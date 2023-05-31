@@ -1,3 +1,4 @@
+use pdf2docx::dump::object::ObjectDumper;
 use std::{env::args, str::from_utf8};
 
 use lopdf::Document;
@@ -7,9 +8,10 @@ fn dump_ver(doc: &Document) {
 }
 
 fn dump_trailer(doc: &Document) {
+    println!("\nTrailer: ");
     // trailer is an index to objects(not all objects), maybe used for cross-reference
     doc.trailer.iter().for_each(|(k, v)| {
-        println!("{}: {:?}", from_utf8(k).unwrap(), v);
+        println!("{}: {:}", from_utf8(k).unwrap(), ObjectDumper(v));
     });
 }
 

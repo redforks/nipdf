@@ -1,9 +1,10 @@
 use hex::encode_upper;
 use std::{
-    convert::From,
     fmt::{Display, Write},
     str::from_utf8,
 };
+
+pub mod object;
 
 /// Dump `[u8]` as utf8 str, and hex content
 pub struct BinDumper<'a>(pub &'a [u8]);
