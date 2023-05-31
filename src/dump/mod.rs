@@ -18,34 +18,6 @@ impl<'a> Display for BinDumper<'a> {
     }
 }
 
-/// StrOrString is a wrapper of &str and String, it is used to represent
-/// result that borrow exist data or format to a new String instance.
-/// Call `as_str` to get &str.
-pub enum StrOrString<'a> {
-    Str(&'a str),
-    String(String),
-}
-
-impl<'a> StrOrString<'a> {
-    pub fn as_str(&self) -> &'a str {
-        todo!()
-    }
-}
-
-/// Convert [u8] to StrOrString, if it is valid UTF-8, then return Str,
-/// otherwise return String in hex format.
-impl<'a> From<&'a [u8]> for StrOrString<'a> {
-    fn from(s: &'a [u8]) -> Self {
-        todo!()
-    }
-}
-
-/// Convert [u8] to StrOrString, if it is valid UTF-8, then return Str,
-/// otherwise return String in hex format.
-pub fn u8slice_to_str(s: &[u8]) -> StrOrString {
-    s.into()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
