@@ -8,3 +8,15 @@ default-run = "dump-pdf"
 
 [dependencies]
 lopdf = "0.31.0"
+
+[dev-dependencies]
+hex = "0.4.3"
+
+[features]
+dump = []
+
+[[bin]]
+name = "dump-pdf"
+required-features = ["dump"]
+features = ["dump"]
+
