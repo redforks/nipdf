@@ -85,20 +85,49 @@ impl<'a> Display for ObjectDumper<'a> {
                     f.write_str(">")
                 }
             },
-            Object::Array(a) => {
-                f.write_char('[')?;
-                for (i, obj) in a.iter().enumerate() {
-                    if i > 0 {
-                        f.write_char(' ')?;
-                    }
-                    f.write_fmt(format_args!("{}", ObjectDumper::new(obj)))?;
-                }
-                f.write_char(']')
-            }
+            Object::Array(a) => ArrayDumper::with_indent(a, self.1).fmt(f),
             Object::Dictionary(d) => DictionaryDumper::with_indent(d, self.1).fmt(f),
             Object::Stream { .. } => f.write_str("stream"),
             Object::Reference((idx, ver)) => f.write_fmt(format_args!("{} {} R", idx, ver)),
         }
+    }
+}
+
+pub struct ArrayDumper<'a>(&'a [Object], Indent);
+
+impl<'a> ArrayDumper<'a> {
+    pub fn new(a: &'a [Object]) -> Self {
+        Self(a, Indent(0))
+    }
+
+    fn with_indent(a: &'a [Object], indent: Indent) -> Self {
+        Self(a, indent)
+    }
+}
+
+impl<'a> Display for ArrayDumper<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_char('[')?;
+
+        let indent = self.1.inc();
+        if is_array_complex(self.0) {
+            f.write_char('\n')?;
+            self.0.iter().try_for_each(|item| {
+                indent.fmt(f)?;
+                ObjectDumper::with_indent(item, indent).fmt(f)?;
+                f.write_char('\n')
+            })?;
+            self.1.fmt(f)?;
+        } else {
+            for (i, item) in self.0.iter().enumerate() {
+                if i > 0 {
+                    f.write_char(' ')?;
+                }
+                ObjectDumper::with_indent(item, indent).fmt(f)?;
+            }
+        }
+
+        f.write_char(']')
     }
 }
 
@@ -116,6 +145,7 @@ impl<'a> DictionaryDumper<'a> {
 
 impl<'a> Display for DictionaryDumper<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // TODO: use complex format only if Dictionary itself is complex
         self.1.fmt(f)?;
         f.write_str("<<")?;
         let indent = self.1.inc();
@@ -140,10 +170,32 @@ impl<'a> Display for DictionaryDumper<'a> {
     }
 }
 
+fn is_array_complex(v: &[Object]) -> bool {
+    if v.iter().count() > 3 {
+        true
+    } else if v.iter().any(|item| is_complex_pdf_value(item)) {
+        true
+    } else {
+        false
+    }
+}
+
+fn is_dictionary_complex(v: &Dictionary) -> bool {
+    if v.iter().count() > 1 {
+        true
+    } else {
+        v.iter()
+            .next()
+            .map(|(_, v)| is_complex_pdf_value(v))
+            .unwrap_or(false)
+    }
+}
+
 /// Return true if `v` is Dictionary or Array
 fn is_complex_pdf_value(v: &Object) -> bool {
     match v {
-        Object::Dictionary(_) | Object::Array(_) => true,
+        Object::Dictionary(dict) => is_dictionary_complex(dict),
+        Object::Array(items) => is_array_complex(items),
         _ => false,
     }
 }
