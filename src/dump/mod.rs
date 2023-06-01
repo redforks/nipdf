@@ -1,6 +1,7 @@
 use std::fmt::{Display, Write};
 
 pub mod object;
+pub mod objects;
 pub mod xref;
 
 #[derive(Clone, Copy, PartialEq, Debug)]

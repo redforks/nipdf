@@ -1,7 +1,7 @@
 use clap::{arg, Command};
-use pdf2docx::dump::{object::DictionaryDumper, xref::dump_xref};
+use pdf2docx::dump::{object::DictionaryDumper, objects::dump_objects, xref::dump_xref};
 
-use lopdf::Document;
+use lopdf::{Document, Object, ObjectId};
 
 fn summary(doc: &Document) {
     println!("PDF Version: {}", doc.version);
@@ -32,6 +32,11 @@ fn cli() -> Command {
                 .about("Dump xref table")
                 .arg(arg!([id] "Object ID to dump")),
         )
+        .subcommand(
+            Command::new("objects")
+                .about("Dump objects")
+                .arg(arg!([id] "Object ID to dump")),
+        )
 }
 
 fn main() {
@@ -44,6 +49,10 @@ fn main() {
         Some(("xref", sub_m)) => dump_xref(
             &doc,
             sub_m.get_one::<String>("id").map(|s| s.parse().unwrap()),
+        ),
+        Some(("objects", sub_m)) => dump_objects(
+            &doc,
+            sub_m.get_one::<String>("id").and_then(|s| s.parse().ok()),
         ),
         _ => todo!(),
     }
