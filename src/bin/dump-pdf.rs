@@ -12,7 +12,7 @@ fn dump_basic_info(doc: &Document) {
 
 fn dump_trailer(doc: &Document) {
     println!("\nTrailer: ");
-    println!("{:}", DictionaryDumper(&doc.trailer));
+    println!("{:}", DictionaryDumper::new(&doc.trailer));
 }
 
 fn main() {
