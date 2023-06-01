@@ -83,5 +83,12 @@ fn object_dumper_array() {
     assert_eq!(
         format!("{}", dumper),
         "[null true 123 123.456 /hello (hello) <68656C6C6F>]"
-    ); 
+    );
+}
+
+#[test]
+fn object_dumper_reference() {
+    let obj = Object::Reference((123, 456));
+    let dumper = ObjectDumper(&obj);
+    assert_eq!(format!("{}", dumper), "123 456 R");
 }
