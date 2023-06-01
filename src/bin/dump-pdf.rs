@@ -1,5 +1,5 @@
 use clap::{arg, Command};
-use pdf2docx::dump::object::DictionaryDumper;
+use pdf2docx::dump::{object::DictionaryDumper, xref::dump_xref};
 
 use lopdf::Document;
 
@@ -27,6 +27,11 @@ fn cli() -> Command {
                 .visible_alias("ls")
                 .about("Dump PDF file summary"),
         )
+        .subcommand(
+            Command::new("xref")
+                .about("Dump xref table")
+                .arg(arg!([id] "Object ID to dump")),
+        )
 }
 
 fn main() {
@@ -36,6 +41,10 @@ fn main() {
 
     match cli().get_matches().subcommand() {
         Some(("summary", _)) => summary(&doc),
+        Some(("xref", sub_m)) => dump_xref(
+            &doc,
+            sub_m.get_one::<String>("id").map(|s| s.parse().unwrap()),
+        ),
         _ => todo!(),
     }
 }
