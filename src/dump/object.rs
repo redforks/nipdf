@@ -3,6 +3,7 @@ use std::fmt::Display;
 use std::fmt::Write;
 use std::str::from_utf8;
 
+use super::Indent;
 use lopdf::Dictionary;
 use lopdf::Object;
 
@@ -11,30 +12,6 @@ struct HexDumer<'a>(&'a [u8]);
 impl<'a> Display for HexDumer<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&hex::encode_upper(self.0))
-    }
-}
-
-#[derive(Clone, Copy)]
-/// When display, render n*2 spaces
-struct Indent(usize);
-
-impl Indent {
-    fn inc(self) -> Self {
-        Self(self.0 + 1)
-    }
-
-    fn dec(self) -> Self {
-        debug_assert!(self.0 > 0);
-        Self(self.0 - 1)
-    }
-}
-
-impl Display for Indent {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for _ in 0..(self.0 * 2) {
-            f.write_char(' ')?;
-        }
-        Ok(())
     }
 }
 
