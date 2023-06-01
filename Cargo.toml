@@ -18,5 +18,4 @@ dump = ["hex"]
 [[bin]]
 name = "dump-pdf"
 required-features = ["dump"]
-features = ["dump"]
 
