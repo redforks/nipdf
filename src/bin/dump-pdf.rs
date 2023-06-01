@@ -3,8 +3,11 @@ use std::{env::args, str::from_utf8};
 
 use lopdf::Document;
 
-fn dump_ver(doc: &Document) {
-    println!("PDF version: {}", doc.version);
+fn dump_basic_info(doc: &Document) {
+    println!("PDF Version: {}", doc.version);
+    println!("Max ID: {}", doc.max_id);
+    println!("Max Bookmark Id: {}", doc.max_bookmark_id);
+    println!("Xref Start: {}", doc.xref_start);
 }
 
 fn dump_trailer(doc: &Document) {
@@ -19,6 +22,6 @@ fn main() {
     let filename = args().nth(1).expect("Usage: dump-pdf <filename>");
 
     let doc = Document::load(filename).unwrap();
-    dump_ver(&doc);
+    dump_basic_info(&doc);
     dump_trailer(&doc);
 }
