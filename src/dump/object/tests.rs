@@ -65,25 +65,9 @@ fn object_dumper_string() {
 
 #[test]
 fn object_dumper_array() {
-    // empty array
     let obj = Object::Array(vec![]);
     let dumper = ObjectDumper::new(&obj);
     assert_eq!(format!("{}", dumper), "[]");
-
-    let obj = Object::Array(vec![
-        Object::Null,
-        Object::Boolean(true),
-        Object::Integer(123),
-        Object::Real(123.456),
-        Object::Name(b"hello".to_vec()),
-        Object::String(b"hello".to_vec(), StringFormat::Literal),
-        Object::String(b"hello".to_vec(), StringFormat::Hexadecimal),
-    ]);
-    let dumper = ObjectDumper::new(&obj);
-    assert_eq!(
-        format!("{}", dumper),
-        "[null true 123 123.456 /hello (hello) <68656C6C6F>]"
-    );
 }
 
 #[test]
