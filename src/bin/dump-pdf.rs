@@ -1,7 +1,7 @@
 use clap::{arg, Command};
 use pdf2docx::dump::{object::DictionaryDumper, objects::dump_objects, xref::dump_xref};
 
-use lopdf::{Document, Object, ObjectId};
+use lopdf::{Document};
 
 fn summary(doc: &Document) {
     println!("PDF Version: {}", doc.version);

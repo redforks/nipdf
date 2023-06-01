@@ -175,12 +175,10 @@ impl<'a> Display for DictionaryDumper<'a> {
 }
 
 fn is_array_complex(v: &[Object]) -> bool {
-    if v.iter().count() > 3 {
-        true
-    } else if v.iter().any(|item| is_complex_pdf_value(item)) {
+    if v.len() > 3 {
         true
     } else {
-        false
+        v.iter().any(is_complex_pdf_value)
     }
 }
 

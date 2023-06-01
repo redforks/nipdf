@@ -210,7 +210,7 @@ fn test_is_complex_pdf_value() {
         Integer(123),
     ])));
     assert!(is_complex_pdf_value(&four_items_arr));
-    assert!(!is_complex_pdf_value(&Array(vec![empty_arr.clone()])));
+    assert!(!is_complex_pdf_value(&Array(vec![empty_arr])));
     assert!(is_complex_pdf_value(&Array(vec![four_items_arr.clone()])));
 
     // Dictionary items less than 2, and do not contains complex types are simple
