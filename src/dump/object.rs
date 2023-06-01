@@ -146,25 +146,38 @@ impl<'a> DictionaryDumper<'a> {
 impl<'a> Display for DictionaryDumper<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("<<")?;
+
         let indent = self.1.inc();
-        for (i, (k, v)) in self.0.iter().enumerate() {
-            if i > 0 {
-                indent.fmt(f)?;
-            }
-            if !is_complex_pdf_value(v) {
+        if !is_dictionary_complex(self.0) {
+            for (k, v) in self.0.iter() {
                 f.write_fmt(format_args!(
-                    "/{} {}\n",
+                    "/{} {}",
                     Utf8OrHexDumper(k),
                     ObjectDumper::with_indent(v, indent)
                 ))?;
-            } else {
-                f.write_fmt(format_args!("/{}\n", Utf8OrHexDumper(k),))?;
-                indent.fmt(f)?;
-                ObjectDumper::with_indent(v, indent).fmt(f)?;
-                f.write_char('\n')?;
             }
+        } else {
+            for (i, (k, v)) in self.0.iter().enumerate() {
+                if i > 0 {
+                    indent.fmt(f)?;
+                }
+                if !is_complex_pdf_value(v) {
+                    f.write_fmt(format_args!(
+                        "/{} {}\n",
+                        Utf8OrHexDumper(k),
+                        ObjectDumper::with_indent(v, indent)
+                    ))?;
+                } else {
+                    f.write_fmt(format_args!(
+                        "/{}\n{}{}\n",
+                        Utf8OrHexDumper(k),
+                        indent,
+                        ObjectDumper::with_indent(v, indent)
+                    ))?;
+                }
+            }
+            self.1.fmt(f)?;
         }
-        self.1.fmt(f)?;
         f.write_str(">>")
     }
 }
