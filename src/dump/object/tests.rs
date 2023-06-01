@@ -51,3 +51,14 @@ fn object_dumper_name() {
     let dumper = ObjectDumper(&obj);
     assert_eq!(format!("{}", dumper), "/hello");
 }
+
+#[test]
+fn object_dumper_string() {
+    let obj = Object::String(b"hello".to_vec(), StringFormat::Literal);
+    let dumper = ObjectDumper(&obj);
+    assert_eq!(format!("{}", dumper), "(hello)");
+
+    let obj = Object::String(b"hello".to_vec(), StringFormat::Hexadecimal);
+    let dumper = ObjectDumper(&obj);
+    assert_eq!(format!("{}", dumper), "<68656C6C6F>");
+}

@@ -6,14 +6,25 @@ use std::str::from_utf8;
 use lopdf::Dictionary;
 use lopdf::Object;
 
+struct HexDumer<'a>(&'a [u8]);
+
+impl<'a> Display for HexDumer<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&hex::encode_upper(self.0))
+    }
+}
+
 /// Dump `[u8]` as utf8 str, or hex if not valid utf8
-pub struct Utf8OrHexDumper<'a>(pub &'a [u8]);
+struct Utf8OrHexDumper<'a>(pub &'a [u8]);
 
 impl<'a> Display for Utf8OrHexDumper<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match from_utf8(self.0) {
             Ok(s) => f.write_fmt(format_args!("{}", s)),
-            Err(_) => f.write_fmt(format_args!("0x{}", &hex::encode_upper(self.0))),
+            Err(_) => {
+                f.write_str("0x")?;
+                HexDumer(self.0).fmt(f)
+            }
         }
     }
 }
@@ -28,17 +39,18 @@ impl<'a> Display for ObjectDumper<'a> {
             Object::Integer(i) => f.write_fmt(format_args!("{}", i)),
             Object::Real(r) => f.write_fmt(format_args!("{}", r)),
             Object::Name(n) => f.write_fmt(format_args!("/{}", Utf8OrHexDumper(n))),
-            Object::String(s, fmt) => {
-                match fmt {
-                    lopdf::StringFormat::Literal => f.write_char('(')?,
-                    lopdf::StringFormat::Hexadecimal => f.write_str("<")?,
+            Object::String(s, fmt) => match fmt {
+                lopdf::StringFormat::Literal => {
+                    f.write_char('(')?;
+                    f.write_fmt(format_args!("{}", Utf8OrHexDumper(s)))?;
+                    f.write_char(')')
                 }
-                f.write_fmt(format_args!("{}", Utf8OrHexDumper(s)))?;
-                match fmt {
-                    lopdf::StringFormat::Literal => f.write_char(')'),
-                    lopdf::StringFormat::Hexadecimal => f.write_str(">"),
+                lopdf::StringFormat::Hexadecimal => {
+                    f.write_str("<")?;
+                    HexDumer(s).fmt(f)?;
+                    f.write_str(">")
                 }
-            }
+            },
             Object::Array(a) => {
                 f.write_char('[')?;
                 for (i, obj) in a.iter().enumerate() {
