@@ -9,11 +9,12 @@ default-run = "dump-pdf"
 [dependencies]
 lopdf = "0.31.0"
 hex = {version="0.4.3", optional=true}
+clap = {version="4.3.0", optional=true, features=["derive"]}
 
 [dev-dependencies]
 
 [features]
-dump = ["hex"]
+dump = ["hex", "clap"]
 
 [[bin]]
 name = "dump-pdf"
