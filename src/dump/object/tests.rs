@@ -105,7 +105,8 @@ fn dictionary_dumper() {
     assert_eq!(
         format!("{}", DictionaryDumper::new(&obj)),
         r#"
-<</hello null
+<<
+  /hello null
   /world true
 >>"#
         .trim()
@@ -121,9 +122,11 @@ fn dictionary_dumper() {
     assert_eq!(
         format!("{}", DictionaryDumper::new(&obj)),
         r#"
-<</hello null
+<<
+  /hello null
   /nested
-  <</world true
+  <<
+    /world true
     /hello null
   >>
 >>"#

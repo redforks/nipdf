@@ -149,10 +149,9 @@ impl<'a> Display for DictionaryDumper<'a> {
                 ))?;
             }
         } else {
-            for (i, (k, v)) in self.0.iter().enumerate() {
-                if i > 0 {
-                    indent.fmt(f)?;
-                }
+            f.write_char('\n')?;
+            for (k, v) in self.0.iter() {
+                indent.fmt(f)?;
                 if !is_complex_pdf_value(v) {
                     f.write_fmt(format_args!(
                         "/{} {}\n",
