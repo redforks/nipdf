@@ -6,6 +6,7 @@ use std::str::from_utf8;
 use super::Indent;
 use lopdf::Dictionary;
 use lopdf::Object;
+use lopdf::ObjectId;
 
 struct HexDumer<'a>(&'a [u8]);
 
@@ -27,6 +28,20 @@ impl<'a> Display for Utf8OrHexDumper<'a> {
                 HexDumer(self.0).fmt(f)
             }
         }
+    }
+}
+
+pub struct ObjectIdDumper<'a>(&'a ObjectId);
+
+impl<'a> ObjectIdDumper<'a> {
+    pub fn new(id: &'a ObjectId) -> Self {
+        Self(id)
+    }
+}
+
+impl<'a> Display for ObjectIdDumper<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{} {} R", self.0 .0, self.0 .1))
     }
 }
 
@@ -65,7 +80,7 @@ impl<'a> Display for ObjectDumper<'a> {
             Object::Array(a) => ArrayDumper::with_indent(a, self.1).fmt(f),
             Object::Dictionary(d) => DictionaryDumper::with_indent(d, self.1).fmt(f),
             Object::Stream { .. } => f.write_str("stream"),
-            Object::Reference((idx, ver)) => f.write_fmt(format_args!("{} {} R", idx, ver)),
+            Object::Reference(id) => ObjectIdDumper::new(id).fmt(f),
         }
     }
 }

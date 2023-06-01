@@ -236,3 +236,9 @@ fn test_is_complex_pdf_value() {
             .collect()
     ));
 }
+
+#[test]
+fn object_id_dumper() {
+    let obj = (123, 456);
+    assert_eq!(format!("{}", ObjectIdDumper::new(&obj)), "123 456 R");
+}
