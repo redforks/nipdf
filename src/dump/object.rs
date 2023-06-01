@@ -145,8 +145,6 @@ impl<'a> DictionaryDumper<'a> {
 
 impl<'a> Display for DictionaryDumper<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // TODO: use complex format only if Dictionary itself is complex
-        self.1.fmt(f)?;
         f.write_str("<<")?;
         let indent = self.1.inc();
         for (i, (k, v)) in self.0.iter().enumerate() {
@@ -161,6 +159,7 @@ impl<'a> Display for DictionaryDumper<'a> {
                 ))?;
             } else {
                 f.write_fmt(format_args!("/{}\n", Utf8OrHexDumper(k),))?;
+                indent.fmt(f)?;
                 ObjectDumper::with_indent(v, indent).fmt(f)?;
                 f.write_char('\n')?;
             }

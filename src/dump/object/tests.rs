@@ -197,8 +197,7 @@ fn array_dumper() {
     65
     12.34
   ]
-]"#
-        .trim()
+]"#.trim()
     );
 }
 
@@ -251,8 +250,6 @@ fn test_is_complex_pdf_value() {
     ));
     // complex if item value is complex
     assert!(is_dictionary_complex(
-        &vec![(b"hello".to_vec(), four_items_arr)]
-            .into_iter()
-            .collect()
+        &vec![(b"hello".to_vec(), four_items_arr)].into_iter().collect()
     ));
 }
