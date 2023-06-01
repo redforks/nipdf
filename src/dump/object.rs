@@ -5,7 +5,6 @@ use std::str::from_utf8;
 
 use lopdf::Dictionary;
 use lopdf::Object;
-use lopdf::ObjectId;
 
 /// Dump `[u8]` as utf8 str, or hex if not valid utf8
 pub struct Utf8OrHexDumper<'a>(pub &'a [u8]);
@@ -13,7 +12,7 @@ pub struct Utf8OrHexDumper<'a>(pub &'a [u8]);
 impl<'a> Display for Utf8OrHexDumper<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match from_utf8(self.0) {
-            Ok(s) => f.write_fmt(format_args!("\"{}\"", s)),
+            Ok(s) => f.write_fmt(format_args!("{}", s)),
             Err(_) => f.write_fmt(format_args!("0x{}", &hex::encode_upper(self.0))),
         }
     }
@@ -71,3 +70,6 @@ impl<'a> Display for DictionaryDumper<'a> {
         f.write_str(" >>")
     }
 }
+
+#[cfg(test)]
+mod tests;
