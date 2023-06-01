@@ -1,26 +1,40 @@
 use std::fmt::Display;
 
-use lopdf::{xref::Xref, Document};
+use lopdf::{xref::XrefEntry, Document};
 
-pub struct XrefDumper<'a>(&'a Xref);
+struct XrefEntryDumper<'a>(u32, &'a XrefEntry);
 
-impl<'a> XrefDumper<'a> {
-    pub fn new(xref: &'a Xref) -> Self {
-        Self(xref)
-    }
-}
-
-impl<'a> Display for XrefDumper<'a> {
+impl<'a> Display for XrefEntryDumper<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("xref:\n")?;
-        f.write_fmt(format_args!("type: {:?}\n", self.0.cross_reference_type))?;
-        f.write_fmt(format_args!("size: {}\n", self.0.size))
+        f.write_fmt(format_args!("{}: ", self.0))?;
+
+        match self.1 {
+            XrefEntry::Free => f.write_str("free"),
+            XrefEntry::UnusableFree => f.write_str("unusable free"),
+            XrefEntry::Normal { offset, generation } => {
+                f.write_fmt(format_args!("normal {} {}", offset, generation))
+            }
+            XrefEntry::Compressed { container, index } => {
+                f.write_fmt(format_args!("compressed {} {}", container, index))
+            }
+        }
     }
 }
 
 pub fn dump_xref(doc: &Document, id: Option<u32>) {
-    println!(
-        "{}",
-        id.map_or_else(|| "no id".to_owned(), |id| format!("{} ", id))
-    );
+    let xref = &doc.reference_table;
+    match id {
+        None => {
+            xref.entries.iter().for_each(|(id, entry)| {
+                println!("{}", XrefEntryDumper(*id, entry));
+            });
+        }
+        Some(id) => match xref.get(id) {
+            None => println!("{}: not found", id),
+            Some(entry) => println!("{}", XrefEntryDumper(id, entry)),
+        },
+    }
 }
+
+#[cfg(test)]
+mod tests;
