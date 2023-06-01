@@ -1,19 +1,20 @@
 use clap::{arg, Command};
 use pdf2docx::dump::object::DictionaryDumper;
-use pdf2docx::dump::xref::XrefDumper;
 
 use lopdf::Document;
 
-fn dump_basic_info(doc: &Document) {
+fn summary(doc: &Document) {
     println!("PDF Version: {}", doc.version);
     println!("Max ID: {}", doc.max_id);
     println!("Max Bookmark Id: {}", doc.max_bookmark_id);
     println!("Xref Start: {}", doc.xref_start);
-}
 
-fn dump_trailer(doc: &Document) {
     println!("\nTrailer: ");
     println!("{:}", DictionaryDumper::new(&doc.trailer));
+
+    println!("\nxref:");
+    println!("type: {:?}", doc.reference_table.cross_reference_type);
+    println!("size: {}", doc.reference_table.size);
 }
 
 fn cli() -> Command {
@@ -34,11 +35,7 @@ fn main() {
     let doc = Document::load(filename).unwrap();
 
     match cli().get_matches().subcommand() {
-        Some(("summary", _)) => {
-            dump_basic_info(&doc);
-            dump_trailer(&doc);
-            println!("\n{}", XrefDumper::new(&doc.reference_table));
-        }
+        Some(("summary", _)) => summary(&doc),
         _ => todo!(),
     }
 }
