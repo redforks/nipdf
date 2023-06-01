@@ -1,4 +1,5 @@
 use pdf2docx::dump::object::DictionaryDumper;
+use pdf2docx::dump::xref::XrefDumper;
 use std::env::args;
 
 use lopdf::Document;
@@ -21,4 +22,5 @@ fn main() {
     let doc = Document::load(filename).unwrap();
     dump_basic_info(&doc);
     dump_trailer(&doc);
+    println!("\n{}", XrefDumper::new(&doc.reference_table));
 }

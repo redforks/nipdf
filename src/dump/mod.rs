@@ -1,6 +1,7 @@
 use std::fmt::{Display, Write};
 
 pub mod object;
+pub mod xref;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 /// When display, render n*2 spaces
