@@ -300,3 +300,12 @@ STREAM not allows_compression
         .trim_matches('\n')
     );
 }
+
+#[test]
+fn dump_stream_content() {
+    let stream = Stream::new(Dict::new(), vec![1, 2, 3, 4, 5]);
+    let mut dest = vec![];
+    let result = StreamDumper::new(&stream).write_content(&mut dest);
+    assert_eq!(result.unwrap(), 5);
+    assert_eq!(dest, vec![1, 2, 3, 4, 5]);
+}
