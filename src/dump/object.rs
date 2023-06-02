@@ -3,6 +3,8 @@ use std::fmt::Display;
 use std::fmt::Write;
 use std::str::from_utf8;
 
+use crate::stream::decode;
+
 use super::Indent;
 use lopdf::{Dictionary, Object, ObjectId, Stream};
 
@@ -181,7 +183,15 @@ impl<'a> StreamContentDumper<'a> {
 
     /// Write stream content to `w`.
     pub fn write_content(&self, mut w: impl std::io::Write) -> anyhow::Result<u64> {
-        let mut r = self.0.content.as_slice();
+        // variable to hold temp decoded data
+        let decoded: Vec<u8>;
+        let mut r = if self.1 {
+            decoded = decode(self.0)?;
+            decoded.as_slice()
+        } else {
+            self.0.content.as_slice()
+        };
+
         Ok(std::io::copy(&mut r, &mut w)?)
     }
 }
