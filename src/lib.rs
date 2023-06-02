@@ -4,7 +4,6 @@ pub fn add(left: usize, right: usize) -> usize {
 
 #[cfg(feature = "dump")]
 pub mod dump;
-pub mod filter;
 pub mod stream;
 
 #[cfg(test)]

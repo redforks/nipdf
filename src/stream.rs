@@ -1,5 +1,7 @@
 use lopdf::Stream;
 
+mod filter;
+
 /// Stream object dict key `Filter`.
 pub const KEY_FILTER: &[u8] = b"Filter";
 /// Stream object dict key `DecodeParms`.
