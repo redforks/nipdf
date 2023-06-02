@@ -2,6 +2,9 @@ pub fn add(left: usize, right: usize) -> usize {
     left + right
 }
 
+#[cfg(feature = "dump")]
+pub mod dump;
+
 #[cfg(test)]
 mod tests {
     use super::*;

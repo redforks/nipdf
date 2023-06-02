@@ -2,8 +2,21 @@
 name = "pdf2docx"
 version = "0.1.0"
 edition = "2021"
+default-run = "dump-pdf"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 lopdf = "0.31.0"
+hex = {version="0.4.3", optional=true}
+clap = {version="4.3.0", optional=true, features=["derive"]}
+
+[dev-dependencies]
+
+[features]
+dump = ["hex", "clap"]
+
+[[bin]]
+name = "dump-pdf"
+required-features = ["dump"]
+
