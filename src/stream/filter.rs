@@ -1,7 +1,7 @@
 use anyhow::Result as AnyResult;
 use lopdf::{Object, Stream};
-use once_cell::{sync::Lazy, unsync::Lazy as UnsyncLazy};
-use std::{borrow::Cow, collections::HashMap, str::from_utf8};
+use once_cell::unsync::Lazy;
+use std::{borrow::Cow, str::from_utf8};
 
 use lopdf::Dictionary;
 
@@ -17,12 +17,6 @@ impl<F: for<'b> Fn(Cow<'b, [u8]>, &Dictionary) -> AnyResult<Cow<'b, [u8]>> + 'st
     ) -> Result<Cow<'a, [u8]>, anyhow::Error> {
         self(data, params)
     }
-}
-
-type FilterCreator = Box<dyn Fn() -> Box<dyn Filter> + 'static + Send + Sync>;
-
-struct FilterFactory {
-    filters: HashMap<&'static [u8], FilterCreator>,
 }
 
 fn zero_decoder<'a>(data: Cow<'a, [u8]>, _params: &Dictionary) -> AnyResult<Cow<'a, [u8]>> {
@@ -46,32 +40,17 @@ fn inc_decoder<'a>(data: Cow<'a, [u8]>, params: &Dictionary) -> AnyResult<Cow<'a
     Ok(Cow::from(buf))
 }
 
-impl FilterFactory {
-    fn new() -> Self {
-        let mut filters: HashMap<&'static [u8], FilterCreator> = HashMap::new();
+fn create_filter(name: &[u8]) -> Result<Box<dyn Filter>, DecodeError> {
+    match name {
         #[cfg(test)]
-        {
-            filters.insert(
-                super::FILTER_ZERO_DECODER,
-                Box::new(|| Box::new(zero_decoder)),
-            );
-            filters.insert(
-                super::FILTER_INC_DECODER,
-                Box::new(|| Box::new(inc_decoder)),
-            );
-        }
-        Self { filters }
-    }
-
-    /// Create [`Filter`] by name.
-    fn create(&self, name: &[u8]) -> Result<Box<dyn Filter>, DecodeError> {
-        self.filters
-            .get(name)
-            .ok_or_else(|| DecodeError::UnknownFilter(from_utf8(name).unwrap().to_string()))
-            .map(|f| f())
+        super::FILTER_ZERO_DECODER => Ok(Box::new(zero_decoder)),
+        #[cfg(test)]
+        super::FILTER_INC_DECODER => Ok(Box::new(inc_decoder)),
+        _ => Err(DecodeError::UnknownFilter(
+            from_utf8(name).unwrap().to_string(),
+        )),
     }
 }
-static FACTORY: Lazy<FilterFactory> = Lazy::new(FilterFactory::new);
 
 #[derive(thiserror::Error, Debug)]
 pub enum DecodeError {
@@ -94,7 +73,7 @@ pub fn decode(stream: &Stream) -> Result<Vec<u8>, DecodeError> {
     };
 
     let empty_dict = Dictionary::new();
-    let params = UnsyncLazy::new(|| {
+    let params = Lazy::new(|| {
         stream.dict.get(super::KEY_DECODE_PARMS).map_or_else(
             |_| &empty_dict,
             |v| v.as_dict().expect("DecodeParms should be dict"),
@@ -102,7 +81,7 @@ pub fn decode(stream: &Stream) -> Result<Vec<u8>, DecodeError> {
     });
     let mut buf = Cow::from(stream.content.as_slice());
     for filter_name in filters {
-        let f = FACTORY.create(filter_name.as_bytes())?;
+        let f = create_filter(filter_name.as_bytes())?;
         buf = f.filter(buf, &params)?;
     }
     Ok(buf.into_owned())
