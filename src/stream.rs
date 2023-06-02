@@ -1,6 +1,5 @@
-use lopdf::Stream;
-
 mod filter;
+pub use filter::{decode, DecodeError};
 
 /// Stream object dict key `Filter`.
 pub const KEY_FILTER: &[u8] = b"Filter";
@@ -11,31 +10,15 @@ pub const KEY_FFILTER: &[u8] = b"FFilter";
 /// Stream object dict key `FDecodeParms`.
 pub const KEY_FDECODE_PARMS: &[u8] = b"FDecodeParms";
 
-#[cfg(test)]
 /// Stream filter name of zero decoder, that replace all bytes to zero (\0),
 /// used in unit tests
+#[cfg(test)]
 pub const FILTER_ZERO_DECODER: &[u8] = b"zero";
 
-#[derive(thiserror::Error, Debug)]
-pub enum DecodeError {
-    #[error("Unknown filter {0}")]
-    UnknownFilter(String),
-    #[error("External stream not supported")]
-    ExternalStreamNotSupported,
-}
-
-/// Decode stream content by filters defined in `stream` dict.
-pub fn decode(stream: &Stream) -> Result<Vec<u8>, DecodeError> {
-    #[cfg(test)]
-    if let Ok(filter_name) = stream.dict.get(KEY_FILTER) {
-        match filter_name {
-            Object::Name(name) if name == FILTER_ZERO_DECODER => {
-                return Ok(stream.content.iter().map(|_| 0u8).collect());
-            }
-            _ => {
-                todo!()
-            }
-        }
-    }
-    todo!()
-}
+/// Param name of [FILTER_INC_DECODER] filter, defines increment step,
+#[cfg(test)]
+pub const FILTER_INC_DECODER_STEP_PARAM: &[u8] = b"inc-step";
+/// Stream filter name of increment decoder, that increment all bytes by one or use
+/// step defined in [FILTER_INC_DECODER_STEP_PARAM] param, used in unit tests.
+#[cfg(test)]
+pub const FILTER_INC_DECODER: &[u8] = b"inc";
