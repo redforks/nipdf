@@ -171,6 +171,22 @@ impl<'a> Display for DictionaryDumper<'a> {
     }
 }
 
+/// Dump stream content.
+pub struct StreamContentDumper<'a>(&'a Stream, bool);
+
+impl<'a> StreamContentDumper<'a> {
+    pub fn new(s: &'a Stream, dump_decoded: bool) -> Self {
+        Self(s, dump_decoded)
+    }
+
+    /// Write stream content to `w`.
+    pub fn write_content(&self, mut w: impl std::io::Write) -> std::io::Result<u64> {
+        todo!()
+        // let mut r = self.0.content.as_slice();
+        // std::io::copy(&mut r, &mut w)
+    }
+}
+
 pub struct StreamDumper<'a>(&'a Stream, Indent);
 
 impl<'a> StreamDumper<'a> {
