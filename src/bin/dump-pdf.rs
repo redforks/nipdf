@@ -36,7 +36,8 @@ fn cli() -> Command {
             Command::new("objects")
                 .about("Dump objects")
                 .arg(arg!([id] "Object ID to dump"))
-                .arg(arg!(--raw "Dump stream object content")),
+                .arg(arg!(--raw "Dump stream object content"))
+                .arg(arg!(--decode "Decode stream object content, no effect if not set --raw option")),
         )
 }
 
@@ -55,6 +56,7 @@ fn main() {
             &doc,
             sub_m.get_one::<String>("id").and_then(|s| s.parse().ok()),
             sub_m.get_one::<bool>("raw").map(|x| *x).unwrap_or(false),
+            sub_m.get_one::<bool>("decode").map(|x| *x).unwrap_or(false),
         ),
         _ => todo!(),
     }

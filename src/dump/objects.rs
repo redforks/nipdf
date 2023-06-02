@@ -64,7 +64,7 @@ fn dump_stream_content(doc: &Document, id: Option<u32>) {
 }
 
 /// Dump objects in the `document`, if `id` is `None`, dump all objects, otherwise dump the object with `id`
-pub fn dump_objects(doc: &Document, id: Option<u32>, dump_content: bool) {
+pub fn dump_objects(doc: &Document, id: Option<u32>, dump_content: bool, decode: bool) {
     if dump_content {
         dump_stream_content(doc, id)
     } else {
