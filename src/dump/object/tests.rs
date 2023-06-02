@@ -1,4 +1,4 @@
-use lopdf::{Dictionary as Dict, Object, Object::*, StringFormat};
+use lopdf::{Dictionary as Dict, Object, Object::*, Stream, StringFormat};
 
 use super::*;
 
@@ -82,6 +82,15 @@ fn object_dumper_reference() {
     let obj = Object::Reference((123, 456));
     let dumper = ObjectDumper::new(&obj);
     assert_eq!(format!("{}", dumper), "123 456 R");
+}
+
+#[test]
+fn object_dumper_stream() {
+    let obj = Object::Stream(Stream::new(Dict::new(), b"hello".to_vec()));
+    assert_eq!(
+        format!("{}", ObjectDumper::new(&obj)),
+        "STREAM allows_compression\n  <</Length 5>>"
+    );
 }
 
 #[test]
@@ -244,4 +253,50 @@ fn test_is_complex_pdf_value() {
 fn object_id_dumper() {
     let obj = (123, 456);
     assert_eq!(format!("{}", ObjectIdDumper::new(&obj)), "123 456 R");
+}
+
+#[test]
+fn stream_dumper_test() {
+    // allows compression, with start_position
+    let dict = Dict::from_iter([("hello", Object::Null), ("world", Object::Null)]);
+    let stream = Stream::with_position(dict, 1234).with_compression(true);
+    assert_eq!(
+        format!("{}", StreamDumper::new(&stream)),
+        r#"
+STREAM allows_compression @1234
+  <<
+    /hello null
+    /world null
+  >>
+"#
+        .trim()
+    );
+
+    // not allow compression, without start_position
+    let dict = Dict::new();
+    let stream = Stream::new(dict, vec![]).with_compression(false);
+    assert_eq!(
+        format!("{}", StreamDumper::new(&stream)),
+        r#"
+STREAM not allows_compression
+  <</Length 0>>
+"#
+        .trim()
+    );
+
+    // indent
+    let dict = Dict::from_iter([("hello", Object::Null), ("world", Object::Null)]);
+    let stream = Stream::new(dict, vec![]).with_compression(false);
+    assert_eq!(
+        format!("{}", StreamDumper::with_indent(&stream, Indent(1))),
+        r#"
+  STREAM not allows_compression
+    <<
+      /hello null
+      /world null
+      /Length 0
+    >>
+"#
+        .trim_matches('\n')
+    );
 }

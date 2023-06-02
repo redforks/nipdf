@@ -4,9 +4,7 @@ use std::fmt::Write;
 use std::str::from_utf8;
 
 use super::Indent;
-use lopdf::Dictionary;
-use lopdf::Object;
-use lopdf::ObjectId;
+use lopdf::{Dictionary, Object, ObjectId, Stream};
 
 struct HexDumer<'a>(&'a [u8]);
 
@@ -79,7 +77,7 @@ impl<'a> Display for ObjectDumper<'a> {
             },
             Object::Array(a) => ArrayDumper::with_indent(a, self.1).fmt(f),
             Object::Dictionary(d) => DictionaryDumper::with_indent(d, self.1).fmt(f),
-            Object::Stream { .. } => f.write_str("stream"),
+            Object::Stream(stream) => StreamDumper::with_indent(stream, self.1).fmt(f),
             Object::Reference(id) => ObjectIdDumper::new(id).fmt(f),
         }
     }
@@ -170,6 +168,37 @@ impl<'a> Display for DictionaryDumper<'a> {
             self.1.fmt(f)?;
         }
         f.write_str(">>")
+    }
+}
+
+pub struct StreamDumper<'a>(&'a Stream, Indent);
+
+impl<'a> StreamDumper<'a> {
+    pub fn new(s: &'a Stream) -> Self {
+        Self(s, Indent(0))
+    }
+
+    fn with_indent(s: &'a Stream, indent: Indent) -> Self {
+        Self(s, indent)
+    }
+}
+
+impl<'a> Display for StreamDumper<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.1.fmt(f)?;
+        f.write_str("STREAM ")?;
+        f.write_str(if self.0.allows_compression {
+            "allows_compression"
+        } else {
+            "not allows_compression"
+        })?;
+        if let Some(pos) = self.0.start_position {
+            f.write_fmt(format_args!(" @{}", pos))?;
+        }
+        f.write_char('\n')?;
+        let indent = self.1.inc();
+        indent.fmt(f)?;
+        DictionaryDumper::with_indent(&self.0.dict, indent).fmt(f)
     }
 }
 
