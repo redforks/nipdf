@@ -36,8 +36,8 @@ fn cli() -> Command {
             Command::new("objects")
                 .about("Dump objects")
                 .arg(arg!([id] "Object ID to dump"))
-                .arg(arg!(--raw "Dump stream object content"))
-                .arg(arg!(--decode "Decode stream object content, no effect if not set --raw option")),
+                .arg(arg!(-r --raw "Dump stream object content"))
+                .arg(arg!(-d --decode "Decode stream object content, no effect if not set --raw option")),
         )
 }
 

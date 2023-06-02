@@ -1,4 +1,4 @@
-use lopdf::{Object, Stream};
+use lopdf::Stream;
 
 /// Stream object dict key `Filter`.
 pub const KEY_FILTER: &[u8] = b"Filter";
