@@ -14,6 +14,9 @@ anyhow = "1.0.71"
 thiserror = "1.0.40"
 educe = "0.4.22"
 
+[patch.crates-io]
+lopdf = { git = "https://github.com/redforks/lopdf.git" }
+
 [dev-dependencies]
 
 [features]
