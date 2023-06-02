@@ -1,4 +1,7 @@
-use crate::stream::{FILTER_ZERO_DECODER, KEY_DECODE_PARMS, KEY_FILTER};
+use crate::{
+    object::new_name,
+    stream::{FILTER_ZERO_DECODER, KEY_DECODE_PARMS, KEY_FILTER},
+};
 use lopdf::{Dictionary as Dict, Object, Object::*, Stream, StringFormat};
 
 use super::*;
@@ -305,12 +308,9 @@ STREAM not allows_compression
 #[test]
 fn dump_stream_content() {
     let stream = Stream::new(
-        [
-            (KEY_FILTER, Object::Name((*FILTER_ZERO_DECODER).into())),
-            (KEY_DECODE_PARMS, Object::Array(vec![Object::Null])),
-        ]
-        .into_iter()
-        .collect(),
+        [(KEY_FILTER, new_name(FILTER_ZERO_DECODER))]
+            .into_iter()
+            .collect(),
         vec![1, 2, 3, 4, 5],
     );
 

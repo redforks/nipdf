@@ -19,10 +19,12 @@ impl<F: for<'b> Fn(Cow<'b, [u8]>, &Dictionary) -> AnyResult<Cow<'b, [u8]>> + 'st
     }
 }
 
+#[cfg(test)]
 fn zero_decoder<'a>(data: Cow<'a, [u8]>, _params: &Dictionary) -> AnyResult<Cow<'a, [u8]>> {
     Ok(Cow::from(vec![0; data.len()]))
 }
 
+#[cfg(test)]
 fn inc_decoder<'a>(data: Cow<'a, [u8]>, params: &Dictionary) -> AnyResult<Cow<'a, [u8]>> {
     let step = params
         .get(super::FILTER_INC_DECODER_STEP_PARAM)
