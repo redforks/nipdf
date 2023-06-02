@@ -55,8 +55,8 @@ fn main() {
         Some(("objects", sub_m)) => dump_objects(
             &doc,
             sub_m.get_one::<String>("id").and_then(|s| s.parse().ok()),
-            sub_m.get_one::<bool>("raw").map(|x| *x).unwrap_or(false),
-            sub_m.get_one::<bool>("decode").map(|x| *x).unwrap_or(false),
+            sub_m.get_one::<bool>("raw").copied().unwrap_or(false),
+            sub_m.get_one::<bool>("decode").copied().unwrap_or(false),
         ),
         _ => todo!(),
     }

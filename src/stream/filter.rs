@@ -1,5 +1,5 @@
 use anyhow::Result as AnyResult;
-use lopdf::{Object, Stream};
+use lopdf::Stream;
 use once_cell::unsync::Lazy;
 use std::{borrow::Cow, str::from_utf8};
 
