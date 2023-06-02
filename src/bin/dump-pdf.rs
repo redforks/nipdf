@@ -1,7 +1,7 @@
 use clap::{arg, Command};
 use pdf2docx::dump::{object::DictionaryDumper, objects::dump_objects, xref::dump_xref};
 
-use lopdf::{Document};
+use lopdf::Document;
 
 fn summary(doc: &Document) {
     println!("PDF Version: {}", doc.version);
@@ -35,7 +35,8 @@ fn cli() -> Command {
         .subcommand(
             Command::new("objects")
                 .about("Dump objects")
-                .arg(arg!([id] "Object ID to dump")),
+                .arg(arg!([id] "Object ID to dump"))
+                .arg(arg!(--raw "Dump stream object content")),
         )
 }
 
@@ -53,6 +54,7 @@ fn main() {
         Some(("objects", sub_m)) => dump_objects(
             &doc,
             sub_m.get_one::<String>("id").and_then(|s| s.parse().ok()),
+            sub_m.get_one::<bool>("raw").map(|x| *x).unwrap_or(false),
         ),
         _ => todo!(),
     }
