@@ -304,8 +304,10 @@ STREAM not allows_compression
 #[test]
 fn dump_stream_content() {
     let stream = Stream::new(Dict::new(), vec![1, 2, 3, 4, 5]);
+
+    // dump content without decode
     let mut dest = vec![];
-    let result = StreamDumper::new(&stream).write_content(&mut dest);
+    let result = StreamContentDumper::new(&stream, false).write_content(&mut dest);
     assert_eq!(result.unwrap(), 5);
     assert_eq!(dest, vec![1, 2, 3, 4, 5]);
 }

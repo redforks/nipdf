@@ -180,10 +180,9 @@ impl<'a> StreamContentDumper<'a> {
     }
 
     /// Write stream content to `w`.
-    pub fn write_content(&self, mut w: impl std::io::Write) -> std::io::Result<u64> {
-        todo!()
-        // let mut r = self.0.content.as_slice();
-        // std::io::copy(&mut r, &mut w)
+    pub fn write_content(&self, mut w: impl std::io::Write) -> anyhow::Result<u64> {
+        let mut r = self.0.content.as_slice();
+        Ok(std::io::copy(&mut r, &mut w)?)
     }
 }
 
@@ -196,12 +195,6 @@ impl<'a> StreamDumper<'a> {
 
     fn with_indent(s: &'a Stream, indent: Indent) -> Self {
         Self(s, indent)
-    }
-
-    /// Write stream content to `w`.
-    pub fn write_content(&self, mut w: impl std::io::Write) -> std::io::Result<u64> {
-        let mut r = self.0.content.as_slice();
-        std::io::copy(&mut r, &mut w)
     }
 }
 
