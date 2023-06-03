@@ -5,7 +5,7 @@ use super::super::{
     KEY_FFILTER, KEY_FILTER,
 };
 use super::*;
-use lopdf::{Dictionary, Stream};
+use lopdf::{Dictionary, Object, Stream};
 
 #[test]
 fn decode_no_filter() {

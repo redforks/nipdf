@@ -26,6 +26,8 @@ fn zero_decoder<'a>(data: Cow<'a, [u8]>, _params: &Dictionary) -> AnyResult<Cow<
 
 #[cfg(test)]
 fn inc_decoder<'a>(data: Cow<'a, [u8]>, params: &Dictionary) -> AnyResult<Cow<'a, [u8]>> {
+    use lopdf::Object;
+
     let step = params
         .get(super::FILTER_INC_DECODER_STEP_PARAM)
         .map_or(1u8, |v| {
