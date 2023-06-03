@@ -44,7 +44,8 @@ fn test_name_matches(
     #[case] ignore_case: bool,
 ) {
     let o = o.into();
-    let q = FieldQuery::parse(q);
+    let q = format!("/{}", q);
+    let q = FieldQuery::parse(&q);
     assert_eq!(value_matches(&o, &q, ignore_case), exp);
 }
 
@@ -65,7 +66,7 @@ fn test_name_value_matches(
     #[case] ignore_case: bool,
 ) {
     let o = o.into();
-    let q = format!("name{}", q);
+    let q = format!("/name{}", q);
     let q = FieldQuery::parse(&q);
 
     // name not matches
@@ -75,6 +76,28 @@ fn test_name_value_matches(
     // name matches checks value
     let d = Dictionary::from_iter(vec![(b"name".as_slice(), o)]).into();
     assert_eq!(value_matches(&d, &q, ignore_case), exp);
+}
+
+#[rstest::rstest]
+#[case(true, Object::Null, "Null", false)]
+#[case(false, Object::Null, "null", false)]
+#[case(true, Object::Null, "Null", true)]
+#[case(true, Object::Null, "nU", true)]
+#[case(true, new_name("Name"), "naM", true)]
+#[case(true, Dictionary::from_iter([(b"name".as_slice(), Object::Null)]), "name", false)]
+#[case(false, Dictionary::from_iter([(b"name".as_slice(), Object::Null)]), "NAme", false)]
+#[case(true, Dictionary::from_iter([(b"name".as_slice(), Object::Null)]), "NAme", true)]
+#[case(true, Dictionary::from_iter([(b"foo".as_slice(), new_name("nAme"))]), "NAme", true)]
+#[case(true, Dictionary::from_iter([(b"foo".as_slice(), vec![Object::Null].into())]), "null", true)]
+fn test_search_everywhere(
+    #[case] exp: bool,
+    #[case] o: impl Into<Object>,
+    #[case] q: &str,
+    #[case] ignore_case: bool,
+) {
+    let o = o.into();
+    let q = FieldQuery::parse(q);
+    assert_eq!(value_matches(&o, &q, ignore_case), exp);
 }
 
 #[rstest::rstest]
