@@ -5,23 +5,6 @@ use crate::object::new_name;
 use super::*;
 
 #[test]
-fn test_filter_object_type() {
-    let dict = Dictionary::new();
-    assert_eq!(filter_object_type(&Object::Null, ObjectType::Stream), false);
-    assert_eq!(
-        filter_object_type(&Object::Dictionary(dict.clone()), ObjectType::Stream),
-        false
-    );
-    assert_eq!(
-        filter_object_type(
-            &Object::Stream(Stream::new(dict, vec![])),
-            ObjectType::Stream
-        ),
-        true
-    );
-}
-
-#[test]
 fn parse_field_query() {
     // name only
     let q = FieldQuery::parse("name");

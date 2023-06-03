@@ -1,14 +1,8 @@
 use std::borrow::Cow;
 
 use super::object::{ObjectDumper, ObjectIdDumper};
-use super::ObjectType;
 use lopdf::{Dictionary, Document, Object};
 use memchr::memmem::Finder;
-
-/// Return ture if the object type matches the given type.
-fn filter_object_type(o: &Object, typ: ObjectType) -> bool {
-    ObjectType::from(o) == typ
-}
 
 #[derive(Debug, PartialEq)]
 enum FieldQuery<'a> {
@@ -102,16 +96,12 @@ fn value_matches(o: &Object, q: &FieldQuery<'_>, ignore_case: bool) -> bool {
     }
 }
 
-pub fn query(doc: &Document, typ: ObjectType, q: Option<&String>, ignore_case: bool) {
+pub fn query(doc: &Document, q: Option<&String>, ignore_case: bool) {
     let field_query = q.map(|s| FieldQuery::parse(s.as_str()));
 
     doc.objects
         .iter()
         .filter(|(_, o)| {
-            if !filter_object_type(o, typ) {
-                return false;
-            }
-
             if let Some(q) = &field_query {
                 if !value_matches(o, q, ignore_case) {
                     return false;

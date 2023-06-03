@@ -1,6 +1,6 @@
 use clap::{arg, Command};
 use pdf2docx::dump::{
-    object::DictionaryDumper, objects::dump_objects, query::query, xref::dump_xref, ObjectType,
+    object::DictionaryDumper, objects::dump_objects, query::query, xref::dump_xref,
 };
 
 use lopdf::Document;
@@ -48,9 +48,8 @@ fn cli() -> Command {
                 
                 For stream objects, queries the attached Dict")
                 .visible_alias("q")
-                .arg(arg!(-t --type <TYPE> "Object type to query, default is stream"))
                 .arg(arg!(-i --"ignore-case" "Ignore case when both in field name and value"))
-                .arg(arg!([query] "Query string, e.g. /Filter /Filter=ASCIIHexDecode /Filter*=Hex"))
+                .arg(arg!(<query> "Query string, e.g. /Filter /Filter=ASCIIHexDecode /Filter*=Hex"))
         )
 }
 
@@ -73,10 +72,6 @@ fn main() {
         ),
         Some(("query", sub_m)) => query(
             &doc,
-            sub_m
-                .get_one::<String>("type")
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(ObjectType::default()),
             sub_m.get_one::<String>("query"),
             sub_m
                 .get_one::<bool>("ignore-case")
