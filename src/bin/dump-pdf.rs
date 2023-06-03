@@ -44,12 +44,16 @@ fn cli() -> Command {
         .subcommand(
             Command::new("query")
                 .about("Query objects")
-                .long_about("Query objects, the actual behavior depensd on object type.
-                
-                For stream objects, queries the attached Dict")
+                .long_about("If <query> not starts with '/', search <query> at everywhere, including
+Dictionary key, non-string values are converted to string and then searched.
+
+/Filter: search for object contains key 'Filter'
+/Filter=ASCIIHexDecode: search for object contains key 'Filter' and value is 'ASCIIHexDecode'
+/Filter*=Hex: search for object contains key 'Filter' and value contains 'Hex'
+                ")
                 .visible_alias("q")
                 .arg(arg!(-i --"ignore-case" "Ignore case when both in field name and value"))
-                .arg(arg!(<query> "Query string, e.g. /Filter /Filter=ASCIIHexDecode /Filter*=Hex"))
+                .arg(arg!(<query> "Query string, e.g. foo /Filter /Filter=ASCIIHexDecode /Filter*=Hex"))
         )
 }
 
