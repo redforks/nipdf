@@ -66,10 +66,10 @@ fn test_name_value_matches(
 
     // name not matches
     let d = Dictionary::from_iter(vec![(b"blah".as_slice(), o.clone())]).into();
-    assert_eq!(value_matches(&d, &q, ignore_case), false);
+    assert!(!value_matches(&d, &q, ignore_case));
 
     // name matches checks value
-    let d = Dictionary::from_iter(vec![(b"name".as_slice(), o.clone())]).into();
+    let d = Dictionary::from_iter(vec![(b"name".as_slice(), o)]).into();
     assert_eq!(value_matches(&d, &q, ignore_case), exp);
 }
 

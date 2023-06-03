@@ -1,6 +1,6 @@
 use crate::{
     object::new_name,
-    stream::{FILTER_ZERO_DECODER, KEY_DECODE_PARMS, KEY_FILTER},
+    stream::{FILTER_ZERO_DECODER, KEY_FILTER},
 };
 use lopdf::{Dictionary as Dict, Object, Object::*, Stream, StringFormat};
 

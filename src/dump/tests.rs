@@ -1,5 +1,3 @@
-use lopdf::{Dictionary, Stream};
-
 use super::*;
 
 #[test]

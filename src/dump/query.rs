@@ -16,8 +16,7 @@ impl<'a> FieldQuery<'a> {
         if let Some(pos) = s.find('=') {
             let (name, value) = s.split_at(pos);
             let value = &value[1..];
-            if name.ends_with('*') {
-                let name = &name[..name.len() - 1];
+            if let Some(name) = name.strip_suffix('*') {
                 Self::NameAndContainsValue(name.as_bytes(), value.as_bytes())
             } else {
                 Self::NameValueExact(name.as_bytes(), value.as_bytes())
@@ -107,7 +106,7 @@ pub fn query(doc: &Document, q: Option<&String>, ignore_case: bool) {
                     return false;
                 }
             }
-            return true;
+            true
         })
         .for_each(|(id, o)| println!("{}: {}", ObjectIdDumper::new(id), ObjectDumper::new(o)));
 }
