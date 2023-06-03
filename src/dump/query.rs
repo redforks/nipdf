@@ -1,9 +1,8 @@
-use std::{borrow::Cow, cell::Cell};
+use std::{borrow::Cow, cell::OnceCell};
 
 use super::object::{ObjectDumper, ObjectIdDumper};
 use lopdf::{Dictionary, Document, Object};
 use memchr::memmem::Finder;
-use once_cell::unsync::Lazy;
 
 #[derive(Debug, PartialEq)]
 enum FieldQuery<'a> {
@@ -46,95 +45,99 @@ fn as_bytes(value: &Object) -> Cow<[u8]> {
     }
 }
 
-/// Return true if the object matches the given query, value are converted to string before comparison.
-fn value_matches(o: &Object, q: &FieldQuery<'_>, ignore_case: bool) -> bool {
-    fn bytes_eq(a: &[u8], b: &[u8], ignore_case: bool) -> bool {
-        if ignore_case {
-            a.eq_ignore_ascii_case(b)
-        } else {
-            a == b
+fn new_contains(needle: &[u8], ignore_case: bool) -> impl Fn(&[u8]) -> bool + '_ {
+    let needle: Cow<[u8]> = if ignore_case {
+        needle.to_ascii_lowercase().into()
+    } else {
+        needle.into()
+    };
+    #[ouroboros::self_referencing]
+    struct F<'a> {
+        ignore_case: bool,
+        needle: Cow<'a, [u8]>,
+        #[borrows(needle)]
+        #[covariant]
+        f: Finder<'this>,
+    }
+    let finder = FBuilder {
+        needle,
+        ignore_case,
+        f_builder: |needle| Finder::new(needle),
+    }
+    .build();
+    impl<'a> F<'a> {
+        fn contains(&self, haystack: &[u8]) -> bool {
+            if *self.borrow_ignore_case() {
+                self.borrow_f()
+                    .find(&haystack.to_ascii_lowercase())
+                    .is_some()
+            } else {
+                self.borrow_f().find(haystack).is_some()
+            }
         }
     }
+    move |hay: &[u8]| finder.contains(hay)
+}
 
-    fn new_contains(needle: &[u8], ignore_case: bool) -> impl Fn(&[u8]) -> bool + '_ {
-        let needle: Cow<[u8]> = if ignore_case {
-            needle.to_ascii_lowercase().into()
-        } else {
-            needle.into()
+fn bytes_eq(a: &[u8], b: &[u8], ignore_case: bool) -> bool {
+    if ignore_case {
+        a.eq_ignore_ascii_case(b)
+    } else {
+        a == b
+    }
+}
+
+/// Return true if the object matches the given query, value are converted to string before comparison.
+fn value_matches(o: &Object, q: &FieldQuery<'_>, ignore_case: bool) -> bool {
+    let contains = OnceCell::new();
+    let matches = |o: &Object| {
+        let name_value_matches = |n: &[u8]| match q {
+            FieldQuery::NameOnly(name) => bytes_eq(n, name, ignore_case),
+            FieldQuery::SearchEverywhere(s) => {
+                contains.get_or_init(|| new_contains(s, ignore_case))(n)
+            }
+            _ => false,
         };
-        #[ouroboros::self_referencing]
-        struct F<'a> {
-            ignore_case: bool,
-            needle: Cow<'a, [u8]>,
-            #[borrows(needle)]
-            #[covariant]
-            f: Finder<'this>,
-        }
-        let finder = FBuilder {
-            needle,
-            ignore_case,
-            f_builder: |needle| Finder::new(needle),
-        }
-        .build();
-        impl<'a> F<'a> {
-            fn contains(&self, haystack: &[u8]) -> bool {
-                if *self.borrow_ignore_case() {
-                    self.borrow_f()
-                        .find(&haystack.to_ascii_lowercase())
-                        .is_some()
+        let dict_value_matches = |d: &Dictionary| -> bool {
+            if match q {
+                FieldQuery::NameOnly(name) => d.iter().any(|(k, _)| bytes_eq(k, name, ignore_case)),
+                FieldQuery::NameValueExact(name, val) => d.iter().any(|(k, v)| {
+                    bytes_eq(k, name, ignore_case) && bytes_eq(&as_bytes(v), val, ignore_case)
+                }),
+                FieldQuery::NameAndContainsValue(name, val) => {
+                    let f = contains.get_or_init(|| new_contains(val, ignore_case));
+                    d.iter()
+                        .any(|(k, v)| bytes_eq(k, name, ignore_case) && f(&as_bytes(v)))
+                }
+                FieldQuery::SearchEverywhere(s) => {
+                    let f = contains.get_or_init(|| new_contains(s, ignore_case));
+                    d.iter().any(|(k, v)| f(k) || f(&as_bytes(v)))
+                }
+            } {
+                true
+            } else {
+                d.iter()
+                    .map(|(_, v)| v)
+                    .any(|v| value_matches(v, q, ignore_case))
+            }
+        };
+
+        match o {
+            Object::Name(n) => name_value_matches(n),
+            Object::Dictionary(d) => dict_value_matches(d),
+            Object::Array(a) => a.iter().any(|v| value_matches(v, q, ignore_case)),
+            Object::Stream(s) => dict_value_matches(&s.dict),
+            _ => {
+                if let FieldQuery::SearchEverywhere(q) = q {
+                    let f = contains.get_or_init(|| new_contains(q, ignore_case));
+                    f(&as_bytes(o))
                 } else {
-                    self.borrow_f().find(haystack).is_some()
+                    false
                 }
             }
         }
-        move |hay: &[u8]| finder.contains(hay)
-    }
-
-    fn name_value_matches(n: &[u8], q: &FieldQuery<'_>, ignore_case: bool) -> bool {
-        match q {
-            FieldQuery::NameOnly(name) => bytes_eq(n, name, ignore_case),
-            FieldQuery::SearchEverywhere(s) => new_contains(s, ignore_case)(n),
-            _ => false,
-        }
-    }
-    fn dict_value_matches(d: &Dictionary, q: &FieldQuery<'_>, ignore_case: bool) -> bool {
-        if match q {
-            FieldQuery::NameOnly(name) => d.iter().any(|(k, _)| bytes_eq(k, name, ignore_case)),
-            FieldQuery::NameValueExact(name, val) => d.iter().any(|(k, v)| {
-                bytes_eq(k, name, ignore_case) && bytes_eq(&as_bytes(v), val, ignore_case)
-            }),
-            FieldQuery::NameAndContainsValue(name, val) => {
-                let f = new_contains(val, ignore_case);
-                d.iter()
-                    .any(|(k, v)| bytes_eq(k, name, ignore_case) && f(&as_bytes(v)))
-            }
-            FieldQuery::SearchEverywhere(s) => {
-                let f = new_contains(s, ignore_case);
-                d.iter().any(|(k, v)| f(k) || f(&as_bytes(v)))
-            }
-        } {
-            true
-        } else {
-            d.iter()
-                .map(|(_, v)| v)
-                .any(|v| value_matches(v, q, ignore_case))
-        }
-    }
-
-    match o {
-        Object::Name(n) => name_value_matches(n, q, ignore_case),
-        Object::Dictionary(d) => dict_value_matches(d, q, ignore_case),
-        Object::Array(a) => a.iter().any(|v| value_matches(v, q, ignore_case)),
-        Object::Stream(s) => dict_value_matches(&s.dict, q, ignore_case),
-        _ => {
-            if let FieldQuery::SearchEverywhere(q) = q {
-                let f = new_contains(q, ignore_case);
-                f(&as_bytes(o))
-            } else {
-                false
-            }
-        }
-    }
+    };
+    matches(o)
 }
 
 pub fn query(doc: &Document, q: Option<&String>, ignore_case: bool) {
