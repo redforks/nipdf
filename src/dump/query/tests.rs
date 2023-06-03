@@ -7,16 +7,20 @@ use super::*;
 #[test]
 fn parse_field_query() {
     // name only
-    let q = FieldQuery::parse("name");
+    let q = FieldQuery::parse("/name");
     assert_eq!(q, FieldQuery::NameOnly(b"name"));
 
     // Name Value Exact if name=foo
-    let q = FieldQuery::parse("name=foo");
+    let q = FieldQuery::parse("/name=foo");
     assert_eq!(q, FieldQuery::NameValueExact(b"name", b"foo"));
 
     // Name and value contains
-    let q = FieldQuery::parse("name*=foo");
+    let q = FieldQuery::parse("/name*=foo");
     assert_eq!(q, FieldQuery::NameAndContainsValue(b"name", b"foo"));
+
+    // search everywhere
+    let q = FieldQuery::parse("foo");
+    assert_eq!(q, FieldQuery::SearchEverywhere(b"foo"));
 }
 
 #[rstest::rstest]

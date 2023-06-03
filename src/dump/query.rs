@@ -6,6 +6,7 @@ use memchr::memmem::Finder;
 
 #[derive(Debug, PartialEq)]
 enum FieldQuery<'a> {
+    SearchEverywhere(&'a [u8]),
     NameOnly(&'a [u8]),
     NameValueExact(&'a [u8], &'a [u8]),
     NameAndContainsValue(&'a [u8], &'a [u8]),
@@ -13,16 +14,20 @@ enum FieldQuery<'a> {
 
 impl<'a> FieldQuery<'a> {
     fn parse(s: &'a str) -> Self {
-        if let Some(pos) = s.find('=') {
-            let (name, value) = s.split_at(pos);
-            let value = &value[1..];
-            if let Some(name) = name.strip_suffix('*') {
-                Self::NameAndContainsValue(name.as_bytes(), value.as_bytes())
+        if let Some(s) = s.strip_prefix('/') {
+            if let Some(pos) = s.find('=') {
+                let (name, value) = s.split_at(pos);
+                let value = &value[1..];
+                if let Some(name) = name.strip_suffix('*') {
+                    Self::NameAndContainsValue(name.as_bytes(), value.as_bytes())
+                } else {
+                    Self::NameValueExact(name.as_bytes(), value.as_bytes())
+                }
             } else {
-                Self::NameValueExact(name.as_bytes(), value.as_bytes())
+                Self::NameOnly(s.as_bytes())
             }
         } else {
-            Self::NameOnly(s.as_bytes())
+            Self::SearchEverywhere(s.as_bytes())
         }
     }
 }
@@ -77,6 +82,7 @@ fn value_matches(o: &Object, q: &FieldQuery<'_>, ignore_case: bool) -> bool {
                     })
                 }
             }
+            _ => todo!(),
         } {
             true
         } else {
