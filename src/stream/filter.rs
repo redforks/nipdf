@@ -1,42 +1,44 @@
 use anyhow::Result as AnyResult;
-use lopdf::Stream;
-use once_cell::unsync::Lazy;
-use std::{borrow::Cow, str::from_utf8};
-
-use lopdf::Dictionary;
+use lopdf::{Dictionary, Object, Stream};
+use std::{borrow::Cow, iter::repeat, str::from_utf8};
 
 pub trait Filter {
-    fn filter<'a>(&self, data: Cow<'a, [u8]>, params: &Dictionary) -> AnyResult<Cow<'a, [u8]>>;
-}
-
-impl<F: for<'b> Fn(Cow<'b, [u8]>, &Dictionary) -> AnyResult<Cow<'b, [u8]>> + 'static> Filter for F {
     fn filter<'a>(
         &self,
         data: Cow<'a, [u8]>,
-        params: &Dictionary,
+        params: Option<&Dictionary>,
+    ) -> AnyResult<Cow<'a, [u8]>>;
+}
+
+impl<F: for<'b> Fn(Cow<'b, [u8]>, Option<&Dictionary>) -> AnyResult<Cow<'b, [u8]>> + 'static> Filter
+    for F
+{
+    fn filter<'a>(
+        &self,
+        data: Cow<'a, [u8]>,
+        params: Option<&Dictionary>,
     ) -> Result<Cow<'a, [u8]>, anyhow::Error> {
         self(data, params)
     }
 }
 
 #[cfg(test)]
-fn zero_decoder<'a>(data: Cow<'a, [u8]>, _params: &Dictionary) -> AnyResult<Cow<'a, [u8]>> {
+fn zero_decoder<'a>(data: Cow<'a, [u8]>, _params: Option<&Dictionary>) -> AnyResult<Cow<'a, [u8]>> {
     Ok(Cow::from(vec![0; data.len()]))
 }
 
 #[cfg(test)]
-fn inc_decoder<'a>(data: Cow<'a, [u8]>, params: &Dictionary) -> AnyResult<Cow<'a, [u8]>> {
-    use lopdf::Object;
-
-    let step = params
-        .get(super::FILTER_INC_DECODER_STEP_PARAM)
-        .map_or(1u8, |v| {
-            if let Object::Integer(i) = v {
-                *i as u8
-            } else {
-                panic!("Invalid step parameter type")
-            }
-        });
+fn inc_decoder<'a>(data: Cow<'a, [u8]>, params: Option<&Dictionary>) -> AnyResult<Cow<'a, [u8]>> {
+    let step = params.map_or(1, |p| {
+        p.get(super::FILTER_INC_DECODER_STEP_PARAM)
+            .map_or(1u8, |v| {
+                if let Object::Integer(i) = v {
+                    *i as u8
+                } else {
+                    panic!("Invalid step parameter type")
+                }
+            })
+    });
     let mut buf = Vec::with_capacity(data.len());
     for b in data.iter() {
         buf.push(b + step);
@@ -64,6 +66,51 @@ pub enum DecodeError {
     ExternalStreamNotSupported,
     #[error("Filter error")]
     FilterError(#[from] anyhow::Error),
+    #[error("Filter and params mismatch")] // more than one filter and params not array
+    FilterAndParamsMismatch,
+    #[error("Invalid filter object type")]
+    InvalidFilterObjectType,
+    #[error("Invalid params object type")]
+    InvalidParamsObjectType,
+}
+
+/// Iterate over filters and their parameters of `stream_dict`.
+fn iter_filter(
+    stream_dict: &Dictionary,
+) -> Result<impl Iterator<Item = (&str, Option<&Dictionary>)>, DecodeError> {
+    let filters = stream_dict.get(super::KEY_FILTER).map_or_else(
+        |_| Ok(vec![]),
+        |v| match v {
+            Object::Array(vals) => vals
+                .iter()
+                .map(|v| {
+                    v.as_name_str()
+                        .map_err(|_| DecodeError::InvalidFilterObjectType)
+                })
+                .collect(),
+            Object::Name(s) => Ok(vec![from_utf8(s).unwrap()]),
+            _ => Err(DecodeError::InvalidFilterObjectType),
+        },
+    )?;
+    let params = stream_dict.get(super::KEY_DECODE_PARMS).map_or_else(
+        |_| Ok(vec![]),
+        |v| match v {
+            Object::Null => Ok(vec![]),
+            Object::Array(vals) => vals
+                .iter()
+                .map(|v| match v {
+                    Object::Null => Ok(None),
+                    Object::Dictionary(dict) => Ok(Some(dict)),
+                    _ => Err(DecodeError::InvalidParamsObjectType),
+                })
+                .collect(),
+            Object::Dictionary(dict) => Ok(vec![Some(dict)]),
+            _ => Err(DecodeError::InvalidParamsObjectType),
+        },
+    )?;
+    Ok(filters
+        .into_iter()
+        .zip(params.into_iter().chain(repeat(None))))
 }
 
 /// Decode stream content by filters defined in `stream` dict.
@@ -72,21 +119,10 @@ pub fn decode(stream: &Stream) -> Result<Vec<u8>, DecodeError> {
         return Err(DecodeError::ExternalStreamNotSupported);
     }
 
-    let Ok(filters) = stream.filters() else {
-        return Ok(stream.content.clone());
-    };
-
-    let empty_dict = Dictionary::new();
-    let params = Lazy::new(|| {
-        stream.dict.get(super::KEY_DECODE_PARMS).map_or_else(
-            |_| &empty_dict,
-            |v| v.as_dict().expect("DecodeParms should be dict"),
-        )
-    });
     let mut buf = Cow::from(stream.content.as_slice());
-    for filter_name in filters {
+    for (filter_name, params) in iter_filter(&stream.dict)? {
         let f = create_filter(filter_name.as_bytes())?;
-        buf = f.filter(buf, &params)?;
+        buf = f.filter(buf, params)?;
     }
     Ok(buf.into_owned())
 }
