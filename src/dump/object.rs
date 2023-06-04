@@ -184,10 +184,10 @@ impl<'a> StreamContentDumper<'a> {
     /// Write stream content to `w`.
     pub fn write_content(&self, mut w: impl std::io::Write) -> anyhow::Result<u64> {
         // variable to hold temp decoded data
-        let decoded: Vec<u8>;
+        let decoded;
         let mut r = if self.1 {
             decoded = decode(self.0)?;
-            decoded.as_slice()
+            &decoded
         } else {
             self.0.content.as_slice()
         };

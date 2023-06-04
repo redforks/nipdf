@@ -12,14 +12,14 @@ use lopdf::{Dictionary, Object, Stream};
 fn decode_no_filter() {
     let stream = Stream::new(Dictionary::new(), vec![0, 1, 2]);
     let result = decode(&stream).unwrap();
-    assert_eq!(vec![0, 1, 2], result);
+    assert_eq!([0, 1, 2].as_slice(), &result as &[u8]);
 }
 
 #[test]
 fn decode_one_filter() {
     let dict = Dictionary::from_iter([(KEY_FILTER, new_name(FILTER_ZERO_DECODER))].into_iter());
     let stream = Stream::new(dict, vec![0, 1, 2]);
-    assert_eq!(vec![0, 0, 0], decode(&stream).unwrap());
+    assert_eq!([0, 0, 0].as_slice(), &decode(&stream).unwrap() as &[u8]);
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn decode_two_fiters() {
         .into_iter(),
     );
     let stream = Stream::new(dict, vec![0, 1, 2]);
-    assert_eq!(vec![2, 2, 2], decode(&stream).unwrap());
+    assert_eq!([2, 2, 2].as_slice(), &decode(&stream).unwrap() as &[u8]);
 }
 
 #[test]
@@ -169,7 +169,10 @@ fn test_iter_filter() {
     let dict = Dictionary::from_iter(
         [
             (KEY_FILTER, vec![new_name("zero"), new_name("inc")].into()),
-            (KEY_DECODE_PARMS, vec![Object::Null, Dictionary::new().into()].into()),
+            (
+                KEY_DECODE_PARMS,
+                vec![Object::Null, Dictionary::new().into()].into(),
+            ),
         ]
         .into_iter(),
     );

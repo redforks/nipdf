@@ -114,7 +114,7 @@ fn iter_filter(
 }
 
 /// Decode stream content by filters defined in `stream` dict.
-pub fn decode(stream: &Stream) -> Result<Vec<u8>, DecodeError> {
+pub fn decode(stream: &Stream) -> Result<Cow<[u8]>, DecodeError> {
     if stream.dict.has(super::KEY_FFILTER) {
         return Err(DecodeError::ExternalStreamNotSupported);
     }
@@ -124,7 +124,7 @@ pub fn decode(stream: &Stream) -> Result<Vec<u8>, DecodeError> {
         let f = create_filter(filter_name.as_bytes())?;
         buf = f.filter(buf, params)?;
     }
-    Ok(buf.into_owned())
+    Ok(buf)
 }
 
 #[cfg(test)]
