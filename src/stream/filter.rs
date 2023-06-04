@@ -3,26 +3,6 @@ use lopdf::{Dictionary, Object, Stream};
 use std::io::Read;
 use std::{borrow::Cow, iter::repeat, str::from_utf8};
 
-pub trait Filter {
-    fn filter<'a>(
-        &self,
-        data: Cow<'a, [u8]>,
-        params: Option<&Dictionary>,
-    ) -> AnyResult<Cow<'a, [u8]>>;
-}
-
-impl<F: for<'b> Fn(Cow<'b, [u8]>, Option<&Dictionary>) -> AnyResult<Cow<'b, [u8]>> + 'static> Filter
-    for F
-{
-    fn filter<'a>(
-        &self,
-        data: Cow<'a, [u8]>,
-        params: Option<&Dictionary>,
-    ) -> Result<Cow<'a, [u8]>, anyhow::Error> {
-        self(data, params)
-    }
-}
-
 #[cfg(test)]
 fn zero_decoder<'a>(data: Cow<'a, [u8]>, _params: Option<&Dictionary>) -> AnyResult<Cow<'a, [u8]>> {
     Ok(Cow::from(vec![0; data.len()]))
@@ -58,15 +38,19 @@ fn flate_decode<'a>(data: Cow<'a, [u8]>, params: Option<&Dictionary>) -> AnyResu
     Ok(Cow::from(buf))
 }
 
-fn create_filter(name: &[u8]) -> Result<Box<dyn Filter>, DecodeError> {
-    match name {
+fn filter<'a>(
+    data: Cow<'a, [u8]>,
+    filter_name: &[u8],
+    params: Option<&Dictionary>,
+) -> Result<Cow<'a, [u8]>, DecodeError> {
+    match filter_name {
         #[cfg(test)]
-        super::FILTER_ZERO_DECODER => Ok(Box::new(zero_decoder)),
+        super::FILTER_ZERO_DECODER => Ok(zero_decoder(data, params)?),
         #[cfg(test)]
-        super::FILTER_INC_DECODER => Ok(Box::new(inc_decoder)),
-        super::FILTER_FLATE_DECODE => Ok(Box::new(flate_decode)),
+        super::FILTER_INC_DECODER => Ok(inc_decoder(data, params)?),
+        super::FILTER_FLATE_DECODE => Ok(flate_decode(data, params)?),
         _ => Err(DecodeError::UnknownFilter(
-            from_utf8(name).unwrap().to_string(),
+            from_utf8(filter_name).unwrap().to_string(),
         )),
     }
 }
@@ -134,8 +118,7 @@ pub fn decode(stream: &Stream) -> Result<Cow<[u8]>, DecodeError> {
 
     let mut buf = Cow::from(stream.content.as_slice());
     for (filter_name, params) in iter_filter(&stream.dict)? {
-        let f = create_filter(filter_name)?;
-        buf = f.filter(buf, params)?;
+        buf = filter(buf, filter_name, params)?;
     }
     Ok(buf)
 }
