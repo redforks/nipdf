@@ -4,12 +4,12 @@ use std::io::Read;
 use std::{borrow::Cow, iter::repeat, str::from_utf8};
 
 #[cfg(test)]
-fn zero_decoder<'a>(data: Cow<'a, [u8]>, _params: Option<&Dictionary>) -> AnyResult<Cow<'a, [u8]>> {
-    Ok(Cow::from(vec![0; data.len()]))
+fn zero_decoder(data: &[u8]) -> Vec<u8> {
+    vec![0u8; data.len()]
 }
 
 #[cfg(test)]
-fn inc_decoder<'a>(data: Cow<'a, [u8]>, params: Option<&Dictionary>) -> AnyResult<Cow<'a, [u8]>> {
+fn inc_decoder(data: &[u8], params: Option<&Dictionary>) -> Vec<u8> {
     let step = params.map_or(1, |p| {
         p.get(super::FILTER_INC_DECODER_STEP_PARAM)
             .map_or(1u8, |v| {
@@ -24,30 +24,30 @@ fn inc_decoder<'a>(data: Cow<'a, [u8]>, params: Option<&Dictionary>) -> AnyResul
     for b in data.iter() {
         buf.push(b + step);
     }
-    Ok(Cow::from(buf))
+    buf
 }
 
-fn flate_decode<'a>(data: Cow<'a, [u8]>, params: Option<&Dictionary>) -> AnyResult<Cow<'a, [u8]>> {
+fn flate_decode(data: &[u8], params: Option<&Dictionary>) -> AnyResult<Vec<u8>> {
     assert!(
         params.is_none(),
         "FlateDecode params support not implemented"
     );
-    let mut decoder = flate2::bufread::ZlibDecoder::new(data.as_ref());
+    let mut decoder = flate2::bufread::ZlibDecoder::new(data);
     let mut buf = Vec::new();
     decoder.read_to_end(&mut buf)?;
-    Ok(Cow::from(buf))
+    Ok(buf)
 }
 
-fn filter<'a>(
-    data: Cow<'a, [u8]>,
+fn filter(
+    data: &[u8],
     filter_name: &[u8],
     params: Option<&Dictionary>,
-) -> Result<Cow<'a, [u8]>, DecodeError> {
+) -> Result<Vec<u8>, DecodeError> {
     match filter_name {
         #[cfg(test)]
-        super::FILTER_ZERO_DECODER => Ok(zero_decoder(data, params)?),
+        super::FILTER_ZERO_DECODER => Ok(zero_decoder(data)),
         #[cfg(test)]
-        super::FILTER_INC_DECODER => Ok(inc_decoder(data, params)?),
+        super::FILTER_INC_DECODER => Ok(inc_decoder(data, params)),
         super::FILTER_FLATE_DECODE => Ok(flate_decode(data, params)?),
         _ => Err(DecodeError::UnknownFilter(
             from_utf8(filter_name).unwrap().to_string(),
@@ -118,7 +118,7 @@ pub fn decode(stream: &Stream) -> Result<Cow<[u8]>, DecodeError> {
 
     let mut buf = Cow::from(stream.content.as_slice());
     for (filter_name, params) in iter_filter(&stream.dict)? {
-        buf = filter(buf, filter_name, params)?;
+        buf = filter(&buf, filter_name, params)?.into();
     }
     Ok(buf)
 }
