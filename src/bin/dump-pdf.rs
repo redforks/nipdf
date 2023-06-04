@@ -1,5 +1,7 @@
 use clap::{arg, Command};
-use pdf2docx::dump::{object::DictionaryDumper, objects::dump_objects, xref::dump_xref};
+use pdf2docx::dump::{
+    object::DictionaryDumper, objects::dump_objects, query::query, xref::dump_xref,
+};
 
 use lopdf::Document;
 
@@ -36,8 +38,22 @@ fn cli() -> Command {
             Command::new("objects")
                 .about("Dump objects")
                 .arg(arg!([id] "Object ID to dump"))
-                .arg(arg!(--raw "Dump stream object content"))
-                .arg(arg!(--decode "Decode stream object content, no effect if not set --raw option")),
+                .arg(arg!(-r --raw "Dump stream object content"))
+                .arg(arg!(-d --decode "Decode stream object content, no effect if not set --raw option")),
+        )
+        .subcommand(
+            Command::new("query")
+                .about("Query objects")
+                .long_about("If <query> not starts with '/', search <query> at everywhere, including
+Dictionary key, non-string values are converted to string and then searched.
+
+/Filter: search for object contains key 'Filter'
+/Filter=ASCIIHexDecode: search for object contains key 'Filter' and value is 'ASCIIHexDecode'
+/Filter*=Hex: search for object contains key 'Filter' and value contains 'Hex'
+                ")
+                .visible_alias("q")
+                .arg(arg!(-i --"ignore-case" "Ignore case when both in field name and value"))
+                .arg(arg!(<query> "Query string, e.g. foo /Filter /Filter=ASCIIHexDecode /Filter*=Hex"))
         )
 }
 
@@ -55,8 +71,16 @@ fn main() {
         Some(("objects", sub_m)) => dump_objects(
             &doc,
             sub_m.get_one::<String>("id").and_then(|s| s.parse().ok()),
-            sub_m.get_one::<bool>("raw").map(|x| *x).unwrap_or(false),
-            sub_m.get_one::<bool>("decode").map(|x| *x).unwrap_or(false),
+            sub_m.get_one::<bool>("raw").copied().unwrap_or(false),
+            sub_m.get_one::<bool>("decode").copied().unwrap_or(false),
+        ),
+        Some(("query", sub_m)) => query(
+            &doc,
+            sub_m.get_one::<String>("query"),
+            sub_m
+                .get_one::<bool>("ignore-case")
+                .copied()
+                .unwrap_or(false),
         ),
         _ => todo!(),
     }

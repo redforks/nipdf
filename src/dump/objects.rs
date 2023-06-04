@@ -1,7 +1,7 @@
 use crate::dump::object::ObjectIdDumper;
 use std::{fmt::Display, io::stdout};
 
-use super::object::{ObjectDumper, StreamDumper};
+use super::object::{ObjectDumper, StreamContentDumper};
 use lopdf::{Document, Object, ObjectId};
 
 struct ObjectEntryDumper<'a>(&'a ObjectId, &'a Object);
@@ -42,11 +42,13 @@ fn exactly_one<T>(mut iter: impl Iterator<Item = T>) -> Result<T, ExactlyOneErro
     }
 }
 
-fn dump_stream_content(doc: &Document, id: Option<u32>) {
+fn dump_stream_content(doc: &Document, id: Option<u32>, dump_decode: bool) {
     match exactly_one(filter_by_id(doc, id)) {
         Ok((_, obj)) => match obj {
             Object::Stream(stream) => {
-                StreamDumper::new(stream).write_content(stdout()).unwrap();
+                StreamContentDumper::new(stream, dump_decode)
+                    .write_content(stdout())
+                    .unwrap();
             }
             _ => {
                 eprintln!("Object not stearm");
@@ -66,7 +68,7 @@ fn dump_stream_content(doc: &Document, id: Option<u32>) {
 /// Dump objects in the `document`, if `id` is `None`, dump all objects, otherwise dump the object with `id`
 pub fn dump_objects(doc: &Document, id: Option<u32>, dump_content: bool, decode: bool) {
     if dump_content {
-        dump_stream_content(doc, id)
+        dump_stream_content(doc, id, decode)
     } else {
         let mut not_found = true;
         filter_by_id(doc, id).for_each(|(id, obj)| {

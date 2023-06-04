@@ -3,6 +3,8 @@ use std::fmt::Display;
 use std::fmt::Write;
 use std::str::from_utf8;
 
+use crate::stream::decode;
+
 use super::Indent;
 use lopdf::{Dictionary, Object, ObjectId, Stream};
 
@@ -171,6 +173,29 @@ impl<'a> Display for DictionaryDumper<'a> {
     }
 }
 
+/// Dump stream content.
+pub struct StreamContentDumper<'a>(&'a Stream, bool);
+
+impl<'a> StreamContentDumper<'a> {
+    pub fn new(s: &'a Stream, dump_decoded: bool) -> Self {
+        Self(s, dump_decoded)
+    }
+
+    /// Write stream content to `w`.
+    pub fn write_content(&self, mut w: impl std::io::Write) -> anyhow::Result<u64> {
+        // variable to hold temp decoded data
+        let decoded;
+        let mut r = if self.1 {
+            decoded = decode(self.0)?;
+            &decoded
+        } else {
+            self.0.content.as_slice()
+        };
+
+        Ok(std::io::copy(&mut r, &mut w)?)
+    }
+}
+
 pub struct StreamDumper<'a>(&'a Stream, Indent);
 
 impl<'a> StreamDumper<'a> {
@@ -180,12 +205,6 @@ impl<'a> StreamDumper<'a> {
 
     fn with_indent(s: &'a Stream, indent: Indent) -> Self {
         Self(s, indent)
-    }
-
-    /// Write stream content to `w`.
-    pub fn write_content(&self, mut w: impl std::io::Write) -> std::io::Result<u64> {
-        let mut r = self.0.content.as_slice();
-        std::io::copy(&mut r, &mut w)
     }
 }
 
