@@ -22,7 +22,7 @@ ouroboros = "0.15.6"
 lopdf = { git = "https://github.com/redforks/lopdf.git" }
 
 [dev-dependencies]
-rstest = "0.17.0"
+test-case = "3.1.0"
 
 [features]
 dump = ["hex", "clap"]
