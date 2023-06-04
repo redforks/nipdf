@@ -1,5 +1,6 @@
 use anyhow::Result as AnyResult;
 use lopdf::{Dictionary, Object, Stream};
+use std::io::Read;
 use std::{borrow::Cow, iter::repeat, str::from_utf8};
 
 pub trait Filter {
@@ -46,12 +47,24 @@ fn inc_decoder<'a>(data: Cow<'a, [u8]>, params: Option<&Dictionary>) -> AnyResul
     Ok(Cow::from(buf))
 }
 
+fn flate_decode<'a>(data: Cow<'a, [u8]>, params: Option<&Dictionary>) -> AnyResult<Cow<'a, [u8]>> {
+    assert!(
+        params.is_none(),
+        "FlateDecode params support not implemented"
+    );
+    let mut decoder = flate2::bufread::ZlibDecoder::new(data.as_ref());
+    let mut buf = Vec::new();
+    decoder.read_to_end(&mut buf)?;
+    Ok(Cow::from(buf))
+}
+
 fn create_filter(name: &[u8]) -> Result<Box<dyn Filter>, DecodeError> {
     match name {
         #[cfg(test)]
         super::FILTER_ZERO_DECODER => Ok(Box::new(zero_decoder)),
         #[cfg(test)]
         super::FILTER_INC_DECODER => Ok(Box::new(inc_decoder)),
+        super::FILTER_FLATE_DECODE => Ok(Box::new(flate_decode)),
         _ => Err(DecodeError::UnknownFilter(
             from_utf8(name).unwrap().to_string(),
         )),
