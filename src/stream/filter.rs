@@ -77,18 +77,18 @@ pub enum DecodeError {
 /// Iterate over filters and their parameters of `stream_dict`.
 fn iter_filter(
     stream_dict: &Dictionary,
-) -> Result<impl Iterator<Item = (&str, Option<&Dictionary>)>, DecodeError> {
+) -> Result<impl Iterator<Item = (&[u8], Option<&Dictionary>)>, DecodeError> {
     let filters = stream_dict.get(super::KEY_FILTER).map_or_else(
         |_| Ok(vec![]),
         |v| match v {
             Object::Array(vals) => vals
                 .iter()
                 .map(|v| {
-                    v.as_name_str()
+                    v.as_name()
                         .map_err(|_| DecodeError::InvalidFilterObjectType)
                 })
                 .collect(),
-            Object::Name(s) => Ok(vec![from_utf8(s).unwrap()]),
+            Object::Name(s) => Ok(vec![s]),
             _ => Err(DecodeError::InvalidFilterObjectType),
         },
     )?;
@@ -121,7 +121,7 @@ pub fn decode(stream: &Stream) -> Result<Cow<[u8]>, DecodeError> {
 
     let mut buf = Cow::from(stream.content.as_slice());
     for (filter_name, params) in iter_filter(&stream.dict)? {
-        let f = create_filter(filter_name.as_bytes())?;
+        let f = create_filter(filter_name)?;
         buf = f.filter(buf, params)?;
     }
     Ok(buf)
