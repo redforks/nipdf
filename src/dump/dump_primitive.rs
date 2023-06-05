@@ -109,7 +109,7 @@ impl<'a> Display for ArrayDumper<'a> {
     }
 }
 
-struct DictionaryDumper<'a>(&'a Dictionary, Indent);
+pub struct DictionaryDumper<'a>(&'a Dictionary, Indent);
 
 impl<'a> DictionaryDumper<'a> {
     pub fn new(d: &'a Dictionary) -> Self {
