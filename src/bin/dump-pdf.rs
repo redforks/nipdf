@@ -14,6 +14,14 @@ fn trailer<OC, SC>(f: &File<Vec<u8>, OC, SC>) {
     );
 }
 
+fn catalog<OC, SC>(f: &File<Vec<u8>, OC, SC>) {
+    let catalog = &f.trailer.root;
+    println!(
+        "Catalog:\n{}",
+        DictionaryDumper::new(&catalog.to_dict(&mut NoUpdate).unwrap())
+    );
+}
+
 fn cli() -> Command {
     Command::new("dump-pdf")
         .about("Dump PDF file structure and contents")
@@ -23,6 +31,10 @@ fn cli() -> Command {
             Command::new("trailer")
                 .visible_alias("ls")
                 .about("Dump PDF file summary"),
+        )
+        .subcommand(
+            Command::new("catalog")
+            .about("Dump catalog")
         )
         .subcommand(
             Command::new("xref")
@@ -59,6 +71,7 @@ fn main() -> ExitCode {
 
     match cli().get_matches().subcommand() {
         Some(("summary", _)) => trailer(&f),
+        Some(("catalog", _)) => catalog(&f),
         // Some(("xref", sub_m)) => dump_xref(
         //     &doc,
         //     sub_m.get_one::<String>("id").map(|s| s.parse().unwrap()),
