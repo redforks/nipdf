@@ -171,9 +171,11 @@ fn value_matches(o: &Object, q: &FieldQuery<'_>, ignore_case: bool) -> bool {
     }
 }
 
-pub fn query(doc: &Document, q: Option<&String>, ignore_case: bool) {
+/// Return false if no objects match the query.
+pub fn query(doc: &Document, q: Option<&String>, ignore_case: bool) -> bool {
     let field_query = q.map(|s| FieldQuery::parse(s.as_str()));
 
+    let mut found = false;
     doc.objects
         .iter()
         .filter(|(_, o)| {
@@ -184,7 +186,9 @@ pub fn query(doc: &Document, q: Option<&String>, ignore_case: bool) {
             }
             true
         })
+        .inspect(|_| found = true)
         .for_each(|(id, o)| println!("{}: {}", ObjectIdDumper::new(id), ObjectDumper::new(o)));
+    found
 }
 
 #[cfg(test)]
