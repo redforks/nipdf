@@ -37,11 +37,6 @@ fn cli() -> Command {
             .about("Dump catalog")
         )
         .subcommand(
-            Command::new("xref")
-                .about("Dump xref table")
-                .arg(arg!([id] "Object ID to dump")),
-        )
-        .subcommand(
             Command::new("objects")
                 .about("Dump objects")
                 .arg(arg!([id] "Object ID to dump"))
@@ -72,10 +67,6 @@ fn main() -> ExitCode {
     match cli().get_matches().subcommand() {
         Some(("summary", _)) => trailer(&f),
         Some(("catalog", _)) => catalog(&f),
-        // Some(("xref", sub_m)) => dump_xref(
-        //     &doc,
-        //     sub_m.get_one::<String>("id").map(|s| s.parse().unwrap()),
-        // ),
         // Some(("objects", sub_m)) => dump_objects(
         //     &doc,
         //     sub_m.get_one::<String>("id").and_then(|s| s.parse().ok()),
