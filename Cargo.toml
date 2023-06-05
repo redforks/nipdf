@@ -19,6 +19,7 @@ memchr = "2.5.0"
 itertools = "0.10.5"
 flate2 = "1.0.26"
 pdf = "0.8.1"
+istring = "0.3.3"
 
 [patch.crates-io]
 lopdf = { git = "https://github.com/redforks/lopdf.git" }

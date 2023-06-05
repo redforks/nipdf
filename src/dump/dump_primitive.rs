@@ -2,6 +2,7 @@ use std::fmt::{Display, Write};
 
 use super::object::Utf8OrHexDumper;
 use super::Indent;
+use istring::small::SmallString;
 use pdf::{
     object::PlainRef,
     primitive::{Dictionary, PdfStream, Primitive},
@@ -33,9 +34,16 @@ impl<'a> Display for PrimitiveDumper<'a> {
             Primitive::Dictionary(d) => DictionaryDumper::with_indent(d, self.1).fmt(f),
             Primitive::Array(a) => ArrayDumper::with_indent(a, self.1).fmt(f),
             Primitive::Reference(r) => PlainRefDumper(r).fmt(f),
-            Primitive::Name(n) => f.write_fmt(format_args!("/{}", n)),
-            _ => todo!(),
+            Primitive::Name(n) => NameDumper(n).fmt(f),
         }
+    }
+}
+
+struct NameDumper<'a>(&'a SmallString);
+
+impl<'a> Display for NameDumper<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("/{}", self.0))
     }
 }
 
@@ -117,30 +125,30 @@ impl<'a> Display for DictionaryDumper<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("<<")?;
 
-        // let indent = self.1.inc();
-        // if is_dictionary_complex(self.0) {
-        //     f.write_char('\n')?;
-        //     self.0.iter().try_for_each(|(k, v)| {
-        //         f.write_char('\n')?;
-        //         indent.fmt(f)?;
-        //         f.write_fmt(format_args!(
-        //             "/{} {}",
-        //             PrimitiveDumper(k, indent),
-        //             PrimitiveDumper(v, indent)
-        //         ))
-        //     })?;
-        //     self.1.fmt(f)?;
-        // } else {
-        //     self.0.iter().try_for_each(|(k, v)| {
-        //         f.write_char(' ')?;
-        //         f.write_fmt(format_args!(
-        //             "/{} {}",
-        //             PrimitiveDumper(k, indent),
-        //             PrimitiveDumper(v, indent)
-        //         ))
-        //     })?;
-        // }
-
+        let indent = self.1.inc();
+        if !is_dictionary_complex(self.0) {
+            for (k, v) in self.0.iter() {
+                f.write_fmt(format_args!(
+                    "{} {}",
+                    NameDumper(&k.0),
+                    PrimitiveDumper::with_indent(v, indent)
+                ))?;
+            }
+        } else {
+            f.write_char('\n')?;
+            for (k, v) in self.0.iter() {
+                indent.fmt(f)?;
+                NameDumper(&k.0).fmt(f)?;
+                if !is_complex_primitive(v) {
+                    f.write_char(' ')?;
+                } else {
+                    f.write_fmt(format_args!("\n{}", indent))?;
+                }
+                PrimitiveDumper::with_indent(v, indent).fmt(f)?;
+                f.write_char('\n')?;
+            }
+            self.1.fmt(f)?;
+        }
         f.write_str(">>")
     }
 }

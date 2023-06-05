@@ -41,9 +41,23 @@ fn array_dumper(exp: &str, items: Vec<Primitive>) {
     assert_eq!(format!("{}", ArrayDumper::new(&items)), exp);
 }
 
-#[test]
-fn dictionary_dumper() {
-    todo!()
+#[test_case("<<>>", Dictionary::new(); "empty")]
+#[test_case("<</hello 123>>", new_dictionary1("hello", 123); "one simple item")]
+#[test_case("<<
+  /hello 123
+  /world 456
+>>", new_dictionary2("hello", 123, "world", 456); "two simple items")]
+#[test_case("<<
+  /foo
+  [
+    1
+    2
+    3
+    null
+  ]
+>>", new_dictionary1("foo", vec![1.into(), 2.into(), 3.into(), Null]); "nested complex array")]
+fn dictionary_dumper(exp: &str, d: Dictionary) {
+    assert_eq!(format!("{}", DictionaryDumper::new(&d)), exp);
 }
 
 #[test_case(false, Null)]
