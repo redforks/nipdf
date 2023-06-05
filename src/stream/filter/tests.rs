@@ -114,7 +114,7 @@ fn test_iter_filter() {
     let dict = Dictionary::from_iter([(KEY_FILTER, new_name("zero"))].into_iter());
     assert_eq!(
         iter_filter(&dict).unwrap().collect_vec(),
-        vec![("zero", None)]
+        vec![(b"zero".as_slice(), None)]
     );
 
     // one filter with Null params
@@ -127,7 +127,7 @@ fn test_iter_filter() {
     );
     assert_eq!(
         iter_filter(&dict).unwrap().collect_vec(),
-        vec![("zero", None)]
+        vec![(b"zero".as_slice(), None)]
     );
 
     // one filter with params
@@ -140,7 +140,7 @@ fn test_iter_filter() {
     );
     assert_eq!(
         iter_filter(&dict).unwrap().collect_vec(),
-        vec![("zero", Some(&Dictionary::new()))]
+        vec![(b"zero".as_slice(), Some(&Dictionary::new()))]
     );
 
     // two filters no params
@@ -148,7 +148,7 @@ fn test_iter_filter() {
         Dictionary::from_iter([(KEY_FILTER, vec![new_name("zero"), new_name("inc")].into())]);
     assert_eq!(
         iter_filter(&dict).unwrap().collect_vec(),
-        vec![("zero", None), ("inc", None)]
+        vec![(b"zero".as_slice(), None), (b"inc".as_slice(), None)]
     );
 
     // two filters with params
@@ -162,7 +162,10 @@ fn test_iter_filter() {
     let empty_dict = Dictionary::new();
     assert_eq!(
         iter_filter(&dict).unwrap().collect_vec(),
-        vec![("zero", Some(&empty_dict)), ("inc", None)]
+        vec![
+            (b"zero".as_slice(), Some(&empty_dict)),
+            (b"inc".as_slice(), None)
+        ]
     );
 
     // two filters first params is Null
@@ -178,6 +181,9 @@ fn test_iter_filter() {
     );
     assert_eq!(
         iter_filter(&dict).unwrap().collect_vec(),
-        vec![("zero", None), ("inc", Some(&Dictionary::new()))]
+        vec![
+            (b"zero".as_slice(), None),
+            (b"inc".as_slice(), Some(&Dictionary::new()))
+        ]
     );
 }

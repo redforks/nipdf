@@ -1,3 +1,5 @@
+use std::process::ExitCode;
+
 use clap::{arg, Command};
 use pdf2docx::dump::{
     object::DictionaryDumper, objects::dump_objects, query::query, xref::dump_xref,
@@ -57,7 +59,7 @@ Dictionary key, non-string values are converted to string and then searched.
         )
 }
 
-fn main() {
+fn main() -> ExitCode {
     let matches = cli().get_matches();
     let filename: &String = matches.get_one("filename").unwrap();
     let doc = Document::load(filename).unwrap();
@@ -74,14 +76,22 @@ fn main() {
             sub_m.get_one::<bool>("raw").copied().unwrap_or(false),
             sub_m.get_one::<bool>("decode").copied().unwrap_or(false),
         ),
-        Some(("query", sub_m)) => query(
-            &doc,
-            sub_m.get_one::<String>("query"),
-            sub_m
-                .get_one::<bool>("ignore-case")
-                .copied()
-                .unwrap_or(false),
-        ),
+        Some(("query", sub_m)) => {
+            if query(
+                &doc,
+                sub_m.get_one::<String>("query"),
+                sub_m
+                    .get_one::<bool>("ignore-case")
+                    .copied()
+                    .unwrap_or(false),
+            ) {
+                return ExitCode::SUCCESS;
+            } else {
+                return ExitCode::FAILURE;
+            }
+        }
         _ => todo!(),
     }
+
+    ExitCode::SUCCESS
 }

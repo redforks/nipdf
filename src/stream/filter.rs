@@ -1,34 +1,15 @@
 use anyhow::Result as AnyResult;
 use lopdf::{Dictionary, Object, Stream};
+use std::io::Read;
 use std::{borrow::Cow, iter::repeat, str::from_utf8};
 
-pub trait Filter {
-    fn filter<'a>(
-        &self,
-        data: Cow<'a, [u8]>,
-        params: Option<&Dictionary>,
-    ) -> AnyResult<Cow<'a, [u8]>>;
-}
-
-impl<F: for<'b> Fn(Cow<'b, [u8]>, Option<&Dictionary>) -> AnyResult<Cow<'b, [u8]>> + 'static> Filter
-    for F
-{
-    fn filter<'a>(
-        &self,
-        data: Cow<'a, [u8]>,
-        params: Option<&Dictionary>,
-    ) -> Result<Cow<'a, [u8]>, anyhow::Error> {
-        self(data, params)
-    }
+#[cfg(test)]
+fn zero_decoder(data: &[u8]) -> Vec<u8> {
+    vec![0u8; data.len()]
 }
 
 #[cfg(test)]
-fn zero_decoder<'a>(data: Cow<'a, [u8]>, _params: Option<&Dictionary>) -> AnyResult<Cow<'a, [u8]>> {
-    Ok(Cow::from(vec![0; data.len()]))
-}
-
-#[cfg(test)]
-fn inc_decoder<'a>(data: Cow<'a, [u8]>, params: Option<&Dictionary>) -> AnyResult<Cow<'a, [u8]>> {
+fn inc_decoder(data: &[u8], params: Option<&Dictionary>) -> Vec<u8> {
     let step = params.map_or(1, |p| {
         p.get(super::FILTER_INC_DECODER_STEP_PARAM)
             .map_or(1u8, |v| {
@@ -43,17 +24,33 @@ fn inc_decoder<'a>(data: Cow<'a, [u8]>, params: Option<&Dictionary>) -> AnyResul
     for b in data.iter() {
         buf.push(b + step);
     }
-    Ok(Cow::from(buf))
+    buf
 }
 
-fn create_filter(name: &[u8]) -> Result<Box<dyn Filter>, DecodeError> {
-    match name {
+fn flate_decode(data: &[u8], params: Option<&Dictionary>) -> AnyResult<Vec<u8>> {
+    assert!(
+        params.is_none(),
+        "FlateDecode params support not implemented"
+    );
+    let mut decoder = flate2::bufread::ZlibDecoder::new(data);
+    let mut buf = Vec::new();
+    decoder.read_to_end(&mut buf)?;
+    Ok(buf)
+}
+
+fn filter(
+    data: &[u8],
+    filter_name: &[u8],
+    params: Option<&Dictionary>,
+) -> Result<Vec<u8>, DecodeError> {
+    match filter_name {
         #[cfg(test)]
-        super::FILTER_ZERO_DECODER => Ok(Box::new(zero_decoder)),
+        super::FILTER_ZERO_DECODER => Ok(zero_decoder(data)),
         #[cfg(test)]
-        super::FILTER_INC_DECODER => Ok(Box::new(inc_decoder)),
+        super::FILTER_INC_DECODER => Ok(inc_decoder(data, params)),
+        super::FILTER_FLATE_DECODE => Ok(flate_decode(data, params)?),
         _ => Err(DecodeError::UnknownFilter(
-            from_utf8(name).unwrap().to_string(),
+            from_utf8(filter_name).unwrap().to_string(),
         )),
     }
 }
@@ -77,18 +74,18 @@ pub enum DecodeError {
 /// Iterate over filters and their parameters of `stream_dict`.
 fn iter_filter(
     stream_dict: &Dictionary,
-) -> Result<impl Iterator<Item = (&str, Option<&Dictionary>)>, DecodeError> {
+) -> Result<impl Iterator<Item = (&[u8], Option<&Dictionary>)>, DecodeError> {
     let filters = stream_dict.get(super::KEY_FILTER).map_or_else(
         |_| Ok(vec![]),
         |v| match v {
             Object::Array(vals) => vals
                 .iter()
                 .map(|v| {
-                    v.as_name_str()
+                    v.as_name()
                         .map_err(|_| DecodeError::InvalidFilterObjectType)
                 })
                 .collect(),
-            Object::Name(s) => Ok(vec![from_utf8(s).unwrap()]),
+            Object::Name(s) => Ok(vec![s]),
             _ => Err(DecodeError::InvalidFilterObjectType),
         },
     )?;
@@ -121,8 +118,7 @@ pub fn decode(stream: &Stream) -> Result<Cow<[u8]>, DecodeError> {
 
     let mut buf = Cow::from(stream.content.as_slice());
     for (filter_name, params) in iter_filter(&stream.dict)? {
-        let f = create_filter(filter_name.as_bytes())?;
-        buf = f.filter(buf, params)?;
+        buf = filter(&buf, filter_name, params)?.into();
     }
     Ok(buf)
 }

@@ -22,3 +22,6 @@ pub const FILTER_INC_DECODER_STEP_PARAM: &[u8] = b"inc-step";
 /// step defined in [FILTER_INC_DECODER_STEP_PARAM] param, used in unit tests.
 #[cfg(test)]
 pub const FILTER_INC_DECODER: &[u8] = b"inc";
+
+pub const FILTER_ASCII_HEX_DECODE: &[u8] = b"ASCIIHexDecode";
+pub const FILTER_FLATE_DECODE: &[u8] = b"FlateDecode";
