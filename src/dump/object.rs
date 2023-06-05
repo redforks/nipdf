@@ -17,7 +17,7 @@ impl<'a> Display for HexDumer<'a> {
 }
 
 /// Dump `[u8]` as utf8 str, or hex if not valid utf8
-struct Utf8OrHexDumper<'a>(&'a [u8]);
+pub struct Utf8OrHexDumper<'a>(pub &'a [u8]);
 
 impl<'a> Display for Utf8OrHexDumper<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

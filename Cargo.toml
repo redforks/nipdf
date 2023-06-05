@@ -18,6 +18,7 @@ strum = {version = "0.24.1", features=["derive"]}
 memchr = "2.5.0"
 itertools = "0.10.5"
 flate2 = "1.0.26"
+pdf = "0.8.1"
 
 [patch.crates-io]
 lopdf = { git = "https://github.com/redforks/lopdf.git" }

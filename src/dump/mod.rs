@@ -1,5 +1,6 @@
 use std::fmt::{Display, Write};
 
+pub mod dump_primitive;
 pub mod object;
 pub mod objects;
 pub mod query;
