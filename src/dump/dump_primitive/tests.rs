@@ -17,9 +17,28 @@ fn primitive_dumper(exp: &str, val: impl Into<Primitive>) {
     assert_eq!(format!("{}", PrimitiveDumper::new(&val.into())), exp);
 }
 
-#[test]
-fn array_dumper() {
-    todo!()
+#[test_case("[]", vec![]; "empty")]
+#[test_case("[123]", vec![123.into()]; "one")]
+#[test_case("[123 456]", vec![123.into(), 456.into()]; "two")]
+#[test_case("[
+  123
+  456
+  789
+  12
+]", vec![123.into(), 456.into(), 789.into(), 12.into()]; "four items use complex format")]
+#[test_case("[
+  <<>>
+  <<>>
+  <<>>
+  <<>>
+]", vec![
+    Dictionary::new().into(),
+    Dictionary::new().into(),
+    Dictionary::new().into(),
+    Dictionary::new().into()
+]; "nested dict")]
+fn array_dumper(exp: &str, items: Vec<Primitive>) {
+    assert_eq!(format!("{}", ArrayDumper::new(&items)), exp);
 }
 
 #[test]

@@ -83,16 +83,18 @@ impl<'a> Display for ArrayDumper<'a> {
         if is_array_complex(self.0) {
             f.write_char('\n')?;
             self.0.iter().try_for_each(|item| {
-                f.write_char('\n')?;
                 indent.fmt(f)?;
-                f.write_fmt(format_args!("{}", PrimitiveDumper(item, indent)))
+                PrimitiveDumper::with_indent(item, indent).fmt(f)?;
+                f.write_char('\n')
             })?;
             self.1.fmt(f)?;
         } else {
-            self.0.iter().try_for_each(|item| {
-                f.write_char(' ')?;
-                f.write_fmt(format_args!("{}", PrimitiveDumper(item, indent)))
-            })?;
+            for (i, item) in self.0.iter().enumerate() {
+                if i > 0 {
+                    f.write_char(' ')?;
+                }
+                PrimitiveDumper::with_indent(item, indent).fmt(f)?;
+            }
         }
 
         f.write_char(']')
