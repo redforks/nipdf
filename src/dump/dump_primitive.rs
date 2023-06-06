@@ -47,7 +47,7 @@ impl<'a> Display for NameDumper<'a> {
     }
 }
 
-struct PlainRefDumper<'a>(&'a PlainRef);
+pub struct PlainRefDumper<'a>(pub &'a PlainRef);
 
 impl<'a> Display for PlainRefDumper<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

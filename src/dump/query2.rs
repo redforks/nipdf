@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use super::dump_primitive::{PlainRefDumper, PrimitiveDumper};
 use pdf::primitive::Primitive;
 
 use super::FileWithXRef;
@@ -47,9 +48,53 @@ fn as_str(v: &Primitive) -> Cow<str> {
     }
 }
 
+fn search_everywhere_matches(v: &Primitive, s: &str, ignore_case: bool) -> bool {
+    todo!()
+}
+
+fn search_name_only_matches(v: &Primitive, s: &str, ignore_case: bool) -> bool {
+    todo!()
+}
+
+fn search_name_value_exact(v: &Primitive, name: &str, value: &str, ignore_case: bool) -> bool {
+    todo!()
+}
+
+fn search_name_and_contains_value(
+    v: &Primitive,
+    name: &str,
+    value: &str,
+    ignore_case: bool,
+) -> bool {
+    todo!()
+}
+
 /// Return false if no objects match the query.
 pub fn query(doc: &FileWithXRef, q: Option<&String>, ignore_case: bool) -> bool {
-    todo!()
+    let field_query = q.map(|s| FieldQuery::parse(s.as_str()));
+    let mut found = false;
+    doc.iter_id_object()
+        .filter(|(_, o)| {
+            if let Some(field_query) = &field_query {
+                match field_query {
+                    FieldQuery::SearchEverywhere(s) => search_everywhere_matches(o, s, ignore_case),
+                    FieldQuery::NameOnly(s) => search_name_only_matches(o, s, ignore_case),
+                    FieldQuery::NameValueExact(name, value) => {
+                        search_name_value_exact(o, name, value, ignore_case)
+                    }
+                    FieldQuery::NameAndContainsValue(name, value) => {
+                        search_name_and_contains_value(o, name, value, ignore_case)
+                    }
+                }
+            } else {
+                true
+            }
+        })
+        .for_each(|(id, o)| {
+            found = true;
+            println!("{}: {}", PlainRefDumper(&id), PrimitiveDumper::new(&o));
+        });
+    found
 }
 
 #[cfg(test)]
