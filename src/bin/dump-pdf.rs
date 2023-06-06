@@ -7,8 +7,8 @@ use pdf::{
     object::{NoUpdate, ToDict},
     PdfError,
 };
-use pdf2docx::dump::FileWithXRef;
 use pdf2docx::dump::{dump_primitive::DictionaryDumper, objects::dump_objects};
+use pdf2docx::dump::{query2::query, FileWithXRef};
 
 fn trailer<OC, SC>(f: &File<Vec<u8>, OC, SC>) {
     println!(
@@ -77,20 +77,20 @@ fn main() -> ExitCode {
             sub_m.get_one::<String>("id").and_then(|s| s.parse().ok()),
             sub_m.get_one::<bool>("dump").copied().unwrap_or(false),
         ),
-        // Some(("query", sub_m)) => {
-        //     if query(
-        //         &doc,
-        //         sub_m.get_one::<String>("query"),
-        //         sub_m
-        //             .get_one::<bool>("ignore-case")
-        //             .copied()
-        //             .unwrap_or(false),
-        //     ) {
-        //         return ExitCode::SUCCESS;
-        //     } else {
-        //         return ExitCode::FAILURE;
-        //     }
-        // }
+        Some(("query", sub_m)) => {
+            if query(
+                &f,
+                sub_m.get_one::<String>("query"),
+                sub_m
+                    .get_one::<bool>("ignore-case")
+                    .copied()
+                    .unwrap_or(false),
+            ) {
+                return ExitCode::SUCCESS;
+            } else {
+                return ExitCode::FAILURE;
+            }
+        }
         _ => todo!(),
     }
 

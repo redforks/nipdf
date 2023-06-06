@@ -11,6 +11,7 @@ pub mod dump_primitive;
 pub mod object;
 pub mod objects;
 pub mod query;
+pub mod query2;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 /// When display, render n*2 spaces
