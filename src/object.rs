@@ -1,7 +1,7 @@
 //! Helpers for [`lopdf::Object`].
 use lopdf::Object;
 use pdf::{
-    object::{GenNr, ObjNr, ObjectWrite, PlainRef},
+    object::{GenNr, ObjNr, PlainRef},
     primitive::{Dictionary, Name, PdfString, Primitive},
 };
 

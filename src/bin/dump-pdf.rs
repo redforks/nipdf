@@ -4,12 +4,12 @@ use clap::{arg, Command};
 use pdf::{
     any::AnySync,
     file::{Cache, File},
-    object::{NoUpdate, ObjNr, PlainRef, Resolve, ToDict},
+    object::{NoUpdate, ToDict},
     PdfError,
 };
 use pdf2docx::dump::FileWithXRef;
 use pdf2docx::dump::{
-    dump_primitive::{DictionaryDumper, PrimitiveDumper},
+    dump_primitive::{DictionaryDumper},
     objects2::dump_objects,
 };
 
