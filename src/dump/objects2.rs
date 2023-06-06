@@ -12,14 +12,23 @@ use pdf::{
 use super::dump_primitive::PrimitiveDumper;
 use super::FileWithXRef;
 
+fn equals_to_id(id: Option<u32>, obj_id: &PlainRef) -> bool {
+    id.map_or(true, |id| id as ObjNr == obj_id.id)
+}
+
 /// Dump objects in the `document`, if `id` is `None`, dump all objects, otherwise dump the object with `id`
 pub fn dump_objects(f: &FileWithXRef, id: Option<u32>, dump_content: bool, decode: bool) {
-    for (id, obj) in f.iter_id_object() {
+    let mut not_found = true;
+    for (id, obj) in f.iter_id_object().filter(|(r, _)| equals_to_id(id, &r)) {
+        not_found = false;
         println!(
             "{}: {}",
             PrimitiveDumper::new(&id.into()),
             PrimitiveDumper::new(&obj)
         );
+    }
+    if not_found {
+        println!("Object not found");
     }
     // if dump_content {
     //     dump_stream_content(doc, id, decode)
