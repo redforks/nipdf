@@ -1,3 +1,7 @@
+use std::borrow::Cow;
+
+use pdf::primitive::Primitive;
+
 use super::FileWithXRef;
 
 #[derive(Debug, PartialEq)]
@@ -25,6 +29,21 @@ impl<'a> FieldQuery<'a> {
         } else {
             Self::SearchEverywhere(s)
         }
+    }
+}
+
+fn as_str(v: &Primitive) -> Cow<str> {
+    match v {
+        Primitive::Null => "null".into(),
+        Primitive::Boolean(b) => if *b { "true" } else { "false" }.into(),
+        Primitive::Integer(i) => i.to_string().into(),
+        Primitive::Number(r) => r.to_string().into(),
+        Primitive::Name(n) => n.as_str().into(),
+        Primitive::String(s) => s.to_string_lossy().into(),
+        Primitive::Reference(r) => r.id.to_string().into(),
+        Primitive::Array(_) => "ARRAY".into(),
+        Primitive::Dictionary(_) => "DICT".into(),
+        Primitive::Stream(_) => "STREAM".into(),
     }
 }
 

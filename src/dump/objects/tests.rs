@@ -1,14 +1,7 @@
 use super::*;
-use pdf::object::GenNr;
+use crate::object::new_plain_ref;
 use std::iter::{empty, once, repeat};
 use test_case::test_case;
-
-fn new_plain_ref(id: u32, gen: u16) -> PlainRef {
-    PlainRef {
-        id: id as ObjNr,
-        gen: gen as GenNr,
-    }
-}
 
 #[test_case(true, None, new_plain_ref(1, 0); "always true if no id")]
 #[test_case(true, Some(1), new_plain_ref(1, 0); "true if id matches")]
