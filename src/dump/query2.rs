@@ -75,40 +75,39 @@ impl<'a> Contains<'a> {
     }
 }
 
-fn iter_self_and_children(v: &Primitive) -> impl Iterator<Item = &Primitive> {
-    let mut stack = vec![v];
-    std::iter::from_fn(move || {
-        if let Some(v) = stack.pop() {
-            match v {
-                Primitive::Array(a) => {
-                    stack.extend(a.iter());
-                }
-                Primitive::Dictionary(d) => {
-                    stack.extend(d.values());
-                }
-                Primitive::Stream(s) => {
-                    stack.extend(s.info.iter().map(|(_, v)| v));
-                }
-                _ => {}
+/// return true if any `f` call returns true
+fn walk_self_and_children(
+    v: &Primitive,
+    f: &impl Fn(&Primitive) -> bool,
+    include_dict_name: bool,
+) -> bool {
+    if f(v) {
+        return true;
+    }
+
+    match v {
+        Primitive::Array(a) => a
+            .iter()
+            .any(|v| walk_self_and_children(v, f, include_dict_name)),
+        Primitive::Dictionary(d) => {
+            if include_dict_name && d.keys().any(|k| f(&Primitive::from(k.clone()))) {
+                true
+            } else {
+                d.values()
+                    .any(|v| walk_self_and_children(v, f, include_dict_name))
             }
-            Some(v)
-        } else {
-            None
         }
-    })
+        Primitive::Stream(s) => s
+            .info
+            .iter()
+            .any(|(_, v)| walk_self_and_children(v, f, include_dict_name)),
+        _ => false,
+    }
 }
 
 fn search_everywhere(v: &Primitive, s: &str, ignore_case: bool) -> bool {
     let contains = Contains::new(s, ignore_case);
-    fn inner(v: &Primitive, contains: &Contains) -> bool {
-        contains.contains(as_str(v).as_ref())
-            || match v {
-                Primitive::Dictionary(d) => d.iter().any(|(k, _)| contains.contains(k.as_str())),
-                _ => false,
-            }
-    }
-
-    iter_self_and_children(v).any(|v| inner(v, &contains))
+    walk_self_and_children(v, &|v| (&contains).contains(as_str(v).as_ref()), true)
 }
 
 fn search_name_only(v: &Primitive, s: &str, ignore_case: bool) -> bool {
