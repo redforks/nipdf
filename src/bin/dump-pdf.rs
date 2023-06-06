@@ -7,8 +7,11 @@ use pdf::{
     object::{NoUpdate, ObjNr, PlainRef, Resolve, ToDict},
     PdfError,
 };
-use pdf2docx::dump::dump_primitive::{DictionaryDumper, PrimitiveDumper};
 use pdf2docx::dump::FileWithXRef;
+use pdf2docx::dump::{
+    dump_primitive::{DictionaryDumper, PrimitiveDumper},
+    objects2::dump_objects,
+};
 
 fn trailer<OC, SC>(f: &File<Vec<u8>, OC, SC>) {
     println!(
@@ -26,26 +29,6 @@ where
         "Catalog:\n{}",
         DictionaryDumper::new(&f.get_root().to_dict(&mut NoUpdate).unwrap())
     );
-}
-
-fn object_ids(f: &FileWithXRef) {
-    let table = f.xref_table();
-    for id in table.iter() {
-        if let Ok(xref) = table.get(id as ObjNr) {
-            print!("{}: ", id);
-            let plain_ref = PlainRef {
-                id: id as ObjNr,
-                gen: xref.get_gen_nr(),
-            };
-            if let Ok(obj) = f.f().resolve(plain_ref) {
-                println!(
-                    "{}: {}",
-                    PrimitiveDumper::new(&plain_ref.into()),
-                    PrimitiveDumper::new(&obj)
-                );
-            }
-        }
-    }
 }
 
 fn cli() -> Command {
@@ -93,13 +76,12 @@ fn main() -> ExitCode {
     match cli().get_matches().subcommand() {
         Some(("trailer", _)) => trailer(f.f()),
         Some(("catalog", _)) => catalog(f.f()),
-        Some(("objects", sub_m)) => object_ids(&f),
-        // Some(("objects", sub_m)) => dump_objects(
-        //     &doc,
-        //     sub_m.get_one::<String>("id").and_then(|s| s.parse().ok()),
-        //     sub_m.get_one::<bool>("raw").copied().unwrap_or(false),
-        //     sub_m.get_one::<bool>("decode").copied().unwrap_or(false),
-        // ),
+        Some(("objects", sub_m)) => dump_objects(
+            &f,
+            sub_m.get_one::<String>("id").and_then(|s| s.parse().ok()),
+            sub_m.get_one::<bool>("raw").copied().unwrap_or(false),
+            sub_m.get_one::<bool>("decode").copied().unwrap_or(false),
+        ),
         // Some(("query", sub_m)) => {
         //     if query(
         //         &doc,
