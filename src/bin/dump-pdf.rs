@@ -8,10 +8,7 @@ use pdf::{
     PdfError,
 };
 use pdf2docx::dump::FileWithXRef;
-use pdf2docx::dump::{
-    dump_primitive::{DictionaryDumper},
-    objects2::dump_objects,
-};
+use pdf2docx::dump::{dump_primitive::DictionaryDumper, objects::dump_objects};
 
 fn trailer<OC, SC>(f: &File<Vec<u8>, OC, SC>) {
     println!(
