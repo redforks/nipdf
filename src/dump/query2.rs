@@ -98,7 +98,7 @@ fn iter_self_and_children(v: &Primitive) -> impl Iterator<Item = &Primitive> {
     })
 }
 
-fn search_everywhere_matches(v: &Primitive, s: &str, ignore_case: bool) -> bool {
+fn search_everywhere(v: &Primitive, s: &str, ignore_case: bool) -> bool {
     let contains = Contains::new(s, ignore_case);
     fn inner(v: &Primitive, contains: &Contains) -> bool {
         contains.contains(as_str(v).as_ref())
@@ -111,7 +111,7 @@ fn search_everywhere_matches(v: &Primitive, s: &str, ignore_case: bool) -> bool 
     iter_self_and_children(v).any(|v| inner(v, &contains))
 }
 
-fn search_name_only_matches(v: &Primitive, s: &str, ignore_case: bool) -> bool {
+fn search_name_only(v: &Primitive, s: &str, ignore_case: bool) -> bool {
     todo!()
 }
 
@@ -136,8 +136,8 @@ pub fn query(doc: &FileWithXRef, q: Option<&String>, ignore_case: bool) -> bool 
         .filter(|(_, o)| {
             if let Some(field_query) = &field_query {
                 match field_query {
-                    FieldQuery::SearchEverywhere(s) => search_everywhere_matches(o, s, ignore_case),
-                    FieldQuery::NameOnly(s) => search_name_only_matches(o, s, ignore_case),
+                    FieldQuery::SearchEverywhere(s) => search_everywhere(o, s, ignore_case),
+                    FieldQuery::NameOnly(s) => search_name_only(o, s, ignore_case),
                     FieldQuery::NameValueExact(name, value) => {
                         search_name_value_exact(o, name, value, ignore_case)
                     }

@@ -45,5 +45,5 @@ fn test_contains(exp: bool, needle: &str, haystack: &str, ignore_case: bool) {
 #[test_case(true, new_dictionary1("blah", new_pdf_string("foo")), "foo")]
 #[test_case(true, new_dictionary1("blah", vec![new_pdf_string("foo").into()]), "foo")]
 fn test_search_everywhere(exp: bool, v: impl Into<Primitive>, s: &str) {
-    assert_eq!(search_everywhere_matches(&v.into(), s, false), exp);
+    assert_eq!(search_everywhere(&v.into(), s, false), exp);
 }
