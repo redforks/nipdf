@@ -1,7 +1,8 @@
 use pdf::{
     backend::Backend,
     file::{File, FileOptions, NoCache},
-    object::NoResolve,
+    object::{NoResolve, ObjNr, PlainRef, Resolve},
+    primitive::Primitive,
     xref::XRefTable,
 };
 use std::fmt::{Display, Write};
@@ -56,6 +57,25 @@ impl FileWithXRef {
 
     pub fn xref_table(&self) -> &XRefTable {
         &self.xref_table
+    }
+
+    pub fn iter_id_object(&self) -> impl Iterator<Item = (PlainRef, Primitive)> + '_ {
+        let table = self.xref_table();
+        table.iter().filter_map(move |id| {
+            if let Ok(xref) = table.get(id as ObjNr) {
+                let plain_ref = PlainRef {
+                    id: id as ObjNr,
+                    gen: xref.get_gen_nr(),
+                };
+                if let Ok(obj) = self.f.resolve(plain_ref) {
+                    Some((plain_ref, obj))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
     }
 }
 
