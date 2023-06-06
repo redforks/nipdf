@@ -49,8 +49,7 @@ fn cli() -> Command {
             Command::new("objects")
                 .about("Dump objects")
                 .arg(arg!([id] "Object ID to dump"))
-                .arg(arg!(-r --raw "Dump stream object content"))
-                .arg(arg!(-d --decode "Decode stream object content, no effect if not set --raw option")),
+                .arg(arg!(-d --dump "Dump decoded stream content")),
         )
         .subcommand(
             Command::new("query")
@@ -79,8 +78,7 @@ fn main() -> ExitCode {
         Some(("objects", sub_m)) => dump_objects(
             &f,
             sub_m.get_one::<String>("id").and_then(|s| s.parse().ok()),
-            sub_m.get_one::<bool>("raw").copied().unwrap_or(false),
-            sub_m.get_one::<bool>("decode").copied().unwrap_or(false),
+            sub_m.get_one::<bool>("dump").copied().unwrap_or(false),
         ),
         // Some(("query", sub_m)) => {
         //     if query(
