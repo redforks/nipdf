@@ -1,4 +1,3 @@
-//! Helpers for [`lopdf::Object`].
 use pdf::{
     object::{GenNr, ObjNr, PlainRef},
     primitive::{Dictionary, Name, PdfString, Primitive},
