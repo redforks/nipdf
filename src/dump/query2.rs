@@ -152,7 +152,11 @@ fn search_name_and_contains_value(
     value: &str,
     ignore_case: bool,
 ) -> bool {
-    todo!()
+    let needle = StrCompare::new(name, ignore_case);
+    let contains = StrCompare::new(value, ignore_case);
+    walk_dict_entry_recursive(v, |n, v| {
+        needle == n && (&contains).contains(&as_str(v).as_ref())
+    })
 }
 
 /// Return false if no objects match the query.

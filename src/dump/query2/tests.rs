@@ -75,3 +75,12 @@ fn test_search_name_only(exp: bool, v: impl Into<Primitive>, s: &str) {
 fn test_search_name_value_exact(exp: bool, v: impl Into<Primitive>, name: &str, value: &str) {
     assert_eq!(search_name_value_exact(&v.into(), name, value, false), exp);
 }
+
+#[test_case(false, Primitive::Null, "null", "foo"; "Not a dictionary")]
+#[test_case(true, new_dictionary1("foo", 1), "foo", "1"; "name and value exact")]
+#[test_case(true, new_dictionary1("foo", 12), "foo", "1"; "contains value")]
+#[test_case(false, new_dictionary1("foo", 1), "foo", "2"; "value not match")]
+#[test_case(false, new_dictionary1("foo", new_pdf_string("bar")), "foobar", "bar"; "name not match")]
+fn test_search_name_and_contains_value(exp: bool, v: impl Into<Primitive>, name: &str, value: &str) {
+    assert_eq!(search_name_and_contains_value(&v.into(), name, value, false), exp);
+}
