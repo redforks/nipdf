@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
 use super::dump_primitive::{PlainRefDumper, PrimitiveDumper};
+use istring::SmallString;
 use pdf::primitive::Primitive;
 
 use super::FileWithXRef;
@@ -48,12 +49,23 @@ fn as_str(v: &Primitive) -> Cow<str> {
     }
 }
 
-struct Contains<'a> {
+/// Support eq and contains for str, with optional case insensitivity
+struct StrCompare<'a> {
     needle: Cow<'a, str>,
     ignore_case: bool,
 }
 
-impl<'a> Contains<'a> {
+impl<'a> PartialEq<&str> for StrCompare<'a> {
+    fn eq(&self, other: &&str) -> bool {
+        if self.ignore_case {
+            self.needle.eq_ignore_ascii_case(other)
+        } else {
+            self.needle.eq(other)
+        }
+    }
+}
+
+impl<'a> StrCompare<'a> {
     fn new(needle: &'a str, ignore_case: bool) -> Self {
         let needle = if ignore_case {
             needle.to_ascii_lowercase().into()
@@ -105,13 +117,27 @@ fn walk_self_and_children(
     }
 }
 
+fn walk_dict_entry_recursive(v: &Primitive, f: impl Fn(&SmallString, &Primitive) -> bool) -> bool {
+    walk_self_and_children(
+        v,
+        &|v: &Primitive| -> bool {
+            match v {
+                Primitive::Dictionary(d) => d.iter().any(|(k, v)| f(&k.0, v)),
+                _ => false,
+            }
+        },
+        false,
+    )
+}
+
 fn search_everywhere(v: &Primitive, s: &str, ignore_case: bool) -> bool {
-    let contains = Contains::new(s, ignore_case);
+    let contains = StrCompare::new(s, ignore_case);
     walk_self_and_children(v, &|v| (&contains).contains(as_str(v).as_ref()), true)
 }
 
 fn search_name_only(v: &Primitive, s: &str, ignore_case: bool) -> bool {
-    todo!()
+    let needle = StrCompare::new(s, ignore_case);
+    walk_dict_entry_recursive(v, |n, _| needle == n)
 }
 
 fn search_name_value_exact(v: &Primitive, name: &str, value: &str, ignore_case: bool) -> bool {

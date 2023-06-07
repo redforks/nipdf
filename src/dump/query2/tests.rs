@@ -34,8 +34,17 @@ fn test_as_str(exp: &str, v: impl Into<Primitive>) {
 #[test_case(false, "foo", "bar", false; "no match")]
 #[test_case(false, "foobar", "foo", true; "no contains")]
 fn test_contains(exp: bool, needle: &str, haystack: &str, ignore_case: bool) {
-    let c = Contains::new(needle, ignore_case);
+    let c = StrCompare::new(needle, ignore_case);
     assert_eq!(c.contains(haystack), exp);
+}
+
+#[test_case(true, "foo", "foo", false; "exact match")]
+#[test_case(false, "foo", "Foo", false; "case not match")]
+#[test_case(true, "Foo", "fOo", true; "exact match, ignore case")]
+#[test_case(false, "foo", "foobar", false; "contains")]
+fn test_eq(exp: bool, needle: &str, haystack: &str, ignore_case: bool) {
+    let c = StrCompare::new(needle, ignore_case);
+    assert_eq!(c == haystack, exp);
 }
 
 #[test_case(true, Primitive::Null, "null")]
@@ -46,4 +55,13 @@ fn test_contains(exp: bool, needle: &str, haystack: &str, ignore_case: bool) {
 #[test_case(true, new_dictionary1("blah", vec![new_pdf_string("foo").into()]), "foo")]
 fn test_search_everywhere(exp: bool, v: impl Into<Primitive>, s: &str) {
     assert_eq!(search_everywhere(&v.into(), s, false), exp);
+}
+
+#[test_case(false, Primitive::Null, "null"; "Not a dictionary")]
+#[test_case(true, new_dictionary1("foo", 1), "foo"; "Name only")]
+#[test_case(false, new_dictionary1("blah", new_pdf_string("foo")), "foo"; "name not match")]
+#[test_case(true, new_dictionary1("blah", new_dictionary1("foo", 1)), "foo"; "nested inside dict")]
+#[test_case(true, vec![new_dictionary1("foo", 1).into()], "foo"; "nested inside array")]
+fn test_search_name_only(exp: bool, v: impl Into<Primitive>, s: &str) {
+    assert_eq!(search_name_only(&v.into(), s, false), exp);
 }
