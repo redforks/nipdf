@@ -1,12 +1,37 @@
-use std::fmt::{Display, Write};
+use std::{
+    fmt::{Display, Write},
+    str::from_utf8,
+};
 
-use super::object::Utf8OrHexDumper;
 use super::Indent;
 use istring::small::SmallString;
 use pdf::{
     object::PlainRef,
     primitive::{Dictionary, PdfStream, Primitive},
 };
+
+struct HexDumer<'a>(&'a [u8]);
+
+impl<'a> Display for HexDumer<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&hex::encode_upper(self.0))
+    }
+}
+
+/// Dump `[u8]` as utf8 str, or hex if not valid utf8
+pub struct Utf8OrHexDumper<'a>(pub &'a [u8]);
+
+impl<'a> Display for Utf8OrHexDumper<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match from_utf8(self.0) {
+            Ok(s) => f.write_fmt(format_args!("{}", s)),
+            Err(_) => {
+                f.write_str("0x")?;
+                HexDumer(self.0).fmt(f)
+            }
+        }
+    }
+}
 
 pub struct PrimitiveDumper<'a>(&'a Primitive, Indent);
 
