@@ -1,5 +1,5 @@
 use pdf::{
-    object::{GenNr, ObjNr, PlainRef},
+    object::{GenNr, ObjNr, PlainRef, Rect},
     primitive::{Dictionary, Name, PdfString, Primitive},
 };
 
@@ -29,4 +29,13 @@ pub fn new_dictionary2(
 
 pub fn new_plain_ref(id: ObjNr, gen: GenNr) -> PlainRef {
     PlainRef { id, gen }
+}
+
+pub fn new_rect(left: f32, top: f32, right: f32, bottom: f32) -> Rect {
+    Rect {
+        left,
+        top,
+        right,
+        bottom,
+    }
 }

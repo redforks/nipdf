@@ -6,7 +6,7 @@ use std::{
 use super::Indent;
 use istring::small::SmallString;
 use pdf::{
-    object::PlainRef,
+    object::{PlainRef, Rect},
     primitive::{Dictionary, PdfStream, Primitive},
 };
 
@@ -202,6 +202,39 @@ fn is_complex_primitive(p: &Primitive) -> bool {
         Primitive::Dictionary(dict) => is_dictionary_complex(dict),
         Primitive::Array(items) => is_array_complex(items),
         _ => false,
+    }
+}
+
+pub struct RectDumper<'a>(pub &'a Rect);
+
+impl<'a> Display for RectDumper<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "Rect[{} {} {} {}]",
+            self.0.left, self.0.top, self.0.right, self.0.bottom
+        ))
+    }
+}
+
+pub struct OptionRectDumper<'a>(pub &'a Option<Rect>);
+
+impl<'a> Display for OptionRectDumper<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            Some(rect) => RectDumper(rect).fmt(f),
+            None => f.write_str("n/a"),
+        }
+    }
+}
+
+pub struct OptionPrimitiveDumper<'a>(pub &'a Option<Primitive>);
+
+impl<'a> Display for OptionPrimitiveDumper<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            Some(p) => PrimitiveDumper::new(p).fmt(f),
+            None => f.write_str("n/a"),
+        }
     }
 }
 

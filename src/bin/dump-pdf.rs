@@ -65,7 +65,7 @@ Dictionary key, non-string values are converted to string and then searched.
         .subcommand(
             Command::new("page")
             .about("Show total pages, show page detail info if provided page number")
-            .arg(arg!([page] "Page number to show"))
+            .arg(arg!([page] "Page number to show, start from 0"))
         )
 }
 

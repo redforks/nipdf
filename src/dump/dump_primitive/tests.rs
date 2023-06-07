@@ -1,5 +1,5 @@
 use super::*;
-use crate::object::{new_dictionary1, new_dictionary2, new_pdf_string, new_plain_ref};
+use crate::object::{new_dictionary1, new_dictionary2, new_pdf_string, new_plain_ref, new_rect};
 use pdf::primitive::{Name, Primitive::Null};
 use test_case::test_case;
 
@@ -100,4 +100,29 @@ fn test_is_array_complex(exp: bool, val: Vec<Primitive>) {
 #[test_case(true, new_dictionary1("foo", new_dictionary2("hello", 123, "bar", 1)); "contains complex item")]
 fn test_is_dictionary_complex(exp: bool, val: Dictionary) {
     assert_eq!(is_dictionary_complex(&val), exp);
+}
+
+#[test]
+fn rect_dumper() {
+    let rect = new_rect(1.0, 2.0, 3.0, 4.0);
+    assert_eq!(format!("{}", RectDumper(&rect)), "Rect[1 2 3 4]");
+}
+
+#[test]
+fn option_rect_dumper() {
+    let rect = new_rect(1.0, 2.0, 3.0, 4.0);
+    assert_eq!(
+        format!("{}", OptionRectDumper(&Some(rect))),
+        "Rect[1 2 3 4]"
+    );
+    assert_eq!(format!("{}", OptionRectDumper(&None)), "n/a");
+}
+
+#[test]
+fn option_primitive_dumper() {
+    assert_eq!(
+        format!("{}", OptionPrimitiveDumper(&Some(123.into()))),
+        "123"
+    );
+    assert_eq!(format!("{}", OptionPrimitiveDumper(&None)), "n/a");
 }
