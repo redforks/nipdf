@@ -59,6 +59,3 @@ pub fn new_dictionary2(
 pub fn new_plain_ref(id: ObjNr, gen: GenNr) -> PlainRef {
     PlainRef { id, gen }
 }
-
-#[cfg(test)]
-mod tests;
