@@ -62,6 +62,11 @@ Dictionary key, non-string values are converted to string and then searched.
                 .arg(arg!(-i --"ignore-case" "Ignore case when both in field name and value"))
                 .arg(arg!(<query> "Query string, e.g. foo /Filter /Filter=ASCIIHexDecode /Filter*=Hex"))
         )
+        .subcommand(
+            Command::new("page")
+            .about("Show total pages, show page detail info if provided page number")
+            .arg(arg!([page] "Page number to show"))
+        )
 }
 
 fn main() -> ExitCode {
@@ -90,6 +95,12 @@ fn main() -> ExitCode {
             } else {
                 return ExitCode::FAILURE;
             }
+        }
+        Some(("page", sub_m)) => {
+            pdf2docx::dump::page::page(
+                &f,
+                sub_m.get_one::<String>("page").map(|s| s.parse().unwrap()),
+            );
         }
         _ => todo!(),
     }

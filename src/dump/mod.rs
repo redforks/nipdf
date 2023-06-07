@@ -9,6 +9,7 @@ use std::fmt::{Display, Write};
 
 pub mod dump_primitive;
 pub mod objects;
+pub mod page;
 pub mod query;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
