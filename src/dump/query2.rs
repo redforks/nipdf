@@ -109,10 +109,9 @@ fn walk_self_and_children(
                     .any(|v| walk_self_and_children(v, f, include_dict_name))
             }
         }
-        Primitive::Stream(s) => s
-            .info
-            .iter()
-            .any(|(_, v)| walk_self_and_children(v, f, include_dict_name)),
+        Primitive::Stream(s) => {
+            walk_self_and_children(&Primitive::Dictionary(s.info.clone()), f, include_dict_name)
+        }
         _ => false,
     }
 }
