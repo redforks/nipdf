@@ -3,8 +3,6 @@ use std::fmt::Display;
 use std::fmt::Write;
 use std::str::from_utf8;
 
-use crate::stream::decode;
-
 use super::Indent;
 use lopdf::{Dictionary, Object, ObjectId, Stream};
 
@@ -170,29 +168,6 @@ impl<'a> Display for DictionaryDumper<'a> {
             self.1.fmt(f)?;
         }
         f.write_str(">>")
-    }
-}
-
-/// Dump stream content.
-pub struct StreamContentDumper<'a>(&'a Stream, bool);
-
-impl<'a> StreamContentDumper<'a> {
-    pub fn new(s: &'a Stream, dump_decoded: bool) -> Self {
-        Self(s, dump_decoded)
-    }
-
-    /// Write stream content to `w`.
-    pub fn write_content(&self, mut w: impl std::io::Write) -> anyhow::Result<u64> {
-        // variable to hold temp decoded data
-        let decoded;
-        let mut r = if self.1 {
-            decoded = decode(self.0)?;
-            &decoded
-        } else {
-            self.0.content.as_slice()
-        };
-
-        Ok(std::io::copy(&mut r, &mut w)?)
     }
 }
 

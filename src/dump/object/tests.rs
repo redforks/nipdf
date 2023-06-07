@@ -1,7 +1,3 @@
-use crate::{
-    object::new_name,
-    stream::{FILTER_ZERO_DECODER, KEY_FILTER},
-};
 use lopdf::{Dictionary as Dict, Object, Object::*, Stream, StringFormat};
 
 use super::*;
@@ -303,25 +299,4 @@ STREAM not allows_compression
 "#
         .trim_matches('\n')
     );
-}
-
-#[test]
-fn dump_stream_content() {
-    let stream = Stream::new(
-        [(KEY_FILTER, new_name(FILTER_ZERO_DECODER))]
-            .into_iter()
-            .collect(),
-        vec![1, 2, 3, 4, 5],
-    );
-
-    // dump content without decode
-    let mut dest = vec![];
-    let result = StreamContentDumper::new(&stream, false).write_content(&mut dest);
-    assert_eq!(result.unwrap(), 5);
-    assert_eq!(dest, vec![1, 2, 3, 4, 5]);
-
-    // dump decoded content
-    let mut dest = vec![];
-    let result = StreamContentDumper::new(&stream, true).write_content(&mut dest);
-    assert_eq!(result.unwrap(), 5);
 }
