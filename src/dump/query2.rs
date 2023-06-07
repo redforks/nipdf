@@ -141,7 +141,9 @@ fn search_name_only(v: &Primitive, s: &str, ignore_case: bool) -> bool {
 }
 
 fn search_name_value_exact(v: &Primitive, name: &str, value: &str, ignore_case: bool) -> bool {
-    todo!()
+    let needle = StrCompare::new(name, ignore_case);
+    let contains = StrCompare::new(value, ignore_case);
+    walk_dict_entry_recursive(v, |n, v| needle == n && (&contains).eq(&as_str(v).as_ref()))
 }
 
 fn search_name_and_contains_value(
