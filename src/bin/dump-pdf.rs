@@ -8,7 +8,7 @@ use pdf::{
     PdfError,
 };
 use pdf2docx::dump::{dump_primitive::DictionaryDumper, objects::dump_objects};
-use pdf2docx::dump::{query2::query, FileWithXRef};
+use pdf2docx::dump::{query::query, FileWithXRef};
 
 fn trailer<OC, SC>(f: &File<Vec<u8>, OC, SC>) {
     println!(
