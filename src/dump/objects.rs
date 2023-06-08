@@ -1,32 +1,21 @@
-use crate::dump::object::ObjectIdDumper;
-use std::{fmt::Display, io::stdout};
+use std::{
+    borrow::Borrow,
+    io::{stdout, Write},
+};
 
-use super::object::{ObjectDumper, StreamContentDumper};
-use lopdf::{Document, Object, ObjectId};
+use pdf::{
+    object::{ObjNr, PlainRef, Stream},
+    primitive::Primitive,
+};
 
-struct ObjectEntryDumper<'a>(&'a ObjectId, &'a Object);
+use super::dump_primitive::PrimitiveDumper;
+use super::FileWithXRef;
 
-impl<'a> Display for ObjectEntryDumper<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!(
-            "{}: {}",
-            ObjectIdDumper::new(self.0),
-            ObjectDumper::new(self.1)
-        ))
-    }
+fn equals_to_id(id: Option<u32>, obj_id: &PlainRef) -> bool {
+    id.map_or(true, |id| id as ObjNr == obj_id.id)
 }
 
-/// Returns true if `obj_id` id equals to `id`, if `id` is None, return true.
-fn equals_to_id(id: Option<u32>, obj_id: &ObjectId) -> bool {
-    id.map_or(true, |id| obj_id.0 == id)
-}
-
-fn filter_by_id(doc: &Document, id: Option<u32>) -> impl Iterator<Item = (&ObjectId, &Object)> {
-    doc.objects
-        .iter()
-        .filter(move |(obj_id, _)| equals_to_id(id, obj_id))
-}
-
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum ExactlyOneError {
     NoItems,
     MoreThanOne,
@@ -42,42 +31,48 @@ fn exactly_one<T>(mut iter: impl Iterator<Item = T>) -> Result<T, ExactlyOneErro
     }
 }
 
-fn dump_stream_content(doc: &Document, id: Option<u32>, dump_decode: bool) {
-    match exactly_one(filter_by_id(doc, id)) {
-        Ok((_, obj)) => match obj {
-            Object::Stream(stream) => {
-                StreamContentDumper::new(stream, dump_decode)
-                    .write_content(stdout())
-                    .unwrap();
-            }
-            _ => {
-                eprintln!("Object not stearm");
-            }
-        },
-        Err(err) => match err {
-            ExactlyOneError::NoItems => {
-                eprintln!("Object not found");
-            }
-            ExactlyOneError::MoreThanOne => {
-                eprintln!("More than one object found");
-            }
-        },
-    }
-}
-
 /// Dump objects in the `document`, if `id` is `None`, dump all objects, otherwise dump the object with `id`
-pub fn dump_objects(doc: &Document, id: Option<u32>, dump_content: bool, decode: bool) {
+pub fn dump_objects(f: &FileWithXRef, id: Option<u32>, dump_content: bool) {
+    let iter = f.iter_id_object().filter(|(r, _)| equals_to_id(id, r));
     if dump_content {
-        dump_stream_content(doc, id, decode)
-    } else {
-        let mut not_found = true;
-        filter_by_id(doc, id).for_each(|(id, obj)| {
-            not_found = false;
-            println!("{}", ObjectEntryDumper(id, obj));
-        });
-        if not_found {
-            println!("Object not found");
+        match exactly_one(iter) {
+            Ok((_, obj)) => match obj {
+                Primitive::Stream(pdf_stream) => {
+                    let stream: Stream<()> = Stream::from_stream(pdf_stream, f.f()).unwrap();
+                    let data = stream.data(f.f()).unwrap();
+                    let mut data: &[u8] = data.borrow();
+                    std::io::copy(&mut data, &mut std::io::stdout()).unwrap();
+                }
+                _ => {
+                    eprintln!("Object not stream");
+                }
+            },
+            Err(err) => match err {
+                ExactlyOneError::NoItems => {
+                    eprintln!("Object not found");
+                }
+                ExactlyOneError::MoreThanOne => {
+                    eprintln!("More than one object found");
+                }
+            },
         }
+        return;
+    }
+
+    let mut not_found = true;
+    let mut lock = stdout().lock();
+    for (id, obj) in iter {
+        not_found = false;
+        write!(
+            lock,
+            "{}: {}",
+            PrimitiveDumper::new(&id.into()),
+            PrimitiveDumper::new(&obj)
+        )
+        .unwrap();
+    }
+    if not_found {
+        println!("Object not found");
     }
 }
 

@@ -1,15 +1,17 @@
 use std::borrow::Cow;
 
-use super::object::{ObjectDumper, ObjectIdDumper};
-use lopdf::{Dictionary, Document, Object};
-use memchr::memmem::Finder;
+use super::dump_primitive::{PlainRefDumper, PrimitiveDumper};
+use istring::SmallString;
+use pdf::primitive::Primitive;
+
+use super::FileWithXRef;
 
 #[derive(Debug, PartialEq)]
 enum FieldQuery<'a> {
-    SearchEverywhere(&'a [u8]),
-    NameOnly(&'a [u8]),
-    NameValueExact(&'a [u8], &'a [u8]),
-    NameAndContainsValue(&'a [u8], &'a [u8]),
+    SearchEverywhere(&'a str),
+    NameOnly(&'a str),
+    NameValueExact(&'a str, &'a str),
+    NameAndContainsValue(&'a str, &'a str),
 }
 
 impl<'a> FieldQuery<'a> {
@@ -19,175 +21,168 @@ impl<'a> FieldQuery<'a> {
                 let (name, value) = s.split_at(pos);
                 let value = &value[1..];
                 if let Some(name) = name.strip_suffix('*') {
-                    Self::NameAndContainsValue(name.as_bytes(), value.as_bytes())
+                    Self::NameAndContainsValue(name, value)
                 } else {
-                    Self::NameValueExact(name.as_bytes(), value.as_bytes())
+                    Self::NameValueExact(name, value)
                 }
             } else {
-                Self::NameOnly(s.as_bytes())
+                Self::NameOnly(s)
             }
         } else {
-            Self::SearchEverywhere(s.as_bytes())
+            Self::SearchEverywhere(s)
         }
     }
 }
 
-fn as_bytes(value: &Object) -> Cow<[u8]> {
-    match value {
-        Object::Null => b"Null".as_slice().into(),
-        Object::Boolean(b) => if *b { &b"true"[..] } else { &b"false"[..] }.into(),
-        Object::Integer(i) => i.to_string().as_bytes().to_vec().into(),
-        Object::Real(r) => r.to_string().as_bytes().to_vec().into(),
-        Object::Name(n) => n.as_slice().into(),
-        Object::String(s, _) => s.as_slice().into(),
-        Object::Reference(r) => r.0.to_string().as_bytes().to_vec().into(),
-        _ => b"".as_slice().into(),
+fn as_str(v: &Primitive) -> Cow<str> {
+    match v {
+        Primitive::Null => "null".into(),
+        Primitive::Boolean(b) => if *b { "true" } else { "false" }.into(),
+        Primitive::Integer(i) => i.to_string().into(),
+        Primitive::Number(r) => r.to_string().into(),
+        Primitive::Name(n) => n.as_str().into(),
+        Primitive::String(s) => s.to_string_lossy().into(),
+        Primitive::Reference(r) => r.id.to_string().into(),
+        Primitive::Array(_) => "ARRAY".into(),
+        Primitive::Dictionary(_) => "DICT".into(),
+        Primitive::Stream(_) => "STREAM".into(),
     }
 }
 
-fn bytes_eq(a: &[u8], b: &[u8], ignore_case: bool) -> bool {
-    if ignore_case {
-        a.eq_ignore_ascii_case(b)
-    } else {
-        a == b
+/// Support eq and contains for str, with optional case insensitivity
+struct StrCompare<'a> {
+    needle: Cow<'a, str>,
+    ignore_case: bool,
+}
+
+impl<'a> PartialEq<&str> for StrCompare<'a> {
+    fn eq(&self, other: &&str) -> bool {
+        if self.ignore_case {
+            self.needle.eq_ignore_ascii_case(other)
+        } else {
+            self.needle.eq(other)
+        }
     }
 }
 
-fn iter_self_and_children(o: &Object) -> impl Iterator<Item = &Object> {
-    let mut stack = vec![o];
-    std::iter::from_fn(move || {
-        if let Some(o) = stack.pop() {
-            match o {
-                Object::Dictionary(d) => {
-                    stack.extend(d.iter().map(|(_, v)| v));
-                }
-                Object::Array(a) => {
-                    stack.extend(a.iter());
-                }
-                Object::Stream(stream) => {
-                    stack.extend(stream.dict.iter().map(|(_, v)| v));
-                }
-                _ => {}
+impl<'a> StrCompare<'a> {
+    fn new(needle: &'a str, ignore_case: bool) -> Self {
+        let needle = if ignore_case {
+            needle.to_ascii_lowercase().into()
+        } else {
+            needle.into()
+        };
+        Self {
+            needle,
+            ignore_case,
+        }
+    }
+
+    fn contains(&self, haystack: &str) -> bool {
+        if self.ignore_case {
+            haystack.to_ascii_lowercase().contains(self.needle.as_ref())
+        } else {
+            haystack.contains(self.needle.as_ref())
+        }
+    }
+}
+
+/// return true if any `f` call returns true
+fn walk_self_and_children(
+    v: &Primitive,
+    f: &impl Fn(&Primitive) -> bool,
+    include_dict_name: bool,
+) -> bool {
+    if f(v) {
+        return true;
+    }
+
+    match v {
+        Primitive::Array(a) => a
+            .iter()
+            .any(|v| walk_self_and_children(v, f, include_dict_name)),
+        Primitive::Dictionary(d) => {
+            if include_dict_name && d.keys().any(|k| f(&Primitive::from(k.clone()))) {
+                true
+            } else {
+                d.values()
+                    .any(|v| walk_self_and_children(v, f, include_dict_name))
             }
-            Some(o)
-        } else {
-            None
         }
+        Primitive::Stream(s) => {
+            walk_self_and_children(&Primitive::Dictionary(s.info.clone()), f, include_dict_name)
+        }
+        _ => false,
+    }
+}
+
+fn walk_dict_entry_recursive(v: &Primitive, f: impl Fn(&SmallString, &Primitive) -> bool) -> bool {
+    walk_self_and_children(
+        v,
+        &|v: &Primitive| -> bool {
+            match v {
+                Primitive::Dictionary(d) => d.iter().any(|(k, v)| f(&k.0, v)),
+                _ => false,
+            }
+        },
+        false,
+    )
+}
+
+fn search_everywhere(v: &Primitive, s: &str, ignore_case: bool) -> bool {
+    let contains = StrCompare::new(s, ignore_case);
+    walk_self_and_children(v, &|v| (&contains).contains(as_str(v).as_ref()), true)
+}
+
+fn search_name_only(v: &Primitive, s: &str, ignore_case: bool) -> bool {
+    let needle = StrCompare::new(s, ignore_case);
+    walk_dict_entry_recursive(v, |n, _| needle == n)
+}
+
+fn search_name_value_exact(v: &Primitive, name: &str, value: &str, ignore_case: bool) -> bool {
+    let needle = StrCompare::new(name, ignore_case);
+    let contains = StrCompare::new(value, ignore_case);
+    walk_dict_entry_recursive(v, |n, v| needle == n && (&contains).eq(&as_str(v).as_ref()))
+}
+
+fn search_name_and_contains_value(
+    v: &Primitive,
+    name: &str,
+    value: &str,
+    ignore_case: bool,
+) -> bool {
+    let needle = StrCompare::new(name, ignore_case);
+    let contains = StrCompare::new(value, ignore_case);
+    walk_dict_entry_recursive(v, |n, v| {
+        needle == n && (&contains).contains(&as_str(v).as_ref())
     })
-}
-
-fn search_everywhere_matches(o: &Object, s: &[u8], ignore_case: bool) -> bool {
-    let lower_s;
-    let f = if ignore_case {
-        lower_s = s.to_ascii_lowercase();
-        Finder::new(&lower_s)
-    } else {
-        Finder::new(s)
-    };
-
-    fn contains(v: &[u8], f: &Finder, ignore_case: bool) -> bool {
-        if ignore_case {
-            f.find(&v.to_ascii_lowercase()).is_some()
-        } else {
-            f.find(v).is_some()
-        }
-    }
-
-    fn inner(o: &Object, f: &Finder, ignore_case: bool) -> bool {
-        match o {
-            Object::Dictionary(d) => d.iter().any(|(k, _)| contains(k, f, ignore_case)),
-            _ => contains(&as_bytes(o), f, ignore_case),
-        }
-    }
-
-    iter_self_and_children(o).any(|o| inner(o, &f, ignore_case))
-}
-
-fn name_only(o: &Object, name: &[u8], ignore_case: bool) -> bool {
-    fn dict(o: &Dictionary, name: &[u8], ignore_case: bool) -> bool {
-        o.iter().any(|(k, _)| bytes_eq(k, name, ignore_case))
-    }
-
-    iter_self_and_children(o).any(|o| match o {
-        Object::Name(n) => bytes_eq(n, name, ignore_case),
-        Object::Dictionary(d) => dict(d, name, ignore_case),
-        Object::Stream(stream) => dict(&stream.dict, name, ignore_case),
-        _ => false,
-    })
-}
-
-fn name_value_exact(o: &Object, name: &[u8], value: &[u8], ignore_case: bool) -> bool {
-    fn dict(o: &Dictionary, name: &[u8], value: &[u8], ignore_case: bool) -> bool {
-        o.iter().any(|(k, v)| {
-            bytes_eq(k, name, ignore_case) && bytes_eq(&as_bytes(v), value, ignore_case)
-        })
-    }
-
-    match o {
-        Object::Dictionary(d) => dict(d, name, value, ignore_case),
-        Object::Stream(stream) => dict(&stream.dict, name, value, ignore_case),
-        _ => false,
-    }
-}
-
-fn name_and_contains_value(o: &Object, name: &[u8], value: &[u8], ignore_case: bool) -> bool {
-    let lower_s;
-    let f = if ignore_case {
-        lower_s = value.to_ascii_lowercase();
-        Finder::new(&lower_s)
-    } else {
-        Finder::new(value)
-    };
-
-    fn contains(v: &[u8], f: &Finder, ignore_case: bool) -> bool {
-        if ignore_case {
-            f.find(&v.to_ascii_lowercase()).is_some()
-        } else {
-            f.find(v).is_some()
-        }
-    }
-
-    fn dict(o: &Dictionary, name: &[u8], f: &Finder, ignore_case: bool) -> bool {
-        o.iter()
-            .any(|(k, v)| bytes_eq(k, name, ignore_case) && contains(&as_bytes(v), f, ignore_case))
-    }
-
-    match o {
-        Object::Dictionary(d) => dict(d, name, &f, ignore_case),
-        Object::Stream(stream) => dict(&stream.dict, value, &f, ignore_case),
-        _ => false,
-    }
-}
-
-/// Return true if the object matches the given query, value are converted to string before comparison.
-fn value_matches(o: &Object, q: &FieldQuery<'_>, ignore_case: bool) -> bool {
-    match q {
-        FieldQuery::SearchEverywhere(s) => search_everywhere_matches(o, s, ignore_case),
-        FieldQuery::NameOnly(name) => name_only(o, name, ignore_case),
-        FieldQuery::NameValueExact(name, val) => name_value_exact(o, name, val, ignore_case),
-        FieldQuery::NameAndContainsValue(name, val) => {
-            name_and_contains_value(o, name, val, ignore_case)
-        }
-    }
 }
 
 /// Return false if no objects match the query.
-pub fn query(doc: &Document, q: Option<&String>, ignore_case: bool) -> bool {
+pub fn query(doc: &FileWithXRef, q: Option<&String>, ignore_case: bool) -> bool {
     let field_query = q.map(|s| FieldQuery::parse(s.as_str()));
-
     let mut found = false;
-    doc.objects
-        .iter()
+    doc.iter_id_object()
         .filter(|(_, o)| {
-            if let Some(q) = &field_query {
-                if !value_matches(o, q, ignore_case) {
-                    return false;
+            if let Some(field_query) = &field_query {
+                match field_query {
+                    FieldQuery::SearchEverywhere(s) => search_everywhere(o, s, ignore_case),
+                    FieldQuery::NameOnly(s) => search_name_only(o, s, ignore_case),
+                    FieldQuery::NameValueExact(name, value) => {
+                        search_name_value_exact(o, name, value, ignore_case)
+                    }
+                    FieldQuery::NameAndContainsValue(name, value) => {
+                        search_name_and_contains_value(o, name, value, ignore_case)
+                    }
                 }
+            } else {
+                true
             }
-            true
         })
-        .inspect(|_| found = true)
-        .for_each(|(id, o)| println!("{}: {}", ObjectIdDumper::new(id), ObjectDumper::new(o)));
+        .for_each(|(id, o)| {
+            found = true;
+            println!("{}: {}", PlainRefDumper(&id), PrimitiveDumper::new(&o));
+        });
     found
 }
 

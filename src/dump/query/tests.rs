@@ -1,101 +1,86 @@
-use lopdf::{Stream, StringFormat};
+use super::*;
+use crate::object::{new_dictionary1, new_pdf_string, new_plain_ref};
+use istring::small::SmallString;
+use pdf::primitive::{Dictionary, Name, Primitive};
 use test_case::test_case;
 
-use crate::object::new_name;
-
-use super::*;
-
-#[test]
-fn parse_field_query() {
-    // name only
-    let q = FieldQuery::parse("/name");
-    assert_eq!(q, FieldQuery::NameOnly(b"name"));
-
-    // Name Value Exact if name=foo
-    let q = FieldQuery::parse("/name=foo");
-    assert_eq!(q, FieldQuery::NameValueExact(b"name", b"foo"));
-
-    // Name and value contains
-    let q = FieldQuery::parse("/name*=foo");
-    assert_eq!(q, FieldQuery::NameAndContainsValue(b"name", b"foo"));
-
-    // search everywhere
-    let q = FieldQuery::parse("foo");
-    assert_eq!(q, FieldQuery::SearchEverywhere(b"foo"));
+#[test_case(FieldQuery::NameOnly("name"), "/name"; "name only")]
+#[test_case(FieldQuery::NameValueExact("name", "foo"), "/name=foo"; "name value exact")]
+#[test_case(FieldQuery::NameAndContainsValue("name", "foo"), "/name*=foo"; "name and contains value")]
+#[test_case(FieldQuery::SearchEverywhere("foo"), "foo"; "search everywhere")]
+fn parse_field_query(exp: FieldQuery, s: &str) {
+    let q = FieldQuery::parse(s);
+    assert_eq!(q, exp);
 }
 
-// name only compares Name, dict name, stream dict name, array children values, dict children values,
-// recursively checked, no need to repeat in other FieldQuery cases
-#[test_case(false, Object::Null, "name", false; "type no name")]
-#[test_case(true, new_name("name"), "name", false; "name matches")]
-#[test_case(false, new_name("name"), "Name", false; "name match case not match")]
-#[test_case(true, new_name("name"), "Name", true; "name not match ignore case")]
-#[test_case(true, Dictionary::from_iter(vec![(b"name".as_slice(), Object::Null)]), "name", false; "dict name match")]
-#[test_case(false, Dictionary::new(), "name", false; "dict name match not match")]
-#[test_case(true, Dictionary::from_iter(vec![(b"foo".as_slice(), new_name("name"))]), "name", false; "dict contains value matches")]
-#[test_case(false, vec![], "name", false; "array no children")]
-#[test_case(true, vec![Object::Null, new_name("name")], "name", false; "array children matches")]
-#[test_case(false, Stream::new(Dictionary::new(), vec![]), "name", false; "stream no dict")]
-#[test_case(true, Stream::new(Dictionary::from_iter(vec![(b"name".as_slice(), Object::Null)]), vec![]), "name", false; "stream dict name matches")]
-fn test_name_matches(exp: bool, o: impl Into<Object>, q: &str, ignore_case: bool) {
-    let o = o.into();
-    let q = format!("/{}", q);
-    let q = FieldQuery::parse(&q);
-    assert_eq!(value_matches(&o, &q, ignore_case), exp);
+#[test_case("null", Primitive::Null; "null value")]
+#[test_case("15", 15; "int")]
+#[test_case("1.15", 1.15; "number")]
+#[test_case("true", true; "bool: true")]
+#[test_case("false", false; "bool: false")]
+#[test_case("foo", new_pdf_string("foo"); "string")]
+#[test_case("33", new_plain_ref(33, 1); "reference")]
+#[test_case("ARRAY", vec![]; "array")]
+#[test_case("DICT", Dictionary::new(); "dict")]
+#[test_case("name", Name(SmallString::from("name")); "name")]
+fn test_as_str(exp: &str, v: impl Into<Primitive>) {
+    assert_eq!(as_str(&v.into()), Cow::from(exp));
 }
 
-#[test_case(false, Object::Null, "=foo", false)]
-#[test_case(true, Object::Null, "=Null", false)]
-#[test_case(false, Object::Null, "=null", false)]
-#[test_case(true, Object::Null, "=null", true)]
-#[test_case(true, Object::Boolean(true), "=true", false)]
-#[test_case(false, Object::Array(vec![]), "=foo", false)]
-#[test_case(true, Object::Boolean(true), "*=tru", false)]
-#[test_case(true, Object::Boolean(true), "*=Tru", true)]
-#[test_case(false, Object::Boolean(true), "*=Tru", false)]
-fn test_name_value_matches(exp: bool, o: impl Into<Object>, q: &str, ignore_case: bool) {
-    let o = o.into();
-    let q = format!("/name{}", q);
-    let q = FieldQuery::parse(&q);
-
-    // name not matches
-    let d = Dictionary::from_iter(vec![(b"blah".as_slice(), o.clone())]).into();
-    assert!(!value_matches(&d, &q, ignore_case));
-
-    // name matches checks value
-    let d = Dictionary::from_iter(vec![(b"name".as_slice(), o)]).into();
-    assert_eq!(value_matches(&d, &q, ignore_case), exp);
+#[test_case(true, "foo", "foo", false; "exact match")]
+#[test_case(true, "Foo", "fOo", true; "exact match, ignore case")]
+#[test_case(true, "foo", "foobar", false; "contains")]
+#[test_case(true, "Foo", "fOoBar", true; "contains, ignore case")]
+#[test_case(false, "foo", "bar", false; "no match")]
+#[test_case(false, "foobar", "foo", true; "no contains")]
+fn test_contains(exp: bool, needle: &str, haystack: &str, ignore_case: bool) {
+    let c = StrCompare::new(needle, ignore_case);
+    assert_eq!(c.contains(haystack), exp);
 }
 
-#[test_case(true, Object::Null, "Null", false)]
-#[test_case(false, Object::Null, "null", false)]
-#[test_case(true, Object::Null, "Null", true)]
-#[test_case(true, Object::Null, "nU", true)]
-#[test_case(true, new_name("Name"), "naM", true)]
-#[test_case(true, Dictionary::from_iter([(b"name".as_slice(), Object::Null)]), "name", false)]
-#[test_case(false, Dictionary::from_iter([(b"name".as_slice(), Object::Null)]), "NAme", false)]
-#[test_case(true, Dictionary::from_iter([(b"name".as_slice(), Object::Null)]), "NAme", true)]
-#[test_case(true, Dictionary::from_iter([(b"foo".as_slice(), new_name("nAme"))]), "NAme", true)]
-#[test_case(true, Dictionary::from_iter([(b"foo".as_slice(), vec![Object::Null].into())]), "null", true)]
-fn test_search_everywhere(exp: bool, o: impl Into<Object>, q: &str, ignore_case: bool) {
-    let o = o.into();
-    let q = FieldQuery::parse(q);
-    assert_eq!(value_matches(&o, &q, ignore_case), exp);
+#[test_case(true, "foo", "foo", false; "exact match")]
+#[test_case(false, "foo", "Foo", false; "case not match")]
+#[test_case(true, "Foo", "fOo", true; "exact match, ignore case")]
+#[test_case(false, "foo", "foobar", false; "contains")]
+fn test_eq(exp: bool, needle: &str, haystack: &str, ignore_case: bool) {
+    let c = StrCompare::new(needle, ignore_case);
+    assert_eq!(c == haystack, exp);
 }
 
-#[test_case(b"Null", Object::Null)]
-#[test_case(b"true", Object::Boolean(true))]
-#[test_case(b"false", Object::Boolean(false))]
-#[test_case(b"123", Object::Integer(123))]
-#[test_case(b"123.456", Object::Real(123.456))]
-#[test_case(b"foo", Object::String(b"foo".to_vec(), StringFormat::Literal))]
-#[test_case(b"foo", Object::Name(b"foo".to_vec()))]
-#[test_case(b"", vec![])]
-#[test_case(b"", Dictionary::new())]
-#[test_case(b"", Stream::new(Dictionary::new(), vec![]))]
-#[test_case(b"12345", (12345, 2))]
-fn test_as_bytes(exp: &'static [u8], o: impl Into<Object>) {
-    let o = o.into();
-    let bytes = as_bytes(&o);
-    assert_eq!(bytes, exp);
+#[test_case(true, Primitive::Null, "null")]
+#[test_case(false, Primitive::Null, "blah")]
+#[test_case(true, new_dictionary1("foo", 1), "foo")]
+#[test_case(true, vec![Dictionary::new().into()], "DIC")]
+#[test_case(true, new_dictionary1("blah", new_pdf_string("foo")), "foo")]
+#[test_case(true, new_dictionary1("blah", vec![new_pdf_string("foo").into()]), "foo")]
+fn test_search_everywhere(exp: bool, v: impl Into<Primitive>, s: &str) {
+    assert_eq!(search_everywhere(&v.into(), s, false), exp);
+}
+
+#[test_case(false, Primitive::Null, "null"; "Not a dictionary")]
+#[test_case(true, new_dictionary1("foo", 1), "foo"; "Name only")]
+#[test_case(false, new_dictionary1("blah", new_pdf_string("foo")), "foo"; "name not match")]
+#[test_case(true, new_dictionary1("blah", new_dictionary1("foo", 1)), "foo"; "nested inside dict")]
+#[test_case(true, vec![new_dictionary1("foo", 1).into()], "foo"; "nested inside array")]
+fn test_search_name_only(exp: bool, v: impl Into<Primitive>, s: &str) {
+    assert_eq!(search_name_only(&v.into(), s, false), exp);
+}
+
+#[test_case(false, Primitive::Null, "null", "foo"; "Not a dictionary")]
+#[test_case(true, new_dictionary1("foo", 1), "foo", "1"; "name and value exact")]
+#[test_case(false, new_dictionary1("foo", 1), "foo", "2"; "value not match")]
+#[test_case(false, new_dictionary1("foo", new_pdf_string("bar")), "foobar", "bar"; "name not match")]
+#[test_case(false, new_dictionary1("foo", new_pdf_string("bar")), "fo", "bar"; "contains name, should exactly equal")]
+#[test_case(false, new_dictionary1("foo", new_pdf_string("bar")), "foo", "ba"; "contains value, should exactly equal")]
+fn test_search_name_value_exact(exp: bool, v: impl Into<Primitive>, name: &str, value: &str) {
+    assert_eq!(search_name_value_exact(&v.into(), name, value, false), exp);
+}
+
+#[test_case(false, Primitive::Null, "null", "foo"; "Not a dictionary")]
+#[test_case(true, new_dictionary1("foo", 1), "foo", "1"; "name and value exact")]
+#[test_case(true, new_dictionary1("foo", 12), "foo", "1"; "contains value")]
+#[test_case(false, new_dictionary1("foo", 1), "foo", "2"; "value not match")]
+#[test_case(false, new_dictionary1("foo", new_pdf_string("bar")), "foobar", "bar"; "name not match")]
+fn test_search_name_and_contains_value(exp: bool, v: impl Into<Primitive>, name: &str, value: &str) {
+    assert_eq!(search_name_and_contains_value(&v.into(), name, value, false), exp);
 }

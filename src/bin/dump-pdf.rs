@@ -1,24 +1,31 @@
-use std::process::ExitCode;
+use std::{process::ExitCode, sync::Arc};
 
 use clap::{arg, Command};
-use pdf2docx::dump::{
-    object::DictionaryDumper, objects::dump_objects, query::query, xref::dump_xref,
+use pdf::{
+    any::AnySync,
+    file::{Cache, File},
+    object::{NoUpdate, ToDict},
+    PdfError,
 };
+use pdf2docx::dump::{dump_primitive::DictionaryDumper, objects::dump_objects};
+use pdf2docx::dump::{query::query, FileWithXRef};
 
-use lopdf::Document;
+fn trailer<OC, SC>(f: &File<Vec<u8>, OC, SC>) {
+    println!(
+        "Trailer:\n{}",
+        DictionaryDumper::new(&f.trailer.to_dict(&mut NoUpdate).unwrap())
+    );
+}
 
-fn summary(doc: &Document) {
-    println!("PDF Version: {}", doc.version);
-    println!("Max ID: {}", doc.max_id);
-    println!("Max Bookmark Id: {}", doc.max_bookmark_id);
-    println!("Xref Start: {}", doc.xref_start);
-
-    println!("\nTrailer: ");
-    println!("{:}", DictionaryDumper::new(&doc.trailer));
-
-    println!("\nxref:");
-    println!("type: {:?}", doc.reference_table.cross_reference_type);
-    println!("size: {}", doc.reference_table.size);
+fn catalog<OC, SC>(f: &File<Vec<u8>, OC, SC>)
+where
+    OC: Cache<Result<AnySync, Arc<PdfError>>>,
+    SC: Cache<Result<Arc<[u8]>, Arc<PdfError>>>,
+{
+    println!(
+        "Catalog:\n{}",
+        DictionaryDumper::new(&f.get_root().to_dict(&mut NoUpdate).unwrap())
+    );
 }
 
 fn cli() -> Command {
@@ -27,21 +34,19 @@ fn cli() -> Command {
         .subcommand_required(true)
         .arg(arg!(<filename> "PDF file to dump"))
         .subcommand(
-            Command::new("summary")
+            Command::new("trailer")
                 .visible_alias("ls")
                 .about("Dump PDF file summary"),
         )
         .subcommand(
-            Command::new("xref")
-                .about("Dump xref table")
-                .arg(arg!([id] "Object ID to dump")),
+            Command::new("catalog")
+            .about("Dump catalog")
         )
         .subcommand(
             Command::new("objects")
                 .about("Dump objects")
                 .arg(arg!([id] "Object ID to dump"))
-                .arg(arg!(-r --raw "Dump stream object content"))
-                .arg(arg!(-d --decode "Decode stream object content, no effect if not set --raw option")),
+                .arg(arg!(-d --dump "Dump decoded stream content")),
         )
         .subcommand(
             Command::new("query")
@@ -57,28 +62,29 @@ Dictionary key, non-string values are converted to string and then searched.
                 .arg(arg!(-i --"ignore-case" "Ignore case when both in field name and value"))
                 .arg(arg!(<query> "Query string, e.g. foo /Filter /Filter=ASCIIHexDecode /Filter*=Hex"))
         )
+        .subcommand(
+            Command::new("page")
+            .about("Show total pages, show page detail info if provided page number")
+            .arg(arg!([page] "Page number to show, start from 0"))
+        )
 }
 
 fn main() -> ExitCode {
     let matches = cli().get_matches();
     let filename: &String = matches.get_one("filename").unwrap();
-    let doc = Document::load(filename).unwrap();
+    let f = FileWithXRef::open(filename);
 
     match cli().get_matches().subcommand() {
-        Some(("summary", _)) => summary(&doc),
-        Some(("xref", sub_m)) => dump_xref(
-            &doc,
-            sub_m.get_one::<String>("id").map(|s| s.parse().unwrap()),
-        ),
+        Some(("trailer", _)) => trailer(f.f()),
+        Some(("catalog", _)) => catalog(f.f()),
         Some(("objects", sub_m)) => dump_objects(
-            &doc,
+            &f,
             sub_m.get_one::<String>("id").and_then(|s| s.parse().ok()),
-            sub_m.get_one::<bool>("raw").copied().unwrap_or(false),
-            sub_m.get_one::<bool>("decode").copied().unwrap_or(false),
+            sub_m.get_one::<bool>("dump").copied().unwrap_or(false),
         ),
         Some(("query", sub_m)) => {
             if query(
-                &doc,
+                &f,
                 sub_m.get_one::<String>("query"),
                 sub_m
                     .get_one::<bool>("ignore-case")
@@ -89,6 +95,12 @@ fn main() -> ExitCode {
             } else {
                 return ExitCode::FAILURE;
             }
+        }
+        Some(("page", sub_m)) => {
+            pdf2docx::dump::page::page(
+                &f,
+                sub_m.get_one::<String>("page").map(|s| s.parse().unwrap()),
+            );
         }
         _ => todo!(),
     }
