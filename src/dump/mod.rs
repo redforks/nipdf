@@ -5,7 +5,7 @@ use pdf::{
     primitive::Primitive,
     xref::XRefTable,
 };
-use std::fmt::{Display, Write};
+use std::fmt::{Debug, Display, Write};
 
 pub mod dump_primitive;
 pub mod objects;
@@ -75,6 +75,38 @@ impl FileWithXRef {
                 None
             }
         })
+    }
+}
+
+pub struct OptionDumper<'a, T>(&'static str, &'a Option<T>);
+
+impl<'a, T> OptionDumper<'a, T> {
+    pub fn new(value: &'a Option<T>) -> Self {
+        Self("None", value)
+    }
+
+    pub fn with_none_text(value: &'a Option<T>, none_text: &'static str) -> Self {
+        Self(none_text, value)
+    }
+}
+
+impl<'a, T: Display> Display for OptionDumper<'a, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(v) = self.1 {
+            v.fmt(f)
+        } else {
+            write!(f, "{}", self.0)
+        }
+    }
+}
+
+impl<'a, T: Debug> Debug for OptionDumper<'a, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(v) = self.1 {
+            v.fmt(f)
+        } else {
+            write!(f, "{}", self.0)
+        }
     }
 }
 
