@@ -1,4 +1,7 @@
-use std::{borrow::Borrow};
+use std::{
+    borrow::Borrow,
+    io::{stdout, Write},
+};
 
 use pdf::{
     object::{ObjNr, PlainRef, Stream},
@@ -35,8 +38,7 @@ pub fn dump_objects(f: &FileWithXRef, id: Option<u32>, dump_content: bool) {
         match exactly_one(iter) {
             Ok((_, obj)) => match obj {
                 Primitive::Stream(pdf_stream) => {
-                    let stream: Stream<()> =
-                        Stream::from_stream(pdf_stream, f.f()).unwrap();
+                    let stream: Stream<()> = Stream::from_stream(pdf_stream, f.f()).unwrap();
                     let data = stream.data(f.f()).unwrap();
                     let mut data: &[u8] = data.borrow();
                     std::io::copy(&mut data, &mut std::io::stdout()).unwrap();
@@ -58,13 +60,16 @@ pub fn dump_objects(f: &FileWithXRef, id: Option<u32>, dump_content: bool) {
     }
 
     let mut not_found = true;
+    let mut lock = stdout().lock();
     for (id, obj) in iter {
         not_found = false;
-        println!(
+        write!(
+            lock,
             "{}: {}",
             PrimitiveDumper::new(&id.into()),
             PrimitiveDumper::new(&obj)
-        );
+        )
+        .unwrap();
     }
     if not_found {
         println!("Object not found");
