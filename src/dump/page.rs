@@ -1,4 +1,7 @@
-use crate::dump::dump_primitive::{OptionPrimitiveDumper, OptionRectDumper};
+use crate::dump::{
+    dump_primitive::{OptionPrimitiveDumper, OptionRectDumper},
+    OptionDumper,
+};
 
 use super::FileWithXRef;
 
@@ -12,6 +15,10 @@ pub fn page(f: &FileWithXRef, page_no: Option<u32>) {
         println!("Metadata: {}", OptionPrimitiveDumper(&page.metadata));
         println!("lgi: {}", OptionPrimitiveDumper(&page.lgi));
         println!("vp: {}", OptionPrimitiveDumper(&page.vp));
+        println!(
+            "\nContents:\n{:#?}",
+            OptionDumper::new(&page.contents.as_ref().map(|x| x.operations(f.f()).unwrap()))
+        );
     } else {
         println!("Total pages: {}", f.f().num_pages());
     }
