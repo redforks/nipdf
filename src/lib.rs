@@ -4,7 +4,7 @@ pub fn add(left: usize, right: usize) -> usize {
 
 #[cfg(feature = "dump")]
 pub mod dump;
-pub mod object;
+pub mod old_object;
 
 #[cfg(test)]
 mod tests {

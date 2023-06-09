@@ -1,5 +1,5 @@
 use super::*;
-use crate::object::{new_dictionary1, new_pdf_string, new_plain_ref};
+use crate::old_object::{new_dictionary1, new_pdf_string, new_plain_ref};
 use istring::small::SmallString;
 use pdf::primitive::{Dictionary, Name, Primitive};
 use test_case::test_case;
@@ -81,6 +81,14 @@ fn test_search_name_value_exact(exp: bool, v: impl Into<Primitive>, name: &str, 
 #[test_case(true, new_dictionary1("foo", 12), "foo", "1"; "contains value")]
 #[test_case(false, new_dictionary1("foo", 1), "foo", "2"; "value not match")]
 #[test_case(false, new_dictionary1("foo", new_pdf_string("bar")), "foobar", "bar"; "name not match")]
-fn test_search_name_and_contains_value(exp: bool, v: impl Into<Primitive>, name: &str, value: &str) {
-    assert_eq!(search_name_and_contains_value(&v.into(), name, value, false), exp);
+fn test_search_name_and_contains_value(
+    exp: bool,
+    v: impl Into<Primitive>,
+    name: &str,
+    value: &str,
+) {
+    assert_eq!(
+        search_name_and_contains_value(&v.into(), name, value, false),
+        exp
+    );
 }

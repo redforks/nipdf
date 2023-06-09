@@ -1,5 +1,7 @@
 use super::*;
-use crate::object::{new_dictionary1, new_dictionary2, new_pdf_string, new_plain_ref, new_rect};
+use crate::old_object::{
+    new_dictionary1, new_dictionary2, new_pdf_string, new_plain_ref, new_rect,
+};
 use pdf::primitive::{Name, Primitive::Null};
 use test_case::test_case;
 

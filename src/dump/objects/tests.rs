@@ -1,5 +1,5 @@
 use super::*;
-use crate::object::new_plain_ref;
+use crate::old_object::new_plain_ref;
 use std::iter::{empty, once, repeat};
 use test_case::test_case;
 
