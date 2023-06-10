@@ -10,8 +10,8 @@ pub enum Object<'a> {
     Bool(bool),
     Integer(i32),
     Number(f32),
-    String(&'a [u8]),
-    Name(Name<'a>), // without the leading slash
+    LiteralString(&'a [u8]), // including the parentheses
+    Name(Name<'a>),          // without the leading slash
     Dictionary(Dictionary<'a>),
     Array(Array<'a>),
     Stream(Stream<'a>),
@@ -50,7 +50,7 @@ impl<'a> From<Name<'a>> for Object<'a> {
 
 impl<'a> From<&'a [u8]> for Object<'a> {
     fn from(value: &'a [u8]) -> Self {
-        Self::String(value)
+        Self::LiteralString(value)
     }
 }
 

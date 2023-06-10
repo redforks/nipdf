@@ -34,10 +34,10 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
             is_not(b"()".as_slice()),
             delimited(tag(b"("), parse_quoted_string, tag(b")")),
         ));
-        let mut parser = delimited(tag(b"("), recognize(many0(inner_parser)), tag(b")"));
+        let mut parser = recognize(delimited(tag(b"("), many0(inner_parser), tag(b")")));
         parser(input)
     }
-    let parse_quoted_string = map(parse_quoted_string, |s| Object::String(s));
+    let parse_quoted_string = map(parse_quoted_string, |s| Object::LiteralString(s));
 
     alt((
         null,
