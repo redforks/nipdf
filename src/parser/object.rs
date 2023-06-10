@@ -1,6 +1,6 @@
 use nom::{
     branch::alt,
-    bytes::complete::{is_not, tag},
+    bytes::complete::{escaped, is_not, tag},
     character::complete::{char, none_of},
     combinator::{map, recognize},
     multi::many0,
@@ -30,7 +30,12 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
     });
 
     fn parse_quoted_string(input: &[u8]) -> ParseResult<'_, &[u8]> {
-        let inner_parser = alt((is_not(b"()".as_slice()), parse_quoted_string));
+        let inner_parser = alt((
+            tag(b"\\("),
+            tag(b"\\)"),
+            is_not(b"()".as_slice()),
+            parse_quoted_string,
+        ));
         let mut parser = recognize(delimited(tag(b"("), many0(inner_parser), tag(b")")));
         parser(input)
     }

@@ -14,6 +14,8 @@ use test_case::test_case;
 b)"), "(a
 b)"; "literal string contains new line")]
 #[test_case(Object::LiteralString(b"(*!&}^%)"), b"(*!&}^%)"; "literal string contains special characters")]
+#[test_case(Object::LiteralString(b"(\\)\\()"), b"(\\)\\()"; "literal string contains escape")]
+#[test_case(Object::LiteralString(b"(\\333\\n)"), b"(\\333\\n)")]
 fn test_parse_simple_objects(exp: impl Into<Object<'static>>, buf: impl AsRef<[u8]>) {
     assert_eq!(
         (b"".as_slice(), exp.into()),
