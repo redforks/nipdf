@@ -8,6 +8,7 @@ use test_case::test_case;
 #[test_case(Object::Integer(-123), "-123"; "negative integer")]
 #[test_case(Object::Number(123.12), "123.12"; "number")]
 #[test_case(Object::Number(-123.12), "-123.12"; "negative number")]
+#[test_case(Object::String(b""), "()"; "empty string")]
 fn test_parse_simple_objects(exp: Object, buf: impl AsRef<[u8]>) {
     assert_eq!((b"".as_slice(), exp), parse_object(buf.as_ref()).unwrap());
 }
