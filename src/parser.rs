@@ -13,3 +13,4 @@ pub enum LogicParseError {
 }
 
 mod file;
+mod object;
