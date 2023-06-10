@@ -30,10 +30,7 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
     });
 
     fn parse_quoted_string(input: &[u8]) -> ParseResult<'_, &[u8]> {
-        let inner_parser = alt((
-            is_not(b"()".as_slice()),
-            delimited(tag(b"("), parse_quoted_string, tag(b")")),
-        ));
+        let inner_parser = alt((is_not(b"()".as_slice()), parse_quoted_string));
         let mut parser = recognize(delimited(tag(b"("), many0(inner_parser), tag(b")")));
         parser(input)
     }
