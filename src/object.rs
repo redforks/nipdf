@@ -11,6 +11,7 @@ pub enum Object<'a> {
     Integer(i32),
     Number(f32),
     LiteralString(&'a [u8]), // including the parentheses
+    HexString(&'a [u8]),     // including the angle brackets
     Name(Name<'a>),          // without the leading slash
     Dictionary(Dictionary<'a>),
     Array(Array<'a>),

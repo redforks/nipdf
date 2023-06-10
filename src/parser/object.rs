@@ -1,7 +1,7 @@
 use nom::{
     branch::alt,
     bytes::complete::{escaped, is_not, tag},
-    character::complete::{char, none_of},
+    character::complete::{char, hex_digit0, none_of},
     combinator::{map, recognize},
     multi::many0,
     number::complete::float,
@@ -9,7 +9,7 @@ use nom::{
 };
 use num::cast;
 
-use crate::object::Object;
+use crate::{object::Object, parser::ParseError};
 
 use super::ParseResult;
 
@@ -40,6 +40,14 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
         parser(input)
     }
     let parse_quoted_string = map(parse_quoted_string, |s| Object::LiteralString(s));
+    let parse_hex_string = map(
+        recognize(delimited(
+            tag(b"<"),
+            hex_digit0::<&[u8], ParseError>,
+            tag(b">"),
+        )),
+        |s| Object::HexString(s),
+    );
 
     alt((
         null,
@@ -47,6 +55,7 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
         false_parser,
         number_parser,
         parse_quoted_string,
+        parse_hex_string,
     ))(buf)
 }
 
