@@ -4,16 +4,7 @@ pub fn add(left: usize, right: usize) -> usize {
 
 #[cfg(feature = "dump")]
 pub mod dump;
+pub mod file;
 pub mod object;
 pub mod old_object;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub mod parser;
