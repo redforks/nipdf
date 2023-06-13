@@ -10,6 +10,8 @@ pub enum ObjectValueError {
     UnexpectedType,
     #[error("invalid hex string")]
     InvalidHexString,
+    #[error("invalid name format")]
+    InvalidNameFormat,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -206,8 +208,62 @@ impl<'a> From<bool> for Object<'a> {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, Clone)]
+#[derive(Eq, Hash, Debug, Clone)]
 pub struct Name<'a>(&'a [u8]);
+
+impl<'a> Name<'a> {
+    pub fn new(s: &'a [u8]) -> Self {
+        Self(s)
+    }
+
+    /// Return `Err(ObjectValueError::InvalidNameForma)` if the name is not a valid PDF name encoding,
+    /// not two hex char after `#`.
+    pub fn normalize(&self) -> Result<Cow<[u8]>, ObjectValueError> {
+        fn next_hex_char(iter: &mut impl Iterator<Item = u8>) -> Option<u8> {
+            let mut result = 0;
+            for _ in 0..2 {
+                if let Some(c) = iter.next() {
+                    result <<= 4;
+                    result |= match c {
+                        b'0'..=b'9' => c - b'0',
+                        b'a'..=b'f' => c - b'a' + 10,
+                        b'A'..=b'F' => c - b'A' + 10,
+                        _ => return None,
+                    };
+                } else {
+                    return None;
+                }
+            }
+            Some(result)
+        }
+
+        let s = &self.0[1..];
+        if s.iter().copied().any(|b| b == b'#') {
+            let mut result = Vec::with_capacity(s.len());
+            let mut iter = s.into_iter().copied();
+            while let Some(next) = iter.next() {
+                if next == b'#' {
+                    if let Some(c) = next_hex_char(&mut iter) {
+                        result.push(c);
+                    } else {
+                        return Err(ObjectValueError::InvalidNameFormat);
+                    }
+                } else {
+                    result.push(next);
+                }
+            }
+            Ok(Cow::Owned(result))
+        } else {
+            Ok(Cow::Borrowed(s))
+        }
+    }
+}
+
+impl<'a> PartialEq for Name<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        self.normalize().unwrap() == other.normalize().unwrap()
+    }
+}
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone)]
 pub struct Reference {

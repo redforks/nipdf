@@ -7,7 +7,7 @@ default-run = "dump-pdf"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-hex = {version="0.4.3", optional=true}
+hex = {version="0.4.3"}
 clap = {version="4.3.0", optional=true, features=["derive"]}
 anyhow = "1.0.71"
 thiserror = "1.0.40"
@@ -24,7 +24,7 @@ num = "0.4.0"
 test-case = "3.1.0"
 
 [features]
-dump = ["hex", "clap"]
+dump = ["clap"]
 
 [[bin]]
 name = "dump-pdf"
