@@ -5,12 +5,12 @@ use nom::{
     combinator::{map, recognize},
     multi::{many0, many0_count, separated_list0},
     number::complete::float,
-    sequence::{delimited, preceded},
+    sequence::{delimited, preceded, separated_pair, tuple},
     Parser,
 };
 use num::cast;
 
-use crate::object::{Array, Name, Object};
+use crate::object::{Array, Dictionary, Name, Object};
 
 use super::{ParseError, ParseResult};
 
@@ -55,6 +55,7 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
         parse_hex_string,
         map(parse_array, Object::Array),
         map(parse_name, Object::Name),
+        map(parse_dict, Object::Dictionary),
     ))(buf)
 }
 
@@ -73,6 +74,20 @@ fn parse_array(input: &[u8]) -> ParseResult<'_, Array<'_>> {
         tag(b"[".as_slice()),
         ws(separated_list0(multispace1, parse_object)),
         tag(b"]".as_slice()),
+    )(input)
+}
+
+fn parse_dict(input: &[u8]) -> ParseResult<'_, Dictionary<'_>> {
+    map(
+        delimited(
+            tag(b"<<".as_slice()),
+            ws(separated_list0(
+                multispace1,
+                separated_pair(parse_name, multispace1, parse_object),
+            )),
+            tag(b">>".as_slice()),
+        ),
+        |v| v.into_iter().collect(),
     )(input)
 }
 

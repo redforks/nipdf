@@ -38,3 +38,12 @@ fn test_parse_array(exp: Vec<Object<'static>>, buf: impl AsRef<[u8]>) {
         parse_array(buf.as_ref()).unwrap()
     );
 }
+
+#[test_case(vec![], b"<< >>"; "empty dict")]
+#[test_case(vec![(Name::new(b"/Type"), Name::new(b"/Catalog").into())], b"<< /Type /Catalog >>"; "dict with one entry")]
+fn test_parse_dict(exp: Vec<(Name, Object)>, buf: impl AsRef<[u8]>) {
+    assert_eq!(
+        parse_dict(buf.as_ref()),
+        Ok((&[][..], exp.into_iter().collect()))
+    );
+}
