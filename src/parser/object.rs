@@ -1,16 +1,17 @@
 use nom::{
     branch::alt,
-    bytes::complete::{escaped, is_not, tag, take_until},
-    character::complete::{char, hex_digit0, none_of},
-    combinator::{map, recognize},
+    bytes::complete::{is_a, is_not, tag, take_till, take_until},
+    combinator::{eof, map, recognize},
     multi::many0,
     number::complete::float,
-    sequence::delimited,
-    AsChar, InputTakeAtPosition,
+    sequence::{delimited, preceded},
 };
 use num::cast;
 
-use crate::{object::Object, parser::ParseError};
+use crate::{
+    object::{Name, Object},
+    parser::ParseError,
+};
 
 use super::ParseResult;
 
@@ -45,6 +46,13 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
         recognize(delimited(tag(b"<"), take_until(b">".as_slice()), tag(b">"))),
         |s| Object::HexString(s),
     );
+    let parse_name = map(
+        recognize(preceded(
+            tag(b"/".as_slice()),
+            take_till(|c: u8| c.is_ascii_whitespace()),
+        )),
+        |s| Object::Name(Name::new(s)),
+    );
 
     alt((
         null,
@@ -53,6 +61,7 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
         number_parser,
         parse_quoted_string,
         parse_hex_string,
+        parse_name,
     ))(buf)
 }
 
