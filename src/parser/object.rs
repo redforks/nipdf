@@ -1,17 +1,14 @@
 use nom::{
     branch::alt,
-    bytes::complete::{is_a, is_not, tag, take_till, take_until},
-    combinator::{eof, map, recognize},
-    multi::many0,
+    bytes::complete::{is_not, tag, take_till, take_until},
+    combinator::{map, recognize},
+    multi::many0_count,
     number::complete::float,
     sequence::{delimited, preceded},
 };
 use num::cast;
 
-use crate::{
-    object::{Name, Object},
-    parser::ParseError,
-};
+use crate::object::{Name, Object};
 
 use super::ParseResult;
 
@@ -38,20 +35,13 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
             is_not(b"()".as_slice()),
             parse_quoted_string,
         ));
-        let mut parser = recognize(delimited(tag(b"("), many0(inner_parser), tag(b")")));
+        let mut parser = recognize(delimited(tag(b"("), many0_count(inner_parser), tag(b")")));
         parser(input)
     }
     let parse_quoted_string = map(parse_quoted_string, |s| Object::LiteralString(s));
     let parse_hex_string = map(
         recognize(delimited(tag(b"<"), take_until(b">".as_slice()), tag(b">"))),
         |s| Object::HexString(s),
-    );
-    let parse_name = map(
-        recognize(preceded(
-            tag(b"/".as_slice()),
-            take_till(|c: u8| c.is_ascii_whitespace()),
-        )),
-        |s| Object::Name(Name::new(s)),
     );
 
     alt((
@@ -61,8 +51,18 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
         number_parser,
         parse_quoted_string,
         parse_hex_string,
-        parse_name,
+        map(parse_name, Object::Name),
     ))(buf)
+}
+
+fn parse_name(input: &[u8]) -> ParseResult<'_, Name<'_>> {
+    map(
+        recognize(preceded(
+            tag(b"/".as_slice()),
+            take_till(|c: u8| c.is_ascii_whitespace()),
+        )),
+        |s| Name::new(s),
+    )(input)
 }
 
 #[cfg(test)]
