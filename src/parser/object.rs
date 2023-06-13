@@ -1,11 +1,12 @@
 use nom::{
     branch::alt,
-    bytes::complete::{escaped, is_not, tag},
+    bytes::complete::{escaped, is_not, tag, take_until},
     character::complete::{char, hex_digit0, none_of},
     combinator::{map, recognize},
     multi::many0,
     number::complete::float,
     sequence::delimited,
+    AsChar, InputTakeAtPosition,
 };
 use num::cast;
 
@@ -41,11 +42,7 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
     }
     let parse_quoted_string = map(parse_quoted_string, |s| Object::LiteralString(s));
     let parse_hex_string = map(
-        recognize(delimited(
-            tag(b"<"),
-            hex_digit0::<&[u8], ParseError>,
-            tag(b">"),
-        )),
+        recognize(delimited(tag(b"<"), take_until(b">".as_slice()), tag(b">"))),
         |s| Object::HexString(s),
     );
 

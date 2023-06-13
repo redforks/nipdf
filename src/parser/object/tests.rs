@@ -18,6 +18,7 @@ b)"; "literal string contains new line")]
 #[test_case(Object::LiteralString(b"(\\333\\n)"), b"(\\333\\n)")]
 #[test_case(Object::HexString(b"<>"), b"<>")]
 #[test_case(Object::HexString(b"<12A>"), b"<12A>")]
+#[test_case(Object::HexString(b"<12 A\t3>"), b"<12 A\t3>"; "contains whitespace")]
 fn test_parse_simple_objects(exp: impl Into<Object<'static>>, buf: impl AsRef<[u8]>) {
     assert_eq!(
         (b"".as_slice(), exp.into()),
