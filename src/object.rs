@@ -1,13 +1,15 @@
-use std::{collections::HashMap, iter::Peekable};
+use std::{borrow::Cow, collections::HashMap, iter::Peekable};
 
 type Dictionary<'a> = HashMap<Name<'a>, Object<'a>>;
 type Array<'a> = Vec<Object<'a>>;
 type Stream<'a> = (Dictionary<'a>, &'a [u8]); // data part not including the stream/endstream keyword
 
 #[derive(Clone, Copy, PartialEq, Debug, thiserror::Error)]
-pub enum ObjectTypeError {
+pub enum ObjectValueError {
     #[error("unexpected type")]
     UnexpectedType,
+    #[error("invalid hex string")]
+    InvalidHexString,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -27,7 +29,7 @@ pub enum Object<'a> {
 
 impl<'a> Object<'a> {
     /// decode LiteralString and HexString to String
-    pub fn as_string(&self) -> Result<String, ObjectTypeError> {
+    pub fn as_string(&self) -> Result<String, ObjectValueError> {
         fn skip_cur_new_line<I: Iterator<Item = u8>>(cur: u8, s: &mut Peekable<I>) -> bool {
             if cur == b'\r' {
                 s.next_if_eq(&b'\n');
@@ -107,7 +109,45 @@ impl<'a> Object<'a> {
 
         match self {
             Object::LiteralString(s) => Ok(decode_literal_string(s)),
-            _ => Err(ObjectTypeError::UnexpectedType),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
+    }
+
+    fn as_hex_string(&self) -> Result<Vec<u8>, ObjectValueError> {
+        fn decode_hex_string(s: &[u8]) -> Result<Vec<u8>, ObjectValueError> {
+            let s = &s[1..s.len() - 1];
+
+            fn filter_whitespace(s: &[u8]) -> Cow<[u8]> {
+                if s.iter().copied().any(|b| b.is_ascii_whitespace()) {
+                    Cow::Owned(
+                        s.iter()
+                            .copied()
+                            .filter(|b| !b.is_ascii_whitespace())
+                            .collect::<Vec<_>>(),
+                    )
+                } else {
+                    Cow::Borrowed(s)
+                }
+            }
+            fn append_zero_if_odd(s: &[u8]) -> Cow<[u8]> {
+                if s.len() % 2 == 0 {
+                    Cow::Borrowed(s)
+                } else {
+                    let mut v = Vec::with_capacity(s.len() + 1);
+                    v.extend_from_slice(s);
+                    v.push(b'0');
+                    Cow::Owned(v)
+                }
+            }
+            let s = filter_whitespace(s);
+            let s = append_zero_if_odd(&s);
+
+            hex::decode(s).map_err(|_| ObjectValueError::InvalidHexString)
+        }
+
+        match self {
+            Object::HexString(s) => decode_hex_string(s),
+            _ => Err(ObjectValueError::UnexpectedType),
         }
     }
 }
