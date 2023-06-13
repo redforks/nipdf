@@ -1,16 +1,18 @@
 use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, take_till, take_until},
+    character::complete::{multispace0, multispace1},
     combinator::{map, recognize},
-    multi::many0_count,
+    multi::{many0, many0_count, separated_list0},
     number::complete::float,
     sequence::{delimited, preceded},
+    Parser,
 };
 use num::cast;
 
-use crate::object::{Name, Object};
+use crate::object::{Array, Name, Object};
 
-use super::ParseResult;
+use super::{ParseError, ParseResult};
 
 pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
     let null = map(tag("null"), |_| Object::Null);
@@ -51,6 +53,7 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
         number_parser,
         parse_quoted_string,
         parse_hex_string,
+        map(parse_array, Object::Array),
         map(parse_name, Object::Name),
     ))(buf)
 }
@@ -63,6 +66,23 @@ fn parse_name(input: &[u8]) -> ParseResult<'_, Name<'_>> {
         )),
         |s| Name::new(s),
     )(input)
+}
+
+fn parse_array(input: &[u8]) -> ParseResult<'_, Array<'_>> {
+    delimited(
+        tag(b"[".as_slice()),
+        ws(separated_list0(multispace1, parse_object)),
+        tag(b"]".as_slice()),
+    )(input)
+}
+
+/// A combinator that takes a parser `inner` and produces a parser that also consumes both leading and
+/// trailing whitespace, returning the output of `inner`.
+fn ws<'a, F, O>(inner: F) -> impl FnMut(&'a [u8]) -> ParseResult<'_, O>
+where
+    F: Parser<&'a [u8], O, ParseError<'a>>,
+{
+    delimited(multispace0, inner, multispace0)
 }
 
 #[cfg(test)]

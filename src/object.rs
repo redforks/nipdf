@@ -1,7 +1,7 @@
 use std::{borrow::Cow, collections::HashMap, iter::Peekable};
 
 type Dictionary<'a> = HashMap<Name<'a>, Object<'a>>;
-type Array<'a> = Vec<Object<'a>>;
+pub type Array<'a> = Vec<Object<'a>>;
 type Stream<'a> = (Dictionary<'a>, &'a [u8]); // data part not including the stream/endstream keyword
 
 #[derive(Clone, Copy, PartialEq, Debug, thiserror::Error)]

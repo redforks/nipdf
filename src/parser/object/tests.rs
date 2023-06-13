@@ -27,3 +27,14 @@ fn test_parse_simple_objects(exp: impl Into<Object<'static>>, buf: impl AsRef<[u
         parse_object(buf.as_ref()).unwrap()
     );
 }
+
+#[test_case(vec![], b"[]"; "empty array")]
+#[test_case(vec![], b"[ \t]"; "empty array 2")]
+#[test_case(vec![Object::Null], b"[null]"; "array with null")]
+#[test_case(vec![Object::Array(vec![Object::Null])], b"[[null]]"; "nested array with null")]
+fn test_parse_array(exp: Vec<Object<'static>>, buf: impl AsRef<[u8]>) {
+    assert_eq!(
+        (b"".as_slice(), exp.into()),
+        parse_array(buf.as_ref()).unwrap()
+    );
+}
