@@ -9,12 +9,12 @@ use nom::{
     error::{Error as NomError, ErrorKind},
     multi::{many0_count, separated_list0},
     number::complete::float,
-    sequence::{delimited, preceded, separated_pair, tuple},
+    sequence::{delimited, preceded, separated_pair, terminated, tuple},
     Parser,
 };
 use num::cast;
 
-use crate::object::{Array, Dictionary, IndirectObject, Name, Object, Stream};
+use crate::object::{Array, Dictionary, IndirectObject, Name, Object, Reference, Stream};
 
 use super::{ParseError, ParseResult, PdfParseError};
 
@@ -40,6 +40,7 @@ gen_complete_parse_fn!(
     parse_indirected_object,
     IndirectObject
 );
+gen_complete_parse_fn!(parse_complete_reference, parse_reference, Reference);
 
 fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
     let null = map(tag("null"), |_| Object::Null);
@@ -83,6 +84,7 @@ fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
         map(parse_array, Object::Array),
         map(parse_name, Object::Name),
         map(parse_dict, Object::Dictionary),
+        map(parse_reference, Object::Reference),
     ))(buf)
 }
 
@@ -138,6 +140,14 @@ fn parse_indirected_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
     let (input, (id, gen)) = separated_pair(u32, multispace1, u16)(input)?;
     let (input, obj) = delimited(ws(tag(b"obj")), parse_object, ws(tag(b"endobj")))(input)?;
     Ok((input, IndirectObject::new(id, gen, obj)))
+}
+
+fn parse_reference(input: &[u8]) -> ParseResult<'_, Reference> {
+    let (input, (id, gen)) = terminated(
+        separated_pair(u32, multispace1, u16),
+        ws_prefixed(tag(b"R")),
+    )(input)?;
+    Ok((input, Reference::new(id, gen)))
 }
 
 fn ws_prefixed<'a, F, O>(inner: F) -> impl FnMut(&'a [u8]) -> ParseResult<'_, O>

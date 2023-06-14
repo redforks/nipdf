@@ -59,6 +59,6 @@ mod file;
 mod object;
 
 pub use object::{
-    parse_complete_array, parse_complete_dict, parse_complete_object, parse_complete_stream,
-    parse_complete_indirected_object
+    parse_complete_array, parse_complete_dict, parse_complete_indirected_object,
+    parse_complete_object, parse_complete_reference, parse_complete_stream,
 };

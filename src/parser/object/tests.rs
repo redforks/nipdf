@@ -69,3 +69,8 @@ endobj"; "null")]
 fn test_parse_indirected_object(buf: impl AsRef<[u8]>) {
     insta::assert_debug_snapshot!(parse_indirected_object(buf.as_ref()).unwrap());
 }
+
+#[test_case(b"1 0 R"; "simple")]
+fn test_parse_reference(buf: impl AsRef<[u8]>) {
+    insta::assert_debug_snapshot!(parse_reference(buf.as_ref()).unwrap());
+}

@@ -1,0 +1,11 @@
+---
+source: src/parser/object/tests.rs
+expression: parse_reference(buf.as_ref()).unwrap()
+---
+(
+    [],
+    Reference {
+        id: 1,
+        generation: 0,
+    },
+)

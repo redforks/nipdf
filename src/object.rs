@@ -284,8 +284,22 @@ impl<'a> PartialEq for Name<'a> {
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone)]
 pub struct Reference {
-    pub id: u32,
-    pub generation: u16,
+    id: u32,
+    generation: u16,
+}
+
+impl Reference {
+    pub fn new(id: u32, generation: u16) -> Self {
+        Self { id, generation }
+    }
+
+    pub fn id(&self) -> u32 {
+        self.id
+    }
+
+    pub fn generation(&self) -> u16 {
+        self.generation
+    }
 }
 
 #[cfg(test)]
