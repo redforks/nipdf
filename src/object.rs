@@ -152,6 +152,20 @@ impl<'a> Object<'a> {
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
+
+    pub fn as_int(&self) -> Result<i32, ObjectValueError> {
+        match self {
+            Object::Integer(i) => Ok(*i),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
+    }
+
+    pub fn as_number(&self) -> Result<f32, ObjectValueError> {
+        match self {
+            Object::Number(f) => Ok(*f),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
+    }
 }
 
 impl<'a> From<Stream<'a>> for Object<'a> {
