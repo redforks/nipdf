@@ -16,7 +16,7 @@ use num::cast;
 
 use crate::object::{Array, Dictionary, IndirectObject, Name, Object, Reference, Stream};
 
-use super::{ParseError, ParseResult, PdfParseError};
+use super::{ws, ws_prefixed, ParseError, ParseResult, PdfParseError};
 
 macro_rules! gen_complete_parse_fn {
     ($new_fn: ident, $wrapped_fn: ident, $ty: ty) => {
@@ -148,22 +148,6 @@ fn parse_reference(input: &[u8]) -> ParseResult<'_, Reference> {
         ws_prefixed(tag(b"R")),
     )(input)?;
     Ok((input, Reference::new(id, gen)))
-}
-
-fn ws_prefixed<'a, F, O>(inner: F) -> impl FnMut(&'a [u8]) -> ParseResult<'_, O>
-where
-    F: Parser<&'a [u8], O, ParseError<'a>>,
-{
-    preceded(multispace0, inner)
-}
-
-/// A combinator that takes a parser `inner` and produces a parser that also consumes both leading and
-/// trailing whitespace, returning the output of `inner`.
-fn ws<'a, F, O>(inner: F) -> impl FnMut(&'a [u8]) -> ParseResult<'_, O>
-where
-    F: Parser<&'a [u8], O, ParseError<'a>>,
-{
-    delimited(multispace0, inner, multispace0)
 }
 
 #[cfg(test)]

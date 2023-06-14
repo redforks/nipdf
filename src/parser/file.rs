@@ -1,14 +1,18 @@
+use memchr::memmem::rfind;
 use nom::{
     bytes::complete::tag,
     character::complete::u32,
     character::complete::{char, line_ending, satisfy},
     combinator::{complete, map, map_res, recognize},
-    sequence::{preceded, terminated, tuple},
+    sequence::{delimited, preceded, terminated, tuple},
 };
 
-use crate::file::{Header, Tail};
+use crate::{
+    file::{Header, Tail, Trailer},
+    parser::ws_terminated,
+};
 
-use super::{FileError, ParseError, ParseResult};
+use super::{ws, ws_prefixed, FileError, ParseError, ParseResult};
 
 fn parse_header(buf: &[u8]) -> ParseResult<'_, Header<'_>> {
     let one_digit = || satisfy(|c| c.is_digit(10));
@@ -36,20 +40,46 @@ fn parse_header(buf: &[u8]) -> ParseResult<'_, Header<'_>> {
     )(buf)
 }
 
-/// Reverse iterator of lines, ignore empty lines.
-fn riter_lines(buf: &[u8]) -> impl Iterator<Item = &[u8]> + '_ {
-    // must ignore empty lines, because the way we detect the end of a line is
-    // check either '\r' or '\n', for '\r\n' or '\n\r' we will get extra empty line.
-    let mut iter = buf.rsplit(|&c| c == b'\n' || c == b'\r');
-    iter.filter(|&line| !line.is_empty())
+/// Return start position of object tag from the end of the buffer.
+/// Object tag occupies a whole line.
+fn r_find_start_object_tag(mut buf: &[u8], tag: &[u8]) -> Option<usize> {
+    fn is_new_line(buf: &[u8], pos: usize) -> bool {
+        buf.get(pos).map_or(true, |ch| *ch == b'\n' || *ch == b'\r')
+    }
+
+    loop {
+        match rfind(buf, tag) {
+            None => return None,
+            Some(pos) => {
+                if is_new_line(buf, pos + tag.len()) && (pos == 0 || is_new_line(buf, pos - 1)) {
+                    return Some(pos);
+                } else {
+                    buf = &buf[..pos];
+                }
+            }
+        }
+    }
+}
+
+/// nom parser consumes buf until the end of the last object tag.
+fn after_tag_r<'a>(buf: &'a [u8], tag: &'static [u8]) -> ParseResult<'a, ()> {
+    let pos = r_find_start_object_tag(buf, tag);
+    if let Some(pos) = pos {
+        Ok((&buf[pos + tag.len()..], ()))
+    } else {
+        Err(nom::Err::Error(ParseError::InvalidFile))
+    }
 }
 
 fn parse_tail(buf: &[u8]) -> ParseResult<Tail> {
-    let mut iter = riter_lines(buf);
-    let line = iter.next().unwrap_or_default();
-    complete(tag("%%EOF"))(line)?;
-    let line = iter.next().unwrap_or_default();
-    map(complete(u32), Tail::new)(line)
+    fn parse(buf: &[u8]) -> ParseResult<Tail> {
+        map(
+            complete(terminated(ws_prefixed(u32), ws(tag(b"%%EOF")))),
+            Tail::new,
+        )(buf)
+    }
+    let (buf, _) = after_tag_r(buf, b"startxref")?;
+    parse(buf)
 }
 
 #[cfg(test)]

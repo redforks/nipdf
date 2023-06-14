@@ -1,5 +1,6 @@
 use super::*;
 use crate::file::Header;
+use test_case::test_case;
 
 #[test]
 fn parse_file_header() {
@@ -13,26 +14,19 @@ fn parse_file_header() {
     assert!(err.is_err());
 }
 
-#[test]
-fn test_riter_lines() {
-    // empty
-    assert_eq!(0, riter_lines(b"").count());
-
-    // one line without line ending
-    assert_eq!(vec![b"hello"], riter_lines(b"hello").collect::<Vec<_>>());
-
-    // one line with line ending
-    assert_eq!(vec![b"hello"], riter_lines(b"hello\n").collect::<Vec<_>>());
-
-    // two lines with line ending
-    assert_eq!(
-        vec![b"world", b"hello"],
-        riter_lines(b"hello\n\rworld\r\n").collect::<Vec<_>>()
-    );
+#[test_case(None, b"hello", b"world"; "not exist")]
+#[test_case(Some(0), b"hello", b"hello"; "matches")]
+#[test_case(Some(1), b"\nhello", b"hello"; "after newline")]
+#[test_case(Some(1), b"\nhello\n", b"hello"; "end with newline")]
+#[test_case(Some(2), b"\r\nhello\r\n", b"hello"; "CRLF")]
+#[test_case(Some(4), b"foo\nfoo\nbar", b"foo"; "from end")]
+#[test_case(None, b"abc-foo", b"foo"; "not the whole line")]
+fn test_after_tag_r(exp: Option<usize>, buf: &[u8], tag: &[u8]) {
+    assert_eq!(exp, r_find_start_object_tag(buf, tag));
 }
 
 #[test]
 fn test_parse_tail() {
-    let buf = b"blah\n1234\n%%EOF";
+    let buf = b"\nstartxref\n1234\n%%EOF";
     assert_eq!((b"".as_slice(), Tail::new(1234)), parse_tail(buf).unwrap());
 }

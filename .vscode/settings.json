@@ -7,7 +7,8 @@
         "endobj",
         "endstream",
         "Flate",
-        "Parms"
+        "Parms",
+        "startxref"
     ],
     "rust-analyzer.check.allTargets": false,
     "rust-analyzer.cargo.target": "x86_64-unknown-linux-gnu"

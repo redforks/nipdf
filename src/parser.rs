@@ -1,4 +1,9 @@
-use nom::{error::FromExternalError, IResult};
+use nom::{
+    character::complete::multispace0,
+    error::FromExternalError,
+    sequence::{delimited, preceded, terminated},
+    IResult, Parser,
+};
 
 #[derive(PartialEq, Debug, thiserror::Error)]
 pub enum PdfParseError<I, E>
@@ -12,6 +17,9 @@ where
     StreamRequireLength,
     #[error("Stream length type is not integer")]
     StreamInvalidLengthType,
+
+    #[error("Not valid pdf file")]
+    InvalidFile,
 
     #[error("phantom for generic type I, Not used")]
     Phantom(I),
@@ -62,3 +70,26 @@ pub use object::{
     parse_complete_array, parse_complete_dict, parse_complete_indirected_object,
     parse_complete_object, parse_complete_reference, parse_complete_stream,
 };
+
+fn ws_prefixed<'a, F, O>(inner: F) -> impl FnMut(&'a [u8]) -> ParseResult<'_, O>
+where
+    F: Parser<&'a [u8], O, ParseError<'a>>,
+{
+    preceded(multispace0, inner)
+}
+
+/// A combinator that takes a parser `inner` and produces a parser that also consumes both leading and
+/// trailing whitespace, returning the output of `inner`.
+fn ws<'a, F, O>(inner: F) -> impl FnMut(&'a [u8]) -> ParseResult<'_, O>
+where
+    F: Parser<&'a [u8], O, ParseError<'a>>,
+{
+    delimited(multispace0, inner, multispace0)
+}
+
+fn ws_terminated<'a, F, O>(inner: F) -> impl FnMut(&'a [u8]) -> ParseResult<'_, O>
+where
+    F: Parser<&'a [u8], O, ParseError<'a>>,
+{
+    terminated(inner, multispace0)
+}
