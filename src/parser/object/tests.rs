@@ -62,3 +62,10 @@ endstream"; "not empty"
 fn test_parse_stream(buf: impl AsRef<[u8]>) {
     insta::assert_debug_snapshot!(parse_stream(buf.as_ref()).unwrap());
 }
+
+#[test_case(b"1 0 obj
+null
+endobj"; "null")]
+fn test_parse_indirected_object(buf: impl AsRef<[u8]>) {
+    insta::assert_debug_snapshot!(parse_indirected_object(buf.as_ref()).unwrap());
+}

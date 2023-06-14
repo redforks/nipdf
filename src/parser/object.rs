@@ -4,7 +4,7 @@ use nom::{
         complete::{is_not, tag, take_till, take_until},
         streaming::take,
     },
-    character::complete::{crlf, multispace0, multispace1, newline},
+    character::complete::{crlf, multispace0, multispace1, u16, u32},
     combinator::{complete, map, recognize},
     error::{Error as NomError, ErrorKind},
     multi::{many0_count, separated_list0},
@@ -14,7 +14,7 @@ use nom::{
 };
 use num::cast;
 
-use crate::object::{Array, Dictionary, Name, Object, Stream};
+use crate::object::{Array, Dictionary, IndirectObject, Name, Object, Stream};
 
 use super::{ParseError, ParseResult, PdfParseError};
 
@@ -35,6 +35,11 @@ gen_complete_parse_fn!(parse_complete_object, parse_object, Object);
 gen_complete_parse_fn!(parse_complete_array, parse_array, Array);
 gen_complete_parse_fn!(parse_complete_dict, parse_dict, Dictionary);
 gen_complete_parse_fn!(parse_complete_stream, parse_stream, Stream);
+gen_complete_parse_fn!(
+    parse_complete_indirected_object,
+    parse_indirected_object,
+    IndirectObject
+);
 
 fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
     let null = map(tag("null"), |_| Object::Null);
@@ -127,6 +132,12 @@ fn parse_stream(input: &[u8]) -> ParseResult<'_, Stream<'_>> {
         ws_prefixed(tag(b"endstream")),
     )(input)?;
     Ok((input, (dict, buf)))
+}
+
+fn parse_indirected_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
+    let (input, (id, gen)) = separated_pair(u32, multispace1, u16)(input)?;
+    let (input, obj) = delimited(ws(tag(b"obj")), parse_object, ws(tag(b"endobj")))(input)?;
+    Ok((input, IndirectObject::new(id, gen, obj)))
 }
 
 fn ws_prefixed<'a, F, O>(inner: F) -> impl FnMut(&'a [u8]) -> ParseResult<'_, O>

@@ -1,5 +1,6 @@
 use super::Object;
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct IndirectObject<'a> {
     id: u32,
     generation: u16,

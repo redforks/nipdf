@@ -1,0 +1,12 @@
+---
+source: src/parser/object/tests.rs
+expression: parse_indirected_object(buf.as_ref()).unwrap()
+---
+(
+    [],
+    IndirectObject {
+        id: 1,
+        generation: 0,
+        object: Null,
+    },
+)
