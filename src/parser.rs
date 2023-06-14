@@ -1,7 +1,43 @@
-use nom::IResult;
+use nom::{error::FromExternalError, IResult};
 
-// Set `= nom::error:VerboseError<&'a[u8]>` for detail error
-pub type ParseError<'a> = nom::error::Error<&'a [u8]>;
+#[derive(PartialEq, Debug, thiserror::Error)]
+pub enum PdfParseError<I, E>
+where
+    E: nom::error::ParseError<I> + std::fmt::Debug + PartialEq,
+{
+    #[error("nom parse error: {0}")]
+    NomError(#[from] E),
+    #[error("phantom for generic type I, Not used")]
+    Phantom(I),
+}
+
+impl<I, E1, E2> FromExternalError<I, E1> for PdfParseError<I, E2>
+where
+    E2: nom::error::FromExternalError<I, E1>
+        + nom::error::ParseError<I>
+        + std::fmt::Debug
+        + PartialEq,
+{
+    fn from_external_error(input: I, kind: nom::error::ErrorKind, e: E1) -> Self {
+        Self::NomError(E2::from_external_error(input, kind, e))
+    }
+}
+
+impl<I, E> nom::error::ParseError<I> for PdfParseError<I, E>
+where
+    E: nom::error::ParseError<I> + std::fmt::Debug + PartialEq,
+{
+    fn from_error_kind(input: I, kind: nom::error::ErrorKind) -> Self {
+        Self::NomError(E::from_error_kind(input, kind))
+    }
+
+    fn append(_input: I, _kind: nom::error::ErrorKind, other: Self) -> Self {
+        other
+    }
+}
+
+// Set `nom::error:VerboseError<&'a[u8]>` for detail error
+pub type ParseError<'a> = PdfParseError<&'a [u8], nom::error::Error<&'a [u8]>>;
 pub type ParseResult<'a, O, E = ParseError<'a>> = IResult<&'a [u8], O, E>;
 
 /// Error at file struct level.
