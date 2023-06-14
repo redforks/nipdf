@@ -42,7 +42,7 @@ gen_complete_parse_fn!(
 );
 gen_complete_parse_fn!(parse_complete_reference, parse_reference, Reference);
 
-fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
+pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
     let null = map(tag("null"), |_| Object::Null);
     let true_parser = map(tag("true"), |_| Object::Bool(true));
     let false_parser = map(tag("false"), |_| Object::Bool(false));
@@ -98,7 +98,7 @@ fn parse_name(input: &[u8]) -> ParseResult<'_, Name<'_>> {
     )(input)
 }
 
-fn parse_array(input: &[u8]) -> ParseResult<'_, Array<'_>> {
+pub fn parse_array(input: &[u8]) -> ParseResult<'_, Array<'_>> {
     delimited(
         tag(b"[".as_slice()),
         ws(separated_list0(multispace1, parse_object)),
@@ -106,7 +106,7 @@ fn parse_array(input: &[u8]) -> ParseResult<'_, Array<'_>> {
     )(input)
 }
 
-fn parse_dict(input: &[u8]) -> ParseResult<'_, Dictionary<'_>> {
+pub fn parse_dict(input: &[u8]) -> ParseResult<'_, Dictionary<'_>> {
     map(
         delimited(
             tag(b"<<".as_slice()),
@@ -120,7 +120,7 @@ fn parse_dict(input: &[u8]) -> ParseResult<'_, Dictionary<'_>> {
     )(input)
 }
 
-fn parse_stream(input: &[u8]) -> ParseResult<'_, Stream<'_>> {
+pub fn parse_stream(input: &[u8]) -> ParseResult<'_, Stream<'_>> {
     let (input, dict) = ws_prefixed(parse_dict)(input)?;
     let len = dict
         .get(&Name::new(b"/Length"))
@@ -136,7 +136,7 @@ fn parse_stream(input: &[u8]) -> ParseResult<'_, Stream<'_>> {
     Ok((input, (dict, buf)))
 }
 
-fn parse_indirected_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
+pub fn parse_indirected_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
     let (input, (id, gen)) = separated_pair(u32, multispace1, u16)(input)?;
     let (input, obj) = delimited(ws(tag(b"obj")), parse_object, ws(tag(b"endobj")))(input)?;
     Ok((input, IndirectObject::new(id, gen, obj)))

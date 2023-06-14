@@ -34,3 +34,9 @@ impl Tail {
 pub struct Trailer<'a> {
     dict: Dictionary<'a>,
 }
+
+impl<'a> Trailer<'a> {
+    pub fn new(dict: Dictionary<'a>) -> Self {
+        Self { dict }
+    }
+}

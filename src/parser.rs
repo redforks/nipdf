@@ -66,10 +66,7 @@ pub enum FileError {
 mod file;
 mod object;
 
-pub use object::{
-    parse_complete_array, parse_complete_dict, parse_complete_indirected_object,
-    parse_complete_object, parse_complete_reference, parse_complete_stream,
-};
+pub use object::*;
 
 fn ws_prefixed<'a, F, O>(inner: F) -> impl FnMut(&'a [u8]) -> ParseResult<'_, O>
 where

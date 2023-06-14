@@ -9,7 +9,7 @@ use nom::{
 
 use crate::{
     file::{Header, Tail, Trailer},
-    parser::ws_terminated,
+    parser::{parse_dict, ws_terminated},
 };
 
 use super::{ws, ws_prefixed, FileError, ParseError, ParseResult};
@@ -80,6 +80,11 @@ fn parse_tail(buf: &[u8]) -> ParseResult<Tail> {
     }
     let (buf, _) = after_tag_r(buf, b"startxref")?;
     parse(buf)
+}
+
+fn parse_trailer(buf: &[u8]) -> ParseResult<Trailer> {
+    let (buf, _) = after_tag_r(buf, b"trailer")?;
+    map(ws_prefixed(parse_dict), Trailer::new)(buf)
 }
 
 #[cfg(test)]
