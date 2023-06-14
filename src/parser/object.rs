@@ -18,14 +18,23 @@ use crate::object::{Array, Dictionary, Name, Object, Stream};
 
 use super::{ParseError, ParseResult, PdfParseError};
 
-/// Like [parse_object] but failed if the input is not consumed completely.
-pub fn parse_complete_object(buf: &[u8]) -> Result<Object, ParseError> {
-    match complete(ws(parse_object))(buf) {
-        Ok((_, obj)) => Ok(obj),
-        Err(nom::Err::Incomplete(_)) => unreachable!(),
-        Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => Err(e),
-    }
+macro_rules! gen_complete_parse_fn {
+    ($new_fn: ident, $wrapped_fn: ident, $ty: ty) => {
+        /// Like [$wrapped_fn] but failed if the input is not consumed completely.
+        pub fn $new_fn(buf: &[u8]) -> Result<$ty, ParseError> {
+            match complete(ws($wrapped_fn))(buf) {
+                Ok((_, obj)) => Ok(obj),
+                Err(nom::Err::Incomplete(_)) => unreachable!(),
+                Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => Err(e),
+            }
+        }
+    };
 }
+
+gen_complete_parse_fn!(parse_complete_object, parse_object, Object);
+gen_complete_parse_fn!(parse_complete_array, parse_array, Array);
+gen_complete_parse_fn!(parse_complete_dict, parse_dict, Dictionary);
+gen_complete_parse_fn!(parse_complete_stream, parse_stream, Stream);
 
 fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
     let null = map(tag("null"), |_| Object::Null);
