@@ -8,15 +8,15 @@ use nom::{
 
 use crate::file::{Header, Tail};
 
-use super::{LogicParseError, ParseError, ParseResult};
+use super::{FileError, ParseError, ParseResult};
 
 fn parse_header(buf: &[u8]) -> ParseResult<'_, Header<'_>> {
     let one_digit = || satisfy(|c| c.is_digit(10));
 
-    fn new_header(buf: &[u8]) -> std::result::Result<Header<'_>, LogicParseError> {
+    fn new_header(buf: &[u8]) -> std::result::Result<Header<'_>, FileError> {
         assert_eq!(3, buf.len());
         if buf[0] != b'1' {
-            Err(LogicParseError::UnsupportedVersion(
+            Err(FileError::UnsupportedVersion(
                 String::from_utf8_lossy(buf).to_string(),
             ))
         } else {
