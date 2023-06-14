@@ -7,6 +7,12 @@ where
 {
     #[error("nom parse error: {0}")]
     NomError(#[from] E),
+
+    #[error("Stream require length field in info dict")]
+    StreamRequireLength,
+    #[error("Stream length type is not integer")]
+    StreamInvalidLengthType,
+
     #[error("phantom for generic type I, Not used")]
     Phantom(I),
 }

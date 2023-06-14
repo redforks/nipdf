@@ -47,3 +47,18 @@ fn test_parse_dict(exp: Vec<(Name, Object)>, buf: impl AsRef<[u8]>) {
         Ok((&[][..], exp.into_iter().collect()))
     );
 }
+
+#[test_case(
+    b"<</Length 0>>
+stream
+endstream"; "empty"
+)]
+#[test_case(
+    b"<</Length 4>>
+stream
+abcd
+endstream"; "not empty"
+)]
+fn test_parse_stream(buf: impl AsRef<[u8]>) {
+    insta::assert_debug_snapshot!(parse_stream(buf.as_ref()).unwrap());
+}

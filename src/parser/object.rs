@@ -1,16 +1,19 @@
 use nom::{
     branch::alt,
-    bytes::complete::{is_not, tag, take_till, take_until},
-    character::complete::{multispace0, multispace1},
+    bytes::{
+        complete::{is_not, tag, take_till, take_until},
+        streaming::take,
+    },
+    character::complete::{crlf, multispace0, multispace1, newline},
     combinator::{map, recognize},
-    multi::{many0, many0_count, separated_list0},
+    multi::{many0_count, separated_list0},
     number::complete::float,
     sequence::{delimited, preceded, separated_pair, tuple},
     Parser,
 };
 use num::cast;
 
-use crate::object::{Array, Dictionary, Name, Object};
+use crate::object::{Array, Dictionary, Name, Object, Stream};
 
 use super::{ParseError, ParseResult};
 
@@ -89,6 +92,29 @@ fn parse_dict(input: &[u8]) -> ParseResult<'_, Dictionary<'_>> {
         ),
         |v| v.into_iter().collect(),
     )(input)
+}
+
+fn parse_stream(input: &[u8]) -> ParseResult<'_, Stream<'_>> {
+    let (input, dict) = ws_prefixed(parse_dict)(input)?;
+    let len = dict
+        .get(&Name::new(b"/Length"))
+        .ok_or(nom::Err::Error(ParseError::StreamRequireLength))?;
+    let len = len
+        .as_int()
+        .map_err(|_| nom::Err::Error(ParseError::StreamInvalidLengthType))?;
+    let (input, buf) = delimited(
+        delimited(multispace0, tag(b"stream"), alt((crlf, tag(b"\n")))),
+        take(len as u32),
+        ws_prefixed(tag(b"endstream")),
+    )(input)?;
+    Ok((input, (dict, buf)))
+}
+
+fn ws_prefixed<'a, F, O>(inner: F) -> impl FnMut(&'a [u8]) -> ParseResult<'_, O>
+where
+    F: Parser<&'a [u8], O, ParseError<'a>>,
+{
+    preceded(multispace0, inner)
 }
 
 /// A combinator that takes a parser `inner` and produces a parser that also consumes both leading and

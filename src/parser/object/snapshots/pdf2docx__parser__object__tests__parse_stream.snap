@@ -1,0 +1,25 @@
+---
+source: src/parser/object/tests.rs
+expression: parse_stream(buf.as_ref()).unwrap()
+---
+(
+    [],
+    (
+        {
+            Name(
+                [
+                    47,
+                    76,
+                    101,
+                    110,
+                    103,
+                    116,
+                    104,
+                ],
+            ): Integer(
+                0,
+            ),
+        },
+        [],
+    ),
+)
