@@ -5,7 +5,8 @@ use nom::{
         streaming::take,
     },
     character::complete::{crlf, multispace0, multispace1, newline},
-    combinator::{map, recognize},
+    combinator::{complete, map, recognize},
+    error::{Error as NomError, ErrorKind},
     multi::{many0_count, separated_list0},
     number::complete::float,
     sequence::{delimited, preceded, separated_pair, tuple},
@@ -15,9 +16,18 @@ use num::cast;
 
 use crate::object::{Array, Dictionary, Name, Object, Stream};
 
-use super::{ParseError, ParseResult};
+use super::{ParseError, ParseResult, PdfParseError};
 
-pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
+/// Like [parse_object] but failed if the input is not consumed completely.
+pub fn parse_complete_object(buf: &[u8]) -> Result<Object, ParseError> {
+    match complete(ws(parse_object))(buf) {
+        Ok((_, obj)) => Ok(obj),
+        Err(nom::Err::Incomplete(_)) => unreachable!(),
+        Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => Err(e),
+    }
+}
+
+fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
     let null = map(tag("null"), |_| Object::Null);
     let true_parser = map(tag("true"), |_| Object::Bool(true));
     let false_parser = map(tag("false"), |_| Object::Bool(false));

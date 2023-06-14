@@ -4,6 +4,9 @@ pub type Dictionary<'a> = HashMap<Name<'a>, Object<'a>>;
 pub type Array<'a> = Vec<Object<'a>>;
 pub type Stream<'a> = (Dictionary<'a>, &'a [u8]); // data part not including the stream/endstream keyword
 
+mod indirect_object;
+pub use indirect_object::IndirectObject;
+
 #[derive(Clone, Copy, PartialEq, Debug, thiserror::Error)]
 pub enum ObjectValueError {
     #[error("unexpected type")]

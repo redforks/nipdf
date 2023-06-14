@@ -57,3 +57,5 @@ pub enum FileError {
 
 mod file;
 mod object;
+
+pub use object::parse_complete_object;
