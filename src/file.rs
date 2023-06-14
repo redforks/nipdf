@@ -1,4 +1,7 @@
 //! Contains types of PDF file structures.
+
+use crate::object::Dictionary;
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Header<'a>(&'a [u8]);
 
@@ -25,4 +28,9 @@ impl Tail {
     pub fn xref_pos(&self) -> u32 {
         self.xref_pos
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Trailer<'a> {
+    dict: Dictionary<'a>,
 }
