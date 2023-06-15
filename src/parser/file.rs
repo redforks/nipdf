@@ -6,18 +6,18 @@ use nom::{
     bytes::complete::tag,
     character::complete::{char, line_ending, satisfy},
     character::complete::{u16, u32},
-    combinator::{map, map_res, recognize, value},
+    combinator::{complete, map, map_res, recognize, value},
     multi::{fold_many1, many0},
     sequence::{preceded, separated_pair, terminated, tuple},
 };
 
 use crate::{
-    file::{Frame, Header, Trailer},
+    file::{Frame, FrameSet, Header, Trailer},
     object::{XRefEntry, XRefTable},
     parser::parse_dict,
 };
 
-use super::{ws_terminated, FileError, ParseError, ParseResult};
+use super::{ws, ws_terminated, FileError, ParseError, ParseResult};
 
 fn parse_header(buf: &[u8]) -> ParseResult<'_, Header<'_>> {
     let one_digit = || satisfy(|c| c.is_ascii_digit());
@@ -66,12 +66,11 @@ fn r_find_start_object_tag(mut buf: &[u8], tag: &[u8]) -> Option<usize> {
     }
 }
 
-/// nom parser consumes buf to the next line of the last object tag.
-fn after_tag_r<'a>(buf: &'a [u8], tag: &'static [u8]) -> ParseResult<'a, ()> {
+/// nom parser consumes buf to the start of the last object tag.
+fn to_tag_r<'a>(buf: &'a [u8], tag: &'static [u8]) -> ParseResult<'a, ()> {
     let pos = r_find_start_object_tag(buf, tag);
     if let Some(pos) = pos {
-        let buf = &buf[pos + tag.len()..];
-        value((), line_ending)(buf)
+        Ok((&buf[pos..], ()))
     } else {
         Err(nom::Err::Error(ParseError::InvalidFile))
     }
@@ -130,6 +129,24 @@ fn parse_frame(buf: &[u8]) -> ParseResult<Frame> {
         tuple((parse_xref_table, parse_trailer, parse_startxref, parse_eof)),
         |(xref_table, trailer, startxref, _)| Frame::new(startxref, trailer, xref_table),
     )(buf)
+}
+
+fn parse_frame_set(input: &[u8]) -> ParseResult<FrameSet> {
+    let mut frames = Vec::new();
+    let (buf, _) = to_tag_r(input, b"startxref")?;
+    let (_, pos) = parse_startxref(buf)?;
+    let (_, frame) = parse_frame(&input[pos as usize..])?;
+    let mut prev = frame.prev();
+    frames.push(frame);
+
+    while let Some(pos) = prev {
+        let buf = &input[pos as usize..];
+        let (_, frame) = parse_frame(buf)?;
+        prev = frame.prev();
+        frames.push(frame);
+    }
+
+    Ok((&input[..0], FrameSet::new(frames)))
 }
 
 #[cfg(test)]

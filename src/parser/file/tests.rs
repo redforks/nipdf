@@ -22,7 +22,7 @@ fn parse_file_header() {
 #[test_case(Some(2), b"\r\nhello\r\n", b"hello"; "CRLF")]
 #[test_case(Some(4), b"foo\nfoo\nbar", b"foo"; "from end")]
 #[test_case(None, b"abc-foo", b"foo"; "not the whole line")]
-fn test_after_tag_r(exp: Option<usize>, buf: &[u8], tag: &[u8]) {
+fn test_r_find_start_object_tag(exp: Option<usize>, buf: &[u8], tag: &[u8]) {
     assert_eq!(exp, r_find_start_object_tag(buf, tag));
 }
 
@@ -49,6 +49,31 @@ trailer
 << /Size 1 >>
 startxref
 1234
+%%EOF
+"
+    )
+    .unwrap());
+}
+
+#[test]
+fn test_parse_frame_set() {
+    assert_debug_snapshot!(parse_frame_set(
+        b"%PDF-1.7
+xref
+1 1
+0000000000 00000 n
+trailer
+<< /Size 1 >>
+startxref
+9
+%%EOF
+xref
+1 1
+0000000000 00000 n
+trailer
+<< /Prev 9 >>
+startxref
+77
 %%EOF
 "
     )
