@@ -15,21 +15,6 @@ impl<'a> Header<'a> {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct Tail {
-    xref_pos: u32,
-}
-
-impl Tail {
-    pub fn new(xref_pos: u32) -> Self {
-        Self { xref_pos }
-    }
-
-    pub fn xref_pos(&self) -> u32 {
-        self.xref_pos
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Trailer<'a> {
     dict: Dictionary<'a>,

@@ -6,18 +6,18 @@ use nom::{
     bytes::complete::tag,
     character::complete::{char, line_ending, satisfy},
     character::complete::{u16, u32},
-    combinator::{complete, map, map_res, recognize, value},
+    combinator::{map, map_res, recognize, value},
     multi::{fold_many1, many0},
     sequence::{preceded, separated_pair, terminated, tuple},
 };
 
 use crate::{
-    file::{Frame, Header, Tail, Trailer},
+    file::{Frame, Header, Trailer},
     object::{XRefEntry, XRefTable},
     parser::parse_dict,
 };
 
-use super::{ws, ws_terminated, FileError, ParseError, ParseResult};
+use super::{ws_terminated, FileError, ParseError, ParseResult};
 
 fn parse_header(buf: &[u8]) -> ParseResult<'_, Header<'_>> {
     let one_digit = || satisfy(|c| c.is_ascii_digit());
@@ -75,14 +75,6 @@ fn after_tag_r<'a>(buf: &'a [u8], tag: &'static [u8]) -> ParseResult<'a, ()> {
     } else {
         Err(nom::Err::Error(ParseError::InvalidFile))
     }
-}
-
-fn parse_tail(buf: &[u8]) -> ParseResult<Tail> {
-    fn parse(buf: &[u8]) -> ParseResult<Tail> {
-        map(complete(terminated(u32, ws(tag(b"%%EOF")))), Tail::new)(buf)
-    }
-    let (buf, _) = after_tag_r(buf, b"startxref")?;
-    parse(buf)
 }
 
 fn parse_trailer(buf: &[u8]) -> ParseResult<Trailer> {

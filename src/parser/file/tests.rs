@@ -27,12 +27,6 @@ fn test_after_tag_r(exp: Option<usize>, buf: &[u8], tag: &[u8]) {
 }
 
 #[test]
-fn test_parse_tail() {
-    let buf = b"\nstartxref\n1234\n%%EOF";
-    assert_eq!((b"".as_slice(), Tail::new(1234)), parse_tail(buf).unwrap());
-}
-
-#[test]
 fn test_parse_trailer() {
     let buf = b"trailer\n<< /Size 1 >>\nstartxref\n1234\n%%EOF";
     assert_debug_snapshot!(parse_trailer(buf).unwrap());
