@@ -1,6 +1,6 @@
 //! Contains types of PDF file structures.
 
-use crate::object::Dictionary;
+use crate::object::{Dictionary, XRefEntry, XRefTableSection};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Header<'a>(&'a [u8]);
@@ -40,3 +40,44 @@ impl<'a> Trailer<'a> {
         Self { dict }
     }
 }
+
+#[derive(Debug, Clone, PartialEq)]
+/// Frame contains things like xref, trailer, caused by incremental update. See [FrameSet]
+pub struct Frame<'a> {
+    xref_pos: u32,
+    trailer: Trailer<'a>,
+    xref_table: XRefTableSection,
+}
+
+impl<'a> Frame<'a> {
+    pub fn new(xref_pos: u32, trailer: Trailer<'a>, xref_table: XRefTableSection) -> Self {
+        Self {
+            xref_pos,
+            trailer,
+            xref_table,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FrameSet<'a>(Vec<Frame<'a>>);
+
+impl<'a> FrameSet<'a> {
+    pub fn new(frames: Vec<Frame<'a>>) -> Self {
+        Self(frames)
+    }
+
+    pub fn resolve_object(&self, id: u32) -> Option<XRefEntry> {
+        self.iter_entry_by_id(id).next()
+    }
+
+    pub fn iter_entry_by_id(&self, id: u32) -> impl Iterator<Item = XRefEntry> + '_ {
+        self.0
+            .iter()
+            .flat_map(move |frame| frame.xref_table.get(&id))
+            .copied()
+    }
+}
+
+#[cfg(test)]
+mod tests;
