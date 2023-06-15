@@ -28,7 +28,7 @@ impl ObjectId {
 }
 
 mod xref_table;
-pub use xref_table::{Section as XRefTableSection, XRefEntry, XRefTable};
+pub use xref_table::{Section as XRefTableSection, XRefEntry};
 
 #[derive(Clone, Copy, PartialEq, Debug, thiserror::Error)]
 pub enum ObjectValueError {
