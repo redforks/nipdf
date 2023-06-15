@@ -27,6 +27,9 @@ impl ObjectId {
     }
 }
 
+mod xref_table;
+pub use xref_table::*;
+
 #[derive(Clone, Copy, PartialEq, Debug, thiserror::Error)]
 pub enum ObjectValueError {
     #[error("unexpected type")]
