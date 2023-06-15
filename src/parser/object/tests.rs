@@ -40,6 +40,8 @@ fn test_parse_array(exp: Vec<Object<'static>>, buf: impl AsRef<[u8]>) {
 #[test_case(b"<<>>", "empty dict 2")]
 #[test_case(b"<< /Type /Catalog >>", "dict with one entry")]
 #[test_case(b"<</Inner <<>>>>", "nested")]
+#[test_case(b"<</id[]>>", "empty array")]
+#[test_case(b"<</id<<>>>>", "nested empty dict")]
 fn test_parse_dict(buf: impl AsRef<[u8]>, name: &str) {
     insta::assert_debug_snapshot!(name, parse_dict(buf.as_ref()).unwrap());
 }

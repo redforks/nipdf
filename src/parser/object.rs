@@ -97,7 +97,7 @@ fn parse_name(input: &[u8]) -> ParseResult<'_, Name<'_>> {
     map(
         recognize(preceded(
             tag(b"/".as_slice()),
-            take_till(|c: u8| c.is_ascii_whitespace()),
+            take_till(|c: u8| c.is_ascii_whitespace() || c == b'[' || c == b'<'),
         )),
         Name::new,
     )(input)
@@ -105,9 +105,9 @@ fn parse_name(input: &[u8]) -> ParseResult<'_, Name<'_>> {
 
 pub fn parse_array(input: &[u8]) -> ParseResult<'_, Array<'_>> {
     delimited(
-        tag(b"[".as_slice()),
-        ws(separated_list0(multispace1, parse_object)),
-        tag(b"]".as_slice()),
+        ws(tag(b"[")),
+        many0(ws(parse_object)),
+        ws_terminated(tag(b"]")),
     )(input)
 }
 

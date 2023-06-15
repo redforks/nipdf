@@ -1,0 +1,18 @@
+---
+source: src/parser/object/tests.rs
+expression: parse_dict(buf.as_ref()).unwrap()
+---
+(
+    [],
+    {
+        Name(
+            [
+                47,
+                105,
+                100,
+            ],
+        ): Array(
+            [],
+        ),
+    },
+)
