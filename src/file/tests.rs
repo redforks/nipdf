@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use test_case::test_case;
 
 use super::*;
 
@@ -49,4 +50,16 @@ fn resolve_xref_table() {
         frame_set.iter_entry_by_id(1).collect::<Vec<_>>(),
         vec![entry3_1, entry1_1]
     );
+}
+
+#[test_case(None, None; "no prev")]
+#[test_case(100, Object::Integer(100); "has prev")]
+fn prev_frame(exp: impl Into<Option<u32>>, prev_value: impl Into<Option<Object<'static>>>) {
+    let mut dict = Dictionary::new();
+    if let Some(prev) = prev_value.into() {
+        dict.insert(Name::new(b"/Prev"), prev);
+    }
+    let trailer = Trailer::new(dict);
+    let frame = Frame::new(0, trailer, XRefTable::new(BTreeMap::new()));
+    assert_eq!(frame.prev(), exp.into());
 }
