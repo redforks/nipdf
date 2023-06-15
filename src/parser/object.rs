@@ -6,17 +6,15 @@ use nom::{
     },
     character::complete::{crlf, multispace0, multispace1, u16, u32},
     combinator::{complete, map, recognize},
-    error::{Error as NomError, ErrorKind},
     multi::{many0_count, separated_list0},
     number::complete::float,
-    sequence::{delimited, preceded, separated_pair, terminated, tuple},
-    Parser,
+    sequence::{delimited, preceded, separated_pair, terminated},
 };
 use num::cast;
 
 use crate::object::{Array, Dictionary, IndirectObject, Name, Object, Reference, Stream};
 
-use super::{ws, ws_prefixed, ParseError, ParseResult, PdfParseError};
+use super::{ws, ws_prefixed, ParseError, ParseResult};
 
 macro_rules! gen_complete_parse_fn {
     ($new_fn: ident, $wrapped_fn: ident, $ty: ty) => {
@@ -68,10 +66,10 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
         let mut parser = recognize(delimited(tag(b"("), many0_count(inner_parser), tag(b")")));
         parser(input)
     }
-    let parse_quoted_string = map(parse_quoted_string, |s| Object::LiteralString(s));
+    let parse_quoted_string = map(parse_quoted_string, Object::LiteralString);
     let parse_hex_string = map(
         recognize(delimited(tag(b"<"), take_until(b">".as_slice()), tag(b">"))),
-        |s| Object::HexString(s),
+        Object::HexString,
     );
 
     alt((
@@ -94,7 +92,7 @@ fn parse_name(input: &[u8]) -> ParseResult<'_, Name<'_>> {
             tag(b"/".as_slice()),
             take_till(|c: u8| c.is_ascii_whitespace()),
         )),
-        |s| Name::new(s),
+        Name::new,
     )(input)
 }
 

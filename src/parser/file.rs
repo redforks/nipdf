@@ -4,18 +4,18 @@ use nom::{
     character::complete::u32,
     character::complete::{char, line_ending, satisfy},
     combinator::{complete, map, map_res, recognize},
-    sequence::{delimited, preceded, terminated, tuple},
+    sequence::{preceded, terminated, tuple},
 };
 
 use crate::{
     file::{Header, Tail, Trailer},
-    parser::{parse_dict, ws_terminated},
+    parser::{parse_dict},
 };
 
 use super::{ws, ws_prefixed, FileError, ParseError, ParseResult};
 
 fn parse_header(buf: &[u8]) -> ParseResult<'_, Header<'_>> {
-    let one_digit = || satisfy(|c| c.is_digit(10));
+    let one_digit = || satisfy(|c| c.is_ascii_digit());
 
     fn new_header(buf: &[u8]) -> std::result::Result<Header<'_>, FileError> {
         assert_eq!(3, buf.len());

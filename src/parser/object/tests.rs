@@ -34,7 +34,7 @@ fn test_parse_simple_objects(exp: impl Into<Object<'static>>, buf: impl AsRef<[u
 #[test_case(vec![Object::Array(vec![Object::Null])], b"[[null]]"; "nested array with null")]
 fn test_parse_array(exp: Vec<Object<'static>>, buf: impl AsRef<[u8]>) {
     assert_eq!(
-        (b"".as_slice(), exp.into()),
+        (b"".as_slice(), exp),
         parse_array(buf.as_ref()).unwrap()
     );
 }

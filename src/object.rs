@@ -74,7 +74,7 @@ impl<'a> Object<'a> {
         fn decode_literal_string(s: &[u8]) -> String {
             let s = &s[1..s.len() - 1];
             let mut result = String::with_capacity(s.len());
-            let mut iter = s.into_iter().copied().peekable();
+            let mut iter = s.iter().copied().peekable();
             while let Some(next) = iter.next() {
                 match next {
                     b'\\' => {
@@ -257,7 +257,7 @@ impl<'a> Name<'a> {
         let s = &self.0[1..];
         if s.iter().copied().any(|b| b == b'#') {
             let mut result = Vec::with_capacity(s.len());
-            let mut iter = s.into_iter().copied();
+            let mut iter = s.iter().copied();
             while let Some(next) = iter.next() {
                 if next == b'#' {
                     if let Some(c) = next_hex_char(&mut iter) {
