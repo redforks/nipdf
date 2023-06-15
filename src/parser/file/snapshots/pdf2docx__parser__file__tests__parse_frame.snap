@@ -1,0 +1,39 @@
+---
+source: src/parser/file/tests.rs
+expression: "parse_frame(b\"xref\n1 2\n0000000000 00000 n\n0000000010 00000 n\ntrailer\n<< /Size 1 >>\nstartxref\n1234\n%%EOF\n\").unwrap()"
+---
+(
+    [],
+    Frame {
+        xref_pos: 1234,
+        trailer: Trailer {
+            dict: {
+                Name(
+                    [
+                        47,
+                        83,
+                        105,
+                        122,
+                        101,
+                    ],
+                ): Integer(
+                    1,
+                ),
+            },
+        },
+        xref_table: XRefTable {
+            entries: {
+                1: XRefEntry(
+                    0,
+                    0,
+                    true,
+                ),
+                2: XRefEntry(
+                    10,
+                    0,
+                    true,
+                ),
+            },
+        },
+    },
+)

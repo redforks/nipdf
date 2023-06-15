@@ -41,5 +41,22 @@ fn test_parse_trailer() {
 #[test_case(b"xref\n1 0\n"; "empty")]
 #[test_case(b"xref\n1 2\n0000000000 00000 n \n0000000010 00000 n \n"; "two entries")]
 fn test_parse_xref_table(buf: impl AsRef<[u8]>) {
-    assert_debug_snapshot!(parse_xref_table_section(buf.as_ref()).unwrap());
+    assert_debug_snapshot!(parse_xref_table(buf.as_ref()).unwrap());
+}
+
+#[test]
+fn test_parse_frame() {
+    assert_debug_snapshot!(parse_frame(
+        b"xref
+1 2
+0000000000 00000 n
+0000000010 00000 n
+trailer
+<< /Size 1 >>
+startxref
+1234
+%%EOF
+"
+    )
+    .unwrap());
 }

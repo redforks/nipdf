@@ -4,7 +4,6 @@ expression: parse_trailer(buf).unwrap()
 ---
 (
     [
-        10,
         115,
         116,
         97,

@@ -12,7 +12,7 @@ use nom::{
 };
 
 use crate::{
-    file::{Header, Tail, Trailer},
+    file::{Frame, Header, Tail, Trailer},
     object::{XRefEntry, XRefTable},
     parser::parse_dict,
 };
@@ -86,11 +86,14 @@ fn parse_tail(buf: &[u8]) -> ParseResult<Tail> {
 }
 
 fn parse_trailer(buf: &[u8]) -> ParseResult<Trailer> {
-    let (buf, _) = after_tag_r(buf, b"trailer")?;
-    map(parse_dict, Trailer::new)(buf)
+    map(
+        preceded(ws_terminated(tag(b"trailer")), ws_terminated(parse_dict)),
+        Trailer::new,
+    )(buf)
 }
 
-fn parse_xref_table_section(buf: &[u8]) -> ParseResult<XRefTable> {
+// Assumes buf start from xref
+fn parse_xref_table(buf: &[u8]) -> ParseResult<XRefTable> {
     let record_count_parser = ws_terminated(separated_pair(u32, tag(b" "), u32));
     let record_parser = map(
         ws_terminated(tuple((
@@ -103,7 +106,7 @@ fn parse_xref_table_section(buf: &[u8]) -> ParseResult<XRefTable> {
         |(offset, _, generation, _, ty)| XRefEntry::new(offset, generation, ty == b"n"),
     );
     let group = tuple((record_count_parser, many0(record_parser)));
-    let mut parser = map(
+    let parser = map(
         fold_many1(
             group,
             BTreeMap::new,
@@ -118,8 +121,23 @@ fn parse_xref_table_section(buf: &[u8]) -> ParseResult<XRefTable> {
         XRefTable::new,
     );
 
-    let (buf, _) = after_tag_r(buf, b"xref")?;
-    parser(buf)
+    preceded(ws_terminated(tag(b"xref")), parser)(buf)
+}
+
+fn parse_startxref(buf: &[u8]) -> ParseResult<u32> {
+    preceded(ws_terminated(tag(b"startxref")), ws_terminated(u32))(buf)
+}
+
+fn parse_eof(buf: &[u8]) -> ParseResult<()> {
+    value((), ws_terminated(tag(b"%%EOF")))(buf)
+}
+
+// Assumes buf start from xref
+fn parse_frame(buf: &[u8]) -> ParseResult<Frame> {
+    map(
+        tuple((parse_xref_table, parse_trailer, parse_startxref, parse_eof)),
+        |(xref_table, trailer, startxref, _)| Frame::new(startxref, trailer, xref_table),
+    )(buf)
 }
 
 #[cfg(test)]
