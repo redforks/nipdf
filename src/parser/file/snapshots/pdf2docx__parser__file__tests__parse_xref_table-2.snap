@@ -1,0 +1,21 @@
+---
+source: src/parser/file/tests.rs
+expression: parse_xref_table(buf.as_ref()).unwrap()
+---
+(
+    [],
+    XRefTable {
+        entries: {
+            1: XRefEntry(
+                0,
+                0,
+                true,
+            ),
+            2: XRefEntry(
+                10,
+                0,
+                true,
+            ),
+        },
+    },
+)

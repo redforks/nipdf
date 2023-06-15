@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Copy)]
-pub struct XRefEntry(u32, u16, bool); // offset, generation, is_free
+pub struct XRefEntry(u32, u16, bool); // offset, generation, is_used
 
 impl XRefEntry {
-    pub fn new(offset: u32, generation: u16, is_free: bool) -> Self {
-        Self(offset, generation, is_free)
+    pub fn new(offset: u32, generation: u16, is_used: bool) -> Self {
+        Self(offset, generation, is_used)
     }
 
     pub fn offset(&self) -> u32 {
@@ -16,7 +16,7 @@ impl XRefEntry {
         self.1
     }
 
-    pub fn is_free(&self) -> bool {
+    pub fn is_used(&self) -> bool {
         self.2
     }
 }

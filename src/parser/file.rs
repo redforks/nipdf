@@ -1,18 +1,23 @@
+use std::{collections::BTreeMap, io::BufRead};
+
 use memchr::memmem::rfind;
 use nom::{
+    branch::alt,
     bytes::complete::tag,
-    character::complete::u32,
     character::complete::{char, line_ending, satisfy},
-    combinator::{complete, map, map_res, recognize},
-    sequence::{preceded, terminated, tuple},
+    character::complete::{u16, u32},
+    combinator::{complete, map, map_res, recognize, value},
+    multi::{fold_many0, fold_many1, many0, many1},
+    sequence::{delimited, preceded, separated_pair, terminated, tuple},
 };
 
 use crate::{
     file::{Header, Tail, Trailer},
-    parser::{parse_dict},
+    object::{XRefEntry, XRefTable},
+    parser::parse_dict,
 };
 
-use super::{ws, ws_prefixed, FileError, ParseError, ParseResult};
+use super::{ws, ws_prefixed, ws_terminated, FileError, ParseError, ParseResult};
 
 fn parse_header(buf: &[u8]) -> ParseResult<'_, Header<'_>> {
     let one_digit = || satisfy(|c| c.is_ascii_digit());
@@ -61,11 +66,12 @@ fn r_find_start_object_tag(mut buf: &[u8], tag: &[u8]) -> Option<usize> {
     }
 }
 
-/// nom parser consumes buf until the end of the last object tag.
+/// nom parser consumes buf to the next line of the last object tag.
 fn after_tag_r<'a>(buf: &'a [u8], tag: &'static [u8]) -> ParseResult<'a, ()> {
     let pos = r_find_start_object_tag(buf, tag);
     if let Some(pos) = pos {
-        Ok((&buf[pos + tag.len()..], ()))
+        let buf = &buf[pos + tag.len()..];
+        value((), line_ending)(buf)
     } else {
         Err(nom::Err::Error(ParseError::InvalidFile))
     }
@@ -73,10 +79,7 @@ fn after_tag_r<'a>(buf: &'a [u8], tag: &'static [u8]) -> ParseResult<'a, ()> {
 
 fn parse_tail(buf: &[u8]) -> ParseResult<Tail> {
     fn parse(buf: &[u8]) -> ParseResult<Tail> {
-        map(
-            complete(terminated(ws_prefixed(u32), ws(tag(b"%%EOF")))),
-            Tail::new,
-        )(buf)
+        map(complete(terminated(u32, ws(tag(b"%%EOF")))), Tail::new)(buf)
     }
     let (buf, _) = after_tag_r(buf, b"startxref")?;
     parse(buf)
@@ -84,7 +87,39 @@ fn parse_tail(buf: &[u8]) -> ParseResult<Tail> {
 
 fn parse_trailer(buf: &[u8]) -> ParseResult<Trailer> {
     let (buf, _) = after_tag_r(buf, b"trailer")?;
-    map(ws_prefixed(parse_dict), Trailer::new)(buf)
+    map(parse_dict, Trailer::new)(buf)
+}
+
+fn parse_xref_table(buf: &[u8]) -> ParseResult<XRefTable> {
+    let record_count_parser = ws_terminated(separated_pair(u32, tag(b" "), u32));
+    let record_parser = map(
+        ws_terminated(tuple((
+            u32,
+            tag(b" "),
+            u16,
+            tag(b" "),
+            alt((tag(b"n"), tag(b"f"))),
+        ))),
+        |(offset, _, generation, _, ty)| XRefEntry::new(offset, generation, ty == b"n"),
+    );
+    let group = tuple((record_count_parser, many0(record_parser)));
+    let mut parser = map(
+        fold_many1(
+            group,
+            BTreeMap::new,
+            |mut table, ((start, count), entries)| {
+                assert_eq!(count, entries.len() as u32);
+                for (i, entry) in entries.into_iter().enumerate() {
+                    table.insert(start + i as u32, entry);
+                }
+                table
+            },
+        ),
+        XRefTable::new,
+    );
+
+    let (buf, _) = after_tag_r(buf, b"xref")?;
+    parser(buf)
 }
 
 #[cfg(test)]
