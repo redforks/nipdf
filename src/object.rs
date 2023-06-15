@@ -7,6 +7,26 @@ pub type Stream<'a> = (Dictionary<'a>, &'a [u8]); // data part not including the
 mod indirect_object;
 pub use indirect_object::IndirectObject;
 
+#[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
+pub struct ObjectId {
+    id: u32,
+    generation: u16,
+}
+
+impl ObjectId {
+    pub fn new(id: u32, generation: u16) -> Self {
+        Self { id, generation }
+    }
+
+    pub fn id(&self) -> u32 {
+        self.id
+    }
+
+    pub fn generation(&self) -> u16 {
+        self.generation
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Debug, thiserror::Error)]
 pub enum ObjectValueError {
     #[error("unexpected type")]
@@ -283,22 +303,15 @@ impl<'a> PartialEq for Name<'a> {
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone)]
-pub struct Reference {
-    id: u32,
-    generation: u16,
-}
+pub struct Reference(ObjectId);
 
 impl Reference {
     pub fn new(id: u32, generation: u16) -> Self {
-        Self { id, generation }
+        Self(ObjectId::new(id, generation))
     }
 
-    pub fn id(&self) -> u32 {
-        self.id
-    }
-
-    pub fn generation(&self) -> u16 {
-        self.generation
+    pub fn id(&self) -> ObjectId {
+        self.0
     }
 }
 

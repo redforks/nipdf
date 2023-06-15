@@ -4,9 +4,11 @@ expression: parse_indirected_object(buf.as_ref()).unwrap()
 ---
 (
     [],
-    IndirectObject {
-        id: 1,
-        generation: 0,
-        object: Null,
-    },
+    IndirectObject(
+        ObjectId {
+            id: 1,
+            generation: 0,
+        },
+        Null,
+    ),
 )

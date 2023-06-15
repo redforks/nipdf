@@ -4,8 +4,10 @@ expression: parse_reference(buf.as_ref()).unwrap()
 ---
 (
     [],
-    Reference {
-        id: 1,
-        generation: 0,
-    },
+    Reference(
+        ObjectId {
+            id: 1,
+            generation: 0,
+        },
+    ),
 )
