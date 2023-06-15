@@ -22,17 +22,17 @@ impl XRefEntry {
 }
 
 #[derive(Debug)]
-pub struct XRefTable {
+pub struct Section {
     entries: BTreeMap<u32, XRefEntry>,
 }
 
-impl XRefTable {
+impl Section {
     pub fn new(entries: BTreeMap<u32, XRefEntry>) -> Self {
         Self { entries }
     }
 }
 
-impl std::ops::Deref for XRefTable {
+impl std::ops::Deref for Section {
     type Target = BTreeMap<u32, XRefEntry>;
 
     fn deref(&self) -> &Self::Target {

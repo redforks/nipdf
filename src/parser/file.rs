@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, io::BufRead};
+use std::collections::BTreeMap;
 
 use memchr::memmem::rfind;
 use nom::{
@@ -7,17 +7,17 @@ use nom::{
     character::complete::{char, line_ending, satisfy},
     character::complete::{u16, u32},
     combinator::{complete, map, map_res, recognize, value},
-    multi::{fold_many0, fold_many1, many0, many1},
-    sequence::{delimited, preceded, separated_pair, terminated, tuple},
+    multi::{fold_many1, many0},
+    sequence::{preceded, separated_pair, terminated, tuple},
 };
 
 use crate::{
     file::{Header, Tail, Trailer},
-    object::{XRefEntry, XRefTable},
+    object::{XRefEntry, XRefTableSection},
     parser::parse_dict,
 };
 
-use super::{ws, ws_prefixed, ws_terminated, FileError, ParseError, ParseResult};
+use super::{ws, ws_terminated, FileError, ParseError, ParseResult};
 
 fn parse_header(buf: &[u8]) -> ParseResult<'_, Header<'_>> {
     let one_digit = || satisfy(|c| c.is_ascii_digit());
@@ -90,7 +90,7 @@ fn parse_trailer(buf: &[u8]) -> ParseResult<Trailer> {
     map(parse_dict, Trailer::new)(buf)
 }
 
-fn parse_xref_table(buf: &[u8]) -> ParseResult<XRefTable> {
+fn parse_xref_table_section(buf: &[u8]) -> ParseResult<XRefTableSection> {
     let record_count_parser = ws_terminated(separated_pair(u32, tag(b" "), u32));
     let record_parser = map(
         ws_terminated(tuple((
@@ -115,7 +115,7 @@ fn parse_xref_table(buf: &[u8]) -> ParseResult<XRefTable> {
                 table
             },
         ),
-        XRefTable::new,
+        XRefTableSection::new,
     );
 
     let (buf, _) = after_tag_r(buf, b"xref")?;
