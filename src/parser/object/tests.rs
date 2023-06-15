@@ -63,14 +63,17 @@ fn test_parse_stream(buf: impl AsRef<[u8]>, name: &str) {
     insta::assert_debug_snapshot!(name, parse_stream(buf.as_ref()).unwrap());
 }
 
-#[test_case(b"1 0 obj
+#[test_case(
+    b"1 0 obj
 null
-endobj"; "null")]
-fn test_parse_indirected_object(buf: impl AsRef<[u8]>) {
-    insta::assert_debug_snapshot!(parse_indirected_object(buf.as_ref()).unwrap());
+endobj",
+    "null"
+)]
+fn test_parse_indirected_object(buf: impl AsRef<[u8]>, name: &str) {
+    insta::assert_debug_snapshot!(name, parse_indirected_object(buf.as_ref()).unwrap());
 }
 
-#[test_case(b"1 0 R"; "simple")]
-fn test_parse_reference(buf: impl AsRef<[u8]>) {
-    insta::assert_debug_snapshot!(parse_reference(buf.as_ref()).unwrap());
+#[test_case(b"1 0 R", "simple")]
+fn test_parse_reference(buf: impl AsRef<[u8]>, name: &str) {
+    insta::assert_debug_snapshot!(name, parse_reference(buf.as_ref()).unwrap());
 }
