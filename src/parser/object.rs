@@ -9,9 +9,9 @@ use nom::{
         is_hex_digit,
     },
     combinator::{complete, map, recognize},
-    multi::{many0_count, separated_list0},
+    multi::{many0, many0_count, separated_list0},
     number::complete::float,
-    sequence::{delimited, preceded, separated_pair, terminated},
+    sequence::{delimited, preceded, separated_pair, terminated, tuple},
 };
 use num::cast;
 
@@ -83,13 +83,13 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
         null,
         true_parser,
         false_parser,
+        map(parse_reference, Object::Reference),
         number_parser,
         parse_quoted_string,
         parse_hex_string,
         map(parse_array, Object::Array),
         map(parse_name, Object::Name),
         map(parse_dict, Object::Dictionary),
-        map(parse_reference, Object::Reference),
     ))(buf)
 }
 
@@ -114,11 +114,8 @@ pub fn parse_array(input: &[u8]) -> ParseResult<'_, Array<'_>> {
 pub fn parse_dict(input: &[u8]) -> ParseResult<'_, Dictionary<'_>> {
     map(
         delimited(
-            tag(b"<<".as_slice()),
-            ws(separated_list0(
-                multispace1,
-                separated_pair(parse_name, multispace1, parse_object),
-            )),
+            ws(tag(b"<<".as_slice())),
+            many0(tuple((ws(parse_name), ws(parse_object)))),
             ws_terminated(tag(b">>")),
         ),
         |v| v.into_iter().collect(),
