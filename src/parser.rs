@@ -66,6 +66,7 @@ pub enum FileError {
 mod file;
 mod object;
 
+pub use file::*;
 pub use object::*;
 
 fn ws_prefixed<'a, F, O>(inner: F) -> impl FnMut(&'a [u8]) -> ParseResult<'_, O>

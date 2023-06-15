@@ -1,10 +1,13 @@
 use nom::{
     branch::alt,
     bytes::{
-        complete::{is_not, tag, take_till, take_until},
+        complete::{is_not, tag, take_till, take_while},
         streaming::take,
     },
-    character::complete::{crlf, multispace0, multispace1, u16, u32},
+    character::{
+        complete::{crlf, multispace0, multispace1, u16, u32},
+        is_hex_digit,
+    },
     combinator::{complete, map, recognize},
     multi::{many0_count, separated_list0},
     number::complete::float,
@@ -14,7 +17,7 @@ use num::cast;
 
 use crate::object::{Array, Dictionary, IndirectObject, Name, Object, Reference, Stream};
 
-use super::{ws, ws_prefixed, ParseError, ParseResult};
+use super::{ws, ws_prefixed, ws_terminated, ParseError, ParseResult};
 
 macro_rules! gen_complete_parse_fn {
     ($new_fn: ident, $wrapped_fn: ident, $ty: ty) => {
@@ -68,7 +71,11 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
     }
     let parse_quoted_string = map(parse_quoted_string, Object::LiteralString);
     let parse_hex_string = map(
-        recognize(delimited(tag(b"<"), take_until(b">".as_slice()), tag(b">"))),
+        recognize(delimited(
+            tag(b"<"),
+            take_while(|c| is_hex_digit(c) || c.is_ascii_whitespace()),
+            tag(b">"),
+        )),
         Object::HexString,
     );
 
@@ -112,7 +119,7 @@ pub fn parse_dict(input: &[u8]) -> ParseResult<'_, Dictionary<'_>> {
                 multispace1,
                 separated_pair(parse_name, multispace1, parse_object),
             )),
-            tag(b">>".as_slice()),
+            ws_terminated(tag(b">>")),
         ),
         |v| v.into_iter().collect(),
     )(input)

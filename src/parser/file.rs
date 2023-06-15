@@ -6,7 +6,7 @@ use nom::{
     bytes::complete::tag,
     character::complete::{char, line_ending, satisfy},
     character::complete::{u16, u32},
-    combinator::{complete, map, map_res, recognize, value},
+    combinator::{map, map_res, recognize, value},
     multi::{fold_many1, many0},
     sequence::{preceded, separated_pair, terminated, tuple},
 };
@@ -17,7 +17,7 @@ use crate::{
     parser::parse_dict,
 };
 
-use super::{ws, ws_terminated, FileError, ParseError, ParseResult};
+use super::{ws_terminated, FileError, ParseError, ParseResult};
 
 fn parse_header(buf: &[u8]) -> ParseResult<'_, Header<'_>> {
     let one_digit = || satisfy(|c| c.is_ascii_digit());
@@ -131,7 +131,7 @@ fn parse_frame(buf: &[u8]) -> ParseResult<Frame> {
     )(buf)
 }
 
-fn parse_frame_set(input: &[u8]) -> ParseResult<FrameSet> {
+pub fn parse_frame_set(input: &[u8]) -> ParseResult<FrameSet> {
     let mut frames = Vec::new();
     let (buf, _) = to_tag_r(input, b"startxref")?;
     let (_, pos) = parse_startxref(buf)?;
