@@ -38,6 +38,8 @@ pub enum ObjectValueError {
     InvalidHexString,
     #[error("invalid name format")]
     InvalidNameFormat,
+    #[error("Name not in dictionary")]
+    DictNameMissing,
 }
 
 #[derive(Clone, PartialEq, Debug)]

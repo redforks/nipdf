@@ -1,6 +1,6 @@
 //! Contains types of PDF file structures.
 
-use crate::object::{Dictionary, Name, Object, XRefEntry, XRefTable};
+use crate::object::{Dictionary, Name, Object, ObjectValueError, XRefEntry, XRefTable};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Header<'a>(&'a [u8]);
@@ -23,6 +23,13 @@ pub struct Trailer<'a> {
 impl<'a> Trailer<'a> {
     pub fn new(dict: Dictionary<'a>) -> Self {
         Self { dict }
+    }
+
+    pub fn total_objects(&self) -> Result<i32, ObjectValueError> {
+        self.dict
+            .get(&Name::new(b"/Size".as_slice()))
+            .ok_or(ObjectValueError::DictNameMissing)
+            .and_then(|obj| obj.as_int())
     }
 }
 
@@ -53,6 +60,10 @@ impl<'a> Frame<'a> {
                 _ => unreachable!(),
             })
     }
+
+    pub fn total_objects(&self) -> Result<i32, ObjectValueError> {
+        self.trailer.total_objects()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -72,6 +83,14 @@ impl<'a> FrameSet<'a> {
             .iter()
             .flat_map(move |frame| frame.xref_table.get(&id))
             .copied()
+    }
+
+    /// Return total number of objects from the last frame
+    pub fn total_objects(&self) -> Result<i32, ObjectValueError> {
+        self.0
+            .first()
+            .ok_or(ObjectValueError::DictNameMissing)
+            .and_then(|frame| frame.total_objects())
     }
 }
 
