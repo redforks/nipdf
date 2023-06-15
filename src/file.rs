@@ -1,6 +1,6 @@
 //! Contains types of PDF file structures.
 
-use crate::object::{Dictionary, XRefEntry, XRefTableSection};
+use crate::object::{Dictionary, XRefEntry, XRefTable};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Header<'a>(&'a [u8]);
@@ -46,11 +46,11 @@ impl<'a> Trailer<'a> {
 pub struct Frame<'a> {
     xref_pos: u32,
     trailer: Trailer<'a>,
-    xref_table: XRefTableSection,
+    xref_table: XRefTable,
 }
 
 impl<'a> Frame<'a> {
-    pub fn new(xref_pos: u32, trailer: Trailer<'a>, xref_table: XRefTableSection) -> Self {
+    pub fn new(xref_pos: u32, trailer: Trailer<'a>, xref_table: XRefTable) -> Self {
         Self {
             xref_pos,
             trailer,
