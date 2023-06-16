@@ -4,5 +4,4 @@ pub fn add(left: usize, right: usize) -> usize {
 
 pub mod file;
 pub mod object;
-pub mod old_object;
 pub mod parser;
