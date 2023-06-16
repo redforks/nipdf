@@ -9,7 +9,7 @@ use nom::{
         is_hex_digit,
     },
     combinator::{complete, map, recognize},
-    multi::{many0, many0_count, separated_list0},
+    multi::{many0, many0_count},
     number::complete::float,
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
 };
