@@ -1,10 +1,12 @@
-use pdf2docx::{file::FrameSet, parser::parse_frame_set};
-use test_case::test_case;
+use glob::glob;
+use pdf2docx::parser::parse_frame_set;
 
-#[test_case("doc/PDF32000_2008.pdf")]
-#[test_case("doc/pdfreference1.0.pdf")]
-#[test_case("doc/SamplePdf1_12mb_6pages.pdf")]
-fn scan_objects(f: &str) {
-    let buf = std::fs::read(f).unwrap();
-    let (_, _frames) = parse_frame_set(&buf).unwrap();
+#[test]
+fn scan_objects() {
+    for entry in glob("doc/*.pdf").unwrap() {
+        let path = entry.unwrap();
+        let buf = std::fs::read(&path).unwrap();
+        let (_, _frames) = parse_frame_set(&buf)
+            .unwrap_or_else(|_| panic!("{}", path.to_str().unwrap().to_string()));
+    }
 }

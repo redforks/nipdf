@@ -22,6 +22,7 @@ num = "0.4.0"
 memchr = "2.5.0"
 
 [dev-dependencies]
+glob = "0.3.1"
 insta = "1.29.0"
 test-case = "3.1.0"
 
