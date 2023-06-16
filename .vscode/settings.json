@@ -1,7 +1,4 @@
 {
-    "rust-analyzer.cargo.features": [
-        "dump"
-    ],
     "cSpell.words": [
         "Dumer",
         "endobj",
@@ -11,5 +8,6 @@
         "startxref"
     ],
     "rust-analyzer.check.allTargets": false,
-    "rust-analyzer.cargo.target": "x86_64-unknown-linux-gnu"
+    "rust-analyzer.cargo.target": "x86_64-unknown-linux-gnu",
+    "rust-analyzer.cargo.buildScripts.overrideCommand": null
 }

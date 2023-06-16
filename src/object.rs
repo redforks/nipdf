@@ -194,6 +194,15 @@ impl<'a> Object<'a> {
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
+
+    /// If value is a Name, return its normalized name, return error if
+    /// value is not Name..
+    pub fn as_name(&self) -> Result<Cow<[u8]>, ObjectValueError> {
+        match self {
+            Object::Name(n) => n.normalize(),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
+    }
 }
 
 impl<'a> From<Stream<'a>> for Object<'a> {
