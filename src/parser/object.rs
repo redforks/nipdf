@@ -19,15 +19,20 @@ use crate::object::{Array, Dictionary, IndirectObject, Name, Object, Reference, 
 
 use super::{ws, ws_prefixed, ws_terminated, ParseError, ParseResult};
 
+/// Unwrap the result of nom parser to a *normal* result.
+pub fn unwrap_parse_result<'a, T: 'a>(obj: ParseResult<'a, T>) -> Result<T, ParseError<'a>> {
+    match obj {
+        Ok((_, obj)) => Ok(obj),
+        Err(nom::Err::Incomplete(_)) => unreachable!(),
+        Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => Err(e),
+    }
+}
+
 macro_rules! gen_complete_parse_fn {
     ($new_fn: ident, $wrapped_fn: ident, $ty: ty) => {
         /// Like [$wrapped_fn] but failed if the input is not consumed completely.
         pub fn $new_fn(buf: &[u8]) -> Result<$ty, ParseError> {
-            match complete(ws($wrapped_fn))(buf) {
-                Ok((_, obj)) => Ok(obj),
-                Err(nom::Err::Incomplete(_)) => unreachable!(),
-                Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => Err(e),
-            }
+            unwrap_parse_result(complete(ws($wrapped_fn))(buf))
         }
     };
 }
@@ -43,7 +48,7 @@ gen_complete_parse_fn!(
 );
 gen_complete_parse_fn!(parse_complete_reference, parse_reference, Reference);
 
-pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
+pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object<'_>> {
     let null = map(tag("null"), |_| Object::Null);
     let true_parser = map(tag("true"), |_| Object::Bool(true));
     let false_parser = map(tag("false"), |_| Object::Bool(false));
