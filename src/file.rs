@@ -1,5 +1,7 @@
 //! Contains types of PDF file structures.
 
+use std::borrow::Cow;
+
 use crate::object::{Dictionary, Name, Object, ObjectValueError, XRefEntry, XRefTable};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -12,6 +14,24 @@ impl<'a> Header<'a> {
 
     pub fn ver(&self) -> &str {
         std::str::from_utf8(self.0).unwrap()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Catalog<'a> {
+    dict: Dictionary<'a>,
+}
+
+impl<'a> Catalog<'a> {
+    pub fn new(dict: Dictionary<'a>) -> Self {
+        Self { dict }
+    }
+
+    pub fn ver(&self) -> Result<Option<Cow<[u8]>>, ObjectValueError> {
+        self.dict
+            .get(&Name::new(b"/Version".as_slice()))
+            .map(|o| o.as_name())
+            .transpose()
     }
 }
 
