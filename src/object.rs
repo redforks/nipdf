@@ -203,6 +203,20 @@ impl<'a> Object<'a> {
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
+
+    pub fn as_dict(&self) -> Result<&Dictionary<'a>, ObjectValueError> {
+        match self {
+            Object::Dictionary(d) => Ok(d),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
+    }
+
+    pub fn as_reference(&self) -> Result<&Reference, ObjectValueError> {
+        match self {
+            Object::Reference(r) => Ok(r),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
+    }
 }
 
 impl<'a> From<Stream<'a>> for Object<'a> {
