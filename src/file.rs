@@ -1,6 +1,8 @@
 //! Contains types of PDF file structures.
 
-use std::borrow::Cow;
+use lru::LruCache;
+use nohash_hasher::BuildNoHashHasher;
+use std::{borrow::Cow, num::NonZeroUsize};
 
 use crate::{
     object::{Dictionary, Name, Object, ObjectId, ObjectValueError, XRefEntry, XRefTable},
@@ -117,11 +119,11 @@ impl<'a> FrameSet<'a> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
 pub struct File<'a> {
     content: &'a [u8],
     head: Header<'a>,
     frame_set: FrameSet<'a>,
+    cache: LruCache<u32, Option<Object<'a>>, BuildNoHashHasher<u32>>,
 }
 
 impl<'a> File<'a> {
@@ -130,17 +132,25 @@ impl<'a> File<'a> {
             content,
             head,
             frame_set,
+            cache: LruCache::with_hasher(
+                NonZeroUsize::new(1024).unwrap(),
+                BuildNoHashHasher::default(),
+            ),
         }
     }
 
     /// resolve object by id, use newest generation
-    pub fn resolve(&self, id: u32) -> Result<Option<Object<'a>>, ParseError<'a>> {
-        self.frame_set
-            .resolve_object(id)
-            .map(|entry| {
-                unwrap_parse_result(parse_object(&self.content[entry.offset() as usize..]))
+    pub fn resolve(&mut self, id: u32) -> Result<Option<&Object<'a>>, ParseError<'a>> {
+        self.cache
+            .try_get_or_insert(id, || {
+                self.frame_set
+                    .resolve_object(id)
+                    .map(|entry| {
+                        unwrap_parse_result(parse_object(&self.content[entry.offset() as usize..]))
+                    })
+                    .transpose()
             })
-            .transpose()
+            .map(|o| o.as_ref())
     }
 }
 
