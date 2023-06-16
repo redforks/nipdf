@@ -12,7 +12,7 @@ use nom::{
 };
 
 use crate::{
-    file::{Frame, FrameSet, Header, Trailer},
+    file::{File, Frame, FrameSet, Header, Trailer},
     object::{XRefEntry, XRefTable},
     parser::parse_dict,
 };
@@ -147,6 +147,12 @@ pub fn parse_frame_set(input: &[u8]) -> ParseResult<FrameSet> {
     }
 
     Ok((&input[..0], FrameSet::new(frames)))
+}
+
+pub fn parse_file(input: &[u8]) -> ParseResult<File> {
+    let (buf, header) = parse_header(input)?;
+    let (buf, frame_set) = parse_frame_set(buf)?;
+    Ok((buf, File::new(input, header, frame_set)))
 }
 
 #[cfg(test)]
