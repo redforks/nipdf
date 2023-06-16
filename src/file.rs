@@ -94,5 +94,22 @@ impl<'a> FrameSet<'a> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct File<'a> {
+    content: &'a [u8],
+    head: Header<'a>,
+    frame_set: FrameSet<'a>,
+}
+
+impl<'a> File<'a> {
+    pub fn new(content: &'a [u8], head: Header<'a>, frame_set: FrameSet<'a>) -> Self {
+        Self {
+            content,
+            head,
+            frame_set,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests;
