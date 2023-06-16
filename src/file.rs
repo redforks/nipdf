@@ -2,7 +2,10 @@
 
 use std::borrow::Cow;
 
-use crate::object::{Dictionary, Name, Object, ObjectValueError, XRefEntry, XRefTable};
+use crate::{
+    object::{Dictionary, Name, Object, ObjectId, ObjectValueError, XRefEntry, XRefTable},
+    parser::{parse_object, unwrap_parse_result, ParseError},
+};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Header<'a>(&'a [u8]);
@@ -128,6 +131,16 @@ impl<'a> File<'a> {
             head,
             frame_set,
         }
+    }
+
+    /// resolve object by id, use newest generation
+    pub fn resolve(&self, id: u32) -> Result<Option<Object<'a>>, ParseError<'a>> {
+        self.frame_set
+            .resolve_object(id)
+            .map(|entry| {
+                unwrap_parse_result(parse_object(&self.content[entry.offset() as usize..]))
+            })
+            .transpose()
     }
 }
 
