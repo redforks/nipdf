@@ -10,8 +10,8 @@ pub enum PdfParseError<I, E>
 where
     E: nom::error::ParseError<I> + std::fmt::Debug + PartialEq,
 {
-    #[error("nom parse error: {0}")]
-    NomError(#[from] E),
+    #[error("nom parse error: {0:?}")]
+    NomError(E),
 
     #[error("Stream require length field in info dict")]
     StreamRequireLength,
