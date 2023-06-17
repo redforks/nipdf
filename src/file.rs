@@ -181,7 +181,7 @@ pub enum FileError {
 }
 
 impl File {
-    pub fn parse(buf: &[u8]) -> AnyResult<Self> {
+    pub fn parse(buf: &[u8]) -> AnyResult<(Self, ObjectResolver)> {
         let (_, head_ver) = parse_header(buf).unwrap();
         let (_, frame_set) = parse_frame_set(buf).unwrap();
         let xref = XRefTable::from_frame_set(buf, &frame_set);
@@ -203,7 +203,7 @@ impl File {
             .ok_or(FileError::MissingRequiredTrailerValue)?
             .as_int()?;
 
-        Ok(Self { ver, total_objects })
+        Ok((Self { ver, total_objects }, resolver))
     }
 
     pub fn version(&self) -> &str {
