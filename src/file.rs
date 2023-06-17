@@ -55,6 +55,17 @@ pub struct ObjectResolver<'a> {
     lru: LruCache<u32, Option<Object<'a>>>,
 }
 
+pub trait DataContainer<'a> {
+    fn get_value(&'a self, key: &'a str) -> Option<&'a Object>;
+}
+
+impl<'a> DataContainer<'a> for Dictionary<'a> {
+    fn get_value(&'a self, key: &'a str) -> Option<&'a Object> {
+        debug_assert!(key.starts_with('/'));
+        self.get(&Name::new(key.as_bytes()))
+    }
+}
+
 impl<'a> ObjectResolver<'a> {
     pub fn new(xref_table: XRefTable<'a>) -> Self {
         Self {
@@ -63,14 +74,42 @@ impl<'a> ObjectResolver<'a> {
         }
     }
 
+    /// Resolve object with id `id`, if object is reference, resolve it recursively.
     pub fn resolve(&mut self, id: u32) -> Option<&Object<'a>> {
         self.lru
             .get_or_insert(id, || {
-                self.xref_table
+                let mut o = self
+                    .xref_table
                     .resolve_object_buf(id)
-                    .map(|buf| parse_object(buf).unwrap().1)
+                    .map(|buf| parse_object(buf).unwrap().1)?;
+                while let Object::Reference(id) = &o {
+                    let id = id.id().id();
+                    o = self
+                        .xref_table
+                        .resolve_object_buf(id)
+                        .map(|buf| parse_object(buf).unwrap().1)?;
+                }
+                Some(o)
             })
             .as_ref()
+    }
+
+    /// Resolve value from data container `c` with key `k`, if value is reference,
+    /// resolve it recursively.
+    /// Return `None` if key is not found, or if value is reference
+    /// but target is not found.
+    pub fn resolve_value<K, C: DataContainer<'a>>(
+        &mut self,
+        c: &'a C,
+        id: &'a str,
+    ) -> Option<&Object<'a>> {
+        let obj = c.get_value(id)?;
+
+        if let Object::Reference(id) = obj {
+            self.resolve(id.id().id())
+        } else {
+            Some(obj)
+        }
     }
 }
 

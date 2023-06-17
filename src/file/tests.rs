@@ -1,5 +1,4 @@
 use crate::object::Object;
-use std::collections::BTreeMap;
 use std::str::from_utf8;
 use test_case::test_case;
 
@@ -36,14 +35,15 @@ fn xref_table_resolve_object_buf() {
 
 #[test]
 fn object_resolver() {
-    let buf = b"   5 null";
+    let buf = b"   5 null 2 0 R";
     let mut id_offset = IDOffsetMap::with_hasher(BuildNoHashHasher::default());
     id_offset.insert(1, 5);
     id_offset.insert(2, 3);
+    id_offset.insert(3, 10);
     let xref_table = XRefTable::new(buf, id_offset);
     let mut resolver = ObjectResolver::new(xref_table);
 
     assert_eq!(resolver.resolve(1), Some(&Object::Null));
     assert_eq!(resolver.resolve(2), Some(&Object::Integer(5)));
-    assert_eq!(resolver.resolve(3), None);
+    assert_eq!(resolver.resolve(3), Some(&Object::Integer(5)));
 }

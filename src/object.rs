@@ -44,6 +44,8 @@ pub enum ObjectValueError {
     InvalidNameFormat,
     #[error("Name not in dictionary")]
     DictNameMissing,
+    #[error("Reference target not found")]
+    ReferenceTargetNotFound,
 }
 
 #[derive(Clone, PartialEq, Debug)]
