@@ -6,7 +6,7 @@ use std::{borrow::Cow, collections::HashMap, num::NonZeroUsize, str::from_utf8};
 
 use crate::{
     object::{Dictionary, FrameSet, Name, Object, ObjectValueError},
-    parser::parse_indirected_object,
+    parser::{parse_frame_set, parse_header, parse_indirected_object},
 };
 use lru::LruCache;
 use nohash_hasher::BuildNoHashHasher;
@@ -183,11 +183,12 @@ pub enum FileError {
 }
 
 impl File {
-    pub fn parse<'a: 'b, 'b>(
-        head_ver: String,
-        frame_set: &'b FrameSet<'a>,
-        resolver: &'b mut ObjectResolver<'a>,
-    ) -> AnyResult<Self> {
+    pub fn parse(buf: &[u8]) -> AnyResult<Self> {
+        let (_, head_ver) = parse_header(&buf[..]).unwrap();
+        let (_, frame_set) = parse_frame_set(&buf[..]).unwrap();
+        let xref = XRefTable::from_frame_set(&buf[..], &frame_set);
+        let mut resolver = ObjectResolver::new(xref);
+
         let trailers = frame_set.iter().map(|f| &f.trailer).collect_vec();
         let catalog = resolver
             .resolve_value(&trailers, "/Root")
@@ -198,7 +199,7 @@ impl File {
             .map(|o| -> Result<String, ObjectValueError> {
                 Ok(from_utf8(o.as_name()?.as_ref()).unwrap().to_owned())
             })
-            .unwrap_or(Ok(head_ver))?;
+            .unwrap_or(Ok(head_ver.to_owned()))?;
         Ok(Self { ver })
     }
 

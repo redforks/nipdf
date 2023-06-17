@@ -62,10 +62,6 @@ fn parse_file() {
     p.push("normal");
     p.push("SamplePdf1_12mb_6pages.pdf");
     let buf = std::fs::read(p).unwrap();
-    let (_, head_ver) = parse_header(&buf[..]).unwrap();
-    let (_, frame_set) = parse_frame_set(&buf[..]).unwrap();
-    let xref = XRefTable::from_frame_set(&buf[..], &frame_set);
-    let mut object_resolver = ObjectResolver::new(xref);
-    let f = File::parse(head_ver.to_owned(), &frame_set, &mut object_resolver).unwrap();
+    let f = File::parse(&buf).unwrap();
     assert_eq!("1.5", f.version());
 }
