@@ -4,17 +4,16 @@ use memchr::memmem::rfind;
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{char, line_ending, satisfy},
+    character::complete::{char, satisfy},
     character::complete::{u16, u32},
     combinator::{map, map_res, recognize, value},
     multi::{fold_many1, many0},
-    sequence::{preceded, separated_pair, terminated, tuple},
+    sequence::{preceded, separated_pair, tuple},
 };
 
 use crate::{
-    file::File,
     object::{Dictionary, Entry, Frame, FrameSet, Name, XRefSection},
-    parser::{parse_dict, ws_prefixed},
+    parser::parse_dict,
 };
 
 use super::{ws_terminated, FileError, ParseError, ParseResult};
@@ -145,13 +144,6 @@ pub fn parse_frame_set(input: &[u8]) -> ParseResult<FrameSet> {
     }
 
     Ok((&input[..0], frames))
-}
-
-pub fn parse_file(_input: &[u8]) -> ParseResult<File> {
-    todo!()
-    // let (buf, header) = parse_header(input)?;
-    // let (buf, frame_set) = parse_frame_set(buf)?;
-    // Ok((buf, File::new(input, header, frame_set)))
 }
 
 #[cfg(test)]

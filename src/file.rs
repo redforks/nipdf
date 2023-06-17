@@ -28,8 +28,7 @@ impl<'a> XRefTable<'a> {
         for (id, entry) in frame_set
             .iter()
             .rev()
-            .map(|f| f.xref_section.iter())
-            .flatten()
+            .flat_map(|f| f.xref_section.iter())
         {
             if entry.is_used() {
                 r.insert(*id, entry.offset());
@@ -184,9 +183,9 @@ pub enum FileError {
 
 impl File {
     pub fn parse(buf: &[u8]) -> AnyResult<Self> {
-        let (_, head_ver) = parse_header(&buf[..]).unwrap();
-        let (_, frame_set) = parse_frame_set(&buf[..]).unwrap();
-        let xref = XRefTable::from_frame_set(&buf[..], &frame_set);
+        let (_, head_ver) = parse_header(buf).unwrap();
+        let (_, frame_set) = parse_frame_set(buf).unwrap();
+        let xref = XRefTable::from_frame_set(buf, &frame_set);
         let mut resolver = ObjectResolver::new(xref);
 
         let trailers = frame_set.iter().map(|f| &f.trailer).collect_vec();
