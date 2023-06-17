@@ -1,8 +1,12 @@
 //! Contains types of PDF file structures.
 
-use std::{borrow::Cow, collections::HashMap};
+use std::{borrow::Cow, collections::HashMap, num::NonZeroUsize};
 
-use crate::object::{self, Dictionary, FrameSet, Name, ObjectValueError};
+use crate::{
+    object::{self, Dictionary, FrameSet, Name, Object, ObjectValueError},
+    parser::parse_object,
+};
+use lru::LruCache;
 use nohash_hasher::BuildNoHashHasher;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -56,6 +60,30 @@ impl<'a> XRefTable<'a> {
         self.id_offset
             .get(&id)
             .map(|offset| &self.buf[*offset as usize..])
+    }
+}
+
+pub struct ObjectResolver<'a> {
+    xref_table: XRefTable<'a>,
+    lru: LruCache<u32, Option<Object<'a>>>,
+}
+
+impl<'a> ObjectResolver<'a> {
+    pub fn new(xref_table: XRefTable<'a>) -> Self {
+        Self {
+            xref_table,
+            lru: LruCache::new(NonZeroUsize::new(5000).unwrap()),
+        }
+    }
+
+    pub fn resolve(&mut self, id: u32) -> Option<&Object<'a>> {
+        self.lru
+            .get_or_insert(id, || {
+                self.xref_table
+                    .resolve_object_buf(id)
+                    .map(|buf| parse_object(buf).unwrap().1)
+            })
+            .as_ref()
     }
 }
 

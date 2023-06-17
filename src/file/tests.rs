@@ -32,3 +32,17 @@ fn xref_table_resolve_object_buf() {
     assert_eq!(xref_table.resolve_object_buf(2), Some(&b"4567890"[..]));
     assert_eq!(xref_table.resolve_object_buf(3), None);
 }
+
+#[test]
+fn object_resolver() {
+    let buf = b"   5 null";
+    let mut id_offset = IDOffsetMap::with_hasher(BuildNoHashHasher::default());
+    id_offset.insert(1, 5);
+    id_offset.insert(2, 3);
+    let xref_table = XRefTable::new(buf, id_offset);
+    let mut resolver = ObjectResolver::new(xref_table);
+
+    assert_eq!(resolver.resolve(1), Some(&Object::Null));
+    assert_eq!(resolver.resolve(2), Some(&Object::Integer(5)));
+    assert_eq!(resolver.resolve(3), None);
+}
