@@ -4,62 +4,56 @@ expression: "parse_frame_set(b\"%PDF-1.7\nxref\n1 1\n0000000000 00000 n\ntrailer
 ---
 (
     [],
-    FrameSet(
-        [
-            Frame {
-                xref_pos: 77,
-                trailer: Trailer {
-                    dict: {
-                        Name(
-                            [
-                                47,
-                                80,
-                                114,
-                                101,
-                                118,
-                            ],
-                        ): Integer(
-                            9,
-                        ),
-                    },
-                },
-                xref_table: XRefTable {
-                    entries: {
-                        1: XRefEntry(
-                            0,
-                            0,
-                            true,
-                        ),
-                    },
+    [
+        Frame {
+            xref_pos: 77,
+            trailer: {
+                Name(
+                    [
+                        47,
+                        80,
+                        114,
+                        101,
+                        118,
+                    ],
+                ): Integer(
+                    9,
+                ),
+            },
+            xref_section: Section {
+                entries: {
+                    1: Entry(
+                        0,
+                        0,
+                        true,
+                    ),
                 },
             },
-            Frame {
-                xref_pos: 9,
-                trailer: Trailer {
-                    dict: {
-                        Name(
-                            [
-                                47,
-                                83,
-                                105,
-                                122,
-                                101,
-                            ],
-                        ): Integer(
-                            1,
-                        ),
-                    },
-                },
-                xref_table: XRefTable {
-                    entries: {
-                        1: XRefEntry(
-                            0,
-                            0,
-                            true,
-                        ),
-                    },
+        },
+        Frame {
+            xref_pos: 9,
+            trailer: {
+                Name(
+                    [
+                        47,
+                        83,
+                        105,
+                        122,
+                        101,
+                    ],
+                ): Integer(
+                    1,
+                ),
+            },
+            xref_section: Section {
+                entries: {
+                    1: Entry(
+                        0,
+                        0,
+                        true,
+                    ),
                 },
             },
-        ],
-    ),
+        },
+    ],
 )

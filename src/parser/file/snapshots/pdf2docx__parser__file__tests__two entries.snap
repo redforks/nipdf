@@ -4,14 +4,14 @@ expression: parse_xref_table(buf.as_ref()).unwrap()
 ---
 (
     [],
-    XRefTable {
+    Section {
         entries: {
-            1: XRefEntry(
+            1: Entry(
                 0,
                 0,
                 true,
             ),
-            2: XRefEntry(
+            2: Entry(
                 10,
                 0,
                 true,

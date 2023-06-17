@@ -1,3 +1,4 @@
+//! object mod contains data structure map to low level pdf objects
 use std::{borrow::Cow, collections::HashMap, iter::Peekable};
 
 pub type Dictionary<'a> = HashMap<Name<'a>, Object<'a>>;
@@ -28,7 +29,10 @@ impl ObjectId {
 }
 
 mod xref;
-pub use xref::*;
+pub use xref::{Entry as XRefEntry, Section as XRefSection, *};
+
+mod frame;
+pub use frame::*;
 
 #[derive(Clone, Copy, PartialEq, Debug, thiserror::Error)]
 pub enum ObjectValueError {

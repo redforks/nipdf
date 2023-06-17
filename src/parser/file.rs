@@ -12,8 +12,8 @@ use nom::{
 };
 
 use crate::{
-    file::{File, Frame, FrameSet, Header, Trailer},
-    object::{Entry, Section},
+    file::{File, Header},
+    object::{Dictionary, Entry, Frame, FrameSet, Name, XRefSection},
     parser::parse_dict,
 };
 
@@ -76,15 +76,12 @@ fn to_tag_r<'a>(buf: &'a [u8], tag: &'static [u8]) -> ParseResult<'a, ()> {
     }
 }
 
-fn parse_trailer(buf: &[u8]) -> ParseResult<Trailer> {
-    map(
-        preceded(ws_terminated(tag(b"trailer")), ws_terminated(parse_dict)),
-        Trailer::new,
-    )(buf)
+fn parse_trailer(buf: &[u8]) -> ParseResult<Dictionary> {
+    preceded(ws_terminated(tag(b"trailer")), ws_terminated(parse_dict))(buf)
 }
 
 // Assumes buf start from xref
-fn parse_xref_table(buf: &[u8]) -> ParseResult<Section> {
+fn parse_xref_table(buf: &[u8]) -> ParseResult<XRefSection> {
     let record_count_parser = ws_terminated(separated_pair(u32, tag(b" "), u32));
     let record_parser = map(
         ws_terminated(tuple((
@@ -109,7 +106,7 @@ fn parse_xref_table(buf: &[u8]) -> ParseResult<Section> {
                 table
             },
         ),
-        Section::new,
+        XRefSection::new,
     );
 
     preceded(ws_terminated(tag(b"xref")), parser)(buf)
@@ -132,27 +129,35 @@ fn parse_frame(buf: &[u8]) -> ParseResult<Frame> {
 }
 
 pub fn parse_frame_set(input: &[u8]) -> ParseResult<FrameSet> {
+    fn get_prev(frame: &Frame) -> Option<i32> {
+        frame
+            .trailer
+            .get(&Name::new(b"/Prev".as_slice()))
+            .map(|o| o.as_int().unwrap())
+    }
+
     let mut frames = Vec::new();
     let (buf, _) = to_tag_r(input, b"startxref")?;
     let (_, pos) = parse_startxref(buf)?;
     let (_, frame) = parse_frame(&input[pos as usize..])?;
-    let mut prev = frame.prev();
+    let mut prev = get_prev(&frame);
     frames.push(frame);
 
     while let Some(pos) = prev {
         let buf = &input[pos as usize..];
         let (_, frame) = parse_frame(buf)?;
-        prev = frame.prev();
+        prev = get_prev(&frame);
         frames.push(frame);
     }
 
-    Ok((&input[..0], FrameSet::new(frames)))
+    Ok((&input[..0], frames))
 }
 
 pub fn parse_file(input: &[u8]) -> ParseResult<File> {
-    let (buf, header) = parse_header(input)?;
-    let (buf, frame_set) = parse_frame_set(buf)?;
-    Ok((buf, File::new(input, header, frame_set)))
+    todo!()
+    // let (buf, header) = parse_header(input)?;
+    // let (buf, frame_set) = parse_frame_set(buf)?;
+    // Ok((buf, File::new(input, header, frame_set)))
 }
 
 #[cfg(test)]

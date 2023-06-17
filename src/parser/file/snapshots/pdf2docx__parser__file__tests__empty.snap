@@ -4,7 +4,7 @@ expression: parse_xref_table(buf.as_ref()).unwrap()
 ---
 (
     [],
-    XRefTable {
+    Section {
         entries: {},
     },
 )

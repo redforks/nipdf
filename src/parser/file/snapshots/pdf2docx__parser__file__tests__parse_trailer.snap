@@ -25,19 +25,17 @@ expression: parse_trailer(buf).unwrap()
         79,
         70,
     ],
-    Trailer {
-        dict: {
-            Name(
-                [
-                    47,
-                    83,
-                    105,
-                    122,
-                    101,
-                ],
-            ): Integer(
-                1,
-            ),
-        },
+    {
+        Name(
+            [
+                47,
+                83,
+                105,
+                122,
+                101,
+            ],
+        ): Integer(
+            1,
+        ),
     },
 )
