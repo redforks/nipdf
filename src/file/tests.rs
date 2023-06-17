@@ -1,4 +1,6 @@
 use crate::object::Object;
+use crate::parser::{parse_frame_set, parse_header};
+use std::path::PathBuf;
 use std::str::from_utf8;
 use test_case::test_case;
 
@@ -46,4 +48,23 @@ fn object_resolver() {
     assert_eq!(resolver.resolve(1), Some(&Object::Null));
     assert_eq!(resolver.resolve(2), Some(&Object::Integer(5)));
     assert_eq!(resolver.resolve(3), Some(&Object::Integer(5)));
+}
+
+#[test]
+fn parse_file() {
+    let mut p = PathBuf::from(file!());
+    assert_eq!(
+        p.pop().then(|| p.pop().then(|| p.pop())).flatten(),
+        Some(true)
+    );
+    p.push("sample_files");
+    p.push("normal");
+    p.push("SamplePdf1_12mb_6pages.pdf");
+    let buf = std::fs::read(p).unwrap();
+    let (_, head_ver) = parse_header(&buf[..]).unwrap();
+    let (_, frame_set) = parse_frame_set(&buf[..]).unwrap();
+    let xref = XRefTable::from_frame_set(&buf[..], &frame_set);
+    let mut object_resolver = ObjectResolver::new(xref);
+    let f = File::parse(head_ver.to_owned(), &frame_set, &mut object_resolver).unwrap();
+    assert_eq!("1.5", f.version());
 }

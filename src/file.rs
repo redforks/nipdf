@@ -1,6 +1,8 @@
 //! Contains types of PDF file structures.
 
-use std::{borrow::Cow, collections::HashMap, num::NonZeroUsize};
+use anyhow::Result as AnyResult;
+use itertools::Itertools;
+use std::{borrow::Cow, collections::HashMap, num::NonZeroUsize, str::from_utf8};
 
 use crate::{
     object::{Dictionary, FrameSet, Name, Object, ObjectValueError},
@@ -56,11 +58,11 @@ pub struct ObjectResolver<'a> {
 }
 
 pub trait DataContainer<'a> {
-    fn get_value(&'a self, key: &'a str) -> Option<&'a Object>;
+    fn get_value<'b: 'a>(&self, key: &'b str) -> Option<&Object<'a>>;
 }
 
 impl<'a> DataContainer<'a> for Dictionary<'a> {
-    fn get_value(&'a self, key: &'a str) -> Option<&'a Object> {
+    fn get_value<'b: 'a>(&self, key: &'b str) -> Option<&Object<'a>> {
         debug_assert!(key.starts_with('/'));
         self.get(&Name::new(key.as_bytes()))
     }
@@ -68,7 +70,7 @@ impl<'a> DataContainer<'a> for Dictionary<'a> {
 
 /// Get value from first dictionary that contains `key`.
 impl<'a> DataContainer<'a> for Vec<&Dictionary<'a>> {
-    fn get_value(&'a self, key: &'a str) -> Option<&'a Object> {
+    fn get_value<'b: 'a>(&self, key: &'b str) -> Option<&Object<'a>> {
         debug_assert!(key.starts_with('/'));
         let key = Name::new(key.as_bytes());
         for dict in self {
@@ -112,11 +114,11 @@ impl<'a> ObjectResolver<'a> {
     /// resolve it recursively.
     /// Return `None` if key is not found, or if value is reference
     /// but target is not found.
-    pub fn resolve_value<K, C: DataContainer<'a>>(
-        &mut self,
-        c: &'a C,
-        id: &'a str,
-    ) -> Option<&Object<'a>> {
+    pub fn resolve_value<'b: 'a, 'd: 'c, 'c, C: DataContainer<'a>>(
+        &'d mut self,
+        c: &'c C,
+        id: &'b str,
+    ) -> Option<&'c Object<'a>> {
         let obj = c.get_value(id)?;
 
         if let Object::Reference(id) = obj {
@@ -164,13 +166,38 @@ impl<'a> Trailer<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct File<'a> {
-    content: &'a [u8],
+pub struct File {
+    ver: String,
 }
 
-impl<'a> File<'a> {
-    pub fn new(content: &'a [u8]) -> Self {
-        Self { content }
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum FileError {
+    #[error("catalog object is required")]
+    CatalogRequired,
+}
+
+impl File {
+    pub fn parse<'a: 'b, 'b>(
+        head_ver: String,
+        frame_set: &'b FrameSet<'a>,
+        resolver: &'b mut ObjectResolver<'a>,
+    ) -> AnyResult<Self> {
+        let trailers = frame_set.iter().map(|f| &f.trailer).collect_vec();
+        let catalog = resolver
+            .resolve_value(&trailers, "/Root")
+            .ok_or(FileError::CatalogRequired)?;
+        let ver = catalog
+            .as_dict()?
+            .get(&Name::new(b"/Version".as_slice()))
+            .map(|o| -> Result<String, ObjectValueError> {
+                Ok(from_utf8(o.as_name()?.as_ref()).unwrap().to_owned())
+            })
+            .unwrap_or(Ok(head_ver))?;
+        Ok(Self { ver })
+    }
+
+    pub fn version(&self) -> &str {
+        &self.ver
     }
 }
 
