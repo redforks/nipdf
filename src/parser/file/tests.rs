@@ -8,10 +8,6 @@ fn parse_file_header() {
     let (buf, header) = parse_header(buf).unwrap();
     assert_eq!(buf, b"%comment\n");
     assert_eq!(header, "1.7");
-
-    let buf = b"%PDF-1.7";
-    let err = parse_header(buf);
-    assert!(err.is_err());
 }
 
 #[test_case(None, b"hello", b"world"; "not exist")]

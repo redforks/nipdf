@@ -14,12 +14,12 @@ use nom::{
 use crate::{
     file::File,
     object::{Dictionary, Entry, Frame, FrameSet, Name, XRefSection},
-    parser::parse_dict,
+    parser::{parse_dict, ws_prefixed},
 };
 
 use super::{ws_terminated, FileError, ParseError, ParseResult};
 
-pub fn parse_header(buf: &[u8]) -> ParseResult<'_, &str> {
+pub fn parse_header(buf: &[u8]) -> ParseResult<&str> {
     let one_digit = || satisfy(|c| c.is_ascii_digit());
 
     fn new_header(buf: &[u8]) -> std::result::Result<&str, FileError> {
@@ -33,16 +33,13 @@ pub fn parse_header(buf: &[u8]) -> ParseResult<'_, &str> {
         }
     }
 
-    terminated(
-        preceded(
-            tag("%PDF-"),
-            map_res(
-                recognize(tuple((one_digit(), char('.'), one_digit()))),
-                new_header,
-            ),
+    ws_terminated(preceded(
+        tag("%PDF-"),
+        map_res(
+            recognize(tuple((one_digit(), char('.'), one_digit()))),
+            new_header,
         ),
-        line_ending,
-    )(buf)
+    ))(buf)
 }
 
 /// Return start position of object tag from the end of the buffer.
