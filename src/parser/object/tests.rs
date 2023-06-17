@@ -32,6 +32,7 @@ fn test_parse_simple_objects(exp: impl Into<Object<'static>>, buf: impl AsRef<[u
 #[test_case(vec![], b"[ \t]"; "empty array 2")]
 #[test_case(vec![Object::Null], b"[null]"; "array with null")]
 #[test_case(vec![Object::Array(vec![Object::Null])], b"[[null]]"; "nested array with null")]
+#[test_case(vec![Name::new(b"/foo").into()], b"[/foo]"; "name value")]
 fn test_parse_array(exp: Vec<Object<'static>>, buf: impl AsRef<[u8]>) {
     assert_eq!((b"".as_slice(), exp), parse_array(buf.as_ref()).unwrap());
 }
