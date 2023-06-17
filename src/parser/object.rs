@@ -8,7 +8,7 @@ use nom::{
         complete::{crlf, multispace0, multispace1, u16, u32},
         is_hex_digit,
     },
-    combinator::{complete, map, recognize},
+    combinator::{map, recognize},
     multi::{many0, many0_count},
     number::complete::float,
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
@@ -27,26 +27,6 @@ pub fn unwrap_parse_result<'a, T: 'a>(obj: ParseResult<'a, T>) -> Result<T, Pars
         Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => Err(e),
     }
 }
-
-macro_rules! gen_complete_parse_fn {
-    ($new_fn: ident, $wrapped_fn: ident, $ty: ty) => {
-        /// Like [$wrapped_fn] but failed if the input is not consumed completely.
-        pub fn $new_fn(buf: &[u8]) -> Result<$ty, ParseError> {
-            unwrap_parse_result(complete(ws($wrapped_fn))(buf))
-        }
-    };
-}
-
-gen_complete_parse_fn!(parse_complete_object, parse_object, Object);
-gen_complete_parse_fn!(parse_complete_array, parse_array, Array);
-gen_complete_parse_fn!(parse_complete_dict, parse_dict, Dictionary);
-gen_complete_parse_fn!(parse_complete_stream, parse_stream, Stream);
-gen_complete_parse_fn!(
-    parse_complete_indirected_object,
-    parse_indirected_object,
-    IndirectObject
-);
-gen_complete_parse_fn!(parse_complete_reference, parse_reference, Reference);
 
 pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object<'_>> {
     let null = map(tag("null"), |_| Object::Null);
