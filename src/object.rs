@@ -27,8 +27,8 @@ impl ObjectId {
     }
 }
 
-mod xref_table;
-pub use xref_table::*;
+mod xref;
+pub use xref::*;
 
 #[derive(Clone, Copy, PartialEq, Debug, thiserror::Error)]
 pub enum ObjectValueError {
