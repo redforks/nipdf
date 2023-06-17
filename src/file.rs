@@ -1,8 +1,9 @@
 //! Contains types of PDF file structures.
 
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::HashMap};
 
-use crate::object::{Dictionary, Name, ObjectValueError};
+use crate::object::{self, Dictionary, FrameSet, Name, ObjectValueError};
+use nohash_hasher::BuildNoHashHasher;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Header<'a>(&'a [u8]);
@@ -14,6 +15,47 @@ impl<'a> Header<'a> {
 
     pub fn ver(&self) -> &str {
         std::str::from_utf8(self.0).unwrap()
+    }
+}
+
+type IDOffsetMap = HashMap<u32, u32, BuildNoHashHasher<u32>>;
+
+pub struct XRefTable<'a> {
+    buf: &'a [u8],
+    id_offset: IDOffsetMap, // object id -> offset
+}
+
+impl<'a> XRefTable<'a> {
+    fn new(buf: &'a [u8], id_offset: IDOffsetMap) -> Self {
+        Self { buf, id_offset }
+    }
+
+    pub fn scan(frame_set: &FrameSet) -> IDOffsetMap {
+        let mut r = IDOffsetMap::with_capacity_and_hasher(5000, BuildNoHashHasher::default());
+        for (id, entry) in frame_set
+            .iter()
+            .rev()
+            .map(|f| f.xref_section.iter())
+            .flatten()
+        {
+            if entry.is_used() {
+                r.insert(*id, entry.offset());
+            } else {
+                r.remove(id);
+            }
+        }
+        r
+    }
+
+    pub fn from_frame_set(buf: &'a [u8], frame_set: &FrameSet) -> Self {
+        Self::new(buf, Self::scan(frame_set))
+    }
+
+    /// Return `buf` start from where `id` is
+    pub fn resolve_object_buf(&self, id: u32) -> Option<&'a [u8]> {
+        self.id_offset
+            .get(&id)
+            .map(|offset| &self.buf[*offset as usize..])
     }
 }
 
