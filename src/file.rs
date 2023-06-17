@@ -66,6 +66,20 @@ impl<'a> DataContainer<'a> for Dictionary<'a> {
     }
 }
 
+/// Get value from first dictionary that contains `key`.
+impl<'a> DataContainer<'a> for Vec<&Dictionary<'a>> {
+    fn get_value(&'a self, key: &'a str) -> Option<&'a Object> {
+        debug_assert!(key.starts_with('/'));
+        let key = Name::new(key.as_bytes());
+        for dict in self {
+            if let Some(v) = dict.get(&key) {
+                return Some(v);
+            }
+        }
+        None
+    }
+}
+
 impl<'a> ObjectResolver<'a> {
     pub fn new(xref_table: XRefTable<'a>) -> Self {
         Self {
