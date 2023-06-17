@@ -3,7 +3,7 @@
 use std::borrow::Cow;
 
 use crate::{
-    object::{Dictionary, Name, Object, ObjectId, ObjectValueError, XRefEntry, XRefSection},
+    object::{Dictionary, Entry, Name, Object, ObjectId, ObjectValueError, Section},
     parser::{parse_object, unwrap_parse_result, ParseError},
 };
 
@@ -61,11 +61,11 @@ impl<'a> Trailer<'a> {
 pub struct Frame<'a> {
     xref_pos: u32,
     trailer: Trailer<'a>,
-    xref_table: XRefSection,
+    xref_table: Section,
 }
 
 impl<'a> Frame<'a> {
-    pub fn new(xref_pos: u32, trailer: Trailer<'a>, xref_table: XRefSection) -> Self {
+    pub fn new(xref_pos: u32, trailer: Trailer<'a>, xref_table: Section) -> Self {
         Self {
             xref_pos,
             trailer,
@@ -97,11 +97,11 @@ impl<'a> FrameSet<'a> {
         Self(frames)
     }
 
-    pub fn resolve_object(&self, id: u32) -> Option<XRefEntry> {
+    pub fn resolve_object(&self, id: u32) -> Option<Entry> {
         self.iter_entry_by_id(id).next()
     }
 
-    pub fn iter_entry_by_id(&self, id: u32) -> impl Iterator<Item = XRefEntry> + '_ {
+    pub fn iter_entry_by_id(&self, id: u32) -> impl Iterator<Item = Entry> + '_ {
         self.0
             .iter()
             .flat_map(move |frame| frame.xref_table.get(&id))

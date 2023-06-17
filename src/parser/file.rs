@@ -13,7 +13,7 @@ use nom::{
 
 use crate::{
     file::{File, Frame, FrameSet, Header, Trailer},
-    object::{XRefEntry, XRefSection},
+    object::{Entry, Section},
     parser::parse_dict,
 };
 
@@ -84,7 +84,7 @@ fn parse_trailer(buf: &[u8]) -> ParseResult<Trailer> {
 }
 
 // Assumes buf start from xref
-fn parse_xref_table(buf: &[u8]) -> ParseResult<XRefSection> {
+fn parse_xref_table(buf: &[u8]) -> ParseResult<Section> {
     let record_count_parser = ws_terminated(separated_pair(u32, tag(b" "), u32));
     let record_parser = map(
         ws_terminated(tuple((
@@ -94,7 +94,7 @@ fn parse_xref_table(buf: &[u8]) -> ParseResult<XRefSection> {
             tag(b" "),
             alt((tag(b"n"), tag(b"f"))),
         ))),
-        |(offset, _, generation, _, ty)| XRefEntry::new(offset, generation, ty == b"n"),
+        |(offset, _, generation, _, ty)| Entry::new(offset, generation, ty == b"n"),
     );
     let group = tuple((record_count_parser, many0(record_parser)));
     let parser = map(
@@ -109,7 +109,7 @@ fn parse_xref_table(buf: &[u8]) -> ParseResult<XRefSection> {
                 table
             },
         ),
-        XRefSection::new,
+        Section::new,
     );
 
     preceded(ws_terminated(tag(b"xref")), parser)(buf)

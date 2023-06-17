@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Copy)]
-pub struct XRefEntry(u32, u16, bool); // offset, generation, is_used
+pub struct Entry(u32, u16, bool); // offset, generation, is_used
 
-impl XRefEntry {
+impl Entry {
     pub fn new(offset: u32, generation: u16, is_used: bool) -> Self {
         Self(offset, generation, is_used)
     }
@@ -22,18 +22,18 @@ impl XRefEntry {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct XRefSection {
-    entries: BTreeMap<u32, XRefEntry>,
+pub struct Section {
+    entries: BTreeMap<u32, Entry>,
 }
 
-impl XRefSection {
-    pub fn new(entries: BTreeMap<u32, XRefEntry>) -> Self {
+impl Section {
+    pub fn new(entries: BTreeMap<u32, Entry>) -> Self {
         Self { entries }
     }
 }
 
-impl std::ops::Deref for XRefSection {
-    type Target = BTreeMap<u32, XRefEntry>;
+impl std::ops::Deref for Section {
+    type Target = BTreeMap<u32, Entry>;
 
     fn deref(&self) -> &Self::Target {
         &self.entries
