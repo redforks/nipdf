@@ -6,7 +6,7 @@ use std::{borrow::Cow, collections::HashMap, num::NonZeroUsize, str::from_utf8};
 
 use crate::{
     object::{Dictionary, FrameSet, Name, Object, ObjectValueError},
-    parser::parse_object,
+    parser::parse_indirected_object,
 };
 use lru::LruCache;
 use nohash_hasher::BuildNoHashHasher;
@@ -92,18 +92,24 @@ impl<'a> ObjectResolver<'a> {
 
     /// Resolve object with id `id`, if object is reference, resolve it recursively.
     pub fn resolve(&mut self, id: u32) -> Option<&Object<'a>> {
+        fn parse_object(id: u32, buf: &[u8]) -> Object<'_> {
+            let (_, indirect_obj) = parse_indirected_object(buf).unwrap();
+            assert_eq!(id, indirect_obj.id().id());
+            indirect_obj.take()
+        }
+
         self.lru
             .get_or_insert(id, || {
                 let mut o = self
                     .xref_table
                     .resolve_object_buf(id)
-                    .map(|buf| parse_object(buf).unwrap().1)?;
+                    .map(|buf| parse_object(id, buf))?;
                 while let Object::Reference(id) = &o {
                     let id = id.id().id();
                     o = self
                         .xref_table
                         .resolve_object_buf(id)
-                        .map(|buf| parse_object(buf).unwrap().1)?;
+                        .map(|buf| parse_object(id, buf))?;
                 }
                 Some(o)
             })

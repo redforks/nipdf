@@ -15,4 +15,8 @@ impl<'a> IndirectObject<'a> {
     pub fn object(&self) -> &Object<'a> {
         &self.1
     }
+
+    pub fn take(self) -> Object<'a> {
+        self.1
+    }
 }
