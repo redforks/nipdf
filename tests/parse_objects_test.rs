@@ -7,6 +7,16 @@ fn scan_objects() {
         let path = entry.unwrap();
         let buf = std::fs::read(&path).unwrap();
         println!("parsing {:?}", path);
-        File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {:?}", path));
+        let (f, mut resolver) =
+            File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {:?}", path));
+        for id in 0..f.total_objects {
+            print!("scan object: {}", id);
+            let obj = resolver.resolve(id);
+            if obj.is_none() {
+                println!("  missing");
+            } else {
+                println!("  done");
+            }
+        }
     }
 }
