@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::from_utf8};
 
 use memchr::memmem::rfind;
 use nom::{
@@ -12,24 +12,24 @@ use nom::{
 };
 
 use crate::{
-    file::{File, Header},
+    file::File,
     object::{Dictionary, Entry, Frame, FrameSet, Name, XRefSection},
     parser::parse_dict,
 };
 
 use super::{ws_terminated, FileError, ParseError, ParseResult};
 
-fn parse_header(buf: &[u8]) -> ParseResult<'_, Header<'_>> {
+pub fn parse_header(buf: &[u8]) -> ParseResult<'_, &str> {
     let one_digit = || satisfy(|c| c.is_ascii_digit());
 
-    fn new_header(buf: &[u8]) -> std::result::Result<Header<'_>, FileError> {
+    fn new_header(buf: &[u8]) -> std::result::Result<&str, FileError> {
         assert_eq!(3, buf.len());
         if buf[0] != b'1' {
             Err(FileError::UnsupportedVersion(
                 String::from_utf8_lossy(buf).to_string(),
             ))
         } else {
-            Ok(Header::new(buf))
+            Ok(from_utf8(buf).unwrap())
         }
     }
 

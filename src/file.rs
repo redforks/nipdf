@@ -3,24 +3,11 @@
 use std::{borrow::Cow, collections::HashMap, num::NonZeroUsize};
 
 use crate::{
-    object::{self, Dictionary, FrameSet, Name, Object, ObjectValueError},
+    object::{Dictionary, FrameSet, Name, Object, ObjectValueError},
     parser::parse_object,
 };
 use lru::LruCache;
 use nohash_hasher::BuildNoHashHasher;
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct Header<'a>(&'a [u8]);
-
-impl<'a> Header<'a> {
-    pub fn new(buf: &'a [u8]) -> Self {
-        Self(buf)
-    }
-
-    pub fn ver(&self) -> &str {
-        std::str::from_utf8(self.0).unwrap()
-    }
-}
 
 type IDOffsetMap = HashMap<u32, u32, BuildNoHashHasher<u32>>;
 
@@ -126,12 +113,11 @@ impl<'a> Trailer<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct File<'a> {
     content: &'a [u8],
-    head: Header<'a>,
 }
 
 impl<'a> File<'a> {
-    pub fn new(content: &'a [u8], head: Header<'a>) -> Self {
-        Self { content, head }
+    pub fn new(content: &'a [u8]) -> Self {
+        Self { content }
     }
 }
 

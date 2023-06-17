@@ -1,5 +1,6 @@
 use crate::object::Object;
-use std::{collections::BTreeMap, str::from_utf8};
+use std::collections::BTreeMap;
+use std::str::from_utf8;
 use test_case::test_case;
 
 use super::*;
