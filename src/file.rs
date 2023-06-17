@@ -25,11 +25,7 @@ impl<'a> XRefTable<'a> {
 
     pub fn scan(frame_set: &FrameSet) -> IDOffsetMap {
         let mut r = IDOffsetMap::with_capacity_and_hasher(5000, BuildNoHashHasher::default());
-        for (id, entry) in frame_set
-            .iter()
-            .rev()
-            .flat_map(|f| f.xref_section.iter())
-        {
+        for (id, entry) in frame_set.iter().rev().flat_map(|f| f.xref_section.iter()) {
             if entry.is_used() {
                 r.insert(*id, entry.offset());
             } else {
@@ -173,12 +169,15 @@ impl<'a> Trailer<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct File {
     ver: String,
+    total_objects: i32,
 }
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum FileError {
     #[error("catalog object is required")]
     CatalogRequired,
+    #[error("missing required trailer value")]
+    MissingRequiredTrailerValue,
 }
 
 impl File {
@@ -199,7 +198,12 @@ impl File {
                 Ok(from_utf8(o.as_name()?.as_ref()).unwrap().to_owned())
             })
             .unwrap_or(Ok(head_ver.to_owned()))?;
-        Ok(Self { ver })
+        let total_objects = resolver
+            .resolve_value(&trailers, "/Size")
+            .ok_or(FileError::MissingRequiredTrailerValue)?
+            .as_int()?;
+
+        Ok(Self { ver, total_objects })
     }
 
     pub fn version(&self) -> &str {

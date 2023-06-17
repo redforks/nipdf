@@ -64,4 +64,5 @@ fn parse_file() {
     let buf = std::fs::read(p).unwrap();
     let f = File::parse(&buf).unwrap();
     assert_eq!("1.5", f.version());
+    assert_eq!(311, f.total_objects);
 }
