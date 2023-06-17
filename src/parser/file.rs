@@ -153,7 +153,7 @@ pub fn parse_frame_set(input: &[u8]) -> ParseResult<FrameSet> {
     Ok((&input[..0], frames))
 }
 
-pub fn parse_file(input: &[u8]) -> ParseResult<File> {
+pub fn parse_file(_input: &[u8]) -> ParseResult<File> {
     todo!()
     // let (buf, header) = parse_header(input)?;
     // let (buf, frame_set) = parse_frame_set(buf)?;
