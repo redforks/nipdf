@@ -102,7 +102,7 @@ fn parse_name(input: &[u8]) -> ParseResult<'_, Name<'_>> {
     map(
         recognize(preceded(
             tag(b"/".as_slice()),
-            take_till(|c: u8| c.is_ascii_whitespace() || c == b'[' || c == b'<'),
+            take_till(|c: u8| c.is_ascii_whitespace() || c == b'[' || c == b'<' || c == b'('),
         )),
         Name::new,
     )(input)
