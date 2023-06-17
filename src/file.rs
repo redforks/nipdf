@@ -169,7 +169,7 @@ impl<'a> Trailer<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct File {
     ver: String,
-    total_objects: i32,
+    pub total_objects: u32,
 }
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -201,7 +201,7 @@ impl File {
         let total_objects = resolver
             .resolve_value(&trailers, "/Size")
             .ok_or(FileError::MissingRequiredTrailerValue)?
-            .as_int()?;
+            .as_int()? as u32;
 
         Ok((Self { ver, total_objects }, resolver))
     }

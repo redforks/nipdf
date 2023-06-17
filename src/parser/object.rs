@@ -74,6 +74,7 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object<'_>> {
         parse_hex_string,
         map(parse_array, Object::Array),
         map(parse_name, Object::Name),
+        map(parse_stream, Object::Stream),
         map(parse_dict, Object::Dictionary),
     ))(buf)
 }
@@ -82,7 +83,15 @@ fn parse_name(input: &[u8]) -> ParseResult<'_, Name<'_>> {
     map(
         recognize(preceded(
             tag(b"/".as_slice()),
-            take_till(|c: u8| c.is_ascii_whitespace() || c == b'[' || c == b'<' || c == b'(' || c == b'/' || c == b'>' || c == b']'),
+            take_till(|c: u8| {
+                c.is_ascii_whitespace()
+                    || c == b'['
+                    || c == b'<'
+                    || c == b'('
+                    || c == b'/'
+                    || c == b'>'
+                    || c == b']'
+            }),
         )),
         Name::new,
     )(input)
