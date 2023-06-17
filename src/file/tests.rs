@@ -14,7 +14,7 @@ fn resolve_xref_table() {
     section1.insert(1, entry1_1);
     section1.insert(2, entry1_2);
     section1.insert(3, entry1_3);
-    let section1 = XRefTable::new(section1);
+    let section1 = XRefSection::new(section1);
     let frame1 = Frame::new(100, Trailer::new(Dictionary::new()), section1);
 
     let mut section2 = BTreeMap::new();
@@ -22,7 +22,7 @@ fn resolve_xref_table() {
     let entry2_3 = XRefEntry::new(200, 1, false);
     section2.insert(2, entry2_2);
     section2.insert(3, entry2_3);
-    let section2 = XRefTable::new(section2);
+    let section2 = XRefSection::new(section2);
     let frame2 = Frame::new(101, Trailer::new(Dictionary::new()), section2);
 
     let mut section3 = BTreeMap::new();
@@ -30,7 +30,7 @@ fn resolve_xref_table() {
     let entry3_3 = XRefEntry::new(300, 2, true);
     section3.insert(1, entry3_1);
     section3.insert(3, entry3_3);
-    let section3 = XRefTable::new(section3);
+    let section3 = XRefSection::new(section3);
     let frame3 = Frame::new(102, Trailer::new(Dictionary::new()), section3);
 
     let frame_set = FrameSet::new(vec![frame3, frame2, frame1]);
@@ -60,7 +60,7 @@ fn prev_frame(exp: impl Into<Option<u32>>, prev_value: impl Into<Option<Object<'
         dict.insert(Name::new(b"/Prev"), prev);
     }
     let trailer = Trailer::new(dict);
-    let frame = Frame::new(0, trailer, XRefTable::new(BTreeMap::new()));
+    let frame = Frame::new(0, trailer, XRefSection::new(BTreeMap::new()));
     assert_eq!(frame.prev(), exp.into());
 }
 

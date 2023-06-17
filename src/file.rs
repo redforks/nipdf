@@ -3,7 +3,7 @@
 use std::borrow::Cow;
 
 use crate::{
-    object::{Dictionary, Name, Object, ObjectId, ObjectValueError, XRefEntry, XRefTable},
+    object::{Dictionary, Name, Object, ObjectId, ObjectValueError, XRefEntry, XRefSection},
     parser::{parse_object, unwrap_parse_result, ParseError},
 };
 
@@ -61,11 +61,11 @@ impl<'a> Trailer<'a> {
 pub struct Frame<'a> {
     xref_pos: u32,
     trailer: Trailer<'a>,
-    xref_table: XRefTable,
+    xref_table: XRefSection,
 }
 
 impl<'a> Frame<'a> {
-    pub fn new(xref_pos: u32, trailer: Trailer<'a>, xref_table: XRefTable) -> Self {
+    pub fn new(xref_pos: u32, trailer: Trailer<'a>, xref_table: XRefSection) -> Self {
         Self {
             xref_pos,
             trailer,
