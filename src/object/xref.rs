@@ -21,21 +21,4 @@ impl Entry {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct Section {
-    entries: BTreeMap<u32, Entry>,
-}
-
-impl Section {
-    pub fn new(entries: BTreeMap<u32, Entry>) -> Self {
-        Self { entries }
-    }
-}
-
-impl std::ops::Deref for Section {
-    type Target = BTreeMap<u32, Entry>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.entries
-    }
-}
+pub type Section = BTreeMap<u32, Entry>;

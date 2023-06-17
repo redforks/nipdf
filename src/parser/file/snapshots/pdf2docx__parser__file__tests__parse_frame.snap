@@ -19,19 +19,17 @@ expression: "parse_frame(b\"xref\n1 2\n0000000000 00000 n\n0000000010 00000 n\nt
                 1,
             ),
         },
-        xref_section: Section {
-            entries: {
-                1: Entry(
-                    0,
-                    0,
-                    true,
-                ),
-                2: Entry(
-                    10,
-                    0,
-                    true,
-                ),
-            },
+        xref_section: {
+            1: Entry(
+                0,
+                0,
+                true,
+            ),
+            2: Entry(
+                10,
+                0,
+                true,
+            ),
         },
     },
 )

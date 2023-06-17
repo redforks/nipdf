@@ -94,19 +94,16 @@ fn parse_xref_table(buf: &[u8]) -> ParseResult<XRefSection> {
         |(offset, _, generation, _, ty)| Entry::new(offset, generation, ty == b"n"),
     );
     let group = tuple((record_count_parser, many0(record_parser)));
-    let parser = map(
-        fold_many1(
-            group,
-            BTreeMap::new,
-            |mut table, ((start, count), entries)| {
-                assert_eq!(count, entries.len() as u32);
-                for (i, entry) in entries.into_iter().enumerate() {
-                    table.insert(start + i as u32, entry);
-                }
-                table
-            },
-        ),
-        XRefSection::new,
+    let parser = fold_many1(
+        group,
+        BTreeMap::new,
+        |mut table, ((start, count), entries)| {
+            assert_eq!(count, entries.len() as u32);
+            for (i, entry) in entries.into_iter().enumerate() {
+                table.insert(start + i as u32, entry);
+            }
+            table
+        },
     );
 
     preceded(ws_terminated(tag(b"xref")), parser)(buf)
