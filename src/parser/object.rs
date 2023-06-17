@@ -82,7 +82,7 @@ fn parse_name(input: &[u8]) -> ParseResult<'_, Name<'_>> {
     map(
         recognize(preceded(
             tag(b"/".as_slice()),
-            take_till(|c: u8| c.is_ascii_whitespace() || c == b'[' || c == b'<' || c == b'('),
+            take_till(|c: u8| c.is_ascii_whitespace() || c == b'[' || c == b'<' || c == b'(' || c == b'/' || c == b'>'),
         )),
         Name::new,
     )(input)
@@ -100,7 +100,7 @@ pub fn parse_dict(input: &[u8]) -> ParseResult<'_, Dictionary<'_>> {
     map(
         delimited(
             ws(tag(b"<<".as_slice())),
-            many0(tuple((ws(parse_name), ws(parse_object)))),
+            many0(tuple((ws_prefixed(parse_name), ws(parse_object)))),
             ws_terminated(tag(b">>")),
         ),
         |v| v.into_iter().collect(),
