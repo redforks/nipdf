@@ -70,7 +70,6 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object<'_>> {
         parse_hex_string,
         map(parse_array, Object::Array),
         map(parse_name, Object::Name),
-        map(parse_stream, Object::Stream),
         map(parse_dict, Object::Dictionary),
     ))(buf)
 }
@@ -130,7 +129,8 @@ pub fn parse_stream(input: &[u8]) -> ParseResult<'_, Stream<'_>> {
 
 pub fn parse_indirected_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
     let (input, (id, gen)) = separated_pair(u32, multispace1, u16)(input)?;
-    let (input, obj) = delimited(ws(tag(b"obj")), parse_object, ws(tag(b"endobj")))(input)?;
+    let inner = alt((map(parse_stream, Object::Stream), parse_object));
+    let (input, obj) = delimited(ws(tag(b"obj")), inner, ws(tag(b"endobj")))(input)?;
     Ok((input, IndirectObject::new(id, gen, obj)))
 }
 
