@@ -61,16 +61,16 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object<'_>> {
     );
 
     alt((
+        map(parse_name, Object::Name),
+        parse_quoted_string,
+        map(parse_dict, Object::Dictionary),
+        map(parse_array, Object::Array),
+        parse_hex_string,
         null,
         true_parser,
         false_parser,
         map(parse_reference, Object::Reference),
         number_parser,
-        parse_quoted_string,
-        parse_hex_string,
-        map(parse_array, Object::Array),
-        map(parse_name, Object::Name),
-        map(parse_dict, Object::Dictionary),
     ))(buf)
 }
 
