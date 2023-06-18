@@ -54,23 +54,6 @@ fn test_parse_dict(buf: impl AsRef<[u8]>, name: &str) {
 }
 
 #[test_case(
-    b"<</Length 0>>
-stream
-endstream",
-    "empty"
-)]
-#[test_case(
-    b"<</Length 4>>
-stream
-abcd
-endstream",
-    "not empty"
-)]
-fn test_parse_stream(buf: impl AsRef<[u8]>, name: &str) {
-    insta::assert_debug_snapshot!(name, parse_stream(buf.as_ref()).unwrap());
-}
-
-#[test_case(
     b"1 0 obj
 null
 endobj",

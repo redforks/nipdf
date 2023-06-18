@@ -8,7 +8,7 @@ use nom::{
         complete::{anychar, crlf, multispace0, multispace1, u16, u32},
         is_hex_digit,
     },
-    combinator::{map, recognize, value},
+    combinator::{map, opt, recognize, value},
     multi::{many0, many0_count},
     number::complete::float,
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
@@ -111,26 +111,37 @@ pub fn parse_dict(input: &[u8]) -> ParseResult<'_, Dictionary<'_>> {
     )(input)
 }
 
-pub fn parse_stream(input: &[u8]) -> ParseResult<'_, Stream<'_>> {
-    let (input, dict) = ws_prefixed(parse_dict)(input)?;
-    let len = dict
-        .get(&Name::new(b"/Length"))
-        .ok_or(nom::Err::Error(ParseError::StreamRequireLength))?;
-    let len = len
-        .as_int()
-        .map_err(|_| nom::Err::Error(ParseError::StreamInvalidLengthType))?;
-    let (input, buf) = delimited(
-        delimited(multispace0, tag(b"stream"), alt((crlf, tag(b"\n")))),
-        take(len as u32),
-        ws_prefixed(tag(b"endstream")),
-    )(input)?;
-    Ok((input, Stream(dict, buf)))
+fn parse_object_and_stream(input: &[u8]) -> ParseResult<Object> {
+    let (input, o) = parse_object(input)?;
+    let (input, buf) = match o {
+        Object::Dictionary(ref d) => {
+            let Some(len) = d.get(&Name::new(b"/Length")) else {
+                return Ok((input, o));
+            };
+            let Object::Integer(len) = len else {
+                return Ok((input, o));
+            };
+            opt(delimited(
+                delimited(multispace0, tag(b"stream"), alt((crlf, tag(b"\n")))),
+                take(*len as u32),
+                ws_prefixed(tag(b"endstream")),
+            ))(input)?
+        }
+        _ => return Ok((input, o)),
+    };
+    match buf {
+        Some(buf) => match o {
+            Object::Dictionary(d) => Ok((input, Object::Stream(Stream(d, buf)))),
+            _ => unreachable!(),
+        },
+        None => Ok((input, o)),
+    }
 }
 
 pub fn parse_indirected_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
     let (input, (id, gen)) = separated_pair(u32, multispace1, u16)(input)?;
-    let inner = alt((map(parse_stream, Object::Stream), parse_object));
-    let (input, obj) = delimited(ws(tag(b"obj")), inner, ws(tag(b"endobj")))(input)?;
+    let (input, obj) =
+        delimited(ws(tag(b"obj")), parse_object_and_stream, ws(tag(b"endobj")))(input)?;
     Ok((input, IndirectObject::new(id, gen, obj)))
 }
 
