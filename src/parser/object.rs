@@ -104,7 +104,7 @@ pub fn parse_dict(input: &[u8]) -> ParseResult<'_, Dictionary<'_>> {
     map(
         delimited(
             ws(tag(b"<<".as_slice())),
-            many0(tuple((ws_prefixed(parse_name), ws(parse_object)))),
+            many0(tuple((parse_name, ws(parse_object)))),
             ws_terminated(tag(b">>")),
         ),
         |v| v.into_iter().collect(),
