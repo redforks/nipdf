@@ -1,5 +1,6 @@
 use crate::object::Object;
 
+use ahash::RandomState;
 use std::path::PathBuf;
 use std::str::from_utf8;
 use test_case::test_case;
@@ -13,7 +14,7 @@ fn catalog_ver(
     ver: impl Into<Option<Object<'static>>>,
 ) -> Result<Option<String>, ObjectValueError> {
     let ver = ver.into();
-    let mut dict = Dictionary::new();
+    let mut dict = Dictionary::default();
     if let Some(ver) = ver {
         dict.insert(Name::borrowed(b"Version"), ver);
     }
@@ -25,7 +26,7 @@ fn catalog_ver(
 #[test]
 fn xref_table_resolve_object_buf() {
     let buf = b"1234567890";
-    let mut id_offset = IDOffsetMap::with_hasher(BuildNoHashHasher::default());
+    let mut id_offset = IDOffsetMap::default();
     id_offset.insert(1, 5);
     id_offset.insert(2, 3);
     let xref_table = XRefTable::new(buf, id_offset);
@@ -38,7 +39,7 @@ fn xref_table_resolve_object_buf() {
 #[test]
 fn object_resolver() {
     let buf = b"   2 0 obj 5 endobj 1 0 obj null endobj 3 0 obj 2 0 R endobj";
-    let mut id_offset = IDOffsetMap::with_hasher(BuildNoHashHasher::default());
+    let mut id_offset = IDOffsetMap::default();
     id_offset.insert(1, 20);
     id_offset.insert(2, 3);
     id_offset.insert(3, 40);

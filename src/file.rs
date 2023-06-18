@@ -2,7 +2,7 @@
 
 use anyhow::Result as AnyResult;
 use itertools::Itertools;
-use std::{borrow::Cow, collections::HashMap, num::NonZeroUsize, str::from_utf8};
+use std::{collections::HashMap, num::NonZeroUsize, str::from_utf8};
 
 use crate::{
     object::{Dictionary, FrameSet, Name, Object, ObjectValueError},

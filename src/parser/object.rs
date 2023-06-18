@@ -147,7 +147,7 @@ pub fn parse_array(input: &[u8]) -> ParseResult<'_, Array<'_>> {
     )(input)
 }
 
-pub fn parse_dict(input: &[u8]) -> ParseResult<'_, Dictionary<'_>> {
+pub fn parse_dict(input: &[u8]) -> ParseResult<Dictionary> {
     map(
         delimited(
             ws(tag(b"<<".as_slice())),

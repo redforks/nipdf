@@ -1,17 +1,18 @@
 //! object mod contains data structure map to low level pdf objects
+use ahash::HashMap;
+use ahash::RandomState;
 use std::{
     borrow::{Borrow, Cow},
-    collections::HashMap,
     iter::Peekable,
 };
-
-pub type Dictionary<'a> = HashMap<Name<'a>, Object<'a>>;
-pub type Array<'a> = Vec<Object<'a>>;
 
 mod indirect_object;
 pub use indirect_object::IndirectObject;
 mod stream;
 pub use stream::*;
+
+pub type Dictionary<'a> = HashMap<Name<'a>, Object<'a>>;
+pub type Array<'a> = Vec<Object<'a>>;
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
 pub struct ObjectId {
