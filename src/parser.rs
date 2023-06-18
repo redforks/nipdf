@@ -1,3 +1,5 @@
+use std::ops::{RangeBounds, RangeTo};
+
 use nom::{
     character::complete::multispace0,
     error::FromExternalError,
@@ -25,27 +27,31 @@ where
     Phantom(I),
 }
 
-impl<I, E1, E2> FromExternalError<I, E1> for PdfParseError<I, E2>
+impl<'a, E1, E2> FromExternalError<&'a [u8], E1> for PdfParseError<&'a [u8], E2>
 where
-    E2: nom::error::FromExternalError<I, E1>
-        + nom::error::ParseError<I>
+    E2: nom::error::FromExternalError<&'a [u8], E1>
+        + nom::error::ParseError<&'a [u8]>
         + std::fmt::Debug
         + PartialEq,
 {
-    fn from_external_error(input: I, kind: nom::error::ErrorKind, e: E1) -> Self {
-        Self::NomError(E2::from_external_error(input, kind, e))
+    fn from_external_error(input: &'a [u8], kind: nom::error::ErrorKind, e: E1) -> Self {
+        Self::NomError(E2::from_external_error(
+            &input[..20.min(input.len())],
+            kind,
+            e,
+        ))
     }
 }
 
-impl<I, E> nom::error::ParseError<I> for PdfParseError<I, E>
+impl<'a, E> nom::error::ParseError<&'a [u8]> for PdfParseError<&'a [u8], E>
 where
-    E: nom::error::ParseError<I> + std::fmt::Debug + PartialEq,
+    E: nom::error::ParseError<&'a [u8]> + std::fmt::Debug + PartialEq,
 {
-    fn from_error_kind(input: I, kind: nom::error::ErrorKind) -> Self {
-        Self::NomError(E::from_error_kind(input, kind))
+    fn from_error_kind(input: &'a [u8], kind: nom::error::ErrorKind) -> Self {
+        Self::NomError(E::from_error_kind(&input[..20.min(input.len())], kind))
     }
 
-    fn append(_input: I, _kind: nom::error::ErrorKind, other: Self) -> Self {
+    fn append(_input: &'a [u8], _kind: nom::error::ErrorKind, other: Self) -> Self {
         other
     }
 }
