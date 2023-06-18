@@ -8,7 +8,7 @@ use nom::{
         complete::{anychar, char, crlf, multispace0, multispace1, one_of, u16, u32},
         is_hex_digit,
     },
-    combinator::{consumed, map, recognize},
+    combinator::{consumed, map, recognize, value},
     multi::{many0, many0_count},
     number::complete::float,
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
@@ -29,9 +29,9 @@ pub fn unwrap_parse_result<'a, T: 'a>(obj: ParseResult<'a, T>) -> Result<T, Pars
 }
 
 pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object<'_>> {
-    let null = map(tag("null"), |_| Object::Null);
-    let true_parser = map(tag("true"), |_| Object::Bool(true));
-    let false_parser = map(tag("false"), |_| Object::Bool(false));
+    let null = value(Object::Null, tag(b"null"));
+    let true_parser = value(Object::Bool(true), tag(b"true"));
+    let false_parser = value(Object::Bool(false), tag(b"false"));
     let number_parser = map(float, |v| {
         if let Some(i) = cast(v) {
             if v.fract() == 0.0 {
