@@ -28,3 +28,9 @@ opt-level = 3
 
 [patch.crates-io]
 lru = {git = "https://github.com/redforks/lru-rs"}
+
+[profile.release]
+split-debuginfo = "unpacked"
+
+[profile.dev]
+split-debuginfo = "unpacked"
