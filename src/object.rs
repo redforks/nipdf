@@ -5,7 +5,7 @@ use std::{
     iter::Peekable,
 };
 
-pub type Dictionary<'a> = HashMap<Name2<'a>, Object<'a>>;
+pub type Dictionary<'a> = HashMap<Name<'a>, Object<'a>>;
 pub type Array<'a> = Vec<Object<'a>>;
 
 mod indirect_object;
@@ -61,7 +61,7 @@ pub enum Object<'a> {
     Number(f32),
     LiteralString(&'a [u8]), // including the parentheses
     HexString(&'a [u8]),     // including the angle brackets
-    Name(Name2<'a>),         // with the leading slash
+    Name(Name<'a>),          // with the leading slash
     Dictionary(Dictionary<'a>),
     Array(Array<'a>),
     Stream(Stream<'a>),
@@ -254,8 +254,8 @@ impl<'a> From<Dictionary<'a>> for Object<'a> {
     }
 }
 
-impl<'a> From<Name2<'a>> for Object<'a> {
-    fn from(value: Name2<'a>) -> Self {
+impl<'a> From<Name<'a>> for Object<'a> {
+    fn from(value: Name<'a>) -> Self {
         Self::Name(value)
     }
 }
@@ -286,9 +286,9 @@ impl<'a> From<bool> for Object<'a> {
 
 /// A PDF name object, preceding '/' not included.
 #[derive(Eq, PartialEq, Hash, Debug, Clone)]
-pub struct Name2<'a>(pub Cow<'a, [u8]>);
+pub struct Name<'a>(pub Cow<'a, [u8]>);
 
-impl<'a> Name2<'a> {
+impl<'a> Name<'a> {
     pub fn borrowed(v: &'a [u8]) -> Self {
         debug_assert!(!v.starts_with(b"/"));
         Self(Cow::Borrowed(v))
@@ -297,63 +297,6 @@ impl<'a> Name2<'a> {
     pub fn owned(v: Vec<u8>) -> Self {
         debug_assert!(!v.starts_with(b"/"));
         Self(Cow::Owned(v))
-    }
-}
-
-#[derive(Eq, Hash, Debug, Clone)]
-pub struct Name<'a>(&'a [u8]);
-
-impl<'a> Name<'a> {
-    pub fn new(s: &'a [u8]) -> Self {
-        Self(s)
-    }
-
-    /// Return `Err(ObjectValueError::InvalidNameForma)` if the name is not a valid PDF name encoding,
-    /// not two hex char after `#`.
-    pub fn normalize(&self) -> Result<Cow<[u8]>, ObjectValueError> {
-        fn next_hex_char(iter: &mut impl Iterator<Item = u8>) -> Option<u8> {
-            let mut result = 0;
-            for _ in 0..2 {
-                if let Some(c) = iter.next() {
-                    result <<= 4;
-                    result |= match c {
-                        b'0'..=b'9' => c - b'0',
-                        b'a'..=b'f' => c - b'a' + 10,
-                        b'A'..=b'F' => c - b'A' + 10,
-                        _ => return None,
-                    };
-                } else {
-                    return None;
-                }
-            }
-            Some(result)
-        }
-
-        let s = &self.0[1..];
-        if s.iter().copied().any(|b| b == b'#') {
-            let mut result = Vec::with_capacity(s.len());
-            let mut iter = s.iter().copied();
-            while let Some(next) = iter.next() {
-                if next == b'#' {
-                    if let Some(c) = next_hex_char(&mut iter) {
-                        result.push(c);
-                    } else {
-                        return Err(ObjectValueError::InvalidNameFormat);
-                    }
-                } else {
-                    result.push(next);
-                }
-            }
-            Ok(Cow::Owned(result))
-        } else {
-            Ok(Cow::Borrowed(s))
-        }
-    }
-}
-
-impl<'a> PartialEq for Name<'a> {
-    fn eq(&self, other: &Self) -> bool {
-        self.normalize().unwrap() == other.normalize().unwrap()
     }
 }
 

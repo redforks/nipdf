@@ -6,13 +6,10 @@ expression: parse_dict(buf.as_ref()).unwrap()
     [],
     {
         Name(
-            [
-                47,
-            ],
+            [],
         ): Name(
             Name(
                 [
-                    47,
                     105,
                     100,
                 ],

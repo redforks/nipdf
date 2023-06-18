@@ -18,7 +18,7 @@ use nom::{
 use num::cast;
 
 use crate::object::{
-    Array, Dictionary, IndirectObject, Name, Name2, Object, ObjectValueError, Reference, Stream,
+    Array, Dictionary, IndirectObject, Name, Object, ObjectValueError, Reference, Stream,
 };
 
 use super::{ws, ws_prefixed, ws_terminated, ParseError, ParseResult};
@@ -120,7 +120,7 @@ fn normalize_name(buf: &[u8]) -> Result<Cow<[u8]>, ObjectValueError> {
     }
 }
 
-fn parse_name2(input: &[u8]) -> ParseResult<Name2> {
+fn parse_name2(input: &[u8]) -> ParseResult<Name> {
     let (input, buf) = recognize(preceded(
         tag(b"/"),
         take_till(|c: u8| {
@@ -135,26 +135,8 @@ fn parse_name2(input: &[u8]) -> ParseResult<Name2> {
     ))(input)?;
     let name = normalize_name(buf)
         .map_err(|_| nom::Err::Error(ParseError::InvalidNameFormat))
-        .map(|buf| Name2(buf))?;
+        .map(|buf| Name(buf))?;
     Ok((input, name))
-}
-
-fn parse_name(input: &[u8]) -> ParseResult<'_, Name<'_>> {
-    map(
-        recognize(preceded(
-            tag(b"/".as_slice()),
-            take_till(|c: u8| {
-                c.is_ascii_whitespace()
-                    || c == b'['
-                    || c == b'<'
-                    || c == b'('
-                    || c == b'/'
-                    || c == b'>'
-                    || c == b']'
-            }),
-        )),
-        Name::new,
-    )(input)
 }
 
 pub fn parse_array(input: &[u8]) -> ParseResult<'_, Array<'_>> {
@@ -180,7 +162,7 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<Object> {
     let (input, o) = parse_object(input)?;
     let (input, buf) = match o {
         Object::Dictionary(ref d) => {
-            let Some(len) = d.get(&Name2::borrowed(b"/Length")) else {
+            let Some(len) = d.get(&Name::borrowed(b"Length")) else {
                 return Ok((input, o));
             };
             let Object::Integer(len) = len else {

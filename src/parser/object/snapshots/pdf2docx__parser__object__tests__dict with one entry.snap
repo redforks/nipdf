@@ -7,7 +7,6 @@ expression: parse_dict(buf.as_ref()).unwrap()
     {
         Name(
             [
-                47,
                 84,
                 121,
                 112,
@@ -16,7 +15,6 @@ expression: parse_dict(buf.as_ref()).unwrap()
         ): Name(
             Name(
                 [
-                    47,
                     67,
                     97,
                     116,

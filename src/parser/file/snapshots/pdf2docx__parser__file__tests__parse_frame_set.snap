@@ -10,7 +10,6 @@ expression: "parse_frame_set(b\"%PDF-1.7\nxref\n1 1\n0000000000 00000 n\ntrailer
             trailer: {
                 Name(
                     [
-                        47,
                         80,
                         114,
                         101,
@@ -33,7 +32,6 @@ expression: "parse_frame_set(b\"%PDF-1.7\nxref\n1 1\n0000000000 00000 n\ntrailer
             trailer: {
                 Name(
                     [
-                        47,
                         83,
                         105,
                         122,

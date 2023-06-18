@@ -43,18 +43,3 @@ fn as_hex_string(exp: impl AsRef<[u8]>, buf: impl AsRef<[u8]>) {
         exp.as_ref()
     );
 }
-
-#[test_case(true, b"/foo", b"/foo")]
-#[test_case(false, b"/foo", b"/bar")]
-#[test_case(false, b"/foo", b"/Foo")]
-#[test_case(true, b"/#46oo", b"/Foo")]
-fn name_equals(exp: bool, name1: impl AsRef<[u8]>, name2: impl AsRef<[u8]>) {
-    assert_eq!(Name(name1.as_ref()) == Name(name2.as_ref()), exp);
-}
-
-#[test_case(b"foo", b"/foo")]
-#[test_case(b"a#b", b"/a#23b")]
-#[test_case(b"Ab", b"/#41#62")]
-fn name_normalize(exp: impl AsRef<[u8]>, name: impl AsRef<[u8]>) {
-    assert_eq!(Name(name.as_ref()).normalize().unwrap(), exp.as_ref());
-}

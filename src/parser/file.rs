@@ -12,7 +12,7 @@ use nom::{
 };
 
 use crate::{
-    object::{Dictionary, Entry, Frame, FrameSet, Name, Name2, XRefSection},
+    object::{Dictionary, Entry, Frame, FrameSet, Name, XRefSection},
     parser::parse_dict,
 };
 
@@ -125,7 +125,7 @@ pub fn parse_frame_set(input: &[u8]) -> ParseResult<FrameSet> {
     fn get_prev(frame: &Frame) -> Option<i32> {
         frame
             .trailer
-            .get(&Name2::borrowed(b"/Prev"))
+            .get(&Name::borrowed(b"Prev"))
             .map(|o| o.as_int().unwrap())
     }
 

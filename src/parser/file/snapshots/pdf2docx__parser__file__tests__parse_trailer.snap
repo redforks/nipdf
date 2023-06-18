@@ -28,7 +28,6 @@ expression: parse_trailer(buf).unwrap()
     {
         Name(
             [
-                47,
                 83,
                 105,
                 122,
