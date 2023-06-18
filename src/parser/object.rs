@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use nom::{
     branch::alt,
     bytes::{
@@ -15,7 +17,9 @@ use nom::{
 };
 use num::cast;
 
-use crate::object::{Array, Dictionary, IndirectObject, Name, Object, Reference, Stream};
+use crate::object::{
+    Array, Dictionary, IndirectObject, Name, Name2, Object, ObjectValueError, Reference, Stream,
+};
 
 use super::{ws, ws_prefixed, ws_terminated, ParseError, ParseResult};
 
@@ -61,7 +65,7 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object<'_>> {
     );
 
     alt((
-        map(parse_name, Object::Name),
+        map(parse_name2, Object::Name),
         parse_quoted_string,
         map(parse_dict, Object::Dictionary),
         map(parse_array, Object::Array),
@@ -72,6 +76,67 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object<'_>> {
         map(parse_reference, Object::Reference),
         number_parser,
     ))(buf)
+}
+
+/// Return `Err(ObjectValueError::InvalidNameForma)` if the name is not a valid PDF name encoding,
+/// not two hex char after `#`.
+fn normalize_name(buf: &[u8]) -> Result<Cow<[u8]>, ObjectValueError> {
+    fn next_hex_char(iter: &mut impl Iterator<Item = u8>) -> Option<u8> {
+        let mut result = 0;
+        for _ in 0..2 {
+            if let Some(c) = iter.next() {
+                result <<= 4;
+                result |= match c {
+                    b'0'..=b'9' => c - b'0',
+                    b'a'..=b'f' => c - b'a' + 10,
+                    b'A'..=b'F' => c - b'A' + 10,
+                    _ => return None,
+                };
+            } else {
+                return None;
+            }
+        }
+        Some(result)
+    }
+
+    let s = &buf[1..];
+    if s.iter().copied().any(|b| b == b'#') {
+        let mut result = Vec::with_capacity(s.len());
+        let mut iter = s.iter().copied();
+        while let Some(next) = iter.next() {
+            if next == b'#' {
+                if let Some(c) = next_hex_char(&mut iter) {
+                    result.push(c);
+                } else {
+                    return Err(ObjectValueError::InvalidNameFormat);
+                }
+            } else {
+                result.push(next);
+            }
+        }
+        Ok(Cow::Owned(result))
+    } else {
+        Ok(Cow::Borrowed(s))
+    }
+}
+
+fn parse_name2(input: &[u8]) -> ParseResult<Name2> {
+    let (input, buf) = recognize(preceded(
+        tag(b"/"),
+        take_till(|c: u8| {
+            c.is_ascii_whitespace()
+                || c == b'['
+                || c == b'<'
+                || c == b'('
+                || c == b'/'
+                || c == b'>'
+                || c == b']'
+        }),
+    ))(input)?;
+    let name = normalize_name(buf)
+        .map_err(|_| nom::Err::Error(ParseError::InvalidNameFormat))
+        .map(|buf| Name2(buf))?;
+    Ok((input, name))
 }
 
 fn parse_name(input: &[u8]) -> ParseResult<'_, Name<'_>> {
@@ -104,7 +169,7 @@ pub fn parse_dict(input: &[u8]) -> ParseResult<'_, Dictionary<'_>> {
     map(
         delimited(
             ws(tag(b"<<".as_slice())),
-            many0(tuple((parse_name, ws(parse_object)))),
+            many0(tuple((parse_name2, ws(parse_object)))),
             ws_terminated(tag(b">>")),
         ),
         |v| v.into_iter().collect(),
@@ -115,7 +180,7 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<Object> {
     let (input, o) = parse_object(input)?;
     let (input, buf) = match o {
         Object::Dictionary(ref d) => {
-            let Some(len) = d.get(&Name::new(b"/Length")) else {
+            let Some(len) = d.get(&Name2::borrowed(b"/Length")) else {
                 return Ok((input, o));
             };
             let Object::Integer(len) = len else {

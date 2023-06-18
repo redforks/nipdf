@@ -1,7 +1,11 @@
 //! object mod contains data structure map to low level pdf objects
-use std::{borrow::Cow, collections::HashMap, iter::Peekable};
+use std::{
+    borrow::{Borrow, Cow},
+    collections::HashMap,
+    iter::Peekable,
+};
 
-pub type Dictionary<'a> = HashMap<Name<'a>, Object<'a>>;
+pub type Dictionary<'a> = HashMap<Name2<'a>, Object<'a>>;
 pub type Array<'a> = Vec<Object<'a>>;
 
 mod indirect_object;
@@ -57,7 +61,7 @@ pub enum Object<'a> {
     Number(f32),
     LiteralString(&'a [u8]), // including the parentheses
     HexString(&'a [u8]),     // including the angle brackets
-    Name(Name<'a>),          // with the leading slash
+    Name(Name2<'a>),         // with the leading slash
     Dictionary(Dictionary<'a>),
     Array(Array<'a>),
     Stream(Stream<'a>),
@@ -204,9 +208,9 @@ impl<'a> Object<'a> {
 
     /// If value is a Name, return its normalized name, return error if
     /// value is not Name..
-    pub fn as_name(&self) -> Result<Cow<[u8]>, ObjectValueError> {
+    pub fn as_name(&self) -> Result<&[u8], ObjectValueError> {
         match self {
-            Object::Name(n) => n.normalize(),
+            Object::Name(n) => Ok(n.0.borrow()),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
@@ -250,8 +254,8 @@ impl<'a> From<Dictionary<'a>> for Object<'a> {
     }
 }
 
-impl<'a> From<Name<'a>> for Object<'a> {
-    fn from(value: Name<'a>) -> Self {
+impl<'a> From<Name2<'a>> for Object<'a> {
+    fn from(value: Name2<'a>) -> Self {
         Self::Name(value)
     }
 }
@@ -277,6 +281,22 @@ impl<'a> From<i32> for Object<'a> {
 impl<'a> From<bool> for Object<'a> {
     fn from(value: bool) -> Self {
         Self::Bool(value)
+    }
+}
+
+/// A PDF name object, preceding '/' not included.
+#[derive(Eq, PartialEq, Hash, Debug, Clone)]
+pub struct Name2<'a>(pub Cow<'a, [u8]>);
+
+impl<'a> Name2<'a> {
+    pub fn borrowed(v: &'a [u8]) -> Self {
+        debug_assert!(!v.starts_with(b"/"));
+        Self(Cow::Borrowed(v))
+    }
+
+    pub fn owned(v: Vec<u8>) -> Self {
+        debug_assert!(!v.starts_with(b"/"));
+        Self(Cow::Owned(v))
     }
 }
 

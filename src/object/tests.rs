@@ -58,16 +58,3 @@ fn name_equals(exp: bool, name1: impl AsRef<[u8]>, name2: impl AsRef<[u8]>) {
 fn name_normalize(exp: impl AsRef<[u8]>, name: impl AsRef<[u8]>) {
     assert_eq!(Name(name.as_ref()).normalize().unwrap(), exp.as_ref());
 }
-
-#[test]
-fn as_name() {
-    assert_eq!(
-        Object::Name(Name(b"/foo")).as_name().unwrap().as_ref(),
-        &b"foo"[..]
-    );
-
-    assert_eq!(
-        Object::LiteralString(b"(foo)").as_name().unwrap_err(),
-        ObjectValueError::UnexpectedType
-    );
-}

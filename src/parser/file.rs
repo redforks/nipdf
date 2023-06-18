@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, str::from_utf8};
+use std::{borrow::Cow, collections::BTreeMap, str::from_utf8};
 
 use memchr::memmem::rfind;
 use nom::{
@@ -12,7 +12,7 @@ use nom::{
 };
 
 use crate::{
-    object::{Dictionary, Entry, Frame, FrameSet, Name, XRefSection},
+    object::{Dictionary, Entry, Frame, FrameSet, Name, Name2, XRefSection},
     parser::parse_dict,
 };
 
@@ -125,7 +125,7 @@ pub fn parse_frame_set(input: &[u8]) -> ParseResult<FrameSet> {
     fn get_prev(frame: &Frame) -> Option<i32> {
         frame
             .trailer
-            .get(&Name::new(b"/Prev".as_slice()))
+            .get(&Name2::borrowed(b"/Prev"))
             .map(|o| o.as_int().unwrap())
     }
 

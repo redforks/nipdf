@@ -21,8 +21,8 @@ b)"; "literal string contains new line")]
 #[test_case(Object::HexString(b"<>"), b"<>")]
 #[test_case(Object::HexString(b"<12A>"), b"<12A>")]
 #[test_case(Object::HexString(b"<12 A\t3>"), b"<12 A\t3>"; "contains whitespace")]
-#[test_case(Name::new(b"/"), b"/"; "empty name")]
-#[test_case(Name::new(b"/foo"), b"/foo"; "name")]
+#[test_case(Name2::borrowed(b"/"), b"/"; "empty name")]
+#[test_case(Name2::borrowed(b"/foo"), b"/foo"; "name")]
 fn test_parse_simple_objects(exp: impl Into<Object<'static>>, buf: impl AsRef<[u8]>) {
     assert_eq!(
         (b"".as_slice(), exp.into()),
@@ -34,7 +34,7 @@ fn test_parse_simple_objects(exp: impl Into<Object<'static>>, buf: impl AsRef<[u
 #[test_case(vec![], b"[ \t]"; "empty array 2")]
 #[test_case(vec![Object::Null], b"[null]"; "array with null")]
 #[test_case(vec![Object::Array(vec![Object::Null])], b"[[null]]"; "nested array with null")]
-#[test_case(vec![Name::new(b"/foo").into()], b"[/foo]"; "name value")]
+#[test_case(vec![Name2::borrowed(b"/foo").into()], b"[/foo]"; "name value")]
 fn test_parse_array(exp: Vec<Object<'static>>, buf: impl AsRef<[u8]>) {
     assert_eq!((b"".as_slice(), exp), parse_array(buf.as_ref()).unwrap());
 }
@@ -66,4 +66,11 @@ fn test_parse_indirected_object(buf: impl AsRef<[u8]>, name: &str) {
 #[test_case(b"1 0 R", "simple")]
 fn test_parse_reference(buf: impl AsRef<[u8]>, name: &str) {
     insta::assert_debug_snapshot!(name, parse_reference(buf.as_ref()).unwrap());
+}
+
+#[test_case(b"foo", b"/foo")]
+#[test_case(b"a#b", b"/a#23b")]
+#[test_case(b"Ab", b"/#41#62")]
+fn name_normalize(exp: impl AsRef<[u8]>, name: impl AsRef<[u8]>) {
+    assert_eq!(normalize_name(name.as_ref()).unwrap(), exp.as_ref());
 }

@@ -1,5 +1,3 @@
-
-
 use nom::{
     character::complete::multispace0,
     error::FromExternalError,
@@ -25,6 +23,9 @@ where
 
     #[error("phantom for generic type I, Not used")]
     Phantom(I),
+
+    #[error("Invalid name format")]
+    InvalidNameFormat,
 }
 
 impl<'a, E1, E2> FromExternalError<&'a [u8], E1> for PdfParseError<&'a [u8], E2>

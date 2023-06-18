@@ -5,7 +5,7 @@ use itertools::Itertools;
 use std::{borrow::Cow, collections::HashMap, num::NonZeroUsize, str::from_utf8};
 
 use crate::{
-    object::{Dictionary, FrameSet, Name, Object, ObjectValueError},
+    object::{Dictionary, FrameSet, Name2, Object, ObjectValueError},
     parser::{parse_frame_set, parse_header, parse_indirected_object},
 };
 use lru::LruCache;
@@ -59,7 +59,7 @@ pub trait DataContainer<'a> {
 impl<'a> DataContainer<'a> for Dictionary<'a> {
     fn get_value<'b: 'a>(&self, key: &'b str) -> Option<&Object<'a>> {
         debug_assert!(key.starts_with('/'));
-        self.get(&Name::new(key.as_bytes()))
+        self.get(&Name2::borrowed(key.as_bytes()))
     }
 }
 
@@ -67,7 +67,7 @@ impl<'a> DataContainer<'a> for Dictionary<'a> {
 impl<'a> DataContainer<'a> for Vec<&Dictionary<'a>> {
     fn get_value<'b: 'a>(&self, key: &'b str) -> Option<&Object<'a>> {
         debug_assert!(key.starts_with('/'));
-        let key = Name::new(key.as_bytes());
+        let key = Name2::borrowed(key.as_bytes());
         for dict in self {
             if let Some(v) = dict.get(&key) {
                 return Some(v);
@@ -140,9 +140,9 @@ impl<'a> Catalog<'a> {
         Self { dict }
     }
 
-    pub fn ver(&self) -> Result<Option<Cow<[u8]>>, ObjectValueError> {
+    pub fn ver(&self) -> Result<Option<&[u8]>, ObjectValueError> {
         self.dict
-            .get(&Name::new(b"/Version".as_slice()))
+            .get(&Name2::borrowed(b"/Version"))
             .map(|o| o.as_name())
             .transpose()
     }
@@ -160,7 +160,7 @@ impl<'a> Trailer<'a> {
 
     pub fn total_objects(&self) -> Result<i32, ObjectValueError> {
         self.dict
-            .get(&Name::new(b"/Size".as_slice()))
+            .get(&Name2::borrowed(b"/Size"))
             .ok_or(ObjectValueError::DictNameMissing)
             .and_then(|obj| obj.as_int())
     }
@@ -193,7 +193,7 @@ impl File {
             .ok_or(FileError::CatalogRequired)?;
         let ver = catalog
             .as_dict()?
-            .get(&Name::new(b"/Version".as_slice()))
+            .get(&Name2::borrowed(b"/Version"))
             .map(|o| -> Result<String, ObjectValueError> {
                 Ok(from_utf8(o.as_name()?.as_ref()).unwrap().to_owned())
             })
