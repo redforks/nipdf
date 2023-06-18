@@ -8,9 +8,9 @@ use nom::{
 #[derive(PartialEq, Debug, thiserror::Error)]
 pub enum PdfParseError<I, E>
 where
-    E: nom::error::ParseError<I> + std::fmt::Display + PartialEq,
+    E: nom::error::ParseError<I> + std::fmt::Debug + PartialEq,
 {
-    #[error("nom parse error: {0}")]
+    #[error("nom parse error: {0:?}")]
     NomError(E),
 
     #[error("Stream require length field in info dict")]
