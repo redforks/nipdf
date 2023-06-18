@@ -5,10 +5,10 @@ use nom::{
         streaming::take,
     },
     character::{
-        complete::{anychar, char, crlf, multispace0, multispace1, one_of, u16, u32},
+        complete::{anychar, crlf, multispace0, multispace1, u16, u32},
         is_hex_digit,
     },
-    combinator::{consumed, map, recognize, value},
+    combinator::{map, recognize, value},
     multi::{many0, many0_count},
     number::complete::float,
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
@@ -124,7 +124,7 @@ pub fn parse_stream(input: &[u8]) -> ParseResult<'_, Stream<'_>> {
         take(len as u32),
         ws_prefixed(tag(b"endstream")),
     )(input)?;
-    Ok((input, (dict, buf)))
+    Ok((input, Stream(dict, buf)))
 }
 
 pub fn parse_indirected_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
