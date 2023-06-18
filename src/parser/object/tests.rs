@@ -9,6 +9,8 @@ use test_case::test_case;
 #[test_case(123.12, "123.12"; "number")]
 #[test_case(-123.12, "-123.12"; "negative number")]
 #[test_case(Object::LiteralString(b"()"), "()"; "empty literal string")]
+#[test_case(Object::LiteralString(b"(5\\()"), "(5\\()"; "escaped )")]
+#[test_case(Object::LiteralString(b"(5\\\\)"), "(5\\\\)"; "escaped back slash")]
 #[test_case(Object::LiteralString(b"(a(foo))"), "(a(foo))"; "nested quoted string")]
 #[test_case(Object::LiteralString(b"(a
 b)"), "(a
