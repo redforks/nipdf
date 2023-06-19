@@ -1,7 +1,7 @@
 use glob::glob;
-use pdf2docx::file::File;
+use pdf2docx::{file::File, object::Object};
 
-#[test]
+#[test_log::test]
 fn scan_objects() {
     for entry in glob("sample_files/normal/**/*.pdf").unwrap() {
         let path = entry.unwrap();
@@ -12,10 +12,19 @@ fn scan_objects() {
         for id in 0..f.total_objects {
             print!("scan object: {}", id);
             let obj = resolver.resolve(id);
-            if obj.is_none() {
-                println!("  missing");
-            } else {
-                println!("  done");
+            match obj {
+                None => println!(" missing"),
+                Some(obj) => {
+                    match obj {
+                        Object::Stream(s) => {
+                            s.decode().unwrap();
+                            ()
+                        }
+                        _ => (),
+                    };
+
+                    println!("  done");
+                }
             }
         }
     }

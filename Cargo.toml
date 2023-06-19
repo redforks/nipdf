@@ -19,11 +19,14 @@ anyhow = "1.0.71"
 ahash = "0.8.3"
 flate2 = "1.0.26"
 log = "0.4.19"
+env = "0.0.0"
 
 [dev-dependencies]
+env_logger = "0.10.0"
 glob = "0.3.1"
 insta = "1.29.0"
 test-case = "3.1.0"
+test-log = "0.2.12"
 
 [profile.dev.package.insta]
 opt-level = 3

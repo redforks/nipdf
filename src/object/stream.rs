@@ -16,19 +16,27 @@ const KEY_FFILTER: &[u8] = b"FFilter";
 pub struct Stream<'a>(pub Dictionary<'a>, pub &'a [u8]);
 
 fn decode_flate(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, ObjectValueError> {
-    use flate2::read::ZlibDecoder;
+    assert!(params.is_none(), "TODO: handle params of FlateDecode");
+
+    use flate2::bufread::{DeflateDecoder, ZlibDecoder};
     use std::io::Read;
 
     let mut output = Vec::with_capacity(buf.len() * 2);
     let mut decoder = ZlibDecoder::new(buf);
-
-    if !buf.is_empty() {
-        decoder.read_to_end(&mut output).map_err(|err| {
-            error!("{}", err);
+    decoder
+        .read_to_end(&mut output)
+        .or_else(|_| DeflateDecoder::new(buf).read_to_end(&mut output))
+        .map_err(|err| {
+            error!(
+                "Failed to decode FlateDecode using DeflateDecoder: {:?}",
+                err
+            );
             ObjectValueError::FilterDecodeError
         })?;
-    }
-    assert!(params.is_none(), "TODO: handle params of FlateDecode");
+
+    // let mut file = std::fs::File::create("/tmp/stream").unwrap();
+    // file.write_all(&buf).unwrap();
+    // drop(file);
     Ok(output)
 }
 

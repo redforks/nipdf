@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use log::{debug, warn};
 use nom::{
     branch::alt,
     bytes::{
@@ -169,9 +170,9 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<Object> {
                 return Ok((input, o));
             };
             opt(delimited(
-                delimited(multispace0, tag(b"stream"), alt((crlf, tag(b"\n")))),
+                tuple((ws_prefixed(tag(b"stream")), alt((crlf, tag(b"\n"))))),
                 take(*len as u32),
-                ws_prefixed(tag(b"endstream")),
+                ws(tag(b"endstream")),
             ))(input)?
         }
         _ => return Ok((input, o)),
