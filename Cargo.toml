@@ -17,6 +17,8 @@ lru = { version = "0.10.0", default-features = false }
 nohash-hasher = "0.2.0"
 anyhow = "1.0.71"
 ahash = "0.8.3"
+flate2 = "1.0.26"
+log = "0.4.19"
 
 [dev-dependencies]
 glob = "0.3.1"

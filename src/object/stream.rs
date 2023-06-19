@@ -1,7 +1,10 @@
 use std::{
     borrow::{Borrow, Cow},
     iter::repeat,
+    str::from_utf8,
 };
+
+use log::error;
 
 use super::{Dictionary, Name, Object, ObjectValueError};
 
@@ -12,13 +15,34 @@ const KEY_FFILTER: &[u8] = b"FFilter";
 #[derive(Clone, PartialEq, Debug)]
 pub struct Stream<'a>(pub Dictionary<'a>, pub &'a [u8]);
 
+fn decode_flate(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, ObjectValueError> {
+    use flate2::read::ZlibDecoder;
+    use std::io::Read;
+
+    let mut output = Vec::with_capacity(buf.len() * 2);
+    let mut decoder = ZlibDecoder::new(buf);
+
+    if !buf.is_empty() {
+        decoder.read_to_end(&mut output).map_err(|err| {
+            error!("{}", err);
+            ObjectValueError::FilterDecodeError
+        })?;
+    }
+    assert!(params.is_none(), "TODO: handle params of FlateDecode");
+    Ok(output)
+}
+
 fn filter<'a>(
     buf: Cow<'a, [u8]>,
     filter_name: &[u8],
-    _params: Option<&Dictionary<'a>>,
+    params: Option<&Dictionary<'a>>,
 ) -> Result<Vec<u8>, ObjectValueError> {
     match filter_name {
-        _ => Err(ObjectValueError::UnknownFilter),
+        b"FlateDecode" => decode_flate(&buf, params),
+        _ => {
+            error!("Unknown filter: {}", from_utf8(filter_name).unwrap());
+            Err(ObjectValueError::UnknownFilter)
+        }
     }
 }
 

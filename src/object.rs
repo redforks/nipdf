@@ -56,6 +56,8 @@ pub enum ObjectValueError {
     ExternalStreamNotSupported,
     #[error("Unknown filter")]
     UnknownFilter,
+    #[error("Filter decode error")]
+    FilterDecodeError,
 }
 
 #[derive(Clone, PartialEq, Debug)]
