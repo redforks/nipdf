@@ -12,10 +12,24 @@ const KEY_FFILTER: &[u8] = b"FFilter";
 #[derive(Clone, PartialEq, Debug)]
 pub struct Stream<'a>(pub Dictionary<'a>, pub &'a [u8]);
 
+fn filter<'a>(
+    buf: Cow<'a, [u8]>,
+    filter_name: &[u8],
+    _params: Option<&Dictionary<'a>>,
+) -> Result<Vec<u8>, ObjectValueError> {
+    match filter_name {
+        _ => Err(ObjectValueError::UnknownFilter),
+    }
+}
+
 impl<'a> Stream<'a> {
     /// Decode stream data using filter and parameters in stream dictionary.
     pub fn decode(&self) -> Result<Cow<[u8]>, ObjectValueError> {
-        todo!()
+        let mut buf = Cow::Borrowed(self.1);
+        for (filter_name, params) in self.iter_filter()? {
+            buf = Cow::Owned(filter(buf, filter_name, params)?);
+        }
+        Ok(buf)
     }
 
     fn iter_filter(

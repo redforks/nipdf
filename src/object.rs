@@ -54,6 +54,8 @@ pub enum ObjectValueError {
     ReferenceTargetNotFound,
     #[error("External stream not supported")]
     ExternalStreamNotSupported,
+    #[error("Unknown filter")]
+    UnknownFilter,
 }
 
 #[derive(Clone, PartialEq, Debug)]
