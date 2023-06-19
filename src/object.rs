@@ -52,6 +52,8 @@ pub enum ObjectValueError {
     DictNameMissing,
     #[error("Reference target not found")]
     ReferenceTargetNotFound,
+    #[error("External stream not supported")]
+    ExternalStreamNotSupported,
 }
 
 #[derive(Clone, PartialEq, Debug)]
