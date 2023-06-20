@@ -4,7 +4,7 @@ use serde::{de, forward_to_deserialize_any, Deserialize, Deserializer};
 type Result<T> = std::result::Result<T, ObjectValueError>;
 
 pub fn from_object<'a, 'de: 'a, T: Deserialize<'a>>(o: &'de Object<'a>) -> Result<T> {
-    let mut deserilizer = ObjectDeserializer::new(&o);
+    let mut deserilizer = ObjectDeserializer::new(o);
     T::deserialize(&mut deserilizer)
 }
 

@@ -195,7 +195,7 @@ impl File {
             .as_dict()?
             .get(&Name::borrowed(b"Version"))
             .map(|o| -> Result<String, ObjectValueError> {
-                Ok(from_utf8(o.as_name()?.as_ref()).unwrap().to_owned())
+                Ok(from_utf8(o.as_name()?).unwrap().to_owned())
             })
             .unwrap_or(Ok(head_ver.to_owned()))?;
         let total_objects = resolver
