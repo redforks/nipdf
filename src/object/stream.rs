@@ -44,9 +44,10 @@ fn filter<'a>(
     buf: Cow<'a, [u8]>,
     filter_name: &[u8],
     params: Option<&Dictionary<'a>>,
-) -> Result<Vec<u8>, ObjectValueError> {
+) -> Result<Cow<'a, [u8]>, ObjectValueError> {
     match filter_name {
-        b"FlateDecode" => decode_flate(&buf, params),
+        b"FlateDecode" => decode_flate(&buf, params).map(Cow::Owned),
+        b"DCTDecode" => Ok(buf),
         _ => {
             error!("Unknown filter: {}", from_utf8(filter_name).unwrap());
             Err(ObjectValueError::UnknownFilter)
@@ -59,7 +60,7 @@ impl<'a> Stream<'a> {
     pub fn decode(&self) -> Result<Cow<[u8]>, ObjectValueError> {
         let mut buf = Cow::Borrowed(self.1);
         for (filter_name, params) in self.iter_filter()? {
-            buf = Cow::Owned(filter(buf, filter_name, params)?);
+            buf = filter(buf, filter_name, params)?;
         }
         Ok(buf)
     }
