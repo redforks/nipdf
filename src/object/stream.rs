@@ -1,5 +1,6 @@
 use std::{
     borrow::{Borrow, Cow},
+    fmt::Display,
     iter::repeat,
     str::from_utf8,
 };
@@ -15,6 +16,17 @@ const KEY_FFILTER: &[u8] = b"FFilter";
 #[derive(Clone, PartialEq, Debug)]
 pub struct Stream<'a>(pub Dictionary<'a>, pub &'a [u8]);
 
+/// error!() log if r is error, returns `Err<ObjectValueError::FilterDecodeError>`
+fn handle_filter_error<V, E: Display>(
+    r: Result<V, E>,
+    filter_name: &str,
+) -> Result<V, ObjectValueError> {
+    r.map_err(|err| {
+        error!("Failed to decode stream using {}: {}", filter_name, &err);
+        ObjectValueError::FilterDecodeError
+    })
+}
+
 fn decode_flate(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, ObjectValueError> {
     assert!(params.is_none(), "TODO: handle params of FlateDecode");
 
@@ -23,21 +35,24 @@ fn decode_flate(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, Obje
 
     let mut output = Vec::with_capacity(buf.len() * 2);
     let mut decoder = ZlibDecoder::new(buf);
-    decoder
-        .read_to_end(&mut output)
-        .or_else(|_| DeflateDecoder::new(buf).read_to_end(&mut output))
-        .map_err(|err| {
-            error!(
-                "Failed to decode FlateDecode using DeflateDecoder: {:?}",
-                err
-            );
-            ObjectValueError::FilterDecodeError
-        })?;
+    handle_filter_error(
+        decoder
+            .read_to_end(&mut output)
+            .or_else(|_| DeflateDecoder::new(buf).read_to_end(&mut output)),
+        "FlateDecode",
+    )?;
 
     // let mut file = std::fs::File::create("/tmp/stream").unwrap();
     // file.write_all(&buf).unwrap();
     // drop(file);
     Ok(output)
+}
+
+fn decode_dct(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, ObjectValueError> {
+    assert!(params.is_none(), "TODO: handle params of DCTDecode");
+    use jpeg_decoder::Decoder;
+    let mut decoder = Decoder::new(buf);
+    handle_filter_error(decoder.decode(), "DCTDecode")
 }
 
 fn filter<'a>(
@@ -47,7 +62,7 @@ fn filter<'a>(
 ) -> Result<Cow<'a, [u8]>, ObjectValueError> {
     match filter_name {
         b"FlateDecode" => decode_flate(&buf, params).map(Cow::Owned),
-        b"DCTDecode" => Ok(buf),
+        b"DCTDecode" => decode_dct(&buf, params).map(Cow::Owned),
         _ => {
             error!("Unknown filter: {}", from_utf8(filter_name).unwrap());
             Err(ObjectValueError::UnknownFilter)
