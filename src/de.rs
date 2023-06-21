@@ -22,7 +22,6 @@ impl<'a, 'de, 'b> Deserializer<'de> for &'b mut ObjectDeserializer<'a, 'de> {
     {
         match self.object {
             Object::Bool(v) => visitor.visit_bool(*v),
-            Object::Null => visitor.visit_none(),
             _ => todo!(),
         }
     }
