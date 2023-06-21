@@ -43,9 +43,11 @@ impl<'a> Dictionary<'a> {
     }
 
     pub fn get_int(&self, id: &str, default: i32) -> Result<i32, ObjectValueError> {
-        self.0
-            .get(&Name::borrowed(id.as_bytes()))
-            .map_or(Ok(default), |o| o.as_int())
+        self.0.get(&id.into()).map_or(Ok(default), |o| o.as_int())
+    }
+
+    pub fn get_bool(&self, id: &str, default: bool) -> Result<bool, ObjectValueError> {
+        self.0.get(&id.into()).map_or(Ok(default), |o| o.as_bool())
     }
 
     pub fn set(&mut self, id: impl Into<Name<'a>>, value: impl Into<Object<'a>>) {
@@ -118,6 +120,13 @@ impl<'a> Object<'a> {
     pub fn as_int(&self) -> Result<i32, ObjectValueError> {
         match self {
             Object::Integer(i) => Ok(*i),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
+    }
+
+    pub fn as_bool(&self) -> Result<bool, ObjectValueError> {
+        match self {
+            Object::Bool(b) => Ok(*b),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }

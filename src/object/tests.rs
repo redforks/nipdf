@@ -50,3 +50,16 @@ fn buf_or_str_to_object<'a>(exp: Object<'a>, s: &'a str) {
     assert_eq!(exp, Object::from(s.as_bytes()));
     assert_eq!(exp, Object::from(s));
 }
+
+#[test]
+fn dict_get_bool() {
+    let mut d = Dictionary::default();
+    d.set("a", true);
+    d.set("b", true);
+    d.set("c", 1i32);
+
+    assert_eq!(Ok(true), d.get_bool("a", false));
+    assert_eq!(Ok(true), d.get_bool("b", true));
+    assert_eq!(Err(ObjectValueError::UnexpectedType), d.get_bool("c", false));
+    assert_eq!(Ok(false), d.get_bool("d", false));
+}
