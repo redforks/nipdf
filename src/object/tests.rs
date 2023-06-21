@@ -37,9 +37,9 @@ fn literal_string_as_string(exp: &str, buf: impl AsRef<[u8]>) {
 #[test_case(b"\x90\x1f\xa3", b"<901FA3>"; "not empty")]
 #[test_case(b"\x90\x1f\xa0", b"<901FA>"; "append 0 if odd")]
 #[test_case(b"\x90\x1f\xa0", b"<90 1F\tA>"; "ignore whitespace")]
-fn as_hex_string(exp: impl AsRef<[u8]>, buf: impl AsRef<[u8]>) {
+fn hex_string_decoded(exp: impl AsRef<[u8]>, buf: impl AsRef<[u8]>) {
     assert_eq!(
-        Object::HexString(buf.as_ref()).as_hex_string().unwrap(),
+        HexString::new(buf.as_ref()).decoded().unwrap(),
         exp.as_ref()
     );
 }

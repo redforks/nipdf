@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 
-
 use nom::{
     branch::alt,
     bytes::{
@@ -19,7 +18,7 @@ use nom::{
 use num::cast;
 
 use crate::object::{
-    Array, Dictionary, IndirectObject, Name, Object, ObjectValueError, Reference, Stream,
+    Array, Dictionary, HexString, IndirectObject, Name, Object, ObjectValueError, Reference, Stream,
 };
 
 use super::{ws, ws_prefixed, ws_terminated, ParseError, ParseResult};
@@ -62,7 +61,7 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object<'_>> {
             take_while(|c| is_hex_digit(c) || c.is_ascii_whitespace()),
             tag(b">"),
         )),
-        Object::HexString,
+        |buf| Object::HexString(HexString::new(buf)),
     );
 
     alt((

@@ -9,6 +9,7 @@ use std::{
 mod indirect_object;
 pub use indirect_object::IndirectObject;
 mod stream;
+use once_cell::unsync::OnceCell;
 pub use stream::*;
 
 pub type Dictionary<'a> = HashMap<Name<'a>, Object<'a>>;
@@ -67,8 +68,8 @@ pub enum Object<'a> {
     Integer(i32),
     Number(f32),
     LiteralString(&'a [u8]), // including the parentheses
-    HexString(&'a [u8]),     // including the angle brackets
-    Name(Name<'a>),          // with the leading slash
+    HexString(HexString<'a>),
+    Name(Name<'a>), // with the leading slash
     Dictionary(Dictionary<'a>),
     Array(Array<'a>),
     Stream(Stream<'a>),
@@ -157,44 +158,6 @@ impl<'a> Object<'a> {
 
         match self {
             Object::LiteralString(s) => Ok(decode_literal_string(s)),
-            _ => Err(ObjectValueError::UnexpectedType),
-        }
-    }
-
-    fn as_hex_string(&self) -> Result<Vec<u8>, ObjectValueError> {
-        fn decode_hex_string(s: &[u8]) -> Result<Vec<u8>, ObjectValueError> {
-            let s = &s[1..s.len() - 1];
-
-            fn filter_whitespace(s: &[u8]) -> Cow<[u8]> {
-                if s.iter().copied().any(|b| b.is_ascii_whitespace()) {
-                    Cow::Owned(
-                        s.iter()
-                            .copied()
-                            .filter(|b| !b.is_ascii_whitespace())
-                            .collect::<Vec<_>>(),
-                    )
-                } else {
-                    Cow::Borrowed(s)
-                }
-            }
-            fn append_zero_if_odd(s: &[u8]) -> Cow<[u8]> {
-                if s.len() % 2 == 0 {
-                    Cow::Borrowed(s)
-                } else {
-                    let mut v = Vec::with_capacity(s.len() + 1);
-                    v.extend_from_slice(s);
-                    v.push(b'0');
-                    Cow::Owned(v)
-                }
-            }
-            let s = filter_whitespace(s);
-            let s = append_zero_if_odd(&s);
-
-            hex::decode(s).map_err(|_| ObjectValueError::InvalidHexString)
-        }
-
-        match self {
-            Object::HexString(s) => decode_hex_string(s),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
@@ -288,6 +251,59 @@ impl<'a> From<i32> for Object<'a> {
 impl<'a> From<bool> for Object<'a> {
     fn from(value: bool) -> Self {
         Self::Bool(value)
+    }
+}
+
+/// Decoded PDF literal string object, enclosing '(' and ')' not included.
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct HexString<'a>(&'a [u8], OnceCell<Vec<u8>>);
+
+impl<'a> HexString<'a> {
+    pub fn new(s: &'a [u8]) -> Self {
+        Self(s, OnceCell::new())
+    }
+
+    /// Get decoded binary string.
+    pub fn decoded(&self) -> Result<&[u8], ObjectValueError> {
+        self.1
+            .get_or_try_init(|| {
+                fn filter_whitespace(s: &[u8]) -> Cow<[u8]> {
+                    if s.iter().copied().any(|b| b.is_ascii_whitespace()) {
+                        Cow::Owned(
+                            s.iter()
+                                .copied()
+                                .filter(|b| !b.is_ascii_whitespace())
+                                .collect::<Vec<_>>(),
+                        )
+                    } else {
+                        Cow::Borrowed(s)
+                    }
+                }
+                fn append_zero_if_odd(s: &[u8]) -> Cow<[u8]> {
+                    if s.len() % 2 == 0 {
+                        Cow::Borrowed(s)
+                    } else {
+                        let mut v = Vec::with_capacity(s.len() + 1);
+                        v.extend_from_slice(s);
+                        v.push(b'0');
+                        Cow::Owned(v)
+                    }
+                }
+                let s = self.0;
+                debug_assert!(s.starts_with(b"<") && s.ends_with(b">"));
+                let s = &s[1..s.len() - 1];
+                let s = filter_whitespace(s);
+                let s = append_zero_if_odd(&s);
+
+                hex::decode(s).map_err(|_| ObjectValueError::InvalidHexString)
+            })
+            .map(|s| &s[..])
+    }
+}
+
+impl<'a> From<HexString<'a>> for Object<'a> {
+    fn from(value: HexString<'a>) -> Self {
+        Self::HexString(value)
     }
 }
 

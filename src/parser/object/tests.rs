@@ -1,4 +1,5 @@
 use super::*;
+use crate::object::HexString;
 use test_case::test_case;
 
 #[test_case(Object::Null, "null"; "null")]
@@ -18,9 +19,9 @@ b)"; "literal string contains new line")]
 #[test_case(Object::LiteralString(b"(*!&}^%)"), b"(*!&}^%)"; "literal string contains special characters")]
 #[test_case(Object::LiteralString(b"(\\)\\()"), b"(\\)\\()"; "literal string contains escape")]
 #[test_case(Object::LiteralString(b"(\\333\\n)"), b"(\\333\\n)")]
-#[test_case(Object::HexString(b"<>"), b"<>")]
-#[test_case(Object::HexString(b"<12A>"), b"<12A>")]
-#[test_case(Object::HexString(b"<12 A\t3>"), b"<12 A\t3>"; "contains whitespace")]
+#[test_case(HexString::new(b"<>"), b"<>")]
+#[test_case(HexString::new(b"<12A>"), b"<12A>")]
+#[test_case(HexString::new(b"<12 A\t3>"), b"<12 A\t3>"; "contains whitespace")]
 #[test_case(Name::borrowed(b""), b"/"; "empty name")]
 #[test_case(Name::borrowed(b"foo"), b"/foo"; "name")]
 fn test_parse_simple_objects(exp: impl Into<Object<'static>>, buf: impl AsRef<[u8]>) {
