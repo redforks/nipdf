@@ -1,7 +1,6 @@
 //! object mod contains data structure map to low level pdf objects
 use ahash::HashMap;
-
-use serde::de;
+use ahash::RandomState;
 use std::{
     borrow::{Borrow, Cow},
     iter::Peekable,
@@ -41,7 +40,7 @@ pub use xref::{Entry as XRefEntry, Section as XRefSection, *};
 mod frame;
 pub use frame::*;
 
-#[derive(Clone, PartialEq, Debug, thiserror::Error)]
+#[derive(Clone, Copy, PartialEq, Debug, thiserror::Error)]
 pub enum ObjectValueError {
     #[error("unexpected type")]
     UnexpectedType,
@@ -59,14 +58,6 @@ pub enum ObjectValueError {
     UnknownFilter,
     #[error("Filter decode error")]
     FilterDecodeError,
-    #[error("{0}")]
-    Message(String),
-}
-
-impl de::Error for ObjectValueError {
-    fn custom<T: std::fmt::Display>(msg: T) -> Self {
-        Self::Message(msg.to_string())
-    }
 }
 
 #[derive(Clone, PartialEq, Debug)]

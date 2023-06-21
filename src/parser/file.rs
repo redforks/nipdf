@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, str::from_utf8};
+use std::{borrow::Cow, collections::BTreeMap, str::from_utf8};
 
 use memchr::memmem::rfind;
 use nom::{

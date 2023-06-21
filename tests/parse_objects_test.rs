@@ -18,7 +18,7 @@ fn scan_objects() {
                     match obj {
                         Object::Stream(s) => {
                             s.decode().unwrap();
-                            
+                            ()
                         }
                         _ => (),
                     };

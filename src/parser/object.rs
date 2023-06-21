@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-
+use log::{debug, warn};
 use nom::{
     branch::alt,
     bytes::{
@@ -8,7 +8,7 @@ use nom::{
         streaming::take,
     },
     character::{
-        complete::{anychar, crlf, multispace1, u16, u32},
+        complete::{anychar, crlf, multispace0, multispace1, u16, u32},
         is_hex_digit,
     },
     combinator::{map, opt, recognize, value},
@@ -136,7 +136,7 @@ fn parse_name2(input: &[u8]) -> ParseResult<Name> {
     ))(input)?;
     let name = normalize_name(buf)
         .map_err(|_| nom::Err::Error(ParseError::InvalidNameFormat))
-        .map(Name)?;
+        .map(|buf| Name(buf))?;
     Ok((input, name))
 }
 

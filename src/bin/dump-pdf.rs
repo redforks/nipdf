@@ -1,6 +1,6 @@
 use std::{
     borrow::Borrow,
-    io::{copy, stdout},
+    io::{copy, stdout, Stdout},
 };
 
 use anyhow::Result as AnyResult;
