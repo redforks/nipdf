@@ -25,16 +25,18 @@ expression: parse_trailer(buf).unwrap()
         79,
         70,
     ],
-    {
-        Name(
-            [
-                83,
-                105,
-                122,
-                101,
-            ],
-        ): Integer(
-            1,
-        ),
-    },
+    Dictionary(
+        {
+            Name(
+                [
+                    83,
+                    105,
+                    122,
+                    101,
+                ],
+            ): Integer(
+                1,
+            ),
+        },
+    ),
 )

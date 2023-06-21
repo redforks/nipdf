@@ -12,8 +12,36 @@ mod stream;
 use once_cell::unsync::OnceCell;
 pub use stream::*;
 
-pub type Dictionary<'a> = HashMap<Name<'a>, Object<'a>>;
 pub type Array<'a> = Vec<Object<'a>>;
+
+#[derive(PartialEq, Debug, Clone, Default)]
+pub struct Dictionary<'a>(HashMap<Name<'a>, Object<'a>>);
+
+impl<'a> std::ops::DerefMut for Dictionary<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<'a> FromIterator<(Name<'a>, Object<'a>)> for Dictionary<'a> {
+    fn from_iter<T: IntoIterator<Item = (Name<'a>, Object<'a>)>>(iter: T) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
+
+impl<'a> std::ops::Deref for Dictionary<'a> {
+    type Target = HashMap<Name<'a>, Object<'a>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<'a> Dictionary<'a> {
+    pub fn new() -> Self {
+        Self(HashMap::default())
+    }
+}
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
 pub struct ObjectId {

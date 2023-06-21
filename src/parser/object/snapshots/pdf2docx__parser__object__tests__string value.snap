@@ -4,20 +4,22 @@ expression: parse_dict(buf.as_ref()).unwrap()
 ---
 (
     [],
-    {
-        Name(
-            [
-                105,
-                100,
-            ],
-        ): LiteralString(
-            LiteralString(
+    Dictionary(
+        {
+            Name(
                 [
-                    40,
-                    41,
+                    105,
+                    100,
                 ],
-                OnceCell(Uninit),
+            ): LiteralString(
+                LiteralString(
+                    [
+                        40,
+                        41,
+                    ],
+                    OnceCell(Uninit),
+                ),
             ),
-        ),
-    },
+        },
+    ),
 )

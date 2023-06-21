@@ -4,17 +4,21 @@ expression: parse_dict(buf.as_ref()).unwrap()
 ---
 (
     [],
-    {
-        Name(
-            [
-                73,
-                110,
-                110,
-                101,
-                114,
-            ],
-        ): Dictionary(
-            {},
-        ),
-    },
+    Dictionary(
+        {
+            Name(
+                [
+                    73,
+                    110,
+                    110,
+                    101,
+                    114,
+                ],
+            ): Dictionary(
+                Dictionary(
+                    {},
+                ),
+            ),
+        },
+    ),
 )
