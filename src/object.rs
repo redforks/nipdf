@@ -47,6 +47,10 @@ impl<'a> Dictionary<'a> {
             .get(&Name::borrowed(id.as_bytes()))
             .map_or(Ok(default), |o| o.as_int())
     }
+
+    pub fn set(&mut self, id: impl Into<Name<'a>>, value: impl Into<Object<'a>>) {
+        self.0.insert(id.into(), value.into());
+    }
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
@@ -185,7 +189,7 @@ impl<'a> From<Name<'a>> for Object<'a> {
 #[cfg(test)]
 impl<'a> From<&'a [u8]> for Object<'a> {
     fn from(value: &'a [u8]) -> Self {
-        assert!(value.len() > 0);
+        assert!(!value.is_empty());
         match value[0] {
             b'(' => Self::LiteralString(LiteralString::new(value)),
             b'<' => Self::HexString(HexString::new(value)),

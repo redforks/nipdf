@@ -37,8 +37,8 @@ fn hex_string_decoded(exp: impl AsRef<[u8]>, buf: impl AsRef<[u8]>) {
 #[test_case(Err(ObjectValueError::UnexpectedType), "b"; "id exist, but not int")]
 fn dict_get_int(exp: Result<i32, ObjectValueError>, id: &str) {
     let mut d = Dictionary::default();
-    d.insert("a".into(), 1i32.into());
-    d.insert("b".into(), "(2)".into());
+    d.set("a", 1i32);
+    d.set("b", "(2)");
 
     assert_eq!(exp, d.get_int(id, 10));
 }
