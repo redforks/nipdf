@@ -31,3 +31,17 @@ fn hex_string_decoded(exp: impl AsRef<[u8]>, buf: impl AsRef<[u8]>) {
         exp.as_ref()
     );
 }
+
+#[test_case(Ok(10), "unknown"; "not exist use default value")]
+#[test_case(Ok(1), "a"; "id exist, and is int")]
+#[test_case(Err(ObjectValueError::UnexpectedType), "b"; "id exist, but not int")]
+fn dict_get_int(exp: impl Into<Result<i32, ObjectValueError>>, id: &str) {
+    let mut d = Dictionary::default();
+    d.insert("a".into(), Object::Integer(1));
+    d.insert(
+        "b".into(),
+        Object::LiteralString(LiteralString::new("(2)".as_bytes())),
+    );
+
+    assert_eq!(exp.into(), d.get_int(id, 10));
+}

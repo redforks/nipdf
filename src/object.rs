@@ -41,6 +41,12 @@ impl<'a> Dictionary<'a> {
     pub fn new() -> Self {
         Self(HashMap::default())
     }
+
+    pub fn get_int(&self, id: &str, default: i32) -> Result<i32, ObjectValueError> {
+        self.0
+            .get(&Name::borrowed(id.as_bytes()))
+            .map_or(Ok(default), |o| o.as_int())
+    }
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
