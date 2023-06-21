@@ -35,13 +35,18 @@ fn hex_string_decoded(exp: impl AsRef<[u8]>, buf: impl AsRef<[u8]>) {
 #[test_case(Ok(10), "unknown"; "not exist use default value")]
 #[test_case(Ok(1), "a"; "id exist, and is int")]
 #[test_case(Err(ObjectValueError::UnexpectedType), "b"; "id exist, but not int")]
-fn dict_get_int(exp: impl Into<Result<i32, ObjectValueError>>, id: &str) {
+fn dict_get_int(exp: Result<i32, ObjectValueError>, id: &str) {
     let mut d = Dictionary::default();
-    d.insert("a".into(), Object::Integer(1));
-    d.insert(
-        "b".into(),
-        Object::LiteralString(LiteralString::new("(2)".as_bytes())),
-    );
+    d.insert("a".into(), 1i32.into());
+    d.insert("b".into(), "(2)".into());
 
-    assert_eq!(exp.into(), d.get_int(id, 10));
+    assert_eq!(exp, d.get_int(id, 10));
+}
+
+#[test_case(Object::LiteralString("(foo)".into()), "(foo)"; "literal string")]
+#[test_case(Object::HexString("<901FA3>".into()), "<901FA3>"; "hex string")]
+#[test_case(Object::Name("foo".into()), "/foo"; "name")]
+fn buf_or_str_to_object<'a>(exp: Object<'a>, s: &'a str) {
+    assert_eq!(exp, Object::from(s.as_bytes()));
+    assert_eq!(exp, Object::from(s));
 }

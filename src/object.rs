@@ -179,9 +179,29 @@ impl<'a> From<Name<'a>> for Object<'a> {
     }
 }
 
+/// Convert [u8] to Object based on first char,
+/// if start with '(' or '<', convert to LiteralString or HexString
+/// if start with '/' convert to Name, panic otherwise
+#[cfg(test)]
 impl<'a> From<&'a [u8]> for Object<'a> {
     fn from(value: &'a [u8]) -> Self {
-        Self::LiteralString(LiteralString::new(value))
+        assert!(value.len() > 0);
+        match value[0] {
+            b'(' => Self::LiteralString(LiteralString::new(value)),
+            b'<' => Self::HexString(HexString::new(value)),
+            b'/' => Self::Name((&value[1..]).into()),
+            _ => panic!("invalid object"),
+        }
+    }
+}
+
+/// Convert &str to Object based on first char,
+/// if start with '(' or '<', convert to LiteralString or HexString
+/// if start with '/' convert to Name, panic otherwise
+#[cfg(test)]
+impl<'a> From<&'a str> for Object<'a> {
+    fn from(value: &'a str) -> Self {
+        value.as_bytes().into()
     }
 }
 
@@ -205,6 +225,18 @@ impl<'a> From<bool> for Object<'a> {
 
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub struct LiteralString<'a>(&'a [u8], OnceCell<Cow<'a, str>>);
+
+impl<'a> From<&'a [u8]> for LiteralString<'a> {
+    fn from(s: &'a [u8]) -> Self {
+        Self(s, OnceCell::new())
+    }
+}
+
+impl<'a> From<&'a str> for LiteralString<'a> {
+    fn from(value: &'a str) -> Self {
+        Self(value.as_bytes(), OnceCell::new())
+    }
+}
 
 impl<'a> LiteralString<'a> {
     pub fn new(s: &'a [u8]) -> Self {
@@ -306,6 +338,18 @@ impl<'a> From<LiteralString<'a>> for Object<'a> {
 /// Decoded PDF literal string object, enclosing '(' and ')' not included.
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub struct HexString<'a>(&'a [u8], OnceCell<Vec<u8>>);
+
+impl<'a> From<&'a [u8]> for HexString<'a> {
+    fn from(s: &'a [u8]) -> Self {
+        Self::new(s)
+    }
+}
+
+impl<'a> From<&'a str> for HexString<'a> {
+    fn from(value: &'a str) -> Self {
+        Self::new(value.as_bytes())
+    }
+}
 
 impl<'a> HexString<'a> {
     pub fn new(s: &'a [u8]) -> Self {
