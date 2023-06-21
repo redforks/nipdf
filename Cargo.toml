@@ -23,6 +23,7 @@ log = "0.4.19"
 env = "0.0.0"
 clap = { version = "4.3.4", features = ["derive"] }
 jpeg-decoder = "0.3.0"
+fax = "0.2.0"
 
 [dev-dependencies]
 env_logger = "0.10.0"

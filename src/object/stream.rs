@@ -6,6 +6,7 @@ use std::{
 };
 
 use log::error;
+use once_cell::unsync::Lazy;
 
 use super::{Dictionary, Name, Object, ObjectValueError};
 
@@ -55,14 +56,95 @@ fn decode_dct(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, Object
     handle_filter_error(decoder.decode(), "DCTDecode")
 }
 
-fn filter<'a>(
+struct CCITTFaxDecodeParams<'a: 'b, 'b>(&'b Dictionary<'a>);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CCITTFGroup {
+    Group3_1D,
+    Group3_2D(i32),
+    Group4,
+}
+
+impl<'a: 'b, 'b> CCITTFaxDecodeParams<'a, 'b> {
+    pub fn k(&self) -> CCITTFGroup {
+        match self.0.get_int("K", 0).unwrap() {
+            0 => CCITTFGroup::Group3_1D,
+            k @ 1.. => CCITTFGroup::Group3_2D(k),
+            ..=-1 => CCITTFGroup::Group4,
+        }
+    }
+
+    pub fn end_of_line(&self) -> bool {
+        self.0.get_bool("EndOfLine", false).unwrap()
+    }
+
+    pub fn encoded_byte_align(&self) -> bool {
+        self.0.get_bool("EncodedByteAlign", false).unwrap()
+    }
+
+    pub fn columns(&self) -> u16 {
+        self.0.get_int("Columns", 1728).unwrap() as u16
+    }
+
+    pub fn rows(&self) -> u16 {
+        self.0.get_int("Rows", 0).unwrap() as u16
+    }
+
+    pub fn end_of_block(&self) -> bool {
+        self.0.get_bool("EndOfBlock", true).unwrap()
+    }
+
+    pub fn black_is1(&self) -> bool {
+        self.0.get_bool("BlackIs1", false).unwrap()
+    }
+
+    pub fn damaged_rows_before_error(&self) -> i32 {
+        self.0.get_int("DamagedRowsBeforeError", 0).unwrap()
+    }
+}
+
+fn decode_ccitt<'a: 'b, 'b>(
+    input: &[u8],
+    params: Option<&'b Dictionary<'a>>,
+) -> Result<Vec<u8>, ObjectValueError> {
+    use fax::{
+        decoder::{decode_g4, pels},
+        Color,
+    };
+    // let empty_params = Dictionary::default();
+    let empty_params = Lazy::new(|| Dictionary::default());
+    let params = CCITTFaxDecodeParams(params.unwrap_or_else(|| &empty_params));
+    assert!(params.k() == CCITTFGroup::Group4, "CCITT: mode supported");
+    let columns = params.columns();
+    let rows = params.rows();
+    let mut buf = Vec::with_capacity(columns as usize * rows as usize);
+    let height = if rows == 0 { None } else { Some(rows) };
+    decode_g4(input.iter().cloned(), columns, height, |line| {
+        buf.extend(pels(line, columns as u16).map(|c| match c {
+            Color::Black => 0,
+            Color::White => 255,
+        }));
+        assert_eq!(
+            buf.len() % columns as usize,
+            0,
+            "len={}, columns={}",
+            buf.len(),
+            columns
+        );
+    })
+    .ok_or(ObjectValueError::FilterDecodeError)?;
+    Ok(buf)
+}
+
+fn filter<'a: 'b, 'b>(
     buf: Cow<'a, [u8]>,
     filter_name: &[u8],
-    params: Option<&Dictionary<'a>>,
+    params: Option<&'b Dictionary<'a>>,
 ) -> Result<Cow<'a, [u8]>, ObjectValueError> {
     match filter_name {
         b"FlateDecode" => decode_flate(&buf, params).map(Cow::Owned),
         b"DCTDecode" => decode_dct(&buf, params).map(Cow::Owned),
+        b"CCITTFaxDecode" => decode_ccitt(&buf, params).map(Cow::Owned),
         _ => {
             error!("Unknown filter: {}", from_utf8(filter_name).unwrap());
             Err(ObjectValueError::UnknownFilter)
