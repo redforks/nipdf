@@ -1,6 +1,6 @@
 //! object mod contains data structure map to low level pdf objects
 use ahash::HashMap;
-use ahash::RandomState;
+
 use std::{
     borrow::{Borrow, Cow},
     iter::Peekable,

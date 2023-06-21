@@ -1,6 +1,6 @@
 use crate::object::Object;
 
-use ahash::RandomState;
+
 use std::path::PathBuf;
 use std::str::from_utf8;
 use test_case::test_case;
@@ -20,7 +20,7 @@ fn catalog_ver(
     }
     let cat = Catalog::new(dict);
     cat.ver()
-        .map(|v| v.map(|v| from_utf8(v.as_ref()).unwrap().into()))
+        .map(|v| v.map(|v| from_utf8(v).unwrap().into()))
 }
 
 #[test]
