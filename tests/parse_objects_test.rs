@@ -15,9 +15,13 @@ fn scan_objects() {
             match obj {
                 None => println!(" missing"),
                 Some(obj) => {
-                    if let Object::Stream(s) = obj {
-                        s.decode().unwrap();
-                    }
+                    match obj {
+                        Object::Stream(s) => {
+                            s.decode().unwrap();
+                            
+                        }
+                        _ => (),
+                    };
 
                     println!("  done");
                 }

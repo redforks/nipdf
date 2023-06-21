@@ -1,7 +1,10 @@
 //! object mod contains data structure map to low level pdf objects
 use ahash::HashMap;
 
-use std::borrow::{Borrow, Cow};
+use std::{
+    borrow::{Borrow, Cow},
+    iter::Peekable,
+};
 
 mod indirect_object;
 pub use indirect_object::IndirectObject;
@@ -73,6 +76,91 @@ pub enum Object<'a> {
 }
 
 impl<'a> Object<'a> {
+    /// decode LiteralString and HexString to String
+    pub fn as_string(&self) -> Result<String, ObjectValueError> {
+        fn skip_cur_new_line<I: Iterator<Item = u8>>(cur: u8, s: &mut Peekable<I>) -> bool {
+            if cur == b'\r' {
+                s.next_if_eq(&b'\n');
+                true
+            } else if cur == b'\n' {
+                s.next_if_eq(&b'\r');
+                true
+            } else {
+                false
+            }
+        }
+
+        fn skip_next_line<I: Iterator<Item = u8>>(s: &mut Peekable<I>) -> bool {
+            if s.next_if_eq(&b'\r').is_some() {
+                s.next_if_eq(&b'\n');
+                true
+            } else if s.next_if_eq(&b'\n').is_some() {
+                s.next_if_eq(&b'\r');
+                true
+            } else {
+                false
+            }
+        }
+
+        fn next_oct_char<I: Iterator<Item = u8>>(s: &mut Peekable<I>) -> Option<u8> {
+            let mut result = 0;
+            let mut hit = false;
+            for _ in 0..3 {
+                if let Some(c) = s.next_if(|v| matches!(v, b'0'..=b'7')) {
+                    hit = true;
+                    result = result * 8 + (c - b'0');
+                }
+            }
+            hit.then_some(result)
+        }
+
+        fn decode_literal_string(s: &[u8]) -> String {
+            let s = &s[1..s.len() - 1];
+            let mut result = String::with_capacity(s.len());
+            let mut iter = s.iter().copied().peekable();
+            while let Some(next) = iter.next() {
+                match next {
+                    b'\\' => {
+                        if skip_next_line(&mut iter) {
+                            continue;
+                        }
+                        if let Some(ch) = next_oct_char(&mut iter) {
+                            result.push(ch as char);
+                            continue;
+                        }
+
+                        if let Some(c) = iter.next() {
+                            match c {
+                                b'r' => result.push('\r'),
+                                b'n' => result.push('\n'),
+                                b't' => result.push('\t'),
+                                b'f' => result.push('\x0c'),
+                                b'b' => result.push('\x08'),
+                                b'(' => result.push('('),
+                                b')' => result.push(')'),
+                                _ => result.push(c as char),
+                            }
+                        }
+                    }
+                    _ => {
+                        if skip_cur_new_line(next, &mut iter) {
+                            result.push('\n');
+                        } else {
+                            result.push(next as char);
+                        }
+                    }
+                }
+            }
+
+            result
+        }
+
+        match self {
+            Object::LiteralString(s) => Ok(decode_literal_string(s)),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
+    }
+
     fn as_hex_string(&self) -> Result<Vec<u8>, ObjectValueError> {
         fn decode_hex_string(s: &[u8]) -> Result<Vec<u8>, ObjectValueError> {
             let s = &s[1..s.len() - 1];
