@@ -295,6 +295,18 @@ impl<'a> From<bool> for Object<'a> {
 #[derive(Eq, PartialEq, Hash, Debug, Clone)]
 pub struct Name<'a>(pub Cow<'a, [u8]>);
 
+impl<'a> From<&'a str> for Name<'a> {
+    fn from(value: &'a str) -> Self {
+        Self(Cow::Borrowed(value.as_bytes()))
+    }
+}
+
+impl<'a> From<&'a [u8]> for Name<'a> {
+    fn from(value: &'a [u8]) -> Self {
+        Self(Cow::Borrowed(value))
+    }
+}
+
 impl<'a> Name<'a> {
     pub fn borrowed(v: &'a [u8]) -> Self {
         debug_assert!(!v.starts_with(b"/"));
