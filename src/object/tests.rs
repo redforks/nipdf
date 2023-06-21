@@ -1,15 +1,6 @@
 use super::*;
 use test_case::test_case;
 
-#[test]
-fn as_string_non_string() {
-    // not string object
-    assert_eq!(
-        Object::Null.as_string().unwrap_err(),
-        ObjectValueError::UnexpectedType
-    );
-}
-
 #[test_case("", b"()"; "empty")]
 #[test_case("a", b"(a)"; "single character")]
 #[test_case("a(", b"(a\\()"; "left square")]
@@ -26,11 +17,8 @@ fn as_string_non_string() {
 #[test_case("\x05a", b"(\\5a)"; "oct 1")]
 #[test_case("\x05a", b"(\\05a)"; "oct 2")]
 #[test_case("\x05a", b"(\\005a)"; "oct 3")]
-fn literal_string_as_string(exp: &str, buf: impl AsRef<[u8]>) {
-    assert_eq!(
-        Object::LiteralString(buf.as_ref()).as_string().unwrap(),
-        exp
-    );
+fn literal_string_decoded(exp: &str, buf: impl AsRef<[u8]>) {
+    assert_eq!(LiteralString::new(buf.as_ref()).decoded().unwrap(), exp);
 }
 
 #[test_case(b"", b"<>" ; "empty")]

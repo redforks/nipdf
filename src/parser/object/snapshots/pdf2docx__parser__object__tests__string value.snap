@@ -11,10 +11,13 @@ expression: parse_dict(buf.as_ref()).unwrap()
                 100,
             ],
         ): LiteralString(
-            [
-                40,
-                41,
-            ],
+            LiteralString(
+                [
+                    40,
+                    41,
+                ],
+                OnceCell(Uninit),
+            ),
         ),
     },
 )

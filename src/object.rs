@@ -67,7 +67,7 @@ pub enum Object<'a> {
     Bool(bool),
     Integer(i32),
     Number(f32),
-    LiteralString(&'a [u8]), // including the parentheses
+    LiteralString(LiteralString<'a>), // including the parentheses
     HexString(HexString<'a>),
     Name(Name<'a>), // with the leading slash
     Dictionary(Dictionary<'a>),
@@ -77,91 +77,6 @@ pub enum Object<'a> {
 }
 
 impl<'a> Object<'a> {
-    /// decode LiteralString and HexString to String
-    pub fn as_string(&self) -> Result<String, ObjectValueError> {
-        fn skip_cur_new_line<I: Iterator<Item = u8>>(cur: u8, s: &mut Peekable<I>) -> bool {
-            if cur == b'\r' {
-                s.next_if_eq(&b'\n');
-                true
-            } else if cur == b'\n' {
-                s.next_if_eq(&b'\r');
-                true
-            } else {
-                false
-            }
-        }
-
-        fn skip_next_line<I: Iterator<Item = u8>>(s: &mut Peekable<I>) -> bool {
-            if s.next_if_eq(&b'\r').is_some() {
-                s.next_if_eq(&b'\n');
-                true
-            } else if s.next_if_eq(&b'\n').is_some() {
-                s.next_if_eq(&b'\r');
-                true
-            } else {
-                false
-            }
-        }
-
-        fn next_oct_char<I: Iterator<Item = u8>>(s: &mut Peekable<I>) -> Option<u8> {
-            let mut result = 0;
-            let mut hit = false;
-            for _ in 0..3 {
-                if let Some(c) = s.next_if(|v| matches!(v, b'0'..=b'7')) {
-                    hit = true;
-                    result = result * 8 + (c - b'0');
-                }
-            }
-            hit.then_some(result)
-        }
-
-        fn decode_literal_string(s: &[u8]) -> String {
-            let s = &s[1..s.len() - 1];
-            let mut result = String::with_capacity(s.len());
-            let mut iter = s.iter().copied().peekable();
-            while let Some(next) = iter.next() {
-                match next {
-                    b'\\' => {
-                        if skip_next_line(&mut iter) {
-                            continue;
-                        }
-                        if let Some(ch) = next_oct_char(&mut iter) {
-                            result.push(ch as char);
-                            continue;
-                        }
-
-                        if let Some(c) = iter.next() {
-                            match c {
-                                b'r' => result.push('\r'),
-                                b'n' => result.push('\n'),
-                                b't' => result.push('\t'),
-                                b'f' => result.push('\x0c'),
-                                b'b' => result.push('\x08'),
-                                b'(' => result.push('('),
-                                b')' => result.push(')'),
-                                _ => result.push(c as char),
-                            }
-                        }
-                    }
-                    _ => {
-                        if skip_cur_new_line(next, &mut iter) {
-                            result.push('\n');
-                        } else {
-                            result.push(next as char);
-                        }
-                    }
-                }
-            }
-
-            result
-        }
-
-        match self {
-            Object::LiteralString(s) => Ok(decode_literal_string(s)),
-            _ => Err(ObjectValueError::UnexpectedType),
-        }
-    }
-
     pub fn as_int(&self) -> Result<i32, ObjectValueError> {
         match self {
             Object::Integer(i) => Ok(*i),
@@ -232,7 +147,7 @@ impl<'a> From<Name<'a>> for Object<'a> {
 
 impl<'a> From<&'a [u8]> for Object<'a> {
     fn from(value: &'a [u8]) -> Self {
-        Self::LiteralString(value)
+        Self::LiteralString(LiteralString::new(value))
     }
 }
 
@@ -251,6 +166,106 @@ impl<'a> From<i32> for Object<'a> {
 impl<'a> From<bool> for Object<'a> {
     fn from(value: bool) -> Self {
         Self::Bool(value)
+    }
+}
+
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct LiteralString<'a>(&'a [u8], OnceCell<Cow<'a, str>>);
+
+impl<'a> LiteralString<'a> {
+    pub fn new(s: &'a [u8]) -> Self {
+        Self(s, OnceCell::new())
+    }
+
+    pub fn decoded(&self) -> Result<&str, ObjectValueError> {
+        fn skip_cur_new_line<I: Iterator<Item = u8>>(cur: u8, s: &mut Peekable<I>) -> bool {
+            if cur == b'\r' {
+                s.next_if_eq(&b'\n');
+                true
+            } else if cur == b'\n' {
+                s.next_if_eq(&b'\r');
+                true
+            } else {
+                false
+            }
+        }
+
+        fn skip_next_line<I: Iterator<Item = u8>>(s: &mut Peekable<I>) -> bool {
+            if s.next_if_eq(&b'\r').is_some() {
+                s.next_if_eq(&b'\n');
+                true
+            } else if s.next_if_eq(&b'\n').is_some() {
+                s.next_if_eq(&b'\r');
+                true
+            } else {
+                false
+            }
+        }
+
+        fn next_oct_char<I: Iterator<Item = u8>>(s: &mut Peekable<I>) -> Option<u8> {
+            let mut result = 0;
+            let mut hit = false;
+            for _ in 0..3 {
+                if let Some(c) = s.next_if(|v| matches!(v, b'0'..=b'7')) {
+                    hit = true;
+                    result = result * 8 + (c - b'0');
+                }
+            }
+            hit.then_some(result)
+        }
+
+        Ok(self
+            .1
+            .get_or_init(|| {
+                let s = self.0;
+                let s = &s[1..s.len() - 1];
+                let mut result = String::with_capacity(s.len());
+                let mut iter = s.iter().copied().peekable();
+                // TODO: use exist buf if no escape, or newline to normalize
+                while let Some(next) = iter.next() {
+                    match next {
+                        b'\\' => {
+                            if skip_next_line(&mut iter) {
+                                continue;
+                            }
+                            if let Some(ch) = next_oct_char(&mut iter) {
+                                result.push(ch as char);
+                                continue;
+                            }
+
+                            if let Some(c) = iter.next() {
+                                match c {
+                                    b'r' => result.push('\r'),
+                                    b'n' => result.push('\n'),
+                                    b't' => result.push('\t'),
+                                    b'f' => result.push('\x0c'),
+                                    b'b' => result.push('\x08'),
+                                    b'(' => result.push('('),
+                                    b')' => result.push(')'),
+                                    _ => result.push(c as char),
+                                }
+                            }
+                        }
+                        _ => {
+                            // TODO: test escape new line
+                            if skip_cur_new_line(next, &mut iter) {
+                                result.push('\n');
+                            } else {
+                                result.push(next as char);
+                            }
+                        }
+                    }
+                }
+
+                result.into()
+            })
+            .borrow())
+    }
+}
+
+impl<'a> From<LiteralString<'a>> for Object<'a> {
+    fn from(value: LiteralString<'a>) -> Self {
+        Self::LiteralString(value)
     }
 }
 

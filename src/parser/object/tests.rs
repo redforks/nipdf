@@ -1,3 +1,5 @@
+
+
 use super::*;
 use crate::object::HexString;
 use test_case::test_case;
@@ -9,35 +11,33 @@ use test_case::test_case;
 #[test_case(-123, "-123"; "negative integer")]
 #[test_case(123.12, "123.12"; "number")]
 #[test_case(-123.12, "-123.12"; "negative number")]
-#[test_case(Object::LiteralString(b"()"), "()"; "empty literal string")]
-#[test_case(Object::LiteralString(b"(5\\()"), "(5\\()"; "escaped )")]
-#[test_case(Object::LiteralString(b"(5\\\\)"), "(5\\\\)"; "escaped back slash")]
-#[test_case(Object::LiteralString(b"(a(foo))"), "(a(foo))"; "nested quoted string")]
-#[test_case(Object::LiteralString(b"(a
+#[test_case(LiteralString::new(b"()"), "()"; "empty literal string")]
+#[test_case(LiteralString::new(b"(5\\()"), "(5\\()"; "escaped )")]
+#[test_case(LiteralString::new(b"(5\\\\)"), "(5\\\\)"; "escaped back slash")]
+#[test_case(LiteralString::new(b"(a(foo))"), "(a(foo))"; "nested quoted string")]
+#[test_case(LiteralString::new(b"(a
 b)"), "(a
 b)"; "literal string contains new line")]
-#[test_case(Object::LiteralString(b"(*!&}^%)"), b"(*!&}^%)"; "literal string contains special characters")]
-#[test_case(Object::LiteralString(b"(\\)\\()"), b"(\\)\\()"; "literal string contains escape")]
-#[test_case(Object::LiteralString(b"(\\333\\n)"), b"(\\333\\n)")]
-#[test_case(HexString::new(b"<>"), b"<>")]
-#[test_case(HexString::new(b"<12A>"), b"<12A>")]
-#[test_case(HexString::new(b"<12 A\t3>"), b"<12 A\t3>"; "contains whitespace")]
-#[test_case(Name::borrowed(b""), b"/"; "empty name")]
-#[test_case(Name::borrowed(b"foo"), b"/foo"; "name")]
-fn test_parse_simple_objects(exp: impl Into<Object<'static>>, buf: impl AsRef<[u8]>) {
-    assert_eq!(
-        (b"".as_slice(), exp.into()),
-        parse_object(buf.as_ref()).unwrap()
-    );
+#[test_case(LiteralString::new(b"(*!&}^%)"), "(*!&}^%)"; "literal string contains special characters")]
+#[test_case(LiteralString::new(b"(\\)\\()"), "(\\)\\()"; "literal string contains escape")]
+#[test_case(LiteralString::new(b"(\\333\\n)"), "(\\333\\n)")]
+#[test_case(HexString::new(b"<>"), "<>")]
+#[test_case(HexString::new(b"<12A>"), "<12A>")]
+#[test_case(HexString::new(b"<12 A\t3>"), "<12 A\t3>"; "contains whitespace")]
+#[test_case(Name::borrowed(b""), "/"; "empty name")]
+#[test_case(Name::borrowed(b"foo"), "/foo"; "name")]
+fn test_parse_simple_objects(exp: impl Into<Object<'static>>, buf: &'static str) {
+    let o = parse_object(buf.as_bytes()).unwrap();
+    assert_eq!((b"".as_slice(), exp.into()), o);
 }
 
-#[test_case(vec![], b"[]"; "empty array")]
-#[test_case(vec![], b"[ \t]"; "empty array 2")]
-#[test_case(vec![Object::Null], b"[null]"; "array with null")]
-#[test_case(vec![Object::Array(vec![Object::Null])], b"[[null]]"; "nested array with null")]
-#[test_case(vec![Name::borrowed(b"foo").into()], b"[/foo]"; "name value")]
-fn test_parse_array(exp: Vec<Object<'static>>, buf: impl AsRef<[u8]>) {
-    assert_eq!((b"".as_slice(), exp), parse_array(buf.as_ref()).unwrap());
+#[test_case(vec![], "[]"; "empty array")]
+#[test_case(vec![], "[ \t]"; "empty array 2")]
+#[test_case(vec![Object::Null], "[null]"; "array with null")]
+#[test_case(vec![Object::Array(vec![Object::Null])], "[[null]]"; "nested array with null")]
+#[test_case(vec![Name::borrowed(b"foo").into()], "[/foo]"; "name value")]
+fn test_parse_array(exp: Vec<Object<'static>>, buf: &'static str) {
+    assert_eq!((b"".as_slice(), exp), parse_array(buf.as_bytes()).unwrap());
 }
 
 #[test_case(b"<< >>", "empty dict")]

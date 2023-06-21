@@ -18,7 +18,8 @@ use nom::{
 use num::cast;
 
 use crate::object::{
-    Array, Dictionary, HexString, IndirectObject, Name, Object, ObjectValueError, Reference, Stream,
+    Array, Dictionary, HexString, IndirectObject, LiteralString, Name, Object, ObjectValueError,
+    Reference, Stream,
 };
 
 use super::{ws, ws_prefixed, ws_terminated, ParseError, ParseResult};
@@ -32,7 +33,7 @@ pub fn unwrap_parse_result<'a, T: 'a>(obj: ParseResult<'a, T>) -> Result<T, Pars
     }
 }
 
-pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object<'_>> {
+pub fn parse_object(buf: &[u8]) -> ParseResult<Object> {
     let null = value(Object::Null, tag(b"null"));
     let true_parser = value(Object::Bool(true), tag(b"true"));
     let false_parser = value(Object::Bool(false), tag(b"false"));
@@ -48,13 +49,15 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object<'_>> {
         }
     });
 
-    fn parse_quoted_string(input: &[u8]) -> ParseResult<'_, &[u8]> {
+    fn parse_quoted_string(input: &[u8]) -> ParseResult<&[u8]> {
         let esc = escaped(is_not("\\()"), '\\', anychar);
         let inner_parser = alt((esc, parse_quoted_string));
         let mut parser = recognize(delimited(tag(b"("), many0_count(inner_parser), tag(b")")));
         parser(input)
     }
-    let parse_quoted_string = map(parse_quoted_string, Object::LiteralString);
+    let parse_quoted_string = map(parse_quoted_string, |s| {
+        Object::LiteralString(LiteralString::new(s))
+    });
     let parse_hex_string = map(
         recognize(delimited(
             tag(b"<"),
@@ -65,7 +68,7 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object<'_>> {
     );
 
     alt((
-        map(parse_name2, Object::Name),
+        map(parse_name, Object::Name),
         parse_quoted_string,
         map(parse_dict, Object::Dictionary),
         map(parse_array, Object::Array),
@@ -120,7 +123,7 @@ fn normalize_name(buf: &[u8]) -> Result<Cow<[u8]>, ObjectValueError> {
     }
 }
 
-fn parse_name2(input: &[u8]) -> ParseResult<Name> {
+fn parse_name(input: &[u8]) -> ParseResult<Name> {
     let (input, buf) = recognize(preceded(
         tag(b"/"),
         take_till(|c: u8| {
@@ -139,7 +142,7 @@ fn parse_name2(input: &[u8]) -> ParseResult<Name> {
     Ok((input, name))
 }
 
-pub fn parse_array(input: &[u8]) -> ParseResult<'_, Array<'_>> {
+pub fn parse_array(input: &[u8]) -> ParseResult<Array> {
     delimited(
         ws(tag(b"[")),
         many0(ws(parse_object)),
@@ -151,7 +154,7 @@ pub fn parse_dict(input: &[u8]) -> ParseResult<Dictionary> {
     map(
         delimited(
             ws(tag(b"<<".as_slice())),
-            many0(tuple((parse_name2, ws(parse_object)))),
+            many0(tuple((parse_name, ws(parse_object)))),
             ws_terminated(tag(b">>")),
         ),
         |v| v.into_iter().collect(),
@@ -185,14 +188,14 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<Object> {
     }
 }
 
-pub fn parse_indirected_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
+pub fn parse_indirected_object(input: &[u8]) -> ParseResult<IndirectObject> {
     let (input, (id, gen)) = separated_pair(u32, multispace1, u16)(input)?;
     let (input, obj) =
         delimited(ws(tag(b"obj")), parse_object_and_stream, ws(tag(b"endobj")))(input)?;
     Ok((input, IndirectObject::new(id, gen, obj)))
 }
 
-fn parse_reference(input: &[u8]) -> ParseResult<'_, Reference> {
+fn parse_reference(input: &[u8]) -> ParseResult<Reference> {
     let (input, (id, gen)) = terminated(
         separated_pair(u32, multispace1, u16),
         ws_prefixed(tag(b"R")),
