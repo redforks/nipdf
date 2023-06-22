@@ -13,15 +13,16 @@ fn cli() -> Command {
         .about("Dump PDF file structure and contents")
         .subcommand_required(true)
         .subcommand(
-            Command::new("dump-stream")
+            Command::new("stream")
                 .about("dump stream content to stdout")
                 .arg(arg!(-f <filename> "PDF file to dump"))
                 .arg(arg!(<object_id> "object ID to dump"))
-                .arg(arg!(--raw "Skip decoding stream content")),
+                .arg(arg!(--raw "Skip decoding stream content"))
+                .arg(arg!(--image "Assume stream is image, convert to JPEG or PNG based on stream type")),
         )
 }
 
-fn dump_stream(path: &str, id: u32, raw: bool) -> AnyResult<()> {
+fn dump_stream(path: &str, id: u32, raw: bool, as_image: bool) -> AnyResult<()> {
     let buf = std::fs::read(path).unwrap();
     let (_f, mut resolver) =
         File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {:?}", path));
@@ -56,6 +57,7 @@ fn main() -> AnyResult<()> {
                 .and_then(|s| s.parse().ok())
                 .unwrap(),
             sub_m.get_one::<bool>("raw").copied().unwrap_or_default(),
+            sub_m.get_one::<bool>("image").copied().unwrap_or_default(),
         ),
         _ => todo!(),
     }
