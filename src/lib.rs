@@ -3,6 +3,5 @@ pub fn add(left: usize, right: usize) -> usize {
 }
 
 pub mod file;
-pub mod image;
 pub mod object;
 pub mod parser;

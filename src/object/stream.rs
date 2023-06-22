@@ -5,6 +5,7 @@ use std::{
     str::from_utf8,
 };
 
+use image::ImageFormat;
 use log::error;
 use once_cell::unsync::Lazy;
 
@@ -152,6 +153,11 @@ fn filter<'a: 'b, 'b>(
     }
 }
 
+pub struct Image {
+    pub format: ImageFormat,
+    pub data: Vec<u8>,
+}
+
 impl<'a> Stream<'a> {
     /// Decode stream data using filter and parameters in stream dictionary.
     pub fn decode(&self) -> Result<Cow<[u8]>, ObjectValueError> {
@@ -160,6 +166,10 @@ impl<'a> Stream<'a> {
             buf = filter(buf, filter_name, params)?;
         }
         Ok(buf)
+    }
+
+    pub fn to_image(&self) -> Result<Image, ObjectValueError> {
+        todo!()
     }
 
     fn iter_filter(

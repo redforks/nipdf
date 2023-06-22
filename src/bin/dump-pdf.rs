@@ -6,7 +6,7 @@ use std::{
 use anyhow::Result as AnyResult;
 
 use clap::{arg, Command};
-use pdf2docx::{file::File, image::to_image, object::Object};
+use pdf2docx::{file::File, object::Object};
 
 fn cli() -> Command {
     Command::new("dump-pdf")
@@ -38,7 +38,7 @@ fn dump_stream(path: &str, id: u32, raw: bool, as_image: bool) -> AnyResult<()> 
                     let mut buf = if raw {
                         s.1
                     } else if as_image {
-                        image = to_image(s)?;
+                        image = s.to_image()?;
                         &image.data[..]
                     } else {
                         decoded = s.decode()?;
