@@ -1,11 +1,12 @@
 use std::{
     borrow::{Borrow, Cow},
     fmt::Display,
+    io::Cursor,
     iter::repeat,
     str::from_utf8,
 };
 
-use image::ImageFormat;
+use image::{write_buffer_with_format, ImageFormat};
 use log::error;
 use once_cell::unsync::Lazy;
 
@@ -14,6 +15,11 @@ use super::{Dictionary, Name, Object, ObjectValueError};
 const KEY_FILTER: &[u8] = b"Filter";
 const KEY_FILTER_PARAMS: &[u8] = b"DecodeParms";
 const KEY_FFILTER: &[u8] = b"FFilter";
+
+const FILTER_CCITT_FAX: &str = "CCITTFaxDecode";
+const B_FILTER_CCITT_FAX: &[u8] = FILTER_CCITT_FAX.as_bytes();
+const FILTER_DCT_DECODE: &str = "DCTDecode";
+const B_FILTER_DCT_DECODE: &[u8] = FILTER_DCT_DECODE.as_bytes();
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Stream<'a>(pub Dictionary<'a>, pub &'a [u8]);
@@ -51,10 +57,14 @@ fn decode_flate(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, Obje
 }
 
 fn decode_dct(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, ObjectValueError> {
-    assert!(params.is_none(), "TODO: handle params of DCTDecode");
+    assert!(
+        params.is_none(),
+        "TODO: handle params of {}",
+        FILTER_DCT_DECODE
+    );
     use jpeg_decoder::Decoder;
     let mut decoder = Decoder::new(buf);
-    handle_filter_error(decoder.decode(), "DCTDecode")
+    handle_filter_error(decoder.decode(), FILTER_DCT_DECODE)
 }
 
 struct CCITTFaxDecodeParams<'a: 'b, 'b>(&'b Dictionary<'a>);
@@ -108,33 +118,35 @@ fn decode_ccitt<'a: 'b, 'b>(
     input: &[u8],
     params: Option<&'b Dictionary<'a>>,
 ) -> Result<Vec<u8>, ObjectValueError> {
-    use fax::{
-        decoder::{decode_g4, pels},
-        Color,
-    };
+    _decode_ccitt(input, params).map(|(buf, _meta)| buf)
+}
+
+fn _decode_ccitt<'a: 'b, 'b>(
+    input: &[u8],
+    params: Option<&'b Dictionary<'a>>,
+) -> Result<(Vec<u8>, (u32, u32)), ObjectValueError> {
+    use ccitt_t4_t6::g42d::common::Color;
+    use ccitt_t4_t6::g42d::decode::Decoder;
     // let empty_params = Dictionary::default();
     let empty_params = Lazy::new(|| Dictionary::default());
     let params = CCITTFaxDecodeParams(params.unwrap_or_else(|| &empty_params));
     assert!(params.k() == CCITTFGroup::Group4, "CCITT: mode supported");
     let columns = params.columns();
     let rows = params.rows();
-    let mut buf = Vec::with_capacity(columns as usize * rows as usize);
-    let height = if rows == 0 { None } else { Some(rows) };
-    decode_g4(input.iter().cloned(), columns, height, |line| {
-        buf.extend(pels(line, columns as u16).map(|c| match c {
-            Color::Black => 0,
-            Color::White => 255,
-        }));
-        assert_eq!(
-            buf.len() % columns as usize,
-            0,
-            "len={}, columns={}",
-            buf.len(),
-            columns
-        );
-    })
-    .ok_or(ObjectValueError::FilterDecodeError)?;
-    Ok(buf)
+    let mut decoder = Decoder::<Vec<Color>>::new(columns as usize);
+    decoder.decode(input).map_err(|e| {
+        error!("Failed to decode CCITT: {:?}", e);
+        ObjectValueError::FilterDecodeError
+    })?;
+    let buf = decoder.into_store();
+    let buf = buf
+        .into_iter()
+        .map(|color| match color {
+            Color::White => 0u8,
+            Color::Black => 255u8,
+        })
+        .collect();
+    Ok((buf, (columns as u32, rows as u32)))
 }
 
 fn filter<'a: 'b, 'b>(
@@ -144,8 +156,8 @@ fn filter<'a: 'b, 'b>(
 ) -> Result<Cow<'a, [u8]>, ObjectValueError> {
     match filter_name {
         b"FlateDecode" => decode_flate(&buf, params).map(Cow::Owned),
-        b"DCTDecode" => decode_dct(&buf, params).map(Cow::Owned),
-        b"CCITTFaxDecode" => decode_ccitt(&buf, params).map(Cow::Owned),
+        B_FILTER_DCT_DECODE => decode_dct(&buf, params).map(Cow::Owned),
+        B_FILTER_CCITT_FAX => decode_ccitt(&buf, params).map(Cow::Owned),
         _ => {
             error!("Unknown filter: {}", from_utf8(filter_name).unwrap());
             Err(ObjectValueError::UnknownFilter)
@@ -156,6 +168,40 @@ fn filter<'a: 'b, 'b>(
 pub struct Image {
     pub format: ImageFormat,
     pub data: Vec<u8>,
+}
+
+fn ensure_last_filter<'a, T>(
+    v: T,
+    has_next: bool,
+    filter_name: &str,
+) -> Result<T, ObjectValueError> {
+    if !has_next {
+        Ok(v)
+    } else {
+        error!("should no other filter after {}", filter_name,);
+        Err(ObjectValueError::FilterDecodeError)
+    }
+}
+
+fn ccitt_to_image<'a>(
+    buf: &[u8],
+    params: Option<&Dictionary<'a>>,
+) -> Result<Image, ObjectValueError> {
+    let (data, (w, h)) = _decode_ccitt(buf, params)?;
+    let mut cursor = Cursor::new(Vec::new());
+    write_buffer_with_format(
+        &mut cursor,
+        &data,
+        w,
+        h,
+        image::ColorType::L8,
+        ImageFormat::Png,
+    )
+    .unwrap();
+    Ok(Image {
+        format: ImageFormat::Png,
+        data: cursor.into_inner(),
+    })
 }
 
 impl<'a> Stream<'a> {
@@ -169,7 +215,33 @@ impl<'a> Stream<'a> {
     }
 
     pub fn to_image(&self) -> Result<Image, ObjectValueError> {
-        todo!()
+        let mut buf = Cow::Borrowed(self.1);
+        let mut iter = self.iter_filter()?;
+        for (filter_name, params) in iter.by_ref() {
+            match filter_name {
+                B_FILTER_DCT_DECODE => {
+                    return ensure_last_filter(
+                        Image {
+                            format: ImageFormat::Jpeg,
+                            data: buf.into(),
+                        },
+                        iter.next().is_some(),
+                        FILTER_DCT_DECODE,
+                    );
+                }
+                B_FILTER_CCITT_FAX => {
+                    return ensure_last_filter(
+                        ccitt_to_image(&buf, params)?,
+                        iter.next().is_some(),
+                        FILTER_CCITT_FAX,
+                    );
+                }
+                _ => {
+                    buf = filter(buf, filter_name, params)?;
+                }
+            }
+        }
+        return Err(ObjectValueError::StreamNotImage);
     }
 
     fn iter_filter(

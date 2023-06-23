@@ -27,7 +27,6 @@ fn dump_stream(path: &str, id: u32, raw: bool, as_image: bool) -> AnyResult<()> 
     let (_f, mut resolver) =
         File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {:?}", path));
     let obj = resolver.resolve(id);
-    let raw = if as_image { true } else { raw };
     match obj {
         None => eprintln!("object id not found"),
         Some(obj) => {
@@ -35,11 +34,11 @@ fn dump_stream(path: &str, id: u32, raw: bool, as_image: bool) -> AnyResult<()> 
                 Object::Stream(s) => {
                     let decoded;
                     let image;
-                    let mut buf = if raw {
-                        s.1
-                    } else if as_image {
+                    let mut buf = if as_image {
                         image = s.to_image()?;
                         &image.data[..]
+                    } else if raw {
+                        s.1
                     } else {
                         decoded = s.decode()?;
                         decoded.borrow()
@@ -54,8 +53,10 @@ fn dump_stream(path: &str, id: u32, raw: bool, as_image: bool) -> AnyResult<()> 
 }
 
 fn main() -> AnyResult<()> {
+    env_logger::init();
+
     match cli().get_matches().subcommand() {
-        Some(("dump-stream", sub_m)) => dump_stream(
+        Some(("stream", sub_m)) => dump_stream(
             sub_m.get_one::<String>("filename").unwrap(),
             sub_m
                 .get_one::<String>("object_id")

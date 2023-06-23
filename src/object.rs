@@ -99,6 +99,8 @@ pub enum ObjectValueError {
     UnknownFilter,
     #[error("Filter decode error")]
     FilterDecodeError,
+    #[error("Stream not image")]
+    StreamNotImage,
 }
 
 #[derive(Clone, PartialEq, Debug)]
