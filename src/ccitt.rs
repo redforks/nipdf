@@ -43,6 +43,8 @@ pub enum Error {
     IOError(#[from] std::io::Error),
     #[error("Horizontal run color mismatch")]
     HorizontalRunColorMismatch,
+    #[error("Unknown code")]
+    InvalidCode,
 }
 
 type Result<T> = std::result::Result<T, Error>;
@@ -338,19 +340,30 @@ fn iter_code(buf: &[u8]) -> impl FnMut(u8) -> Option<Result<Code>> + '_ {
                     match reader.read::<u8>(2)? {
                         0b11 => Ok(Code::Vertical(2)), // 000011
                         0b01 => match reader.read_bit()? {
-                            // 000001
+                            // 0000_01
                             true => Ok(Code::Vertical(3)),   // 0000011
                             false => Ok(Code::Vertical(-3)), // 0000010
                         },
-                        0b00 => {
-                            if reader.read::<u8>(3)? == 0b010 {
-                                // 000000010
+                        0b00 => match reader.read::<u8>(3)? {
+                            0b010 => {
+                                // 0000_00_010
                                 unimplemented!("Extension code")
                                 // Ok(Code::Extension)
-                            } else {
-                                todo!()
                             }
-                        }
+                            0b000 => {
+                                // 0000_00_000
+                                if reader.read::<u8>(3)? != 1 {
+                                    Err(Error::InvalidCode)
+                                } else if reader.read::<u8>(4)? != 0 {
+                                    Err(Error::InvalidCode)
+                                } else if reader.read::<u8>(8)? != 1 {
+                                    Err(Error::InvalidCode)
+                                } else {
+                                    Ok(Code::EndOfFassimileBlock)
+                                }
+                            }
+                            _ => unreachable!(),
+                        },
                         0b10 => Ok(Code::Vertical(-2)), // 000010
                         _ => unreachable!(),
                     }

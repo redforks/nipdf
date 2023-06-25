@@ -19,6 +19,10 @@ fn test_decode() {
     &[Code::Horizontal(Run::new(WHITE, 1), Run::new(BLACK, 2))],
     &[0b001_00011, 0b1_110_0000]
 )]
+#[test_case(
+    &[Code::EndOfFassimileBlock],
+    &[0b0, 0b0001_0000, 0b0000_0001]
+)]
 fn test_iter_code(exp: &[Code], buf: &[u8]) {
     let mut next_code = iter_code(buf);
     for e in exp {
