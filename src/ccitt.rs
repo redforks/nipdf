@@ -472,7 +472,10 @@ impl<'a> Coder<'a> {
     // return true if current line filled.
     fn decode(&mut self, code: Code) -> Result<bool> {
         match code {
-            Code::Horizontal(a0a1, a1a2) => {
+            Code::Horizontal(mut a0a1, a1a2) => {
+                if self.pos == 0 && a0a1.bytes > 0 {
+                    a0a1 = Run::new(a0a1.color, a0a1.bytes - 1);
+                }
                 self.fill(a0a1);
                 self.fill(a1a2);
             }
