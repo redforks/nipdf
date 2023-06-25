@@ -23,3 +23,17 @@ fn test_iter_code(exp: &[Code], buf: &[u8]) {
     assert!(iter.next().is_none());
     assert!(iter.next().is_none());
 }
+
+#[test_case(WHITE, 0, &[0b0011_0101] ; "white 0")]
+#[test_case(WHITE, 1, &[0b0001_1100] ; "white 1")]
+#[test_case(WHITE, 64, &[0b1101_1001, 0b1010_1000]; "white 64")]
+#[test_case(WHITE, 4005, &[0b0000_0001, 0b1111_0110, 0b1101_1000, 0b1011_0000]; "white 2560+1408+37")]
+#[test_case(BLACK, 0, &[0b0000_1101, 0b1100_0000])]
+fn test_parse_next_run(color: u8, exp: u16, buf: &[u8]) {
+    let mut reader = BitReader::endian(buf, BigEndian);
+    let huffman = build_run_huffman();
+    assert_eq!(
+        Run::new(color, exp),
+        next_run(&mut reader, &huffman, color).unwrap()
+    );
+}

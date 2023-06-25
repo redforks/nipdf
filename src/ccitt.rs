@@ -1,7 +1,7 @@
 use bitstream_io::{
     huffman::{compile_read_tree, ReadHuffmanTree},
     read::{BitRead, BitReader},
-    BigEndian,
+    BigEndian, HuffmanRead,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -41,6 +41,8 @@ const NOT_USED: u8 = 100;
 pub enum Error {
     #[error("IOError: {0}")]
     IOError(#[from] std::io::Error),
+    #[error("Horizontal run color mismatch")]
+    HorizontalRunColorMismatch,
 }
 
 type Result<T> = std::result::Result<T, Error>;
@@ -48,6 +50,16 @@ type Result<T> = std::result::Result<T, Error>;
 struct RunHuffamnTree {
     black: Box<[ReadHuffmanTree<BigEndian, Run>]>,
     white: Box<[ReadHuffmanTree<BigEndian, Run>]>,
+}
+
+impl RunHuffamnTree {
+    fn get(&self, color: u8) -> &Box<[ReadHuffmanTree<BigEndian, Run>]> {
+        match color {
+            BLACK => &self.black,
+            WHITE => &self.white,
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[rustfmt::skip]
@@ -272,18 +284,37 @@ fn build_run_huffman() -> RunHuffamnTree {
     }
 }
 
-fn next_run(reader: &mut impl BitRead, huffman: &RunHuffamnTree) -> Result<Run> {
-    let mut color = reader.read_bit()? as u8;
-    let mut bytes = 0;
-    while reader.read_bit()? {
-        bytes += 1;
+fn next_run(
+    reader: &mut impl HuffmanRead<BigEndian>,
+    huffman: &RunHuffamnTree,
+    color: u8,
+) -> Result<Run> {
+    let tree = huffman.get(color);
+    let mut r = Run::new(color, 0);
+    loop {
+        let run = reader.read_huffman(tree)?;
+        match run.color {
+            GRAY => {}
+            BLACK | WHITE => {
+                if run.color != color {
+                    return Err(Error::HorizontalRunColorMismatch);
+                }
+            }
+            _ => unreachable!(),
+        }
+        r.bytes += run.bytes;
+        if run.bytes < 64 {
+            return Ok(r);
+        }
     }
-    Ok(Run::new(color, bytes))
 }
 
 fn iter_code(buf: &[u8]) -> impl Iterator<Item = Result<Code>> + '_ {
     let huffman = build_run_huffman();
-    fn next(huffman: &RunHuffamnTree, reader: &mut impl BitRead) -> Result<Code> {
+    fn next(
+        huffman: &RunHuffamnTree,
+        reader: &mut (impl BitRead + HuffmanRead<BigEndian>),
+    ) -> Result<Code> {
         if reader.read_bit()? {
             // 1
             return Ok(Code::Vertical(0));
@@ -293,8 +324,8 @@ fn iter_code(buf: &[u8]) -> impl Iterator<Item = Result<Code>> + '_ {
             0b11 => Ok(Code::Vertical(1)),  // 011
             0b10 => Ok(Code::Vertical(-1)), // 010
             0b01 => {
-                let a0a1 = next_run(reader, &huffman)?;
-                let a1a2 = next_run(reader, &huffman)?;
+                let a0a1 = next_run(reader, &huffman, BLACK)?;
+                let a1a2 = next_run(reader, &huffman, WHITE)?;
                 Ok(Code::Horizontal(a0a1, a1a2))
             }
             0b00 => {
