@@ -418,19 +418,28 @@ fn iter_code(buf: &[u8]) -> impl FnMut(&CodeContext) -> Option<Result<Code>> + '
 struct LineBuf<'a>(&'a [u8]);
 
 impl<'a> LineBuf<'a> {
-    fn b1(&self, pos: usize, pos_color: u8) -> Option<usize> {
-        todo!()
+    fn b1(&self, pos: usize, pos_color: u8) -> usize {
+        let pos = self.next_flip(pos);
+        if pos < self.0.len() && self.0[pos] == pos_color {
+            self.next_flip(pos)
+        } else {
+            pos
+        }
     }
 
-    fn next_flip(&self, pos: usize) -> Option<usize> {
-        todo!()
+    fn next_flip(&self, pos: usize) -> usize {
+        let color = self.0[pos];
+        self.0[pos..]
+            .iter()
+            .position(|&c| c != color)
+            .map_or(self.0.len(), |p| pos + p)
     }
 }
 
 struct Coder<'a> {
     last: LineBuf<'a>,
     cur: &'a mut [u8],
-    cur_color: Option<u8>,
+    cur_color: u8,
     pos: usize,
 }
 
@@ -448,7 +457,7 @@ impl<'a> Coder<'a> {
         Self {
             last: LineBuf(last),
             cur,
-            cur_color: None,
+            cur_color: WHITE,
             pos: 0,
         }
     }
@@ -468,27 +477,20 @@ impl<'a> Coder<'a> {
                 self.fill(a1a2);
             }
             Code::Vertical(n) => {
-                let color = self.cur_color.expect("cur_color exist in vertical");
-                let b1 = self
-                    .last
-                    .b1(self.pos, color)
-                    .expect("b1 should exist in vertical");
+                let b1 = self.last.b1(self.pos, self.cur_color);
                 self.fill(Run::new(
-                    color,
+                    self.cur_color,
                     (b1 as i16 - self.pos as i16 + n as i16) as u16,
                 ));
                 if n < 0 {
-                    self.fill(Run::new(neg_color(color), -n as u16));
+                    self.fill(Run::new(neg_color(self.cur_color), -n as u16));
                 }
                 self.pos = b1;
             }
             Code::Pass => {
                 let color = neg_color(self.last.0[self.pos]);
-                let b1 = self
-                    .last
-                    .b1(self.pos, color)
-                    .expect("b1 should exist in pass");
-                let b2 = self.last.next_flip(b1).expect("b2 not exist in pass");
+                let b1 = self.last.b1(self.pos, color);
+                let b2 = self.last.next_flip(b1);
                 self.fill(Run::new(color, (b2 - self.pos) as u16));
                 self.pos = b2;
             }
@@ -510,26 +512,36 @@ pub fn decode(buf: &[u8], width: u16, rows: Option<usize>) -> Result<Vec<u8>> {
     let mut line_buf = repeat(WHITE).take(width as usize).collect_vec();
     let mut next_code = iter_code(buf);
     let mut ctx = CodeContext::new();
+    let mut coder = Coder::new(last_line, &mut line_buf);
     loop {
-        let mut coder = Coder::new(last_line, &mut line_buf);
-        let code = next_code(ctx.set_color(coder.last_line_color()));
+        let code = next_code(&ctx);
         debug!("code: {:?}", code);
         match code {
             None => break,
             Some(code) => match code? {
                 Code::Extension(_) => todo!(),
                 Code::EndOfFassimileBlock => {
-                    todo!()
+                    r.extend_from_slice(&line_buf[..]);
+
+                    #[cfg(test)]
+                    line_buf.fill(WHITE);
+
+                    coder = Coder::new(&r[r.len() - width as usize..], &mut line_buf);
+                    ctx.new_line(coder.last_line_color());
+                    debug!("EOFB new line");
                 }
                 code => {
                     if coder.decode(code)? {
                         r.extend_from_slice(&line_buf[..]);
 
                         #[cfg(test)]
-                        line_buf.fill(0x1f);
+                        line_buf.fill(WHITE);
 
                         coder = Coder::new(&r[r.len() - width as usize..], &mut line_buf);
-                        ctx.new_line(coder.cur_color.unwrap());
+                        ctx.new_line(coder.last_line_color());
+                        debug!("new line");
+                    } else {
+                        ctx.set_color(coder.last_line_color());
                     }
                 }
             },
