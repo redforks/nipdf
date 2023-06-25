@@ -309,11 +309,12 @@ fn next_run(
     }
 }
 
-fn iter_code(buf: &[u8]) -> impl Iterator<Item = Result<Code>> + '_ {
+fn iter_code(buf: &[u8]) -> impl FnMut(u8) -> Option<Result<Code>> + '_ {
     let huffman = build_run_huffman();
     fn next(
         huffman: &RunHuffamnTree,
         reader: &mut (impl BitRead + HuffmanRead<BigEndian>),
+        hor_color: u8,
     ) -> Result<Code> {
         if reader.read_bit()? {
             // 1
@@ -324,8 +325,8 @@ fn iter_code(buf: &[u8]) -> impl Iterator<Item = Result<Code>> + '_ {
             0b11 => Ok(Code::Vertical(1)),  // 011
             0b10 => Ok(Code::Vertical(-1)), // 010
             0b01 => {
-                let a0a1 = next_run(reader, &huffman, BLACK)?;
-                let a1a2 = next_run(reader, &huffman, WHITE)?;
+                let a0a1 = next_run(reader, &huffman, hor_color)?;
+                let a1a2 = next_run(reader, &huffman, neg_color(hor_color))?;
                 Ok(Code::Horizontal(a0a1, a1a2))
             }
             0b00 => {
@@ -360,7 +361,7 @@ fn iter_code(buf: &[u8]) -> impl Iterator<Item = Result<Code>> + '_ {
     }
 
     let mut reader = BitReader::endian(buf, BigEndian);
-    from_fn(move || match next(&huffman, &mut reader) {
+    move |hor_color| match next(&huffman, &mut reader, hor_color) {
         Ok(v) => Some(Ok(v)),
         Err(e) => match e {
             Error::IOError(io_err) => {
@@ -372,7 +373,7 @@ fn iter_code(buf: &[u8]) -> impl Iterator<Item = Result<Code>> + '_ {
             }
             _ => Some(Err(e)),
         },
-    })
+    }
 }
 
 struct LineBuf<'a>(&'a [u8]);
@@ -457,6 +458,10 @@ impl<'a> Coder<'a> {
         debug_assert!(self.pos <= self.cur.len());
         Ok(self.pos == self.cur.len())
     }
+
+    fn last_line_color(&self) -> u8 {
+        self.last.0[self.pos]
+    }
 }
 
 pub fn decode(buf: &[u8], width: u16, rows: Option<usize>) -> Result<Vec<u8>> {
@@ -464,25 +469,28 @@ pub fn decode(buf: &[u8], width: u16, rows: Option<usize>) -> Result<Vec<u8>> {
     let last_line = &image_line[..];
     let mut r = Vec::with_capacity(rows.unwrap_or(30) * width as usize);
     let mut line_buf = repeat(WHITE).take(width as usize).collect_vec();
-    for code in iter_code(buf) {
+    let mut next_code = iter_code(buf);
+    loop {
         let mut coder = Coder::new(last_line, &mut line_buf);
-        let code = code?;
-        match code {
-            Code::Extension => todo!(),
-            Code::EndOfFassimileBlock => {
-                todo!()
-            }
-            _ => {
-                if coder.decode(code)? {
-                    r.extend_from_slice(&line_buf[..]);
-
-                    #[cfg(test)]
-                    line_buf.fill(0x1f);
-
-                    coder = Coder::new(&r[r.len() - width as usize..], &mut line_buf);
+        match next_code(coder.last_line_color()) {
+            None => break,
+            Some(code) => match code? {
+                Code::Extension => todo!(),
+                Code::EndOfFassimileBlock => {
+                    todo!()
                 }
-            }
-        };
+                code => {
+                    if coder.decode(code)? {
+                        r.extend_from_slice(&line_buf[..]);
+
+                        #[cfg(test)]
+                        line_buf.fill(0x1f);
+
+                        coder = Coder::new(&r[r.len() - width as usize..], &mut line_buf);
+                    }
+                }
+            },
+        }
     }
     Ok(r)
 }

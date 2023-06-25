@@ -15,13 +15,17 @@ fn test_decode() {
 #[test_case(&[Code::Vertical(-2)], &[0b0000_1000])]
 #[test_case(&[Code::Vertical(-3)], &[0b0000_0100])]
 #[test_case(&[Code::Vertical(0), Code::Vertical(0)], &[0b1100_0000])]
+#[test_case(
+    &[Code::Horizontal(Run::new(WHITE, 1), Run::new(BLACK, 2))],
+    &[0b001_00011, 0b1_110_0000]
+)]
 fn test_iter_code(exp: &[Code], buf: &[u8]) {
-    let mut iter = iter_code(buf);
+    let mut next_code = iter_code(buf);
     for e in exp {
-        assert_eq!(iter.next().unwrap().unwrap(), *e);
+        assert_eq!(next_code(WHITE).unwrap().unwrap(), *e);
     }
-    assert!(iter.next().is_none());
-    assert!(iter.next().is_none());
+    assert!(next_code(WHITE).is_none());
+    assert!(next_code(WHITE).is_none());
 }
 
 #[test_case(WHITE, 0, &[0b0011_0101] ; "white 0")]
