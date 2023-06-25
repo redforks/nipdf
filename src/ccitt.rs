@@ -3,20 +3,17 @@ use bitstream_io::{
     read::{BitRead, BitReader},
     BigEndian, HuffmanRead,
 };
-use std::{
-    collections::{HashMap, HashSet},
-    iter::{from_fn, repeat},
-};
+use log::{debug, error};
+use std::iter::repeat;
 
 use itertools::Itertools;
-use once_cell::unsync::Lazy;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum Code {
     Pass,
     Horizontal(Run, Run), // a0a1, a1a2
     Vertical(i8),
-    Extension,
+    Extension(u8),
     EndOfFassimileBlock,
 }
 
@@ -311,13 +308,43 @@ fn next_run(
     }
 }
 
-fn iter_code(buf: &[u8]) -> impl FnMut(u8) -> Option<Result<Code>> + '_ {
+struct CodeContext {
+    hor_color: u8,
+    new_line: bool, // drop current byte, and scan next byte
+}
+
+impl CodeContext {
+    fn new() -> Self {
+        Self {
+            hor_color: WHITE,
+            new_line: true,
+        }
+    }
+
+    fn new_line(&mut self, color: u8) -> &Self {
+        self.hor_color = color;
+        self.new_line = true;
+        self
+    }
+
+    fn set_color(&mut self, color: u8) -> &Self {
+        self.hor_color = color;
+        self.new_line = false;
+        self
+    }
+}
+
+fn iter_code(buf: &[u8]) -> impl FnMut(&CodeContext) -> Option<Result<Code>> + '_ {
     let huffman = build_run_huffman();
     fn next(
         huffman: &RunHuffamnTree,
         reader: &mut (impl BitRead + HuffmanRead<BigEndian>),
-        hor_color: u8,
+        ctx: &CodeContext,
     ) -> Result<Code> {
+        if ctx.new_line {
+            reader.byte_align();
+        }
+
         if reader.read_bit()? {
             // 1
             return Ok(Code::Vertical(0));
@@ -327,8 +354,8 @@ fn iter_code(buf: &[u8]) -> impl FnMut(u8) -> Option<Result<Code>> + '_ {
             0b11 => Ok(Code::Vertical(1)),  // 011
             0b10 => Ok(Code::Vertical(-1)), // 010
             0b01 => {
-                let a0a1 = next_run(reader, &huffman, hor_color)?;
-                let a1a2 = next_run(reader, &huffman, neg_color(hor_color))?;
+                let a0a1 = next_run(reader, &huffman, ctx.hor_color)?;
+                let a1a2 = next_run(reader, &huffman, neg_color(ctx.hor_color))?;
                 Ok(Code::Horizontal(a0a1, a1a2))
             }
             0b00 => {
@@ -344,15 +371,15 @@ fn iter_code(buf: &[u8]) -> impl FnMut(u8) -> Option<Result<Code>> + '_ {
                             true => Ok(Code::Vertical(3)),   // 0000011
                             false => Ok(Code::Vertical(-3)), // 0000010
                         },
-                        0b00 => match reader.read::<u8>(3)? {
-                            0b010 => {
-                                // 0000_00_010
-                                unimplemented!("Extension code")
-                                // Ok(Code::Extension)
+                        0b00 => match reader.read_bit()? {
+                            true => {
+                                // 0000_001
+                                let ext = reader.read::<u8>(3)?;
+                                Ok(Code::Extension(ext))
                             }
-                            0b000 => {
-                                // 0000_00_000
-                                if reader.read::<u8>(3)? != 1 {
+                            false => {
+                                // 0000_000
+                                if reader.read::<u8>(5)? != 1 {
                                     Err(Error::InvalidCode)
                                 } else if reader.read::<u8>(4)? != 0 {
                                     Err(Error::InvalidCode)
@@ -362,7 +389,6 @@ fn iter_code(buf: &[u8]) -> impl FnMut(u8) -> Option<Result<Code>> + '_ {
                                     Ok(Code::EndOfFassimileBlock)
                                 }
                             }
-                            _ => unreachable!(),
                         },
                         0b10 => Ok(Code::Vertical(-2)), // 000010
                         _ => unreachable!(),
@@ -374,7 +400,7 @@ fn iter_code(buf: &[u8]) -> impl FnMut(u8) -> Option<Result<Code>> + '_ {
     }
 
     let mut reader = BitReader::endian(buf, BigEndian);
-    move |hor_color| match next(&huffman, &mut reader, hor_color) {
+    move |ctx| match next(&huffman, &mut reader, ctx) {
         Ok(v) => Some(Ok(v)),
         Err(e) => match e {
             Error::IOError(io_err) => {
@@ -483,12 +509,15 @@ pub fn decode(buf: &[u8], width: u16, rows: Option<usize>) -> Result<Vec<u8>> {
     let mut r = Vec::with_capacity(rows.unwrap_or(30) * width as usize);
     let mut line_buf = repeat(WHITE).take(width as usize).collect_vec();
     let mut next_code = iter_code(buf);
+    let mut ctx = CodeContext::new();
     loop {
         let mut coder = Coder::new(last_line, &mut line_buf);
-        match next_code(coder.last_line_color()) {
+        let code = next_code(ctx.set_color(coder.last_line_color()));
+        debug!("code: {:?}", code);
+        match code {
             None => break,
             Some(code) => match code? {
-                Code::Extension => todo!(),
+                Code::Extension(_) => todo!(),
                 Code::EndOfFassimileBlock => {
                     todo!()
                 }
@@ -500,6 +529,7 @@ pub fn decode(buf: &[u8], width: u16, rows: Option<usize>) -> Result<Vec<u8>> {
                         line_buf.fill(0x1f);
 
                         coder = Coder::new(&r[r.len() - width as usize..], &mut line_buf);
+                        ctx.new_line(coder.cur_color.unwrap());
                     }
                 }
             },

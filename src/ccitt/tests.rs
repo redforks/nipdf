@@ -1,7 +1,7 @@
 use super::*;
 use test_case::test_case;
 
-#[test]
+#[test_log::test]
 fn test_decode() {
     insta::assert_debug_snapshot!(decode(include_bytes!("./ccitt-1"), 24, None).unwrap());
 }
@@ -25,11 +25,13 @@ fn test_decode() {
 )]
 fn test_iter_code(exp: &[Code], buf: &[u8]) {
     let mut next_code = iter_code(buf);
+    let mut ctx = CodeContext::new();
+    ctx.set_color(WHITE);
     for e in exp {
-        assert_eq!(next_code(WHITE).unwrap().unwrap(), *e);
+        assert_eq!(next_code(&ctx).unwrap().unwrap(), *e);
     }
-    assert!(next_code(WHITE).is_none());
-    assert!(next_code(WHITE).is_none());
+    assert!(next_code(&ctx).is_none());
+    assert!(next_code(&ctx).is_none());
 }
 
 #[test_case(WHITE, 0, &[0b0011_0101] ; "white 0")]
