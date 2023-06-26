@@ -428,6 +428,10 @@ impl<'a> LineBuf<'a> {
     }
 
     fn next_flip(&self, pos: usize) -> usize {
+        if pos == self.0.len() {
+            return pos;
+        }
+
         let color = self.0[pos];
         self.0[pos..]
             .iter()
@@ -491,10 +495,9 @@ impl<'a> Coder<'a> {
                 self.pos = b1;
             }
             Code::Pass => {
-                let color = neg_color(self.last.0[self.pos]);
-                let b1 = self.last.b1(self.pos, color);
+                let b1 = self.last.b1(self.pos, self.cur_color);
                 let b2 = self.last.next_flip(b1);
-                self.fill(Run::new(color, (b2 - self.pos) as u16));
+                self.fill(Run::new(self.cur_color, (b2 - self.pos) as u16));
                 self.pos = b2;
             }
             _ => unreachable!(),
