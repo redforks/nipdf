@@ -52,7 +52,7 @@ struct RunHuffamnTree {
 }
 
 impl RunHuffamnTree {
-    fn get(&self, color: u8) -> &Box<[ReadHuffmanTree<BigEndian, Run>]> {
+    fn get(&self, color: u8) -> &[ReadHuffmanTree<BigEndian, Run>] {
         match color {
             BLACK => &self.black,
             WHITE => &self.white,
@@ -328,8 +328,8 @@ fn iter_code(buf: &[u8]) -> impl FnMut(&Coder) -> Option<Result<Code>> + '_ {
             0b11 => Ok(Code::Vertical(1)),  // 011
             0b10 => Ok(Code::Vertical(-1)), // 010
             0b01 => {
-                let a0a1 = next_run(reader, &huffman, ctx.cur_color())?;
-                let a1a2 = next_run(reader, &huffman, neg_color(ctx.cur_color()))?;
+                let a0a1 = next_run(reader, huffman, ctx.cur_color())?;
+                let a1a2 = next_run(reader, huffman, neg_color(ctx.cur_color()))?;
                 Ok(Code::Horizontal(a0a1, a1a2))
             }
             0b00 => {
@@ -353,14 +353,13 @@ fn iter_code(buf: &[u8]) -> impl FnMut(&Coder) -> Option<Result<Code>> + '_ {
                             }
                             false => {
                                 // 0000_000
-                                if reader.read::<u8>(5)? != 1 {
-                                    Err(Error::InvalidCode)
-                                } else if reader.read::<u8>(4)? != 0 {
-                                    Err(Error::InvalidCode)
-                                } else if reader.read::<u8>(8)? != 1 {
-                                    Err(Error::InvalidCode)
-                                } else {
+                                if reader.read::<u8>(5)? == 1
+                                    && reader.read::<u8>(4)? == 0
+                                    && reader.read::<u8>(8)? == 1
+                                {
                                     Ok(Code::EndOfFassimileBlock)
+                                } else {
+                                    Err(Error::InvalidCode)
                                 }
                             }
                         },
@@ -457,7 +456,7 @@ impl<'a> Coder<'a> {
         let mut pos = self.pos.unwrap_or_default();
         for _ in 0..run.bytes {
             self.cur[pos] = run.color;
-            pos = pos + 1;
+            pos += 1;
         }
         self.pos = Some(pos);
     }
@@ -465,7 +464,7 @@ impl<'a> Coder<'a> {
     // return true if current line filled.
     fn decode(&mut self, code: Code) -> Result<bool> {
         match code {
-            Code::Horizontal(mut a0a1, a1a2) => {
+            Code::Horizontal(a0a1, a1a2) => {
                 self.fill(a0a1);
                 self.fill(a1a2);
             }

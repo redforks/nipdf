@@ -127,8 +127,8 @@ fn _decode_ccitt<'a: 'b, 'b>(
 ) -> Result<(Vec<u8>, (u32, u32)), ObjectValueError> {
     use crate::ccitt::decode;
 
-    let empty_params = Lazy::new(|| Dictionary::new());
-    let params = CCITTFaxDecodeParams(params.unwrap_or_else(|| &empty_params));
+    let empty_params = Lazy::new(Dictionary::new);
+    let params = CCITTFaxDecodeParams(params.unwrap_or_else(|| Lazy::force(&empty_params)));
     let image = handle_filter_error(
         decode(input, params.columns(), Some(params.rows() as usize)),
         FILTER_CCITT_FAX,
@@ -161,11 +161,7 @@ pub struct Image {
     pub data: Vec<u8>,
 }
 
-fn ensure_last_filter<'a, T>(
-    v: T,
-    has_next: bool,
-    filter_name: &str,
-) -> Result<T, ObjectValueError> {
+fn ensure_last_filter<T>(v: T, has_next: bool, filter_name: &str) -> Result<T, ObjectValueError> {
     if !has_next {
         Ok(v)
     } else {
@@ -174,10 +170,7 @@ fn ensure_last_filter<'a, T>(
     }
 }
 
-fn ccitt_to_image<'a>(
-    buf: &[u8],
-    params: Option<&Dictionary<'a>>,
-) -> Result<Image, ObjectValueError> {
+fn ccitt_to_image(buf: &[u8], params: Option<&Dictionary<'_>>) -> Result<Image, ObjectValueError> {
     let (data, (w, h)) = _decode_ccitt(buf, params)?;
     let mut cursor = Cursor::new(Vec::new());
     write_buffer_with_format(
@@ -232,7 +225,7 @@ impl<'a> Stream<'a> {
                 }
             }
         }
-        return Err(ObjectValueError::StreamNotImage);
+        Err(ObjectValueError::StreamNotImage)
     }
 
     fn iter_filter(

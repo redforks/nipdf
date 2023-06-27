@@ -18,7 +18,7 @@ fn test_decode() {
 #[test_case(&[Code::Vertical(0), Code::Vertical(0)], &[0b1100_0000])]
 #[test_case(
     &[Code::Horizontal(Run::new(WHITE, 1), Run::new(BLACK, 2))],
-    &[0b001_00011, 0b1_110_0000]
+    &[0b001_00011, 0b1110_0000]
 )]
 #[test_case(
     &[Code::EndOfFassimileBlock],
