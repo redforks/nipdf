@@ -29,6 +29,7 @@ fn test_iter_code(exp: &[Code], buf: &[u8]) {
     let last_buf = repeat(0).take(4).collect::<Vec<_>>();
     let mut cur_buf = repeat(0).take(4).collect::<Vec<_>>();
     let mut coder = Coder::new(&last_buf, &mut cur_buf);
+    coder.pos = Some(0); // disable new_line flag
     for e in exp {
         assert_eq!(next_code(&mut coder).unwrap().unwrap(), *e);
     }
