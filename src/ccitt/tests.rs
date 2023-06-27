@@ -25,13 +25,14 @@ fn test_decode() {
 )]
 fn test_iter_code(exp: &[Code], buf: &[u8]) {
     let mut next_code = iter_code(buf);
-    let mut ctx = CodeContext::new();
-    ctx.set_color(WHITE);
+    let last_buf = repeat(0).take(4).collect::<Vec<_>>();
+    let mut cur_buf = repeat(0).take(4).collect::<Vec<_>>();
+    let mut coder = Coder::new(&last_buf, &mut cur_buf);
     for e in exp {
-        assert_eq!(next_code(&ctx).unwrap().unwrap(), *e);
+        assert_eq!(next_code(&mut coder).unwrap().unwrap(), *e);
     }
-    assert!(next_code(&ctx).is_none());
-    assert!(next_code(&ctx).is_none());
+    assert!(next_code(&mut coder).is_none());
+    assert!(next_code(&mut coder).is_none());
 }
 
 #[test_case(WHITE, 0, &[0b0011_0101] ; "white 0")]

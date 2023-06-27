@@ -308,40 +308,14 @@ fn next_run(
     }
 }
 
-struct CodeContext {
-    hor_color: u8,
-    new_line: bool, // drop current byte, and scan next byte
-}
-
-impl CodeContext {
-    fn new() -> Self {
-        Self {
-            hor_color: WHITE,
-            new_line: true,
-        }
-    }
-
-    fn new_line(&mut self, color: u8) -> &Self {
-        self.hor_color = color;
-        self.new_line = true;
-        self
-    }
-
-    fn set_color(&mut self, color: u8) -> &Self {
-        self.hor_color = color;
-        self.new_line = false;
-        self
-    }
-}
-
-fn iter_code(buf: &[u8]) -> impl FnMut(&CodeContext) -> Option<Result<Code>> + '_ {
+fn iter_code(buf: &[u8]) -> impl FnMut(&Coder) -> Option<Result<Code>> + '_ {
     let huffman = build_run_huffman();
     fn next(
         huffman: &RunHuffamnTree,
         reader: &mut (impl BitRead + HuffmanRead<BigEndian>),
-        ctx: &CodeContext,
+        ctx: &Coder,
     ) -> Result<Code> {
-        if ctx.new_line {
+        if ctx.is_new_line() {
             reader.byte_align();
         }
 
@@ -354,8 +328,8 @@ fn iter_code(buf: &[u8]) -> impl FnMut(&CodeContext) -> Option<Result<Code>> + '
             0b11 => Ok(Code::Vertical(1)),  // 011
             0b10 => Ok(Code::Vertical(-1)), // 010
             0b01 => {
-                let a0a1 = next_run(reader, &huffman, ctx.hor_color)?;
-                let a1a2 = next_run(reader, &huffman, neg_color(ctx.hor_color))?;
+                let a0a1 = next_run(reader, &huffman, ctx.cur_color())?;
+                let a1a2 = next_run(reader, &huffman, neg_color(ctx.cur_color()))?;
                 Ok(Code::Horizontal(a0a1, a1a2))
             }
             0b00 => {
@@ -466,6 +440,14 @@ impl<'a> Coder<'a> {
         }
     }
 
+    fn is_new_line(&self) -> bool {
+        self.pos == 0
+    }
+
+    fn cur_color(&self) -> u8 {
+        self.cur_color
+    }
+
     fn fill(&mut self, run: Run) {
         for _ in 0..run.bytes {
             self.cur[self.pos] = run.color;
@@ -506,10 +488,6 @@ impl<'a> Coder<'a> {
         debug_assert!(self.pos <= self.cur.len());
         Ok(self.pos == self.cur.len())
     }
-
-    fn last_line_color(&self) -> u8 {
-        self.last.0[self.pos]
-    }
 }
 
 pub fn decode(buf: &[u8], width: u16, rows: Option<usize>) -> Result<Vec<u8>> {
@@ -518,10 +496,9 @@ pub fn decode(buf: &[u8], width: u16, rows: Option<usize>) -> Result<Vec<u8>> {
     let mut r = Vec::with_capacity(rows.unwrap_or(30) * width as usize);
     let mut line_buf = repeat(WHITE).take(width as usize).collect_vec();
     let mut next_code = iter_code(buf);
-    let mut ctx = CodeContext::new();
     let mut coder = Coder::new(last_line, &mut line_buf);
     loop {
-        let code = next_code(&ctx);
+        let code = next_code(&coder);
         debug!("code: {:?}", code);
         match code {
             None => break,
@@ -534,7 +511,6 @@ pub fn decode(buf: &[u8], width: u16, rows: Option<usize>) -> Result<Vec<u8>> {
                     line_buf.fill(WHITE);
 
                     coder = Coder::new(&r[r.len() - width as usize..], &mut line_buf);
-                    ctx.new_line(coder.last_line_color());
                     debug!("EOFB new line");
                 }
                 code => {
@@ -545,10 +521,7 @@ pub fn decode(buf: &[u8], width: u16, rows: Option<usize>) -> Result<Vec<u8>> {
                         line_buf.fill(WHITE);
 
                         coder = Coder::new(&r[r.len() - width as usize..], &mut line_buf);
-                        ctx.new_line(coder.last_line_color());
                         debug!("new line");
-                    } else {
-                        ctx.set_color(coder.last_line_color());
                     }
                 }
             },
