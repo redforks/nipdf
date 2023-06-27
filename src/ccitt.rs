@@ -392,21 +392,25 @@ fn iter_code(buf: &[u8]) -> impl FnMut(&Coder) -> Option<Result<Code>> + '_ {
 struct LineBuf<'a>(&'a [u8]);
 
 impl<'a> LineBuf<'a> {
-    fn b1(&self, pos: usize, pos_color: u8) -> usize {
+    fn b1(&self, pos: Option<usize>, pos_color: u8) -> usize {
         let pos = self.next_flip(pos);
         if pos < self.0.len() && self.0[pos] == pos_color {
-            self.next_flip(pos)
+            self.next_flip(Some(pos))
         } else {
             pos
         }
     }
 
-    fn next_flip(&self, pos: usize) -> usize {
+    fn next_flip(&self, pos: Option<usize>) -> usize {
+        let color = match pos {
+            None => WHITE,
+            Some(pos) => self.0[pos],
+        };
+        let pos = pos.unwrap_or_default();
         if pos == self.0.len() {
             return pos;
         }
 
-        let color = self.0[pos];
         self.0[pos..]
             .iter()
             .position(|&c| c != color)
@@ -418,7 +422,7 @@ struct Coder<'a> {
     last: LineBuf<'a>,
     cur: &'a mut [u8],
     cur_color: u8,
-    pos: usize,
+    pos: Option<usize>,
 }
 
 fn neg_color(c: u8) -> u8 {
@@ -436,12 +440,12 @@ impl<'a> Coder<'a> {
             last: LineBuf(last),
             cur,
             cur_color: WHITE,
-            pos: 0,
+            pos: None,
         }
     }
 
     fn is_new_line(&self) -> bool {
-        self.pos == 0
+        self.pos.is_none()
     }
 
     fn cur_color(&self) -> u8 {
@@ -449,44 +453,44 @@ impl<'a> Coder<'a> {
     }
 
     fn fill(&mut self, run: Run) {
+        debug!("fill {:?} at {:?}", run, self.pos);
+        let mut pos = self.pos.unwrap_or_default();
         for _ in 0..run.bytes {
-            self.cur[self.pos] = run.color;
-            self.pos += 1;
+            self.cur[pos] = run.color;
+            pos = pos + 1;
         }
+        self.pos = Some(pos);
     }
 
     // return true if current line filled.
     fn decode(&mut self, code: Code) -> Result<bool> {
         match code {
             Code::Horizontal(mut a0a1, a1a2) => {
-                if self.pos == 0 && a0a1.bytes > 0 {
-                    a0a1 = Run::new(a0a1.color, a0a1.bytes - 1);
-                }
                 self.fill(a0a1);
                 self.fill(a1a2);
             }
             Code::Vertical(n) => {
                 let b1 = self.last.b1(self.pos, self.cur_color);
+                debug!("b1: {}, color: {}", b1, self.cur_color);
                 self.fill(Run::new(
                     self.cur_color,
-                    (b1 as i16 - self.pos as i16 + n as i16) as u16,
+                    (b1 as i16 - self.pos.unwrap_or_default() as i16 + n as i16) as u16,
                 ));
                 self.cur_color = neg_color(self.cur_color);
-                if n < 0 {
-                    self.fill(Run::new(self.cur_color, -n as u16));
-                }
-                debug_assert_eq!(self.pos, b1);
             }
             Code::Pass => {
                 let b1 = self.last.b1(self.pos, self.cur_color);
-                let b2 = self.last.next_flip(b1);
-                self.fill(Run::new(self.cur_color, (b2 - self.pos) as u16));
-                debug_assert_eq!(self.pos, b2);
+                let b2 = self.last.next_flip(Some(b1));
+                self.fill(Run::new(
+                    self.cur_color,
+                    (b2 - self.pos.unwrap_or_default()) as u16,
+                ));
+                debug_assert_eq!(self.pos.unwrap(), b2);
             }
             _ => unreachable!(),
         };
-        debug_assert!(self.pos <= self.cur.len());
-        Ok(self.pos == self.cur.len())
+        debug_assert!(self.pos.unwrap_or_default() <= self.cur.len());
+        Ok(self.pos.unwrap_or_default() == self.cur.len())
     }
 }
 
@@ -525,13 +529,29 @@ pub fn decode(buf: &[u8], width: u16, rows: Option<usize>) -> Result<Vec<u8>> {
                         line_buf.fill(0x10);
 
                         coder = Coder::new(&r[r.len() - width as usize..], &mut line_buf);
-                        debug!("new line");
+                        debug!("line: {}\n", r.len() / width as usize);
+                        write_buf(&r[..], width as usize);
                     }
                 }
             },
         }
     }
     Ok(r)
+}
+
+fn write_buf(buf: &[u8], width: usize) {
+    // write buf content to /tmp/foo, white as '1', black as '0'
+    use std::fs::File;
+    use std::io::Write;
+
+    let mut f = File::create("/tmp/foo").unwrap();
+    for line in buf.chunks(width) {
+        for &c in line {
+            let c = if c == WHITE { '1' } else { '0' };
+            write!(f, "{}", c).unwrap();
+        }
+        writeln!(f).unwrap();
+    }
 }
 
 #[cfg(test)]
