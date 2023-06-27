@@ -489,16 +489,17 @@ impl<'a> Coder<'a> {
                     self.cur_color,
                     (b1 as i16 - self.pos as i16 + n as i16) as u16,
                 ));
+                self.cur_color = neg_color(self.cur_color);
                 if n < 0 {
-                    self.fill(Run::new(neg_color(self.cur_color), -n as u16));
+                    self.fill(Run::new(self.cur_color, -n as u16));
                 }
-                self.pos = b1;
+                debug_assert_eq!(self.pos, b1);
             }
             Code::Pass => {
                 let b1 = self.last.b1(self.pos, self.cur_color);
                 let b2 = self.last.next_flip(b1);
                 self.fill(Run::new(self.cur_color, (b2 - self.pos) as u16));
-                self.pos = b2;
+                debug_assert_eq!(self.pos, b2);
             }
             _ => unreachable!(),
         };
