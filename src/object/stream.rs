@@ -125,28 +125,19 @@ fn _decode_ccitt<'a: 'b, 'b>(
     input: &[u8],
     params: Option<&'b Dictionary<'a>>,
 ) -> Result<(Vec<u8>, (u32, u32)), ObjectValueError> {
-    use ccitt_t4_t6::g42d::common::Color;
-    use ccitt_t4_t6::g42d::decode::Decoder;
-    // let empty_params = Dictionary::default();
-    let empty_params = Lazy::new(|| Dictionary::default());
+    use crate::ccitt::decode;
+
+    let empty_params = Lazy::new(|| Dictionary::new());
     let params = CCITTFaxDecodeParams(params.unwrap_or_else(|| &empty_params));
-    assert!(params.k() == CCITTFGroup::Group4, "CCITT: mode supported");
-    let columns = params.columns();
-    let rows = params.rows();
-    let mut decoder = Decoder::<Vec<Color>>::new(columns as usize);
-    decoder.decode(input).map_err(|e| {
-        error!("Failed to decode CCITT: {:?}", e);
-        ObjectValueError::FilterDecodeError
-    })?;
-    let buf = decoder.into_store();
-    let buf = buf
-        .into_iter()
-        .map(|color| match color {
-            Color::White => 0u8,
-            Color::Black => 255u8,
-        })
-        .collect();
-    Ok((buf, (columns as u32, rows as u32)))
+    let image = handle_filter_error(
+        decode(input, params.columns(), Some(params.rows() as usize)),
+        FILTER_CCITT_FAX,
+    )?;
+    assert_eq!(
+        params.rows() as usize,
+        image.len() / params.columns() as usize
+    );
+    Ok((image, (params.columns() as u32, params.rows() as u32)))
 }
 
 fn filter<'a: 'b, 'b>(
