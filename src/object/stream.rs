@@ -71,7 +71,9 @@ struct CCITTFaxDecodeParams<'a: 'b, 'b>(&'b Dictionary<'a>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CCITTFGroup {
+    #[allow(dead_code)]
     Group3_1D,
+    #[allow(dead_code)]
     Group3_2D(i32),
     Group4,
 }
@@ -129,6 +131,7 @@ fn _decode_ccitt<'a: 'b, 'b>(
 
     let empty_params = Lazy::new(Dictionary::new);
     let params = CCITTFaxDecodeParams(params.unwrap_or_else(|| Lazy::force(&empty_params)));
+    assert_eq!(params.k(), CCITTFGroup::Group4);
     let image = handle_filter_error(
         decode(input, params.columns(), Some(params.rows() as usize)),
         FILTER_CCITT_FAX,

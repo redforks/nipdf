@@ -35,7 +35,7 @@ const GRAY: u8 = 128;
 const NOT_USED: u8 = 100;
 
 #[derive(Debug, thiserror::Error)]
-pub enum Error {
+pub enum DecodeError {
     #[error("IOError: {0}")]
     IOError(#[from] std::io::Error),
     #[error("Horizontal run color mismatch")]
@@ -44,7 +44,7 @@ pub enum Error {
     InvalidCode,
 }
 
-type Result<T> = std::result::Result<T, Error>;
+type Result<T> = std::result::Result<T, DecodeError>;
 
 struct RunHuffamnTree {
     black: Box<[ReadHuffmanTree<BigEndian, Run>]>,
@@ -296,7 +296,7 @@ fn next_run(
             GRAY => {}
             BLACK | WHITE => {
                 if run.color != color {
-                    return Err(Error::HorizontalRunColorMismatch);
+                    return Err(DecodeError::HorizontalRunColorMismatch);
                 }
             }
             _ => unreachable!(),
@@ -359,7 +359,7 @@ fn iter_code(buf: &[u8]) -> impl FnMut(&Coder) -> Option<Result<Code>> + '_ {
                                 {
                                     Ok(Code::EndOfFassimileBlock)
                                 } else {
-                                    Err(Error::InvalidCode)
+                                    Err(DecodeError::InvalidCode)
                                 }
                             }
                         },
@@ -376,7 +376,7 @@ fn iter_code(buf: &[u8]) -> impl FnMut(&Coder) -> Option<Result<Code>> + '_ {
     move |ctx| match next(&huffman, &mut reader, ctx) {
         Ok(v) => Some(Ok(v)),
         Err(e) => match e {
-            Error::IOError(io_err) => {
+            DecodeError::IOError(io_err) => {
                 if io_err.kind() == std::io::ErrorKind::UnexpectedEof {
                     None
                 } else {
