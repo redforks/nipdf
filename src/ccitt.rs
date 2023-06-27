@@ -494,7 +494,7 @@ pub fn decode(buf: &[u8], width: u16, rows: Option<usize>) -> Result<Vec<u8>> {
     let image_line = repeat(WHITE).take(width as usize).collect_vec();
     let last_line = &image_line[..];
     let mut r = Vec::with_capacity(rows.unwrap_or(30) * width as usize);
-    let mut line_buf = repeat(WHITE).take(width as usize).collect_vec();
+    let mut line_buf = repeat(0x10).take(width as usize).collect_vec();
     let mut next_code = iter_code(buf);
     let mut coder = Coder::new(last_line, &mut line_buf);
     loop {
@@ -505,20 +505,24 @@ pub fn decode(buf: &[u8], width: u16, rows: Option<usize>) -> Result<Vec<u8>> {
             Some(code) => match code? {
                 Code::Extension(_) => todo!(),
                 Code::EndOfFassimileBlock => {
+                    #[cfg(test)]
+                    assert!(line_buf.iter().all(|&c| c != 0x10));
                     r.extend_from_slice(&line_buf[..]);
 
                     #[cfg(test)]
-                    line_buf.fill(WHITE);
+                    line_buf.fill(0x10);
 
                     coder = Coder::new(&r[r.len() - width as usize..], &mut line_buf);
                     debug!("EOFB new line");
                 }
                 code => {
                     if coder.decode(code)? {
+                        #[cfg(test)]
+                        assert!(line_buf.iter().all(|&c| c != 0x10));
                         r.extend_from_slice(&line_buf[..]);
 
                         #[cfg(test)]
-                        line_buf.fill(WHITE);
+                        line_buf.fill(0x10);
 
                         coder = Coder::new(&r[r.len() - width as usize..], &mut line_buf);
                         debug!("new line");
