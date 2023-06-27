@@ -3,6 +3,7 @@ use test_case::test_case;
 
 #[test_log::test]
 fn test_decode() {
+    // ccitt-1 extracted by `dump-pdf stream -f sample_files/normal/pdfreference1.0.pdf 643 --raw`
     insta::assert_debug_snapshot!(decode(include_bytes!("./ccitt-1"), 24, None).unwrap());
 }
 

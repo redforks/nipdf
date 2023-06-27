@@ -509,28 +509,15 @@ pub fn decode(buf: &[u8], width: u16, rows: Option<usize>) -> Result<Vec<u8>> {
             Some(code) => match code? {
                 Code::Extension(_) => todo!(),
                 Code::EndOfFassimileBlock => {
-                    #[cfg(test)]
-                    assert!(line_buf.iter().all(|&c| c != 0x10));
-                    r.extend_from_slice(&line_buf[..]);
-
-                    #[cfg(test)]
-                    line_buf.fill(0x10);
-
-                    coder = Coder::new(&r[r.len() - width as usize..], &mut line_buf);
-                    debug!("EOFB new line");
+                    break;
                 }
                 code => {
                     if coder.decode(code)? {
-                        #[cfg(test)]
-                        assert!(line_buf.iter().all(|&c| c != 0x10));
                         r.extend_from_slice(&line_buf[..]);
-
-                        #[cfg(test)]
-                        line_buf.fill(0x10);
 
                         coder = Coder::new(&r[r.len() - width as usize..], &mut line_buf);
                         debug!("line: {}\n", r.len() / width as usize);
-                        write_buf(&r[..], width as usize);
+                        // write_buf(&r[..], width as usize);
                     }
                 }
             },
@@ -539,6 +526,7 @@ pub fn decode(buf: &[u8], width: u16, rows: Option<usize>) -> Result<Vec<u8>> {
     Ok(r)
 }
 
+#[allow(dead_code)]
 fn write_buf(buf: &[u8], width: usize) {
     // write buf content to /tmp/foo, white as '1', black as '0'
     use std::fs::File;
