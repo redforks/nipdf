@@ -374,7 +374,7 @@ fn iter_code(buf: &[u8]) -> impl FnMut(&Coder, &Flags) -> Option<Result<Code>> +
     }
 
     let mut reader = BitReader::endian(buf, BigEndian);
-    move |ctx, flags| match next(&huffman, &mut reader, ctx, &flags) {
+    move |ctx, flags| match next(&huffman, &mut reader, ctx, flags) {
         Ok(v) => Some(Ok(v)),
         Err(e) => match e {
             DecodeError::IOError(io_err) => {
