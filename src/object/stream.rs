@@ -141,6 +141,7 @@ fn _decode_ccitt<'a: 'b, 'b>(
             Some(params.rows() as usize),
             Flags {
                 encoded_byte_align: params.encoded_byte_align(),
+                inverse_black_white: params.black_is1(),
             },
         ),
         FILTER_CCITT_FAX,

@@ -493,6 +493,7 @@ impl<'a> Coder<'a> {
 #[derive(Debug, Default)]
 pub struct Flags {
     pub encoded_byte_align: bool,
+    pub inverse_black_white: bool,
 }
 
 pub fn decode(buf: &[u8], width: u16, rows: Option<usize>, flags: Flags) -> Result<Vec<u8>> {
@@ -522,6 +523,12 @@ pub fn decode(buf: &[u8], width: u16, rows: Option<usize>, flags: Flags) -> Resu
                     }
                 }
             },
+        }
+    }
+
+    if flags.inverse_black_white {
+        for c in &mut r {
+            *c = !*c;
         }
     }
     Ok(r)
