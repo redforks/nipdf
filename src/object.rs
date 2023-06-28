@@ -116,6 +116,9 @@ pub enum Object<'a> {
     Array(Array<'a>),
     Stream(Stream<'a>),
     Reference(Reference),
+    // If `Length` is a reference, instead of int, can not parse stream without object resolver,
+    // used inside object resolver as a intermediate state.
+    LaterResolveStream(Dictionary<'a>),
 }
 
 impl<'a> Object<'a> {

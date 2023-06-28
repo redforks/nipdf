@@ -10,7 +10,7 @@ use nom::{
         complete::{anychar, crlf, multispace1, u16, u32},
         is_hex_digit,
     },
-    combinator::{map, opt, recognize, value},
+    combinator::{map, opt, peek, recognize, value},
     multi::{many0, many0_count},
     number::complete::float,
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
@@ -168,14 +168,21 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<Object> {
             let Some(len) = d.get(&Name::borrowed(b"Length")) else {
                 return Ok((input, o));
             };
-            let Object::Integer(len) = len else {
-                return Ok((input, o));
-            };
-            opt(delimited(
-                tuple((ws_prefixed(tag(b"stream")), alt((crlf, tag(b"\n"))))),
-                take(*len as u32),
-                ws(tag(b"endstream")),
-            ))(input)?
+            match len {
+                Object::Integer(len) => opt(delimited(
+                    tuple((ws_prefixed(tag(b"stream")), alt((crlf, tag(b"\n"))))),
+                    take(*len as u32),
+                    ws(tag(b"endstream")),
+                ))(input)?,
+                Object::Reference(_) => {
+                    let (input, inner) = peek(opt(ws_prefixed(tag(b"stream"))))(input)?;
+                    return match inner {
+                        None => Ok((input, o)),
+                        Some(_) => Ok((input, Object::LaterResolveStream(d.clone()))),
+                    };
+                }
+                _ => return Ok((input, o)),
+            }
         }
         _ => return Ok((input, o)),
     };
