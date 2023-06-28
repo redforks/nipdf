@@ -3,8 +3,11 @@ use test_case::test_case;
 
 #[test_log::test]
 fn test_decode() {
+    let flags = Flags {
+        encoded_byte_align: true,
+    };
     // ccitt-1 extracted by `dump-pdf stream -f sample_files/normal/pdfreference1.0.pdf 643 --raw`
-    insta::assert_debug_snapshot!(decode(include_bytes!("./ccitt-1"), 24, None).unwrap());
+    insta::assert_debug_snapshot!(decode(include_bytes!("./ccitt-1"), 24, None, flags).unwrap());
 }
 
 #[test_case(&[], &[]; "empty")]
@@ -25,16 +28,17 @@ fn test_decode() {
     &[0b0, 0b0001_0000, 0b0000_0001]
 )]
 fn test_iter_code(exp: &[Code], buf: &[u8]) {
+    let flags = Flags::default();
     let mut next_code = iter_code(buf);
     let last_buf = repeat(0).take(4).collect::<Vec<_>>();
     let mut cur_buf = repeat(0).take(4).collect::<Vec<_>>();
     let mut coder = Coder::new(&last_buf, &mut cur_buf);
     coder.pos = Some(0); // disable new_line flag
     for e in exp {
-        assert_eq!(next_code(&mut coder).unwrap().unwrap(), *e);
+        assert_eq!(next_code(&mut coder, &flags).unwrap().unwrap(), *e);
     }
-    assert!(next_code(&mut coder).is_none());
-    assert!(next_code(&mut coder).is_none());
+    assert!(next_code(&mut coder, &flags).is_none());
+    assert!(next_code(&mut coder, &flags).is_none());
 }
 
 #[test_case(WHITE, 0, &[0b0011_0101] ; "white 0")]

@@ -10,6 +10,8 @@ use image::{write_buffer_with_format, ImageFormat};
 use log::error;
 use once_cell::unsync::Lazy;
 
+use crate::ccitt::Flags;
+
 use super::{Dictionary, Name, Object, ObjectValueError};
 
 const KEY_FILTER: &[u8] = b"Filter";
@@ -133,7 +135,14 @@ fn _decode_ccitt<'a: 'b, 'b>(
     let params = CCITTFaxDecodeParams(params.unwrap_or_else(|| Lazy::force(&empty_params)));
     assert_eq!(params.k(), CCITTFGroup::Group4);
     let image = handle_filter_error(
-        decode(input, params.columns(), Some(params.rows() as usize)),
+        decode(
+            input,
+            params.columns(),
+            Some(params.rows() as usize),
+            Flags {
+                encoded_byte_align: params.encoded_byte_align(),
+            },
+        ),
         FILTER_CCITT_FAX,
     )?;
     assert_eq!(

@@ -308,14 +308,15 @@ fn next_run(
     }
 }
 
-fn iter_code(buf: &[u8]) -> impl FnMut(&Coder) -> Option<Result<Code>> + '_ {
+fn iter_code(buf: &[u8]) -> impl FnMut(&Coder, &Flags) -> Option<Result<Code>> + '_ {
     let huffman = build_run_huffman();
     fn next(
         huffman: &RunHuffamnTree,
         reader: &mut (impl BitRead + HuffmanRead<BigEndian>),
         ctx: &Coder,
+        flags: &Flags,
     ) -> Result<Code> {
-        if ctx.is_new_line() {
+        if flags.encoded_byte_align && ctx.is_new_line() {
             reader.byte_align();
         }
 
@@ -373,7 +374,7 @@ fn iter_code(buf: &[u8]) -> impl FnMut(&Coder) -> Option<Result<Code>> + '_ {
     }
 
     let mut reader = BitReader::endian(buf, BigEndian);
-    move |ctx| match next(&huffman, &mut reader, ctx) {
+    move |ctx, flags| match next(&huffman, &mut reader, ctx, &flags) {
         Ok(v) => Some(Ok(v)),
         Err(e) => match e {
             DecodeError::IOError(io_err) => {
@@ -489,7 +490,12 @@ impl<'a> Coder<'a> {
     }
 }
 
-pub fn decode(buf: &[u8], width: u16, rows: Option<usize>) -> Result<Vec<u8>> {
+#[derive(Debug, Default)]
+pub struct Flags {
+    pub encoded_byte_align: bool,
+}
+
+pub fn decode(buf: &[u8], width: u16, rows: Option<usize>, flags: Flags) -> Result<Vec<u8>> {
     let image_line = repeat(WHITE).take(width as usize).collect_vec();
     let last_line = &image_line[..];
     let mut r = Vec::with_capacity(rows.unwrap_or(30) * width as usize);
@@ -497,7 +503,7 @@ pub fn decode(buf: &[u8], width: u16, rows: Option<usize>) -> Result<Vec<u8>> {
     let mut next_code = iter_code(buf);
     let mut coder = Coder::new(last_line, &mut line_buf);
     loop {
-        let code = next_code(&coder);
+        let code = next_code(&coder, &flags);
         debug!("code: {:?}", code);
         match code {
             None => break,
