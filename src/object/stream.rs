@@ -80,6 +80,19 @@ enum CCITTFGroup {
     Group4,
 }
 
+impl<'a: 'b, 'b> From<&CCITTFaxDecodeParams<'a, 'b>> for Flags {
+    fn from(params: &CCITTFaxDecodeParams<'a, 'b>) -> Self {
+        assert!(!params.end_of_line());
+        assert!(params.end_of_block());
+        assert_eq!(0, params.damaged_rows_before_error());
+
+        Flags {
+            encoded_byte_align: params.encoded_byte_align(),
+            inverse_black_white: params.black_is1(),
+        }
+    }
+}
+
 impl<'a: 'b, 'b> CCITTFaxDecodeParams<'a, 'b> {
     pub fn k(&self) -> CCITTFGroup {
         match self.0.get_int("K", 0).unwrap() {
@@ -139,10 +152,7 @@ fn _decode_ccitt<'a: 'b, 'b>(
             input,
             params.columns(),
             Some(params.rows() as usize),
-            Flags {
-                encoded_byte_align: params.encoded_byte_align(),
-                inverse_black_white: params.black_is1(),
-            },
+            (&params).into(),
         ),
         FILTER_CCITT_FAX,
     )?;
