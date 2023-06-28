@@ -425,11 +425,7 @@ struct Coder<'a> {
 }
 
 fn neg_color(c: u8) -> u8 {
-    match c {
-        BLACK => WHITE,
-        WHITE => BLACK,
-        _ => unreachable!(),
-    }
+    !c
 }
 
 impl<'a> Coder<'a> {
