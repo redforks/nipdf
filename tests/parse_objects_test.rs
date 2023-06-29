@@ -11,17 +11,12 @@ fn scan_objects() {
             File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {:?}", path));
         for id in 0..f.total_objects {
             print!("scan object: {}", id);
-            let obj = resolver.resolve(id);
-            match obj {
-                None => println!(" missing"),
-                Some(obj) => {
-                    if let Object::Stream(s) = obj {
-                        s.decode().unwrap();
-                    }
-
-                    println!("  done");
-                }
+            let obj = resolver.resolve(id).unwrap();
+            if let Object::Stream(s) = obj {
+                s.decode().unwrap();
             }
+
+            println!("  done");
         }
     }
 }
