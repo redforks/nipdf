@@ -8,6 +8,7 @@ use crate::{
     object::{Dictionary, FrameSet, Name, Object, ObjectValueError},
     parser::{parse_frame_set, parse_header, parse_indirected_object},
 };
+use log::error;
 use lru::LruCache;
 use nohash_hasher::BuildNoHashHasher;
 
@@ -44,6 +45,19 @@ impl<'a> XRefTable<'a> {
         self.id_offset
             .get(&id)
             .map(|offset| &self.buf[*offset as usize..])
+    }
+
+    pub fn parse_object(&self, id: u32) -> Option<Object<'a>> {
+        self.resolve_object_buf(id).and_then(|buf| {
+            let o = parse_indirected_object(buf);
+            match o {
+                Err(e) => {
+                    error!("parse object {} failed: {}", id, e);
+                    None
+                }
+                Ok((_, o)) => Some(o.take()),
+            }
+        })
     }
 }
 
@@ -87,24 +101,12 @@ impl<'a> ObjectResolver<'a> {
 
     /// Resolve object with id `id`, if object is reference, resolve it recursively.
     pub fn resolve(&mut self, id: u32) -> Option<&Object<'a>> {
-        fn parse_object(id: u32, buf: &[u8]) -> Object<'_> {
-            let (_, indirect_obj) = parse_indirected_object(buf).unwrap();
-            assert_eq!(id, indirect_obj.id().id());
-            indirect_obj.take()
-        }
-
         self.lru
             .get_or_insert(id, || {
-                let mut o = self
-                    .xref_table
-                    .resolve_object_buf(id)
-                    .map(|buf| parse_object(id, buf))?;
+                let mut o = self.xref_table.parse_object(id)?;
                 while let Object::Reference(id) = &o {
                     let id = id.id().id();
-                    o = self
-                        .xref_table
-                        .resolve_object_buf(id)
-                        .map(|buf| parse_object(id, buf))?;
+                    o = self.xref_table.parse_object(id)?;
                 }
                 Some(o)
             })
