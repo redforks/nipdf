@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use nom::{
     branch::alt,
     bytes::{
-        complete::{escaped, is_not, tag, take_till, take_while},
+        complete::{escaped, is_not, tag, take_till, take_until, take_while},
         streaming::take,
     },
     character::{
@@ -186,7 +186,11 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<Object> {
                     let (input, inner) = peek(opt(ws_prefixed(tag(b"stream"))))(input)?;
                     return match inner {
                         None => Ok((input, o)),
-                        Some(_) => Ok((input, Object::LaterResolveStream(d.clone()))),
+                        Some(_) => {
+                            let (input, _) =
+                                take_until::<&[u8], &[u8], ParseError>(b"endobj")(input)?;
+                            Ok((input, Object::LaterResolveStream(d.clone())))
+                        }
                     };
                 }
                 _ => return Ok((input, o)),
