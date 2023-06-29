@@ -2,11 +2,14 @@
 
 use anyhow::Result as AnyResult;
 use itertools::Itertools;
+use nom::bytes::complete::take_until;
 use std::{collections::HashMap, num::NonZeroUsize, str::from_utf8};
 
 use crate::{
-    object::{Dictionary, FrameSet, Name, Object, ObjectValueError},
-    parser::{parse_frame_set, parse_header, parse_indirected_object},
+    object::{Dictionary, FrameSet, Name, Object, ObjectValueError, Stream},
+    parser::{
+        parse_frame_set, parse_header, parse_indirected_object, parse_stream_content, ParseError,
+    },
 };
 use log::error;
 use lru::LruCache;
@@ -104,9 +107,26 @@ impl<'a> ObjectResolver<'a> {
         self.lru
             .get_or_insert(id, || {
                 let mut o = self.xref_table.parse_object(id)?;
-                while let Object::Reference(id) = &o {
-                    let id = id.id().id();
-                    o = self.xref_table.parse_object(id)?;
+                loop {
+                    match o {
+                        Object::Reference(id) => {
+                            let id = id.id().id();
+                            o = self.xref_table.parse_object(id)?;
+                        }
+                        Object::LaterResolveStream(d) => {
+                            let l = d.get(&Name::borrowed(b"Length")).unwrap();
+                            let l = l.as_reference().unwrap();
+                            let l = self.xref_table.parse_object(l.id().id()).unwrap();
+                            let l = l.as_int().unwrap();
+                            let buf = self.xref_table.resolve_object_buf(id).unwrap();
+                            let (buf, _) =
+                                take_until::<&[u8], &[u8], ParseError>(b"stream".as_slice())(buf)
+                                    .unwrap();
+                            let (_, content) = parse_stream_content(buf, l as u32).unwrap();
+                            o = Object::Stream(Stream(d, content));
+                        }
+                        _ => break,
+                    }
                 }
                 Some(o)
             })

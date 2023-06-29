@@ -161,6 +161,14 @@ pub fn parse_dict(input: &[u8]) -> ParseResult<Dictionary> {
     )(input)
 }
 
+pub fn parse_stream_content(input: &[u8], stream_len: u32) -> ParseResult<&[u8]> {
+    delimited(
+        tuple((ws_prefixed(tag(b"stream")), alt((crlf, tag(b"\n"))))),
+        take(stream_len),
+        ws(tag(b"endstream")),
+    )(input)
+}
+
 fn parse_object_and_stream(input: &[u8]) -> ParseResult<Object> {
     let (input, o) = parse_object(input)?;
     let (input, buf) = match o {
