@@ -81,7 +81,7 @@ pub use xref::{Entry as XRefEntry, Section as XRefSection, *};
 mod frame;
 pub use frame::*;
 
-#[derive(Clone, Copy, PartialEq, Debug, thiserror::Error)]
+#[derive(Clone, PartialEq, Debug, thiserror::Error)]
 pub enum ObjectValueError {
     #[error("unexpected type")]
     UnexpectedType,
@@ -101,6 +101,10 @@ pub enum ObjectValueError {
     FilterDecodeError,
     #[error("Stream not image")]
     StreamNotImage,
+    #[error("Object not found by id")]
+    ObjectIDNotFound,
+    #[error("Parse error: {0}")]
+    ParseError(String),
 }
 
 #[derive(Clone, PartialEq, Debug)]

@@ -50,23 +50,20 @@ impl<'a> XRefTable<'a> {
             .map(|offset| &self.buf[*offset as usize..])
     }
 
-    pub fn parse_object(&self, id: u32) -> Option<Object<'a>> {
-        self.resolve_object_buf(id).and_then(|buf| {
-            let o = parse_indirected_object(buf);
-            match o {
-                Err(e) => {
-                    error!("parse object {} failed: {}", id, e);
-                    None
-                }
-                Ok((_, o)) => Some(o.take()),
-            }
-        })
+    pub fn parse_object(&self, id: u32) -> Result<Object<'a>, ObjectValueError> {
+        self.resolve_object_buf(id)
+            .ok_or(ObjectValueError::ObjectIDNotFound)
+            .and_then(|buf| {
+                parse_indirected_object(buf)
+                    .map(|(_, o)| o.take())
+                    .map_err(|e| ObjectValueError::ParseError(e.to_string()))
+            })
     }
 }
 
 pub struct ObjectResolver<'a> {
     xref_table: XRefTable<'a>,
-    lru: LruCache<u32, Option<Object<'a>>>,
+    lru: LruCache<u32, Object<'a>>,
 }
 
 pub trait DataContainer<'a> {
@@ -103,34 +100,32 @@ impl<'a> ObjectResolver<'a> {
     }
 
     /// Resolve object with id `id`, if object is reference, resolve it recursively.
-    pub fn resolve(&mut self, id: u32) -> Option<&Object<'a>> {
-        self.lru
-            .get_or_insert(id, || {
-                let mut o = self.xref_table.parse_object(id)?;
-                loop {
-                    match o {
-                        Object::Reference(id) => {
-                            let id = id.id().id();
-                            o = self.xref_table.parse_object(id)?;
-                        }
-                        Object::LaterResolveStream(d) => {
-                            let l = d.get(&Name::borrowed(b"Length")).unwrap();
-                            let l = l.as_reference().unwrap();
-                            let l = self.xref_table.parse_object(l.id().id()).unwrap();
-                            let l = l.as_int().unwrap();
-                            let buf = self.xref_table.resolve_object_buf(id).unwrap();
-                            let (buf, _) =
-                                take_until::<&[u8], &[u8], ParseError>(b"stream".as_slice())(buf)
-                                    .unwrap();
-                            let (_, content) = parse_stream_content(buf, l as u32).unwrap();
-                            o = Object::Stream(Stream(d, content));
-                        }
-                        _ => break,
+    pub fn resolve(&mut self, id: u32) -> Result<&Object<'a>, ObjectValueError> {
+        self.lru.try_get_or_insert(id, || {
+            let mut o = self.xref_table.parse_object(id)?;
+            loop {
+                match o {
+                    Object::Reference(id) => {
+                        let id = id.id().id();
+                        o = self.xref_table.parse_object(id)?;
                     }
+                    Object::LaterResolveStream(d) => {
+                        let l = d.get(&Name::borrowed(b"Length")).unwrap();
+                        let l = l.as_reference().unwrap();
+                        let l = self.xref_table.parse_object(l.id().id()).unwrap();
+                        let l = l.as_int().unwrap();
+                        let buf = self.xref_table.resolve_object_buf(id).unwrap();
+                        let (buf, _) =
+                            take_until::<&[u8], &[u8], ParseError>(b"stream".as_slice())(buf)
+                                .unwrap();
+                        let (_, content) = parse_stream_content(buf, l as u32).unwrap();
+                        o = Object::Stream(Stream(d, content));
+                    }
+                    _ => break,
                 }
-                Some(o)
-            })
-            .as_ref()
+            }
+            Ok(o)
+        })
     }
 
     /// Resolve value from data container `c` with key `k`, if value is reference,
@@ -141,13 +136,13 @@ impl<'a> ObjectResolver<'a> {
         &'d mut self,
         c: &'c C,
         id: &'b str,
-    ) -> Option<&'c Object<'a>> {
-        let obj = c.get_value(id)?;
+    ) -> Result<&'c Object<'a>, ObjectValueError> {
+        let obj = c.get_value(id).ok_or(ObjectValueError::ObjectIDNotFound)?;
 
         if let Object::Reference(id) = obj {
             self.resolve(id.id().id())
         } else {
-            Some(obj)
+            Ok(obj)
         }
     }
 }
@@ -212,7 +207,7 @@ impl File {
         let trailers = frame_set.iter().map(|f| &f.trailer).collect_vec();
         let catalog = resolver
             .resolve_value(&trailers, "Root")
-            .ok_or(FileError::CatalogRequired)?;
+            .map_err(|_| FileError::CatalogRequired)?;
         let ver = catalog
             .as_dict()?
             .get(&Name::borrowed(b"Version"))
@@ -222,7 +217,7 @@ impl File {
             .unwrap_or(Ok(head_ver.to_owned()))?;
         let total_objects = resolver
             .resolve_value(&trailers, "Size")
-            .ok_or(FileError::MissingRequiredTrailerValue)?
+            .map_err(|_| FileError::MissingRequiredTrailerValue)?
             .as_int()? as u32;
 
         Ok((Self { ver, total_objects }, resolver))

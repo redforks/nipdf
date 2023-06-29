@@ -1,6 +1,5 @@
 use crate::object::Object;
 
-
 use std::path::PathBuf;
 use std::str::from_utf8;
 use test_case::test_case;
@@ -19,8 +18,7 @@ fn catalog_ver(
         dict.insert(Name::borrowed(b"Version"), ver);
     }
     let cat = Catalog::new(dict);
-    cat.ver()
-        .map(|v| v.map(|v| from_utf8(v).unwrap().into()))
+    cat.ver().map(|v| v.map(|v| from_utf8(v).unwrap().into()))
 }
 
 #[test]
@@ -46,10 +44,10 @@ fn object_resolver() {
     let xref_table = XRefTable::new(buf, id_offset);
     let mut resolver = ObjectResolver::new(xref_table);
 
-    assert_eq!(resolver.resolve(1), Some(&Object::Null));
-    assert_eq!(resolver.resolve(2), Some(&Object::Integer(5)));
-    assert_eq!(resolver.resolve(3), Some(&Object::Integer(5)));
-    assert_eq!(resolver.resolve(1), Some(&Object::Null));
+    assert_eq!(resolver.resolve(1), Ok(&Object::Null));
+    assert_eq!(resolver.resolve(2), Ok(&Object::Integer(5)));
+    assert_eq!(resolver.resolve(3), Ok(&Object::Integer(5)));
+    assert_eq!(resolver.resolve(1), Ok(&Object::Null));
 }
 
 #[test]
