@@ -24,6 +24,8 @@ const FILTER_DCT_DECODE: &str = "DCTDecode";
 const B_FILTER_DCT_DECODE: &[u8] = FILTER_DCT_DECODE.as_bytes();
 const FILTER_ASCII85_DECODE: &str = "ASCII85Decode";
 const B_FILTER_ASCII85_DECODE: &[u8] = FILTER_ASCII85_DECODE.as_bytes();
+const FILTER_RUN_LENGTH_DECODE: &str = "RunLengthDecode";
+const B_FILTER_RUN_LENGTH_DECODE: &[u8] = FILTER_RUN_LENGTH_DECODE.as_bytes();
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Stream<'a>(pub Dictionary<'a>, pub &'a [u8]);
@@ -142,6 +144,12 @@ fn decode_ascii85(
     handle_filter_error(decode(buf), FILTER_ASCII85_DECODE)
 }
 
+fn decode_run_length(buf: &[u8], params: Option<&Dictionary<'_>>) -> Vec<u8> {
+    assert!(params.is_none());
+    use crate::run_length::decode;
+    decode(buf)
+}
+
 fn decode_ccitt<'a: 'b, 'b>(
     input: &[u8],
     params: Option<&'b Dictionary<'a>>,
@@ -184,6 +192,7 @@ fn filter<'a: 'b, 'b>(
         B_FILTER_DCT_DECODE => decode_dct(&buf, params).map(Cow::Owned),
         B_FILTER_CCITT_FAX => decode_ccitt(&buf, params).map(Cow::Owned),
         B_FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(Cow::Owned),
+        B_FILTER_RUN_LENGTH_DECODE => Ok(Cow::Owned(decode_run_length(&buf, params))),
         _ => {
             error!("Unknown filter: {}", from_utf8(filter_name).unwrap());
             Err(ObjectValueError::UnknownFilter)
