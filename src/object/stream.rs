@@ -22,6 +22,8 @@ const FILTER_CCITT_FAX: &str = "CCITTFaxDecode";
 const B_FILTER_CCITT_FAX: &[u8] = FILTER_CCITT_FAX.as_bytes();
 const FILTER_DCT_DECODE: &str = "DCTDecode";
 const B_FILTER_DCT_DECODE: &[u8] = FILTER_DCT_DECODE.as_bytes();
+const FILTER_ASCII85_DECODE: &str = "ASCII85Decode";
+const B_FILTER_ASCII85_DECODE: &[u8] = FILTER_ASCII85_DECODE.as_bytes();
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Stream<'a>(pub Dictionary<'a>, pub &'a [u8]);
@@ -131,6 +133,15 @@ impl<'a: 'b, 'b> CCITTFaxDecodeParams<'a, 'b> {
     }
 }
 
+fn decode_ascii85(
+    buf: &[u8],
+    params: Option<&Dictionary<'_>>,
+) -> Result<Vec<u8>, ObjectValueError> {
+    assert!(params.is_none());
+    use crate::ascii85::decode;
+    handle_filter_error(decode(buf), FILTER_ASCII85_DECODE)
+}
+
 fn decode_ccitt<'a: 'b, 'b>(
     input: &[u8],
     params: Option<&'b Dictionary<'a>>,
@@ -172,6 +183,7 @@ fn filter<'a: 'b, 'b>(
         b"FlateDecode" => decode_flate(&buf, params).map(Cow::Owned),
         B_FILTER_DCT_DECODE => decode_dct(&buf, params).map(Cow::Owned),
         B_FILTER_CCITT_FAX => decode_ccitt(&buf, params).map(Cow::Owned),
+        B_FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(Cow::Owned),
         _ => {
             error!("Unknown filter: {}", from_utf8(filter_name).unwrap());
             Err(ObjectValueError::UnknownFilter)
