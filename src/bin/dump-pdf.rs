@@ -26,29 +26,24 @@ fn dump_stream(path: &str, id: u32, raw: bool, as_image: bool) -> AnyResult<()> 
     let buf = std::fs::read(path).unwrap();
     let (_f, mut resolver) =
         File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {:?}", path));
-    let obj = resolver.resolve(id);
+    let obj = resolver.resolve(id)?;
     match obj {
-        None => eprintln!("object id not found"),
-        Some(obj) => {
-            match obj {
-                Object::Stream(s) => {
-                    let decoded;
-                    let image;
-                    let mut buf = if as_image {
-                        image = s.to_image()?;
-                        &image.data[..]
-                    } else if raw {
-                        s.1
-                    } else {
-                        decoded = s.decode()?;
-                        decoded.borrow()
-                    };
-                    copy(&mut buf, &mut stdout())?;
-                }
-                _ => eprintln!("object is not a stream"),
+        Object::Stream(s) => {
+            let decoded;
+            let image;
+            let mut buf = if as_image {
+                image = s.to_image()?;
+                &image.data[..]
+            } else if raw {
+                s.1
+            } else {
+                decoded = s.decode()?;
+                decoded.borrow()
             };
+            copy(&mut buf, &mut stdout())?;
         }
-    }
+        _ => eprintln!("object is not a stream"),
+    };
     Ok(())
 }
 
