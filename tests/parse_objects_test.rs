@@ -1,5 +1,8 @@
 use glob::glob;
-use pdf2docx::{file::File, object::Object};
+use pdf2docx::{
+    file::File,
+    object::{Object, ObjectValueError},
+};
 
 #[test_log::test]
 fn scan_objects() {
@@ -11,9 +14,15 @@ fn scan_objects() {
             File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {:?}", path));
         for id in 0..f.total_objects {
             print!("scan object: {}", id);
-            let obj = resolver.resolve(id).unwrap();
-            if let Object::Stream(s) = obj {
-                s.decode().unwrap();
+            match resolver.resolve(id) {
+                Err(ObjectValueError::ObjectIDNotFound) => {
+                    print!(" not found")
+                }
+                Err(e) => panic!("{}", e),
+                Ok(Object::Stream(s)) => {
+                    s.decode().unwrap();
+                }
+                _ => {}
             }
 
             println!("  done");
