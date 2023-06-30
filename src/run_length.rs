@@ -15,7 +15,7 @@ pub fn decode(data: &[u8]) -> Vec<u8> {
             let copy = 257 - length as usize; // copy 2 - 128 times
             let b = d[c + 1]; // copied byte
             buf.extend(std::iter::repeat(b).take(copy));
-            c = c + 2; // move cursor to next run
+            c += 2; // move cursor to next run
         } else {
             break; // EOD
         }
