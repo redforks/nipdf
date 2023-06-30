@@ -4,6 +4,7 @@ use ahash::HashMap;
 use std::{
     borrow::{Borrow, Cow},
     iter::Peekable,
+    str::from_utf8,
 };
 
 mod indirect_object;
@@ -52,6 +53,22 @@ impl<'a> Dictionary<'a> {
 
     pub fn set(&mut self, id: impl Into<Name<'a>>, value: impl Into<Object<'a>>) {
         self.0.insert(id.into(), value.into());
+    }
+
+    pub fn get_name(&self, id: &'static str) -> Result<Option<&str>, ObjectValueError> {
+        self.0
+            .get(&id.into())
+            .map_or(Ok(None), |o| Ok(Some(from_utf8(o.as_name()?).unwrap())))
+    }
+
+    pub fn get_name_or(
+        &self,
+        id: &'static str,
+        default: &'static str,
+    ) -> Result<&str, ObjectValueError> {
+        self.0
+            .get(&id.into())
+            .map_or(Ok(default), |o| Ok(from_utf8(o.as_name()?).unwrap()))
     }
 }
 

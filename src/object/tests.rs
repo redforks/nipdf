@@ -60,6 +60,38 @@ fn dict_get_bool() {
 
     assert_eq!(Ok(true), d.get_bool("a", false));
     assert_eq!(Ok(true), d.get_bool("b", true));
-    assert_eq!(Err(ObjectValueError::UnexpectedType), d.get_bool("c", false));
+    assert_eq!(
+        Err(ObjectValueError::UnexpectedType),
+        d.get_bool("c", false)
+    );
     assert_eq!(Ok(false), d.get_bool("d", false));
+}
+
+#[test]
+fn dict_get_name_or() {
+    let mut d = Dictionary::default();
+    d.set("a", "/foo");
+    d.set("b", "/bar");
+    d.set("c", 1i32);
+
+    assert_eq!(Ok("foo"), d.get_name_or("a", "default"));
+    assert_eq!(Ok("bar"), d.get_name_or("b", "default"));
+    assert_eq!(
+        Err(ObjectValueError::UnexpectedType),
+        d.get_name_or("c", "default")
+    );
+    assert_eq!(Ok("default"), d.get_name_or("d", "default"));
+}
+
+#[test]
+fn dict_get_name() {
+    let mut d = Dictionary::default();
+    d.set("a", "/foo");
+    d.set("b", "/bar");
+    d.set("c", 1i32);
+
+    assert_eq!(Ok(Some("foo")), d.get_name("a"));
+    assert_eq!(Ok(Some("bar")), d.get_name("b"));
+    assert_eq!(Err(ObjectValueError::UnexpectedType), d.get_name("c"));
+    assert_eq!(Ok(None), d.get_name("d"));
 }
