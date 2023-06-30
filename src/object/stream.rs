@@ -131,6 +131,10 @@ impl<'a: 'b, 'b> ImageDict<'a, 'b> {
     fn bit_per_component(&self) -> u8 {
         self.0.get_int("BitsPerComponent", -1).unwrap() as u8
     }
+
+    pub fn encode_image(&self, data: &[u8]) -> Result<Image, ObjectValueError> {
+        todo!()
+    }
 }
 
 struct CCITTFaxDecodeParams<'a: 'b, 'b>(&'b Dictionary<'a>);
@@ -302,34 +306,40 @@ impl<'a> Stream<'a> {
         Ok(buf)
     }
 
-    pub fn to_image(&self) -> Result<Image, ObjectValueError> {
-        let mut buf = Cow::Borrowed(self.1);
+    fn pass_through_to_image(&self) -> Result<Option<Image>, ObjectValueError> {
         let mut iter = self.iter_filter()?;
-        for (filter_name, params) in iter.by_ref() {
+        for (filter_name, _) in iter.by_ref() {
             match filter_name {
                 B_FILTER_DCT_DECODE => {
+                    let buf = Cow::Borrowed(self.1);
                     return ensure_last_filter(
-                        Image {
+                        Some(Image {
                             format: ImageFormat::Jpeg,
                             data: buf.into(),
-                        },
+                        }),
                         iter.next().is_some(),
                         FILTER_DCT_DECODE,
                     );
                 }
-                B_FILTER_CCITT_FAX => {
-                    return ensure_last_filter(
-                        ccitt_to_image(&buf, params)?,
-                        iter.next().is_some(),
-                        FILTER_CCITT_FAX,
-                    );
-                }
-                _ => {
-                    buf = filter(buf, filter_name, params)?;
-                }
+                _ => return Ok(None),
             }
         }
-        Err(ObjectValueError::StreamNotImage)
+        return Ok(None);
+    }
+
+    pub fn to_image(&self) -> Result<Image, ObjectValueError> {
+        let r = self.pass_through_to_image()?;
+        if let Some(img) = r {
+            return Ok(img);
+        }
+
+        let img_dict = ImageDict::from_dict(&self.0);
+        let Some(img_dict) = img_dict else {
+            return Err(ObjectValueError::StreamNotImage);
+        };
+        // pass-through format like DCT,  for better quality
+        let data = self.decode()?;
+        img_dict.encode_image(&data)
     }
 
     fn iter_filter(
