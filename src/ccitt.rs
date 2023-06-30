@@ -3,10 +3,9 @@ use bitstream_io::{
     read::{BitRead, BitReader},
     BigEndian, HuffmanRead,
 };
+use bitvec::{prelude::Msb0, slice::BitSlice, vec::BitVec};
 use log::{debug, error};
 use std::iter::repeat;
-
-use itertools::Itertools;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum Code {
@@ -24,13 +23,23 @@ struct Run {
 }
 
 impl Run {
+    fn from_bool(color: bool, bytes: u16) -> Self {
+        Self::new(if color { WHITE } else { BLACK }, bytes)
+    }
+
     fn new(color: u8, bytes: u16) -> Self {
         Self { color, bytes }
+    }
+
+    fn b_color(&self) -> bool {
+        self.color == WHITE
     }
 }
 
 const BLACK: u8 = 0;
+const B_BLACK: bool = false;
 const WHITE: u8 = 255;
+const B_WHITE: bool = true;
 const GRAY: u8 = 128;
 const NOT_USED: u8 = 100;
 
@@ -52,11 +61,10 @@ struct RunHuffamnTree {
 }
 
 impl RunHuffamnTree {
-    fn get(&self, color: u8) -> &[ReadHuffmanTree<BigEndian, Run>] {
+    fn get(&self, color: bool) -> &[ReadHuffmanTree<BigEndian, Run>] {
         match color {
-            BLACK => &self.black,
-            WHITE => &self.white,
-            _ => unreachable!(),
+            B_BLACK => &self.black,
+            B_WHITE => &self.white,
         }
     }
 }
@@ -286,16 +294,16 @@ fn build_run_huffman() -> RunHuffamnTree {
 fn next_run(
     reader: &mut impl HuffmanRead<BigEndian>,
     huffman: &RunHuffamnTree,
-    color: u8,
+    color: bool,
 ) -> Result<Run> {
     let tree = huffman.get(color);
-    let mut r = Run::new(color, 0);
+    let mut r = Run::from_bool(color, 0);
     loop {
         let run = reader.read_huffman(tree)?;
         match run.color {
             GRAY => {}
             BLACK | WHITE => {
-                if run.color != color {
+                if !(run.color == BLACK || run.color == WHITE || (run.color == WHITE) == color) {
                     return Err(DecodeError::HorizontalRunColorMismatch);
                 }
             }
@@ -330,7 +338,7 @@ fn iter_code(buf: &[u8]) -> impl FnMut(&Coder, &Flags) -> Option<Result<Code>> +
             0b10 => Ok(Code::Vertical(-1)), // 010
             0b01 => {
                 let a0a1 = next_run(reader, huffman, ctx.cur_color())?;
-                let a1a2 = next_run(reader, huffman, neg_color(ctx.cur_color()))?;
+                let a1a2 = next_run(reader, huffman, !ctx.cur_color())?;
                 Ok(Code::Horizontal(a0a1, a1a2))
             }
             0b00 => {
@@ -389,10 +397,10 @@ fn iter_code(buf: &[u8]) -> impl FnMut(&Coder, &Flags) -> Option<Result<Code>> +
     }
 }
 
-struct LineBuf<'a>(&'a [u8]);
+struct LineBuf<'a>(&'a BitSlice<u8, Msb0>);
 
 impl<'a> LineBuf<'a> {
-    fn b1(&self, pos: Option<usize>, pos_color: u8) -> usize {
+    fn b1(&self, pos: Option<usize>, pos_color: bool) -> usize {
         let pos = self.next_flip(pos);
         if pos < self.0.len() && self.0[pos] == pos_color {
             self.next_flip(Some(pos))
@@ -403,7 +411,7 @@ impl<'a> LineBuf<'a> {
 
     fn next_flip(&self, pos: Option<usize>) -> usize {
         let color = match pos {
-            None => WHITE,
+            None => true,
             Some(pos) => self.0[pos],
         };
         let pos = pos.unwrap_or_default();
@@ -413,29 +421,25 @@ impl<'a> LineBuf<'a> {
 
         self.0[pos..]
             .iter()
-            .position(|&c| c != color)
+            .position(|c| c != color)
             .map_or(self.0.len(), |p| pos + p)
     }
 }
 
 struct Coder<'a> {
     last: LineBuf<'a>,
-    cur: &'a mut [u8],
-    cur_color: u8,
+    cur: &'a mut BitSlice<u8, Msb0>,
+    cur_color: bool,
     pos: Option<usize>,
 }
 
-fn neg_color(c: u8) -> u8 {
-    !c
-}
-
 impl<'a> Coder<'a> {
-    fn new(last: &'a [u8], cur: &'a mut [u8]) -> Self {
+    fn new(last: &'a BitSlice<u8, Msb0>, cur: &'a mut BitSlice<u8, Msb0>) -> Self {
         debug_assert!(last.len() == cur.len());
         Self {
             last: LineBuf(last),
             cur,
-            cur_color: WHITE,
+            cur_color: B_WHITE,
             pos: None,
         }
     }
@@ -444,7 +448,7 @@ impl<'a> Coder<'a> {
         self.pos.is_none()
     }
 
-    fn cur_color(&self) -> u8 {
+    fn cur_color(&self) -> bool {
         self.cur_color
     }
 
@@ -452,7 +456,7 @@ impl<'a> Coder<'a> {
         debug!("fill {:?} at {:?}", run, self.pos);
         let mut pos = self.pos.unwrap_or_default();
         for _ in 0..run.bytes {
-            self.cur[pos] = run.color;
+            self.cur.set(pos, run.b_color());
             pos += 1;
         }
         self.pos = Some(pos);
@@ -469,16 +473,16 @@ impl<'a> Coder<'a> {
                 let b1 = self.last.b1(self.pos, self.cur_color);
                 debug!("b1: {}, color: {}", b1, self.cur_color);
                 self.fill(Run::new(
-                    self.cur_color,
+                    if self.cur_color { WHITE } else { BLACK },
                     (b1 as i16 - self.pos.unwrap_or_default() as i16 + n as i16) as u16,
                 ));
-                self.cur_color = neg_color(self.cur_color);
+                self.cur_color = !self.cur_color;
             }
             Code::Pass => {
                 let b1 = self.last.b1(self.pos, self.cur_color);
                 let b2 = self.last.next_flip(Some(b1));
                 self.fill(Run::new(
-                    self.cur_color,
+                    if self.cur_color { WHITE } else { BLACK },
                     (b2 - self.pos.unwrap_or_default()) as u16,
                 ));
                 debug_assert_eq!(self.pos.unwrap(), b2);
@@ -497,10 +501,10 @@ pub struct Flags {
 }
 
 pub fn decode(buf: &[u8], width: u16, rows: Option<usize>, flags: Flags) -> Result<Vec<u8>> {
-    let image_line = repeat(WHITE).take(width as usize).collect_vec();
+    let image_line: BitVec<u8, Msb0> = repeat(B_WHITE).take(width as usize).collect();
     let last_line = &image_line[..];
-    let mut r = Vec::with_capacity(rows.unwrap_or(30) * width as usize);
-    let mut line_buf = repeat(0x10).take(width as usize).collect_vec();
+    let mut r = BitVec::<u8, Msb0>::with_capacity(rows.unwrap_or(30) * width as usize);
+    let mut line_buf: BitVec<u8, Msb0> = repeat(true).take(width as usize).collect();
     let mut next_code = iter_code(buf);
     let mut coder = Coder::new(last_line, &mut line_buf);
     loop {
@@ -515,7 +519,7 @@ pub fn decode(buf: &[u8], width: u16, rows: Option<usize>, flags: Flags) -> Resu
                 }
                 code => {
                     if coder.decode(code)? {
-                        r.extend_from_slice(&line_buf[..]);
+                        r.extend(line_buf.iter());
 
                         coder = Coder::new(&r[r.len() - width as usize..], &mut line_buf);
                         debug!("line: {}\n", r.len() / width as usize);
@@ -527,11 +531,9 @@ pub fn decode(buf: &[u8], width: u16, rows: Option<usize>, flags: Flags) -> Resu
     }
 
     if flags.inverse_black_white {
-        for c in &mut r {
-            *c = !*c;
-        }
+        r.reverse();
     }
-    Ok(r)
+    Ok(r.into_vec())
 }
 
 #[allow(dead_code)]

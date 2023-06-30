@@ -1,12 +1,11 @@
 use std::{
     borrow::{Borrow, Cow},
     fmt::Display,
-    io::Cursor,
     iter::repeat,
     str::from_utf8,
 };
 
-use image::{write_buffer_with_format, ImageFormat};
+use image::ImageFormat;
 use log::error;
 use once_cell::unsync::Lazy;
 
@@ -236,32 +235,25 @@ fn decode_ccitt<'a: 'b, 'b>(
     input: &[u8],
     params: Option<&'b Dictionary<'a>>,
 ) -> Result<Vec<u8>, ObjectValueError> {
-    _decode_ccitt(input, params).map(|(buf, _meta)| buf)
-}
+    {
+        let params = params;
+        use crate::ccitt::decode;
 
-fn _decode_ccitt<'a: 'b, 'b>(
-    input: &[u8],
-    params: Option<&'b Dictionary<'a>>,
-) -> Result<(Vec<u8>, (u32, u32)), ObjectValueError> {
-    use crate::ccitt::decode;
-
-    let empty_params = Lazy::new(Dictionary::new);
-    let params = CCITTFaxDecodeParams(params.unwrap_or_else(|| Lazy::force(&empty_params)));
-    assert_eq!(params.k(), CCITTFGroup::Group4);
-    let image = handle_filter_error(
-        decode(
-            input,
-            params.columns(),
-            Some(params.rows() as usize),
-            (&params).into(),
-        ),
-        FILTER_CCITT_FAX,
-    )?;
-    assert_eq!(
-        params.rows() as usize,
-        image.len() / params.columns() as usize
-    );
-    Ok((image, (params.columns() as u32, params.rows() as u32)))
+        let empty_params = Lazy::new(Dictionary::new);
+        let params = CCITTFaxDecodeParams(params.unwrap_or_else(|| Lazy::force(&empty_params)));
+        assert_eq!(params.k(), CCITTFGroup::Group4);
+        let image = handle_filter_error(
+            decode(
+                input,
+                params.columns(),
+                Some(params.rows() as usize),
+                (&params).into(),
+            ),
+            FILTER_CCITT_FAX,
+        )?;
+        Ok((image, (params.columns() as u32, params.rows() as u32)))
+    }
+    .map(|(buf, _meta)| buf)
 }
 
 fn filter<'a: 'b, 'b>(
@@ -296,24 +288,6 @@ fn ensure_last_filter<T>(v: T, has_next: bool, filter_name: &str) -> Result<T, O
     }
 }
 
-fn ccitt_to_image(buf: &[u8], params: Option<&Dictionary<'_>>) -> Result<Image, ObjectValueError> {
-    let (data, (w, h)) = _decode_ccitt(buf, params)?;
-    let mut cursor = Cursor::new(Vec::new());
-    write_buffer_with_format(
-        &mut cursor,
-        &data,
-        w,
-        h,
-        image::ColorType::L8,
-        ImageFormat::Png,
-    )
-    .unwrap();
-    Ok(Image {
-        format: ImageFormat::Png,
-        data: cursor.into_inner(),
-    })
-}
-
 impl<'a> Stream<'a> {
     /// Decode stream data using filter and parameters in stream dictionary.
     pub fn decode(&self) -> Result<Cow<[u8]>, ObjectValueError> {
@@ -326,7 +300,7 @@ impl<'a> Stream<'a> {
 
     fn pass_through_to_image(&self) -> Result<Option<Image>, ObjectValueError> {
         let mut iter = self.iter_filter()?;
-        for (filter_name, _) in iter.by_ref() {
+        if let Some((filter_name, _)) = iter.next() {
             match filter_name {
                 B_FILTER_DCT_DECODE => {
                     let buf = Cow::Borrowed(self.1);
@@ -342,7 +316,7 @@ impl<'a> Stream<'a> {
                 _ => return Ok(None),
             }
         }
-        return Ok(None);
+        Ok(None)
     }
 
     pub fn to_image(&self) -> Result<Image, ObjectValueError> {

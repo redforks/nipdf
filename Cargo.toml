@@ -27,6 +27,7 @@ env_logger = {version = "0.10.0", optional = true}
 bitstream-io = "1.6.0"
 strum = { version = "0.25.0", features = ["derive"] }
 png = "0.17.9"
+bitvec = "1.0.1"
 
 [features]
 clr = ["env_logger", "clap"]
