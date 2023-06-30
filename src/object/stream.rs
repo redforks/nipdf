@@ -133,7 +133,25 @@ impl<'a: 'b, 'b> ImageDict<'a, 'b> {
     }
 
     pub fn encode_image(&self, data: &[u8]) -> Result<Image, ObjectValueError> {
-        todo!()
+        use png::{BitDepth, ColorType, Encoder};
+
+        match self.color_space() {
+            ColorSpace::DeviceGray => {
+                assert!(self.bit_per_component() == 1);
+                let mut bytes = Vec::new();
+                let mut encoder = Encoder::new(&mut bytes, self.width(), self.height());
+                encoder.set_color(ColorType::Grayscale);
+                encoder.set_depth(BitDepth::One);
+                let mut writer = encoder.write_header().unwrap();
+                writer.write_image_data(data).unwrap();
+                drop(writer);
+                Ok(Image {
+                    format: ImageFormat::Png,
+                    data: bytes,
+                })
+            }
+            _ => todo!("encode_image: {:?}", self.color_space()),
+        }
     }
 }
 
