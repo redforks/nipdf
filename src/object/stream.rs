@@ -73,6 +73,66 @@ fn decode_dct(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, Object
     handle_filter_error(decoder.decode(), FILTER_DCT_DECODE)
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug, strum::EnumString)]
+enum ColorSpace {
+    DeviceGray,
+    DeviceRGB,
+    DeviceCMYK,
+    CalGray,
+}
+
+struct ImageDict<'a: 'b, 'b>(&'b Dictionary<'a>);
+
+impl<'a: 'b, 'b> ImageDict<'a, 'b> {
+    /// Return `None` if dict is not image.
+    pub fn from_dict(dict: &'b Dictionary<'a>) -> Option<Self> {
+        if !dict
+            .get_name("Type")
+            .ok()
+            .flatten()
+            .map_or(true, |ty| ty == "XObject")
+        {
+            return None;
+        }
+
+        if !dict
+            .get_name("Subtype")
+            .ok()
+            .flatten()
+            .is_some_and(|ty| ty == "Image")
+        {
+            return None;
+        };
+
+        if dict.get_bool("ImageMask", false).ok().unwrap_or(true) {
+            return None;
+        }
+
+        Some(Self(dict))
+    }
+
+    fn width(&self) -> u32 {
+        self.0.get_int("Width", -1).unwrap() as u32
+    }
+
+    fn height(&self) -> u32 {
+        self.0.get_int("Height", -1).unwrap() as u32
+    }
+
+    fn color_space(&self) -> ColorSpace {
+        self.0
+            .get_name("ColorSpace")
+            .unwrap()
+            .unwrap()
+            .parse()
+            .unwrap()
+    }
+
+    fn bit_per_component(&self) -> u8 {
+        self.0.get_int("BitsPerComponent", -1).unwrap() as u8
+    }
+}
+
 struct CCITTFaxDecodeParams<'a: 'b, 'b>(&'b Dictionary<'a>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
