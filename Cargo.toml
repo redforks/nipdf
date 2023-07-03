@@ -28,6 +28,7 @@ bitstream-io = "1.6.0"
 strum = { version = "0.25.0", features = ["derive"] }
 png = "0.17.9"
 bitvec = "1.0.1"
+jpeg2k = "0.6.6"
 
 [features]
 clr = ["env_logger", "clap"]
