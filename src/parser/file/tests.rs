@@ -6,7 +6,7 @@ use test_case::test_case;
 fn parse_file_header() {
     let buf = b"%PDF-1.7\n%comment\n";
     let (buf, header) = parse_header(buf).unwrap();
-    assert_eq!(buf, b"%comment\n");
+    assert_eq!(buf, b"");
     assert_eq!(header, "1.7");
 }
 

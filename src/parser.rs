@@ -2,7 +2,7 @@ use nom::{
     character::complete::multispace0,
     error::FromExternalError,
     sequence::{delimited, preceded, terminated},
-    IResult, Parser,
+    IResult, Parser, combinator::opt,
 };
 
 #[derive(PartialEq, Debug, thiserror::Error)]
@@ -76,11 +76,28 @@ mod object;
 pub use file::*;
 pub use object::*;
 
+fn comment(buf: &[u8]) -> ParseResult<'_, ()> {
+    let (buf, _) = nom::bytes::complete::tag(b"%")(buf)?;
+    let (buf, content) = nom::bytes::complete::is_not("\n\r")(buf)?;
+    if content.starts_with(b"PDF-") || content.starts_with(b"%EOF") {
+        return Err(nom::Err::Error(ParseError::InvalidNameFormat));
+    }
+    let (buf, _) = nom::bytes::complete::take_while(|c| c == b'\n' || c == b'\r')(buf)?;
+    let (buf, _) = multispace0(buf)?;
+    Ok((buf, ()))
+}
+
+fn whitespace_or_comment(buf: &[u8]) -> ParseResult<'_, ()> {
+    let (buf, _) = multispace0(buf)?;
+    let (buf, _) = opt(comment)(buf)?;
+    Ok((buf, ()))
+}
+
 fn ws_prefixed<'a, F, O>(inner: F) -> impl FnMut(&'a [u8]) -> ParseResult<'_, O>
 where
     F: Parser<&'a [u8], O, ParseError<'a>>,
 {
-    preceded(multispace0, inner)
+    preceded(whitespace_or_comment, inner)
 }
 
 /// A combinator that takes a parser `inner` and produces a parser that also consumes both leading and
@@ -89,12 +106,12 @@ fn ws<'a, F, O>(inner: F) -> impl FnMut(&'a [u8]) -> ParseResult<'_, O>
 where
     F: Parser<&'a [u8], O, ParseError<'a>>,
 {
-    delimited(multispace0, inner, multispace0)
+    delimited(whitespace_or_comment, inner, whitespace_or_comment)
 }
 
 fn ws_terminated<'a, F, O>(inner: F) -> impl FnMut(&'a [u8]) -> ParseResult<'_, O>
 where
     F: Parser<&'a [u8], O, ParseError<'a>>,
 {
-    terminated(inner, multispace0)
+    terminated(inner, whitespace_or_comment)
 }
