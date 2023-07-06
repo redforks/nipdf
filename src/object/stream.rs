@@ -5,7 +5,8 @@ use std::{
     str::from_utf8,
 };
 
-use image::DynamicImage;
+use bitstream_io::{BigEndian, BitReader};
+use image::{DynamicImage, GrayImage, Luma};
 use log::error;
 use once_cell::unsync::Lazy;
 
@@ -144,6 +145,24 @@ impl<'a: 'b, 'b> ImageDict<'a, 'b> {
 
     fn bit_per_component(&self) -> u8 {
         self.0.get_int("BitsPerComponent", -1).unwrap() as u8
+    }
+
+    fn as_dynamic_image(&self, data: Cow<[u8]>) -> Result<DynamicImage, ObjectValueError> {
+        match (self.color_space(), self.bit_per_component()) {
+            (ColorSpace::DeviceGray, 1) => {
+                use bitstream_io::read::BitRead;
+
+                let mut img = GrayImage::new(self.width(), self.height());
+                let mut r = BitReader::<_, BigEndian>::new(data.borrow() as &[u8]);
+                for y in 0..self.height() {
+                    for x in 0..self.width() {
+                        img.put_pixel(x, y, Luma([if r.read_bit().unwrap() { 255u8 } else { 0 }]));
+                    }
+                }
+                Ok(DynamicImage::ImageLuma8(img))
+            }
+            _ => todo!("encode_image: {:?}", self.color_space()),
+        }
     }
 
     fn decode_image(&self, data: &[u8]) -> Result<RawImage, ObjectValueError> {
@@ -350,6 +369,15 @@ impl<'a> Stream<'a> {
             }
         }
         Ok(None)
+    }
+
+    pub fn to_dynamic_image(&self) -> Result<DynamicImage, ObjectValueError> {
+        let img_dict = ImageDict::from_dict(&self.0);
+        let Some(img_dict) = img_dict else {
+            return Err(ObjectValueError::StreamNotImage);
+        };
+        let data = self.decode()?;
+        img_dict.as_dynamic_image(data)
     }
 
     pub fn to_raw_image(&self) -> Result<RawImage, ObjectValueError> {
