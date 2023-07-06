@@ -5,7 +5,7 @@ use std::{
     str::from_utf8,
 };
 
-use image::ImageFormat;
+use image::DynamicImage;
 use log::error;
 use once_cell::unsync::Lazy;
 
@@ -25,6 +25,8 @@ const FILTER_ASCII85_DECODE: &str = "ASCII85Decode";
 const B_FILTER_ASCII85_DECODE: &[u8] = FILTER_ASCII85_DECODE.as_bytes();
 const FILTER_RUN_LENGTH_DECODE: &str = "RunLengthDecode";
 const B_FILTER_RUN_LENGTH_DECODE: &[u8] = FILTER_RUN_LENGTH_DECODE.as_bytes();
+const FILTER_JPX_DECODE: &str = "JPXDecode";
+const B_FILTER_JPX_DECODE: &[u8] = FILTER_JPX_DECODE.as_bytes();
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Stream<'a>(pub Dictionary<'a>, pub &'a [u8]);
@@ -70,6 +72,19 @@ fn decode_dct(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, Object
     use jpeg_decoder::Decoder;
     let mut decoder = Decoder::new(buf);
     handle_filter_error(decoder.decode(), FILTER_DCT_DECODE)
+}
+
+fn decode_jpx(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, ObjectValueError> {
+    assert!(
+        params.is_none(),
+        "TODO: handle params of {}",
+        FILTER_JPX_DECODE
+    );
+    use jpeg2k::Image;
+    let img = handle_filter_error(Image::from_bytes(buf), FILTER_JPX_DECODE)?;
+    let img = handle_filter_error(img.get_pixels(None), FILTER_JPX_DECODE)?;
+
+    Ok(img.data)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, strum::EnumString)]
@@ -131,7 +146,7 @@ impl<'a: 'b, 'b> ImageDict<'a, 'b> {
         self.0.get_int("BitsPerComponent", -1).unwrap() as u8
     }
 
-    pub fn encode_image(&self, data: &[u8]) -> Result<Image, ObjectValueError> {
+    fn decode_image(&self, data: &[u8]) -> Result<RawImage, ObjectValueError> {
         use png::{BitDepth, ColorType, Encoder};
 
         match self.color_space() {
@@ -144,7 +159,7 @@ impl<'a: 'b, 'b> ImageDict<'a, 'b> {
                 let mut writer = encoder.write_header().unwrap();
                 writer.write_image_data(data).unwrap();
                 drop(writer);
-                Ok(Image {
+                Ok(RawImage {
                     format: ImageFormat::Png,
                     data: bytes,
                 })
@@ -267,6 +282,7 @@ fn filter<'a: 'b, 'b>(
         B_FILTER_CCITT_FAX => decode_ccitt(&buf, params).map(Cow::Owned),
         B_FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(Cow::Owned),
         B_FILTER_RUN_LENGTH_DECODE => Ok(Cow::Owned(decode_run_length(&buf, params))),
+        B_FILTER_JPX_DECODE => decode_jpx(&buf, params).map(Cow::Owned),
         _ => {
             error!("Unknown filter: {}", from_utf8(filter_name).unwrap());
             Err(ObjectValueError::UnknownFilter)
@@ -274,7 +290,13 @@ fn filter<'a: 'b, 'b>(
     }
 }
 
-pub struct Image {
+pub enum ImageFormat {
+    Jpeg,
+    Jpeg2k,
+    Png,
+}
+
+pub struct RawImage {
     pub format: ImageFormat,
     pub data: Vec<u8>,
 }
@@ -298,19 +320,30 @@ impl<'a> Stream<'a> {
         Ok(buf)
     }
 
-    fn pass_through_to_image(&self) -> Result<Option<Image>, ObjectValueError> {
+    fn pass_through_to_image(&self) -> Result<Option<RawImage>, ObjectValueError> {
         let mut iter = self.iter_filter()?;
         if let Some((filter_name, _)) = iter.next() {
             match filter_name {
                 B_FILTER_DCT_DECODE => {
                     let buf = Cow::Borrowed(self.1);
                     return ensure_last_filter(
-                        Some(Image {
+                        Some(RawImage {
                             format: ImageFormat::Jpeg,
                             data: buf.into(),
                         }),
                         iter.next().is_some(),
                         FILTER_DCT_DECODE,
+                    );
+                }
+                B_FILTER_JPX_DECODE => {
+                    let buf = Cow::Borrowed(self.1);
+                    return ensure_last_filter(
+                        Some(RawImage {
+                            format: ImageFormat::Jpeg2k, // TODO: how to specific ImageFormat jpeg2k
+                            data: buf.into(),
+                        }),
+                        iter.next().is_some(),
+                        FILTER_JPX_DECODE,
                     );
                 }
                 _ => return Ok(None),
@@ -319,7 +352,7 @@ impl<'a> Stream<'a> {
         Ok(None)
     }
 
-    pub fn to_image(&self) -> Result<Image, ObjectValueError> {
+    pub fn to_raw_image(&self) -> Result<RawImage, ObjectValueError> {
         let r = self.pass_through_to_image()?;
         if let Some(img) = r {
             return Ok(img);
@@ -331,7 +364,7 @@ impl<'a> Stream<'a> {
         };
         // pass-through format like DCT,  for better quality
         let data = self.decode()?;
-        img_dict.encode_image(&data)
+        img_dict.decode_image(&data)
     }
 
     fn iter_filter(

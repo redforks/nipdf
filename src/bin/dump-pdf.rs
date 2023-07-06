@@ -32,7 +32,7 @@ fn dump_stream(path: &str, id: u32, raw: bool, as_image: bool) -> AnyResult<()> 
             let decoded;
             let image;
             let mut buf = if as_image {
-                image = s.to_image()?;
+                image = s.to_raw_image()?;
                 &image.data[..]
             } else if raw {
                 s.1
