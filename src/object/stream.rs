@@ -134,13 +134,11 @@ impl<'a: 'b, 'b> ImageDict<'a, 'b> {
         self.0.get_int("Height", -1).unwrap() as u32
     }
 
-    fn color_space(&self) -> ColorSpace {
+    fn color_space(&self) -> Option<ColorSpace> {
         self.0
             .get_name("ColorSpace")
             .unwrap()
-            .unwrap()
-            .parse()
-            .unwrap()
+            .map(|s| s.parse().unwrap())
     }
 
     fn bit_per_component(&self) -> u8 {
@@ -149,7 +147,7 @@ impl<'a: 'b, 'b> ImageDict<'a, 'b> {
 
     fn as_dynamic_image(&self, data: Cow<[u8]>) -> Result<DynamicImage, ObjectValueError> {
         match (self.color_space(), self.bit_per_component()) {
-            (ColorSpace::DeviceGray, 1) => {
+            (Some(ColorSpace::DeviceGray), 1) => {
                 use bitstream_io::read::BitRead;
 
                 let mut img = GrayImage::new(self.width(), self.height());
@@ -169,7 +167,7 @@ impl<'a: 'b, 'b> ImageDict<'a, 'b> {
         use png::{BitDepth, ColorType, Encoder};
 
         match self.color_space() {
-            ColorSpace::DeviceGray => {
+            Some(ColorSpace::DeviceGray) => {
                 assert!(self.bit_per_component() == 1);
                 let mut bytes = Vec::new();
                 let mut encoder = Encoder::new(&mut bytes, self.width(), self.height());
