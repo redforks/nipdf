@@ -141,48 +141,8 @@ impl<'a: 'b, 'b> ImageDict<'a, 'b> {
             .map(|s| s.parse().unwrap())
     }
 
-    fn bit_per_component(&self) -> u8 {
+    fn bits_per_component(&self) -> u8 {
         self.0.get_int("BitsPerComponent", -1).unwrap() as u8
-    }
-
-    fn as_dynamic_image(&self, data: Cow<[u8]>) -> Result<DynamicImage, ObjectValueError> {
-        match (self.color_space(), self.bit_per_component()) {
-            (Some(ColorSpace::DeviceGray), 1) => {
-                use bitstream_io::read::BitRead;
-
-                let mut img = GrayImage::new(self.width(), self.height());
-                let mut r = BitReader::<_, BigEndian>::new(data.borrow() as &[u8]);
-                for y in 0..self.height() {
-                    for x in 0..self.width() {
-                        img.put_pixel(x, y, Luma([if r.read_bit().unwrap() { 255u8 } else { 0 }]));
-                    }
-                }
-                Ok(DynamicImage::ImageLuma8(img))
-            }
-            _ => todo!("encode_image: {:?}", self.color_space()),
-        }
-    }
-
-    fn decode_image(&self, data: &[u8]) -> Result<RawImage, ObjectValueError> {
-        use png::{BitDepth, ColorType, Encoder};
-
-        match self.color_space() {
-            Some(ColorSpace::DeviceGray) => {
-                assert!(self.bit_per_component() == 1);
-                let mut bytes = Vec::new();
-                let mut encoder = Encoder::new(&mut bytes, self.width(), self.height());
-                encoder.set_color(ColorType::Grayscale);
-                encoder.set_depth(BitDepth::One);
-                let mut writer = encoder.write_header().unwrap();
-                writer.write_image_data(data).unwrap();
-                drop(writer);
-                Ok(RawImage {
-                    format: ImageFormat::Png,
-                    data: bytes,
-                })
-            }
-            _ => todo!("encode_image: {:?}", self.color_space()),
-        }
     }
 }
 
@@ -375,7 +335,47 @@ impl<'a> Stream<'a> {
             return Err(ObjectValueError::StreamNotImage);
         };
         let data = self.decode()?;
-        img_dict.as_dynamic_image(data)
+        match (img_dict.color_space(), img_dict.bits_per_component()) {
+            (Some(ColorSpace::DeviceGray), 1) => {
+                use bitstream_io::read::BitRead;
+
+                let mut img = GrayImage::new(img_dict.width(), img_dict.height());
+                let mut r = BitReader::<_, BigEndian>::new(data.borrow() as &[u8]);
+                for y in 0..img_dict.height() {
+                    for x in 0..img_dict.width() {
+                        img.put_pixel(x, y, Luma([if r.read_bit().unwrap() { 255u8 } else { 0 }]));
+                    }
+                }
+                Ok(DynamicImage::ImageLuma8(img))
+            }
+            _ => todo!("encode_image: {:?}", img_dict.color_space()),
+        }
+    }
+
+    fn decode_to_raw_image(
+        &self,
+        data: &[u8],
+        img_dict: &ImageDict,
+    ) -> Result<RawImage, ObjectValueError> {
+        use png::{BitDepth, ColorType, Encoder};
+
+        match img_dict.color_space() {
+            Some(ColorSpace::DeviceGray) => {
+                assert!(img_dict.bits_per_component() == 1);
+                let mut bytes = Vec::new();
+                let mut encoder = Encoder::new(&mut bytes, img_dict.width(), img_dict.height());
+                encoder.set_color(ColorType::Grayscale);
+                encoder.set_depth(BitDepth::One);
+                let mut writer = encoder.write_header().unwrap();
+                writer.write_image_data(data).unwrap();
+                drop(writer);
+                Ok(RawImage {
+                    format: ImageFormat::Png,
+                    data: bytes,
+                })
+            }
+            _ => todo!("encode_image: {:?}", img_dict.color_space()),
+        }
     }
 
     pub fn to_raw_image(&self) -> Result<RawImage, ObjectValueError> {
@@ -390,7 +390,7 @@ impl<'a> Stream<'a> {
         };
         // pass-through format like DCT,  for better quality
         let data = self.decode()?;
-        img_dict.decode_image(&data)
+        self.decode_to_raw_image(&data, &img_dict)
     }
 
     fn iter_filter(
