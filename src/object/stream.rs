@@ -66,15 +66,15 @@ fn decode_flate(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, Obje
     Ok(output)
 }
 
-fn decode_dct(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, ObjectValueError> {
+fn decode_dct(buf: &[u8], params: Option<&Dictionary>) -> Result<DynamicImage, ObjectValueError> {
     assert!(
         params.is_none(),
         "TODO: handle params of {}",
         FILTER_DCT_DECODE
     );
-    use jpeg_decoder::Decoder;
-    let mut decoder = Decoder::new(buf);
-    handle_filter_error(decoder.decode(), FILTER_DCT_DECODE)
+    use jpeg2k::Image;
+    let img = handle_filter_error(Image::from_bytes(buf), FILTER_DCT_DECODE)?;
+    handle_filter_error((&img).try_into(), FILTER_DCT_DECODE)
 }
 
 fn decode_jpx(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, ObjectValueError> {
@@ -257,7 +257,7 @@ fn filter<'a: 'b, 'b>(
 ) -> Result<Cow<'a, [u8]>, ObjectValueError> {
     match filter_name {
         B_FILTER_FLATE_DECODE => decode_flate(&buf, params).map(Cow::Owned),
-        B_FILTER_DCT_DECODE => decode_dct(&buf, params).map(Cow::Owned),
+        B_FILTER_DCT_DECODE => decode_dct(&buf, params).map(|img| Cow::Owned(img.into_bytes())),
         B_FILTER_CCITT_FAX => decode_ccitt(&buf, params).map(Cow::Owned),
         B_FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(Cow::Owned),
         B_FILTER_RUN_LENGTH_DECODE => Ok(Cow::Owned(decode_run_length(&buf, params))),
