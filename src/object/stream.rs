@@ -18,6 +18,8 @@ const KEY_FILTER: &[u8] = b"Filter";
 const KEY_FILTER_PARAMS: &[u8] = b"DecodeParms";
 const KEY_FFILTER: &[u8] = b"FFilter";
 
+const FILTER_FLATE_DECODE: &str = "FlateDecode";
+const B_FILTER_FLATE_DECODE: &[u8] = FILTER_FLATE_DECODE.as_bytes();
 const FILTER_CCITT_FAX: &str = "CCITTFaxDecode";
 const B_FILTER_CCITT_FAX: &[u8] = FILTER_CCITT_FAX.as_bytes();
 const FILTER_DCT_DECODE: &str = "DCTDecode";
@@ -55,7 +57,7 @@ fn decode_flate(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, Obje
         decoder
             .read_to_end(&mut output)
             .or_else(|_| DeflateDecoder::new(buf).read_to_end(&mut output)),
-        "FlateDecode",
+        FILTER_FLATE_DECODE,
     )?;
 
     // let mut file = std::fs::File::create("/tmp/stream").unwrap();
@@ -254,7 +256,7 @@ fn filter<'a: 'b, 'b>(
     params: Option<&'b Dictionary<'a>>,
 ) -> Result<Cow<'a, [u8]>, ObjectValueError> {
     match filter_name {
-        b"FlateDecode" => decode_flate(&buf, params).map(Cow::Owned),
+        B_FILTER_FLATE_DECODE => decode_flate(&buf, params).map(Cow::Owned),
         B_FILTER_DCT_DECODE => decode_dct(&buf, params).map(Cow::Owned),
         B_FILTER_CCITT_FAX => decode_ccitt(&buf, params).map(Cow::Owned),
         B_FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(Cow::Owned),

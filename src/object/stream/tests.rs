@@ -14,49 +14,49 @@ use test_case::test_case;
     "filter is array but item not name"
 )]
 #[test_case(
-    [(KEY_FILTER, Name::borrowed(b"FlateDecode").into())] =>
-    Ok(vec![("FlateDecode".to_owned(), None)]);
+    [(KEY_FILTER, Name::borrowed(B_FILTER_FLATE_DECODE).into())] =>
+    Ok(vec![(FILTER_FLATE_DECODE.to_owned(), None)]);
      "one filter"
 )]
 #[test_case(
-    [(KEY_FILTER, Name::borrowed(b"FlateDecode").into()),
+    [(KEY_FILTER, Name::borrowed(B_FILTER_FLATE_DECODE).into()),
      (KEY_FILTER_PARAMS, Object::Null)] =>
-    Ok(vec![("FlateDecode".to_owned(), None)]);
+    Ok(vec![(FILTER_FLATE_DECODE.to_owned(), None)]);
      "one filter with null params"
 )]
 #[test_case(
-    [(KEY_FILTER, Name::borrowed(b"FlateDecode").into()),
+    [(KEY_FILTER, Name::borrowed(B_FILTER_FLATE_DECODE).into()),
      (KEY_FILTER_PARAMS, Object::Array(vec![Object::Null]))] =>
-    Ok(vec![("FlateDecode".to_owned(), None)]);
+    Ok(vec![(FILTER_FLATE_DECODE.to_owned(), None)]);
      "one filter with null params in array"
 )]
 #[test_case(
-    [(KEY_FILTER, Name::borrowed(b"FlateDecode").into()),
+    [(KEY_FILTER, Name::borrowed(B_FILTER_FLATE_DECODE).into()),
      (KEY_FILTER_PARAMS, Object::Dictionary(Dictionary::default()))] =>
-    Ok(vec![("FlateDecode".to_owned(), Some(Dictionary::default()))]);
+    Ok(vec![(FILTER_FLATE_DECODE.to_owned(), Some(Dictionary::default()))]);
      "one filter with dictionary params"
 )]
 #[test_case(
     [(KEY_FILTER, vec![
-        Name::borrowed(b"FlateDecode").into(),
-        Name::borrowed(b"DCTDecode").into()
+        Name::borrowed(B_FILTER_FLATE_DECODE).into(),
+        Name::borrowed(B_FILTER_DCT_DECODE).into(),
     ].into())] =>
-    Ok(vec![("FlateDecode".to_owned(), None),
-            ("DCTDecode".to_owned(), None)]);
+    Ok(vec![(FILTER_FLATE_DECODE.to_owned(), None),
+            (FILTER_DCT_DECODE.to_owned(), None)]);
      "two filters no params"
 )]
 #[test_case(
     [(KEY_FILTER, vec![
-        Name::borrowed(b"FlateDecode").into(),
-        Name::borrowed(b"DCTDecode").into()
+        Name::borrowed(B_FILTER_FLATE_DECODE).into(),
+        Name::borrowed(B_FILTER_DCT_DECODE).into(),
     ].into()),
     (KEY_FILTER_PARAMS, Dictionary::default().into())] =>
-    Ok(vec![("FlateDecode".to_owned(), Some(Dictionary::default())),
-            ("DCTDecode".to_owned(), None)]);
+    Ok(vec![(FILTER_FLATE_DECODE.to_owned(), Some(Dictionary::default())),
+            (FILTER_DCT_DECODE.to_owned(), None)]);
      "two filters with null params"
 )]
 #[test_case(
-    [(KEY_FFILTER, Name::borrowed(b"FlateDecode").into())] =>
+    [(KEY_FFILTER, Name::borrowed(B_FILTER_FLATE_DECODE).into())] =>
     Err(ObjectValueError::ExternalStreamNotSupported);
      "ffilter not supported"
 )]
