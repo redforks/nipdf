@@ -66,7 +66,10 @@ fn decode_flate(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, Obje
     Ok(output)
 }
 
-fn decode_dct(buf: &[u8], params: Option<&Dictionary>) -> Result<DynamicImage, ObjectValueError> {
+fn decode_dct(
+    buf: &[u8],
+    params: Option<&Dictionary>,
+) -> Result<FilterDecodedData<'static>, ObjectValueError> {
     assert!(
         params.is_none(),
         "TODO: handle params of {}",
@@ -74,10 +77,16 @@ fn decode_dct(buf: &[u8], params: Option<&Dictionary>) -> Result<DynamicImage, O
     );
     use jpeg2k::Image;
     let img = handle_filter_error(Image::from_bytes(buf), FILTER_DCT_DECODE)?;
-    handle_filter_error((&img).try_into(), FILTER_DCT_DECODE)
+    handle_filter_error(
+        (&img).try_into().map(FilterDecodedData::Image),
+        FILTER_DCT_DECODE,
+    )
 }
 
-fn decode_jpx(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, ObjectValueError> {
+fn decode_jpx(
+    buf: &[u8],
+    params: Option<&Dictionary>,
+) -> Result<FilterDecodedData<'static>, ObjectValueError> {
     assert!(
         params.is_none(),
         "TODO: handle params of {}",
@@ -87,7 +96,8 @@ fn decode_jpx(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, Object
     let img = handle_filter_error(Image::from_bytes(buf), FILTER_JPX_DECODE)?;
     let img = handle_filter_error(img.get_pixels(None), FILTER_JPX_DECODE)?;
 
-    Ok(img.data)
+    let img = handle_filter_error((&img).try_into(), FILTER_JPX_DECODE)?;
+    Ok(FilterDecodedData::Image(img))
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, strum::EnumString)]
@@ -169,6 +179,17 @@ impl<'a: 'b, 'b> From<&CCITTFaxDecodeParams<'a, 'b>> for Flags {
             encoded_byte_align: params.encoded_byte_align(),
             inverse_black_white: params.black_is1(),
         }
+    }
+}
+
+enum FilterDecodedData<'a> {
+    Bytes(Cow<'a, [u8]>),
+    Image(DynamicImage),
+}
+
+impl<'a> FilterDecodedData<'a> {
+    fn bytes(bytes: Vec<u8>) -> Self {
+        Self::Bytes(Cow::Owned(bytes))
     }
 }
 
@@ -254,14 +275,14 @@ fn filter<'a: 'b, 'b>(
     buf: Cow<'a, [u8]>,
     filter_name: &[u8],
     params: Option<&'b Dictionary<'a>>,
-) -> Result<Cow<'a, [u8]>, ObjectValueError> {
+) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     match filter_name {
-        B_FILTER_FLATE_DECODE => decode_flate(&buf, params).map(Cow::Owned),
-        B_FILTER_DCT_DECODE => decode_dct(&buf, params).map(|img| Cow::Owned(img.into_bytes())),
-        B_FILTER_CCITT_FAX => decode_ccitt(&buf, params).map(Cow::Owned),
-        B_FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(Cow::Owned),
-        B_FILTER_RUN_LENGTH_DECODE => Ok(Cow::Owned(decode_run_length(&buf, params))),
-        B_FILTER_JPX_DECODE => decode_jpx(&buf, params).map(Cow::Owned),
+        B_FILTER_FLATE_DECODE => decode_flate(&buf, params).map(FilterDecodedData::bytes),
+        B_FILTER_DCT_DECODE => decode_dct(&buf, params),
+        B_FILTER_CCITT_FAX => decode_ccitt(&buf, params).map(FilterDecodedData::bytes),
+        B_FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(FilterDecodedData::bytes),
+        B_FILTER_RUN_LENGTH_DECODE => Ok(FilterDecodedData::bytes(decode_run_length(&buf, params))),
+        B_FILTER_JPX_DECODE => decode_jpx(&buf, params),
         _ => {
             error!("Unknown filter: {}", from_utf8(filter_name).unwrap());
             Err(ObjectValueError::UnknownFilter)
