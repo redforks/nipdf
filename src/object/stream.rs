@@ -75,12 +75,12 @@ fn decode_dct(
         "TODO: handle params of {}",
         FILTER_DCT_DECODE
     );
-    use jpeg2k::Image;
-    let img = handle_filter_error(Image::from_bytes(buf), FILTER_DCT_DECODE)?;
+    use image::{load_from_memory_with_format, ImageFormat};
     handle_filter_error(
-        (&img).try_into().map(FilterDecodedData::Image),
+        load_from_memory_with_format(buf, ImageFormat::Jpeg),
         FILTER_DCT_DECODE,
     )
+    .map(|img| FilterDecodedData::Image(img))
 }
 
 fn decode_jpx(
@@ -94,8 +94,6 @@ fn decode_jpx(
     );
     use jpeg2k::Image;
     let img = handle_filter_error(Image::from_bytes(buf), FILTER_JPX_DECODE)?;
-    let img = handle_filter_error(img.get_pixels(None), FILTER_JPX_DECODE)?;
-
     let img = handle_filter_error((&img).try_into(), FILTER_JPX_DECODE)?;
     Ok(FilterDecodedData::Image(img))
 }
@@ -182,14 +180,32 @@ impl<'a: 'b, 'b> From<&CCITTFaxDecodeParams<'a, 'b>> for Flags {
     }
 }
 
-enum FilterDecodedData<'a> {
+pub enum FilterDecodedData<'a> {
     Bytes(Cow<'a, [u8]>),
     Image(DynamicImage),
+    RawImage(RawImage),
 }
 
 impl<'a> FilterDecodedData<'a> {
     fn bytes(bytes: Vec<u8>) -> Self {
         Self::Bytes(Cow::Owned(bytes))
+    }
+
+    /// Return [[ObjectValueError::StreamIsNotBytes]] if stream is not [[Self::Bytes]]
+    fn into_bytes(self) -> Result<Cow<'a, [u8]>, ObjectValueError> {
+        match self {
+            Self::Bytes(bytes) => Ok(bytes),
+            _ => Err(ObjectValueError::StreamIsNotBytes),
+        }
+    }
+
+    /// Convert to bytes, for Image and RawImage returns image bytes.
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            Self::Bytes(bytes) => &bytes,
+            Self::Image(img) => img.as_bytes(),
+            Self::RawImage(img) => &img.data[..],
+        }
     }
 }
 
@@ -312,67 +328,37 @@ fn ensure_last_filter<T>(v: T, has_next: bool, filter_name: &str) -> Result<T, O
 
 impl<'a> Stream<'a> {
     /// Decode stream data using filter and parameters in stream dictionary.
-    pub fn decode(&self) -> Result<Cow<[u8]>, ObjectValueError> {
-        let mut buf = Cow::Borrowed(self.1);
+    /// `image_to_raw` if the stream is image, convert to RawImage.
+    pub fn decode(&self, image_to_raw: bool) -> Result<FilterDecodedData<'a>, ObjectValueError> {
+        let mut buf = FilterDecodedData::Bytes(Cow::Borrowed(self.1));
         for (filter_name, params) in self.iter_filter()? {
-            buf = filter(buf, filter_name, params)?;
+            buf = filter(buf.into_bytes()?, filter_name, params)?;
         }
         Ok(buf)
     }
 
-    fn pass_through_to_image(&self) -> Result<Option<RawImage>, ObjectValueError> {
-        let mut iter = self.iter_filter()?;
-        if let Some((filter_name, _)) = iter.next() {
-            match filter_name {
-                B_FILTER_DCT_DECODE => {
-                    let buf = Cow::Borrowed(self.1);
-                    return ensure_last_filter(
-                        Some(RawImage {
-                            format: ImageFormat::Jpeg,
-                            data: buf.into(),
-                        }),
-                        iter.next().is_some(),
-                        FILTER_DCT_DECODE,
-                    );
-                }
-                B_FILTER_JPX_DECODE => {
-                    let buf = Cow::Borrowed(self.1);
-                    return ensure_last_filter(
-                        Some(RawImage {
-                            format: ImageFormat::Jpeg2k, // TODO: how to specific ImageFormat jpeg2k
-                            data: buf.into(),
-                        }),
-                        iter.next().is_some(),
-                        FILTER_JPX_DECODE,
-                    );
-                }
-                _ => return Ok(None),
-            }
-        }
-        Ok(None)
-    }
-
     pub fn to_dynamic_image(&self) -> Result<DynamicImage, ObjectValueError> {
-        let img_dict = ImageDict::from_dict(&self.0);
-        let Some(img_dict) = img_dict else {
-            return Err(ObjectValueError::StreamNotImage);
-        };
-        let data = self.decode()?;
-        match (img_dict.color_space(), img_dict.bits_per_component()) {
-            (Some(ColorSpace::DeviceGray), 1) => {
-                use bitstream_io::read::BitRead;
+        todo!()
+        // let img_dict = ImageDict::from_dict(&self.0);
+        // let Some(img_dict) = img_dict else {
+        //     return Err(ObjectValueError::StreamNotImage);
+        // };
+        // let data = self.decode()?;
+        // match (img_dict.color_space(), img_dict.bits_per_component()) {
+        //     (Some(ColorSpace::DeviceGray), 1) => {
+        //         use bitstream_io::read::BitRead;
 
-                let mut img = GrayImage::new(img_dict.width(), img_dict.height());
-                let mut r = BitReader::<_, BigEndian>::new(data.borrow() as &[u8]);
-                for y in 0..img_dict.height() {
-                    for x in 0..img_dict.width() {
-                        img.put_pixel(x, y, Luma([if r.read_bit().unwrap() { 255u8 } else { 0 }]));
-                    }
-                }
-                Ok(DynamicImage::ImageLuma8(img))
-            }
-            _ => todo!("encode_image: {:?}", img_dict.color_space()),
-        }
+        //         let mut img = GrayImage::new(img_dict.width(), img_dict.height());
+        //         let mut r = BitReader::<_, BigEndian>::new(data.borrow() as &[u8]);
+        //         for y in 0..img_dict.height() {
+        //             for x in 0..img_dict.width() {
+        //                 img.put_pixel(x, y, Luma([if r.read_bit().unwrap() { 255u8 } else { 0 }]));
+        //             }
+        //         }
+        //         Ok(DynamicImage::ImageLuma8(img))
+        //     }
+        //     _ => todo!("encode_image: {:?}", img_dict.color_space()),
+        // }
     }
 
     fn decode_to_raw_image(
@@ -402,18 +388,19 @@ impl<'a> Stream<'a> {
     }
 
     pub fn to_raw_image(&self) -> Result<RawImage, ObjectValueError> {
-        let r = self.pass_through_to_image()?;
-        if let Some(img) = r {
-            return Ok(img);
-        }
+        todo!()
+        // let r = self.pass_through_to_image()?;
+        // if let Some(img) = r {
+        //     return Ok(img);
+        // }
 
-        let img_dict = ImageDict::from_dict(&self.0);
-        let Some(img_dict) = img_dict else {
-            return Err(ObjectValueError::StreamNotImage);
-        };
-        // pass-through format like DCT,  for better quality
-        let data = self.decode()?;
-        self.decode_to_raw_image(&data, &img_dict)
+        // let img_dict = ImageDict::from_dict(&self.0);
+        // let Some(img_dict) = img_dict else {
+        //     return Err(ObjectValueError::StreamNotImage);
+        // };
+        // // pass-through format like DCT,  for better quality
+        // let data = self.decode()?;
+        // self.decode_to_raw_image(&data, &img_dict)
     }
 
     fn iter_filter(

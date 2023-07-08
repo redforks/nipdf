@@ -118,6 +118,8 @@ pub enum ObjectValueError {
     FilterDecodeError,
     #[error("Stream not image")]
     StreamNotImage,
+    #[error("Stream is not bytes")]
+    StreamIsNotBytes,
     #[error("Object not found by id")]
     ObjectIDNotFound,
     #[error("Parse error: {0}")]

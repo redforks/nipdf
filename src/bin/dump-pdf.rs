@@ -1,5 +1,5 @@
 use std::{
-    borrow::Borrow,
+    borrow::{Borrow, Cow},
     io::{copy, stdout, Cursor},
 };
 
@@ -7,7 +7,10 @@ use anyhow::Result as AnyResult;
 
 use clap::{arg, Command};
 use image::ImageOutputFormat;
-use pdf2docx::{file::File, object::Object};
+use pdf2docx::{
+    file::File,
+    object::{FilterDecodedData, Object},
+};
 
 fn cli() -> Command {
     Command::new("dump-pdf")
@@ -30,25 +33,26 @@ fn dump_stream(path: &str, id: u32, raw: bool, as_image: bool, as_png: bool) -> 
     let (_f, mut resolver) =
         File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {:?}", path));
     let obj = resolver.resolve(id)?;
+    let png_buffer;
     match obj {
         Object::Stream(s) => {
             let decoded;
-            let image;
-            let dyn_image_buf;
-            let mut buf = if as_image {
-                image = s.to_raw_image()?;
-                &image.data[..]
-            } else if raw {
+            let mut buf = if raw {
                 s.1
-            } else if as_png {
-                let img = s.to_dynamic_image()?;
-                let mut cursor = Cursor::new(Vec::new());
-                img.write_to(&mut cursor, ImageOutputFormat::Png)?;
-                dyn_image_buf = cursor.into_inner();
-                &dyn_image_buf[..]
             } else {
-                decoded = s.decode()?;
-                decoded.borrow()
+                decoded = s.decode(as_image)?;
+                if as_png {
+                    if let FilterDecodedData::Image(ref img) = decoded {
+                        let mut buf = Cursor::new(Vec::new());
+                        img.write_to(&mut buf, ImageOutputFormat::Png)?;
+                        png_buffer = buf.into_inner();
+                        &png_buffer
+                    } else {
+                        decoded.as_bytes()
+                    }
+                } else {
+                    decoded.as_bytes()
+                }
             };
             copy(&mut buf, &mut stdout())?;
         }
