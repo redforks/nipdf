@@ -66,18 +66,26 @@ fn decode_flate(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, Obje
     Ok(output)
 }
 
-fn decode_dct(
-    buf: &[u8],
+fn decode_dct<'a>(
+    buf: Cow<'a, [u8]>,
     params: Option<&Dictionary>,
-) -> Result<FilterDecodedData<'static>, ObjectValueError> {
+    image_to_raw: bool,
+) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     assert!(
         params.is_none(),
         "TODO: handle params of {}",
         FILTER_DCT_DECODE
     );
-    use image::{load_from_memory_with_format, ImageFormat};
+    if image_to_raw {
+        return Ok(FilterDecodedData::RawImage(RawImage {
+            format: ImageFormat::Jpeg,
+            data: buf,
+        }));
+    }
+
+    use image::{load_from_memory_with_format, ImageFormat as ImgImageFormat};
     handle_filter_error(
-        load_from_memory_with_format(buf, ImageFormat::Jpeg),
+        load_from_memory_with_format(buf.borrow(), ImgImageFormat::Jpeg),
         FILTER_DCT_DECODE,
     )
     .map(|img| FilterDecodedData::Image(img))
@@ -183,7 +191,7 @@ impl<'a: 'b, 'b> From<&CCITTFaxDecodeParams<'a, 'b>> for Flags {
 pub enum FilterDecodedData<'a> {
     Bytes(Cow<'a, [u8]>),
     Image(DynamicImage),
-    RawImage(RawImage),
+    RawImage(RawImage<'a>),
 }
 
 impl<'a> FilterDecodedData<'a> {
@@ -291,10 +299,11 @@ fn filter<'a: 'b, 'b>(
     buf: Cow<'a, [u8]>,
     filter_name: &[u8],
     params: Option<&'b Dictionary<'a>>,
+    image_to_raw: bool,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     match filter_name {
         B_FILTER_FLATE_DECODE => decode_flate(&buf, params).map(FilterDecodedData::bytes),
-        B_FILTER_DCT_DECODE => decode_dct(&buf, params),
+        B_FILTER_DCT_DECODE => decode_dct(buf, params, image_to_raw),
         B_FILTER_CCITT_FAX => decode_ccitt(&buf, params).map(FilterDecodedData::bytes),
         B_FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(FilterDecodedData::bytes),
         B_FILTER_RUN_LENGTH_DECODE => Ok(FilterDecodedData::bytes(decode_run_length(&buf, params))),
@@ -312,9 +321,9 @@ pub enum ImageFormat {
     Png,
 }
 
-pub struct RawImage {
+pub struct RawImage<'a> {
     pub format: ImageFormat,
-    pub data: Vec<u8>,
+    pub data: Cow<'a, [u8]>,
 }
 
 fn ensure_last_filter<T>(v: T, has_next: bool, filter_name: &str) -> Result<T, ObjectValueError> {
@@ -332,7 +341,7 @@ impl<'a> Stream<'a> {
     pub fn decode(&self, image_to_raw: bool) -> Result<FilterDecodedData<'a>, ObjectValueError> {
         let mut buf = FilterDecodedData::Bytes(Cow::Borrowed(self.1));
         for (filter_name, params) in self.iter_filter()? {
-            buf = filter(buf.into_bytes()?, filter_name, params)?;
+            buf = filter(buf.into_bytes()?, filter_name, params, image_to_raw)?;
         }
         Ok(buf)
     }
@@ -380,7 +389,7 @@ impl<'a> Stream<'a> {
                 drop(writer);
                 Ok(RawImage {
                     format: ImageFormat::Png,
-                    data: bytes,
+                    data: Cow::Owned(bytes),
                 })
             }
             _ => todo!("encode_image: {:?}", img_dict.color_space()),
