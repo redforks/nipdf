@@ -1,5 +1,4 @@
 use std::{
-    borrow::{Borrow, Cow},
     io::{copy, stdout, Cursor},
 };
 
