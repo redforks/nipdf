@@ -89,17 +89,26 @@ fn decode_dct<'a>(
     .map(FilterDecodedData::Image)
 }
 
-fn decode_jpx(
-    buf: &[u8],
+fn decode_jpx<'a>(
+    buf: Cow<'a, [u8]>,
     params: Option<&Dictionary>,
-) -> Result<FilterDecodedData<'static>, ObjectValueError> {
+    image_to_raw: bool,
+) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     assert!(
         params.is_none(),
         "TODO: handle params of {}",
         FILTER_JPX_DECODE
     );
+
+    if image_to_raw {
+        return Ok(FilterDecodedData::RawImage(RawImage {
+            format: ImageFormat::Jpeg2k,
+            data: buf,
+        }));
+    }
+
     use jpeg2k::Image;
-    let img = handle_filter_error(Image::from_bytes(buf), FILTER_JPX_DECODE)?;
+    let img = handle_filter_error(Image::from_bytes(buf.borrow()), FILTER_JPX_DECODE)?;
     let img = handle_filter_error((&img).try_into(), FILTER_JPX_DECODE)?;
     Ok(FilterDecodedData::Image(img))
 }
@@ -305,7 +314,7 @@ fn filter<'a: 'b, 'b>(
         B_FILTER_CCITT_FAX => decode_ccitt(&buf, params).map(FilterDecodedData::bytes),
         B_FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(FilterDecodedData::bytes),
         B_FILTER_RUN_LENGTH_DECODE => Ok(FilterDecodedData::bytes(decode_run_length(&buf, params))),
-        B_FILTER_JPX_DECODE => decode_jpx(&buf, params),
+        B_FILTER_JPX_DECODE => decode_jpx(buf, params, image_to_raw),
         _ => {
             error!("Unknown filter: {}", from_utf8(filter_name).unwrap());
             Err(ObjectValueError::UnknownFilter)
