@@ -154,14 +154,12 @@ pub struct Catalog<'a> {
 
 impl<'a> Catalog<'a> {
     pub fn new(dict: Dictionary<'a>) -> Self {
+        assert_eq!("Catalog", dict.get_name("Type").unwrap().unwrap());
         Self { dict }
     }
 
-    pub fn ver(&self) -> Result<Option<&[u8]>, ObjectValueError> {
-        self.dict
-            .get(&Name::borrowed(b"Version"))
-            .map(|o| o.as_name())
-            .transpose()
+    pub fn ver(&self) -> Option<&str> {
+        self.dict.get_name("Version").unwrap()
     }
 }
 
