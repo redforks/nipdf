@@ -162,6 +162,7 @@ impl<'a> Object<'a> {
     pub fn as_number(&self) -> Result<f32, ObjectValueError> {
         match self {
             Object::Number(f) => Ok(*f),
+            Object::Integer(v) => Ok(*v as f32),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }

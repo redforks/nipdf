@@ -15,6 +15,9 @@ use log::error;
 use lru::LruCache;
 use nohash_hasher::BuildNoHashHasher;
 
+mod page;
+pub use page::*;
+
 type IDOffsetMap = HashMap<u32, u32, BuildNoHashHasher<u32>>;
 
 pub struct XRefTable<'a> {
