@@ -1,5 +1,6 @@
 //! object mod contains data structure map to low level pdf objects
 use ahash::HashMap;
+use image::math::Rect;
 
 use std::{
     borrow::{Borrow, Cow},
@@ -132,6 +133,12 @@ pub struct SchemaDict<'a, 'b, T: SchemaTypeValidator> {
 }
 
 impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
+    pub fn id(&self) -> u32 {
+        self.id
+    }
+}
+
+impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
     pub fn new(id: u32, d: &'b Dictionary<'a>, t: T) -> Result<Self, ObjectValueError> {
         t.valid(id, d)?;
         Ok(Self { id, t, d })
@@ -158,7 +165,7 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
             .map_or(Ok(None), |o| o.as_int().map(Some))
     }
 
-    pub fn required_arr<V>(
+    pub fn required_arr_map<V>(
         &self,
         id: &'static str,
         f: impl Fn(&Object) -> Result<V, ObjectValueError>,
@@ -176,7 +183,7 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
             .collect()
     }
 
-    pub fn opt_arr<V>(
+    pub fn opt_arr_map<V>(
         &self,
         id: &'static str,
         f: impl Fn(&Object) -> Result<V, ObjectValueError>,
@@ -186,6 +193,16 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
             .map_or(Ok(None), |o| o.as_arr().map(Some))?
             .map(|arr| arr.iter().map(f).collect())
             .transpose()
+    }
+
+    pub fn opt_arr(&self, id: &'static str) -> Result<Option<&'b Array<'a>>, ObjectValueError> {
+        self.d
+            .get(&id.into())
+            .map_or(Ok(None), |o| o.as_arr().map(Some))
+    }
+
+    pub fn opt_rectangle(&self, id: &'static str) -> Result<Option<Rectangle>, ObjectValueError> {
+        Ok(self.opt_arr(id)?.map(|arr| arr.into()))
     }
 }
 
@@ -214,6 +231,8 @@ pub use xref::{Entry as XRefEntry, Section as XRefSection, *};
 
 mod frame;
 pub use frame::*;
+
+use crate::file::Rectangle;
 
 #[derive(Clone, PartialEq, Debug, thiserror::Error)]
 pub enum ObjectValueError {

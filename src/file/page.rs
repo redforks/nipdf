@@ -1,6 +1,5 @@
 use crate::object::{Array, Dictionary, ObjectValueError, SchemaDict};
 
-
 use super::ObjectResolver;
 
 #[derive(Debug, Copy, Clone)]
@@ -13,8 +12,8 @@ pub struct Rectangle {
 
 /// Convert from raw array, auto re-order to (left_x, lower_y, right_x, upper_y),
 /// see PDF 32000-1:2008 7.9.5
-impl<'a> From<Array<'a>> for Rectangle {
-    fn from(arr: Array<'a>) -> Self {
+impl<'a> From<&Array<'a>> for Rectangle {
+    fn from(arr: &Array<'a>) -> Self {
         let mut iter = arr.iter();
         let left_x = iter.next().unwrap().as_number().unwrap();
         let lower_y = iter.next().unwrap().as_number().unwrap();
@@ -56,9 +55,17 @@ impl<'a, 'b> PageDict<'a, 'b> {
 
     pub fn kids(&self) -> Vec<u32> {
         self.d
-            .opt_arr("Kids", |o| Ok(o.as_int()? as u32))
+            .opt_arr_map("Kids", |o| Ok(o.as_int()? as u32))
             .unwrap()
             .unwrap_or_default()
+    }
+
+    pub fn media_box(&self) -> Option<Rectangle> {
+        self.d.opt_rectangle("MediaBox").unwrap()
+    }
+
+    pub fn crop_box(&self) -> Option<Rectangle> {
+        self.d.opt_rectangle("CropBox").unwrap()
     }
 }
 
