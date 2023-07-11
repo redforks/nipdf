@@ -20,7 +20,7 @@ fn scan_objects() {
                 }
                 Err(e) => panic!("{}", e),
                 Ok(Object::Stream(s)) => {
-                    s.decode().unwrap();
+                    s.decode(false).unwrap();
                 }
                 _ => {}
             }
