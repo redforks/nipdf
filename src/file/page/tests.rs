@@ -11,7 +11,7 @@ fn rectangle_from_array(
     x2: impl Into<Object<'static>>,
     y2: impl Into<Object<'static>>,
 ) -> (f32, f32, f32, f32) {
-    let arr = Array::from(vec![x1.into(), y1.into(), x2.into(), y2.into()]);
+    let arr = vec![x1.into(), y1.into(), x2.into(), y2.into()];
     let rect = Rectangle::from(arr);
     (rect.left_x, rect.lower_y, rect.right_x, rect.upper_y)
 }

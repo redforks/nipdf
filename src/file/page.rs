@@ -1,5 +1,5 @@
 use crate::object::{Array, Dictionary, ObjectValueError, SchemaDict};
-use itertools::Itertools;
+
 
 use super::ObjectResolver;
 
@@ -83,7 +83,7 @@ impl Page {
         Ok(pages)
     }
 
-    fn from_leaf(id: u32, d: &PageDict) -> Self {
+    fn from_leaf(id: u32, _d: &PageDict) -> Self {
         Self {
             id,
             media_box: Rectangle {

@@ -1,7 +1,7 @@
 use crate::object::Object;
 
 use std::path::PathBuf;
-use std::str::from_utf8;
+
 use test_case::test_case;
 
 use super::*;
@@ -11,6 +11,7 @@ use super::*;
 fn catalog_ver(ver: impl Into<Option<Object<'static>>>) -> Option<String> {
     let ver = ver.into();
     let mut dict = Dictionary::default();
+    dict.insert("Type".into(), "/Catalog".into());
     if let Some(ver) = ver {
         dict.insert(Name::borrowed(b"Version"), ver);
     }
