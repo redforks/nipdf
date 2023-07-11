@@ -1,6 +1,7 @@
 use crate::object::{Array, Dictionary, ObjectValueError, SchemaDict};
 
 use super::ObjectResolver;
+use std::iter::once;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Rectangle {
@@ -71,34 +72,43 @@ impl<'a, 'b> PageDict<'a, 'b> {
 
 impl Page {
     /// Parse page tree to get all pages
-    pub fn parse(
+    pub fn parse<'a, 'b>(
         root_id: u32,
-        resolver: &mut ObjectResolver,
+        resolver: &'b mut ObjectResolver<'a>,
     ) -> Result<Vec<Page>, ObjectValueError> {
         let mut pages = Vec::new();
-        let mut stack = vec![root_id];
-        while let Some(id) = stack.pop() {
-            let d = resolver.resolve(id)?;
-            let d = PageDict::new(root_id, d.as_dict()?)?;
+        let mut parents = Vec::new();
+        fn handle<'a, 'b, 'c>(
+            id: u32,
+            resolver: &'b ObjectResolver<'a>,
+            pages: &'c mut Vec<Page>,
+            parents: &'c mut Vec<PageDict<'a, 'b>>,
+        ) -> Result<(), ObjectValueError> {
+            let d = resolver.resolved(id).unwrap();
+            let d = PageDict::new(id, d.as_dict()?)?;
             if d.is_leaf() {
-                pages.push(Page::from_leaf(id, &d));
+                pages.push(Page::from_leaf(id, &d, &parents[..]));
             } else {
-                stack.extend(d.kids());
+                let kids = d.kids();
+                parents.push(d);
+                for kid in kids {
+                    handle(kid, resolver, pages, parents)?;
+                }
             }
+            Ok(())
         }
-        pages.reverse();
+        handle(root_id, resolver, &mut pages, &mut parents)?;
         Ok(pages)
     }
 
-    fn from_leaf(id: u32, _d: &PageDict) -> Self {
+    fn from_leaf<'a, 'b>(id: u32, d: &PageDict<'a, 'b>, parents: &[PageDict<'a, 'b>]) -> Self {
+        let media_box = once(d)
+            .chain(parents.iter())
+            .map(|d| d.media_box())
+            .find_map(|r| r);
         Self {
             id,
-            media_box: Rectangle {
-                left_x: 0.0,
-                lower_y: 0.0,
-                right_x: 0.0,
-                upper_y: 0.0,
-            },
+            media_box: media_box.unwrap(),
             crop_box: None,
         }
     }

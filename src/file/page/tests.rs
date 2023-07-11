@@ -36,6 +36,7 @@ fn parse_page_tree(root_id: u32, tree: Vec<(u32, Vec<u32>)>) -> Vec<u32> {
             "Type".into(),
             (if kids.is_empty() { "/Page" } else { "/Pages" }).into(),
         );
+        dict.insert("MediaBox".into(), vec![0.0.into(), 0.0.into(), 0.0.into(), 0.0.into()].into());
         dict.insert(
             "Kids".into(),
             Object::Array(

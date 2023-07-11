@@ -115,6 +115,10 @@ impl<'a> ObjectResolver<'a> {
         self.lru.push(id, v);
     }
 
+    pub fn resolved(&self, id: u32) -> Option<&Object<'a>> {
+        self.lru.peek(&id)
+    }
+
     /// Resolve object with id `id`, if object is reference, resolve it recursively.
     pub fn resolve(&mut self, id: u32) -> Result<&Object<'a>, ObjectValueError> {
         self.lru.try_get_or_insert(id, || {
