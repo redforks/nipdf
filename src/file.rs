@@ -102,6 +102,19 @@ impl<'a> ObjectResolver<'a> {
         }
     }
 
+    #[cfg(test)]
+    pub fn empty() -> Self {
+        Self {
+            xref_table: XRefTable::new(&[], IDOffsetMap::default()),
+            lru: LruCache::new(NonZeroUsize::new(5000).unwrap()),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn setup_object(&mut self, id: u32, v: Object<'a>) {
+        self.lru.push(id, v);
+    }
+
     /// Resolve object with id `id`, if object is reference, resolve it recursively.
     pub fn resolve(&mut self, id: u32) -> Result<&Object<'a>, ObjectValueError> {
         self.lru.try_get_or_insert(id, || {

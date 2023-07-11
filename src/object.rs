@@ -137,6 +137,10 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
         Ok(Self { id, t, d })
     }
 
+    pub fn type_name(&self) -> &str {
+        self.t.get_type(self.id, self.d).unwrap()
+    }
+
     pub fn required_int(&self, id: &'static str) -> Result<i32, ObjectValueError> {
         self.d
             .get(&id.into())

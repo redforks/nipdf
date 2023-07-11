@@ -15,3 +15,38 @@ fn rectangle_from_array(
     let rect = Rectangle::from(arr);
     (rect.left_x, rect.lower_y, rect.right_x, rect.upper_y)
 }
+
+#[test_case(1, vec![(1, vec![2]), (2, vec![])]=> vec![2u32]; "one page")]
+#[test_case(1, vec![
+    (1, vec![2, 3, 4]), 
+    (2, vec![]),
+    (3, vec![5, 6]),
+    (4, vec![7, 8]),
+    (5, vec![]),
+    (6, vec![]),
+    (7, vec![9]),
+    (8, vec![]),
+    (9, vec![]),
+]=> vec![2, 5, 6, 9, 8]; "complex tree")]
+fn parse_page_tree(root_id: u32, tree: Vec<(u32, Vec<u32>)>) -> Vec<u32> {
+    let mut resolver = ObjectResolver::empty();
+    for (id, kids) in tree {
+        let mut dict = Dictionary::new();
+        dict.insert(
+            "Type".into(),
+            (if kids.is_empty() { "/Page" } else { "/Pages" }).into(),
+        );
+        dict.insert(
+            "Kids".into(),
+            Object::Array(
+                kids.into_iter()
+                    .map(|id| (id as i32).into())
+                    .collect::<Array>(),
+            ),
+        );
+        resolver.setup_object(id, Object::Dictionary(dict));
+    }
+
+    let pages = Page::parse(root_id, &mut resolver);
+    pages.unwrap().into_iter().map(|p| p.id).collect()
+}
