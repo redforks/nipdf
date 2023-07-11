@@ -95,3 +95,55 @@ fn dict_get_name() {
     assert_eq!(Err(ObjectValueError::UnexpectedType), d.get_name("c"));
     assert_eq!(Ok(None), d.get_name("d"));
 }
+
+#[test]
+fn str_schema_type_validator() {
+    let mut d = Dictionary::new();
+    assert_eq!(
+        Err(ObjectValueError::DictSchemaError(11, "Pages", "Type")),
+        "Pages".valid(11, &d)
+    );
+
+    d.set("Type", 11i32);
+    assert_eq!(
+        Err(ObjectValueError::DictSchemaError(11, "Pages", "Type")),
+        "Pages".valid(11, &d)
+    );
+
+    d.set("Type", "/foo");
+    assert_eq!(
+        Err(ObjectValueError::DictSchemaUnExpectedType(11, "Pages")),
+        "Pages".valid(11, &d)
+    );
+
+    assert_eq!(Ok(()), "foo".valid(11, &d));
+}
+
+#[test]
+fn str_slice_schema_type_validator() {
+    let page_or_pages = ["Pages", "Page"];
+
+    let mut d = Dictionary::new();
+    assert_eq!(
+        Err(ObjectValueError::DictSchemaError(11, "Pages", "Type")),
+        page_or_pages.valid(11, &d)
+    );
+
+    d.set("Type", 11i32);
+    assert_eq!(
+        Err(ObjectValueError::DictSchemaError(11, "Pages", "Type")),
+        page_or_pages.valid(11, &d)
+    );
+
+    d.set("Type", "/foo");
+    assert_eq!(
+        Err(ObjectValueError::DictSchemaUnExpectedType(11, "Pages")),
+        page_or_pages.valid(11, &d)
+    );
+
+    d.set("Type", "/Pages");
+    assert_eq!(Ok(()), page_or_pages.valid(11, &d));
+
+    d.set("Type", "/Page");
+    assert_eq!(Ok(()), page_or_pages.valid(11, &d));
+}
