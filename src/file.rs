@@ -181,22 +181,6 @@ impl<'a> ObjectResolver<'a> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-struct CatalogDict<'a> {
-    dict: Dictionary<'a>,
-}
-
-impl<'a> CatalogDict<'a> {
-    pub fn new(dict: Dictionary<'a>) -> Self {
-        assert_eq!("Catalog", dict.get_name("Type").unwrap().unwrap());
-        Self { dict }
-    }
-
-    pub fn ver(&self) -> Option<&str> {
-        self.dict.get_name("Version").unwrap()
-    }
-}
-
 #[derive(Debug)]
 pub struct Catalog {
     id: u32,

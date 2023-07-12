@@ -2,22 +2,7 @@ use crate::object::Object;
 
 use std::path::PathBuf;
 
-use test_case::test_case;
-
 use super::*;
-
-#[test_case(None => None)]
-#[test_case(Object::Name(Name::borrowed(b"abc")) => Some("abc".into()))]
-fn catalog_ver(ver: impl Into<Option<Object<'static>>>) -> Option<String> {
-    let ver = ver.into();
-    let mut dict = Dictionary::default();
-    dict.insert("Type".into(), "/Catalog".into());
-    if let Some(ver) = ver {
-        dict.insert(Name::borrowed(b"Version"), ver);
-    }
-    let cat = CatalogDict::new(dict);
-    cat.ver().map(|v| v.into())
-}
 
 #[test]
 fn xref_table_resolve_object_buf() {

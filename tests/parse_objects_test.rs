@@ -1,6 +1,6 @@
 use glob::glob;
 use pdf2docx::{
-    file::{File, Page},
+    file::{File},
     object::{Object, ObjectValueError},
 };
 
@@ -10,7 +10,7 @@ fn scan_objects() {
         let path = entry.unwrap();
         let buf = std::fs::read(&path).unwrap();
         println!("parsing {:?}", path);
-        let (f, mut resolver) =
+        let (f, resolver) =
             File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {:?}", path));
         for id in 0..f.total_objects() {
             print!("scan object: {}", id);
@@ -33,6 +33,6 @@ fn scan_objects() {
             println!("  media_box: {:?}", page.media_box());
             println!("  crop_box: {:?}", page.crop_box());
         }
-        println!("");
+        println!();
     }
 }
