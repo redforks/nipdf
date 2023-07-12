@@ -131,7 +131,7 @@ impl<'a> ObjectResolver<'a> {
                     }
                     Object::LaterResolveStream(d) => {
                         let l = d.get(&Name::borrowed(b"Length")).unwrap();
-                        let l = l.as_reference().unwrap();
+                        let l = l.as_ref().unwrap();
                         let l = self.xref_table.parse_object(l.id().id()).unwrap();
                         let l = l.as_int().unwrap();
                         let buf = self.xref_table.resolve_object_buf(id).unwrap();

@@ -204,6 +204,24 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
     pub fn opt_rectangle(&self, id: &'static str) -> Result<Option<Rectangle>, ObjectValueError> {
         Ok(self.opt_arr(id)?.map(|arr| arr.into()))
     }
+
+    pub fn required_ref(&self, id: &'static str) -> Result<u32, ObjectValueError> {
+        self.d
+            .get(&id.into())
+            .ok_or(ObjectValueError::DictSchemaError(
+                self.id,
+                self.t.schema_type(),
+                id,
+            ))?
+            .as_ref()
+            .map(|r| r.id().id())
+    }
+
+    pub fn opt_ref(&self, id: &'static str) -> Result<Option<u32>, ObjectValueError> {
+        self.d
+            .get(&id.into())
+            .map_or(Ok(None), |o| o.as_ref().map(|r| Some(r.id().id())))
+    }
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
@@ -330,7 +348,7 @@ impl<'a> Object<'a> {
         }
     }
 
-    pub fn as_reference(&self) -> Result<&Reference, ObjectValueError> {
+    pub fn as_ref(&self) -> Result<&Reference, ObjectValueError> {
         match self {
             Object::Reference(r) => Ok(r),
             _ => Err(ObjectValueError::UnexpectedType),
