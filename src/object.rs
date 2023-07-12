@@ -1,6 +1,6 @@
 //! object mod contains data structure map to low level pdf objects
 use ahash::HashMap;
-use image::math::Rect;
+
 
 use std::{
     borrow::{Borrow, Cow},
@@ -65,7 +65,7 @@ impl<'a> Dictionary<'a> {
     pub fn get_name(&self, id: &'static str) -> Result<Option<&str>, ObjectValueError> {
         self.0
             .get(&id.into())
-            .map_or(Ok(None), |o| o.as_name().map(|o| Some(o)))
+            .map_or(Ok(None), |o| o.as_name().map(Some))
     }
 
     pub fn get_name_or(

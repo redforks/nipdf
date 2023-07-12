@@ -1,5 +1,3 @@
-use std::str::from_utf8;
-
 use super::*;
 use itertools::Itertools;
 use test_case::test_case;

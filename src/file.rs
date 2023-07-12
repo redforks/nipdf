@@ -4,7 +4,7 @@ use anyhow::Result as AnyResult;
 use itertools::Itertools;
 use nom::bytes::complete::take_until;
 use once_cell::unsync::OnceCell;
-use std::{collections::HashMap, num::NonZeroUsize, str::from_utf8};
+use std::collections::HashMap;
 
 use crate::{
     object::{Dictionary, FrameSet, Name, Object, ObjectValueError, SchemaDict, Stream},
@@ -13,7 +13,7 @@ use crate::{
     },
 };
 use log::error;
-use lru::LruCache;
+
 use nohash_hasher::BuildNoHashHasher;
 
 mod page;

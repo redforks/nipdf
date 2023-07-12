@@ -85,9 +85,9 @@ impl Page {
     }
 
     /// Parse page tree to get all pages
-    pub fn parse<'a, 'b>(
+    pub fn parse(
         root_id: u32,
-        resolver: &'b ObjectResolver<'a>,
+        resolver: &ObjectResolver<'_>,
     ) -> Result<Vec<Page>, ObjectValueError> {
         let mut pages = Vec::new();
         let mut parents = Vec::new();

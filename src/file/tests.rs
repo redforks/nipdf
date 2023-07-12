@@ -40,7 +40,7 @@ fn object_resolver() {
     id_offset.insert(2, 3);
     id_offset.insert(3, 40);
     let xref_table = XRefTable::new(buf, id_offset);
-    let mut resolver = ObjectResolver::new(xref_table);
+    let resolver = ObjectResolver::new(xref_table);
 
     assert_eq!(resolver.resolve(1), Ok(&Object::Null));
     assert_eq!(resolver.resolve(2), Ok(&Object::Integer(5)));
