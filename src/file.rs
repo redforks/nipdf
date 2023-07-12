@@ -3,6 +3,7 @@
 use anyhow::Result as AnyResult;
 use itertools::Itertools;
 use nom::bytes::complete::take_until;
+use once_cell::unsync::OnceCell;
 use std::{collections::HashMap, num::NonZeroUsize, str::from_utf8};
 
 use crate::{
@@ -62,11 +63,19 @@ impl<'a> XRefTable<'a> {
                     .map_err(|e| ObjectValueError::ParseError(e.to_string()))
             })
     }
+
+    pub fn iter_ids(&self) -> impl Iterator<Item = u32> + '_ {
+        self.id_offset.keys().copied()
+    }
+
+    pub fn count(&self) -> usize {
+        self.id_offset.len()
+    }
 }
 
 pub struct ObjectResolver<'a> {
     xref_table: XRefTable<'a>,
-    lru: LruCache<u32, Object<'a>>,
+    objects: HashMap<u32, OnceCell<Object<'a>>, BuildNoHashHasher<u32>>,
 }
 
 pub trait DataContainer<'a> {
@@ -96,9 +105,15 @@ impl<'a> DataContainer<'a> for Vec<&Dictionary<'a>> {
 
 impl<'a> ObjectResolver<'a> {
     pub fn new(xref_table: XRefTable<'a>) -> Self {
+        let mut objects =
+            HashMap::with_capacity_and_hasher(xref_table.count(), BuildNoHashHasher::default());
+        xref_table.iter_ids().for_each(|id| {
+            objects.insert(id, OnceCell::new());
+        });
+
         Self {
             xref_table,
-            lru: LruCache::new(NonZeroUsize::new(5000).unwrap()),
+            objects,
         }
     }
 
@@ -106,22 +121,18 @@ impl<'a> ObjectResolver<'a> {
     pub fn empty() -> Self {
         Self {
             xref_table: XRefTable::new(&[], IDOffsetMap::default()),
-            lru: LruCache::new(NonZeroUsize::new(5000).unwrap()),
+            objects: HashMap::default(),
         }
     }
 
     #[cfg(test)]
     pub fn setup_object(&mut self, id: u32, v: Object<'a>) {
-        self.lru.push(id, v);
-    }
-
-    pub fn resolved(&self, id: u32) -> Option<&Object<'a>> {
-        self.lru.peek(&id)
+        self.objects.insert(id, OnceCell::with_value(v));
     }
 
     /// Resolve object with id `id`, if object is reference, resolve it recursively.
-    pub fn resolve(&mut self, id: u32) -> Result<&Object<'a>, ObjectValueError> {
-        self.lru.try_get_or_insert(id, || {
+    pub fn resolve(&self, id: u32) -> Result<&Object<'a>, ObjectValueError> {
+        self.objects.get(&id).unwrap().get_or_try_init(|| {
             let mut o = self.xref_table.parse_object(id)?;
             loop {
                 match o {
@@ -153,7 +164,7 @@ impl<'a> ObjectResolver<'a> {
     /// Return `None` if key is not found, or if value is reference
     /// but target is not found.
     pub fn resolve_value<'b: 'a, 'd: 'c, 'c, C: DataContainer<'a>>(
-        &'d mut self,
+        &'d self,
         c: &'c C,
         id: &'b str,
     ) -> Result<&'c Object<'a>, ObjectValueError> {

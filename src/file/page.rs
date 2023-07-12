@@ -87,7 +87,7 @@ impl Page {
     /// Parse page tree to get all pages
     pub fn parse<'a, 'b>(
         root_id: u32,
-        resolver: &'b mut ObjectResolver<'a>,
+        resolver: &'b ObjectResolver<'a>,
     ) -> Result<Vec<Page>, ObjectValueError> {
         let mut pages = Vec::new();
         let mut parents = Vec::new();
@@ -97,7 +97,7 @@ impl Page {
             pages: &'c mut Vec<Page>,
             parents: &'c mut Vec<PageDict<'a, 'b>>,
         ) -> Result<(), ObjectValueError> {
-            let d = resolver.resolved(id).unwrap();
+            let d = resolver.resolve(id).unwrap();
             let d = PageDict::new(id, d.as_dict()?)?;
             if d.is_leaf() {
                 pages.push(Page::from_leaf(id, &d, &parents[..]));
