@@ -6,7 +6,7 @@ use nom::bytes::complete::take_until;
 use std::{collections::HashMap, num::NonZeroUsize, str::from_utf8};
 
 use crate::{
-    object::{Dictionary, FrameSet, Name, Object, ObjectValueError, Stream},
+    object::{Dictionary, FrameSet, Name, Object, ObjectValueError, SchemaDict, Stream},
     parser::{
         parse_frame_set, parse_header, parse_indirected_object, parse_stream_content, ParseError,
     },
@@ -168,11 +168,11 @@ impl<'a> ObjectResolver<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Catalog<'a> {
+struct CatalogDict<'a> {
     dict: Dictionary<'a>,
 }
 
-impl<'a> Catalog<'a> {
+impl<'a> CatalogDict<'a> {
     pub fn new(dict: Dictionary<'a>) -> Self {
         assert_eq!("Catalog", dict.get_name("Type").unwrap().unwrap());
         Self { dict }
@@ -180,6 +180,25 @@ impl<'a> Catalog<'a> {
 
     pub fn ver(&self) -> Option<&str> {
         self.dict.get_name("Version").unwrap()
+    }
+}
+
+#[derive(Debug)]
+pub struct Catalog {
+    id: u32,
+    pages: Vec<Page>,
+    ver: Option<String>,
+}
+
+impl Catalog {
+    fn parse(id: u32, resolver: &mut ObjectResolver) -> Result<Self, ObjectValueError> {
+        let dict = resolver.resolve(id)?.as_dict()?;
+        let dict = SchemaDict::new(id, dict, "Catalog")?;
+
+        let root_page_id = dict.required_ref("Pages")?;
+        let ver = dict.opt_name("Version")?.map(|s| s.to_owned());
+        let pages = Page::parse(root_page_id, resolver)?;
+        Ok(Self { id, pages, ver })
     }
 }
 
@@ -201,10 +220,11 @@ impl<'a> Trailer<'a> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug)]
 pub struct File {
     ver: String,
-    pub total_objects: u32,
+    total_objects: u32,
+    catalog: Catalog,
 }
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -223,6 +243,11 @@ impl File {
         let mut resolver = ObjectResolver::new(xref);
 
         let trailers = frame_set.iter().map(|f| &f.trailer).collect_vec();
+        let root_id = trailers
+            .iter()
+            .find_map(|t| t.get(&Name::borrowed(b"Root")))
+            .unwrap();
+        let root_id = root_id.as_ref().unwrap().id().id();
         let catalog = resolver
             .resolve_value(&trailers, "Root")
             .map_err(|_| FileError::CatalogRequired)?;
@@ -235,12 +260,28 @@ impl File {
             .resolve_value(&trailers, "Size")
             .map_err(|_| FileError::MissingRequiredTrailerValue)?
             .as_int()? as u32;
+        let catalog = Catalog::parse(root_id, &mut resolver)?;
 
-        Ok((Self { ver, total_objects }, resolver))
+        Ok((
+            Self {
+                ver,
+                total_objects,
+                catalog,
+            },
+            resolver,
+        ))
     }
 
     pub fn version(&self) -> &str {
         &self.ver
+    }
+
+    pub fn total_objects(&self) -> u32 {
+        self.total_objects
+    }
+
+    pub fn catalog(&self) -> &Catalog {
+        &self.catalog
     }
 }
 

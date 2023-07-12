@@ -65,7 +65,7 @@ impl<'a> Dictionary<'a> {
     pub fn get_name(&self, id: &'static str) -> Result<Option<&str>, ObjectValueError> {
         self.0
             .get(&id.into())
-            .map_or(Ok(None), |o| Ok(Some(o.as_name().unwrap())))
+            .map_or(Ok(None), |o| o.as_name().map(|o| Some(o)))
     }
 
     pub fn get_name_or(
@@ -73,9 +73,7 @@ impl<'a> Dictionary<'a> {
         id: &'static str,
         default: &'static str,
     ) -> Result<&str, ObjectValueError> {
-        self.0
-            .get(&id.into())
-            .map_or(Ok(default), |o| Ok(o.as_name().unwrap()))
+        self.0.get(&id.into()).map_or(Ok(default), |o| o.as_name())
     }
 }
 
@@ -146,6 +144,23 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn type_name(&self) -> &str {
         self.t.get_type(self.id, self.d).unwrap()
+    }
+
+    pub fn opt_name(&self, id: &'static str) -> Result<Option<&str>, ObjectValueError> {
+        self.d
+            .get(&id.into())
+            .map_or(Ok(None), |o| o.as_name().map(Some))
+    }
+
+    pub fn required_name(&self, id: &'static str) -> Result<&str, ObjectValueError> {
+        self.d
+            .get(&id.into())
+            .ok_or(ObjectValueError::DictSchemaError(
+                self.id,
+                self.t.schema_type(),
+                id,
+            ))?
+            .as_name()
     }
 
     pub fn required_int(&self, id: &'static str) -> Result<i32, ObjectValueError> {

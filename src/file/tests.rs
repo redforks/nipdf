@@ -15,7 +15,7 @@ fn catalog_ver(ver: impl Into<Option<Object<'static>>>) -> Option<String> {
     if let Some(ver) = ver {
         dict.insert(Name::borrowed(b"Version"), ver);
     }
-    let cat = Catalog::new(dict);
+    let cat = CatalogDict::new(dict);
     cat.ver().map(|v| v.into())
 }
 

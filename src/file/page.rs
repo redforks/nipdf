@@ -63,6 +63,7 @@ impl<'a, 'b> PageDict<'a, 'b> {
     }
 }
 
+#[derive(Debug)]
 pub struct Page {
     /// pdf object id
     id: u32,

@@ -28,14 +28,19 @@ const FILTER_JPX_DECODE: &str = "JPXDecode";
 #[cfg(test)]
 const B_FILTER_FLATE_DECODE: &[u8] = FILTER_FLATE_DECODE.as_bytes();
 #[cfg(test)]
+#[allow(unused)]
 const B_FILTER_CCITT_FAX: &[u8] = FILTER_CCITT_FAX.as_bytes();
 #[cfg(test)]
+#[allow(unused)]
 const B_FILTER_DCT_DECODE: &[u8] = FILTER_DCT_DECODE.as_bytes();
 #[cfg(test)]
+#[allow(unused)]
 const B_FILTER_ASCII85_DECODE: &[u8] = FILTER_ASCII85_DECODE.as_bytes();
 #[cfg(test)]
+#[allow(unused)]
 const B_FILTER_RUN_LENGTH_DECODE: &[u8] = FILTER_RUN_LENGTH_DECODE.as_bytes();
 #[cfg(test)]
+#[allow(unused)]
 const B_FILTER_JPX_DECODE: &[u8] = FILTER_JPX_DECODE.as_bytes();
 
 #[derive(Clone, PartialEq, Debug)]
