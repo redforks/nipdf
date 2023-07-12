@@ -19,16 +19,23 @@ const KEY_FILTER_PARAMS: &[u8] = b"DecodeParms";
 const KEY_FFILTER: &[u8] = b"FFilter";
 
 const FILTER_FLATE_DECODE: &str = "FlateDecode";
-const B_FILTER_FLATE_DECODE: &[u8] = FILTER_FLATE_DECODE.as_bytes();
 const FILTER_CCITT_FAX: &str = "CCITTFaxDecode";
-const B_FILTER_CCITT_FAX: &[u8] = FILTER_CCITT_FAX.as_bytes();
 const FILTER_DCT_DECODE: &str = "DCTDecode";
-const B_FILTER_DCT_DECODE: &[u8] = FILTER_DCT_DECODE.as_bytes();
 const FILTER_ASCII85_DECODE: &str = "ASCII85Decode";
-const B_FILTER_ASCII85_DECODE: &[u8] = FILTER_ASCII85_DECODE.as_bytes();
 const FILTER_RUN_LENGTH_DECODE: &str = "RunLengthDecode";
-const B_FILTER_RUN_LENGTH_DECODE: &[u8] = FILTER_RUN_LENGTH_DECODE.as_bytes();
 const FILTER_JPX_DECODE: &str = "JPXDecode";
+
+#[cfg(test)]
+const B_FILTER_FLATE_DECODE: &[u8] = FILTER_FLATE_DECODE.as_bytes();
+#[cfg(test)]
+const B_FILTER_CCITT_FAX: &[u8] = FILTER_CCITT_FAX.as_bytes();
+#[cfg(test)]
+const B_FILTER_DCT_DECODE: &[u8] = FILTER_DCT_DECODE.as_bytes();
+#[cfg(test)]
+const B_FILTER_ASCII85_DECODE: &[u8] = FILTER_ASCII85_DECODE.as_bytes();
+#[cfg(test)]
+const B_FILTER_RUN_LENGTH_DECODE: &[u8] = FILTER_RUN_LENGTH_DECODE.as_bytes();
+#[cfg(test)]
 const B_FILTER_JPX_DECODE: &[u8] = FILTER_JPX_DECODE.as_bytes();
 
 #[derive(Clone, PartialEq, Debug)]
@@ -304,19 +311,19 @@ fn decode_ccitt<'a: 'b, 'b>(
 
 fn filter<'a: 'b, 'b>(
     buf: Cow<'a, [u8]>,
-    filter_name: &[u8],
+    filter_name: &str,
     params: Option<&'b Dictionary<'a>>,
     image_to_raw: bool,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     match filter_name {
-        B_FILTER_FLATE_DECODE => decode_flate(&buf, params).map(FilterDecodedData::bytes),
-        B_FILTER_DCT_DECODE => decode_dct(buf, params, image_to_raw),
-        B_FILTER_CCITT_FAX => decode_ccitt(&buf, params).map(FilterDecodedData::bytes),
-        B_FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(FilterDecodedData::bytes),
-        B_FILTER_RUN_LENGTH_DECODE => Ok(FilterDecodedData::bytes(decode_run_length(&buf, params))),
-        B_FILTER_JPX_DECODE => decode_jpx(buf, params, image_to_raw),
+        FILTER_FLATE_DECODE => decode_flate(&buf, params).map(FilterDecodedData::bytes),
+        FILTER_DCT_DECODE => decode_dct(buf, params, image_to_raw),
+        FILTER_CCITT_FAX => decode_ccitt(&buf, params).map(FilterDecodedData::bytes),
+        FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(FilterDecodedData::bytes),
+        FILTER_RUN_LENGTH_DECODE => Ok(FilterDecodedData::bytes(decode_run_length(&buf, params))),
+        FILTER_JPX_DECODE => decode_jpx(buf, params, image_to_raw),
         _ => {
-            error!("Unknown filter: {}", from_utf8(filter_name).unwrap());
+            error!("Unknown filter: {}", filter_name);
             Err(ObjectValueError::UnknownFilter)
         }
     }
@@ -402,7 +409,7 @@ impl<'a> Stream<'a> {
 
     fn iter_filter(
         &self,
-    ) -> Result<impl Iterator<Item = (&[u8], Option<&Dictionary<'a>>)>, ObjectValueError> {
+    ) -> Result<impl Iterator<Item = (&str, Option<&Dictionary<'a>>)>, ObjectValueError> {
         if self.0.contains_key(&Name::borrowed(KEY_FFILTER)) {
             return Err(ObjectValueError::ExternalStreamNotSupported);
         }
@@ -414,7 +421,7 @@ impl<'a> Stream<'a> {
                     .iter()
                     .map(|v| v.as_name().map_err(|_| ObjectValueError::UnexpectedType))
                     .collect(),
-                Object::Name(n) => Ok(vec![n.0.borrow()]),
+                Object::Name(n) => Ok(vec![from_utf8(n.0.borrow()).unwrap()]),
                 _ => Err(ObjectValueError::UnexpectedType),
             },
         )?;

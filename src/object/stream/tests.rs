@@ -70,7 +70,7 @@ fn test_iter_filter(
     let stream = Stream(dict, &[]);
     let r: Vec<(String, Option<Dictionary<'static>>)> = stream
         .iter_filter()?
-        .map(|(k, v)| (from_utf8(k).unwrap().to_owned(), v.cloned()))
+        .map(|(k, v)| (k.to_owned(), v.cloned()))
         .collect_vec();
     Ok(r)
 }

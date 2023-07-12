@@ -65,7 +65,7 @@ impl<'a> Dictionary<'a> {
     pub fn get_name(&self, id: &'static str) -> Result<Option<&str>, ObjectValueError> {
         self.0
             .get(&id.into())
-            .map_or(Ok(None), |o| Ok(Some(from_utf8(o.as_name()?).unwrap())))
+            .map_or(Ok(None), |o| Ok(Some(o.as_name().unwrap())))
     }
 
     pub fn get_name_or(
@@ -75,7 +75,7 @@ impl<'a> Dictionary<'a> {
     ) -> Result<&str, ObjectValueError> {
         self.0
             .get(&id.into())
-            .map_or(Ok(default), |o| Ok(from_utf8(o.as_name()?).unwrap()))
+            .map_or(Ok(default), |o| Ok(o.as_name().unwrap()))
     }
 }
 
@@ -327,9 +327,9 @@ impl<'a> Object<'a> {
 
     /// If value is a Name, return its normalized name, return error if
     /// value is not Name..
-    pub fn as_name(&self) -> Result<&[u8], ObjectValueError> {
+    pub fn as_name(&self) -> Result<&str, ObjectValueError> {
         match self {
-            Object::Name(n) => Ok(n.0.borrow()),
+            Object::Name(n) => Ok(from_utf8(n.0.borrow()).unwrap()),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
