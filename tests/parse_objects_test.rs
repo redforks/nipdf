@@ -1,6 +1,6 @@
 use glob::glob;
 use pdf2docx::{
-    file::File,
+    file::{File, Page},
     object::{Object, ObjectValueError},
 };
 
@@ -12,7 +12,7 @@ fn scan_objects() {
         println!("parsing {:?}", path);
         let (f, mut resolver) =
             File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {:?}", path));
-        for id in 0..f.total_objects {
+        for id in 0..f.total_objects() {
             print!("scan object: {}", id);
             match resolver.resolve(id) {
                 Err(ObjectValueError::ObjectIDNotFound) => {
@@ -27,5 +27,12 @@ fn scan_objects() {
 
             println!("  done");
         }
+
+        for (idx, page) in f.catalog().pages().iter().enumerate() {
+            println!("page: {}, object id: {}", idx, page.id());
+            println!("  media_box: {:?}", page.media_box());
+            println!("  crop_box: {:?}", page.crop_box());
+        }
+        println!("");
     }
 }
