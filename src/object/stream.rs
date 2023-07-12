@@ -6,7 +6,7 @@ use std::{
 };
 
 use bitstream_io::{BigEndian, BitReader};
-use image::{DynamicImage, GrayImage, Luma};
+use image::{DynamicImage, GrayImage, Luma, RgbImage};
 use log::error;
 use once_cell::unsync::Lazy;
 
@@ -379,6 +379,34 @@ impl<'a> Stream<'a> {
                         data: Cow::Owned(bytes),
                     }))
                 }
+                (Some(ColorSpace::DeviceGray), 8) => {
+                    use png::{BitDepth, ColorType, Encoder};
+                    let mut bytes = Vec::new();
+                    let mut encoder = Encoder::new(&mut bytes, img_dict.width(), img_dict.height());
+                    encoder.set_color(ColorType::Grayscale);
+                    encoder.set_depth(BitDepth::Eight);
+                    let mut writer = encoder.write_header().unwrap();
+                    writer.write_image_data(data.borrow()).unwrap();
+                    drop(writer);
+                    Ok(FilterDecodedData::RawImage(RawImage {
+                        format: ImageFormat::Png,
+                        data: Cow::Owned(bytes),
+                    }))
+                }
+                (Some(ColorSpace::DeviceRGB), 8) => {
+                    use png::{BitDepth, ColorType, Encoder};
+                    let mut bytes = Vec::new();
+                    let mut encoder = Encoder::new(&mut bytes, img_dict.width(), img_dict.height());
+                    encoder.set_color(ColorType::Rgb);
+                    encoder.set_depth(BitDepth::Eight);
+                    let mut writer = encoder.write_header().unwrap();
+                    writer.write_image_data(data.borrow()).unwrap();
+                    drop(writer);
+                    Ok(FilterDecodedData::RawImage(RawImage {
+                        format: ImageFormat::Png,
+                        data: Cow::Owned(bytes),
+                    }))
+                }
                 _ => todo!(
                     "unsupported interoperate decoded stream data as raw image: {:?} {}",
                     img_dict.color_space(),
@@ -402,6 +430,18 @@ impl<'a> Stream<'a> {
                         }
                     }
                     Ok(FilterDecodedData::Image(DynamicImage::ImageLuma8(img)))
+                }
+                (Some(ColorSpace::DeviceGray), 8) => {
+                    let img =
+                        GrayImage::from_raw(img_dict.width(), img_dict.height(), data.into_owned())
+                            .unwrap();
+                    Ok(FilterDecodedData::Image(DynamicImage::ImageLuma8(img)))
+                }
+                (Some(ColorSpace::DeviceRGB), 8) => {
+                    let img =
+                        RgbImage::from_raw(img_dict.width(), img_dict.height(), data.into_owned())
+                            .unwrap();
+                    Ok(FilterDecodedData::Image(DynamicImage::ImageRgb8(img)))
                 }
                 _ => todo!(
                     "unsupported interoperate decoded stream data as image: {:?} {}",
