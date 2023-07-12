@@ -49,7 +49,7 @@ impl<'a, 'b> PageDict<'a, 'b> {
 
     pub fn kids(&self) -> Vec<u32> {
         self.d
-            .opt_arr_map("Kids", |o| Ok(o.as_int()? as u32))
+            .opt_arr_map("Kids", |o| Ok(o.as_ref()?.id().id()))
             .unwrap()
             .unwrap_or_default()
     }

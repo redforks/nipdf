@@ -317,6 +317,12 @@ pub enum Object<'a> {
     LaterResolveStream(Dictionary<'a>),
 }
 
+impl Object<'static> {
+    pub fn new_ref(id: u32) -> Self {
+        Self::Reference(Reference::new(id, 0))
+    }
+}
+
 impl<'a> Object<'a> {
     pub fn as_int(&self) -> Result<i32, ObjectValueError> {
         match self {

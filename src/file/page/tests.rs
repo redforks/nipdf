@@ -41,7 +41,7 @@ fn parse_page_tree(root_id: u32, tree: Vec<(u32, Vec<u32>)>) -> Vec<u32> {
             "Kids".into(),
             Object::Array(
                 kids.into_iter()
-                    .map(|id| (id as i32).into())
+                    .map(|id| Object::new_ref(id))
                     .collect::<Array>(),
             ),
         );
