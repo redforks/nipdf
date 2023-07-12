@@ -132,31 +132,34 @@ impl<'a> ObjectResolver<'a> {
 
     /// Resolve object with id `id`, if object is reference, resolve it recursively.
     pub fn resolve(&self, id: u32) -> Result<&Object<'a>, ObjectValueError> {
-        self.objects.get(&id).unwrap().get_or_try_init(|| {
-            let mut o = self.xref_table.parse_object(id)?;
-            loop {
-                match o {
-                    Object::Reference(id) => {
-                        let id = id.id().id();
-                        o = self.xref_table.parse_object(id)?;
+        self.objects
+            .get(&id)
+            .ok_or(ObjectValueError::ObjectIDNotFound)?
+            .get_or_try_init(|| {
+                let mut o = self.xref_table.parse_object(id)?;
+                loop {
+                    match o {
+                        Object::Reference(id) => {
+                            let id = id.id().id();
+                            o = self.xref_table.parse_object(id)?;
+                        }
+                        Object::LaterResolveStream(d) => {
+                            let l = d.get(&Name::borrowed(b"Length")).unwrap();
+                            let l = l.as_ref().unwrap();
+                            let l = self.xref_table.parse_object(l.id().id()).unwrap();
+                            let l = l.as_int().unwrap();
+                            let buf = self.xref_table.resolve_object_buf(id).unwrap();
+                            let (buf, _) =
+                                take_until::<&[u8], &[u8], ParseError>(b"stream".as_slice())(buf)
+                                    .unwrap();
+                            let (_, content) = parse_stream_content(buf, l as u32).unwrap();
+                            o = Object::Stream(Stream(d, content));
+                        }
+                        _ => break,
                     }
-                    Object::LaterResolveStream(d) => {
-                        let l = d.get(&Name::borrowed(b"Length")).unwrap();
-                        let l = l.as_ref().unwrap();
-                        let l = self.xref_table.parse_object(l.id().id()).unwrap();
-                        let l = l.as_int().unwrap();
-                        let buf = self.xref_table.resolve_object_buf(id).unwrap();
-                        let (buf, _) =
-                            take_until::<&[u8], &[u8], ParseError>(b"stream".as_slice())(buf)
-                                .unwrap();
-                        let (_, content) = parse_stream_content(buf, l as u32).unwrap();
-                        o = Object::Stream(Stream(d, content));
-                    }
-                    _ => break,
                 }
-            }
-            Ok(o)
-        })
+                Ok(o)
+            })
     }
 
     /// Resolve value from data container `c` with key `k`, if value is reference,
@@ -210,6 +213,10 @@ impl Catalog {
         let ver = dict.opt_name("Version")?.map(|s| s.to_owned());
         let pages = Page::parse(root_page_id, resolver)?;
         Ok(Self { id, pages, ver })
+    }
+
+    pub fn pages(&self) -> &[Page] {
+        self.pages.as_slice()
     }
 }
 

@@ -85,7 +85,7 @@ impl Page {
     }
 
     /// Parse page tree to get all pages
-    pub fn parse(
+    pub(crate) fn parse(
         root_id: u32,
         resolver: &ObjectResolver<'_>,
     ) -> Result<Vec<Page>, ObjectValueError> {
