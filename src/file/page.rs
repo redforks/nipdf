@@ -29,13 +29,6 @@ impl<'a> From<&Array<'a>> for Rectangle {
     }
 }
 
-pub struct Page {
-    /// pdf object id
-    id: u32,
-    media_box: Rectangle,
-    crop_box: Option<Rectangle>,
-}
-
 struct PageDict<'a, 'b> {
     d: SchemaDict<'a, 'b, [&'static str; 2]>,
 }
@@ -70,7 +63,26 @@ impl<'a, 'b> PageDict<'a, 'b> {
     }
 }
 
+pub struct Page {
+    /// pdf object id
+    id: u32,
+    media_box: Rectangle,
+    crop_box: Option<Rectangle>,
+}
+
 impl Page {
+    pub fn id(&self) -> u32 {
+        self.id
+    }
+
+    pub fn media_box(&self) -> Rectangle {
+        self.media_box
+    }
+
+    pub fn crop_box(&self) -> Option<Rectangle> {
+        self.crop_box
+    }
+
     /// Parse page tree to get all pages
     pub fn parse<'a, 'b>(
         root_id: u32,
@@ -105,11 +117,17 @@ impl Page {
         let media_box = once(d)
             .chain(parents.iter())
             .map(|d| d.media_box())
+            .find_map(|r| r)
+            .unwrap();
+        let crop_box = once(d)
+            .chain(parents.iter())
+            .map(|d| d.crop_box())
             .find_map(|r| r);
+
         Self {
             id,
-            media_box: media_box.unwrap(),
-            crop_box: None,
+            media_box,
+            crop_box,
         }
     }
 }
