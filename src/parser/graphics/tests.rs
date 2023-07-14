@@ -20,3 +20,10 @@ fn parse_operator_falied(s: &str) {
         nom::Err::Error(_)
     ));
 }
+
+#[test_case(" "=> Vec::<Operation>::new(); "empty")]
+fn test_parse_opreations(s: &str) -> Vec<Operation> {
+    let (input, result) = parse_operations(s.as_bytes()).unwrap();
+    assert!(input.is_empty());
+    result
+}

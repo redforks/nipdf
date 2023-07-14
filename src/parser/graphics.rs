@@ -5,8 +5,10 @@ use nom::{branch::alt, bytes::complete::is_not, combinator::map_res, Parser};
 
 use crate::{
     object::Object,
-    parser::{parse_object, ParseError, ParseResult, PdfParseError},
+    parser::{parse_object, ws_prefixed, ParseError, ParseResult, PdfParseError},
 };
+
+use crate::graphics::Operation;
 
 #[derive(Debug, PartialEq)]
 enum ObjectOrOperator<'a> {
@@ -68,6 +70,32 @@ fn parse_object_or_operator(input: &[u8]) -> ParseResult<ObjectOrOperator> {
         parse_object.map(|o| ObjectOrOperator::Object(o)),
         parse_operator,
     ))(input)
+}
+
+pub fn parse_operations(input: &[u8]) -> ParseResult<Vec<Operation>> {
+    let mut operands = Vec::with_capacity(8);
+    let mut r = vec![];
+    loop {
+        let vr = ws_prefixed(parse_object_or_operator)(input);
+        match vr {
+            Ok((input, ObjectOrOperator::Object(o))) => {
+                operands.push(o);
+            }
+            Ok((input, ObjectOrOperator::Operator(op))) => {
+                r.push(match op {
+                    "q" => Operation::SaveGraphicsState,
+                    "Q" => Operation::RestoreGraphicsState,
+                    _ => todo!(),
+                });
+            }
+            Err(nom::Err::Incomplete(_)) => {
+                break;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    assert!(operands.is_empty());
+    Ok((&[], r))
 }
 
 #[cfg(test)]

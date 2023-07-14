@@ -1,7 +1,3 @@
-use crate::object::Dictionary;
-
-mod parser;
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct TransformMatrix {
     a: f32,
@@ -35,9 +31,9 @@ pub enum RenderingIntent {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Operation<'a> {
-    SaveState,
-    RestoreState,
+pub enum Operation {
+    SaveGraphicsState,
+    RestoreGraphicsState,
     ModifyCTM(TransformMatrix),
     SetLineWidth(f32),
     SetLineCap(LineCapStyle),
@@ -46,5 +42,5 @@ pub enum Operation<'a> {
     SetDashPattern(Vec<f32>, f32),
     SetIntent(RenderingIntent),
     SetFlatness(f32),
-    SetGraphicsStateParameters(Box<Dictionary<'a>>),
+    SetGraphicsStateParameters(String),
 }

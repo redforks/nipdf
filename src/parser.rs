@@ -1,9 +1,18 @@
 use nom::{
     character::complete::multispace0,
+    combinator::opt,
     error::FromExternalError,
     sequence::{delimited, preceded, terminated},
-    IResult, Parser, combinator::opt,
+    IResult, Parser,
 };
+
+mod file;
+mod graphics;
+mod object;
+
+pub use file::*;
+pub use graphics::*;
+pub use object::*;
 
 #[derive(PartialEq, Debug, thiserror::Error)]
 pub enum PdfParseError<I, E>
@@ -72,12 +81,6 @@ pub enum FileError {
     #[error("No enough data")]
     NoEnoughData,
 }
-
-mod file;
-mod object;
-
-pub use file::*;
-pub use object::*;
 
 fn comment(buf: &[u8]) -> ParseResult<'_, ()> {
     let (buf, _) = nom::bytes::complete::tag(b"%")(buf)?;
