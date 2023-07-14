@@ -26,6 +26,9 @@ where
 
     #[error("Invalid name format")]
     InvalidNameFormat,
+
+    #[error("Unknown graphics operator {0:?}")]
+    UnknownGraphicOperator(String),
 }
 
 impl<'a, E1, E2> FromExternalError<&'a [u8], E1> for PdfParseError<&'a [u8], E2>
