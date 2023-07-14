@@ -29,9 +29,14 @@ png = "0.17.9"
 bitvec = "1.0.1"
 jpeg2k = "0.6.6"
 lazy_static = "1.4.0"
+syn = "2.0.25"
+quote = "1.0.29"
 
 [features]
 clr = ["env_logger", "clap"]
+
+[lib]
+proc-macro = true
 
 [dev-dependencies]
 env_logger = "0.10.0"
