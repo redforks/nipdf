@@ -30,7 +30,7 @@ fn cli() -> Command {
 fn dump_stream(path: &str, id: u32, raw: bool, as_image: bool, as_png: bool) -> AnyResult<()> {
     let buf = std::fs::read(path).unwrap();
     let (_f, resolver) =
-        File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {:?}", path));
+        File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {path:?}"));
     let obj = resolver.resolve(id)?;
     let png_buffer;
     match obj {

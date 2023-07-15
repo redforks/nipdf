@@ -9,11 +9,11 @@ fn scan_objects() {
     for entry in glob("sample_files/normal/**/*.pdf").unwrap() {
         let path = entry.unwrap();
         let buf = std::fs::read(&path).unwrap();
-        println!("parsing {:?}", path);
+        println!("parsing {path:?}");
         let (f, resolver) =
-            File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {:?}", path));
+            File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {path:?}"));
         for id in 0..f.total_objects() {
-            print!("scan object: {}", id);
+            print!("scan object: {id}");
             match resolver.resolve(id) {
                 Err(ObjectValueError::ObjectIDNotFound) => {
                     print!(" not found")

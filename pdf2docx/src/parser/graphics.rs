@@ -64,7 +64,7 @@ lazy_static! {
         "MP", "DP", "BMC", "BDC", "EMC",
         // Compatibility
         "BX", "EX",
-    ].iter().cloned().collect();
+    ].iter().copied().collect();
 }
 
 fn parse_operator(input: &[u8]) -> ParseResult<ObjectOrOperator> {
