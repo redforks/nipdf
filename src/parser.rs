@@ -1,7 +1,6 @@
 use nom::{
     branch::alt,
-    character::complete::multispace0,
-    combinator::{opt, value},
+    combinator::{value},
     error::FromExternalError,
     multi::many0_count,
     sequence::{delimited, preceded, terminated},

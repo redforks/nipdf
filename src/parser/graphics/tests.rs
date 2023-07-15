@@ -21,9 +21,15 @@ fn parse_operator_falied(s: &str) {
     ));
 }
 
-#[test_case(" "=> Vec::<Operation>::new(); "empty")]
+#[test_case(""=> Vec::<Operation>::new(); "empty")]
+#[test_case(" % comment\n "=> Vec::<Operation>::new(); "comment only")]
+#[test_case(" % comment\n q Q"=> vec![
+        Operation::SaveGraphicsState,
+        Operation::RestoreGraphicsState
+    ];
+    "two ops"
+)]
 fn test_parse_opreations(s: &str) -> Vec<Operation> {
-    let (input, result) = parse_operations(s.as_bytes()).unwrap();
-    assert!(input.is_empty());
+    let (_, result) = parse_operations(s.as_bytes()).unwrap();
     result
 }

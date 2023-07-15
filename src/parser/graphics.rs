@@ -1,11 +1,11 @@
 use lazy_static::lazy_static;
 use std::collections::HashSet;
 
-use nom::{branch::alt, bytes::complete::is_not, combinator::map_res, Parser};
+use nom::{branch::alt, bytes::complete::is_not, combinator::map_res, multi::many0, Parser};
 
 use crate::{
     object::Object,
-    parser::{parse_object, ws_prefixed, ParseError, ParseResult, PdfParseError},
+    parser::{parse_object, ws_prefixed, ParseError, ParseResult},
 };
 
 use crate::graphics::Operation;
@@ -54,7 +54,7 @@ lazy_static! {
 }
 
 fn parse_operator(input: &[u8]) -> ParseResult<ObjectOrOperator> {
-    let p = is_not(b" \t\n\r#".as_slice());
+    let p = is_not(b" \t\n\r%".as_slice());
     map_res(p, |op| {
         let op = unsafe { std::str::from_utf8_unchecked(op) };
         if OPERATORS.contains(op) {
@@ -66,36 +66,36 @@ fn parse_operator(input: &[u8]) -> ParseResult<ObjectOrOperator> {
 }
 
 fn parse_object_or_operator(input: &[u8]) -> ParseResult<ObjectOrOperator> {
-    alt((
-        parse_object.map(|o| ObjectOrOperator::Object(o)),
-        parse_operator,
-    ))(input)
+    alt((parse_object.map(ObjectOrOperator::Object), parse_operator))(input)
+}
+
+fn parse_operation(mut input: &[u8]) -> ParseResult<Operation> {
+    let mut operands = Vec::with_capacity(8);
+    loop {
+        let vr = ws_prefixed(parse_object_or_operator)(input)?;
+        match vr {
+            (remains, ObjectOrOperator::Object(o)) => {
+                input = remains;
+                operands.push(o);
+            }
+            (remains, ObjectOrOperator::Operator(op)) => {
+                input = remains;
+                assert!(operands.is_empty());
+                return Ok((
+                    input,
+                    match op {
+                        "q" => Operation::SaveGraphicsState,
+                        "Q" => Operation::RestoreGraphicsState,
+                        _ => todo!(),
+                    },
+                ));
+            }
+        }
+    }
 }
 
 pub fn parse_operations(input: &[u8]) -> ParseResult<Vec<Operation>> {
-    let mut operands = Vec::with_capacity(8);
-    let mut r = vec![];
-    loop {
-        let vr = ws_prefixed(parse_object_or_operator)(input);
-        match vr {
-            Ok((input, ObjectOrOperator::Object(o))) => {
-                operands.push(o);
-            }
-            Ok((input, ObjectOrOperator::Operator(op))) => {
-                r.push(match op {
-                    "q" => Operation::SaveGraphicsState,
-                    "Q" => Operation::RestoreGraphicsState,
-                    _ => todo!(),
-                });
-            }
-            Err(nom::Err::Incomplete(_)) => {
-                break;
-            }
-            Err(e) => return Err(e),
-        }
-    }
-    assert!(operands.is_empty());
-    Ok((&[], r))
+    many0(parse_operation)(input)
 }
 
 #[cfg(test)]
