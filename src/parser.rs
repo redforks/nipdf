@@ -1,6 +1,6 @@
 use nom::{
     branch::alt,
-    combinator::{value},
+    combinator::value,
     error::FromExternalError,
     multi::many0_count,
     sequence::{delimited, preceded, terminated},
@@ -14,6 +14,8 @@ mod object;
 pub use file::*;
 pub use graphics::*;
 pub use object::*;
+
+use crate::object::ObjectValueError;
 
 #[derive(PartialEq, Debug, thiserror::Error)]
 pub enum PdfParseError<I, E>
@@ -39,6 +41,15 @@ where
 
     #[error("Unknown graphics operator {0:?}")]
     UnknownGraphicOperator(String),
+
+    #[error("Object value error: {0:?}")]
+    ObjectValueError(#[from] ObjectValueError),
+}
+
+impl<'a> From<ObjectValueError> for nom::Err<ParseError<'a>> {
+    fn from(e: ObjectValueError) -> Self {
+        nom::Err::Error(ParseError::ObjectValueError(e))
+    }
 }
 
 impl<'a, E1, E2> FromExternalError<&'a [u8], E1> for PdfParseError<&'a [u8], E2>

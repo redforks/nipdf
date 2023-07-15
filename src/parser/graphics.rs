@@ -4,11 +4,25 @@ use std::collections::HashSet;
 use nom::{branch::alt, bytes::complete::is_not, combinator::map_res, multi::many0, Parser};
 
 use crate::{
-    object::Object,
+    object::{Object, ObjectValueError},
     parser::{parse_object, ws_prefixed, ParseError, ParseResult},
 };
 
 use crate::graphics::Operation;
+
+trait ConvertFromObject<'a, 'b>
+where
+    Self: Sized,
+{
+    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError>;
+}
+
+impl<'a, 'b> ConvertFromObject<'a, 'b> for f32 {
+    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+        let o = objects.pop().unwrap();
+        o.as_number()
+    }
+}
 
 #[derive(Debug, PartialEq)]
 enum ObjectOrOperator<'a> {
@@ -80,15 +94,17 @@ fn parse_operation(mut input: &[u8]) -> ParseResult<Operation> {
             }
             (remains, ObjectOrOperator::Operator(op)) => {
                 input = remains;
-                assert!(operands.is_empty());
-                return Ok((
+                let r = (
                     input,
                     match op {
                         "q" => Operation::SaveGraphicsState,
                         "Q" => Operation::RestoreGraphicsState,
+                        "w" => Operation::SetLineWidth(f32::convert_from_object(&mut operands)?),
                         _ => todo!(),
                     },
-                ));
+                );
+                assert!(operands.is_empty());
+                return Ok(r);
             }
         }
     }
