@@ -29,6 +29,7 @@ png = "0.17.9"
 bitvec = "1.0.1"
 jpeg2k = "0.6.6"
 lazy_static = "1.4.0"
+pdf2docx-macro = { path = "../pdf2docx-macro" }
 
 [features]
 clr = ["env_logger", "clap"]
