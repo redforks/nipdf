@@ -37,7 +37,10 @@ fn object_resolver() {
 fn parse_file() {
     let mut p = PathBuf::from(file!());
     assert_eq!(
-        p.pop().then(|| p.pop().then(|| p.pop())).flatten(),
+        p.pop()
+            .then(|| p.pop().then(|| p.pop().then(|| p.pop())))
+            .flatten()
+            .flatten(),
         Some(true)
     );
     p.push("sample_files");
