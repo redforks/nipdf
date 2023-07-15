@@ -1,9 +1,11 @@
 use nom::{
+    branch::alt,
     character::complete::multispace0,
-    combinator::opt,
+    combinator::{opt, value},
     error::FromExternalError,
+    multi::many0_count,
     sequence::{delimited, preceded, terminated},
-    IResult, Parser,
+    AsChar, IResult, InputTakeAtPosition, Parser,
 };
 
 mod file;
@@ -88,15 +90,25 @@ fn comment(buf: &[u8]) -> ParseResult<'_, ()> {
     if content.starts_with(b"PDF-") || content.starts_with(b"%EOF") {
         return Err(nom::Err::Error(ParseError::InvalidNameFormat));
     }
-    let (buf, _) = nom::bytes::complete::take_while(|c| c == b'\n' || c == b'\r')(buf)?;
-    let (buf, _) = multispace0(buf)?;
     Ok((buf, ()))
 }
 
-fn whitespace_or_comment(buf: &[u8]) -> ParseResult<'_, ()> {
-    let (buf, _) = multispace0(buf)?;
-    let (buf, _) = opt(comment)(buf)?;
-    Ok((buf, ()))
+fn whitespace1<T, E: nom::error::ParseError<T>>(input: T) -> IResult<T, T, E>
+where
+    T: InputTakeAtPosition,
+    <T as InputTakeAtPosition>::Item: AsChar + Clone,
+{
+    input.split_at_position1_complete(
+        |item| {
+            let c = item.as_char();
+            !(c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\0' || c == '\x0C')
+        },
+        nom::error::ErrorKind::MultiSpace,
+    )
+}
+
+fn whitespace_or_comment(input: &[u8]) -> ParseResult<'_, ()> {
+    value((), many0_count(alt((value((), whitespace1), comment))))(input)
 }
 
 fn ws_prefixed<'a, F, O>(inner: F) -> impl FnMut(&'a [u8]) -> ParseResult<'_, O>
@@ -121,3 +133,6 @@ where
 {
     terminated(inner, whitespace_or_comment)
 }
+
+#[cfg(test)]
+mod tests;
