@@ -7,6 +7,7 @@ use crate::{
     object::{Object, ObjectValueError},
     parser::{parse_object, ws_prefixed, ParseError, ParseResult},
 };
+use pdf2docx_macro::graphics_operation_parser;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TransformMatrix {
@@ -40,6 +41,7 @@ pub enum RenderingIntent {
     Perceptual,
 }
 
+#[graphics_operation_parser]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Operation {
     SaveGraphicsState,
@@ -139,15 +141,7 @@ fn parse_operation(mut input: &[u8]) -> ParseResult<Operation> {
             }
             (remains, ObjectOrOperator::Operator(op)) => {
                 input = remains;
-                let r = (
-                    input,
-                    match op {
-                        "q" => Operation::SaveGraphicsState,
-                        "Q" => Operation::RestoreGraphicsState,
-                        "w" => Operation::SetLineWidth(f32::convert_from_object(&mut operands)?),
-                        _ => todo!(),
-                    },
-                );
+                let r = (input, create_operation(op, &mut operands)?);
                 assert!(operands.is_empty());
                 return Ok(r);
             }
