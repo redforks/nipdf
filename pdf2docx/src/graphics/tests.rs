@@ -1,8 +1,6 @@
 use super::*;
-use std::collections::HashSet;
-use test_case::test_case;
 
-use nom::{branch::alt, bytes::complete::is_not, combinator::map_res, multi::many0, Parser};
+use test_case::test_case;
 
 #[test_case("w ")]
 #[test_case("w"; "not end with whitespace")]
