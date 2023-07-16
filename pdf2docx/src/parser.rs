@@ -8,11 +8,9 @@ use nom::{
 };
 
 mod file;
-mod graphics;
 mod object;
 
 pub use file::*;
-pub use graphics::*;
 pub use object::*;
 
 use crate::object::ObjectValueError;
@@ -121,7 +119,7 @@ fn whitespace_or_comment(input: &[u8]) -> ParseResult<'_, ()> {
     value((), many0_count(alt((value((), whitespace1), comment))))(input)
 }
 
-fn ws_prefixed<'a, F, O>(inner: F) -> impl FnMut(&'a [u8]) -> ParseResult<'_, O>
+pub(crate) fn ws_prefixed<'a, F, O>(inner: F) -> impl FnMut(&'a [u8]) -> ParseResult<'_, O>
 where
     F: Parser<&'a [u8], O, ParseError<'a>>,
 {
