@@ -7,7 +7,7 @@ use crate::{
     object::{Object, ObjectValueError},
     parser::{parse_object, ws_prefixed, ParseError, ParseResult},
 };
-use pdf2docx_macro::OperationParser;
+use pdf2docx_macro::{ConvertFromIntObject, OperationParser};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TransformMatrix {
@@ -19,11 +19,11 @@ pub struct TransformMatrix {
     f: f32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, ConvertFromIntObject)]
 pub enum LineCapStyle {
-    Butt,
-    Round,
-    Square,
+    Butt = 0,
+    Round = 1,
+    Square = 2,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -55,7 +55,8 @@ pub enum Operation {
     ModifyCTM(BoxTransformMatrix),
     #[op_tag("w")]
     SetLineWidth(f32),
-    // SetLineCap(LineCapStyle),
+    #[op_tag("J")]
+    SetLineCap(LineCapStyle),
     // SetLineJoin(LineJoinStyle),
     // SetMiterLimit(f32),
     // SetDashPattern(VecF32, f32),

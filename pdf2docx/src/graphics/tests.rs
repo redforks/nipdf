@@ -51,3 +51,13 @@ fn test_parse_operation(s: &str) -> Operation {
     let (_, result) = parse_operation(s.as_bytes()).unwrap();
     result
 }
+
+#[test_case(0 => LineCapStyle::Butt)]
+#[test_case(1 => LineCapStyle::Round)]
+#[test_case(2 => LineCapStyle::Square)]
+fn test_parse_line_cap_style(v: i32) -> LineCapStyle {
+    let mut vec = vec![v.into()];
+    let act = LineCapStyle::convert_from_object(&mut vec).unwrap();
+    assert!(vec.is_empty());
+    act
+}

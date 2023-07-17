@@ -1,7 +1,6 @@
 //! object mod contains data structure map to low level pdf objects
 use ahash::HashMap;
 
-
 use std::{
     borrow::{Borrow, Cow},
     iter::Peekable,
@@ -297,6 +296,8 @@ pub enum ObjectValueError {
     DictSchemaUnExpectedType(u32, &'static str),
     #[error("Dict schema error, object id: {0}, schema: {1}, key: {2}")]
     DictSchemaError(u32, &'static str, &'static str),
+    #[error("Graphics operation schema error")]
+    GraphicsOperationSchemaError,
 }
 
 #[derive(Clone, PartialEq, Debug)]

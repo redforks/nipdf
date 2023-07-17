@@ -6,10 +6,35 @@ use syn::{
     Lit, LitStr, Meta, Pat, Token,
 };
 
+#[proc_macro_derive(ConvertFromIntObject)]
+pub fn convert_from_int_object(input: TokenStream) -> TokenStream {
+    let enum_t = parse_macro_input!(input as ItemEnum);
+    let t = enum_t.ident;
+    let arms = enum_t.variants.iter().map(|branch| -> proc_macro2::TokenStream {
+        let Some((_, Expr::Lit(ExprLit{lit: Lit::Int(ref lit), ..}))) = branch.discriminant else {
+            panic!("Enum discriminant must be literal");
+        };
+        let digit: i32 = lit.base10_parse().unwrap();
+        let b = &branch.ident;
+        parse_quote!( #digit=> Ok(#t::#b))
+    });
+    let tokens = quote! {
+        impl<'a, 'b> ConvertFromObject<'a, 'b> for #t {
+            fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+                let n = objects.pop().unwrap().as_int()?;
+                match n {
+                    #( #arms, )*
+                    _ => Err(ObjectValueError::GraphicsOperationSchemaError),
+                }
+            }
+        }
+    };
+    tokens.into()
+}
+
 #[proc_macro_derive(OperationParser, attributes(op_tag))]
 pub fn graphics_operation_parser(input: TokenStream) -> TokenStream {
-    let op_enum = input;
-    let op_enum = parse_macro_input!(op_enum as ItemEnum);
+    let op_enum = parse_macro_input!(input as ItemEnum);
     let operation_value_from_ident = |i: Ident| {
         let op = Ident::new("Operation", Span::call_site());
         let r: Expr = parse_quote!( #op::#i );
