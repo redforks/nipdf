@@ -7,7 +7,7 @@ use crate::{
     object::{Object, ObjectValueError},
     parser::{parse_object, ws_prefixed, ParseError, ParseResult},
 };
-use pdf2docx_macro::graphics_operation_parser;
+use pdf2docx_macro::OperationParser;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TransformMatrix {
@@ -41,20 +41,25 @@ pub enum RenderingIntent {
     Perceptual,
 }
 
-#[graphics_operation_parser]
-#[derive(Debug, Clone, PartialEq)]
+/// Alias of Vec<f32> for easier parse by [[graphics_operation_parser]] macro
+pub type VecF32 = Vec<f32>;
+
+#[derive(Debug, Clone, PartialEq, OperationParser)]
 pub enum Operation {
+    #[op_tag("q")]
     SaveGraphicsState,
+    #[op_tag("Q")]
     RestoreGraphicsState,
-    ModifyCTM(TransformMatrix),
-    SetLineWidth(f32),
-    SetLineCap(LineCapStyle),
-    SetLineJoin(LineJoinStyle),
-    SetMiterLimit(f32),
-    SetDashPattern(Vec<f32>, f32),
-    SetIntent(RenderingIntent),
-    SetFlatness(f32),
-    SetGraphicsStateParameters(String),
+    // ModifyCTM(TransformMatrix),
+    // #[tag("w")]
+    // SetLineWidth(f32),
+    // SetLineCap(LineCapStyle),
+    // SetLineJoin(LineJoinStyle),
+    // SetMiterLimit(f32),
+    // SetDashPattern(VecF32, f32),
+    // SetIntent(RenderingIntent),
+    // SetFlatness(f32),
+    // SetGraphicsStateParameters(String),
 }
 
 trait ConvertFromObject<'a, 'b>

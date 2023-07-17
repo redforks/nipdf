@@ -37,8 +37,8 @@ fn test_parse_opreations(s: &str) -> Vec<Operation> {
 
 #[test_case("q" => Operation::SaveGraphicsState; "save")]
 #[test_case("Q" => Operation::RestoreGraphicsState; "restore")]
-#[test_case("1 w" => Operation::SetLineWidth(1f32))]
-#[test_case("1.5 w" => Operation::SetLineWidth(1.5f32))]
+// #[test_case("1 w" => Operation::SetLineWidth(1f32))]
+// #[test_case("1.5 w" => Operation::SetLineWidth(1.5f32))]
 fn test_parse_operation(s: &str) -> Operation {
     let (_, result) = parse_operation(s.as_bytes()).unwrap();
     result
