@@ -50,17 +50,12 @@ pub enum RenderingIntent {
 }
 
 /// Alias of Vec<f32> for easier parse by [[graphics_operation_parser]] macro
-pub type VecF32 = Vec<f32>;
+pub type BoxVecF32 = Box<Vec<f32>>;
 pub type BoxTransformMatrix = Box<TransformMatrix>;
 
 #[derive(Debug, Clone, PartialEq, OperationParser)]
+#[rustfmt::skip]
 pub enum Operation {
-    #[op_tag("q")]
-    SaveGraphicsState,
-    #[op_tag("Q")]
-    RestoreGraphicsState,
-    #[op_tag("cm")]
-    ModifyCTM(BoxTransformMatrix),
     #[op_tag("w")]
     SetLineWidth(f32),
     #[op_tag("J")]
@@ -70,12 +65,19 @@ pub enum Operation {
     #[op_tag("M")]
     SetMiterLimit(f32),
     #[op_tag("d")]
-    SetDashPattern(VecF32, f32),
+    SetDashPattern(BoxVecF32, f32),
     #[op_tag("ri")]
     SetRenderIntent(RenderIntent),
-    // SetIntent(RenderingIntent),
-    // SetFlatness(f32),
+    #[op_tag("i")]
+    SetFlatness(f32),
     // SetGraphicsStateParameters(String),
+
+    #[op_tag("q")]
+    SaveGraphicsState,
+    #[op_tag("Q")]
+    RestoreGraphicsState,
+    #[op_tag("cm")]
+    ModifyCTM(BoxTransformMatrix),
 }
 
 trait ConvertFromObject<'a, 'b>
