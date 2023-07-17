@@ -46,19 +46,23 @@ pub enum LineJoinStyle {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, ConvertFromNameObject)]
-pub enum RenderIntent {
+pub enum RenderingIntent {
     AbsoluteColorimetric,
     RelativeColorimetric,
     Saturation,
     Perceptual,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum RenderingIntent {
-    AbsoluteColorimetric,
-    RelativeColorimetric,
-    Saturation,
-    Perceptual,
+#[derive(Debug, Clone, Copy, PartialEq, ConvertFromIntObject)]
+pub enum SetTextRenderingMode {
+    Fill = 0,
+    Stroke = 1,
+    FillAndStroke = 2,
+    Invisible = 3,
+    FillAndClip = 4,
+    StrokeAndClip = 5,
+    FillStrokeAndClip = 6,
+    Clip = 7,
 }
 
 /// Alias of Vec<f32> for easier parse by [[graphics_operation_parser]] macro
@@ -79,7 +83,7 @@ pub enum Operation {
     #[op_tag("d")]
     SetDashPattern(VecF32, f32),
     #[op_tag("ri")]
-    SetRenderIntent(RenderIntent),
+    SetRenderIntent(RenderingIntent),
     #[op_tag("i")]
     SetFlatness(f32),
     #[op_tag("gs")]
@@ -142,6 +146,22 @@ pub enum Operation {
     BeginText,
     #[op_tag("ET")]
     EndText,
+
+    // Text State Operations
+    #[op_tag("Tc")]
+    SetCharacterSpacing(f32),
+    #[op_tag("Tw")]
+    SetWordSpacing(f32),
+    #[op_tag("Tz")]
+    SetHorizontalScaling(f32),
+    #[op_tag("TL")]
+    SetLeading(f32),
+    #[op_tag("Tf")]
+    SetFont(String, f32),
+    #[op_tag("Tr")]
+    SetTextRenderingMode(SetTextRenderingMode),
+    #[op_tag("Ts")]
+    SetTextRise(f32),
 }
 
 trait ConvertFromObject<'a, 'b>
