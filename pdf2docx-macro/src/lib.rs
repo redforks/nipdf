@@ -2,19 +2,14 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
 use syn::{
-    parse_macro_input, parse_quote, Arm, Expr, ExprLit, ExprParen, Ident, ItemEnum, Lit, LitStr,
-    Meta, Pat, Token, Variant,
+    parse_macro_input, parse_quote, Arm, Expr, ExprLit, Fields, FieldsUnnamed, Ident, ItemEnum,
+    Lit, LitStr, Meta, Pat, Token,
 };
 
 #[proc_macro_derive(OperationParser, attributes(op_tag))]
-pub fn graphics_operation_parser(mut input: TokenStream) -> TokenStream {
-    let op_enum = input.clone();
+pub fn graphics_operation_parser(input: TokenStream) -> TokenStream {
+    let op_enum = input;
     let op_enum = parse_macro_input!(op_enum as ItemEnum);
-    fn operation_value(s: &str) -> Expr {
-        let op = Ident::new("Operation", Span::call_site());
-        let s = Ident::new(s, Span::call_site());
-        parse_quote!( #op::#s )
-    }
     let operation_value_from_ident = |i: Ident| {
         let op = Ident::new("Operation", Span::call_site());
         let r: Expr = parse_quote!( #op::#i );
@@ -36,6 +31,19 @@ pub fn graphics_operation_parser(mut input: TokenStream) -> TokenStream {
 
     let mut arms = vec![];
     for branch in op_enum.variants {
+        let mut convert_args: Vec<Expr> = vec![];
+        if !branch.fields.is_empty() {
+            if let Fields::Unnamed(FieldsUnnamed {
+                unnamed: fields, ..
+            }) = branch.fields
+            {
+                for f in fields {
+                    let f = f.ty.clone();
+                    let convert_from_object = convert_from_object();
+                    convert_args.push(parse_quote!( #f::#convert_from_object(operands)?));
+                }
+            }
+        }
         let op = operation_value_from_ident(branch.ident.clone());
         let mut s = None;
         for attr in &branch.attrs {
@@ -52,9 +60,15 @@ pub fn graphics_operation_parser(mut input: TokenStream) -> TokenStream {
                 }
             }
         }
-        arms.push(arm(&s.expect("op_tag not defined"), op));
+        if convert_args.is_empty() {
+            arms.push(arm(&s.expect("op_tag not defined"), op));
+        } else {
+            arms.push(arm(
+                &s.expect("op_tag not defined"),
+                parse_quote!( #op(#(#convert_args),*) ),
+            ));
+        }
     }
-    arms.push(arm("q", operation_value("SaveGraphicsState")));
     // "w" => Operation::SetLineWidth(f32::convert_from_object(operands)?)
     // arms.push(arm("w", {
     //     let op = operation_value("SetLineWidth");
@@ -66,10 +80,9 @@ pub fn graphics_operation_parser(mut input: TokenStream) -> TokenStream {
         fn create_operation(op: &str, operands: &mut Vec<Object>) -> Result<Operation, ObjectValueError> {
             Ok(match op {
                 #( #arms, )*
-                _ => todo!("haha"),
+                _ => todo!(),
             })
         }
     };
-    eprintln!("{}", tokens);
     tokens.into()
 }

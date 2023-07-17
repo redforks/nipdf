@@ -51,8 +51,8 @@ pub enum Operation {
     #[op_tag("Q")]
     RestoreGraphicsState,
     // ModifyCTM(TransformMatrix),
-    // #[tag("w")]
-    // SetLineWidth(f32),
+    #[op_tag("w")]
+    SetLineWidth(f32),
     // SetLineCap(LineCapStyle),
     // SetLineJoin(LineJoinStyle),
     // SetMiterLimit(f32),
