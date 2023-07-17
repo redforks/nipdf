@@ -181,10 +181,10 @@ pub enum Operation {
     ShowText(String),
     // #[op_tag("TJ")]
     // ShowTextWithAdjustments(Vec<Object<'a>>),
-    // #[op_tag("'")]
-    // MoveToNextLineAndShowText(String),
-    // #[op_tag("\"")]
-    // SetSpacingMoveToNextLineAndShowText(f32, f32, String),
+    #[op_tag("'")]
+    MoveToNextLineAndShowText(String),
+    #[op_tag("\"")]
+    SetSpacingMoveToNextLineAndShowText(f32, f32, String),
 }
 
 trait ConvertFromObject<'a, 'b>
