@@ -109,5 +109,6 @@ pub fn graphics_operation_parser(input: TokenStream) -> TokenStream {
             })
         }
     };
+    // println!("{}", tokens);
     tokens.into()
 }

@@ -61,3 +61,12 @@ fn test_parse_line_cap_style(v: i32) -> LineCapStyle {
     assert!(vec.is_empty());
     act
 }
+
+#[test_case(vec![] => Vec::<f32>::new(); "empty")]
+#[test_case(vec![1f32.into()] => vec![1f32]; "one")]
+fn test_arr_convert_from_object(v: Vec<Object>) -> Vec<f32> {
+    let mut outer = vec![Object::Array(v)];
+    let act = Vec::<f32>::convert_from_object(&mut outer).unwrap();
+    assert!(outer.is_empty());
+    act
+}

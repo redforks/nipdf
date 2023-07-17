@@ -59,7 +59,9 @@ pub enum Operation {
     SetLineCap(LineCapStyle),
     #[op_tag("j")]
     SetLineJoin(LineJoinStyle),
-    // SetMiterLimit(f32),
+    #[op_tag("M")]
+    SetMiterLimit(f32),
+    // #[op_tag("d")]
     // SetDashPattern(VecF32, f32),
     // SetIntent(RenderingIntent),
     // SetFlatness(f32),
@@ -76,6 +78,17 @@ where
 impl<'a, 'b, T: ConvertFromObject<'a, 'b>> ConvertFromObject<'a, 'b> for Box<T> {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         Ok(Box::new(T::convert_from_object(objects)?))
+    }
+}
+
+impl<'a, 'b, T: for<'c, 'd> ConvertFromObject<'c, 'd>> ConvertFromObject<'a, 'b> for Vec<T> {
+    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+        let mut arr = objects.pop().unwrap().into_arr()?;
+        let mut result = Vec::new();
+        while !arr.is_empty() {
+            result.push(T::convert_from_object(&mut arr)?);
+        }
+        Ok(result)
     }
 }
 

@@ -370,6 +370,13 @@ impl<'a> Object<'a> {
         }
     }
 
+    pub fn into_arr(self) -> Result<Array<'a>, ObjectValueError> {
+        match self {
+            Object::Array(a) => Ok(a),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
+    }
+
     pub fn as_ref(&self) -> Result<&Reference, ObjectValueError> {
         match self {
             Object::Reference(r) => Ok(r),
