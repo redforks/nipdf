@@ -6,6 +6,34 @@ use syn::{
     Lit, LitStr, Meta, Pat, Token,
 };
 
+/// Generate `impl ConvertFromObject` for enum that convert Object::Name to enum variant
+/// Name equals to variant name
+#[proc_macro_derive(ConvertFromNameObject)]
+pub fn convert_from_name_object(input: TokenStream) -> TokenStream {
+    let enum_t = parse_macro_input!(input as ItemEnum);
+    let t = enum_t.ident;
+    let arms = enum_t
+        .variants
+        .iter()
+        .map(|branch| -> proc_macro2::TokenStream {
+            let b = &branch.ident;
+            let lit = b.to_string();
+            parse_quote!( #lit => Ok(#t::#b))
+        });
+    let tokens = quote! {
+        impl<'a, 'b> ConvertFromObject<'a, 'b> for #t {
+            fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+                match objects.pop().unwrap().as_name()? {
+                    #( #arms, )*
+                    _ => Err(ObjectValueError::GraphicsOperationSchemaError),
+                }
+            }
+        }
+    };
+    // println!("{}", tokens);
+    tokens.into()
+}
+
 #[proc_macro_derive(ConvertFromIntObject)]
 pub fn convert_from_int_object(input: TokenStream) -> TokenStream {
     let enum_t = parse_macro_input!(input as ItemEnum);

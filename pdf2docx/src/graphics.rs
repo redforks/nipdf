@@ -7,7 +7,7 @@ use crate::{
     object::{Object, ObjectValueError},
     parser::{parse_object, ws_prefixed, ParseError, ParseResult},
 };
-use pdf2docx_macro::{ConvertFromIntObject, OperationParser};
+use pdf2docx_macro::{ConvertFromIntObject, ConvertFromNameObject, OperationParser};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TransformMatrix {
@@ -31,6 +31,14 @@ pub enum LineJoinStyle {
     Miter = 0,
     Round = 1,
     Bevel = 2,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, ConvertFromNameObject)]
+pub enum RenderIntent {
+    AbsoluteColorimetric,
+    RelativeColorimetric,
+    Saturation,
+    Perceptual,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -63,6 +71,8 @@ pub enum Operation {
     SetMiterLimit(f32),
     #[op_tag("d")]
     SetDashPattern(VecF32, f32),
+    #[op_tag("ri")]
+    SetRenderIntent(RenderIntent),
     // SetIntent(RenderingIntent),
     // SetFlatness(f32),
     // SetGraphicsStateParameters(String),
