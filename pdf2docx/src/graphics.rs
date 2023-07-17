@@ -67,7 +67,7 @@ pub type VecF32 = Vec<f32>;
 #[derive(Debug, Clone, PartialEq, OperationParser)]
 #[rustfmt::skip]
 pub enum Operation {
-    // General graphics state
+    // General Graphics State Operations
     #[op_tag("w")]
     SetLineWidth(f32),
     #[op_tag("J")]
@@ -85,7 +85,7 @@ pub enum Operation {
     #[op_tag("gs")]
     SetGraphicsStateParameters(String),
 
-    // Special graphics state
+    // Special Graphics State Operations
     #[op_tag("q")]
     SaveGraphicsState,
     #[op_tag("Q")]
@@ -108,6 +108,28 @@ pub enum Operation {
     ClosePath,
     #[op_tag("re")]
     AppendRectangle(Point, f32, f32),
+
+    // Path Painting Operations
+    #[op_tag("S")]
+    Stroke,
+    #[op_tag("s")]
+    CloseAndStroke,
+    #[op_tag("f")]
+    FillNonZero,
+    #[op_tag("F")]
+    FillNonZeroDeprecated,
+    #[op_tag("f*")]
+    FillEvenOdd,
+    #[op_tag("B")]
+    FillAndStrokeNonZero,
+    #[op_tag("B*")]
+    FillAndStrokeEvenOdd,
+    #[op_tag("b")]
+    CloseFillAndStrokeNonZero,
+    #[op_tag("b*")]
+    CloseFillAndStrokeEvenOdd,
+    #[op_tag("n")]
+    EndPath,
 }
 
 trait ConvertFromObject<'a, 'b>
