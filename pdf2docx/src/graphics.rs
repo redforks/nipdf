@@ -130,6 +130,12 @@ pub enum Operation {
     CloseFillAndStrokeEvenOdd,
     #[op_tag("n")]
     EndPath,
+
+    // Clipping Path Operations
+    #[op_tag("W")]
+    ClipNonZero,
+    #[op_tag("W*")]
+    ClipEvenOdd,
 }
 
 trait ConvertFromObject<'a, 'b>
