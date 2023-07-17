@@ -47,6 +47,7 @@ fn test_parse_opreations(s: &str) -> Vec<Operation> {
     e: -2f32,
     f: 6f32,
 })); "cm")]
+#[test_case("[1 2] 0.5 d" => Operation::SetDashPattern(vec![1f32, 2f32], 0.5f32); "dash-pattern")]
 fn test_parse_operation(s: &str) -> Operation {
     let (_, result) = parse_operation(s.as_bytes()).unwrap();
     result
@@ -64,6 +65,7 @@ fn test_parse_line_cap_style(v: i32) -> LineCapStyle {
 
 #[test_case(vec![] => Vec::<f32>::new(); "empty")]
 #[test_case(vec![1f32.into()] => vec![1f32]; "one")]
+#[test_case(vec![1f32.into(), 2f32.into()] => vec![1f32, 2f32]; "two")]
 fn test_arr_convert_from_object(v: Vec<Object>) -> Vec<f32> {
     let mut outer = vec![Object::Array(v)];
     let act = Vec::<f32>::convert_from_object(&mut outer).unwrap();

@@ -85,14 +85,29 @@ pub fn graphics_operation_parser(input: TokenStream) -> TokenStream {
                 }
             }
         }
-        if convert_args.is_empty() {
-            arms.push(arm(&s.expect("op_tag not defined"), op));
-        } else {
-            arms.push(arm(
-                &s.expect("op_tag not defined"),
-                parse_quote!( #op(#(#convert_args),*) ),
-            ));
-        }
+
+        arms.push(arm(
+            &s.expect("op_tag not defined"),
+            match convert_args.len() {
+                0 => op,
+                1 => parse_quote!( #op(#(#convert_args),*) ),
+                _ => {
+                    let mut save_to_vars = vec![];
+                    let mut vars = vec![];
+                    for (idx, arg) in convert_args.into_iter().enumerate() {
+                        // store arg result in variable _arg_idx
+                        let var = Ident::new(&(format!("_arg_{}", idx)), Span::call_site());
+                        vars.push(var.clone());
+                        save_to_vars.push(quote!( let #var = #arg; ));
+                    }
+                    save_to_vars.reverse();
+                    parse_quote!( {
+                        #( #save_to_vars )*
+                        #op(#(#vars),*)
+                    })
+                }
+            },
+        ));
     }
     // "w" => Operation::SetLineWidth(f32::convert_from_object(operands)?)
     // arms.push(arm("w", {

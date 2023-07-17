@@ -61,8 +61,8 @@ pub enum Operation {
     SetLineJoin(LineJoinStyle),
     #[op_tag("M")]
     SetMiterLimit(f32),
-    // #[op_tag("d")]
-    // SetDashPattern(VecF32, f32),
+    #[op_tag("d")]
+    SetDashPattern(VecF32, f32),
     // SetIntent(RenderingIntent),
     // SetFlatness(f32),
     // SetGraphicsStateParameters(String),
@@ -88,6 +88,7 @@ impl<'a, 'b, T: for<'c, 'd> ConvertFromObject<'c, 'd>> ConvertFromObject<'a, 'b>
         while !arr.is_empty() {
             result.push(T::convert_from_object(&mut arr)?);
         }
+        result.reverse();
         Ok(result)
     }
 }
