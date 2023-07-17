@@ -136,6 +136,12 @@ pub enum Operation {
     ClipNonZero,
     #[op_tag("W*")]
     ClipEvenOdd,
+
+    // Text Object Operations
+    #[op_tag("BT")]
+    BeginText,
+    #[op_tag("ET")]
+    EndText,
 }
 
 trait ConvertFromObject<'a, 'b>
