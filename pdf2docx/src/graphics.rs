@@ -26,11 +26,11 @@ pub enum LineCapStyle {
     Square = 2,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, ConvertFromIntObject)]
 pub enum LineJoinStyle {
-    Miter,
-    Round,
-    Bevel,
+    Miter = 0,
+    Round = 1,
+    Bevel = 2,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -57,7 +57,8 @@ pub enum Operation {
     SetLineWidth(f32),
     #[op_tag("J")]
     SetLineCap(LineCapStyle),
-    // SetLineJoin(LineJoinStyle),
+    #[op_tag("j")]
+    SetLineJoin(LineJoinStyle),
     // SetMiterLimit(f32),
     // SetDashPattern(VecF32, f32),
     // SetIntent(RenderingIntent),
