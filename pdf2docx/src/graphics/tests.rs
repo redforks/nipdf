@@ -48,6 +48,7 @@ fn test_parse_opreations(s: &str) -> Vec<Operation> {
     f: 6f32,
 })); "cm")]
 #[test_case("[1 2] 0.5 d" => Operation::SetDashPattern(vec![1f32, 2f32].into(), 0.5f32); "dash-pattern")]
+#[test_case("/stateName gs" => Operation::SetGraphicsStateParameters("stateName".into()); "gs")]
 fn test_parse_operation(s: &str) -> Operation {
     let (_, result) = parse_operation(s.as_bytes()).unwrap();
     result

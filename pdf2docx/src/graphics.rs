@@ -70,7 +70,8 @@ pub enum Operation {
     SetRenderIntent(RenderIntent),
     #[op_tag("i")]
     SetFlatness(f32),
-    // SetGraphicsStateParameters(String),
+    #[op_tag("gs")]
+    SetGraphicsStateParameters(String),
 
     #[op_tag("q")]
     SaveGraphicsState,
@@ -109,6 +110,14 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for f32 {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
         o.as_number()
+    }
+}
+
+/// Convert Object::Name to String
+impl<'a, 'b> ConvertFromObject<'a, 'b> for String {
+    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+        let o = objects.pop().unwrap();
+        o.as_name().map(|s| s.to_string())
     }
 }
 
