@@ -383,6 +383,13 @@ impl<'a> Object<'a> {
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
+
+    pub fn as_text_string(&self) -> Result<String, ObjectValueError> {
+        match self {
+            Object::LiteralString(s) => Ok(s.decoded()?.to_owned()),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
+    }
 }
 
 impl<'a> From<Stream<'a>> for Object<'a> {

@@ -68,6 +68,9 @@ pub enum SetTextRenderingMode {
 /// Alias of Vec<f32> for easier parse by [[graphics_operation_parser]] macro
 pub type VecF32 = Vec<f32>;
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct NameOfDict(pub String);
+
 #[derive(Debug, Clone, PartialEq, OperationParser)]
 #[rustfmt::skip]
 pub enum Operation {
@@ -87,7 +90,7 @@ pub enum Operation {
     #[op_tag("i")]
     SetFlatness(f32),
     #[op_tag("gs")]
-    SetGraphicsStateParameters(String),
+    SetGraphicsStateParameters(NameOfDict),
 
     // Special Graphics State Operations
     #[op_tag("q")]
@@ -172,6 +175,16 @@ pub enum Operation {
     SetTextMatrix(TransformMatrix),
     #[op_tag("T*")]
     MoveToStartOfNextLine,
+
+    // Text Showing Operations
+    #[op_tag("Tj")]
+    ShowText(String),
+    // #[op_tag("TJ")]
+    // ShowTextWithAdjustments(Vec<Object<'a>>),
+    // #[op_tag("'")]
+    // MoveToNextLineAndShowText(String),
+    // #[op_tag("\"")]
+    // SetSpacingMoveToNextLineAndShowText(f32, f32, String),
 }
 
 trait ConvertFromObject<'a, 'b>
@@ -206,11 +219,19 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for f32 {
     }
 }
 
-/// Convert Object::Name to String
+/// Convert Object literal string to String
 impl<'a, 'b> ConvertFromObject<'a, 'b> for String {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
-        o.as_name().map(|s| s.to_string())
+        o.as_text_string()
+    }
+}
+
+/// Convert Object::Name to String
+impl<'a, 'b> ConvertFromObject<'a, 'b> for NameOfDict {
+    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+        let o = objects.pop().unwrap();
+        o.as_name().map(|s| NameOfDict(s.to_string()))
     }
 }
 

@@ -48,8 +48,9 @@ fn test_parse_opreations(s: &str) -> Vec<Operation> {
     f: 6f32,
 }); "cm")]
 #[test_case("[1 2] 0.5 d" => Operation::SetDashPattern(vec![1f32, 2f32], 0.5f32); "dash-pattern")]
-#[test_case("/stateName gs" => Operation::SetGraphicsStateParameters("stateName".into()); "gs")]
+#[test_case("/stateName gs" => Operation::SetGraphicsStateParameters(NameOfDict("stateName".into())); "gs")]
 #[test_case("1 2 3 4 5 6 c" => Operation::AppendBezierCurve(Point::new(1f32, 2f32), Point::new(3f32, 4f32), Point::new(5f32, 6f32)); "c")]
+#[test_case("(foo)Tj" => Operation::ShowText("foo".into()); "Tj")]
 fn test_parse_operation(s: &str) -> Operation {
     let (_, result) = parse_operation(s.as_bytes()).unwrap();
     result
