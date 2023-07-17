@@ -39,6 +39,14 @@ fn test_parse_opreations(s: &str) -> Vec<Operation> {
 #[test_case("Q" => Operation::RestoreGraphicsState; "restore")]
 #[test_case("1 w" => Operation::SetLineWidth(1f32))]
 #[test_case("1.5 w" => Operation::SetLineWidth(1.5f32))]
+#[test_case("1 2 3 1.5 -2 6 cm" => Operation::ModifyCTM(Box::new(TransformMatrix {
+    a: 1f32,
+    b: 2f32,
+    c: 3f32,
+    d: 1.5f32,
+    e: -2f32,
+    f: 6f32,
+})); "cm")]
 fn test_parse_operation(s: &str) -> Operation {
     let (_, result) = parse_operation(s.as_bytes()).unwrap();
     result

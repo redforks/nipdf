@@ -43,6 +43,7 @@ pub enum RenderingIntent {
 
 /// Alias of Vec<f32> for easier parse by [[graphics_operation_parser]] macro
 pub type VecF32 = Vec<f32>;
+pub type BoxTransformMatrix = Box<TransformMatrix>;
 
 #[derive(Debug, Clone, PartialEq, OperationParser)]
 pub enum Operation {
@@ -50,7 +51,8 @@ pub enum Operation {
     SaveGraphicsState,
     #[op_tag("Q")]
     RestoreGraphicsState,
-    // ModifyCTM(TransformMatrix),
+    #[op_tag("cm")]
+    ModifyCTM(BoxTransformMatrix),
     #[op_tag("w")]
     SetLineWidth(f32),
     // SetLineCap(LineCapStyle),
@@ -69,10 +71,28 @@ where
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError>;
 }
 
+impl<'a, 'b, T: ConvertFromObject<'a, 'b>> ConvertFromObject<'a, 'b> for Box<T> {
+    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+        Ok(Box::new(T::convert_from_object(objects)?))
+    }
+}
+
 impl<'a, 'b> ConvertFromObject<'a, 'b> for f32 {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
         o.as_number()
+    }
+}
+
+impl<'a, 'b> ConvertFromObject<'a, 'b> for TransformMatrix {
+    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+        let f = objects.pop().unwrap().as_number()?;
+        let e = objects.pop().unwrap().as_number()?;
+        let d = objects.pop().unwrap().as_number()?;
+        let c = objects.pop().unwrap().as_number()?;
+        let b = objects.pop().unwrap().as_number()?;
+        let a = objects.pop().unwrap().as_number()?;
+        Ok(Self { a, b, c, d, e, f })
     }
 }
 
