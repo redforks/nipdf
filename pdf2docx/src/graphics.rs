@@ -162,6 +162,16 @@ pub enum Operation {
     SetTextRenderingMode(SetTextRenderingMode),
     #[op_tag("Ts")]
     SetTextRise(f32),
+
+    // Text Positioning Operations
+    #[op_tag("Td")]
+    MoveTextPosition(Point),
+    #[op_tag("TD")]
+    MoveTextPositionAndSetLeading(Point),
+    #[op_tag("Tm")]
+    SetTextMatrix(TransformMatrix),
+    #[op_tag("T*")]
+    MoveToStartOfNextLine,
 }
 
 trait ConvertFromObject<'a, 'b>
