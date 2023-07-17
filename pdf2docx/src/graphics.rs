@@ -19,6 +19,18 @@ pub struct TransformMatrix {
     f: f32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Point {
+    x: f32,
+    y: f32,
+}
+
+impl Point {
+    pub fn new(x: f32, y: f32) -> Self {
+        Self { x, y }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, ConvertFromIntObject)]
 pub enum LineCapStyle {
     Butt = 0,
@@ -55,6 +67,7 @@ pub type VecF32 = Vec<f32>;
 #[derive(Debug, Clone, PartialEq, OperationParser)]
 #[rustfmt::skip]
 pub enum Operation {
+    // General graphics state
     #[op_tag("w")]
     SetLineWidth(f32),
     #[op_tag("J")]
@@ -72,12 +85,29 @@ pub enum Operation {
     #[op_tag("gs")]
     SetGraphicsStateParameters(String),
 
+    // Special graphics state
     #[op_tag("q")]
     SaveGraphicsState,
     #[op_tag("Q")]
     RestoreGraphicsState,
     #[op_tag("cm")]
     ModifyCTM(TransformMatrix),
+
+    // Path Construction Operations
+    #[op_tag("m")]
+    MoveToNext(Point),
+    #[op_tag("l")]
+    LineToNext(Point),
+    #[op_tag("c")]
+    AppendBezierCurve(Point, Point, Point),
+    #[op_tag("v")]
+    AppendBezierCurve2(Point, Point),
+    #[op_tag("y")]
+    AppendBezierCurve1(Point, Point),
+    #[op_tag("h")]
+    ClosePath,
+    #[op_tag("re")]
+    AppendRectangle(Point, f32, f32),
 }
 
 trait ConvertFromObject<'a, 'b>
@@ -117,6 +147,14 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for String {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
         o.as_name().map(|s| s.to_string())
+    }
+}
+
+impl<'a, 'b> ConvertFromObject<'a, 'b> for Point {
+    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+        let y = objects.pop().unwrap().as_number()?;
+        let x = objects.pop().unwrap().as_number()?;
+        Ok(Self { x, y })
     }
 }
 
