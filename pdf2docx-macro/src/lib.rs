@@ -63,11 +63,6 @@ pub fn convert_from_int_object(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(OperationParser, attributes(op_tag))]
 pub fn graphics_operation_parser(input: TokenStream) -> TokenStream {
     let op_enum = parse_macro_input!(input as ItemEnum);
-    let operation_value_from_ident = |i: Ident| {
-        let op = Ident::new("Operation", Span::call_site());
-        let r: Expr = parse_quote!( #op::#i );
-        r
-    };
     let ident = |s| Ident::new(s, Span::call_site());
     let convert_from_object = || ident("convert_from_object");
     let arm = |s: &str, body: Expr| Arm {
@@ -97,7 +92,8 @@ pub fn graphics_operation_parser(input: TokenStream) -> TokenStream {
                 }
             }
         }
-        let op = operation_value_from_ident(branch.ident.clone());
+        let op = branch.ident;
+        let op: Expr = parse_quote!(Operation::#op);
         let mut s = None;
         for attr in &branch.attrs {
             if let Meta::List(ref list) = attr.meta {
