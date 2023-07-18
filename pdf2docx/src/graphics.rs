@@ -239,6 +239,14 @@ pub enum Operation {
     // Shading Operation
     #[op_tag("sh")]
     PaintShading(NameOfDict),
+
+    // Inline Image Operations
+    #[op_tag("BI")]
+    BeginInlineImage(NameOfDict),
+    #[op_tag("ID")]
+    BeginInlineImageData,
+    #[op_tag("EI")]
+    EndInlineImage,
 }
 
 trait ConvertFromObject<'a, 'b>
