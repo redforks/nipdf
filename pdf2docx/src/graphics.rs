@@ -186,6 +186,12 @@ pub enum Operation {
     MoveToNextLineAndShowText(String),
     #[op_tag("\"")]
     SetSpacingMoveToNextLineAndShowText(f32, f32, String),
+
+    // Type 3 Font Operations
+    #[op_tag("d0")]
+    SetGlyphWidth(Point),
+    #[op_tag("d1")]
+    SetGlyphWidthAndBoundingBox(Point, Point, Point),
 }
 
 trait ConvertFromObject<'a, 'b>
