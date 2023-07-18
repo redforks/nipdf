@@ -247,6 +247,10 @@ pub enum Operation {
     BeginInlineImageData,
     #[op_tag("EI")]
     EndInlineImage,
+
+    // XObject Operation
+    #[op_tag("Do")]
+    PaintXObject(NameOfDict),
 }
 
 trait ConvertFromObject<'a, 'b>
