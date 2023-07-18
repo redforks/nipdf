@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use nom::{branch::alt, bytes::complete::is_not, combinator::map_res, multi::many0, Parser};
 
 use crate::{
-    object::{Object, ObjectValueError, TextStringOrNumber},
+    object::{Dictionary, Name, Object, ObjectValueError, TextStringOrNumber},
     parser::{parse_object, ws_prefixed, ParseError, ParseResult},
 };
 use pdf2docx_macro::{ConvertFromIntObject, ConvertFromNameObject, OperationParser};
@@ -88,6 +88,12 @@ pub type VecTextStringOrNumber = Vec<TextStringOrNumber>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NameOfDict(pub String);
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum NameOrDict<'a> {
+    Name(Name<'a>),
+    Dict(Dictionary<'a>),
+}
 
 #[derive(Debug, Clone, PartialEq, OperationParser)]
 #[rustfmt::skip]
@@ -251,6 +257,12 @@ pub enum Operation {
     // XObject Operation
     #[op_tag("Do")]
     PaintXObject(NameOfDict),
+
+    // Marked Content Operations
+    #[op_tag("MP")]
+    DesignateMarkedContentPoint(NameOfDict),
+    #[op_tag("DP")]
+    DesignateMarkedContentPointWithProperties(NameOfDict, NameOfDict),
 }
 
 trait ConvertFromObject<'a, 'b>
@@ -344,6 +356,16 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for NameOfDict {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
         o.as_name().map(|s| NameOfDict(s.to_string()))
+    }
+}
+
+impl<'a, 'b> ConvertFromObject<'a, 'b> for NameOrDict<'a> {
+    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+        match objects.pop().unwrap() {
+            Object::Name(name) => Ok(NameOrDict::Name(name.to_owned())),
+            Object::Dictionary(dict) => Ok(NameOrDict::Dict(dict)),
+            _ => Err(ObjectValueError::GraphicsOperationSchemaError),
+        }
     }
 }
 
