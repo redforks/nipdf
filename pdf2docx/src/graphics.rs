@@ -235,6 +235,10 @@ pub enum Operation {
     SetStrokeCMYK(Color), // Should be Color::Cmyk
     #[op_tag("k")]
     SetFillCMYK(Color),   // Should be Color::Cmyk
+
+    // Shading Operation
+    #[op_tag("sh")]
+    PaintShading(NameOfDict),
 }
 
 trait ConvertFromObject<'a, 'b>
