@@ -76,3 +76,20 @@ fn test_arr_convert_from_object(v: Vec<Object>) -> Vec<f32> {
     assert!(outer.is_empty());
     act
 }
+
+#[test_case(vec![1.into()] => Color::Gray(1.0); "Gray")]
+#[test_case(vec![1.into(), 2.0.into(), 3.into()] => Color::Rgb(1.0, 2.0, 3.0); "RGB")]
+#[test_case(vec![1.into(), 2.0.into(), 3.into(), 4.0.into()] => Color::Cmyk(1.0, 2.0, 3.0, 4.0); "CMYK")]
+#[test_case(vec![1.into(), 2.into(), 3.into(), 4.into(), 5.into()] => Color::Cmyk(2.0, 3.0, 4.0, 5.0); "Max 4 numbers")]
+fn color_convert_from_object(mut v: Vec<Object>) -> Color {
+    let act = Color::convert_from_object(&mut v).unwrap();
+    act
+}
+
+#[test]
+fn color_convert_from_object_stop_on_non_number() {
+    let mut v = vec![true.into(), 1.into()];
+    let act = Color::convert_from_object(&mut v).unwrap();
+    assert_eq!(act, Color::Gray(1.0));
+    assert_eq!(v, vec![true.into()]);
+}

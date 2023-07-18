@@ -65,6 +65,17 @@ pub enum SetTextRenderingMode {
     Clip = 7,
 }
 
+/// Color for different color space
+#[derive(Debug, Clone, PartialEq)]
+pub enum Color {
+    /// DeviceGray, CalGray, Indexed
+    Gray(f32),
+    /// DeviceRGB, CalRGB, Lab
+    Rgb(f32, f32, f32),
+    /// DeviceCMYK
+    Cmyk(f32, f32, f32, f32),
+}
+
 /// Alias of Vec<f32> for easier parse by [[graphics_operation_parser]] macro
 pub type VecF32 = Vec<f32>;
 pub type VecTextStringOrNumber = Vec<TextStringOrNumber>;
@@ -192,6 +203,28 @@ pub enum Operation {
     SetGlyphWidth(Point),
     #[op_tag("d1")]
     SetGlyphWidthAndBoundingBox(Point, Point, Point),
+
+    // Color Operations
+    #[op_tag("CS")]
+    SetStrokeColorSpace(NameOfDict),
+    #[op_tag("cs")]
+    SetFillColorSpace(NameOfDict),
+    #[op_tag("SC")]
+    SetStrokeColor(Color),
+    #[op_tag("sc")]
+    SetFillColor(Color),
+    #[op_tag("G")]
+    SetStrokeGray(Color), // Should be Color::Gray
+    #[op_tag("g")]
+    SetFillGray(Color),   // Should be Color::Gray
+    #[op_tag("RG")]
+    SetStrokeRGB(Color), // Should be Color::Rgb
+    #[op_tag("rg")]
+    SetFillRGB(Color),   // Should be Color::Rgb
+    #[op_tag("K")]
+    SetStrokeCMYK(Color), // Should be Color::Cmyk
+    #[op_tag("k")]
+    SetFillCMYK(Color),   // Should be Color::Cmyk
 }
 
 trait ConvertFromObject<'a, 'b>
@@ -223,6 +256,30 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for TextStringOrNumber {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
         o.as_text_string_or_number()
+    }
+}
+
+impl<'a, 'b> ConvertFromObject<'a, 'b> for Color {
+    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+        let mut colors = Vec::with_capacity(4);
+        while let Some(o) = objects.pop() {
+            if let Ok(num) = o.as_number() {
+                colors.push(num);
+                if colors.len() == 4 {
+                    break;
+                }
+            } else {
+                objects.push(o);
+                break;
+            }
+        }
+
+        match colors.len() {
+            1 => Ok(Color::Gray(colors[0])),
+            3 => Ok(Color::Rgb(colors[2], colors[1], colors[0])),
+            4 => Ok(Color::Cmyk(colors[3], colors[2], colors[1], colors[0])),
+            _ => Err(ObjectValueError::GraphicsOperationSchemaError),
+        }
     }
 }
 
