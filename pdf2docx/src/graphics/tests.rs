@@ -51,6 +51,7 @@ fn test_parse_opreations(s: &str) -> Vec<Operation> {
 #[test_case("/stateName gs" => Operation::SetGraphicsStateParameters(NameOfDict("stateName".into())); "gs")]
 #[test_case("1 2 3 4 5 6 c" => Operation::AppendBezierCurve(Point::new(1f32, 2f32), Point::new(3f32, 4f32), Point::new(5f32, 6f32)); "c")]
 #[test_case("(foo)Tj" => Operation::ShowText("foo".into()); "Tj")]
+#[test_case("[(foo) 1]TJ" => Operation::ShowTexts(vec![TextStringOrNumber::Text("foo".into()), TextStringOrNumber::Number(1f32)]); "show texts")]
 fn test_parse_operation(s: &str) -> Operation {
     let (_, result) = parse_operation(s.as_bytes()).unwrap();
     result

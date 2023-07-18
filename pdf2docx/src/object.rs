@@ -390,6 +390,15 @@ impl<'a> Object<'a> {
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
+
+    pub fn as_text_string_or_number(&self) -> Result<TextStringOrNumber, ObjectValueError> {
+        match self {
+            Object::LiteralString(s) => Ok(TextStringOrNumber::Text(s.decoded()?.to_owned())),
+            Object::Number(n) => Ok(TextStringOrNumber::Number(*n)),
+            Object::Integer(v) => Ok(TextStringOrNumber::Number(*v as f32)),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
+    }
 }
 
 impl<'a> From<Stream<'a>> for Object<'a> {
@@ -576,6 +585,12 @@ impl<'a> From<LiteralString<'a>> for Object<'a> {
     fn from(value: LiteralString<'a>) -> Self {
         Self::LiteralString(value)
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TextStringOrNumber {
+    Text(String),
+    Number(f32),
 }
 
 /// Decoded PDF literal string object, enclosing '(' and ')' not included.

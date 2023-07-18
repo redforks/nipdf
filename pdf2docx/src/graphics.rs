@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use nom::{branch::alt, bytes::complete::is_not, combinator::map_res, multi::many0, Parser};
 
 use crate::{
-    object::{Object, ObjectValueError},
+    object::{Object, ObjectValueError, TextStringOrNumber},
     parser::{parse_object, ws_prefixed, ParseError, ParseResult},
 };
 use pdf2docx_macro::{ConvertFromIntObject, ConvertFromNameObject, OperationParser};
@@ -67,6 +67,7 @@ pub enum SetTextRenderingMode {
 
 /// Alias of Vec<f32> for easier parse by [[graphics_operation_parser]] macro
 pub type VecF32 = Vec<f32>;
+pub type VecTextStringOrNumber = Vec<TextStringOrNumber>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NameOfDict(pub String);
@@ -179,8 +180,8 @@ pub enum Operation {
     // Text Showing Operations
     #[op_tag("Tj")]
     ShowText(String),
-    // #[op_tag("TJ")]
-    // ShowTextWithAdjustments(Vec<Object<'a>>),
+    #[op_tag("TJ")]
+    ShowTexts(VecTextStringOrNumber),
     #[op_tag("'")]
     MoveToNextLineAndShowText(String),
     #[op_tag("\"")]
@@ -209,6 +210,13 @@ impl<'a, 'b, T: for<'c, 'd> ConvertFromObject<'c, 'd>> ConvertFromObject<'a, 'b>
         }
         result.reverse();
         Ok(result)
+    }
+}
+
+impl<'a, 'b> ConvertFromObject<'a, 'b> for TextStringOrNumber {
+    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+        let o = objects.pop().unwrap();
+        o.as_text_string_or_number()
     }
 }
 
