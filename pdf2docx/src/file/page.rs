@@ -2,12 +2,12 @@ use nom::Finish;
 
 use crate::{
     graphics::{parse_operations, Operation},
-    object::{Array, Dictionary, ObjectValueError, SchemaDict, Stream},
+    object::{Array, Dictionary, FilterDecodedData, Object, ObjectValueError, SchemaDict, Stream},
     parser::{ParseError, ParseResult},
 };
 
 use super::ObjectResolver;
-use std::iter::once;
+use std::{borrow::Cow, iter::once};
 
 #[derive(Debug, Copy, Clone)]
 pub struct Rectangle {
@@ -94,25 +94,19 @@ impl Page {
     pub fn content<'a, 'b>(
         &self,
         resolver: &'b ObjectResolver<'a>,
-    ) -> Result<Vec<Operation<'b>>, ParseError<'b>> {
-        fn f<'a, 'b>(
-            id: u32,
-            resolver: &'b ObjectResolver<'a>,
-        ) -> ParseResult<'b, Vec<Operation<'b>>> {
-            let stream: &'b Stream<'a> = resolver.resolve(id)?.as_stream()?;
-            parse_operations(stream.1)
-        }
-        fn g<'a, 'b>(
-            id: u32,
-            resolver: &'b ObjectResolver<'a>,
-        ) -> Result<Vec<Operation<'b>>, ParseError<'b>> {
-            f(id, resolver).finish().map(|(_, r)| r)
-        }
-        let mut r = vec![];
+    ) -> Result<PageContent, ObjectValueError> {
+        let mut bufs = Vec::with_capacity(self.content_ids.len());
         for id in &self.content_ids {
-            r.extend_from_slice(g(*id, resolver)?.as_slice());
+            let s = resolver.resolve(*id)?.as_stream()?;
+            let decoded = s.decode(false)?;
+            match decoded {
+                FilterDecodedData::Bytes(b) => bufs.push(b.into_owned()),
+                _ => {
+                    panic!("expected page content is stream");
+                }
+            }
         }
-        Ok(r)
+        Ok(PageContent { bufs })
     }
 
     /// Parse page tree to get all pages
@@ -165,6 +159,22 @@ impl Page {
             crop_box,
             content_ids,
         }
+    }
+}
+
+pub struct PageContent {
+    bufs: Vec<Vec<u8>>,
+}
+
+impl PageContent {
+    pub fn operations(&self) -> Vec<Operation> {
+        let mut r = vec![];
+        for buf in &self.bufs {
+            let (input, ops) = parse_operations(buf.as_ref()).finish().unwrap();
+            assert!(input.is_empty(), "buf should be empty: {:?}", input);
+            r.extend_from_slice(ops.as_slice());
+        }
+        r
     }
 }
 

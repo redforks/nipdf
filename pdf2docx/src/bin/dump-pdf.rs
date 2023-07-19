@@ -1,13 +1,11 @@
-use std::{
-    io::{copy, stdout, Cursor},
-};
+use std::io::{copy, stdout, Cursor};
 
 use anyhow::Result as AnyResult;
 
 use clap::{arg, Command};
 use image::ImageOutputFormat;
 use pdf2docx::{
-    file::File,
+    file::{File, ObjectResolver, Page},
     object::{FilterDecodedData, Object},
 };
 
@@ -25,12 +23,24 @@ fn cli() -> Command {
                 .arg(arg!(--png "Assume stream is image, decode and convert to PNG"))
                 ,
         )
+        .subcommand(
+            Command::new("page")
+            .about("dump page content to stdout")
+                .arg(arg!(-f <filename> "PDF file to dump"))
+                .arg(arg!(--pages "display total page numbers"))
+                .arg(arg!(--id "display page object ID"))
+                .arg(arg!([page_no] "page number (start from zero) to dump")),
+        )
+}
+
+fn open<'a>(path: &str, buf: &'a mut Vec<u8>) -> AnyResult<(File, ObjectResolver<'a>)> {
+    *buf = std::fs::read(path)?;
+    Ok(File::parse(&buf[..])?)
 }
 
 fn dump_stream(path: &str, id: u32, raw: bool, as_image: bool, as_png: bool) -> AnyResult<()> {
-    let buf = std::fs::read(path).unwrap();
-    let (_f, resolver) =
-        File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {path:?}"));
+    let mut buf: Vec<u8> = vec![];
+    let (_f, resolver) = open(path, &mut buf)?;
     let obj = resolver.resolve(id)?;
     let png_buffer;
     match obj {
@@ -60,6 +70,32 @@ fn dump_stream(path: &str, id: u32, raw: bool, as_image: bool, as_png: bool) -> 
     Ok(())
 }
 
+fn dump_page(
+    path: &str,
+    page_no: Option<u32>,
+    show_total_pages: bool,
+    show_page_id: bool,
+) -> AnyResult<()> {
+    let mut buf: Vec<u8> = vec![];
+    let (f, resolver) = open(path, &mut buf)?;
+
+    if show_total_pages {
+        println!("{}", f.catalog().pages().len());
+    } else if show_page_id {
+        let page_no = page_no.expect("page number is required");
+        let page = &f.catalog().pages()[page_no as usize];
+        println!("{}", page.id());
+    } else if let Some(page_no) = page_no {
+        let page = &f.catalog().pages()[page_no as usize];
+        let contents = page.content(&resolver)?;
+        for op in contents.operations() {
+            println!("{:?}", op);
+        }
+    }
+
+    Ok(())
+}
+
 fn main() -> AnyResult<()> {
     env_logger::init();
 
@@ -73,6 +109,14 @@ fn main() -> AnyResult<()> {
             sub_m.get_one::<bool>("raw").copied().unwrap_or_default(),
             sub_m.get_one::<bool>("image").copied().unwrap_or_default(),
             sub_m.get_one::<bool>("png").copied().unwrap_or_default(),
+        ),
+        Some(("page", sub_m)) => dump_page(
+            sub_m.get_one::<String>("filename").unwrap(),
+            sub_m
+                .get_one::<String>("page_no")
+                .and_then(|s| s.parse().ok()),
+            sub_m.get_one::<bool>("pages").copied().unwrap_or_default(),
+            sub_m.get_one::<bool>("id").copied().unwrap_or_default(),
         ),
         _ => todo!(),
     }
