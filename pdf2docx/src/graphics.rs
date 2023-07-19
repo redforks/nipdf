@@ -265,6 +265,12 @@ pub enum Operation<'a> {
     BeginMarkedContentWithProperties(NameOfDict, NameOrDict<'a>),
     #[op_tag("EMC")]
     EndMarkedContent,
+
+    // Compatibility Operations
+    #[op_tag("BX")]
+    BeginCompatibilitySection,
+    #[op_tag("EX")]
+    EndCompatibilitySection,
 }
 
 trait ConvertFromObject<'a, 'b>
