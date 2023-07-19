@@ -5,7 +5,7 @@ use nom::{branch::alt, bytes::complete::is_not, combinator::map_res, multi::many
 
 use crate::{
     object::{Dictionary, Name, Object, ObjectValueError, TextStringOrNumber},
-    parser::{parse_object, ws_prefixed, ParseError, ParseResult},
+    parser::{parse_object, ws_prefixed, ws_terminated, ParseError, ParseResult},
 };
 use pdf2docx_macro::{ConvertFromIntObject, ConvertFromNameObject, OperationParser};
 
@@ -180,7 +180,7 @@ pub enum Operation<'a> {
     #[op_tag("TL")]
     SetLeading(f32),
     #[op_tag("Tf")]
-    SetFont(String, f32),
+    SetFont(NameOfDict, f32),
     #[op_tag("Tr")]
     SetTextRenderingMode(SetTextRenderingMode),
     #[op_tag("Ts")]
@@ -476,7 +476,7 @@ fn parse_operation(mut input: &[u8]) -> ParseResult<Operation> {
 }
 
 pub fn parse_operations<'a>(input: &'a [u8]) -> ParseResult<Vec<Operation<'a>>> {
-    many0(parse_operation)(input)
+    ws_terminated(many0(parse_operation))(input)
 }
 
 #[cfg(test)]

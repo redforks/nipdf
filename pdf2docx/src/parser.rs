@@ -135,7 +135,7 @@ where
     delimited(whitespace_or_comment, inner, whitespace_or_comment)
 }
 
-fn ws_terminated<'a, F, O>(inner: F) -> impl FnMut(&'a [u8]) -> ParseResult<'_, O>
+pub(crate) fn ws_terminated<'a, F, O>(inner: F) -> impl FnMut(&'a [u8]) -> ParseResult<'_, O>
 where
     F: Parser<&'a [u8], O, ParseError<'a>>,
 {
