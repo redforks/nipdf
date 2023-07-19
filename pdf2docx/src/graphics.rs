@@ -259,6 +259,12 @@ pub enum Operation<'a> {
     DesignateMarkedContentPoint(NameOfDict),
     #[op_tag("DP")]
     DesignateMarkedContentPointWithProperties(NameOfDict, NameOrDict<'a>),
+    #[op_tag("BMC")]
+    BeginMarkedContent(NameOfDict),
+    #[op_tag("BDC")]
+    BeginMarkedContentWithProperties(NameOfDict, NameOrDict<'a>),
+    #[op_tag("EMC")]
+    EndMarkedContent,
 }
 
 trait ConvertFromObject<'a, 'b>
