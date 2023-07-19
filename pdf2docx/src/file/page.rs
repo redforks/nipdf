@@ -156,9 +156,8 @@ impl Page {
             .map(|d| d.crop_box())
             .find_map(|r| r);
         let content_ids =
-            d.d.opt_arr_map("Contents", |o| Ok(o.as_ref()?.id().id()))
-                .unwrap()
-                .unwrap_or_default();
+            d.d.opt_single_or_arr("Contents", |o| Ok(o.as_ref()?.id().id()))
+                .unwrap();
 
         Self {
             id,

@@ -215,6 +215,19 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
             .map_or(Ok(None), |o| o.as_arr().map(Some))
     }
 
+    /// Item can be a single object or an array of objects.
+    /// If item not exist, returns empty vec.
+    pub fn opt_single_or_arr<Item: 'b>(
+        &self,
+        id: &'static str,
+        f: impl Fn(&'b Object<'a>) -> Result<Item, ObjectValueError>,
+    ) -> Result<Vec<Item>, ObjectValueError> {
+        self.d.get(&id.into()).map_or(Ok(Vec::new()), |o| match o {
+            Object::Array(arr) => arr.iter().map(f).collect(),
+            _ => f(o).map(|o| vec![o]),
+        })
+    }
+
     pub fn opt_rectangle(&self, id: &'static str) -> Result<Option<Rectangle>, ObjectValueError> {
         Ok(self.opt_arr(id)?.map(|arr| arr.into()))
     }
