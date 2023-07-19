@@ -140,7 +140,7 @@ pub fn graphics_operation_parser(input: TokenStream) -> TokenStream {
     // }));
 
     let tokens = quote! {
-        fn create_operation(op: &str, operands: &mut Vec<Object>) -> Result<Operation, ObjectValueError> {
+        fn create_operation<'a>(op: &str, operands: &mut Vec<Object<'a>>) -> Result<Operation<'a>, ObjectValueError> {
             Ok(match op {
                 #( #arms, )*
                 _ => todo!(),

@@ -93,7 +93,7 @@ pub enum NameOrDict<'a> {
 
 #[derive(Debug, Clone, PartialEq, OperationParser)]
 #[rustfmt::skip]
-pub enum Operation {
+pub enum Operation<'a> {
     // General Graphics State Operations
     #[op_tag("w")]
     SetLineWidth(f32),
@@ -258,7 +258,7 @@ pub enum Operation {
     #[op_tag("MP")]
     DesignateMarkedContentPoint(NameOfDict),
     #[op_tag("DP")]
-    DesignateMarkedContentPointWithProperties(NameOfDict, NameOfDict),
+    DesignateMarkedContentPointWithProperties(NameOfDict, NameOrDict<'a>),
 }
 
 trait ConvertFromObject<'a, 'b>
