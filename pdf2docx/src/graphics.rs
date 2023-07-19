@@ -82,10 +82,6 @@ pub enum ColorOrWithPattern {
     WithPattern(Color, String),
 }
 
-/// Alias of Vec<f32> for easier parse by [[graphics_operation_parser]] macro
-pub type VecF32 = Vec<f32>;
-pub type VecTextStringOrNumber = Vec<TextStringOrNumber>;
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct NameOfDict(pub String);
 
@@ -108,7 +104,7 @@ pub enum Operation {
     #[op_tag("M")]
     SetMiterLimit(f32),
     #[op_tag("d")]
-    SetDashPattern(VecF32, f32),
+    SetDashPattern(Vec<f32>, f32),
     #[op_tag("ri")]
     SetRenderIntent(RenderingIntent),
     #[op_tag("i")]
@@ -204,7 +200,7 @@ pub enum Operation {
     #[op_tag("Tj")]
     ShowText(String),
     #[op_tag("TJ")]
-    ShowTexts(VecTextStringOrNumber),
+    ShowTexts(Vec<TextStringOrNumber>),
     #[op_tag("'")]
     MoveToNextLineAndShowText(String),
     #[op_tag("\"")]

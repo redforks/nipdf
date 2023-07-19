@@ -85,7 +85,9 @@ pub fn graphics_operation_parser(input: TokenStream) -> TokenStream {
             {
                 for f in fields {
                     let t = f.ty;
-                    convert_args.push(parse_quote!( #t::convert_from_object(operands)?));
+                    convert_args.push(
+                        parse_quote!( <#t as ConvertFromObject>::convert_from_object(operands)?),
+                    );
                 }
             }
         }
