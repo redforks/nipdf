@@ -475,7 +475,7 @@ fn parse_operation(mut input: &[u8]) -> ParseResult<Operation> {
     }
 }
 
-pub fn parse_operations(input: &[u8]) -> ParseResult<Vec<Operation>> {
+pub fn parse_operations<'a>(input: &'a [u8]) -> ParseResult<Vec<Operation<'a>>> {
     many0(parse_operation)(input)
 }
 

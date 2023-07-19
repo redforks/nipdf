@@ -363,6 +363,13 @@ impl<'a> Object<'a> {
         }
     }
 
+    pub fn as_stream(&self) -> Result<&Stream<'a>, ObjectValueError> {
+        match self {
+            Object::Stream(s) => Ok(s),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
+    }
+
     pub fn as_arr(&self) -> Result<&Array<'a>, ObjectValueError> {
         match self {
             Object::Array(a) => Ok(a),

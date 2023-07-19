@@ -1,4 +1,10 @@
-use crate::object::{Array, Dictionary, ObjectValueError, SchemaDict};
+use nom::Finish;
+
+use crate::{
+    graphics::{parse_operations, Operation},
+    object::{Array, Dictionary, ObjectValueError, SchemaDict, Stream},
+    parser::{ParseError, ParseResult},
+};
 
 use super::ObjectResolver;
 use std::iter::once;
@@ -67,6 +73,7 @@ impl<'a, 'b> PageDict<'a, 'b> {
 pub struct Page {
     /// pdf object id
     id: u32,
+    content_ids: Vec<u32>, // maybe empty
     media_box: Rectangle,
     crop_box: Option<Rectangle>,
 }
@@ -82,6 +89,30 @@ impl Page {
 
     pub fn crop_box(&self) -> Option<Rectangle> {
         self.crop_box
+    }
+
+    pub fn content<'a, 'b>(
+        &self,
+        resolver: &'b ObjectResolver<'a>,
+    ) -> Result<Vec<Operation<'b>>, ParseError<'b>> {
+        fn f<'a, 'b>(
+            id: u32,
+            resolver: &'b ObjectResolver<'a>,
+        ) -> ParseResult<'b, Vec<Operation<'b>>> {
+            let stream: &'b Stream<'a> = resolver.resolve(id)?.as_stream()?;
+            parse_operations(stream.1)
+        }
+        fn g<'a, 'b>(
+            id: u32,
+            resolver: &'b ObjectResolver<'a>,
+        ) -> Result<Vec<Operation<'b>>, ParseError<'b>> {
+            f(id, resolver).finish().map(|(_, r)| r)
+        }
+        let mut r = vec![];
+        for id in &self.content_ids {
+            r.extend_from_slice(g(*id, resolver)?.as_slice());
+        }
+        Ok(r)
     }
 
     /// Parse page tree to get all pages
@@ -124,11 +155,16 @@ impl Page {
             .chain(parents.iter())
             .map(|d| d.crop_box())
             .find_map(|r| r);
+        let content_ids =
+            d.d.opt_arr_map("Contents", |o| Ok(o.as_ref()?.id().id()))
+                .unwrap()
+                .unwrap_or_default();
 
         Self {
             id,
             media_box,
             crop_box,
+            content_ids,
         }
     }
 }

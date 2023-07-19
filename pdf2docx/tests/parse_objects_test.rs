@@ -1,6 +1,6 @@
 use glob::glob;
 use pdf2docx::{
-    file::{File},
+    file::File,
     object::{Object, ObjectValueError},
 };
 
@@ -32,6 +32,10 @@ fn scan_objects() {
             println!("page: {}, object id: {}", idx, page.id());
             println!("  media_box: {:?}", page.media_box());
             println!("  crop_box: {:?}", page.crop_box());
+
+            for op in page.content(&resolver).unwrap() {
+                println!("  {:?}", op);
+            }
         }
         println!();
     }
