@@ -63,9 +63,7 @@ pub fn convert_from_int_object(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(OperationParser, attributes(op_tag))]
 pub fn graphics_operation_parser(input: TokenStream) -> TokenStream {
     let op_enum = parse_macro_input!(input as ItemEnum);
-    let ident = |s| Ident::new(s, Span::call_site());
-    let convert_from_object = || ident("convert_from_object");
-    let arm = |s: &str, body: Expr| Arm {
+    let new_arm = |s: &str, body: Expr| Arm {
         pat: Pat::Lit(ExprLit {
             attrs: vec![],
             lit: Lit::Str(LitStr::new(s, Span::call_site())),
@@ -86,9 +84,8 @@ pub fn graphics_operation_parser(input: TokenStream) -> TokenStream {
             }) = branch.fields
             {
                 for f in fields {
-                    let f = f.ty.clone();
-                    let convert_from_object = convert_from_object();
-                    convert_args.push(parse_quote!( #f::#convert_from_object(operands)?));
+                    let t = f.ty;
+                    convert_args.push(parse_quote!( #t::convert_from_object(operands)?));
                 }
             }
         }
@@ -110,7 +107,7 @@ pub fn graphics_operation_parser(input: TokenStream) -> TokenStream {
             }
         }
 
-        arms.push(arm(
+        arms.push(new_arm(
             &s.expect("op_tag not defined"),
             match convert_args.len() {
                 0 => op,
