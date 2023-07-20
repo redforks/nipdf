@@ -414,6 +414,7 @@ impl<'a> Object<'a> {
     pub fn as_text_string_or_number(&self) -> Result<TextStringOrNumber, ObjectValueError> {
         match self {
             Object::LiteralString(s) => Ok(TextStringOrNumber::Text(s.decoded()?.to_owned())),
+            Object::HexString(s) => Ok(TextStringOrNumber::HexText(s.0.to_owned())),
             Object::Number(n) => Ok(TextStringOrNumber::Number(*n)),
             Object::Integer(v) => Ok(TextStringOrNumber::Number(*v as f32)),
             _ => Err(ObjectValueError::UnexpectedType),
@@ -610,6 +611,8 @@ impl<'a> From<LiteralString<'a>> for Object<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TextStringOrNumber {
     Text(String),
+    // maybe CID font
+    HexText(Vec<u8>),
     Number(f32),
 }
 
