@@ -10,7 +10,7 @@ use nom::{
         complete::{anychar, crlf, multispace1, u16, u32},
         is_hex_digit,
     },
-    combinator::{map, opt, peek, recognize, value},
+    combinator::{map, not, opt, peek, recognize, value},
     multi::{many0, many0_count},
     number::complete::float,
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
@@ -22,7 +22,7 @@ use crate::object::{
     Reference, Stream,
 };
 
-use super::{ws, ws_prefixed, ws_terminated, ParseError, ParseResult};
+use super::{whitespace_or_comment, ws, ws_prefixed, ws_terminated, ParseError, ParseResult};
 
 /// Unwrap the result of nom parser to a *normal* result.
 pub fn unwrap_parse_result<'a, T: 'a>(obj: ParseResult<'a, T>) -> Result<T, ParseError<'a>> {
@@ -217,7 +217,11 @@ pub fn parse_indirected_object(input: &[u8]) -> ParseResult<IndirectObject> {
 fn parse_reference(input: &[u8]) -> ParseResult<Reference> {
     let (input, (id, gen)) = terminated(
         separated_pair(u32, multispace1, u16),
-        ws_prefixed(tag(b"R")),
+        // `not(peek(tag("G")))` to detect `RG` graphics operation,
+        // such as `0 1 0 RG` is a valid graphics operation,
+        // if not check `not(peek(tag("G")))`, the sequence will parsed to
+        // Integer(0), Reference(1 0)
+        delimited(whitespace_or_comment, tag(b"R"), not(peek(tag("G")))),
     )(input)?;
     Ok((input, Reference::new(id, gen)))
 }

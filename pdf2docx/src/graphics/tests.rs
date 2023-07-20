@@ -54,6 +54,7 @@ fn test_parse_opreations(s: &str) -> Vec<Operation> {
 #[test_case("[(foo) 1]TJ" => Operation::ShowTexts(vec![TextStringOrNumber::Text("foo".into()), TextStringOrNumber::Number(1f32)]); "show texts")]
 #[test_case("/tag /name DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict("tag".into()), NameOrDict::Name("name".into())); "DP with name")]
 #[test_case("/tag<<>>DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict("tag".into()), NameOrDict::Dict(Dictionary::new())); "DP with dict")]
+#[test_case("0 0 1 RG" => Operation::SetStrokeRGB(Color::Rgb(0f32, 0f32, 1f32)); "RG")]
 fn test_parse_operation(s: &str) -> Operation {
     let (_, result) = parse_operation(s.as_bytes()).unwrap();
     result
