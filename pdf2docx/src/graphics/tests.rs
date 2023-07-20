@@ -2,16 +2,20 @@ use super::*;
 
 use test_case::test_case;
 
-#[test_case("w ")]
-#[test_case("w"; "not end with whitespace")]
-#[test_case("TL ")]
-#[test_case("B*\t")]
-#[test_case("' "; "quote 1")]
-#[test_case("\" "; "quote 2")]
-fn parse_operator_succeed(s: &str) {
+#[test_case("w ", "w")]
+#[test_case("w", "w"; "not end with whitespace")]
+#[test_case("TL ", "TL")]
+#[test_case("B*\t", "B*")]
+#[test_case("' ", "'"; "quote 1")]
+#[test_case("\" ", "\""; "quote 2")]
+#[test_case("Tc[", "Tc"; "end with separator 1")]
+#[test_case("Tc<", "Tc"; "end with separator 2")]
+#[test_case("Tc(", "Tc"; "end with separator 3")]
+fn parse_operator_succeed(s: &str, op: &str) {
+    let len = s.len();
     let (input, result) = parse_operator(s.as_bytes()).unwrap();
-    assert!(input.len() < 2);
-    assert_eq!(result, ObjectOrOperator::Operator(s.trim_end()));
+    assert!(input.len() + op.len() == len);
+    assert_eq!(result, ObjectOrOperator::Operator(op));
 }
 
 #[test_case("foo " ; "unknown operator")]

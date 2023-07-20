@@ -441,7 +441,7 @@ lazy_static! {
 }
 
 fn parse_operator(input: &[u8]) -> ParseResult<ObjectOrOperator> {
-    let p = is_not(b" \t\n\r%".as_slice());
+    let p = is_not(b" \t\n\r%[<(".as_slice());
     map_res(p, |op| {
         let op = unsafe { std::str::from_utf8_unchecked(op) };
         if OPERATORS.contains(op) {
