@@ -77,9 +77,9 @@ pub enum Color {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ColorOrWithPattern {
+pub enum ColorOrName {
     Color(Color),
-    WithPattern(Color, String),
+    Name(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -220,11 +220,11 @@ pub enum Operation<'a> {
     #[op_tag("SC")]
     SetStrokeColor(Color),
     #[op_tag("SCN")]
-    SetStrokeColorOrWithPattern(ColorOrWithPattern),
+    SetStrokeColorOrWithPattern(ColorOrName),
     #[op_tag("sc")]
     SetFillColor(Color),
     #[op_tag("scn")]
-    SetFillColorOrWithPattern(ColorOrWithPattern),
+    SetFillColorOrWithPattern(ColorOrName),
     #[op_tag("G")]
     SetStrokeGray(Color), // Should be Color::Gray
     #[op_tag("g")]
@@ -329,17 +329,14 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for Color {
     }
 }
 
-/// If last element in objects is Name, return `ColorOrWithPattern::WithPattern`
-/// Otherwise, return `ColorOrWithPattern::Color`
-impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorOrWithPattern {
+impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorOrName {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
         if let Ok(name) = o.as_name() {
-            let color = Color::convert_from_object(objects)?;
-            Ok(ColorOrWithPattern::WithPattern(color, name.to_owned()))
+            Ok(ColorOrName::Name(name.to_owned()))
         } else {
             objects.push(o);
-            Color::convert_from_object(objects).map(ColorOrWithPattern::Color)
+            Color::convert_from_object(objects).map(ColorOrName::Color)
         }
     }
 }
