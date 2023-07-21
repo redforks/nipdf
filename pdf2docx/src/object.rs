@@ -277,7 +277,7 @@ pub use xref::{Entry as XRefEntry, Section as XRefSection, *};
 mod frame;
 pub use frame::*;
 
-use crate::file::Rectangle;
+use crate::{file::Rectangle, parser};
 
 #[derive(Clone, PartialEq, Debug, thiserror::Error)]
 pub enum ObjectValueError {
@@ -311,6 +311,12 @@ pub enum ObjectValueError {
     DictSchemaError(u32, &'static str, &'static str),
     #[error("Graphics operation schema error")]
     GraphicsOperationSchemaError,
+}
+
+impl<'a> From<parser::ParseError<'a>> for ObjectValueError {
+    fn from(e: parser::ParseError) -> Self {
+        Self::ParseError(e.to_string())
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]

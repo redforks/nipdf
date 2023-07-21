@@ -3,6 +3,7 @@
 use anyhow::Result as AnyResult;
 use itertools::Itertools;
 use nom::bytes::complete::take_until;
+use nom::Finish;
 use once_cell::unsync::OnceCell;
 use std::collections::HashMap;
 
@@ -59,8 +60,9 @@ impl<'a> XRefTable<'a> {
             .ok_or(ObjectValueError::ObjectIDNotFound)
             .and_then(|buf| {
                 parse_indirected_object(buf)
+                    .finish()
                     .map(|(_, o)| o.take())
-                    .map_err(|e| ObjectValueError::ParseError(e.to_string()))
+                    .map_err(|e| ObjectValueError::from(e))
             })
     }
 
