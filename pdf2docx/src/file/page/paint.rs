@@ -1,4 +1,4 @@
-use crate::graphics::Point;
+use crate::graphics::{Point, TransformMatrix};
 
 use super::Operation;
 use tiny_skia::{PathBuilder, Pixmap, Rect as SkiaRect};
@@ -7,11 +7,16 @@ use tiny_skia::{PathBuilder, Pixmap, Rect as SkiaRect};
 pub struct State {
     line_width: f32,
     path: PathBuilder,
+    ctm: TransformMatrix,
 }
 
 impl State {
     fn set_line_width(&mut self, w: f32) {
         self.line_width = w;
+    }
+
+    fn set_ctm(&mut self, ctm: TransformMatrix) {
+        self.ctm = ctm;
     }
 
     fn to_paint(&self) -> tiny_skia::Paint {
@@ -28,7 +33,7 @@ impl State {
     }
 
     fn to_transform(&self) -> tiny_skia::Transform {
-        todo!()
+        self.ctm.clone().into()
     }
 }
 
@@ -74,6 +79,7 @@ impl Render {
             // Special Graphics State Operations
             Operation::SaveGraphicsState => self.push(),
             Operation::RestoreGraphicsState => self.pop(),
+            Operation::ModifyCTM(ctm) => self.current_mut().set_ctm(*ctm),
 
             // Path Construction Operations
             Operation::MoveToNext(Point { x, y }) => self.current_mut().path.move_to(*x, *y),

@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use ahash::RandomState;
 use arrayvec::ArrayVec;
+use educe::Educe;
 use lazy_static::lazy_static;
 use nom::{branch::alt, bytes::complete::is_not, combinator::map_res, multi::many0, Parser};
 
@@ -11,14 +12,29 @@ use crate::{
 };
 use pdf2docx_macro::{ConvertFromIntObject, ConvertFromNameObject, OperationParser};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Educe)]
+#[educe(Default)]
 pub struct TransformMatrix {
-    a: f32,
-    b: f32,
-    c: f32,
-    d: f32,
-    e: f32,
-    f: f32,
+    #[educe(Default = 1.0)]
+    sx: f32,
+    kx: f32,
+    ky: f32,
+    #[educe(Default = 1.0)]
+    sy: f32,
+    tx: f32,
+    ty: f32,
+}
+
+impl TransformMatrix {
+    pub fn identity() -> Self {
+        Self::default()
+    }
+}
+
+impl From<TransformMatrix> for tiny_skia::Transform {
+    fn from(m: TransformMatrix) -> Self {
+        Self::from_row(m.sx, m.ky, m.kx, m.sy, m.tx, m.ty)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -392,7 +408,14 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for TransformMatrix {
         let c = objects.pop().unwrap().as_number()?;
         let b = objects.pop().unwrap().as_number()?;
         let a = objects.pop().unwrap().as_number()?;
-        Ok(Self { a, b, c, d, e, f })
+        Ok(Self {
+            sx: a,
+            kx: b,
+            ky: c,
+            sy: d,
+            tx: e,
+            ty: f,
+        })
     }
 }
 

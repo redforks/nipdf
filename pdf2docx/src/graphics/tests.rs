@@ -44,12 +44,12 @@ fn test_parse_opreations(s: &str) -> Vec<Operation> {
 #[test_case("1 w" => Operation::SetLineWidth(1f32))]
 #[test_case("1.5 w" => Operation::SetLineWidth(1.5f32))]
 #[test_case("1 2 3 1.5 -2 6 cm" => Operation::ModifyCTM(TransformMatrix {
-    a: 1f32,
-    b: 2f32,
-    c: 3f32,
-    d: 1.5f32,
-    e: -2f32,
-    f: 6f32,
+    sx: 1f32,
+    kx: 2f32,
+    ky: 3f32,
+    sy: 1.5f32,
+    tx: -2f32,
+    ty: 6f32,
 }); "cm")]
 #[test_case("[1 2] 0.5 d" => Operation::SetDashPattern(vec![1f32, 2f32], 0.5f32); "dash-pattern")]
 #[test_case("/stateName gs" => Operation::SetGraphicsStateParameters(NameOfDict("stateName".into())); "gs")]
@@ -89,7 +89,6 @@ fn test_arr_convert_from_object(v: Vec<Object>) -> Vec<f32> {
 #[test_case(vec![1.into(), 2.0.into(), 3.into(), 4.0.into()] => Color::Cmyk(1.0, 2.0, 3.0, 4.0); "CMYK")]
 #[test_case(vec![1.into(), 2.into(), 3.into(), 4.into(), 5.into()] => Color::Cmyk(2.0, 3.0, 4.0, 5.0); "Max 4 numbers")]
 fn color_convert_from_object(mut v: Vec<Object>) -> Color {
-    
     Color::convert_from_object(&mut v).unwrap()
 }
 
@@ -104,6 +103,5 @@ fn color_convert_from_object_stop_on_non_number() {
 #[test_case(vec![1.into()] => ColorOrName::Color(Color::Gray(1.0)); "Color")]
 #[test_case(vec!["/name".into()] => ColorOrName::Name("name".to_owned()); "name")]
 fn color_or_with_pattern_from_object(mut v: Vec<Object>) -> ColorOrName {
-    
     ColorOrName::convert_from_object(&mut v).unwrap()
 }
