@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use ahash::RandomState;
 use lazy_static::lazy_static;
 use nom::{branch::alt, bytes::complete::is_not, combinator::map_res, multi::many0, Parser};
 
@@ -401,7 +402,7 @@ enum ObjectOrOperator<'a> {
 }
 
 lazy_static! {
-    static ref OPERATORS: HashSet<&'static str> = [
+    static ref OPERATORS: HashSet<&'static str, RandomState> = [
         // General graphics state
         "w", "J", "j", "M", "d", "ri", "i", "gs",
         // Special graphics state
