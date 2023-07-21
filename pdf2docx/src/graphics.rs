@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use ahash::RandomState;
 use lazy_static::lazy_static;
 use nom::{branch::alt, bytes::complete::is_not, combinator::map_res, multi::many0, Parser};
+use tinyvec::ArrayVec;
 
 use crate::{
     object::{Dictionary, Name, Object, ObjectValueError, TextStringOrNumber},
@@ -308,7 +309,7 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for TextStringOrNumber {
 
 impl<'a, 'b> ConvertFromObject<'a, 'b> for Color {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
-        let mut colors = Vec::with_capacity(4);
+        let mut colors = ArrayVec::<[f32; 4]>::new();
         while let Some(o) = objects.pop() {
             if let Ok(num) = o.as_number() {
                 colors.push(num);
