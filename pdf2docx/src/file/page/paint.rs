@@ -49,6 +49,8 @@ impl Render {
     pub fn exec(&mut self, op: &Operation) {
         match op {
             Operation::SetLineWidth(width) => self.current_mut().set_line_width(*width),
+            Operation::SaveGraphicsState => self.push(),
+            Operation::RestoreGraphicsState => self.pop(),
             _ => {
                 eprintln!("unimplemented: {:?}", op);
             }
