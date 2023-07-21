@@ -121,7 +121,7 @@ impl Page {
             let d = resolver.resolve(id).unwrap();
             let d = PageDict::new(id, d.as_dict()?)?;
             if d.is_leaf() {
-                pages.push(Page::from_leaf(id, &d, &parents[..]));
+                pages.push(Page::from_leaf(id, &d, &parents[..])?);
             } else {
                 let kids = d.kids();
                 parents.push(d);
@@ -135,26 +135,29 @@ impl Page {
         Ok(pages)
     }
 
-    fn from_leaf<'a, 'b>(id: u32, d: &PageDict<'a, 'b>, parents: &[PageDict<'a, 'b>]) -> Self {
+    fn from_leaf<'a, 'b>(
+        id: u32,
+        d: &PageDict<'a, 'b>,
+        parents: &[PageDict<'a, 'b>],
+    ) -> Result<Self, ObjectValueError> {
         let media_box = once(d)
             .chain(parents.iter())
             .map(|d| d.media_box())
             .find_map(|r| r)
-            .unwrap();
+            .ok_or(ObjectValueError::DictSchemaError(id, "Page", "MediaBox"))?;
         let crop_box = once(d)
             .chain(parents.iter())
             .map(|d| d.crop_box())
             .find_map(|r| r);
         let content_ids =
-            d.d.opt_single_or_arr("Contents", |o| Ok(o.as_ref()?.id().id()))
-                .unwrap();
+            d.d.opt_single_or_arr("Contents", |o| Ok(o.as_ref()?.id().id()))?;
 
-        Self {
+        Ok(Self {
             id,
             media_box,
             crop_box,
             content_ids,
-        }
+        })
     }
 }
 
