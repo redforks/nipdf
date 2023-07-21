@@ -12,7 +12,7 @@ use crate::{
 };
 use pdf2docx_macro::{ConvertFromIntObject, ConvertFromNameObject, OperationParser};
 
-#[derive(Debug, Clone, PartialEq, Educe)]
+#[derive(Debug, Clone, Copy, PartialEq, Educe)]
 #[educe(Default)]
 pub struct TransformMatrix {
     #[educe(Default = 1.0)]

@@ -1,7 +1,7 @@
 use crate::graphics::{Point, TransformMatrix};
 
 use super::Operation;
-use tiny_skia::{PathBuilder, Pixmap, Rect as SkiaRect};
+use tiny_skia::{PathBuilder, Pixmap, Rect as SkiaRect, Shader, Stroke};
 
 #[derive(Debug, Default, Clone)]
 pub struct State {
@@ -19,17 +19,19 @@ impl State {
         self.ctm = ctm;
     }
 
-    fn to_paint(&self) -> tiny_skia::Paint {
+    fn to_paint(&self) -> tiny_skia::Paint<'static> {
         let mut paint = tiny_skia::Paint::default();
-        paint.set_color_rgba8(0, 0, 0, 255);
-        paint.set_style(tiny_skia::PaintStyle::Stroke);
-        paint.set_stroke_width(self.line_width);
-        // paint
-        todo!()
+        paint.set_color(tiny_skia::Color::BLACK);
+        paint.shader = Shader::SolidColor(tiny_skia::Color::BLACK);
+        // TODO: complete
+        paint
     }
 
     fn to_stroke(&self) -> tiny_skia::Stroke {
-        todo!()
+        // TODO: complete
+        let mut r = Stroke::default();
+        r.width = self.line_width;
+        r
     }
 
     fn to_transform(&self) -> tiny_skia::Transform {
@@ -114,8 +116,9 @@ impl Render {
                 let paint = state.to_paint();
                 let stroke = state.to_stroke();
                 let path = state.path.clone().finish().unwrap();
+                let transform = state.to_transform();
                 self.canvas
-                    .stroke_path(&path, &paint, &stroke, state.to_transform(), None);
+                    .stroke_path(&path, &paint, &stroke, transform, None);
             }
             _ => {
                 eprintln!("unimplemented: {:?}", op);
