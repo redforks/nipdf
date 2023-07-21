@@ -1,4 +1,4 @@
-use std::io::{copy, stdout, Cursor};
+use std::io::{copy, stdout, BufWriter, Cursor};
 
 use anyhow::Result as AnyResult;
 
@@ -64,7 +64,7 @@ fn dump_stream(path: &str, id: u32, raw: bool, as_image: bool, as_png: bool) -> 
                     decoded.as_bytes()
                 }
             };
-            copy(&mut buf, &mut stdout())?;
+            copy(&mut buf, &mut BufWriter::new(&mut stdout()))?;
         }
         _ => eprintln!("object is not a stream"),
     };
@@ -92,7 +92,7 @@ fn dump_page(
         let page = &f.catalog().pages()[page_no as usize];
         let pixmap = page.render(&resolver)?;
         let buf = pixmap.encode_png()?;
-        copy(&mut &buf[..], &mut stdout())?;
+        copy(&mut &buf[..], &mut BufWriter::new(&mut stdout()))?;
     } else if let Some(page_no) = page_no {
         let page = &f.catalog().pages()[page_no as usize];
         let contents = page.content(&resolver)?;
