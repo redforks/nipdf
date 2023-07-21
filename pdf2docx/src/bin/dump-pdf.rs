@@ -29,6 +29,7 @@ fn cli() -> Command {
                 .arg(arg!(-f <filename> "PDF file to dump"))
                 .arg(arg!(--pages "display total page numbers"))
                 .arg(arg!(--id "display page object ID"))
+                .arg(arg!(--png "Render page to PNG"))
                 .arg(arg!([page_no] "page number (start from zero) to dump")),
         )
 }
@@ -75,6 +76,7 @@ fn dump_page(
     page_no: Option<u32>,
     show_total_pages: bool,
     show_page_id: bool,
+    to_png: bool,
 ) -> AnyResult<()> {
     let mut buf: Vec<u8> = vec![];
     let (f, resolver) = open(path, &mut buf)?;
@@ -85,6 +87,12 @@ fn dump_page(
         let page_no = page_no.expect("page number is required");
         let page = &f.catalog().pages()[page_no as usize];
         println!("{}", page.id());
+    } else if to_png {
+        let page_no = page_no.expect("page number is required");
+        let page = &f.catalog().pages()[page_no as usize];
+        let pixmap = page.render(&resolver)?;
+        let buf = pixmap.encode_png()?;
+        copy(&mut &buf[..], &mut stdout())?;
     } else if let Some(page_no) = page_no {
         let page = &f.catalog().pages()[page_no as usize];
         let contents = page.content(&resolver)?;
@@ -117,6 +125,7 @@ fn main() -> AnyResult<()> {
                 .and_then(|s| s.parse().ok()),
             sub_m.get_one::<bool>("pages").copied().unwrap_or_default(),
             sub_m.get_one::<bool>("id").copied().unwrap_or_default(),
+            sub_m.get_one::<bool>("png").copied().unwrap_or_default(),
         ),
         _ => todo!(),
     }

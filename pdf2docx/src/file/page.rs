@@ -1,4 +1,5 @@
 use nom::Finish;
+use tiny_skia::Pixmap;
 
 use crate::{
     graphics::{parse_operations, Operation},
@@ -8,12 +9,24 @@ use crate::{
 use super::ObjectResolver;
 use std::iter::once;
 
+mod paint;
+
 #[derive(Debug, Copy, Clone)]
 pub struct Rectangle {
     pub left_x: f32,
     pub lower_y: f32,
     pub right_x: f32,
     pub upper_y: f32,
+}
+
+impl Rectangle {
+    pub fn width(&self) -> f32 {
+        self.right_x - self.left_x
+    }
+
+    pub fn height(&self) -> f32 {
+        self.upper_y - self.lower_y
+    }
 }
 
 /// Convert from raw array, auto re-order to (left_x, lower_y, right_x, upper_y),
@@ -103,6 +116,17 @@ impl Page {
             }
         }
         Ok(PageContent { bufs })
+    }
+
+    pub fn render(&self, resolver: &ObjectResolver<'_>) -> Result<Pixmap, ObjectValueError> {
+        let media_box = self.media_box();
+        let map = Pixmap::new(media_box.width() as u32, media_box.height() as u32).unwrap();
+        let mut renderer = paint::Render::new(map);
+        let content = self.content(resolver)?;
+        for op in content.operations() {
+            renderer.exec(&op);
+        }
+        Ok(renderer.into())
     }
 
     /// Parse page tree to get all pages
