@@ -13,6 +13,23 @@ impl State {
     fn set_line_width(&mut self, w: f32) {
         self.line_width = w;
     }
+
+    fn to_paint(&self) -> tiny_skia::Paint {
+        let mut paint = tiny_skia::Paint::default();
+        paint.set_color_rgba8(0, 0, 0, 255);
+        paint.set_style(tiny_skia::PaintStyle::Stroke);
+        paint.set_stroke_width(self.line_width);
+        // paint
+        todo!()
+    }
+
+    fn to_stroke(&self) -> tiny_skia::Stroke {
+        todo!()
+    }
+
+    fn to_transform(&self) -> tiny_skia::Transform {
+        todo!()
+    }
 }
 
 #[derive(Debug)]
@@ -84,6 +101,16 @@ impl Render {
                 .current_mut()
                 .path
                 .push_rect(SkiaRect::from_xywh(*x, *y, *w, *h).unwrap()),
+
+            // Path Painting Operation
+            Operation::Stroke => {
+                let state = self.current();
+                let paint = state.to_paint();
+                let stroke = state.to_stroke();
+                let path = state.path.clone().finish().unwrap();
+                self.canvas
+                    .stroke_path(&path, &paint, &stroke, state.to_transform(), None);
+            }
             _ => {
                 eprintln!("unimplemented: {:?}", op);
             }
