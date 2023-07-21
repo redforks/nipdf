@@ -5,7 +5,7 @@ use anyhow::Result as AnyResult;
 use clap::{arg, Command};
 use image::ImageOutputFormat;
 use pdf2docx::{
-    file::{File, ObjectResolver, Page},
+    file::{File, ObjectResolver},
     object::{FilterDecodedData, Object},
 };
 
@@ -35,7 +35,7 @@ fn cli() -> Command {
 
 fn open<'a>(path: &str, buf: &'a mut Vec<u8>) -> AnyResult<(File, ObjectResolver<'a>)> {
     *buf = std::fs::read(path)?;
-    Ok(File::parse(&buf[..])?)
+    File::parse(&buf[..])
 }
 
 fn dump_stream(path: &str, id: u32, raw: bool, as_image: bool, as_png: bool) -> AnyResult<()> {

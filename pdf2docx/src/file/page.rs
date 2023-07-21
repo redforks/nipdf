@@ -2,12 +2,11 @@ use nom::Finish;
 
 use crate::{
     graphics::{parse_operations, Operation},
-    object::{Array, Dictionary, FilterDecodedData, Object, ObjectValueError, SchemaDict, Stream},
-    parser::{ParseError, ParseResult},
+    object::{Array, Dictionary, FilterDecodedData, ObjectValueError, SchemaDict},
 };
 
 use super::ObjectResolver;
-use std::{borrow::Cow, iter::once};
+use std::iter::once;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Rectangle {
@@ -91,10 +90,7 @@ impl Page {
         self.crop_box
     }
 
-    pub fn content<'a, 'b>(
-        &self,
-        resolver: &'b ObjectResolver<'a>,
-    ) -> Result<PageContent, ObjectValueError> {
+    pub fn content(&self, resolver: &ObjectResolver<'_>) -> Result<PageContent, ObjectValueError> {
         let mut bufs = Vec::with_capacity(self.content_ids.len());
         for id in &self.content_ids {
             let s = resolver.resolve(*id)?.as_stream()?;

@@ -62,7 +62,7 @@ impl<'a> XRefTable<'a> {
                 parse_indirected_object(buf)
                     .finish()
                     .map(|(_, o)| o.take())
-                    .map_err(|e| ObjectValueError::from(e))
+                    .map_err(ObjectValueError::from)
             })
     }
 
