@@ -84,7 +84,7 @@ pub enum SetTextRenderingMode {
 }
 
 /// Color for different color space
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Color {
     /// DeviceGray, CalGray, Indexed
     Gray(f32),

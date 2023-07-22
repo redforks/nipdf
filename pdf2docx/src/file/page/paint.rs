@@ -1,4 +1,6 @@
-use crate::graphics::{LineCapStyle, LineJoinStyle, Point, RenderingIntent, TransformMatrix};
+use crate::graphics::{
+    Color, LineCapStyle, LineJoinStyle, Point, RenderingIntent, TransformMatrix,
+};
 
 use super::Operation;
 use tiny_skia::{Paint, Path, PathBuilder, Pixmap, Rect as SkiaRect, Shader, Stroke, StrokeDash};
@@ -23,19 +25,38 @@ impl From<LineJoinStyle> for tiny_skia::LineJoin {
     }
 }
 
+impl From<Color> for tiny_skia::Color {
+    fn from(color: Color) -> Self {
+        match color {
+            Color::Rgb(r, g, b) => tiny_skia::Color::from_rgba(r, g, b, 1.0).unwrap(),
+            Color::Cmyk(c, m, y, k) => tiny_skia::Color::from_rgba(
+                (1.0 - c) * (1.0 - k),
+                (1.0 - m) * (1.0 - k),
+                (1.0 - y) * (1.0 - k),
+                1.0,
+            )
+            .unwrap(),
+            Color::Gray(g) => tiny_skia::Color::from_rgba(g, g, g, 1.0).unwrap(),
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct State {
     path: PathBuilder,
     ctm: TransformMatrix,
-    paint: Paint<'static>,
+    fill_paint: Paint<'static>,
+    stroke_paint: Paint<'static>,
     stroke: Stroke,
 }
 
 impl State {
     fn new() -> Self {
         let mut r = Self::default();
-        r.paint.set_color(tiny_skia::Color::BLACK);
-        r.paint.shader = Shader::SolidColor(tiny_skia::Color::BLACK);
+        r.fill_paint.set_color(tiny_skia::Color::BLACK);
+        r.fill_paint.shader = Shader::SolidColor(tiny_skia::Color::BLACK);
+        r.stroke_paint.set_color(tiny_skia::Color::BLACK);
+        r.stroke_paint.shader = Shader::SolidColor(tiny_skia::Color::BLACK);
         r
     }
 
@@ -65,6 +86,14 @@ impl State {
 
     fn set_render_intent(&mut self, intent: RenderingIntent) {
         log::info!("not implemented: render intent: {}", intent);
+    }
+
+    fn set_stroke_color(&mut self, color: Color) {
+        self.stroke_paint.shader = Shader::SolidColor(color.into());
+    }
+
+    fn set_fill_color(&mut self, color: Color) {
+        self.fill_paint.shader = Shader::SolidColor(color.into());
     }
 
     fn set_ctm(&mut self, ctm: TransformMatrix) {
@@ -101,8 +130,12 @@ impl State {
             .push_rect(SkiaRect::from_xywh(p.x, p.y, w, h).unwrap());
     }
 
-    fn get_paint(&self) -> &Paint<'static> {
-        &self.paint
+    fn get_fill_paint(&self) -> &Paint<'static> {
+        &self.fill_paint
+    }
+
+    fn get_stroke_paint(&self) -> &Paint<'static> {
+        &self.stroke_paint
     }
 
     fn get_stroke(&self) -> &Stroke {
@@ -189,6 +222,16 @@ impl Render {
             Operation::Stroke => self.stroke(),
             Operation::CloseAndStroke => self.close_and_stroke(),
 
+            // Color Operations
+            Operation::SetStrokeColor(color)
+            | Operation::SetStrokeGray(color)
+            | Operation::SetStrokeCMYK(color)
+            | Operation::SetStrokeRGB(color) => self.current_mut().set_stroke_color(*color),
+            Operation::SetFillColor(color)
+            | Operation::SetFillGray(color)
+            | Operation::SetFillCMYK(color)
+            | Operation::SetFillRGB(color) => self.current_mut().set_fill_color(*color),
+
             _ => {
                 eprintln!("unimplemented: {:?}", op);
             }
@@ -199,7 +242,7 @@ impl Render {
         let state = self.stack.last().unwrap();
         self.canvas.stroke_path(
             &state.path(),
-            state.get_paint(),
+            state.get_fill_paint(),
             state.get_stroke(),
             state.to_transform(),
             None,
@@ -211,3 +254,6 @@ impl Render {
         self.stroke();
     }
 }
+
+#[cfg(test)]
+mod tests;
