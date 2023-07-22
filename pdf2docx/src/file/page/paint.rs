@@ -221,7 +221,7 @@ impl Render {
             // Path Painting Operation
             Operation::Stroke => self.stroke(),
             Operation::CloseAndStroke => self.close_and_stroke(),
-            Operation::FillNonZero => self.fill_path_non_zero(),
+            Operation::FillNonZero | Operation::FillNonZeroDeprecated => self.fill_path_non_zero(),
             Operation::FillEvenOdd => self.fill_path_even_odd(),
 
             // Color Operations
