@@ -1,7 +1,7 @@
 use crate::graphics::{LineCapStyle, LineJoinStyle, Point, RenderingIntent, TransformMatrix};
 
 use super::Operation;
-use tiny_skia::{Paint, Path, PathBuilder, Pixmap, Rect as SkiaRect, Shader, Stroke};
+use tiny_skia::{Paint, Path, PathBuilder, Pixmap, Rect as SkiaRect, Shader, Stroke, StrokeDash};
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
     fn from(cap: LineCapStyle) -> Self {
@@ -49,6 +49,10 @@ impl State {
 
     fn set_line_join(&mut self, join: LineJoinStyle) {
         self.stroke.line_join = join.into();
+    }
+
+    fn set_dash_pattern(&mut self, pattern: &[f32], phase: f32) {
+        self.stroke.dash = StrokeDash::new(pattern.to_owned(), phase);
     }
 
     fn set_miter_limit(&mut self, limit: f32) {
@@ -127,6 +131,9 @@ impl Render {
             Operation::SetLineCap(cap) => self.current_mut().set_line_cap(*cap),
             Operation::SetLineJoin(join) => self.current_mut().set_line_join(*join),
             Operation::SetMiterLimit(limit) => self.current_mut().set_miter_limit(*limit),
+            Operation::SetDashPattern(pattern, phase) => {
+                self.current_mut().set_dash_pattern(pattern, *phase)
+            }
             Operation::SetRenderIntent(intent) => self.current_mut().set_render_intent(*intent),
             Operation::SetFlatness(flatness) => self.current_mut().set_flatness(*flatness),
 
