@@ -71,6 +71,10 @@ impl State {
         self.ctm = ctm;
     }
 
+    fn close_path(&mut self) {
+        self.path.close();
+    }
+
     fn get_paint(&self) -> &Paint<'static> {
         &self.paint
     }
@@ -162,26 +166,35 @@ impl Render {
                 .current_mut()
                 .path
                 .cubic_to(*x1, *y1, *x3, *y3, *x3, *y3),
-            Operation::ClosePath => self.current_mut().path.close(),
+            Operation::ClosePath => self.current_mut().close_path(),
             Operation::AppendRectangle(Point { x, y }, w, h) => self
                 .current_mut()
                 .path
                 .push_rect(SkiaRect::from_xywh(*x, *y, *w, *h).unwrap()),
 
             // Path Painting Operation
-            Operation::Stroke => {
-                let state = self.stack.last().unwrap();
-                self.canvas.stroke_path(
-                    &state.path(),
-                    state.get_paint(),
-                    state.get_stroke(),
-                    state.to_transform(),
-                    None,
-                );
-            }
+            Operation::Stroke => self.stroke(),
+            Operation::CloseAndStroke => self.close_and_stroke(),
+
             _ => {
                 eprintln!("unimplemented: {:?}", op);
             }
         }
+    }
+
+    fn stroke(&mut self) {
+        let state = self.stack.last().unwrap();
+        self.canvas.stroke_path(
+            &state.path(),
+            state.get_paint(),
+            state.get_stroke(),
+            state.to_transform(),
+            None,
+        );
+    }
+
+    fn close_and_stroke(&mut self) {
+        self.current_mut().close_path();
+        self.stroke();
     }
 }
