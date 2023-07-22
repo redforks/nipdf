@@ -223,6 +223,10 @@ impl Render {
             Operation::CloseAndStroke => self.close_and_stroke(),
             Operation::FillNonZero | Operation::FillNonZeroDeprecated => self.fill_path_non_zero(),
             Operation::FillEvenOdd => self.fill_path_even_odd(),
+            Operation::FillAndStrokeNonZero => self.fill_and_stroke_non_zero(),
+            Operation::FillAndStrokeEvenOdd => self.fill_and_stroke_even_odd(),
+            Operation::CloseFillAndStrokeNonZero => self.close_fill_and_stroke_non_zero(),
+            Operation::CloseFillAndStrokeEvenOdd => self.close_fill_and_stroke_even_odd(),
 
             // Color Operations
             Operation::SetStrokeColor(color)
@@ -251,8 +255,12 @@ impl Render {
         );
     }
 
-    fn close_and_stroke(&mut self) {
+    fn close_path(&mut self) {
         self.current_mut().close_path();
+    }
+
+    fn close_and_stroke(&mut self) {
+        self.close_path();
         self.stroke();
     }
 
@@ -276,6 +284,26 @@ impl Render {
             state.to_transform(),
             None,
         );
+    }
+
+    fn fill_and_stroke_non_zero(&mut self) {
+        self.fill_path_non_zero();
+        self.stroke();
+    }
+
+    fn fill_and_stroke_even_odd(&mut self) {
+        self.fill_path_even_odd();
+        self.stroke();
+    }
+
+    fn close_fill_and_stroke_non_zero(&mut self) {
+        self.close_path();
+        self.fill_and_stroke_non_zero();
+    }
+
+    fn close_fill_and_stroke_even_odd(&mut self) {
+        self.close_path();
+        self.fill_and_stroke_even_odd();
     }
 }
 
