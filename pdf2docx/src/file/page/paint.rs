@@ -1,41 +1,47 @@
 use crate::graphics::{Point, TransformMatrix};
 
 use super::Operation;
-use tiny_skia::{PathBuilder, Pixmap, Rect as SkiaRect, Shader, Stroke};
+use tiny_skia::{Paint, Path, PathBuilder, Pixmap, Rect as SkiaRect, Shader, Stroke};
 
 #[derive(Debug, Default, Clone)]
 pub struct State {
     line_width: f32,
     path: PathBuilder,
     ctm: TransformMatrix,
+    paint: Paint<'static>,
+    stroke: Stroke,
 }
 
 impl State {
+    fn new() -> Self {
+        let mut r = Self::default();
+        r.paint.set_color(tiny_skia::Color::BLACK);
+        r.paint.shader = Shader::SolidColor(tiny_skia::Color::BLACK);
+        r
+    }
+
     fn set_line_width(&mut self, w: f32) {
-        self.line_width = w;
+        self.stroke.width = w;
     }
 
     fn set_ctm(&mut self, ctm: TransformMatrix) {
         self.ctm = ctm;
     }
 
-    fn to_paint(&self) -> tiny_skia::Paint<'static> {
-        let mut paint = tiny_skia::Paint::default();
-        paint.set_color(tiny_skia::Color::BLACK);
-        paint.shader = Shader::SolidColor(tiny_skia::Color::BLACK);
-        // TODO: complete
-        paint
+    fn get_paint(&self) -> &Paint<'static> {
+        &self.paint
     }
 
-    fn to_stroke(&self) -> tiny_skia::Stroke {
-        // TODO: complete
-        let mut r = Stroke::default();
-        r.width = self.line_width;
-        r
+    fn get_stroke(&self) -> &Stroke {
+        &self.stroke
     }
 
     fn to_transform(&self) -> tiny_skia::Transform {
         self.ctm.clone().into()
+    }
+
+    fn path(&self) -> Path {
+        self.path.clone().finish().unwrap()
     }
 }
 
@@ -49,7 +55,7 @@ impl Render {
     pub fn new(canvas: Pixmap) -> Self {
         Self {
             canvas,
-            stack: vec![State::default()],
+            stack: vec![State::new()],
         }
     }
 
@@ -99,11 +105,10 @@ impl Render {
                 let p1 = path.last_point().unwrap();
                 path.cubic_to(p1.x, p1.y, *x2, *y2, *x3, *y3);
             }
-            Operation::AppendBezierCurve1(Point { x: x1, y: y1 }, Point { x: x3, y: y3 }) => {
-                self.current_mut()
-                    .path
-                    .cubic_to(*x1, *y1, *x3, *y3, *x3, *y3);
-            }
+            Operation::AppendBezierCurve1(Point { x: x1, y: y1 }, Point { x: x3, y: y3 }) => self
+                .current_mut()
+                .path
+                .cubic_to(*x1, *y1, *x3, *y3, *x3, *y3),
             Operation::ClosePath => self.current_mut().path.close(),
             Operation::AppendRectangle(Point { x, y }, w, h) => self
                 .current_mut()
@@ -112,13 +117,14 @@ impl Render {
 
             // Path Painting Operation
             Operation::Stroke => {
-                let state = self.current();
-                let paint = state.to_paint();
-                let stroke = state.to_stroke();
-                let path = state.path.clone().finish().unwrap();
-                let transform = state.to_transform();
-                self.canvas
-                    .stroke_path(&path, &paint, &stroke, transform, None);
+                let state = self.stack.last().unwrap();
+                self.canvas.stroke_path(
+                    &state.path(),
+                    state.get_paint(),
+                    state.get_stroke(),
+                    state.to_transform(),
+                    None,
+                );
             }
             _ => {
                 eprintln!("unimplemented: {:?}", op);
