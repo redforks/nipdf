@@ -221,6 +221,8 @@ impl Render {
             // Path Painting Operation
             Operation::Stroke => self.stroke(),
             Operation::CloseAndStroke => self.close_and_stroke(),
+            Operation::FillNonZero => self.fill_path_non_zero(),
+            Operation::FillEvenOdd => self.fill_path_even_odd(),
 
             // Color Operations
             Operation::SetStrokeColor(color)
@@ -252,6 +254,28 @@ impl Render {
     fn close_and_stroke(&mut self) {
         self.current_mut().close_path();
         self.stroke();
+    }
+
+    fn fill_path_non_zero(&mut self) {
+        let state = self.stack.last().unwrap();
+        self.canvas.fill_path(
+            &state.path(),
+            state.get_fill_paint(),
+            tiny_skia::FillRule::Winding,
+            state.to_transform(),
+            None,
+        );
+    }
+
+    fn fill_path_even_odd(&mut self) {
+        let state = self.stack.last().unwrap();
+        self.canvas.fill_path(
+            &state.path(),
+            state.get_fill_paint(),
+            tiny_skia::FillRule::EvenOdd,
+            state.to_transform(),
+            None,
+        );
     }
 }
 
