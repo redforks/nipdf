@@ -75,6 +75,32 @@ impl State {
         self.path.close();
     }
 
+    fn move_to(&mut self, p: Point) {
+        self.path.move_to(p.x, p.y);
+    }
+
+    fn line_to(&mut self, p: Point) {
+        self.path.line_to(p.x, p.y);
+    }
+
+    fn curve_to(&mut self, p1: Point, p2: Point, p3: Point) {
+        self.path.cubic_to(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+    }
+
+    fn curve_to_cur_point_as_control(&mut self, p2: Point, p3: Point) {
+        let p1 = self.path.last_point().unwrap();
+        self.curve_to(Point { x: p1.x, y: p2.y }, p2, p3);
+    }
+
+    fn curve_to_dest_point_as_control(&mut self, p1: Point, p3: Point) {
+        self.curve_to(p1, p3, p3);
+    }
+
+    fn append_rect(&mut self, p: Point, w: f32, h: f32) {
+        self.path
+            .push_rect(SkiaRect::from_xywh(p.x, p.y, w, h).unwrap());
+    }
+
     fn get_paint(&self) -> &Paint<'static> {
         &self.paint
     }
@@ -147,30 +173,17 @@ impl Render {
             Operation::ModifyCTM(ctm) => self.current_mut().set_ctm(*ctm),
 
             // Path Construction Operations
-            Operation::MoveToNext(Point { x, y }) => self.current_mut().path.move_to(*x, *y),
-            Operation::LineToNext(Point { x, y }) => self.current_mut().path.line_to(*x, *y),
-            Operation::AppendBezierCurve(
-                Point { x: x1, y: y1 },
-                Point { x: x2, y: y2 },
-                Point { x: x3, y: y3 },
-            ) => self
-                .current_mut()
-                .path
-                .cubic_to(*x1, *y1, *x2, *y2, *x3, *y3),
-            Operation::AppendBezierCurve2(Point { x: x2, y: y2 }, Point { x: x3, y: y3 }) => {
-                let path = &mut self.current_mut().path;
-                let p1 = path.last_point().unwrap();
-                path.cubic_to(p1.x, p1.y, *x2, *y2, *x3, *y3);
+            Operation::MoveToNext(p) => self.current_mut().move_to(*p),
+            Operation::LineToNext(p) => self.current_mut().line_to(*p),
+            Operation::AppendBezierCurve(p1, p2, p3) => self.current_mut().curve_to(*p1, *p2, *p3),
+            Operation::AppendBezierCurve2(p2, p3) => {
+                self.current_mut().curve_to_cur_point_as_control(*p2, *p3);
             }
-            Operation::AppendBezierCurve1(Point { x: x1, y: y1 }, Point { x: x3, y: y3 }) => self
-                .current_mut()
-                .path
-                .cubic_to(*x1, *y1, *x3, *y3, *x3, *y3),
+            Operation::AppendBezierCurve1(p1, p3) => {
+                self.current_mut().curve_to_dest_point_as_control(*p1, *p3);
+            }
             Operation::ClosePath => self.current_mut().close_path(),
-            Operation::AppendRectangle(Point { x, y }, w, h) => self
-                .current_mut()
-                .path
-                .push_rect(SkiaRect::from_xywh(*x, *y, *w, *h).unwrap()),
+            Operation::AppendRectangle(p, w, h) => self.current_mut().append_rect(*p, *w, *h),
 
             // Path Painting Operation
             Operation::Stroke => self.stroke(),
