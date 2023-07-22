@@ -1,4 +1,4 @@
-use crate::graphics::{LineCapStyle, LineJoinStyle, Point, TransformMatrix};
+use crate::graphics::{LineCapStyle, LineJoinStyle, Point, RenderingIntent, TransformMatrix};
 
 use super::Operation;
 use tiny_skia::{Paint, Path, PathBuilder, Pixmap, Rect as SkiaRect, Shader, Stroke};
@@ -59,6 +59,10 @@ impl State {
         log::info!("not implemented: flatness: {}", flatness);
     }
 
+    fn set_render_intent(&mut self, intent: RenderingIntent) {
+        log::info!("not implemented: render intent: {}", intent);
+    }
+
     fn set_ctm(&mut self, ctm: TransformMatrix) {
         self.ctm = ctm;
     }
@@ -87,7 +91,9 @@ pub struct Render {
 }
 
 impl Render {
-    pub fn new(canvas: Pixmap) -> Self {
+    pub fn new(mut canvas: Pixmap) -> Self {
+        // fill the whole canvas with white
+        canvas.fill(tiny_skia::Color::WHITE);
         Self {
             canvas,
             stack: vec![State::new()],
@@ -121,6 +127,7 @@ impl Render {
             Operation::SetLineCap(cap) => self.current_mut().set_line_cap(*cap),
             Operation::SetLineJoin(join) => self.current_mut().set_line_join(*join),
             Operation::SetMiterLimit(limit) => self.current_mut().set_miter_limit(*limit),
+            Operation::SetRenderIntent(intent) => self.current_mut().set_render_intent(*intent),
             Operation::SetFlatness(flatness) => self.current_mut().set_flatness(*flatness),
 
             // Special Graphics State Operations

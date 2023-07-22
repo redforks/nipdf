@@ -63,7 +63,7 @@ pub enum LineJoinStyle {
     Bevel = 2,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, ConvertFromNameObject)]
+#[derive(Debug, Clone, Copy, PartialEq, strum::Display, ConvertFromNameObject)]
 pub enum RenderingIntent {
     AbsoluteColorimetric,
     RelativeColorimetric,
