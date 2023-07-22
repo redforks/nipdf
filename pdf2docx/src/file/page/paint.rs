@@ -1,11 +1,30 @@
-use crate::graphics::{Point, TransformMatrix};
+use crate::graphics::{LineCapStyle, LineJoinStyle, Point, TransformMatrix};
 
 use super::Operation;
 use tiny_skia::{Paint, Path, PathBuilder, Pixmap, Rect as SkiaRect, Shader, Stroke};
 
+impl From<LineCapStyle> for tiny_skia::LineCap {
+    fn from(cap: LineCapStyle) -> Self {
+        match cap {
+            LineCapStyle::Butt => tiny_skia::LineCap::Butt,
+            LineCapStyle::Round => tiny_skia::LineCap::Round,
+            LineCapStyle::Square => tiny_skia::LineCap::Square,
+        }
+    }
+}
+
+impl From<LineJoinStyle> for tiny_skia::LineJoin {
+    fn from(join: LineJoinStyle) -> Self {
+        match join {
+            LineJoinStyle::Miter => tiny_skia::LineJoin::Miter,
+            LineJoinStyle::Round => tiny_skia::LineJoin::Round,
+            LineJoinStyle::Bevel => tiny_skia::LineJoin::Bevel,
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct State {
-    line_width: f32,
     path: PathBuilder,
     ctm: TransformMatrix,
     paint: Paint<'static>,
@@ -22,6 +41,22 @@ impl State {
 
     fn set_line_width(&mut self, w: f32) {
         self.stroke.width = w;
+    }
+
+    fn set_line_cap(&mut self, cap: LineCapStyle) {
+        self.stroke.line_cap = cap.into();
+    }
+
+    fn set_line_join(&mut self, join: LineJoinStyle) {
+        self.stroke.line_join = join.into();
+    }
+
+    fn set_miter_limit(&mut self, limit: f32) {
+        self.stroke.miter_limit = limit;
+    }
+
+    fn set_flatness(&mut self, flatness: f32) {
+        log::info!("not implemented: flatness: {}", flatness);
     }
 
     fn set_ctm(&mut self, ctm: TransformMatrix) {
@@ -83,6 +118,10 @@ impl Render {
         match op {
             // General Graphics State Operations
             Operation::SetLineWidth(width) => self.current_mut().set_line_width(*width),
+            Operation::SetLineCap(cap) => self.current_mut().set_line_cap(*cap),
+            Operation::SetLineJoin(join) => self.current_mut().set_line_join(*join),
+            Operation::SetMiterLimit(limit) => self.current_mut().set_miter_limit(*limit),
+            Operation::SetFlatness(flatness) => self.current_mut().set_flatness(*flatness),
 
             // Special Graphics State Operations
             Operation::SaveGraphicsState => self.push(),
