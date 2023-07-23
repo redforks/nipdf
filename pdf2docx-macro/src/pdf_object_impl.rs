@@ -7,10 +7,16 @@ use syn::{
 };
 
 fn snake_case_to_pascal(s: &str) -> String {
-    let mut s = s.to_string();
+    let s = s.to_string();
     let mut chars = s.chars();
-    let mut result = String::new();
+    let mut result = String::with_capacity(s.len());
+    let mut first = true;
     while let Some(c) = chars.next() {
+        if first {
+            result.push(c.to_ascii_uppercase());
+            first = false;
+            continue;
+        }
         if c == '_' {
             if let Some(c) = chars.next() {
                 result.push(c.to_ascii_uppercase());
