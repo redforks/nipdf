@@ -1,7 +1,31 @@
 use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use quote::quote;
-use syn::{parse_macro_input, parse_quote, Expr, ExprLit, ItemTrait, Type};
+use syn::{
+    parse_macro_input, parse_quote, Expr, ExprLit, ItemTrait, ReturnType, TraitItem, TraitItemFn,
+    Type,
+};
+
+fn snake_case_to_pascal(s: &str) -> String {
+    let mut s = s.to_string();
+    let mut chars = s.chars();
+    let mut result = String::new();
+    while let Some(c) = chars.next() {
+        if c == '_' {
+            if let Some(c) = chars.next() {
+                result.push(c.to_ascii_uppercase());
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
+fn schema_method_name(_rt: &Type) -> &'static str {
+    "required_name"
+    // todo!()
+}
 
 pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attr_expr = parse_macro_input!(attr as Expr);
@@ -42,6 +66,29 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
     let struct_name = &name[..name.len() - 5];
     let struct_name = Ident::new(struct_name, def.ident.span());
 
+    let mut methods = vec![];
+    for item in &def.items {
+        match item {
+            TraitItem::Fn(TraitItemFn { sig, .. }) => {
+                let name = sig.ident.clone();
+                // let rt = sig.output.clone();
+                let rt: &Type = match &sig.output {
+                    ReturnType::Default => panic!("function must have return type"),
+                    ReturnType::Type(_, ty) => &ty,
+                };
+                let key = snake_case_to_pascal(&name.to_string());
+                let method = Ident::new(&schema_method_name(rt), name.span());
+
+                methods.push(quote! {
+                    fn #name(&self) -> #rt {
+                        self.d.#method(#key).unwrap()
+                    }
+                });
+            }
+            _ => panic!("only support function"),
+        }
+    }
+
     let tokens = quote! {
         struct #struct_name<'a, 'b> {
             d: SchemaDict<'a, 'b, #valid_ty>,
@@ -56,6 +103,8 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             fn id(&self) -> u32 {
                 self.d.id()
             }
+
+            #(#methods)*
         }
     };
     println!("{}", tokens);
