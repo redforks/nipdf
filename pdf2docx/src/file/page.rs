@@ -48,13 +48,15 @@ impl<'a> From<&Array<'a>> for Rectangle {
     }
 }
 
-#[pdf_object("foo")]
-trait FooTrait {
-    #[typ("Name")]
-    fn foo(&self) -> &str;
-    fn parent_id(&self) -> Option<u32>;
-    fn media_box(&self) -> Option<Rectangle>;
-    fn kids(&self) -> Vec<u32>;
+#[pdf_object(())]
+trait ResourceDictTrait {
+    fn ext_g_state(&self) -> Option<&'b Dictionary<'a>>;
+    fn color_space(&self) -> Option<&'b Dictionary<'a>>;
+    fn pattern(&self) -> Option<&'b Dictionary<'a>>;
+    fn shading(&self) -> Option<&'b Dictionary<'a>>;
+    fn x_object(&self) -> Option<&'b Dictionary<'a>>;
+    fn font(&self) -> Option<&'b Dictionary<'a>>;
+    fn properties(&self) -> Option<&'b Dictionary<'a>>;
 }
 
 #[pdf_object(["Pages", "Page"])]
