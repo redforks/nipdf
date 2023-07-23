@@ -2,8 +2,8 @@ use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use quote::quote;
 use syn::{
-    parse_macro_input, parse_quote, Expr, ExprLit, ItemTrait, ReturnType, TraitItem, TraitItemFn,
-    Type,
+    parse_macro_input, parse_quote, Attribute, Expr, ExprLit, ItemTrait, Lit, LitStr, ReturnType,
+    TraitItem, TraitItemFn, Type, TypeReference,
 };
 
 fn snake_case_to_pascal(s: &str) -> String {
@@ -22,9 +22,27 @@ fn snake_case_to_pascal(s: &str) -> String {
     result
 }
 
-fn schema_method_name(_rt: &Type) -> &'static str {
-    "required_name"
-    // todo!()
+fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> &'static str {
+    let str_type: Type = parse_quote! { &str };
+    let get_type = || {
+        attrs.iter().find_map(|attr| {
+            if attr.path().is_ident("typ") {
+                let lit: LitStr = attr.parse_args().expect("expect string literal");
+                Some(lit.value())
+            } else {
+                None
+            }
+        })
+    };
+    if rt == &str_type {
+        if get_type().is_some_and(|s| s == "Name") {
+            "required_name"
+        } else {
+            "required_str"
+        }
+    } else {
+        todo!()
+    }
 }
 
 pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -69,15 +87,14 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut methods = vec![];
     for item in &def.items {
         match item {
-            TraitItem::Fn(TraitItemFn { sig, .. }) => {
+            TraitItem::Fn(TraitItemFn { sig, attrs, .. }) => {
                 let name = sig.ident.clone();
-                // let rt = sig.output.clone();
                 let rt: &Type = match &sig.output {
                     ReturnType::Default => panic!("function must have return type"),
                     ReturnType::Type(_, ty) => &ty,
                 };
                 let key = snake_case_to_pascal(&name.to_string());
-                let method = Ident::new(&schema_method_name(rt), name.span());
+                let method = Ident::new(schema_method_name(rt, &attrs[..]), name.span());
 
                 methods.push(quote! {
                     fn #name(&self) -> #rt {
