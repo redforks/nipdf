@@ -65,6 +65,8 @@ trait PageDictTrait {
     fn kids(&self) -> Vec<u32>;
     fn media_box(&self) -> Option<Rectangle>;
     fn crop_box(&self) -> Option<Rectangle>;
+    #[nested]
+    fn resources(&self) -> Option<ResourceDict<'a, 'b>>;
 }
 
 impl<'a, 'b> PageDict<'a, 'b> {

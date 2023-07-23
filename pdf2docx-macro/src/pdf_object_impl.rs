@@ -1,3 +1,6 @@
+use core::panic;
+
+use either::{Either, Left, Right};
 use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use quote::quote;
@@ -28,7 +31,43 @@ fn snake_case_to_pascal(s: &str) -> String {
     result
 }
 
-fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> &'static str {
+// Return left means Option<T>, right means T, Return None means not nested
+fn nested<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
+    if attrs.iter().any(|attr| attr.path().is_ident("nested")) {
+        // check `rt` is Option<T> or T
+        Some(if let Type::Path(tp) = rt {
+            if let Some(seg) = tp.path.segments.last() {
+                if seg.ident == "Option" {
+                    Left(
+                        if let syn::PathArguments::AngleBracketed(args) = &seg.arguments {
+                            if args.args.len() == 1 {
+                                if let syn::GenericArgument::Type(ty) = &args.args[0] {
+                                    ty
+                                } else {
+                                    panic!("expect type argument")
+                                }
+                            } else {
+                                rt
+                            }
+                        } else {
+                            panic!("expect angle bracketed arguments")
+                        },
+                    )
+                } else {
+                    Right(rt)
+                }
+            } else {
+                panic!("expect path segment")
+            }
+        } else {
+            Right(rt)
+        })
+    } else {
+        None
+    }
+}
+
+fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
     let get_type = || {
         attrs.iter().find_map(|attr| {
             if attr.path().is_ident("typ") {
@@ -41,30 +80,42 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> &'static str {
     };
     if rt == &(parse_quote! { &str }) {
         if get_type().is_some_and(|s| s == "Name") {
-            "required_name"
+            Some("required_name")
         } else {
-            "required_str"
+            Some("required_str")
         }
     } else if rt == &(parse_quote!(u32)) {
-        "required_u32"
+        Some("required_u32")
     } else if rt == &(parse_quote!(Option<u32>)) {
-        "opt_u32"
+        Some("opt_u32")
     } else if rt == &(parse_quote!(Option<Rectangle>)) {
-        "opt_rect"
+        Some("opt_rect")
     } else if rt == &(parse_quote!(Rectangle)) {
-        "required_rect"
+        Some("required_rect")
     } else if rt == &(parse_quote!(Vec<u32>)) {
         if get_type().is_some_and(|s| s == "Ref") {
-            "ref_id_arr"
+            Some("ref_id_arr")
         } else {
-            "u32_arr"
+            Some("u32_arr")
         }
     } else if rt == &(parse_quote!(Option<&'b Dictionary<'a>>)) {
-        "opt_dict"
+        Some("opt_dict")
     } else if rt == &(parse_quote!(&'b Dictionary<'a>)) {
-        "required_dict"
+        Some("required_dict")
     } else {
-        todo!()
+        None
+    }
+}
+
+fn remove_generic(t: &Type) -> Type {
+    if let Type::Path(tp) = t {
+        let mut tp = tp.clone();
+        if let Some(seg) = tp.path.segments.last_mut() {
+            seg.arguments = syn::PathArguments::None;
+        }
+        tp.into()
+    } else {
+        panic!("expect path type")
     }
 }
 
@@ -147,13 +198,34 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     ReturnType::Type(_, ty) => &ty,
                 };
                 let key = snake_case_to_pascal(&name.to_string());
-                let method = Ident::new(schema_method_name(rt, &attrs[..]), name.span());
-
-                methods.push(quote! {
-                    fn #name(&self) -> #rt {
-                        self.d.#method(#key).unwrap()
+                let method = schema_method_name(rt, &attrs[..]).map(|m| Ident::new(m, name.span()));
+                if let Some(method) = method {
+                    methods.push(quote! {
+                        fn #name(&self) -> #rt {
+                            self.d.#method(#key).unwrap()
+                        }
+                    });
+                } else if let Some(nested_type) = nested(rt, attrs) {
+                    let type_name = remove_generic(&nested_type);
+                    match nested_type {
+                        Left(ty) => {
+                            methods.push(quote! {
+                                fn #name(&self) -> Option<#ty> {
+                                    self.d.opt_dict(#key).unwrap().map(|d| #type_name::new(d).unwrap())
+                                }
+                            });
+                        }
+                        Right(ty) => {
+                            methods.push(quote! {
+                                fn #name(&self) -> #ty {
+                                    #type_name::new(self.d.required_dict(#key).unwrap()).unwrap()
+                                }
+                            });
+                        }
                     }
-                });
+                } else {
+                    panic!("unsupported return type")
+                }
             }
             _ => panic!("only support function"),
         }
