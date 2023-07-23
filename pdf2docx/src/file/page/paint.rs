@@ -143,7 +143,7 @@ impl State {
     }
 
     fn to_transform(&self) -> tiny_skia::Transform {
-        self.ctm.clone().into()
+        self.ctm.into()
     }
 
     fn path(&self) -> Path {

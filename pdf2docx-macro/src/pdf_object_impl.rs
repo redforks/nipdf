@@ -5,8 +5,8 @@ use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use quote::quote;
 use syn::{
-    parse_macro_input, parse_quote, token::Bracket, Attribute, Expr, ExprLit, ExprTuple, ItemTrait,
-    Lit, LitStr, ReturnType, Token, TraitItem, TraitItemFn, Type, TypeReference,
+    parse_macro_input, parse_quote, Attribute, Expr, ExprLit, ExprTuple, ItemTrait, LitStr,
+    ReturnType, TraitItem, TraitItemFn, Type,
 };
 
 fn snake_case_to_pascal(s: &str) -> String {
@@ -121,7 +121,7 @@ fn remove_generic(t: &Type) -> Type {
 
 pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attr_expr = parse_macro_input!(attr as Expr);
-    println!("{:#?}", attr_expr);
+    // println!("{:#?}", attr_expr);
 
     // Parse pdf_object attribute argument to (Type, Expr),
     // Type is `SchemaDict` 3rd generic parameter,
@@ -195,7 +195,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 let name = sig.ident.clone();
                 let rt: &Type = match &sig.output {
                     ReturnType::Default => panic!("function must have return type"),
-                    ReturnType::Type(_, ty) => &ty,
+                    ReturnType::Type(_, ty) => ty,
                 };
                 let key = snake_case_to_pascal(&name.to_string());
                 let method = schema_method_name(rt, &attrs[..]).map(|m| Ident::new(m, name.span()));
@@ -245,6 +245,6 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             #(#methods)*
         }
     };
-    println!("{}", tokens);
+    // println!("{}", tokens);
     tokens.into()
 }
