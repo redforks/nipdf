@@ -57,37 +57,17 @@ trait FooTrait {
     fn kids(&self) -> Vec<u32>;
 }
 
-struct PageDict<'a, 'b> {
-    d: SchemaDict<'a, 'b, [&'static str; 2]>,
+#[pdf_object(["Pages", "Page"])]
+trait PageDictTrait {
+    fn parent_id(&self) -> Option<u32>;
+    fn kids(&self) -> Vec<u32>;
+    fn media_box(&self) -> Option<Rectangle>;
+    fn crop_box(&self) -> Option<Rectangle>;
 }
 
 impl<'a, 'b> PageDict<'a, 'b> {
-    pub fn new(id: u32, dict: &'b Dictionary<'a>) -> Result<Self, ObjectValueError> {
-        let d = SchemaDict::new(dict, ["Pages", "Page"])?;
-        Ok(Self { d })
-    }
-
     pub fn is_leaf(&self) -> bool {
         self.d.type_name() == "Page"
-    }
-
-    pub fn parent_id(&self) -> Option<u32> {
-        self.d.opt_int("Parent").unwrap().map(|id| id as u32)
-    }
-
-    pub fn kids(&self) -> Vec<u32> {
-        self.d
-            .opt_arr_map("Kids", |o| Ok(o.as_ref()?.id().id()))
-            .unwrap()
-            .unwrap_or_default()
-    }
-
-    pub fn media_box(&self) -> Option<Rectangle> {
-        self.d.opt_rectangle("MediaBox").unwrap()
-    }
-
-    pub fn crop_box(&self) -> Option<Rectangle> {
-        self.d.opt_rectangle("CropBox").unwrap()
     }
 }
 
@@ -153,7 +133,7 @@ impl Page {
             parents: &'c mut Vec<PageDict<'a, 'b>>,
         ) -> Result<(), ObjectValueError> {
             let d = resolver.resolve(id).unwrap();
-            let d = PageDict::new(id, d.as_dict()?)?;
+            let d = PageDict::new(d.as_dict()?)?;
             if d.is_leaf() {
                 pages.push(Page::from_leaf(id, &d, &parents[..])?);
             } else {
