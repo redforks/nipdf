@@ -284,6 +284,11 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
             .get(&id.into())
             .map_or(Ok(None), |o| o.as_ref().map(|r| Some(r.id().id())))
     }
+
+    pub fn ref_id_arr(&self, id: &'static str) -> Result<Vec<u32>, ObjectValueError> {
+        self.opt_arr_map(id, |o| o.as_ref().map(|r| r.id().id()))
+            .map(|o| o.unwrap_or_default())
+    }
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]

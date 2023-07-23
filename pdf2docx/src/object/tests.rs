@@ -100,23 +100,23 @@ fn dict_get_name() {
 fn str_schema_type_validator() {
     let mut d = Dictionary::new();
     assert_eq!(
-        Err(ObjectValueError::DictSchemaError(11, "Pages", "Type")),
-        "Pages".valid(11, &d)
+        Err(ObjectValueError::DictSchemaError("Pages", "Type")),
+        "Pages".valid(&d)
     );
 
     d.set("Type", 11i32);
     assert_eq!(
-        Err(ObjectValueError::DictSchemaError(11, "Pages", "Type")),
-        "Pages".valid(11, &d)
+        Err(ObjectValueError::DictSchemaError("Pages", "Type")),
+        "Pages".valid(&d)
     );
 
     d.set("Type", "/foo");
     assert_eq!(
-        Err(ObjectValueError::DictSchemaUnExpectedType(11, "Pages")),
-        "Pages".valid(11, &d)
+        Err(ObjectValueError::DictSchemaUnExpectedType("Pages")),
+        "Pages".valid(&d)
     );
 
-    assert_eq!(Ok(()), "foo".valid(11, &d));
+    assert_eq!(Ok(()), "foo".valid(&d));
 }
 
 #[test]
@@ -125,25 +125,38 @@ fn str_slice_schema_type_validator() {
 
     let mut d = Dictionary::new();
     assert_eq!(
-        Err(ObjectValueError::DictSchemaError(11, "Pages", "Type")),
-        page_or_pages.valid(11, &d)
+        Err(ObjectValueError::DictSchemaError("Pages", "Type")),
+        page_or_pages.valid(&d)
     );
 
     d.set("Type", 11i32);
     assert_eq!(
-        Err(ObjectValueError::DictSchemaError(11, "Pages", "Type")),
-        page_or_pages.valid(11, &d)
+        Err(ObjectValueError::DictSchemaError("Pages", "Type")),
+        page_or_pages.valid(&d)
     );
 
     d.set("Type", "/foo");
     assert_eq!(
-        Err(ObjectValueError::DictSchemaUnExpectedType(11, "Pages")),
-        page_or_pages.valid(11, &d)
+        Err(ObjectValueError::DictSchemaUnExpectedType("Pages")),
+        page_or_pages.valid(&d)
     );
 
     d.set("Type", "/Pages");
-    assert_eq!(Ok(()), page_or_pages.valid(11, &d));
+    assert_eq!(Ok(()), page_or_pages.valid(&d));
 
     d.set("Type", "/Page");
-    assert_eq!(Ok(()), page_or_pages.valid(11, &d));
+    assert_eq!(Ok(()), page_or_pages.valid(&d));
+}
+
+#[test_case(None => Vec::<u32>::new())]
+#[test_case(Some(&[]) => Vec::<u32>::new())]
+#[test_case(Some(&[1, 2]) => vec![1, 2])]
+fn schema_ref_id_arr(ids: Option<&[u32]>) -> Vec<u32> {
+    let mut d = Dictionary::new();
+    if let Some(ids) = ids {
+        let ids: Array = ids.iter().map(|id| Object::new_ref(*id)).collect();
+        d.insert("ids".into(), ids.into());
+    }
+    let d = SchemaDict::new(&d, ()).unwrap();
+    d.ref_id_arr("ids").unwrap()
 }
