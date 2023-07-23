@@ -79,28 +79,27 @@ impl<'a> Dictionary<'a> {
 
 pub trait SchemaTypeValidator {
     fn schema_type(&self) -> &'static str;
-    fn check(&self, id: u32, d: &Dictionary) -> Result<bool, ObjectValueError>;
+    fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError>;
 
-    fn valid(&self, id: u32, d: &Dictionary) -> Result<(), ObjectValueError> {
-        self.check_result(id, self.check(id, d)?)
+    fn valid(&self, d: &Dictionary) -> Result<(), ObjectValueError> {
+        self.check_result(self.check(d)?)
     }
 
-    fn check_result(&self, id: u32, result: bool) -> Result<(), ObjectValueError> {
+    fn check_result(&self, result: bool) -> Result<(), ObjectValueError> {
         if result {
             Ok(())
         } else {
             Err(ObjectValueError::DictSchemaUnExpectedType(
-                id,
                 self.schema_type(),
             ))
         }
     }
 
-    fn get_type<'a>(&self, id: u32, d: &'a Dictionary) -> Result<&'a str, ObjectValueError> {
+    fn get_type<'a>(&self, d: &'a Dictionary) -> Result<&'a str, ObjectValueError> {
         let name = d
             .get_name("Type")
-            .map_err(|_| ObjectValueError::DictSchemaError(id, self.schema_type(), "Type"))?;
-        name.ok_or_else(|| ObjectValueError::DictSchemaError(id, self.schema_type(), "Type"))
+            .map_err(|_| ObjectValueError::DictSchemaError(self.schema_type(), "Type"))?;
+        name.ok_or_else(|| ObjectValueError::DictSchemaError(self.schema_type(), "Type"))
     }
 }
 
@@ -109,8 +108,8 @@ impl SchemaTypeValidator for &'static str {
         self
     }
 
-    fn check(&self, id: u32, d: &Dictionary) -> Result<bool, ObjectValueError> {
-        Ok(*self == self.get_type(id, d)?)
+    fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError> {
+        Ok(*self == self.get_type(d)?)
     }
 }
 
@@ -119,31 +118,24 @@ impl<const N: usize> SchemaTypeValidator for [&'static str; N] {
         self[0]
     }
 
-    fn check(&self, id: u32, d: &Dictionary) -> Result<bool, ObjectValueError> {
-        Ok(self.contains(&self.get_type(id, d)?))
+    fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError> {
+        Ok(self.contains(&self.get_type(d)?))
     }
 }
 
-pub struct SchemaDict<'a, 'b, T: SchemaTypeValidator> {
-    id: u32,
+pub struct SchemaDict<'a, 'b, T> {
     t: T,
     d: &'b Dictionary<'a>,
 }
 
 impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
-    pub fn id(&self) -> u32 {
-        self.id
-    }
-}
-
-impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
-    pub fn new(id: u32, d: &'b Dictionary<'a>, t: T) -> Result<Self, ObjectValueError> {
-        t.valid(id, d)?;
-        Ok(Self { id, t, d })
+    pub fn new(d: &'b Dictionary<'a>, t: T) -> Result<Self, ObjectValueError> {
+        t.valid(d)?;
+        Ok(Self { t, d })
     }
 
     pub fn type_name(&self) -> &str {
-        self.t.get_type(self.id, self.d).unwrap()
+        self.t.get_type(self.d).unwrap()
     }
 
     pub fn opt_name(&self, id: &'static str) -> Result<Option<&str>, ObjectValueError> {
@@ -155,22 +147,14 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
     pub fn required_name(&self, id: &'static str) -> Result<&str, ObjectValueError> {
         self.d
             .get(&id.into())
-            .ok_or(ObjectValueError::DictSchemaError(
-                self.id,
-                self.t.schema_type(),
-                id,
-            ))?
+            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_name()
     }
 
     pub fn required_int(&self, id: &'static str) -> Result<i32, ObjectValueError> {
         self.d
             .get(&id.into())
-            .ok_or(ObjectValueError::DictSchemaError(
-                self.id,
-                self.t.schema_type(),
-                id,
-            ))?
+            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_int()
     }
 
@@ -203,11 +187,8 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
     }
 
     pub fn required_rect(&self, id: &'static str) -> Result<Rectangle, ObjectValueError> {
-        self.opt_rect(id)?.ok_or(ObjectValueError::DictSchemaError(
-            self.id,
-            self.t.schema_type(),
-            id,
-        ))
+        self.opt_rect(id)?
+            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))
     }
 
     pub fn rect_or(
@@ -225,11 +206,7 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
     ) -> Result<Vec<V>, ObjectValueError> {
         self.d
             .get(&id.into())
-            .ok_or(ObjectValueError::DictSchemaError(
-                self.id,
-                self.t.schema_type(),
-                id,
-            ))?
+            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_arr()?
             .iter()
             .map(f)
@@ -274,11 +251,7 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
     pub fn required_ref(&self, id: &'static str) -> Result<u32, ObjectValueError> {
         self.d
             .get(&id.into())
-            .ok_or(ObjectValueError::DictSchemaError(
-                self.id,
-                self.t.schema_type(),
-                id,
-            ))?
+            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_ref()
             .map(|r| r.id().id())
     }
@@ -344,10 +317,10 @@ pub enum ObjectValueError {
     ObjectIDNotFound,
     #[error("Parse error: {0}")]
     ParseError(String),
-    #[error("Unexpected dict schema type, object id: {0}, schema: {1}")]
-    DictSchemaUnExpectedType(u32, &'static str),
-    #[error("Dict schema error, object id: {0}, schema: {1}, key: {2}")]
-    DictSchemaError(u32, &'static str, &'static str),
+    #[error("Unexpected dict schema type, schema: {0}")]
+    DictSchemaUnExpectedType(&'static str),
+    #[error("Dict schema error, schema: {0}, key: {1}")]
+    DictSchemaError(&'static str, &'static str),
     #[error("Graphics operation schema error")]
     GraphicsOperationSchemaError,
 }

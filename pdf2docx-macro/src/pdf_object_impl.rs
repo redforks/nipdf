@@ -121,13 +121,9 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         impl<'a, 'b> #struct_name<'a, 'b> {
-            fn new(id: u32, dict: &'b Dictionary<'a>) -> Result<Self, ObjectValueError> {
-                let d = SchemaDict::new(id, dict, #valid_arg)?;
+            fn new(dict: &'b Dictionary<'a>) -> Result<Self, ObjectValueError> {
+                let d = SchemaDict::new(dict, #valid_arg)?;
                 Ok(Self { d })
-            }
-
-            fn id(&self) -> u32 {
-                self.d.id()
             }
 
             #(#methods)*

@@ -1,4 +1,5 @@
 use nom::Finish;
+use pdf2docx_macro::pdf_object;
 use tiny_skia::Pixmap;
 
 use crate::{
@@ -47,13 +48,22 @@ impl<'a> From<&Array<'a>> for Rectangle {
     }
 }
 
+#[pdf_object("foo")]
+trait FooTrait {
+    #[typ("Name")]
+    fn foo(&self) -> &str;
+    fn parent_id(&self) -> Option<u32>;
+    fn media_box(&self) -> Option<Rectangle>;
+    fn kids(&self) -> Vec<u32>;
+}
+
 struct PageDict<'a, 'b> {
     d: SchemaDict<'a, 'b, [&'static str; 2]>,
 }
 
 impl<'a, 'b> PageDict<'a, 'b> {
     pub fn new(id: u32, dict: &'b Dictionary<'a>) -> Result<Self, ObjectValueError> {
-        let d = SchemaDict::new(id, dict, ["Pages", "Page"])?;
+        let d = SchemaDict::new(dict, ["Pages", "Page"])?;
         Ok(Self { d })
     }
 
@@ -168,7 +178,7 @@ impl Page {
             .chain(parents.iter())
             .map(|d| d.media_box())
             .find_map(|r| r)
-            .ok_or(ObjectValueError::DictSchemaError(id, "Page", "MediaBox"))?;
+            .ok_or(ObjectValueError::DictSchemaError("Page", "MediaBox"))?;
         let crop_box = once(d)
             .chain(parents.iter())
             .map(|d| d.crop_box())

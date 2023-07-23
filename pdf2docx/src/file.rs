@@ -193,7 +193,7 @@ pub struct Catalog {
 impl Catalog {
     fn parse(id: u32, resolver: &mut ObjectResolver) -> Result<Self, ObjectValueError> {
         let dict = resolver.resolve(id)?.as_dict()?;
-        let dict = SchemaDict::new(id, dict, "Catalog")?;
+        let dict = SchemaDict::new(dict, "Catalog")?;
 
         let root_page_id = dict.required_ref("Pages")?;
         let ver = dict.opt_name("Version")?.map(|s| s.to_owned());
