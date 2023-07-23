@@ -59,7 +59,7 @@ trait FooTrait {
 
 #[pdf_object(["Pages", "Page"])]
 trait PageDictTrait {
-    fn parent_id(&self) -> Option<u32>;
+    #[typ("Ref")]
     fn kids(&self) -> Vec<u32>;
     fn media_box(&self) -> Option<Rectangle>;
     fn crop_box(&self) -> Option<Rectangle>;

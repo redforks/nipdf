@@ -54,7 +54,11 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> &'static str {
     } else if rt == &(parse_quote!(Rectangle)) {
         "required_rect"
     } else if rt == &(parse_quote!(Vec<u32>)) {
-        "u32_arr"
+        if get_type().is_some_and(|s| s == "Ref") {
+            "ref_id_arr"
+        } else {
+            "u32_arr"
+        }
     } else if rt == &(parse_quote!(Option<&'b Dictionary<'a>>)) {
         "opt_dict"
     } else if rt == &(parse_quote!(&'b Dictionary<'a>)) {
