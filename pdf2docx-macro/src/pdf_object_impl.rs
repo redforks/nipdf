@@ -2,8 +2,8 @@ use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use quote::quote;
 use syn::{
-    parse_macro_input, parse_quote, Attribute, Expr, ExprLit, ItemTrait, Lit, LitStr, ReturnType,
-    TraitItem, TraitItemFn, Type, TypeReference,
+    parse_macro_input, parse_quote, token::Bracket, Attribute, Expr, ExprLit, ItemTrait, Lit,
+    LitStr, ReturnType, Token, TraitItem, TraitItemFn, Type, TypeReference,
 };
 
 fn snake_case_to_pascal(s: &str) -> String {
@@ -67,22 +67,46 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
     // 1. `&str` => `(&'static str, Expr::Lit(Lit::Str))`
     // 1. `[&str; N]` => `([&'static str; N], Expr::Array)`
     // 1. `Option<&str>` => `(Option<&'static str>, Expr::Option)`
-    let (valid_ty, valid_arg) = match attr_expr {
+    let (valid_ty, valid_arg): (Type, Expr) = match attr_expr {
         Expr::Lit(lit) => {
             let lit = lit.lit;
             match lit {
-                syn::Lit::Str(lit) => {
-                    let ty: Type = parse_quote! { &'static str };
-                    (
-                        ty,
-                        Expr::Lit(ExprLit {
-                            attrs: vec![],
-                            lit: lit.into(),
-                        }),
-                    )
-                }
+                syn::Lit::Str(lit) => (
+                    parse_quote! { &'static str },
+                    Expr::Lit(ExprLit {
+                        attrs: vec![],
+                        lit: lit.into(),
+                    }),
+                ),
                 _ => panic!("expect string literal"),
             }
+        }
+        Expr::Array(arr) => {
+            let mut ty: Vec<Type> = vec![];
+            let mut arg = vec![];
+            for expr in arr.elems {
+                match expr {
+                    Expr::Lit(lit) => {
+                        let lit = lit.lit;
+                        match lit {
+                            syn::Lit::Str(lit) => {
+                                ty.push(parse_quote! { &'static str });
+                                arg.push(Expr::Lit(ExprLit {
+                                    attrs: vec![],
+                                    lit: lit.into(),
+                                }));
+                            }
+                            _ => panic!("expect string literal"),
+                        }
+                    }
+                    _ => panic!("expect string literal"),
+                }
+            }
+            let len = ty.len();
+            (
+                parse_quote! { [&'static str; #len] },
+                Expr::Array(parse_quote!([ #(#arg),* ])),
+            )
         }
         _ => todo!(),
     };
