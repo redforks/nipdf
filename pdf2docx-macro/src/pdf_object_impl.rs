@@ -23,7 +23,6 @@ fn snake_case_to_pascal(s: &str) -> String {
 }
 
 fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> &'static str {
-    let str_type: Type = parse_quote! { &str };
     let get_type = || {
         attrs.iter().find_map(|attr| {
             if attr.path().is_ident("typ") {
@@ -34,12 +33,16 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> &'static str {
             }
         })
     };
-    if rt == &str_type {
+    if rt == &(parse_quote! { &str }) {
         if get_type().is_some_and(|s| s == "Name") {
             "required_name"
         } else {
             "required_str"
         }
+    } else if rt == &(parse_quote!(u32)) {
+        "required_u32"
+    } else if rt == &(parse_quote!(Option<u32>)) {
+        "opt_u32"
     } else {
         todo!()
     }

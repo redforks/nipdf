@@ -179,6 +179,18 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
             .map_or(Ok(None), |o| o.as_int().map(Some))
     }
 
+    pub fn opt_u32(&self, id: &'static str) -> Result<Option<u32>, ObjectValueError> {
+        self.opt_int(id).map(|i| i.map(|i| i as u32))
+    }
+
+    pub fn required_u32(&self, id: &'static str) -> Result<u32, ObjectValueError> {
+        self.required_int(id).map(|i| i as u32)
+    }
+
+    pub fn u32_or(&self, id: &'static str, default: u32) -> Result<u32, ObjectValueError> {
+        self.opt_u32(id).map(|i| i.unwrap_or(default))
+    }
+
     pub fn required_arr_map<V>(
         &self,
         id: &'static str,
