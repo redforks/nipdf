@@ -150,3 +150,10 @@ pub fn graphics_operation_parser(input: TokenStream) -> TokenStream {
     // println!("{}", tokens);
     tokens.into()
 }
+
+mod pdf_object_impl;
+
+#[proc_macro_attribute]
+pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
+    pdf_object_impl::pdf_object(attr, item)
+}
