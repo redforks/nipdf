@@ -253,6 +253,20 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
         })
     }
 
+    pub fn opt_dict(
+        &self,
+        id: &'static str,
+    ) -> Result<Option<&'b Dictionary<'a>>, ObjectValueError> {
+        self.d
+            .get(&id.into())
+            .map_or(Ok(None), |o| o.as_dict().map(Some))
+    }
+
+    pub fn required_dict(&self, id: &'static str) -> Result<&'b Dictionary<'a>, ObjectValueError> {
+        self.opt_dict(id)
+            .and_then(|o| o.ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id)))
+    }
+
     pub fn opt_rectangle(&self, id: &'static str) -> Result<Option<Rectangle>, ObjectValueError> {
         Ok(self.opt_arr(id)?.map(|arr| arr.into()))
     }
