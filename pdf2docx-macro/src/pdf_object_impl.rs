@@ -242,6 +242,11 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 Ok(Self { d })
             }
 
+            fn from(dict: &'b Dictionary<'a>) -> Result<Option<Self>, ObjectValueError> {
+                let d = SchemaDict::from(dict, #valid_arg)?;
+                Ok(d.map(|d| Self { d }))
+            }
+
             #(#methods)*
         }
     };

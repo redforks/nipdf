@@ -143,6 +143,14 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
         Ok(Self { t, d })
     }
 
+    pub fn from(d: &'b Dictionary<'a>, t: T) -> Result<Option<Self>, ObjectValueError> {
+        if t.check(d)? {
+            Ok(Some(Self { t, d }))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn type_name(&self) -> &str {
         self.t.get_type(self.d).unwrap()
     }
