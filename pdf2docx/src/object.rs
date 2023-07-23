@@ -1,5 +1,6 @@
 //! object mod contains data structure map to low level pdf objects
 use ahash::HashMap;
+use tiny_skia::Rect;
 
 use std::{
     borrow::{Borrow, Cow},
@@ -189,6 +190,26 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn u32_or(&self, id: &'static str, default: u32) -> Result<u32, ObjectValueError> {
         self.opt_u32(id).map(|i| i.unwrap_or(default))
+    }
+
+    pub fn opt_rect(&self, id: &'static str) -> Result<Option<Rectangle>, ObjectValueError> {
+        self.opt_arr(id).map(|arr| arr.map(|v| v.into()))
+    }
+
+    pub fn required_rect(&self, id: &'static str) -> Result<Rectangle, ObjectValueError> {
+        self.opt_rect(id)?.ok_or(ObjectValueError::DictSchemaError(
+            self.id,
+            self.t.schema_type(),
+            id,
+        ))
+    }
+
+    pub fn rect_or(
+        &self,
+        id: &'static str,
+        default: Rectangle,
+    ) -> Result<Rectangle, ObjectValueError> {
+        self.opt_rect(id).map(|r| r.unwrap_or(default))
     }
 
     pub fn required_arr_map<V>(

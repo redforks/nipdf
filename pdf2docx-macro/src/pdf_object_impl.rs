@@ -43,6 +43,10 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> &'static str {
         "required_u32"
     } else if rt == &(parse_quote!(Option<u32>)) {
         "opt_u32"
+    } else if rt == &(parse_quote!(Option<Rectangle>)) {
+        "opt_rect"
+    } else if rt == &(parse_quote!(Rectangle)) {
+        "required_rect"
     } else {
         todo!()
     }
