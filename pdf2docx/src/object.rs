@@ -1,6 +1,5 @@
 //! object mod contains data structure map to low level pdf objects
 use ahash::HashMap;
-use tiny_skia::Rect;
 
 use std::{
     borrow::{Borrow, Cow},
@@ -100,6 +99,16 @@ pub trait SchemaTypeValidator {
             .get_name("Type")
             .map_err(|_| ObjectValueError::DictSchemaError(self.schema_type(), "Type"))?;
         name.ok_or_else(|| ObjectValueError::DictSchemaError(self.schema_type(), "Type"))
+    }
+}
+
+impl SchemaTypeValidator for () {
+    fn schema_type(&self) -> &'static str {
+        "No Specific Type"
+    }
+
+    fn check(&self, _: &Dictionary) -> Result<bool, ObjectValueError> {
+        Ok(true)
     }
 }
 

@@ -2,8 +2,8 @@ use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use quote::quote;
 use syn::{
-    parse_macro_input, parse_quote, token::Bracket, Attribute, Expr, ExprLit, ItemTrait, Lit,
-    LitStr, ReturnType, Token, TraitItem, TraitItemFn, Type, TypeReference,
+    parse_macro_input, parse_quote, token::Bracket, Attribute, Expr, ExprLit, ExprTuple, ItemTrait,
+    Lit, LitStr, ReturnType, Token, TraitItem, TraitItemFn, Type, TypeReference,
 };
 
 fn snake_case_to_pascal(s: &str) -> String {
@@ -62,8 +62,9 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
     // Type is `SchemaDict` 3rd generic parameter,
     // Expr is `SchemaDict::new()` 3rd argument.
     //
-    // Attribute argument has three forms:
+    // Attribute argument has fowling forms:
     //
+    // 1. () => `((), ())`
     // 1. `&str` => `(&'static str, Expr::Lit(Lit::Str))`
     // 1. `[&str; N]` => `([&'static str; N], Expr::Array)`
     // 1. `Option<&str>` => `(Option<&'static str>, Expr::Option)`
@@ -81,6 +82,11 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 _ => panic!("expect string literal"),
             }
         }
+        Expr::Tuple(ExprTuple {
+            attrs: _,
+            paren_token: _,
+            elems,
+        }) if elems.is_empty() => (parse_quote!(()), parse_quote!(())),
         Expr::Array(arr) => {
             let mut ty: Vec<Type> = vec![];
             let mut arg = vec![];
