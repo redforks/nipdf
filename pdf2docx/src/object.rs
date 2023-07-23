@@ -196,6 +196,12 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
         self.opt_arr(id).map(|arr| arr.map(|v| v.into()))
     }
 
+    /// Return empty vec if not exist, error if not array
+    pub fn u32_arr(&self, id: &'static str) -> Result<Vec<u32>, ObjectValueError> {
+        self.opt_arr_map(id, |o| o.as_int().map(|i| i as u32))
+            .map(|o| o.unwrap_or_default())
+    }
+
     pub fn required_rect(&self, id: &'static str) -> Result<Rectangle, ObjectValueError> {
         self.opt_rect(id)?.ok_or(ObjectValueError::DictSchemaError(
             self.id,

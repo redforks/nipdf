@@ -47,6 +47,8 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> &'static str {
         "opt_rect"
     } else if rt == &(parse_quote!(Rectangle)) {
         "required_rect"
+    } else if rt == &(parse_quote!(Vec<u32>)) {
+        "u32_arr"
     } else {
         todo!()
     }
