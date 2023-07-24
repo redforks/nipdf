@@ -1,11 +1,12 @@
 use core::panic;
+use std::ops::Deref;
 
 use either::{Either, Left, Right};
 use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use quote::quote;
 use syn::{
-    parse_macro_input, parse_quote, Attribute, Expr, ExprLit, ExprTuple, ItemTrait, LitStr,
+    parse_macro_input, parse_quote, Attribute, Expr, ExprLit, ExprTuple, ItemTrait, Lit, LitStr,
     ReturnType, TraitItem, TraitItemFn, Type,
 };
 
@@ -133,6 +134,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
     // 1. `&str` => `(&'static str, Expr::Lit(Lit::Str))`
     // 1. `[&str; N]` => `([&'static str; N], Expr::Array)`
     // 1. `Option<&str>` => `(Option<&'static str>, Expr::Option)`
+    // 1. (Option<&str>, &str) => `(Option<&'static str>, Expr::Tuple)`
     let (valid_ty, valid_arg): (Type, Expr) = match attr_expr {
         Expr::Lit(lit) => {
             let lit = lit.lit;
@@ -147,11 +149,53 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 _ => panic!("expect string literal"),
             }
         }
+
         Expr::Tuple(ExprTuple {
             attrs: _,
             paren_token: _,
             elems,
         }) if elems.is_empty() => (parse_quote!(()), parse_quote!(())),
+
+        Expr::Tuple(ExprTuple {
+            attrs: _,
+            paren_token: _,
+            elems,
+        }) if elems.len() == 2 => {
+            let (t, st) = (&elems[0], &elems[1]);
+            match t {
+                Expr::Path(t) if t.path.is_ident("None") => (),
+                Expr::Call(c) => {
+                    let func = &c.func;
+                    match &func.deref() {
+                        Expr::Path(path) => {
+                            assert!(path.path.is_ident("Some"));
+                        }
+                        _ => panic!("expect path"),
+                    }
+                    assert_eq!(1, c.args.len());
+                    assert!(matches!(
+                        c.args[0],
+                        Expr::Lit(ExprLit {
+                            lit: Lit::Str(_),
+                            attrs: _
+                        })
+                    ));
+                }
+                _ => panic!("expect path"),
+            }
+            assert!(matches!(
+                st,
+                Expr::Lit(ExprLit {
+                    lit: Lit::Str(_),
+                    attrs: _
+                })
+            ));
+            (
+                parse_quote! { (Option<&'static str>, &'static str)},
+                parse_quote!( (#t, #st)),
+            )
+        }
+
         Expr::Array(arr) => {
             let mut ty: Vec<Type> = vec![];
             let mut arg = vec![];
@@ -178,6 +222,17 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 parse_quote! { [&'static str; #len] },
                 Expr::Array(parse_quote!([ #(#arg),* ])),
             )
+        }
+
+        Expr::Call(ref call) => {
+            let func = &call.func;
+            match &func.deref() {
+                Expr::Path(path) => {
+                    assert!(path.path.is_ident("Some"));
+                    (parse_quote! { Option<&'static str>}, attr_expr)
+                }
+                _ => panic!("expect path"),
+            }
         }
         _ => todo!(),
     };

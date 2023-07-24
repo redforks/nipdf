@@ -148,6 +148,30 @@ fn str_slice_schema_type_validator() {
     assert_eq!(Ok(()), page_or_pages.valid(&d));
 }
 
+#[test]
+fn sub_type_validator() {
+    let v = (Some("foo"), "bar");
+
+    let mut d = Dictionary::new();
+    assert!(!v.check(&d).unwrap());
+
+    d.set("Subtype", Object::from("/blah"));
+    assert!(!v.check(&d).unwrap());
+
+    d.set("Subtype", Object::from("/bar"));
+    assert!(v.check(&d).unwrap());
+
+    d.set("Type", Object::from("/X"));
+    assert!(!v.check(&d).unwrap());
+
+    d.set("Type", Object::from("/foo"));
+    assert!(v.check(&d).unwrap());
+
+    let v = (None, "bar");
+    d.set("Type", Object::from(1i32));
+    assert!(v.check(&d).unwrap());
+}
+
 #[test_case(None => Vec::<u32>::new())]
 #[test_case(Some(&[]) => Vec::<u32>::new())]
 #[test_case(Some(&[1, 2]) => vec![1, 2])]

@@ -100,6 +100,14 @@ pub trait SchemaTypeValidator {
             .map_err(|_| ObjectValueError::DictSchemaError(self.schema_type(), "Type"))?;
         name.ok_or_else(|| ObjectValueError::DictSchemaError(self.schema_type(), "Type"))
     }
+
+    fn get_type_opt<'a>(&self, d: &'a Dictionary) -> Result<Option<&'a str>, ObjectValueError> {
+        d.get(&"Type".into()).map_or(Ok(None), |o| {
+            o.as_name()
+                .map(Some)
+                .map_err(|_| ObjectValueError::DictSchemaError(self.schema_type(), "Type"))
+        })
+    }
 }
 
 impl SchemaTypeValidator for () {
@@ -119,6 +127,41 @@ impl SchemaTypeValidator for &'static str {
 
     fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError> {
         Ok(*self == self.get_type(d)?)
+    }
+}
+
+impl SchemaTypeValidator for Option<&'static str> {
+    fn schema_type(&self) -> &'static str {
+        self.expect("Should not happen")
+    }
+
+    fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError> {
+        self.get_type_opt(d)?
+            .map_or(Ok(true), |t| Ok(t == self.schema_type()))
+    }
+}
+
+/// Check Type/Subtype fields. If first element is None, check Subtype only.
+impl SchemaTypeValidator for (Option<&'static str>, &'static str) {
+    fn schema_type(&self) -> &'static str {
+        self.1
+    }
+
+    fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError> {
+        fn get_sub_type<'a>(
+            this: &(Option<&'static str>, &'static str),
+            d: &'a Dictionary,
+        ) -> Result<Option<&'a str>, ObjectValueError> {
+            d.get_name("Subtype")
+                .map_err(|_| ObjectValueError::DictSchemaError(this.schema_type(), "Subtype"))
+        }
+
+        if let Some(t) = self.0 {
+            Ok(self.get_type_opt(d)?.map_or(true, |v| v == t)
+                && Some(self.1) == get_sub_type(self, d)?)
+        } else {
+            Ok(Some(self.1) == get_sub_type(self, d)?)
+        }
     }
 }
 
