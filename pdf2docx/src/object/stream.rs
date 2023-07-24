@@ -12,7 +12,7 @@ use once_cell::unsync::Lazy;
 
 use crate::ccitt::Flags;
 
-use super::{Dictionary, Name, Object, ObjectValueError};
+use super::{Dictionary, Name, Object, ObjectValueError, SchemaDict, SchemaTypeValidator};
 
 const KEY_FILTER: &[u8] = b"Filter";
 const KEY_FILTER_PARAMS: &[u8] = b"DecodeParms";
@@ -133,53 +133,39 @@ enum ColorSpace {
     CalGray,
 }
 
-struct ImageDict<'a: 'b, 'b>(&'b Dictionary<'a>);
+struct ImageDict<'a, 'b> {
+    d: SchemaDict<'a, 'b, (Option<&'static str>, &'static str)>,
+}
 
 impl<'a: 'b, 'b> ImageDict<'a, 'b> {
     /// Return `None` if dict is not image.
     pub fn from_dict(dict: &'b Dictionary<'a>) -> Option<Self> {
-        if !dict
-            .get_name("Type")
-            .ok()
-            .flatten()
-            .map_or(true, |ty| ty == "XObject")
-        {
-            return None;
-        }
-
-        if !dict
-            .get_name("Subtype")
-            .ok()
-            .flatten()
-            .is_some_and(|ty| ty == "Image")
-        {
-            return None;
-        };
-
         if dict.get_bool("ImageMask", false).ok().unwrap_or(true) {
             return None;
         }
 
-        Some(Self(dict))
+        SchemaDict::from(dict, (Some("XObject"), "Image"))
+            .unwrap()
+            .map(|d| Self { d })
     }
 
     fn width(&self) -> u32 {
-        self.0.get_int("Width", -1).unwrap() as u32
+        self.d.required_u32("Width").unwrap()
     }
 
     fn height(&self) -> u32 {
-        self.0.get_int("Height", -1).unwrap() as u32
+        self.d.required_u32("Height").unwrap()
     }
 
     fn color_space(&self) -> Option<ColorSpace> {
-        self.0
-            .get_name("ColorSpace")
+        self.d
+            .opt_name("ColorSpace")
             .unwrap()
             .map(|s| s.parse().unwrap())
     }
 
     fn bits_per_component(&self) -> u8 {
-        self.0.get_int("BitsPerComponent", -1).unwrap() as u8
+        self.d.required_u8("BitsPerComponent").unwrap()
     }
 }
 

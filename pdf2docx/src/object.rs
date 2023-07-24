@@ -236,6 +236,18 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
         self.opt_u32(id).map(|i| i.unwrap_or(default))
     }
 
+    pub fn opt_u8(&self, id: &'static str) -> Result<Option<u8>, ObjectValueError> {
+        self.opt_int(id).map(|i| i.map(|i| i as u8))
+    }
+
+    pub fn required_u8(&self, id: &'static str) -> Result<u8, ObjectValueError> {
+        self.required_int(id).map(|i| i as u8)
+    }
+
+    pub fn u8_or(&self, id: &'static str, default: u8) -> Result<u8, ObjectValueError> {
+        self.opt_u8(id).map(|i| i.unwrap_or(default))
+    }
+
     pub fn opt_rect(&self, id: &'static str) -> Result<Option<Rectangle>, ObjectValueError> {
         self.opt_arr(id).map(|arr| arr.map(|v| v.into()))
     }
