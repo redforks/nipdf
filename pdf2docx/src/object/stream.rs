@@ -139,7 +139,7 @@ struct ImageDict<'a, 'b> {
 
 impl<'a: 'b, 'b> ImageDict<'a, 'b> {
     /// Return `None` if dict is not image.
-    pub fn from_dict(dict: &'b Dictionary<'a>) -> Option<Self> {
+    pub fn from(dict: &'b Dictionary<'a>) -> Option<Self> {
         if dict.get_bool("ImageMask", false).ok().unwrap_or(true) {
             return None;
         }
@@ -340,7 +340,7 @@ impl<'a> Stream<'a> {
             decoded = filter(decoded.into_bytes()?, filter_name, params, image_to_raw)?;
         }
 
-        let img_dict = ImageDict::from_dict(&self.0);
+        let img_dict = ImageDict::from(&self.0);
         let Some(img_dict) = img_dict else {
             return Ok(decoded);
         };
