@@ -164,8 +164,8 @@ impl<'a: 'b, 'b> ImageDict<'a, 'b> {
             .map(|s| s.parse().unwrap())
     }
 
-    fn bits_per_component(&self) -> u8 {
-        self.d.required_u8("BitsPerComponent").unwrap()
+    fn bits_per_component(&self) -> Option<u8> {
+        self.d.opt_u8("BitsPerComponent").unwrap()
     }
 }
 
@@ -350,7 +350,10 @@ impl<'a> Stream<'a> {
         };
 
         if image_to_raw {
-            match (img_dict.color_space(), img_dict.bits_per_component()) {
+            match (
+                img_dict.color_space(),
+                img_dict.bits_per_component().unwrap(),
+            ) {
                 (Some(ColorSpace::DeviceGray), 1) => {
                     use png::{BitDepth, ColorType, Encoder};
                     let mut bytes = Vec::new();
@@ -408,11 +411,14 @@ impl<'a> Stream<'a> {
                 _ => todo!(
                     "unsupported interoperate decoded stream data as raw image: {:?} {}",
                     img_dict.color_space(),
-                    img_dict.bits_per_component()
+                    img_dict.bits_per_component().unwrap()
                 ),
             }
         } else {
-            match (img_dict.color_space(), img_dict.bits_per_component()) {
+            match (
+                img_dict.color_space(),
+                img_dict.bits_per_component().unwrap(),
+            ) {
                 (Some(ColorSpace::DeviceGray), 1) => {
                     use bitstream_io::read::BitRead;
 
@@ -451,7 +457,7 @@ impl<'a> Stream<'a> {
                 _ => todo!(
                     "unsupported interoperate decoded stream data as image: {:?} {}",
                     img_dict.color_space(),
-                    img_dict.bits_per_component()
+                    img_dict.bits_per_component().unwrap()
                 ),
             }
         }
