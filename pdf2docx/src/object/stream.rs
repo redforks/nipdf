@@ -9,10 +9,11 @@ use bitstream_io::{BigEndian, BitReader};
 use image::{DynamicImage, GrayImage, Luma, RgbImage};
 use log::error;
 use once_cell::unsync::Lazy;
+use pdf2docx_macro::pdf_object;
 
 use crate::ccitt::Flags;
 
-use super::{Dictionary, Name, Object, ObjectValueError, SchemaDict, SchemaTypeValidator};
+use super::{Dictionary, Name, Object, ObjectValueError, SchemaDict};
 
 const KEY_FILTER: &[u8] = b"Filter";
 const KEY_FILTER_PARAMS: &[u8] = b"DecodeParms";
@@ -133,40 +134,13 @@ enum ColorSpace {
     CalGray,
 }
 
-struct ImageDict<'a, 'b> {
-    d: SchemaDict<'a, 'b, (Option<&'static str>, &'static str)>,
-}
-
-impl<'a: 'b, 'b> ImageDict<'a, 'b> {
-    /// Return `None` if dict is not image.
-    pub fn from(dict: &'b Dictionary<'a>) -> Option<Self> {
-        if dict.get_bool("ImageMask", false).ok().unwrap_or(true) {
-            return None;
-        }
-
-        SchemaDict::from(dict, (Some("XObject"), "Image"))
-            .unwrap()
-            .map(|d| Self { d })
-    }
-
-    fn width(&self) -> Option<u32> {
-        self.d.opt_u32("Width").unwrap()
-    }
-
-    fn height(&self) -> Option<u32> {
-        self.d.opt_u32("Height").unwrap()
-    }
-
-    fn color_space(&self) -> Option<ColorSpace> {
-        self.d
-            .opt_name("ColorSpace")
-            .unwrap()
-            .map(|s| s.parse().unwrap())
-    }
-
-    fn bits_per_component(&self) -> Option<u8> {
-        self.d.opt_u8("BitsPerComponent").unwrap()
-    }
+#[pdf_object((Some("XObject"), "Image"))]
+trait ImageDictTrait {
+    fn width(&self) -> Option<u32>;
+    fn height(&self) -> Option<u32>;
+    fn bits_per_component(&self) -> Option<u8>;
+    #[from_name_str]
+    fn color_space(&self) -> Option<ColorSpace>;
 }
 
 struct CCITTFaxDecodeParams<'a: 'b, 'b>(&'b Dictionary<'a>);
@@ -340,7 +314,7 @@ impl<'a> Stream<'a> {
             decoded = filter(decoded.into_bytes()?, filter_name, params, image_to_raw)?;
         }
 
-        let img_dict = ImageDict::from(&self.0);
+        let img_dict = ImageDict::from(&self.0)?;
         let Some(img_dict) = img_dict else {
             return Ok(decoded);
         };
