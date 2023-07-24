@@ -68,6 +68,45 @@ fn nested<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &
     }
 }
 
+/// Return left means Option<T>, right means T, Return None means `from_name_str` attr not defined.
+fn from_name_str<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
+    if attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("from_name_str"))
+    {
+        // check `rt` is Option<T> or T
+        Some(if let Type::Path(tp) = rt {
+            if let Some(seg) = tp.path.segments.last() {
+                if seg.ident == "Option" {
+                    Left(
+                        if let syn::PathArguments::AngleBracketed(args) = &seg.arguments {
+                            if args.args.len() == 1 {
+                                if let syn::GenericArgument::Type(ty) = &args.args[0] {
+                                    ty
+                                } else {
+                                    panic!("expect type argument")
+                                }
+                            } else {
+                                rt
+                            }
+                        } else {
+                            panic!("expect angle bracketed arguments")
+                        },
+                    )
+                } else {
+                    Right(rt)
+                }
+            } else {
+                panic!("expect path segment")
+            }
+        } else {
+            Right(rt)
+        })
+    } else {
+        None
+    }
+}
+
 fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
     let get_type = || {
         attrs.iter().find_map(|attr| {
@@ -274,6 +313,26 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                             methods.push(quote! {
                                 fn #name(&self) -> #ty {
                                     #type_name::new(self.d.required_dict(#key).unwrap()).unwrap()
+                                }
+                            });
+                        }
+                    }
+                } else if let Some(from_name_str_type) = from_name_str(rt, attrs) {
+                    // let type_name = remove_generic(&from_name_str_type);
+                    match from_name_str_type {
+                        Left(ty) => {
+                            methods.push(quote! {
+                                fn #name(&self) -> Option<#ty> {
+                                    self.d.opt_name(#key).unwrap().map(|s| <#ty as std::str::FromStr>::from_str(s).unwrap())
+                                }
+                            });
+                        }
+                        Right(ty) => {
+                            methods.push(quote! {
+                                fn #name(&self) -> #ty {
+                                    <#ty as std::str::FromStr>::from_str(
+                                        self.d.required_name(#key).unwrap()
+                                    ).unwrap()
                                 }
                             });
                         }
