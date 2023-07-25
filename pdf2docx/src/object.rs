@@ -252,6 +252,33 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
         self.opt_arr(id).map(|arr| arr.map(|v| v.into()))
     }
 
+    pub fn opt_f32(&self, id: &'static str) -> Result<Option<f32>, ObjectValueError> {
+        self.d
+            .get(&id.into())
+            .map_or(Ok(None), |o| o.as_number().map(Some))
+    }
+
+    pub fn required_f32(&self, id: &'static str) -> Result<f32, ObjectValueError> {
+        self.d
+            .get(&id.into())
+            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
+            .as_number()
+    }
+
+    pub fn f32_or(&self, id: &'static str, default: f32) -> Result<f32, ObjectValueError> {
+        self.opt_f32(id).map(|i| i.unwrap_or(default))
+    }
+
+    pub fn opt_object(&self, id: &'static str) -> Result<Option<&'b Object<'a>>, ObjectValueError> {
+        Ok(self.d.get(&id.into()))
+    }
+
+    pub fn required_object(&self, id: &'static str) -> Result<&'b Object<'a>, ObjectValueError> {
+        self.d
+            .get(&id.into())
+            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))
+    }
+
     /// Return empty vec if not exist, error if not array
     pub fn u32_arr(&self, id: &'static str) -> Result<Vec<u32>, ObjectValueError> {
         self.opt_arr_map(id, |o| o.as_int().map(|i| i as u32))
