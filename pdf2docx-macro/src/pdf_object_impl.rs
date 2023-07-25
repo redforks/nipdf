@@ -184,6 +184,10 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         Some("opt_rect")
     } else if rt == &(parse_quote!(Rectangle)) {
         Some("required_rect")
+    } else if rt == &(parse_quote!(Option<bool>)) {
+        Some("opt_bool")
+    } else if rt == &(parse_quote!(bool)) {
+        Some("required_bool")
     } else if rt == &(parse_quote!(Vec<u32>)) {
         if get_type().is_some_and(|s| s == "Ref") {
             Some("ref_id_arr")

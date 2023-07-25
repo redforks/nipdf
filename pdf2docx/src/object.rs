@@ -224,6 +224,23 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
             .map_or(Ok(None), |o| o.as_int().map(Some))
     }
 
+    pub fn opt_bool(&self, id: &'static str) -> Result<Option<bool>, ObjectValueError> {
+        self.d
+            .get(&id.into())
+            .map_or(Ok(None), |o| o.as_bool().map(Some))
+    }
+
+    pub fn required_bool(&self, id: &'static str) -> Result<bool, ObjectValueError> {
+        self.d
+            .get(&id.into())
+            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
+            .as_bool()
+    }
+
+    pub fn bool_or(&self, id: &'static str, default: bool) -> Result<bool, ObjectValueError> {
+        self.opt_bool(id).map(|b| b.unwrap_or(default))
+    }
+
     pub fn opt_u32(&self, id: &'static str) -> Result<Option<u32>, ObjectValueError> {
         self.opt_int(id).map(|i| i.map(|i| i as u32))
     }
