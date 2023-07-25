@@ -291,16 +291,17 @@ pub enum Operation<'a> {
     EndCompatibilitySection,
 }
 
-trait ConvertFromObject<'a, 'b>
+pub(crate) trait ConvertFromObject<'a, 'b>
 where
     Self: Sized,
 {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError>;
 }
 
-impl<'a, 'b, T: ConvertFromObject<'a, 'b>> ConvertFromObject<'a, 'b> for Box<T> {
+impl<'a, 'b, T: for<'c> TryFrom<&'c Object<'a>>> ConvertFromObject<'a, 'b> for T {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
-        Ok(Box::new(T::convert_from_object(objects)?))
+        let o = objects.pop().unwrap();
+        T::try_from(&o).map_err(|_| ObjectValueError::GraphicsOperationSchemaError)
     }
 }
 
