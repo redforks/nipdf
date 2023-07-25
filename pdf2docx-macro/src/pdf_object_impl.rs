@@ -44,9 +44,12 @@ fn snake_case_to_pascal(s: &str) -> String {
     result
 }
 
-// Return left means Option<T>, right means T, Return None means not nested
-fn nested<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
-    if attrs.iter().any(|attr| attr.path().is_ident("nested")) {
+fn has_attr<'a>(
+    attr_name: &str,
+    rt: &'a Type,
+    attrs: &'a [Attribute],
+) -> Option<Either<&'a Type, &'a Type>> {
+    if attrs.iter().any(|attr| attr.path().is_ident(attr_name)) {
         // check `rt` is Option<T> or T
         Some(if let Type::Path(tp) = rt {
             if let Some(seg) = tp.path.segments.last() {
@@ -78,81 +81,21 @@ fn nested<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &
     } else {
         None
     }
+}
+
+// Return left means Option<T>, right means T, Return None means not nested
+fn nested<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
+    has_attr("nested", rt, attrs)
 }
 
 /// Return left means Option<T>, right means T, Return None means `from_name_str` attr not defined.
 fn from_name_str<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
-    if attrs
-        .iter()
-        .any(|attr| attr.path().is_ident("from_name_str"))
-    {
-        // check `rt` is Option<T> or T
-        Some(if let Type::Path(tp) = rt {
-            if let Some(seg) = tp.path.segments.last() {
-                if seg.ident == "Option" {
-                    Left(
-                        if let syn::PathArguments::AngleBracketed(args) = &seg.arguments {
-                            if args.args.len() == 1 {
-                                if let syn::GenericArgument::Type(ty) = &args.args[0] {
-                                    ty
-                                } else {
-                                    panic!("expect type argument")
-                                }
-                            } else {
-                                rt
-                            }
-                        } else {
-                            panic!("expect angle bracketed arguments")
-                        },
-                    )
-                } else {
-                    Right(rt)
-                }
-            } else {
-                panic!("expect path segment")
-            }
-        } else {
-            Right(rt)
-        })
-    } else {
-        None
-    }
+    has_attr("from_name_str", rt, attrs)
 }
 
 /// Return left means Option<T>, right means T, Return None means `try_from` attr not defined.
 fn try_from<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
-    if attrs.iter().any(|attr| attr.path().is_ident("try_from")) {
-        // check `rt` is Option<T> or T
-        Some(if let Type::Path(tp) = rt {
-            if let Some(seg) = tp.path.segments.last() {
-                if seg.ident == "Option" {
-                    Left(
-                        if let syn::PathArguments::AngleBracketed(args) = &seg.arguments {
-                            if args.args.len() == 1 {
-                                if let syn::GenericArgument::Type(ty) = &args.args[0] {
-                                    ty
-                                } else {
-                                    panic!("expect type argument")
-                                }
-                            } else {
-                                rt
-                            }
-                        } else {
-                            panic!("expect angle bracketed arguments")
-                        },
-                    )
-                } else {
-                    Right(rt)
-                }
-            } else {
-                panic!("expect path segment")
-            }
-        } else {
-            Right(rt)
-        })
-    } else {
-        None
-    }
+    has_attr("try_from", rt, attrs)
 }
 
 fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
