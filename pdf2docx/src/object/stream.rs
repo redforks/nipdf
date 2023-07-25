@@ -136,8 +136,8 @@ enum ColorSpace {
 
 #[pdf_object((Some("XObject"), "Image"))]
 trait ImageDictTrait {
-    fn width(&self) -> Option<u32>;
-    fn height(&self) -> Option<u32>;
+    fn width(&self) -> u32;
+    fn height(&self) -> u32;
     fn bits_per_component(&self) -> Option<u8>;
     #[from_name_str]
     fn color_space(&self) -> Option<ColorSpace>;
@@ -331,11 +331,7 @@ impl<'a> Stream<'a> {
                 (Some(ColorSpace::DeviceGray), 1) => {
                     use png::{BitDepth, ColorType, Encoder};
                     let mut bytes = Vec::new();
-                    let mut encoder = Encoder::new(
-                        &mut bytes,
-                        img_dict.width().unwrap(),
-                        img_dict.height().unwrap(),
-                    );
+                    let mut encoder = Encoder::new(&mut bytes, img_dict.width(), img_dict.height());
                     encoder.set_color(ColorType::Grayscale);
                     encoder.set_depth(BitDepth::One);
                     let mut writer = encoder.write_header().unwrap();
@@ -349,11 +345,7 @@ impl<'a> Stream<'a> {
                 (Some(ColorSpace::DeviceGray), 8) => {
                     use png::{BitDepth, ColorType, Encoder};
                     let mut bytes = Vec::new();
-                    let mut encoder = Encoder::new(
-                        &mut bytes,
-                        img_dict.width().unwrap(),
-                        img_dict.height().unwrap(),
-                    );
+                    let mut encoder = Encoder::new(&mut bytes, img_dict.width(), img_dict.height());
                     encoder.set_color(ColorType::Grayscale);
                     encoder.set_depth(BitDepth::Eight);
                     let mut writer = encoder.write_header().unwrap();
@@ -367,11 +359,7 @@ impl<'a> Stream<'a> {
                 (Some(ColorSpace::DeviceRGB), 8) => {
                     use png::{BitDepth, ColorType, Encoder};
                     let mut bytes = Vec::new();
-                    let mut encoder = Encoder::new(
-                        &mut bytes,
-                        img_dict.width().unwrap(),
-                        img_dict.height().unwrap(),
-                    );
+                    let mut encoder = Encoder::new(&mut bytes, img_dict.width(), img_dict.height());
                     encoder.set_color(ColorType::Rgb);
                     encoder.set_depth(BitDepth::Eight);
                     let mut writer = encoder.write_header().unwrap();
@@ -396,11 +384,10 @@ impl<'a> Stream<'a> {
                 (Some(ColorSpace::DeviceGray), 1) => {
                     use bitstream_io::read::BitRead;
 
-                    let mut img =
-                        GrayImage::new(img_dict.width().unwrap(), img_dict.height().unwrap());
+                    let mut img = GrayImage::new(img_dict.width(), img_dict.height());
                     let mut r = BitReader::<_, BigEndian>::new(data.borrow() as &[u8]);
-                    for y in 0..img_dict.height().unwrap() {
-                        for x in 0..img_dict.width().unwrap() {
+                    for y in 0..img_dict.height() {
+                        for x in 0..img_dict.width() {
                             img.put_pixel(
                                 x,
                                 y,
@@ -411,21 +398,15 @@ impl<'a> Stream<'a> {
                     Ok(FilterDecodedData::Image(DynamicImage::ImageLuma8(img)))
                 }
                 (Some(ColorSpace::DeviceGray), 8) => {
-                    let img = GrayImage::from_raw(
-                        img_dict.width().unwrap(),
-                        img_dict.height().unwrap(),
-                        data.into_owned(),
-                    )
-                    .unwrap();
+                    let img =
+                        GrayImage::from_raw(img_dict.width(), img_dict.height(), data.into_owned())
+                            .unwrap();
                     Ok(FilterDecodedData::Image(DynamicImage::ImageLuma8(img)))
                 }
                 (Some(ColorSpace::DeviceRGB), 8) => {
-                    let img = RgbImage::from_raw(
-                        img_dict.width().unwrap(),
-                        img_dict.height().unwrap(),
-                        data.into_owned(),
-                    )
-                    .unwrap();
+                    let img =
+                        RgbImage::from_raw(img_dict.width(), img_dict.height(), data.into_owned())
+                            .unwrap();
                     Ok(FilterDecodedData::Image(DynamicImage::ImageRgb8(img)))
                 }
                 _ => todo!(
