@@ -3,7 +3,7 @@ use pdf2docx_macro::pdf_object;
 use tiny_skia::Pixmap;
 
 use crate::{
-    graphics::{parse_operations, Operation},
+    graphics::{parse_operations, LineCapStyle, LineJoinStyle, Operation, RenderingIntent},
     object::{Array, Dictionary, FilterDecodedData, ObjectValueError, SchemaDict},
 };
 
@@ -48,9 +48,55 @@ impl<'a> From<&Array<'a>> for Rectangle {
     }
 }
 
+#[pdf_object(Some("ExtGState"))]
+trait GraphicsStateParameterDictTrait {
+    #[key("LW")]
+    fn line_width(&self) -> Option<f32>;
+
+    #[key("LC")]
+    #[try_from]
+    fn line_cap(&self) -> Option<LineCapStyle>;
+
+    #[key("LJ")]
+    #[try_from]
+    fn line_join(&self) -> Option<LineJoinStyle>;
+
+    #[key("ML")]
+    fn miter_limit(&self) -> Option<f32>;
+
+    #[key("RI")]
+    #[try_from]
+    fn rendering_intent(&self) -> Option<RenderingIntent>;
+
+    #[key("SA")]
+    fn stroke_adjustment(&self) -> Option<bool>;
+
+    #[key("CA")]
+    fn stroke_alpha(&self) -> Option<f32>;
+    #[key("ca")]
+    fn fill_alpha(&self) -> Option<f32>;
+    #[key("AIS")]
+    fn alpha_source_flag(&self) -> Option<bool>;
+    #[key("TK")]
+    fn text_knockout_flag(&self) -> Option<bool>;
+}
+
+impl<'a, 'b> GraphicsStateParameterDict<'a, 'b> {
+    fn dash_pattern(&self) -> Option<(Vec<f32>, f32)> {
+        self.d.opt_arr("D").unwrap().map(|arr| {
+            let mut iter = arr.iter();
+            let dash_array = iter.next().unwrap().as_arr().unwrap();
+            let dash_phase = iter.next().unwrap().as_number().unwrap();
+            let dash_array = dash_array.iter().map(|o| o.as_number().unwrap()).collect();
+            (dash_array, dash_phase)
+        })
+    }
+}
+
 #[pdf_object(())]
 trait ResourceDictTrait {
-    fn ext_g_state(&self) -> Option<&'b Dictionary<'a>>;
+    #[nested]
+    fn ext_g_state() -> Option<GraphicsStateParameterDict<'a, 'b>>;
     fn color_space(&self) -> Option<&'b Dictionary<'a>>;
     fn pattern(&self) -> Option<&'b Dictionary<'a>>;
     fn shading(&self) -> Option<&'b Dictionary<'a>>;

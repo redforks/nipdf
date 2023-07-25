@@ -382,6 +382,6 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             #(#methods)*
         }
     };
-    println!("{}", tokens);
+    // println!("{}", tokens);
     tokens.into()
 }
