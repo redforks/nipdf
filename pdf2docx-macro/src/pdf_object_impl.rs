@@ -10,6 +10,18 @@ use syn::{
     ReturnType, TraitItem, TraitItemFn, Type,
 };
 
+/// If `#[key("key")]` attribute defined, return key value
+fn key_attr(attrs: &[Attribute]) -> Option<String> {
+    attrs.iter().find_map(|attr| {
+        if attr.path().is_ident("key") {
+            let lit: LitStr = attr.parse_args().expect("expect string literal");
+            Some(lit.value())
+        } else {
+            None
+        }
+    })
+}
+
 fn snake_case_to_pascal(s: &str) -> String {
     let s = s.to_string();
     let mut chars = s.chars();
@@ -128,6 +140,8 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         Some("required_u32")
     } else if rt == &(parse_quote!(Option<u32>)) {
         Some("opt_u32")
+    } else if rt == &(parse_quote!(Option<f32>)) {
+        Some("opt_f32")
     } else if rt == &(parse_quote!(Option<u8>)) {
         Some("opt_u8")
     } else if rt == &(parse_quote!(Option<Rectangle>)) {
@@ -293,7 +307,8 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     ReturnType::Default => panic!("function must have return type"),
                     ReturnType::Type(_, ty) => ty,
                 };
-                let key = snake_case_to_pascal(&name.to_string());
+                let key =
+                    key_attr(attrs).unwrap_or_else(|| snake_case_to_pascal(&name.to_string()));
                 let method = schema_method_name(rt, &attrs[..]).map(|m| Ident::new(m, name.span()));
                 if let Some(method) = method {
                     methods.push(quote! {
