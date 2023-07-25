@@ -10,7 +10,7 @@ use crate::{
     object::{Dictionary, Name, Object, ObjectValueError, TextStringOrNumber},
     parser::{parse_object, ws_prefixed, ws_terminated, ParseError, ParseResult},
 };
-use pdf2docx_macro::{ConvertFromIntObject, ConvertFromNameObject, OperationParser};
+use pdf2docx_macro::{ConvertFromNameObject, OperationParser, TryFromIntObject};
 
 #[derive(Debug, Clone, Copy, PartialEq, Educe)]
 #[educe(Default)]
@@ -49,14 +49,14 @@ impl Point {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, ConvertFromIntObject)]
+#[derive(Debug, Clone, Copy, PartialEq, TryFromIntObject)]
 pub enum LineCapStyle {
     Butt = 0,
     Round = 1,
     Square = 2,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, ConvertFromIntObject)]
+#[derive(Debug, Clone, Copy, PartialEq, TryFromIntObject)]
 pub enum LineJoinStyle {
     Miter = 0,
     Round = 1,
@@ -71,7 +71,7 @@ pub enum RenderingIntent {
     Perceptual,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, ConvertFromIntObject)]
+#[derive(Debug, Clone, Copy, PartialEq, TryFromIntObject)]
 pub enum SetTextRenderingMode {
     Fill = 0,
     Stroke = 1,

@@ -34,8 +34,9 @@ pub fn convert_from_name_object(input: TokenStream) -> TokenStream {
     tokens.into()
 }
 
-#[proc_macro_derive(ConvertFromIntObject)]
-pub fn convert_from_int_object(input: TokenStream) -> TokenStream {
+/// impl TryFrom trait for enum that convert Object::Int to enum variant
+#[proc_macro_derive(TryFromIntObject)]
+pub fn try_from_int_object(input: TokenStream) -> TokenStream {
     let enum_t = parse_macro_input!(input as ItemEnum);
     let t = enum_t.ident;
     let arms = enum_t.variants.iter().map(|branch| -> proc_macro2::TokenStream {
@@ -47,9 +48,10 @@ pub fn convert_from_int_object(input: TokenStream) -> TokenStream {
         parse_quote!( #digit=> Ok(#t::#b))
     });
     let tokens = quote! {
-        impl<'a, 'b> ConvertFromObject<'a, 'b> for #t {
-            fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
-                let n = objects.pop().unwrap().as_int()?;
+        impl<'a, 'b> TryFrom<&'b Object<'a>> for #t {
+            type Error = ObjectValueError;
+            fn try_from(object: &'b Object<'a>) -> Result<Self, Self::Error> {
+                let n = object.as_int()?;
                 match n {
                     #( #arms, )*
                     _ => Err(ObjectValueError::GraphicsOperationSchemaError),
@@ -57,6 +59,7 @@ pub fn convert_from_int_object(input: TokenStream) -> TokenStream {
             }
         }
     };
+    // println!("{}", tokens);
     tokens.into()
 }
 
