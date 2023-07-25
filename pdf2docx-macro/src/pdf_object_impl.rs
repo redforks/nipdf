@@ -119,6 +119,42 @@ fn from_name_str<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a 
     }
 }
 
+/// Return left means Option<T>, right means T, Return None means `try_from` attr not defined.
+fn try_from<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
+    if attrs.iter().any(|attr| attr.path().is_ident("try_from")) {
+        // check `rt` is Option<T> or T
+        Some(if let Type::Path(tp) = rt {
+            if let Some(seg) = tp.path.segments.last() {
+                if seg.ident == "Option" {
+                    Left(
+                        if let syn::PathArguments::AngleBracketed(args) = &seg.arguments {
+                            if args.args.len() == 1 {
+                                if let syn::GenericArgument::Type(ty) = &args.args[0] {
+                                    ty
+                                } else {
+                                    panic!("expect type argument")
+                                }
+                            } else {
+                                rt
+                            }
+                        } else {
+                            panic!("expect angle bracketed arguments")
+                        },
+                    )
+                } else {
+                    Right(rt)
+                }
+            } else {
+                panic!("expect path segment")
+            }
+        } else {
+            Right(rt)
+        })
+    } else {
+        None
+    }
+}
+
 fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
     let get_type = || {
         attrs.iter().find_map(|attr| {
@@ -335,7 +371,6 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                         }
                     }
                 } else if let Some(from_name_str_type) = from_name_str(rt, attrs) {
-                    // let type_name = remove_generic(&from_name_str_type);
                     match from_name_str_type {
                         Left(ty) => {
                             methods.push(quote! {
@@ -349,6 +384,25 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                                 fn #name(&self) -> #ty {
                                     <#ty as std::str::FromStr>::from_str(
                                         self.d.required_name(#key).unwrap()
+                                    ).unwrap()
+                                }
+                            });
+                        }
+                    }
+                } else if let Some(try_from_type) = try_from(rt, attrs) {
+                    match try_from_type {
+                        Left(ty) => {
+                            methods.push(quote! {
+                                fn #name(&self) -> Option<#ty> {
+                                    self.d.opt_object(#key).unwrap().map(|d| <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from(d).unwrap())
+                                }
+                            });
+                        }
+                        Right(ty) => {
+                            methods.push(quote! {
+                                fn #name(&self) -> #ty {
+                                    <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from(
+                                        self.d.required_object(#key).unwrap()
                                     ).unwrap()
                                 }
                             });
@@ -381,6 +435,6 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             #(#methods)*
         }
     };
-    // println!("{}", tokens);
+    println!("{}", tokens);
     tokens.into()
 }
