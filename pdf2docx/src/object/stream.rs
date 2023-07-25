@@ -381,7 +381,7 @@ impl<'a> Stream<'a> {
                 img_dict.color_space(),
                 img_dict.bits_per_component().unwrap(),
             ) {
-                (Some(ColorSpace::DeviceGray), 1) => {
+                (_, 1) => {
                     use bitstream_io::read::BitRead;
 
                     let mut img = GrayImage::new(img_dict.width(), img_dict.height());
