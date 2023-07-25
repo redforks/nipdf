@@ -6,10 +6,10 @@ use syn::{
     Lit, LitStr, Meta, Pat, Token,
 };
 
-/// Generate `impl ConvertFromObject` for enum that convert Object::Name to enum variant
+/// Generate `impl TryFrom` for enum that convert Object::Name to enum variant
 /// Name equals to variant name
-#[proc_macro_derive(ConvertFromNameObject)]
-pub fn convert_from_name_object(input: TokenStream) -> TokenStream {
+#[proc_macro_derive(TryFromNameObject)]
+pub fn try_from_name_object(input: TokenStream) -> TokenStream {
     let enum_t = parse_macro_input!(input as ItemEnum);
     let t = enum_t.ident;
     let arms = enum_t
@@ -21,9 +21,10 @@ pub fn convert_from_name_object(input: TokenStream) -> TokenStream {
             parse_quote!( #lit => Ok(#t::#b))
         });
     let tokens = quote! {
-        impl<'a, 'b> ConvertFromObject<'a, 'b> for #t {
-            fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
-                match objects.pop().unwrap().as_name()? {
+        impl<'a, 'b> TryFrom<&'b Object<'a>> for #t {
+            type Error = ObjectValueError;
+            fn try_from(object: &'b Object<'a>) -> Result<Self, Self::Error> {
+                match object.as_name()? {
                     #( #arms, )*
                     _ => Err(ObjectValueError::GraphicsOperationSchemaError),
                 }

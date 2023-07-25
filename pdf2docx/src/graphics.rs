@@ -10,7 +10,7 @@ use crate::{
     object::{Dictionary, Name, Object, ObjectValueError, TextStringOrNumber},
     parser::{parse_object, ws_prefixed, ws_terminated, ParseError, ParseResult},
 };
-use pdf2docx_macro::{ConvertFromNameObject, OperationParser, TryFromIntObject};
+use pdf2docx_macro::{OperationParser, TryFromIntObject, TryFromNameObject};
 
 #[derive(Debug, Clone, Copy, PartialEq, Educe)]
 #[educe(Default)]
@@ -63,7 +63,7 @@ pub enum LineJoinStyle {
     Bevel = 2,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, strum::Display, ConvertFromNameObject)]
+#[derive(Debug, Clone, Copy, PartialEq, strum::Display, TryFromNameObject)]
 pub enum RenderingIntent {
     AbsoluteColorimetric,
     RelativeColorimetric,
