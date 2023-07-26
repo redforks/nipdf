@@ -181,6 +181,26 @@ pub struct SchemaDict<'a, 'b, T> {
     r: &'b ObjectResolver<'a>,
 }
 
+/// Trait implemented by PdfObject Dicts that are indirect object of PDF file,
+/// resolved by ObjectResolver.
+pub trait RootPdfObject<'a, 'b>
+where
+    Self: Sized,
+{
+    fn new(
+        id: u32,
+        dict: &'b Dictionary<'a>,
+        r: &'b ObjectResolver<'a>,
+    ) -> Result<Self, ObjectValueError>;
+    fn from(
+        id: u32,
+        dict: &'b Dictionary<'a>,
+        r: &'b ObjectResolver<'a>,
+    ) -> Result<Option<Self>, ObjectValueError>;
+
+    fn id(&self) -> u32;
+}
+
 impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
     pub fn new(
         d: &'b Dictionary<'a>,

@@ -7,7 +7,7 @@ use once_cell::unsync::OnceCell;
 use std::collections::HashMap;
 
 use crate::{
-    object::{Dictionary, FrameSet, Name, Object, ObjectValueError, SchemaDict},
+    object::{Dictionary, FrameSet, Name, Object, ObjectValueError, RootPdfObject, SchemaDict},
     parser::{parse_frame_set, parse_header, parse_indirected_object},
 };
 use log::error;
@@ -80,11 +80,6 @@ impl<'a> XRefTable<'a> {
     }
 }
 
-pub struct ObjectResolver<'a> {
-    xref_table: XRefTable<'a>,
-    objects: HashMap<u32, OnceCell<Object<'a>>, BuildNoHashHasher<u32>>,
-}
-
 pub trait DataContainer<'a> {
     fn get_value<'b: 'a>(&self, key: &'b str) -> Option<&Object<'a>>;
 }
@@ -108,6 +103,11 @@ impl<'a> DataContainer<'a> for Vec<&Dictionary<'a>> {
         }
         None
     }
+}
+
+pub struct ObjectResolver<'a> {
+    xref_table: XRefTable<'a>,
+    objects: HashMap<u32, OnceCell<Object<'a>>, BuildNoHashHasher<u32>>,
 }
 
 impl<'a> ObjectResolver<'a> {
@@ -135,6 +135,27 @@ impl<'a> ObjectResolver<'a> {
     #[cfg(test)]
     pub fn setup_object(&mut self, id: u32, v: Object<'a>) {
         self.objects.insert(id, OnceCell::with_value(v));
+    }
+
+    pub fn resolve_pdf_object<'b, T: RootPdfObject<'a, 'b>>(
+        &'b self,
+        id: u32,
+    ) -> Result<T, ObjectValueError> {
+        let obj = self.resolve(id)?.as_dict()?;
+        T::new(id, obj, self)
+    }
+
+    pub fn opt_resolve_pdf_object<'b, T: RootPdfObject<'a, 'b>>(
+        &'b self,
+        id: u32,
+    ) -> Result<Option<T>, ObjectValueError> {
+        self.resolve_pdf_object(id).map(Some).or_else(|e| {
+            if let ObjectValueError::ObjectIDNotFound = e {
+                Ok(None)
+            } else {
+                Err(e)
+            }
+        })
     }
 
     /// Resolve object with id `id`, if object is reference, resolve it recursively.
