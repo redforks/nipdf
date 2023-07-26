@@ -178,20 +178,33 @@ impl<const N: usize> SchemaTypeValidator for [&'static str; N] {
 pub struct SchemaDict<'a, 'b, T> {
     t: T,
     d: &'b Dictionary<'a>,
+    r: &'b ObjectResolver<'a>,
 }
 
 impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
-    pub fn new(d: &'b Dictionary<'a>, t: T) -> Result<Self, ObjectValueError> {
+    pub fn new(
+        d: &'b Dictionary<'a>,
+        r: &'b ObjectResolver<'a>,
+        t: T,
+    ) -> Result<Self, ObjectValueError> {
         t.valid(d)?;
-        Ok(Self { t, d })
+        Ok(Self { t, d, r })
     }
 
-    pub fn from(d: &'b Dictionary<'a>, t: T) -> Result<Option<Self>, ObjectValueError> {
+    pub fn from(
+        d: &'b Dictionary<'a>,
+        r: &'b ObjectResolver<'a>,
+        t: T,
+    ) -> Result<Option<Self>, ObjectValueError> {
         if t.check(d)? {
-            Ok(Some(Self { t, d }))
+            Ok(Some(Self { t, d, r }))
         } else {
             Ok(None)
         }
+    }
+
+    pub fn resolver(&self) -> &'b ObjectResolver<'a> {
+        self.r
     }
 
     pub fn type_name(&self) -> &str {
@@ -424,7 +437,10 @@ pub use xref::{Entry as XRefEntry, Section as XRefSection, *};
 mod frame;
 pub use frame::*;
 
-use crate::{file::Rectangle, parser};
+use crate::{
+    file::{ObjectResolver, Rectangle},
+    parser,
+};
 
 #[derive(Clone, PartialEq, Debug, thiserror::Error)]
 pub enum ObjectValueError {

@@ -11,7 +11,7 @@ use log::error;
 use once_cell::unsync::Lazy;
 use pdf2docx_macro::pdf_object;
 
-use crate::ccitt::Flags;
+use crate::{ccitt::Flags, file::ObjectResolver};
 
 use super::{Dictionary, Name, Object, ObjectValueError, SchemaDict};
 
@@ -308,13 +308,17 @@ pub struct RawImage<'a> {
 impl<'a> Stream<'a> {
     /// Decode stream data using filter and parameters in stream dictionary.
     /// `image_to_raw` if the stream is image, convert to RawImage.
-    pub fn decode(&self, image_to_raw: bool) -> Result<FilterDecodedData<'a>, ObjectValueError> {
+    pub fn decode(
+        &self,
+        resolver: &ObjectResolver<'a>,
+        image_to_raw: bool,
+    ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
         let mut decoded = FilterDecodedData::Bytes(Cow::Borrowed(self.1));
         for (filter_name, params) in self.iter_filter()? {
             decoded = filter(decoded.into_bytes()?, filter_name, params, image_to_raw)?;
         }
 
-        let img_dict = ImageDict::from(&self.0)?;
+        let img_dict = ImageDict::from(&self.0, resolver)?;
         let Some(img_dict) = img_dict else {
             return Ok(decoded);
         };

@@ -50,7 +50,7 @@ fn dump_stream(path: &str, id: u32, raw: bool, as_image: bool, as_png: bool) -> 
             let mut buf = if raw {
                 s.1
             } else {
-                decoded = s.decode(as_image)?;
+                decoded = s.decode(&resolver, as_image)?;
                 if as_png {
                     if let FilterDecodedData::Image(ref img) = decoded {
                         let mut buf = Cursor::new(Vec::new());

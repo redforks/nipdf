@@ -181,6 +181,7 @@ fn schema_ref_id_arr(ids: Option<&[u32]>) -> Vec<u32> {
         let ids: Array = ids.iter().map(|id| Object::new_ref(*id)).collect();
         d.insert("ids".into(), ids.into());
     }
-    let d = SchemaDict::new(&d, ()).unwrap();
+    let resolver = ObjectResolver::empty();
+    let d = SchemaDict::new(&d, &resolver, ()).unwrap();
     d.ref_id_arr("ids").unwrap()
 }

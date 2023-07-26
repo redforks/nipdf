@@ -32,6 +32,14 @@ impl<'a> XRefTable<'a> {
         Self { buf, id_offset }
     }
 
+    #[cfg(test)]
+    pub fn empty() -> Self {
+        Self {
+            buf: &[],
+            id_offset: IDOffsetMap::default(),
+        }
+    }
+
     pub fn scan(frame_set: &FrameSet) -> IDOffsetMap {
         let mut r = IDOffsetMap::with_capacity_and_hasher(5000, BuildNoHashHasher::default());
         for (id, entry) in frame_set.iter().rev().flat_map(|f| f.xref_section.iter()) {
@@ -122,7 +130,7 @@ impl<'a> ObjectResolver<'a> {
     #[cfg(test)]
     pub fn empty() -> Self {
         Self {
-            xref_table: XRefTable::new(&[], IDOffsetMap::default()),
+            xref_table: XRefTable::empty(),
             objects: HashMap::default(),
         }
     }
@@ -193,7 +201,7 @@ pub struct Catalog {
 impl Catalog {
     fn parse(id: u32, resolver: &mut ObjectResolver) -> Result<Self, ObjectValueError> {
         let dict = resolver.resolve(id)?.as_dict()?;
-        let dict = SchemaDict::new(dict, "Catalog")?;
+        let dict = SchemaDict::new(dict, resolver, "Catalog")?;
 
         let root_page_id = dict.required_ref("Pages")?;
         let ver = dict.opt_name("Version")?.map(|s| s.to_owned());

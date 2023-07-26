@@ -147,7 +147,7 @@ impl Page {
         let mut bufs = Vec::with_capacity(self.content_ids.len());
         for id in &self.content_ids {
             let s = resolver.resolve(*id)?.as_stream()?;
-            let decoded = s.decode(false)?;
+            let decoded = s.decode(resolver, false)?;
             match decoded {
                 FilterDecodedData::Bytes(b) => bufs.push(b.into_owned()),
                 _ => {
@@ -183,7 +183,7 @@ impl Page {
             parents: &'c mut Vec<PageDict<'a, 'b>>,
         ) -> Result<(), ObjectValueError> {
             let d = resolver.resolve(id).unwrap();
-            let d = PageDict::new(d.as_dict()?)?;
+            let d = PageDict::new(d.as_dict()?, resolver)?;
             if d.is_leaf() {
                 pages.push(Page::from_leaf(id, &d, &parents[..])?);
             } else {

@@ -305,14 +305,14 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                         Left(ty) => {
                             methods.push(quote! {
                                 fn #name(&self) -> Option<#ty> {
-                                    self.d.opt_dict(#key).unwrap().map(|d| #type_name::new(d).unwrap())
+                                    self.d.opt_dict(#key).unwrap().map(|d| #type_name::new(d, self.d.resolver()).unwrap())
                                 }
                             });
                         }
                         Right(ty) => {
                             methods.push(quote! {
                                 fn #name(&self) -> #ty {
-                                    #type_name::new(self.d.required_dict(#key).unwrap()).unwrap()
+                                    #type_name::new(self.d.required_dict(#key).unwrap(), self.d.resolver()).unwrap()
                                 }
                             });
                         }
@@ -369,13 +369,13 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         impl<'a, 'b> #struct_name<'a, 'b> {
-            fn new(dict: &'b Dictionary<'a>) -> Result<Self, ObjectValueError> {
-                let d = SchemaDict::new(dict, #valid_arg)?;
+            fn new(dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
+                let d = SchemaDict::new(dict, r, #valid_arg)?;
                 Ok(Self { d })
             }
 
-            fn from(dict: &'b Dictionary<'a>) -> Result<Option<Self>, ObjectValueError> {
-                let d = SchemaDict::from(dict, #valid_arg)?;
+            fn from(dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Option<Self>, ObjectValueError> {
+                let d = SchemaDict::from(dict, r, #valid_arg)?;
                 Ok(d.map(|d| Self { d }))
             }
 
