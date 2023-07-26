@@ -1,5 +1,3 @@
-
-
 use super::*;
 use crate::object::HexString;
 use test_case::test_case;
@@ -9,8 +7,12 @@ use test_case::test_case;
 #[test_case(false, "false")]
 #[test_case(123, "123"; "integer")]
 #[test_case(-123, "-123"; "negative integer")]
+#[test_case(123, "+123"; "integer prefixed with +")]
 #[test_case(123.12, "123.12"; "number")]
 #[test_case(-123.12, "-123.12"; "negative number")]
+#[test_case(123.12, "+123.12"; "number prefixed with +")]
+#[test_case(4, "4.0"; "number end with dot")]
+#[test_case(-0.002, "-.002"; "number start with dot")]
 #[test_case(LiteralString::new(b"()"), "()"; "empty literal string")]
 #[test_case(LiteralString::new(b"(5\\()"), "(5\\()"; "escaped )")]
 #[test_case(LiteralString::new(b"(5\\\\)"), "(5\\\\)"; "escaped back slash")]
