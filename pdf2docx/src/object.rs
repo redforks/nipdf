@@ -211,41 +211,38 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
         self.t.get_type(self.d).unwrap()
     }
 
+    fn opt_get(&self, id: &'static str) -> Result<Option<&'b Object<'a>>, ObjectValueError> {
+        self.r.opt_resolve_container_value(self.d, id)
+    }
+
     pub fn opt_name(&self, id: &'static str) -> Result<Option<&str>, ObjectValueError> {
-        self.d
-            .get(&id.into())
+        self.opt_get(id)?
             .map_or(Ok(None), |o| o.as_name().map(Some))
     }
 
     pub fn required_name(&self, id: &'static str) -> Result<&str, ObjectValueError> {
-        self.d
-            .get(&id.into())
+        self.opt_get(id)?
             .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_name()
     }
 
     pub fn required_int(&self, id: &'static str) -> Result<i32, ObjectValueError> {
-        self.d
-            .get(&id.into())
+        self.opt_get(id)?
             .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_int()
     }
 
     pub fn opt_int(&self, id: &'static str) -> Result<Option<i32>, ObjectValueError> {
-        self.d
-            .get(&id.into())
-            .map_or(Ok(None), |o| o.as_int().map(Some))
+        self.opt_get(id)?.map_or(Ok(None), |o| o.as_int().map(Some))
     }
 
     pub fn opt_bool(&self, id: &'static str) -> Result<Option<bool>, ObjectValueError> {
-        self.d
-            .get(&id.into())
+        self.opt_get(id)?
             .map_or(Ok(None), |o| o.as_bool().map(Some))
     }
 
     pub fn required_bool(&self, id: &'static str) -> Result<bool, ObjectValueError> {
-        self.d
-            .get(&id.into())
+        self.opt_get(id)?
             .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_bool()
     }
@@ -283,14 +280,12 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
     }
 
     pub fn opt_f32(&self, id: &'static str) -> Result<Option<f32>, ObjectValueError> {
-        self.d
-            .get(&id.into())
+        self.opt_get(id)?
             .map_or(Ok(None), |o| o.as_number().map(Some))
     }
 
     pub fn required_f32(&self, id: &'static str) -> Result<f32, ObjectValueError> {
-        self.d
-            .get(&id.into())
+        self.opt_get(id)?
             .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_number()
     }
@@ -300,12 +295,11 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
     }
 
     pub fn opt_object(&self, id: &'static str) -> Result<Option<&'b Object<'a>>, ObjectValueError> {
-        Ok(self.d.get(&id.into()))
+        self.opt_get(id)
     }
 
     pub fn required_object(&self, id: &'static str) -> Result<&'b Object<'a>, ObjectValueError> {
-        self.d
-            .get(&id.into())
+        self.opt_object(id)?
             .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))
     }
 
@@ -333,8 +327,7 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
         id: &'static str,
         f: impl Fn(&Object) -> Result<V, ObjectValueError>,
     ) -> Result<Vec<V>, ObjectValueError> {
-        self.d
-            .get(&id.into())
+        self.opt_get(id)?
             .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_arr()?
             .iter()
@@ -347,17 +340,14 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
         id: &'static str,
         f: impl Fn(&Object) -> Result<V, ObjectValueError>,
     ) -> Result<Option<Vec<V>>, ObjectValueError> {
-        self.d
-            .get(&id.into())
+        self.opt_get(id)?
             .map_or(Ok(None), |o| o.as_arr().map(Some))?
             .map(|arr| arr.iter().map(f).collect())
             .transpose()
     }
 
     pub fn opt_arr(&self, id: &'static str) -> Result<Option<&'b Array<'a>>, ObjectValueError> {
-        self.d
-            .get(&id.into())
-            .map_or(Ok(None), |o| o.as_arr().map(Some))
+        self.opt_get(id)?.map_or(Ok(None), |o| o.as_arr().map(Some))
     }
 
     /// Item can be a single object or an array of objects.
@@ -365,7 +355,7 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
     pub fn opt_single_or_arr<Item: 'b>(
         &self,
         id: &'static str,
-        f: impl Fn(&'b Object<'a>) -> Result<Item, ObjectValueError>,
+        f: impl Fn(&Object<'a>) -> Result<Item, ObjectValueError>,
     ) -> Result<Vec<Item>, ObjectValueError> {
         self.d.get(&id.into()).map_or(Ok(Vec::new()), |o| match o {
             Object::Array(arr) => arr.iter().map(f).collect(),
@@ -377,8 +367,7 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
         &self,
         id: &'static str,
     ) -> Result<Option<&'b Dictionary<'a>>, ObjectValueError> {
-        self.d
-            .get(&id.into())
+        self.opt_get(id)?
             .map_or(Ok(None), |o| o.as_dict().map(Some))
     }
 
