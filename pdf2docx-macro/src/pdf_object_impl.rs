@@ -281,7 +281,15 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         _ => todo!(),
     };
 
+    /// Check #[root_object] exist on `item`
+    fn is_root_object(item: &ItemTrait) -> bool {
+        item.attrs
+            .iter()
+            .any(|attr| attr.path().is_ident("root_object"))
+    }
+
     let def = parse_macro_input!(item as ItemTrait);
+    let is_root_object = is_root_object(&def);
     let name = def.ident.to_string();
     assert!(name.ends_with("Trait"));
     let struct_name = &name[..name.len() - 5];
@@ -369,23 +377,52 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
 
-    let tokens = quote! {
-        struct #struct_name<'a, 'b> {
-            d: SchemaDict<'a, 'b, #valid_ty>,
+    let tokens = if is_root_object {
+        quote! {
+            struct #struct_name<'a, 'b> {
+                id: u32,
+                d: SchemaDict<'a, 'b, #valid_ty>,
+            }
+
+            impl<'a, 'b> crate::object::RootPdfObject<'a, 'b> for #struct_name<'a, 'b> {
+                fn new(id: u32, d: &'b Dictionary<'a>, r: &'b crate::file::ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
+                    let d = SchemaDict::new(d, r, #valid_arg)?;
+                    Ok(Self {id, d})
+                }
+
+                fn from(id: u32, d: &'b Dictionary<'a>, r: &'b crate::file::ObjectResolver<'a>) -> Result<Option<Self>, ObjectValueError> {
+                    let d = SchemaDict::from(d, r, #valid_arg)?;
+                    Ok(d.map(|d| Self {id,  d}))
+                }
+
+                fn id(&self) -> u32 {
+                    self.id
+                }
+            }
+
+            impl<'a, 'b> #struct_name<'a, 'b> {
+                #(#methods)*
+            }
         }
-
-        impl<'a, 'b> #struct_name<'a, 'b> {
-            fn new(dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
-                let d = SchemaDict::new(dict, r, #valid_arg)?;
-                Ok(Self { d })
+    } else {
+        quote! {
+            struct #struct_name<'a, 'b> {
+                d: SchemaDict<'a, 'b, #valid_ty>,
             }
 
-            fn from(dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Option<Self>, ObjectValueError> {
-                let d = SchemaDict::from(dict, r, #valid_arg)?;
-                Ok(d.map(|d| Self { d }))
-            }
+            impl<'a, 'b> #struct_name<'a, 'b> {
+                fn new(dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
+                    let d = SchemaDict::new(dict, r, #valid_arg)?;
+                    Ok(Self { d })
+                }
 
-            #(#methods)*
+                fn from(dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Option<Self>, ObjectValueError> {
+                    let d = SchemaDict::from(dict, r, #valid_arg)?;
+                    Ok(d.map(|d| Self { d }))
+                }
+
+                #(#methods)*
+            }
         }
     };
     // println!("{}", tokens);
