@@ -166,10 +166,7 @@ impl<'a> ObjectResolver<'a> {
                             o = self.xref_table.parse_object(id)?;
                         }
                         Object::LaterResolveStream(d) => {
-                            let l = d.get(&Name::borrowed(b"Length")).unwrap();
-                            let l = l.as_ref().unwrap();
-                            let l = self.xref_table.parse_object(l.id().id()).unwrap();
-                            let l = l.as_int().unwrap();
+                            let l = self.resolve_container_value(&d, "Length")?.as_int()?;
                             let buf = self.xref_table.resolve_object_buf(id).unwrap();
                             let (buf, _) =
                                 take_until::<&[u8], &[u8], ParseError>(b"stream".as_slice())(buf)
