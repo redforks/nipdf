@@ -172,7 +172,7 @@ impl<'a> ObjectResolver<'a> {
                                 take_until::<&[u8], &[u8], ParseError>(b"stream".as_slice())(buf)
                                     .unwrap();
                             let (_, content) = parse_stream_content(buf, l as u32).unwrap();
-                            o = Object::Stream(Stream(d, content));
+                            o = Object::Stream(Stream::new(d, content));
                         }
                         _ => break,
                     }

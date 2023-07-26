@@ -45,7 +45,7 @@ const B_FILTER_RUN_LENGTH_DECODE: &[u8] = FILTER_RUN_LENGTH_DECODE.as_bytes();
 const B_FILTER_JPX_DECODE: &[u8] = FILTER_JPX_DECODE.as_bytes();
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct Stream<'a>(pub Dictionary<'a>, pub &'a [u8]);
+pub struct Stream<'a>(Dictionary<'a>, &'a [u8]);
 
 /// error!() log if r is error, returns `Err<ObjectValueError::FilterDecodeError>`
 fn handle_filter_error<V, E: Display>(
@@ -306,6 +306,10 @@ pub struct RawImage<'a> {
 }
 
 impl<'a> Stream<'a> {
+    pub fn new(dict: Dictionary<'a>, data: &'a [u8]) -> Self {
+        Self(dict, data)
+    }
+
     /// Decode stream data using filter and parameters in stream dictionary.
     /// `image_to_raw` if the stream is image, convert to RawImage.
     pub fn decode(

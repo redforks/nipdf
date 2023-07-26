@@ -200,7 +200,7 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<Object> {
     };
     match buf {
         Some(buf) => match o {
-            Object::Dictionary(d) => Ok((input, Object::Stream(Stream(d, buf)))),
+            Object::Dictionary(d) => Ok((input, Object::Stream(Stream::new(d, buf)))),
             _ => unreachable!(),
         },
         None => Ok((input, o)),
