@@ -141,6 +141,18 @@ impl<'a> ObjectResolver<'a> {
     }
 
     /// Resolve object with id `id`, if object is reference, resolve it recursively.
+    /// Return `None` if object is not found.
+    pub fn opt_resolve(&self, id: u32) -> Result<Option<&Object<'a>>, ObjectValueError> {
+        self.resolve(id).map(Some).or_else(|e| {
+            if let ObjectValueError::ObjectIDNotFound = e {
+                Ok(None)
+            } else {
+                Err(e)
+            }
+        })
+    }
+
+    /// Resolve object with id `id`, if object is reference, resolve it recursively.
     pub fn resolve(&self, id: u32) -> Result<&Object<'a>, ObjectValueError> {
         self.objects
             .get(&id)
@@ -173,10 +185,24 @@ impl<'a> ObjectResolver<'a> {
     }
 
     /// Resolve value from data container `c` with key `k`, if value is reference,
+    /// resolve it recursively. Return `None` if object is not found.
+    pub fn opt_resolve_container_value<'b: 'a, 'd: 'c, 'c, C: DataContainer<'a>>(
+        &'d self,
+        c: &'c C,
+        id: &'b str,
+    ) -> Result<Option<&'c Object<'a>>, ObjectValueError> {
+        self.resolve_container_value(c, id).map(Some).or_else(|e| {
+            if let ObjectValueError::ObjectIDNotFound = e {
+                Ok(None)
+            } else {
+                Err(e)
+            }
+        })
+    }
+
+    /// Resolve value from data container `c` with key `k`, if value is reference,
     /// resolve it recursively.
-    /// Return `None` if key is not found, or if value is reference
-    /// but target is not found.
-    pub fn resolve_value<'b: 'a, 'd: 'c, 'c, C: DataContainer<'a>>(
+    pub fn resolve_container_value<'b: 'a, 'd: 'c, 'c, C: DataContainer<'a>>(
         &'d self,
         c: &'c C,
         id: &'b str,
@@ -261,7 +287,7 @@ impl File {
             .unwrap();
         let root_id = root_id.as_ref().unwrap().id().id();
         let catalog = resolver
-            .resolve_value(&trailers, "Root")
+            .resolve_container_value(&trailers, "Root")
             .map_err(|_| FileError::CatalogRequired)?;
         let ver = catalog
             .as_dict()?
@@ -269,7 +295,7 @@ impl File {
             .map(|o| -> Result<String, ObjectValueError> { Ok(o.as_name().unwrap().to_owned()) })
             .unwrap_or(Ok(head_ver.to_owned()))?;
         let total_objects = resolver
-            .resolve_value(&trailers, "Size")
+            .resolve_container_value(&trailers, "Size")
             .map_err(|_| FileError::MissingRequiredTrailerValue)?
             .as_int()? as u32;
         let catalog = Catalog::parse(root_id, &mut resolver)?;
