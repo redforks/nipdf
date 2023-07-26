@@ -106,10 +106,13 @@ where
     T: InputTakeAtPosition,
     <T as InputTakeAtPosition>::Item: AsChar + Clone,
 {
+    // in PDF 32000-1:2008 7.2.2 '\0' is whitespace, but in 4.46 '\0' is
+    // not listed as whitespace. Exclude '\0' because after `stream` tag,
+    // '\0' maybe part of stream content.
     input.split_at_position1_complete(
         |item| {
             let c = item.as_char();
-            !(c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\0' || c == '\x0C')
+            !(c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\x0C')
         },
         nom::error::ErrorKind::MultiSpace,
     )

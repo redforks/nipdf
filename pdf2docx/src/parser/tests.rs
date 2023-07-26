@@ -19,7 +19,7 @@ fn test_comment_exception(input: &str) {
 
 #[test_case("" => ""; "empty")]
 #[test_case(" " => ""; "space")]
-#[test_case("\t \n\r \0\x0c" => ""; "multiple whitespace")]
+#[test_case("\t \n\r \x0c" => ""; "multiple whitespace")]
 #[test_case("% comment" => ""; "comment to the end")]
 #[test_case("% comment\nfoo" => "foo"; "comment to eol")]
 #[test_case(" % comment\n  % again\r\t bar" => "bar"; "continue comment and whitespaces")]
