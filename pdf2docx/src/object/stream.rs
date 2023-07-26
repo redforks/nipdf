@@ -11,7 +11,11 @@ use log::error;
 use once_cell::unsync::Lazy;
 use pdf2docx_macro::pdf_object;
 
-use crate::{ccitt::Flags, file::ObjectResolver};
+use crate::{
+    ccitt::Flags,
+    file::ObjectResolver,
+    parser::{ws_prefixed, ParseResult},
+};
 
 use super::{Dictionary, Name, Object, ObjectValueError, SchemaDict};
 
@@ -45,7 +49,7 @@ const B_FILTER_RUN_LENGTH_DECODE: &[u8] = FILTER_RUN_LENGTH_DECODE.as_bytes();
 const B_FILTER_JPX_DECODE: &[u8] = FILTER_JPX_DECODE.as_bytes();
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct Stream<'a>(Dictionary<'a>, &'a [u8]);
+pub struct Stream<'a>(Dictionary<'a>, &'a [u8]); // NOTE: buf end at the file end
 
 /// error!() log if r is error, returns `Err<ObjectValueError::FilterDecodeError>`
 fn handle_filter_error<V, E: Display>(
@@ -317,7 +321,21 @@ impl<'a> Stream<'a> {
         resolver: &ObjectResolver<'a>,
         image_to_raw: bool,
     ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
-        let mut decoded = FilterDecodedData::Bytes(Cow::Borrowed(self.1));
+        let len = resolver
+            .resolve_container_value(&self.0, "Length")?
+            .as_int()?;
+
+        #[cfg(debug_assertions)]
+        {
+            let end_stream = &self.1[len as usize..];
+            let rv: ParseResult<_> =
+                ws_prefixed(nom::bytes::complete::tag(b"endstream"))(end_stream);
+            if rv.is_err() {
+                panic!("{:#?}", self.1);
+            }
+        }
+
+        let mut decoded = FilterDecodedData::Bytes(Cow::Borrowed(&self.1[0..len as usize]));
         for (filter_name, params) in self.iter_filter()? {
             decoded = filter(decoded.into_bytes()?, filter_name, params, image_to_raw)?;
         }

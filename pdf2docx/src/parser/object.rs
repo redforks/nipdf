@@ -2,12 +2,9 @@ use std::borrow::Cow;
 
 use nom::{
     branch::alt,
-    bytes::{
-        complete::{escaped, is_not, tag, take_till, take_until, take_while},
-        streaming::take,
-    },
+    bytes::complete::{escaped, is_not, tag, take_till, take_while},
     character::{
-        complete::{anychar, crlf, multispace1, u16, u32},
+        complete::{anychar, multispace1, u16, u32},
         is_hex_digit,
     },
     combinator::{map, not, opt, peek, recognize, value},
@@ -22,7 +19,7 @@ use crate::object::{
     Reference, Stream,
 };
 
-use super::{whitespace_or_comment, ws, ws_prefixed, ws_terminated, ParseError, ParseResult};
+use super::{whitespace_or_comment, ws, ws_terminated, ParseError, ParseResult};
 
 /// Unwrap the result of nom parser to a *normal* result.
 pub fn unwrap_parse_result<'a, T: 'a>(obj: ParseResult<'a, T>) -> Result<T, ParseError<'a>> {
@@ -161,56 +158,24 @@ pub fn parse_dict(input: &[u8]) -> ParseResult<Dictionary> {
     )(input)
 }
 
-pub fn parse_stream_content(input: &[u8], stream_len: u32) -> ParseResult<&[u8]> {
-    delimited(
-        tuple((ws_prefixed(tag(b"stream")), alt((crlf, tag(b"\n"))))),
-        take(stream_len),
-        ws(tag(b"endstream")),
-    )(input)
-}
-
 fn parse_object_and_stream(input: &[u8]) -> ParseResult<Object> {
     let (input, o) = parse_object(input)?;
-    let (input, buf) = match o {
-        Object::Dictionary(ref d) => {
-            let Some(len) = d.get(&Name::borrowed(b"Length")) else {
-                return Ok((input, o));
-            };
-            match len {
-                Object::Integer(len) => opt(delimited(
-                    tuple((ws_prefixed(tag(b"stream")), alt((crlf, tag(b"\n"))))),
-                    take(*len as u32),
-                    ws(tag(b"endstream")),
-                ))(input)?,
-                Object::Reference(_) => {
-                    let (input, inner) = peek(opt(ws_prefixed(tag(b"stream"))))(input)?;
-                    return match inner {
-                        None => Ok((input, o)),
-                        Some(_) => {
-                            let (input, _) =
-                                take_until::<&[u8], &[u8], ParseError>(b"endobj")(input)?;
-                            Ok((input, Object::LaterResolveStream(d.clone())))
-                        }
-                    };
-                }
-                _ => return Ok((input, o)),
+    match o {
+        Object::Dictionary(d) => {
+            let (input, begin_stream) = opt(ws(tag(b"stream")))(input)?;
+            if begin_stream.is_some() {
+                Ok((input, Object::Stream(Stream::new(d, input))))
+            } else {
+                Ok((input, Object::Dictionary(d)))
             }
         }
-        _ => return Ok((input, o)),
-    };
-    match buf {
-        Some(buf) => match o {
-            Object::Dictionary(d) => Ok((input, Object::Stream(Stream::new(d, buf)))),
-            _ => unreachable!(),
-        },
-        None => Ok((input, o)),
+        _ => Ok((input, o)),
     }
 }
 
 pub fn parse_indirected_object(input: &[u8]) -> ParseResult<IndirectObject> {
     let (input, (id, gen)) = separated_pair(u32, multispace1, u16)(input)?;
-    let (input, obj) =
-        delimited(ws(tag(b"obj")), parse_object_and_stream, ws(tag(b"endobj")))(input)?;
+    let (input, obj) = preceded(ws(tag(b"obj")), parse_object_and_stream)(input)?;
     Ok((input, IndirectObject::new(id, gen, obj)))
 }
 

@@ -2,16 +2,13 @@
 
 use anyhow::Result as AnyResult;
 use itertools::Itertools;
-use nom::bytes::complete::take_until;
 use nom::Finish;
 use once_cell::unsync::OnceCell;
 use std::collections::HashMap;
 
 use crate::{
-    object::{Dictionary, FrameSet, Name, Object, ObjectValueError, SchemaDict, Stream},
-    parser::{
-        parse_frame_set, parse_header, parse_indirected_object, parse_stream_content, ParseError,
-    },
+    object::{Dictionary, FrameSet, Name, Object, ObjectValueError, SchemaDict},
+    parser::{parse_frame_set, parse_header, parse_indirected_object},
 };
 use log::error;
 
@@ -164,15 +161,6 @@ impl<'a> ObjectResolver<'a> {
                         Object::Reference(id) => {
                             let id = id.id().id();
                             o = self.xref_table.parse_object(id)?;
-                        }
-                        Object::LaterResolveStream(d) => {
-                            let l = self.resolve_container_value(&d, "Length")?.as_int()?;
-                            let buf = self.xref_table.resolve_object_buf(id).unwrap();
-                            let (buf, _) =
-                                take_until::<&[u8], &[u8], ParseError>(b"stream".as_slice())(buf)
-                                    .unwrap();
-                            let (_, content) = parse_stream_content(buf, l as u32).unwrap();
-                            o = Object::Stream(Stream::new(d, content));
                         }
                         _ => break,
                     }
