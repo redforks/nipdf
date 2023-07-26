@@ -115,6 +115,12 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         } else {
             Some("required_str")
         }
+    } else if rt == &(parse_quote!(Option<&str>)) {
+        if get_type().is_some_and(|s| s == "Name") {
+            Some("opt_name")
+        } else {
+            Some("opt_str")
+        }
     } else if rt == &(parse_quote!(u32)) {
         Some("required_u32")
     } else if rt == &(parse_quote!(Option<u32>)) {
