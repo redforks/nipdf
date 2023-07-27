@@ -180,21 +180,25 @@ impl<'a> ObjectResolver<'a> {
 
     /// Resolve value from data container `c` with key `k`, if value is reference,
     /// resolve it recursively. Return `None` if object is not found.
-    /// Return (Option<u32>, Object) if found, where Option<u32> is the id of the object
-    /// if it is resolved from reference.
     pub fn opt_resolve_container_value<'b: 'a, 'd: 'c, 'c, C: DataContainer<'a>>(
         &'d self,
         c: &'c C,
         id: &'b str,
-    ) -> Result<Option<(Option<u32>, &'c Object<'a>)>, ObjectValueError> {
+    ) -> Result<Option<&'c Object<'a>>, ObjectValueError> {
         Self::to_opt(self.resolve_container_value(c, id))
     }
 
     /// Resolve value from data container `c` with key `k`, if value is reference,
     /// resolve it recursively.
-    /// Return (Option<u32>, Object) if found, where Option<u32> is the id of the object
-    /// if it is resolved from reference.
     pub fn resolve_container_value<'b: 'a, 'd: 'c, 'c, C: DataContainer<'a>>(
+        &'d self,
+        c: &'c C,
+        id: &'b str,
+    ) -> Result<&'c Object<'a>, ObjectValueError> {
+        self._resolve_container_value(c, id).map(|(_, o)| o)
+    }
+
+    fn _resolve_container_value<'b: 'a, 'd: 'c, 'c, C: DataContainer<'a>>(
         &'d self,
         c: &'c C,
         id: &'b str,
@@ -288,7 +292,7 @@ impl File {
             .find_map(|t| t.get(&Name::borrowed(b"Root")))
             .unwrap();
         let root_id = root_id.as_ref().unwrap().id().id();
-        let (_, catalog) = resolver
+        let catalog = resolver
             .resolve_container_value(&trailers, "Root")
             .map_err(|_| FileError::CatalogRequired)?;
         let ver = catalog
@@ -299,7 +303,6 @@ impl File {
         let total_objects = resolver
             .resolve_container_value(&trailers, "Size")
             .map_err(|_| FileError::MissingRequiredTrailerValue)?
-            .1
             .as_int()? as u32;
         let catalog = Catalog::parse(root_id, &mut resolver)?;
 
