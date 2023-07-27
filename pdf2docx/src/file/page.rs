@@ -106,6 +106,7 @@ trait ResourceDictTrait {
 }
 
 #[pdf_object(["Pages", "Page"])]
+#[root_object]
 trait PageDictTrait {
     #[typ("Ref")]
     fn kids(&self) -> Vec<u32>;
@@ -182,8 +183,7 @@ impl Page {
             pages: &'c mut Vec<Page>,
             parents: &'c mut Vec<PageDict<'a, 'b>>,
         ) -> Result<(), ObjectValueError> {
-            let d = resolver.resolve(id).unwrap();
-            let d = PageDict::new(d.as_dict()?, resolver)?;
+            let d: PageDict = resolver.resolve_pdf_object(id)?;
             if d.is_leaf() {
                 pages.push(Page::from_leaf(id, &d, &parents[..])?);
             } else {
