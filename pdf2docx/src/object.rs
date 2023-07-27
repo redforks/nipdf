@@ -223,6 +223,10 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
         }
     }
 
+    pub fn dict(&self) -> &'b Dictionary<'a> {
+        self.d
+    }
+
     pub fn resolver(&self) -> &'b ObjectResolver<'a> {
         self.r
     }
@@ -447,7 +451,7 @@ mod frame;
 pub use frame::*;
 
 use crate::{
-    file::{ObjectResolver, Rectangle},
+    file::{DataContainer, ObjectResolver, Rectangle},
     parser,
 };
 

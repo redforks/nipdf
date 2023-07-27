@@ -107,7 +107,7 @@ trait ResourceDictTrait {
 
 #[pdf_object(["Pages", "Page"])]
 #[root_object]
-trait PageDictTrait {
+pub trait PageDictTrait {
     #[typ("Ref")]
     fn kids(&self) -> Vec<u32>;
     fn media_box(&self) -> Option<Rectangle>;

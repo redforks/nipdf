@@ -83,6 +83,10 @@ fn has_attr<'a>(
     }
 }
 
+fn nested_root<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
+    has_attr("nested_root", rt, attrs)
+}
+
 // Return left means Option<T>, right means T, Return None means not nested
 fn nested<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
     has_attr("nested", rt, attrs)
@@ -331,6 +335,24 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                             });
                         }
                     }
+                } else if let Some(nested_root) = nested_root(rt, attrs) {
+                    let type_name = remove_generic(&nested_root);
+                    match nested_root {
+                        Left(ty) => {
+                            methods.push(quote! {
+                                fn #name(&self) -> Option<#ty> {
+                                    self.d.resolver().opt_resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key).unwrap()
+                                }
+                            });
+                        }
+                        Right(ty) => {
+                            methods.push(quote! {
+                                fn #name(&self) -> #ty {
+                                    self.d.resolver().resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key).unwrap()
+                                }
+                            });
+                        }
+                    }
                 } else if let Some(from_name_str_type) = from_name_str(rt, attrs) {
                     match from_name_str_type {
                         Left(ty) => {
@@ -377,9 +399,10 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
 
+    let vis = &def.vis;
     let tokens = if is_root_object {
         quote! {
-            struct #struct_name<'a, 'b> {
+            #vis struct #struct_name<'a, 'b> {
                 id: u32,
                 d: SchemaDict<'a, 'b, #valid_ty>,
             }
@@ -406,22 +429,22 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     } else {
         quote! {
-            struct #struct_name<'a, 'b> {
+            #vis struct #struct_name<'a, 'b> {
                 d: SchemaDict<'a, 'b, #valid_ty>,
             }
 
             impl<'a, 'b> #struct_name<'a, 'b> {
-                fn new(dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
+                pub fn new(dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
                     let d = SchemaDict::new(dict, r, #valid_arg)?;
                     Ok(Self { d })
                 }
 
-                fn from(dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Option<Self>, ObjectValueError> {
+                pub fn from(dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Option<Self>, ObjectValueError> {
                     let d = SchemaDict::from(dict, r, #valid_arg)?;
                     Ok(d.map(|d| Self { d }))
                 }
 
-                #(#methods)*
+                #(pub #methods)*
             }
         }
     };
