@@ -81,11 +81,11 @@ impl<'a> XRefTable<'a> {
 }
 
 pub trait DataContainer<'a> {
-    fn get_value<'b: 'a>(&self, key: &'b str) -> Option<&Object<'a>>;
+    fn get_value(&self, key: &'a str) -> Option<&Object<'a>>;
 }
 
 impl<'a> DataContainer<'a> for Dictionary<'a> {
-    fn get_value<'b: 'a>(&self, key: &'b str) -> Option<&Object<'a>> {
+    fn get_value(&self, key: &'a str) -> Option<&Object<'a>> {
         debug_assert!(!key.starts_with('/'));
         self.get(&Name::borrowed(key.as_bytes()))
     }
@@ -93,7 +93,7 @@ impl<'a> DataContainer<'a> for Dictionary<'a> {
 
 /// Get value from first dictionary that contains `key`.
 impl<'a> DataContainer<'a> for Vec<&Dictionary<'a>> {
-    fn get_value<'b: 'a>(&self, key: &'b str) -> Option<&Object<'a>> {
+    fn get_value(&self, key: &'a str) -> Option<&Object<'a>> {
         debug_assert!(!key.starts_with('/'));
         let key = Name::borrowed(key.as_bytes());
         for dict in self {
