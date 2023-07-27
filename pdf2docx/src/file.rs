@@ -149,25 +149,13 @@ impl<'a> ObjectResolver<'a> {
         &'b self,
         id: u32,
     ) -> Result<Option<T>, ObjectValueError> {
-        self.resolve_pdf_object(id).map(Some).or_else(|e| {
-            if let ObjectValueError::ObjectIDNotFound = e {
-                Ok(None)
-            } else {
-                Err(e)
-            }
-        })
+        Self::to_opt(self.resolve_pdf_object(id))
     }
 
     /// Resolve object with id `id`, if object is reference, resolve it recursively.
     /// Return `None` if object is not found.
     pub fn opt_resolve(&self, id: u32) -> Result<Option<&Object<'a>>, ObjectValueError> {
-        self.resolve(id).map(Some).or_else(|e| {
-            if let ObjectValueError::ObjectIDNotFound = e {
-                Ok(None)
-            } else {
-                Err(e)
-            }
-        })
+        Self::to_opt(self.resolve(id))
     }
 
     /// Resolve object with id `id`, if object is reference, resolve it recursively.
@@ -199,13 +187,7 @@ impl<'a> ObjectResolver<'a> {
         c: &'c C,
         id: &'b str,
     ) -> Result<Option<(Option<u32>, &'c Object<'a>)>, ObjectValueError> {
-        self.resolve_container_value(c, id).map(Some).or_else(|e| {
-            if let ObjectValueError::ObjectIDNotFound = e {
-                Ok(None)
-            } else {
-                Err(e)
-            }
-        })
+        Self::to_opt(self.resolve_container_value(c, id))
     }
 
     /// Resolve value from data container `c` with key `k`, if value is reference,
@@ -224,6 +206,16 @@ impl<'a> ObjectResolver<'a> {
         } else {
             Ok((None, obj))
         }
+    }
+
+    fn to_opt<T>(o: Result<T, ObjectValueError>) -> Result<Option<T>, ObjectValueError> {
+        o.map(Some).or_else(|e| {
+            if let ObjectValueError::ObjectIDNotFound = e {
+                Ok(None)
+            } else {
+                Err(e)
+            }
+        })
     }
 }
 
