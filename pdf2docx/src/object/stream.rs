@@ -323,6 +323,7 @@ impl<'a> Stream<'a> {
     ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
         let len = resolver
             .resolve_container_value(&self.0, "Length")?
+            .1
             .as_int()?;
 
         #[cfg(debug_assertions)]

@@ -232,7 +232,9 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
     }
 
     fn opt_get(&self, id: &'static str) -> Result<Option<&'b Object<'a>>, ObjectValueError> {
-        self.r.opt_resolve_container_value(self.d, id)
+        self.r
+            .opt_resolve_container_value(self.d, id)
+            .map(|o| o.map(|(_, o)| o))
     }
 
     pub fn opt_name(&self, id: &'static str) -> Result<Option<&str>, ObjectValueError> {
