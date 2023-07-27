@@ -198,6 +198,36 @@ impl<'a> ObjectResolver<'a> {
         self._resolve_container_value(c, id).map(|(_, o)| o)
     }
 
+    pub fn opt_resolve_container_root_object<
+        'b: 'a,
+        'd: 'c,
+        'c,
+        C: DataContainer<'a>,
+        T: RootPdfObject<'a, 'c>,
+    >(
+        &'d self,
+        c: &'c C,
+        id: &'b str,
+    ) -> Result<Option<T>, ObjectValueError> {
+        Self::to_opt(self.resolve_container_root_object(c, id))
+    }
+
+    pub fn resolve_container_root_object<
+        'b: 'a,
+        'd: 'c,
+        'c,
+        C: DataContainer<'a>,
+        T: RootPdfObject<'a, 'c>,
+    >(
+        &'d self,
+        c: &'c C,
+        id: &'b str,
+    ) -> Result<T, ObjectValueError> {
+        let (id, obj) = self._resolve_container_value(c, id)?;
+        let obj = obj.as_dict()?;
+        T::new(id.expect("Should be root pdf object"), obj, self)
+    }
+
     fn _resolve_container_value<'b: 'a, 'd: 'c, 'c, C: DataContainer<'a>>(
         &'d self,
         c: &'c C,
