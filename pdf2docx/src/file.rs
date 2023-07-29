@@ -4,6 +4,7 @@ use anyhow::Result as AnyResult;
 use itertools::Itertools;
 use nom::Finish;
 use once_cell::unsync::OnceCell;
+use pdf2docx_macro::pdf_object;
 use std::collections::HashMap;
 
 use crate::{
@@ -198,7 +199,7 @@ impl<'a> ObjectResolver<'a> {
         self._resolve_container_value(c, id).map(|(_, o)| o)
     }
 
-    pub fn opt_resolve_container_root_object<
+    pub fn opt_resolve_container_pdf_object<
         'b: 'a,
         'd: 'c,
         'c,
@@ -209,10 +210,10 @@ impl<'a> ObjectResolver<'a> {
         c: &'c C,
         id: &'b str,
     ) -> Result<Option<T>, ObjectValueError> {
-        Self::to_opt(self.resolve_container_root_object(c, id))
+        Self::to_opt(self.resolve_container_pdf_object(c, id))
     }
 
-    pub fn resolve_container_root_object<
+    pub fn resolve_container_pdf_object<
         'b: 'a,
         'd: 'c,
         'c,
@@ -253,6 +254,15 @@ impl<'a> ObjectResolver<'a> {
     }
 }
 
+#[pdf_object("Catalog")]
+#[root_object]
+trait CatalogDictTrait {
+    #[typ("Name")]
+    fn version(&self) -> Option<&str>;
+    #[nested_root]
+    fn pages(&self) -> PageDict<'a, 'b>;
+}
+
 #[derive(Debug)]
 pub struct Catalog {
     id: u32,
@@ -262,11 +272,12 @@ pub struct Catalog {
 
 impl Catalog {
     fn parse(id: u32, resolver: &mut ObjectResolver) -> Result<Self, ObjectValueError> {
+        let catalog_dict: CatalogDict = resolver.resolve_pdf_object(id)?;
         let dict = resolver.resolve(id)?.as_dict()?;
         let dict = SchemaDict::new(dict, resolver, "Catalog")?;
 
         let root_page_id = dict.required_ref("Pages")?;
-        let ver = dict.opt_name("Version")?.map(|s| s.to_owned());
+        let ver = catalog_dict.version().map(|s| s.to_owned());
         let pages = Page::parse(root_page_id, resolver)?;
         Ok(Self { id, pages, ver })
     }
