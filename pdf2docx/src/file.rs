@@ -294,14 +294,14 @@ trait CatalogDictTrait {
 }
 
 #[derive(Debug)]
-pub struct Catalog {
+pub struct Catalog<'a, 'b> {
     id: u32,
-    pages: Vec<Page>,
+    pages: Vec<Page<'a, 'b>>,
     ver: Option<String>,
 }
 
-impl Catalog {
-    fn parse(id: u32, resolver: &mut ObjectResolver) -> Result<Self, ObjectValueError> {
+impl<'a, 'b> Catalog<'a, 'b> {
+    fn parse(id: u32, resolver: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
         let catalog_dict: CatalogDict = resolver.resolve_pdf_object(id)?;
 
         let ver = catalog_dict.version().map(|s| s.to_owned());
@@ -309,7 +309,7 @@ impl Catalog {
         Ok(Self { id, pages, ver })
     }
 
-    pub fn pages(&self) -> &[Page] {
+    pub fn pages(&self) -> &[Page<'a, 'b>] {
         self.pages.as_slice()
     }
 }
@@ -336,7 +336,7 @@ impl<'a> Trailer<'a> {
 pub struct File {
     ver: String,
     total_objects: u32,
-    catalog: Catalog,
+    root_id: u32,
 }
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -352,7 +352,7 @@ impl File {
         let (_, head_ver) = parse_header(buf).unwrap();
         let (_, frame_set) = parse_frame_set(buf).unwrap();
         let xref = XRefTable::from_frame_set(buf, &frame_set);
-        let mut resolver = ObjectResolver::new(xref);
+        let resolver = ObjectResolver::new(xref);
 
         let trailers = frame_set.iter().map(|f| &f.trailer).collect_vec();
         let root_id = trailers
@@ -372,13 +372,12 @@ impl File {
             .resolve_container_value(&trailers, "Size")
             .map_err(|_| FileError::MissingRequiredTrailerValue)?
             .as_int()? as u32;
-        let catalog = Catalog::parse(root_id, &mut resolver)?;
 
         Ok((
             Self {
                 ver,
                 total_objects,
-                catalog,
+                root_id,
             },
             resolver,
         ))
@@ -392,8 +391,11 @@ impl File {
         self.total_objects
     }
 
-    pub fn catalog(&self) -> &Catalog {
-        &self.catalog
+    pub fn catalog<'a, 'b>(
+        &self,
+        resolver: &'b ObjectResolver<'a>,
+    ) -> Result<Catalog<'a, 'b>, ObjectValueError> {
+        Catalog::parse(self.root_id, resolver)
     }
 }
 

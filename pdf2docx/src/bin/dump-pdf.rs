@@ -48,7 +48,7 @@ fn dump_stream(path: &str, id: u32, raw: bool, as_image: bool, as_png: bool) -> 
         Object::Stream(s) => {
             let decoded;
             let mut buf = if raw {
-                s.1
+                s.raw(&resolver)?
             } else {
                 decoded = s.decode(&resolver, as_image)?;
                 if as_png {
@@ -80,21 +80,22 @@ fn dump_page(
 ) -> AnyResult<()> {
     let mut buf: Vec<u8> = vec![];
     let (f, resolver) = open(path, &mut buf)?;
+    let catalog = f.catalog(&resolver)?;
 
     if show_total_pages {
-        println!("{}", f.catalog().pages().len());
+        println!("{}", catalog.pages().len());
     } else if show_page_id {
         let page_no = page_no.expect("page number is required");
-        let page = &f.catalog().pages()[page_no as usize];
+        let page = &catalog.pages()[page_no as usize];
         println!("{}", page.id());
     } else if to_png {
         let page_no = page_no.expect("page number is required");
-        let page = &f.catalog().pages()[page_no as usize];
+        let page = &catalog.pages()[page_no as usize];
         let pixmap = page.render(&resolver)?;
         let buf = pixmap.encode_png()?;
         copy(&mut &buf[..], &mut BufWriter::new(&mut stdout()))?;
     } else if let Some(page_no) = page_no {
-        let page = &f.catalog().pages()[page_no as usize];
+        let page = &catalog.pages()[page_no as usize];
         let contents = page.content(&resolver)?;
         for op in contents.operations() {
             println!("{:?}", op);

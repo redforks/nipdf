@@ -123,15 +123,16 @@ impl<'a, 'b> PageDict<'a, 'b> {
 }
 
 #[derive(Debug)]
-pub struct Page {
+pub struct Page<'a, 'b> {
     /// pdf object id
     id: u32,
     content_ids: Vec<u32>, // maybe empty
     media_box: Rectangle,
     crop_box: Option<Rectangle>,
+    d: PageDict<'a, 'b>,
 }
 
-impl Page {
+impl<'a, 'b> Page<'a, 'b> {
     pub fn id(&self) -> u32 {
         self.id
     }
@@ -171,16 +172,16 @@ impl Page {
     }
 
     /// Parse page tree to get all pages
-    pub(crate) fn parse<'a, 'b>(
+    pub(crate) fn parse(
         root: PageDict<'a, 'b>,
         resolver: &'b ObjectResolver<'a>,
-    ) -> Result<Vec<Page>, ObjectValueError> {
+    ) -> Result<Vec<Self>, ObjectValueError> {
         let mut pages = Vec::new();
         let mut parents = Vec::new();
         fn handle<'a, 'b, 'c>(
             node: PageDict<'a, 'b>,
             resolver: &'b ObjectResolver<'a>,
-            pages: &'c mut Vec<Page>,
+            pages: &'c mut Vec<Page<'a, 'b>>,
             parents: &'c mut Vec<PageDict<'a, 'b>>,
         ) -> Result<(), ObjectValueError> {
             if node.is_leaf() {
@@ -198,15 +199,15 @@ impl Page {
         Ok(pages)
     }
 
-    fn from_leaf<'a, 'b>(
+    fn from_leaf(
         d: &PageDict<'a, 'b>,
         parents: &[PageDict<'a, 'b>],
     ) -> Result<Self, ObjectValueError> {
-        let media_box = once(d)
-            .chain(parents.iter())
+        let leaf_to_root = || once(d).chain(parents.iter().rev());
+        let media_box = leaf_to_root()
             .find_map(|d| d.media_box())
             .ok_or(ObjectValueError::DictSchemaError("Page", "MediaBox"))?;
-        let crop_box = once(d).chain(parents.iter()).find_map(|d| d.crop_box());
+        let crop_box = leaf_to_root().find_map(|d| d.crop_box());
         let content_ids =
             d.d.opt_single_or_arr("Contents", |o| Ok(o.as_ref()?.id().id()))?;
 
@@ -215,6 +216,7 @@ impl Page {
             media_box,
             crop_box,
             content_ids,
+            d: d.clone(),
         })
     }
 }

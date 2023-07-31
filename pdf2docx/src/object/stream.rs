@@ -314,17 +314,11 @@ impl<'a> Stream<'a> {
         Self(dict, data)
     }
 
-    /// Decode stream data using filter and parameters in stream dictionary.
-    /// `image_to_raw` if the stream is image, convert to RawImage.
-    pub fn decode(
-        &self,
-        resolver: &ObjectResolver<'a>,
-        image_to_raw: bool,
-    ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
+    /// Get stream un-decoded raw data.
+    pub fn raw(&self, resolver: &ObjectResolver<'a>) -> Result<&'a [u8], ObjectValueError> {
         let len = resolver
             .resolve_container_value(&self.0, "Length")?
             .as_int()?;
-
         #[cfg(debug_assertions)]
         {
             let end_stream = &self.1[len as usize..];
@@ -334,8 +328,17 @@ impl<'a> Stream<'a> {
                 panic!("{:#?}", self.1);
             }
         }
+        Ok(&self.1[0..len as usize])
+    }
 
-        let mut decoded = FilterDecodedData::Bytes(Cow::Borrowed(&self.1[0..len as usize]));
+    /// Decode stream data using filter and parameters in stream dictionary.
+    /// `image_to_raw` if the stream is image, convert to RawImage.
+    pub fn decode(
+        &self,
+        resolver: &ObjectResolver<'a>,
+        image_to_raw: bool,
+    ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
+        let mut decoded = FilterDecodedData::Bytes(self.raw(resolver)?.into());
         for (filter_name, params) in self.iter_filter()? {
             decoded = filter(decoded.into_bytes()?, filter_name, params, image_to_raw)?;
         }

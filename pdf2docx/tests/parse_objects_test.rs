@@ -28,7 +28,7 @@ fn scan_objects() {
             println!("  done");
         }
 
-        for (idx, page) in f.catalog().pages().iter().enumerate() {
+        for (idx, page) in f.catalog(&resolver).unwrap().pages().iter().enumerate() {
             println!("page: {}, object id: {}", idx, page.id());
             println!("  media_box: {:?}", page.media_box());
             println!("  crop_box: {:?}", page.crop_box());
