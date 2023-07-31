@@ -22,9 +22,8 @@ fn test_comment_exception(input: &str) {
 #[test_case("\t \n\r \x0c" => ""; "multiple whitespace")]
 #[test_case("% comment" => ""; "comment to the end")]
 #[test_case("% comment\nfoo" => "foo"; "comment to eol")]
-#[test_case(" % comment\n  % again\r\t bar" => "bar"; "continue comment and whitespaces")]
+#[test_case(" % comment\n  % again\r\t bar" => "bar"; "continue comment and white spaces")]
 fn test_whitespace_or_comment(input: &str) -> &str {
-    let (input, v) = whitespace_or_comment(input.as_bytes()).unwrap();
-    assert_eq!((), v);
+    let (input, _): (_, ()) = whitespace_or_comment(input.as_bytes()).unwrap();
     from_utf8(input).unwrap()
 }

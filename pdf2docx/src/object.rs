@@ -455,7 +455,7 @@ mod frame;
 pub use frame::*;
 
 use crate::{
-    file::{DataContainer, ObjectResolver, Rectangle},
+    file::{ObjectResolver, Rectangle},
     parser,
 };
 

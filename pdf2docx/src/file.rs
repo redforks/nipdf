@@ -166,14 +166,8 @@ impl<'a> ObjectResolver<'a> {
             .ok_or(ObjectValueError::ObjectIDNotFound)?
             .get_or_try_init(|| {
                 let mut o = self.xref_table.parse_object(id)?;
-                loop {
-                    match o {
-                        Object::Reference(id) => {
-                            let id = id.id().id();
-                            o = self.xref_table.parse_object(id)?;
-                        }
-                        _ => break,
-                    }
+                while let Object::Reference(id) = o {
+                    o = self.xref_table.parse_object(id.id().id())?;
                 }
                 Ok(o)
             })
@@ -265,7 +259,7 @@ impl<'a> ObjectResolver<'a> {
                 let mut res = Vec::with_capacity(arr.len());
                 for obj in arr {
                     let id = obj.as_ref()?;
-                    let dict = self.resolve(id.id().id()).map(|o| o)?;
+                    let dict = self.resolve(id.id().id())?;
                     res.push(T::new(id.id().id(), dict.as_dict()?, self)?);
                 }
                 Ok(res)
@@ -305,7 +299,7 @@ impl<'a, 'b> Catalog<'a, 'b> {
         let catalog_dict: CatalogDict = resolver.resolve_pdf_object(id)?;
 
         let ver = catalog_dict.version().map(|s| s.to_owned());
-        let pages = Page::parse(catalog_dict.pages(), resolver)?;
+        let pages = Page::parse(catalog_dict.pages())?;
         Ok(Self { id, pages, ver })
     }
 

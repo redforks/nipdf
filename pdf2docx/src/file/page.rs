@@ -179,15 +179,11 @@ impl<'a, 'b> Page<'a, 'b> {
     }
 
     /// Parse page tree to get all pages
-    pub(crate) fn parse(
-        root: PageDict<'a, 'b>,
-        resolver: &'b ObjectResolver<'a>,
-    ) -> Result<Vec<Self>, ObjectValueError> {
+    pub(crate) fn parse(root: PageDict<'a, 'b>) -> Result<Vec<Self>, ObjectValueError> {
         let mut pages = Vec::new();
         let mut parents = Vec::new();
         fn handle<'a, 'b, 'c>(
             node: PageDict<'a, 'b>,
-            resolver: &'b ObjectResolver<'a>,
             pages: &'c mut Vec<Page<'a, 'b>>,
             parents: &'c mut Vec<PageDict<'a, 'b>>,
         ) -> Result<(), ObjectValueError> {
@@ -197,12 +193,12 @@ impl<'a, 'b> Page<'a, 'b> {
                 let kids = node.kids();
                 parents.push(node);
                 for kid in kids {
-                    handle(kid, resolver, pages, parents)?;
+                    handle(kid, pages, parents)?;
                 }
             }
             Ok(())
         }
-        handle(root, resolver, &mut pages, &mut parents)?;
+        handle(root, &mut pages, &mut parents)?;
         Ok(pages)
     }
 
