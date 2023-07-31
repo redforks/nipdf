@@ -83,19 +83,19 @@ fn dump_page(
     let catalog = f.catalog(&resolver)?;
 
     if show_total_pages {
-        println!("{}", catalog.pages().len());
+        println!("{}", catalog.pages()?.len());
     } else if show_page_id {
         let page_no = page_no.expect("page number is required");
-        let page = &catalog.pages()[page_no as usize];
+        let page = &catalog.pages()?[page_no as usize];
         println!("{}", page.id());
     } else if to_png {
         let page_no = page_no.expect("page number is required");
-        let page = &catalog.pages()[page_no as usize];
+        let page = &catalog.pages()?[page_no as usize];
         let pixmap = page.render(&resolver)?;
         let buf = pixmap.encode_png()?;
         copy(&mut &buf[..], &mut BufWriter::new(&mut stdout()))?;
     } else if let Some(page_no) = page_no {
-        let page = &catalog.pages()[page_no as usize];
+        let page = &catalog.pages()?[page_no as usize];
         let contents = page.content(&resolver)?;
         for op in contents.operations() {
             println!("{:?}", op);

@@ -289,22 +289,22 @@ trait CatalogDictTrait {
 
 #[derive(Debug)]
 pub struct Catalog<'a, 'b> {
-    id: u32,
-    pages: Vec<Page<'a, 'b>>,
-    ver: Option<String>,
+    d: CatalogDict<'a, 'b>,
 }
 
 impl<'a, 'b> Catalog<'a, 'b> {
     fn parse(id: u32, resolver: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
-        let catalog_dict: CatalogDict = resolver.resolve_pdf_object(id)?;
-
-        let ver = catalog_dict.version().map(|s| s.to_owned());
-        let pages = Page::parse(catalog_dict.pages())?;
-        Ok(Self { id, pages, ver })
+        Ok(Self {
+            d: resolver.resolve_pdf_object(id)?,
+        })
     }
 
-    pub fn pages(&self) -> &[Page<'a, 'b>] {
-        self.pages.as_slice()
+    pub fn pages(&self) -> Result<Vec<Page<'a, 'b>>, ObjectValueError> {
+        Page::parse(self.d.pages())
+    }
+
+    pub fn ver(&self) -> Option<&str> {
+        self.d.version()
     }
 }
 
