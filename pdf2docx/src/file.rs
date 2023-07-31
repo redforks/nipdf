@@ -243,6 +243,35 @@ impl<'a> ObjectResolver<'a> {
         }
     }
 
+    /// Resolve root pdf_objects from data container `c` with key `k`, if value is reference,
+    /// resolve it recursively. Return empty vector if object is not found.
+    /// The raw value should be an array of references.
+    pub fn resolve_container_pdf_object_array<
+        'b: 'a,
+        'd: 'c,
+        'c,
+        C: DataContainer<'a>,
+        T: RootPdfObject<'a, 'c>,
+    >(
+        &'d self,
+        c: &'c C,
+        id: &'b str,
+    ) -> Result<Vec<T>, ObjectValueError> {
+        let arr = c.get_value(id);
+        arr.map_or_else(
+            || Ok(vec![]),
+            |arr| {
+                let arr = arr.as_arr()?;
+                let mut res = Vec::with_capacity(arr.len());
+                for obj in arr {
+                    let obj = obj.as_dict()?;
+                    res.push(T::new(0, obj, self)?);
+                }
+                Ok(res)
+            },
+        )
+    }
+
     fn to_opt<T>(o: Result<T, ObjectValueError>) -> Result<Option<T>, ObjectValueError> {
         o.map(Some).or_else(|e| {
             if let ObjectValueError::ObjectIDNotFound = e {
