@@ -235,7 +235,7 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
         self.r
     }
 
-    pub fn type_name(&self) -> &str {
+    pub fn type_name(&self) -> &'b str {
         self.t.get_type(self.d).unwrap()
     }
 
@@ -243,12 +243,12 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
         self.r.opt_resolve_container_value(self.d, id)
     }
 
-    pub fn opt_name(&self, id: &'static str) -> Result<Option<&str>, ObjectValueError> {
+    pub fn opt_name(&self, id: &'static str) -> Result<Option<&'b str>, ObjectValueError> {
         self.opt_get(id)?
             .map_or(Ok(None), |o| o.as_name().map(Some))
     }
 
-    pub fn required_name(&self, id: &'static str) -> Result<&str, ObjectValueError> {
+    pub fn required_name(&self, id: &'static str) -> Result<&'b str, ObjectValueError> {
         self.opt_get(id)?
             .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_name()
