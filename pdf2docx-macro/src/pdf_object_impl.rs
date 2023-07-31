@@ -313,7 +313,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let mut methods = vec![];
     for item in &def.items {
-        match item {
+        let method = match item {
             TraitItem::Fn(TraitItemFn { sig, attrs, .. }) => {
                 let name = sig.ident.clone();
                 let rt: &Type = match &sig.output {
@@ -324,91 +324,91 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     key_attr(attrs).unwrap_or_else(|| snake_case_to_pascal(&name.to_string()));
                 let method = schema_method_name(rt, &attrs[..]).map(|m| Ident::new(m, name.span()));
                 if let Some(method) = method {
-                    methods.push(quote! {
+                    quote! {
                         fn #name(&self) -> #rt {
                             self.d.#method(#key).unwrap()
                         }
-                    });
+                    }
                 } else if let Some(nested_type) = nested(rt, attrs) {
                     let type_name = remove_generic(&nested_type);
                     match nested_type {
                         Left(ty) => {
-                            methods.push(quote! {
+                            quote! {
                                 fn #name(&self) -> Option<#ty> {
                                     self.d.opt_dict(#key).unwrap().map(|d| #type_name::new(d, self.d.resolver()).unwrap())
                                 }
-                            });
+                            }
                         }
                         Right(ty) => {
-                            methods.push(quote! {
+                            quote! {
                                 fn #name(&self) -> #ty {
                                     #type_name::new(self.d.required_dict(#key).unwrap(), self.d.resolver()).unwrap()
                                 }
-                            });
+                            }
                         }
                     }
                 } else if let Some(nested_root) = nested_root(rt, attrs) {
                     let type_name = remove_generic(&nested_root);
                     match nested_root {
                         Left(ty) => {
-                            methods.push(quote! {
+                            quote! {
                                 fn #name(&self) -> Option<#ty> {
                                     self.d.resolver().opt_resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key).unwrap()
                                 }
-                            });
+                            }
                         }
                         Right(ty) => {
                             if is_vec(ty) {
-                                methods.push(quote! {
+                                quote! {
                                     fn #name(&self) -> #ty {
                                         self.d.resolver().resolve_container_pdf_object_array(self.d.dict(), #key).unwrap()
                                     }
-                                });
-                            } else {
-                                methods.push(quote! {
-                                fn #name(&self) -> #ty {
-                                    self.d.resolver().resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key).unwrap()
                                 }
-                            });
+                            } else {
+                                quote! {
+                                    fn #name(&self) -> #ty {
+                                        self.d.resolver().resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key).unwrap()
+                                    }
+                                }
                             }
                         }
                     }
                 } else if let Some(from_name_str_type) = from_name_str(rt, attrs) {
                     match from_name_str_type {
                         Left(ty) => {
-                            methods.push(quote! {
+                            quote! {
                                 fn #name(&self) -> Option<#ty> {
                                     self.d.opt_name(#key).unwrap().map(|s| <#ty as std::str::FromStr>::from_str(s).unwrap())
                                 }
-                            });
+                            }
                         }
                         Right(ty) => {
-                            methods.push(quote! {
+                            quote! {
                                 fn #name(&self) -> #ty {
                                     <#ty as std::str::FromStr>::from_str(
                                         self.d.required_name(#key).unwrap()
                                     ).unwrap()
                                 }
-                            });
+                            }
                         }
                     }
                 } else if let Some(try_from_type) = try_from(rt, attrs) {
                     match try_from_type {
                         Left(ty) => {
-                            methods.push(quote! {
+                            quote! {
                                 fn #name(&self) -> Option<#ty> {
                                     self.d.opt_object(#key).unwrap().map(|d| <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from(d).unwrap())
                                 }
-                            });
+                            }
                         }
                         Right(ty) => {
-                            methods.push(quote! {
+                            quote! {
                                 fn #name(&self) -> #ty {
                                     <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from(
                                         self.d.required_object(#key).unwrap()
                                     ).unwrap()
                                 }
-                            });
+                            }
                         }
                     }
                 } else {
@@ -416,7 +416,8 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
             }
             _ => panic!("only support function"),
-        }
+        };
+        methods.push(method);
     }
 
     let vis = &def.vis;
