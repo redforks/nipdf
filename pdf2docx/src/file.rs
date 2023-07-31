@@ -308,24 +308,6 @@ impl<'a, 'b> Catalog<'a, 'b> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Trailer<'a> {
-    dict: Dictionary<'a>,
-}
-
-impl<'a> Trailer<'a> {
-    pub fn new(dict: Dictionary<'a>) -> Self {
-        Self { dict }
-    }
-
-    pub fn total_objects(&self) -> Result<i32, ObjectValueError> {
-        self.dict
-            .get(&Name::borrowed(b"Size"))
-            .ok_or(ObjectValueError::DictNameMissing)
-            .and_then(|obj| obj.as_int())
-    }
-}
-
 #[derive(Debug)]
 pub struct File {
     ver: String,
