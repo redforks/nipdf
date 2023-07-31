@@ -1,5 +1,6 @@
 //! object mod contains data structure map to low level pdf objects
 use ahash::HashMap;
+use educe::Educe;
 
 use std::{
     borrow::{Borrow, Cow},
@@ -76,7 +77,7 @@ impl<'a> Dictionary<'a> {
     }
 }
 
-pub trait SchemaTypeValidator: Clone {
+pub trait SchemaTypeValidator: Clone + std::fmt::Debug {
     fn schema_type(&self) -> &'static str;
     fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError>;
 
@@ -175,10 +176,12 @@ impl<const N: usize> SchemaTypeValidator for [&'static str; N] {
     }
 }
 
-#[derive(Clone)]
-pub struct SchemaDict<'a, 'b, T: Clone> {
+#[derive(Clone, Educe)]
+#[educe(Debug)]
+pub struct SchemaDict<'a, 'b, T: Clone + std::fmt::Debug> {
     t: T,
     d: &'b Dictionary<'a>,
+    #[educe(Debug(ignore))]
     r: &'b ObjectResolver<'a>,
 }
 
