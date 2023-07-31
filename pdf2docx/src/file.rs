@@ -264,8 +264,9 @@ impl<'a> ObjectResolver<'a> {
                 let arr = arr.as_arr()?;
                 let mut res = Vec::with_capacity(arr.len());
                 for obj in arr {
-                    let obj = obj.as_dict()?;
-                    res.push(T::new(0, obj, self)?);
+                    let id = obj.as_ref()?;
+                    let dict = self.resolve(id.id().id()).map(|o| o)?;
+                    res.push(T::new(id.id().id(), dict.as_dict()?, self)?);
                 }
                 Ok(res)
             },
@@ -307,7 +308,7 @@ impl Catalog {
 
         let root_page_id = dict.required_ref("Pages")?;
         let ver = catalog_dict.version().map(|s| s.to_owned());
-        let pages = Page::parse(root_page_id, resolver)?;
+        let pages = Page::parse(resolver.resolve_pdf_object(root_page_id)?, resolver)?;
         Ok(Self { id, pages, ver })
     }
 
