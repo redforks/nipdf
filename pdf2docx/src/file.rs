@@ -310,9 +310,9 @@ impl<'a, 'b> Catalog<'a, 'b> {
 
 #[derive(Debug)]
 pub struct File {
-    ver: String,
     total_objects: u32,
     root_id: u32,
+    head_ver: String,
 }
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -336,14 +336,6 @@ impl File {
             .find_map(|t| t.get(&Name::borrowed(b"Root")))
             .unwrap();
         let root_id = root_id.as_ref().unwrap().id().id();
-        let catalog = resolver
-            .resolve_container_value(&trailers, "Root")
-            .map_err(|_| FileError::CatalogRequired)?;
-        let ver = catalog
-            .as_dict()?
-            .get(&Name::borrowed(b"Version"))
-            .map(|o| -> Result<String, ObjectValueError> { Ok(o.as_name().unwrap().to_owned()) })
-            .unwrap_or(Ok(head_ver.to_owned()))?;
         let total_objects = resolver
             .resolve_container_value(&trailers, "Size")
             .map_err(|_| FileError::MissingRequiredTrailerValue)?
@@ -351,7 +343,7 @@ impl File {
 
         Ok((
             Self {
-                ver,
+                head_ver: head_ver.to_owned(),
                 total_objects,
                 root_id,
             },
@@ -359,8 +351,12 @@ impl File {
         ))
     }
 
-    pub fn version(&self) -> &str {
-        &self.ver
+    pub fn version(&self, resolver: &ObjectResolver) -> Result<String, ObjectValueError> {
+        let catalog = self.catalog(resolver)?;
+        Ok(catalog
+            .ver()
+            .map(|s| s.to_owned())
+            .unwrap_or(self.head_ver.clone()))
     }
 
     pub fn total_objects(&self) -> u32 {
