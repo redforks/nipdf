@@ -76,7 +76,7 @@ impl<'a> Dictionary<'a> {
     }
 }
 
-pub trait SchemaTypeValidator {
+pub trait SchemaTypeValidator: Clone {
     fn schema_type(&self) -> &'static str;
     fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError>;
 
@@ -175,7 +175,8 @@ impl<const N: usize> SchemaTypeValidator for [&'static str; N] {
     }
 }
 
-pub struct SchemaDict<'a, 'b, T> {
+#[derive(Clone)]
+pub struct SchemaDict<'a, 'b, T: Clone> {
     t: T,
     d: &'b Dictionary<'a>,
     r: &'b ObjectResolver<'a>,

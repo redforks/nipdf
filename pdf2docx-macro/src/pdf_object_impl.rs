@@ -423,6 +423,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
     let vis = &def.vis;
     let tokens = if is_root_object {
         quote! {
+            #[derive(Clone)]
             #vis struct #struct_name<'a, 'b> {
                 id: u32,
                 d: SchemaDict<'a, 'b, #valid_ty>,
@@ -450,6 +451,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     } else {
         quote! {
+            #[derive(Clone)]
             #vis struct #struct_name<'a, 'b> {
                 d: SchemaDict<'a, 'b, #valid_ty>,
             }
