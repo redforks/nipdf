@@ -49,5 +49,5 @@ fn parse_page_tree(root_id: u32, tree: Vec<(u32, Vec<u32>)>) -> Vec<u32> {
     }
 
     let pages = Page::parse(resolver.resolve_pdf_object(root_id).unwrap(), &resolver);
-    pages.unwrap().into_iter().map(|p| p.id).collect()
+    pages.unwrap().into_iter().map(|p| p.id()).collect()
 }

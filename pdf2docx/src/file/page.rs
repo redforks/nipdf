@@ -124,30 +124,37 @@ impl<'a, 'b> PageDict<'a, 'b> {
 
 #[derive(Debug)]
 pub struct Page<'a, 'b> {
-    /// pdf object id
-    id: u32,
-    content_ids: Vec<u32>, // maybe empty
-    media_box: Rectangle,
-    crop_box: Option<Rectangle>,
     d: PageDict<'a, 'b>,
+    parents_to_root: Vec<PageDict<'a, 'b>>,
 }
 
 impl<'a, 'b> Page<'a, 'b> {
     pub fn id(&self) -> u32 {
-        self.id
+        self.d.id()
+    }
+
+    fn iter_to_root(&self) -> impl Iterator<Item = &PageDict<'a, 'b>> {
+        once(&self.d).chain(self.parents_to_root.iter())
     }
 
     pub fn media_box(&self) -> Rectangle {
-        self.media_box
+        self.iter_to_root()
+            .find_map(|d| d.media_box())
+            .expect("page must have media box")
     }
 
     pub fn crop_box(&self) -> Option<Rectangle> {
-        self.crop_box
+        self.iter_to_root().find_map(|d| d.crop_box())
     }
 
     pub fn content(&self, resolver: &ObjectResolver<'_>) -> Result<PageContent, ObjectValueError> {
-        let mut bufs = Vec::with_capacity(self.content_ids.len());
-        for id in &self.content_ids {
+        let content_ids = self
+            .d
+            .d
+            .opt_single_or_arr("Contents", |o| Ok(o.as_ref()?.id().id()))?;
+
+        let mut bufs = Vec::with_capacity(content_ids.len());
+        for id in &content_ids[..] {
             let s = resolver.resolve(*id)?.as_stream()?;
             let decoded = s.decode(resolver, false)?;
             match decoded {
@@ -203,20 +210,12 @@ impl<'a, 'b> Page<'a, 'b> {
         d: &PageDict<'a, 'b>,
         parents: &[PageDict<'a, 'b>],
     ) -> Result<Self, ObjectValueError> {
-        let leaf_to_root = || once(d).chain(parents.iter().rev());
-        let media_box = leaf_to_root()
-            .find_map(|d| d.media_box())
-            .ok_or(ObjectValueError::DictSchemaError("Page", "MediaBox"))?;
-        let crop_box = leaf_to_root().find_map(|d| d.crop_box());
-        let content_ids =
-            d.d.opt_single_or_arr("Contents", |o| Ok(o.as_ref()?.id().id()))?;
+        let mut parents = parents.to_vec();
+        parents.reverse();
 
         Ok(Self {
-            id: d.id(),
-            media_box,
-            crop_box,
-            content_ids,
             d: d.clone(),
+            parents_to_root: parents,
         })
     }
 }
