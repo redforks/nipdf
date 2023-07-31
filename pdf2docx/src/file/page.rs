@@ -4,7 +4,7 @@ use tiny_skia::Pixmap;
 
 use crate::{
     graphics::{parse_operations, LineCapStyle, LineJoinStyle, Operation, RenderingIntent},
-    object::{Array, Dictionary, FilterDecodedData, ObjectValueError, SchemaDict},
+    object::{Array, Dictionary, FilterDecodedData, ObjectValueError, RootPdfObject, SchemaDict},
 };
 
 use super::ObjectResolver;
@@ -108,8 +108,8 @@ trait ResourceDictTrait {
 #[pdf_object(["Pages", "Page"])]
 #[root_object]
 pub trait PageDictTrait {
-    #[typ("Ref")]
-    fn kids(&self) -> Vec<u32>;
+    #[nested_root]
+    fn kids(&self) -> Vec<Self>;
     fn media_box(&self) -> Option<Rectangle>;
     fn crop_box(&self) -> Option<Rectangle>;
     #[nested]
@@ -171,53 +171,47 @@ impl Page {
     }
 
     /// Parse page tree to get all pages
-    pub(crate) fn parse(
-        root_id: u32,
-        resolver: &ObjectResolver<'_>,
+    pub(crate) fn parse<'a, 'b>(
+        root: PageDict<'a, 'b>,
+        resolver: &'b ObjectResolver<'a>,
     ) -> Result<Vec<Page>, ObjectValueError> {
         let mut pages = Vec::new();
         let mut parents = Vec::new();
         fn handle<'a, 'b, 'c>(
-            id: u32,
+            node: PageDict<'a, 'b>,
             resolver: &'b ObjectResolver<'a>,
             pages: &'c mut Vec<Page>,
             parents: &'c mut Vec<PageDict<'a, 'b>>,
         ) -> Result<(), ObjectValueError> {
-            let d: PageDict = resolver.resolve_pdf_object(id)?;
-            if d.is_leaf() {
-                pages.push(Page::from_leaf(id, &d, &parents[..])?);
+            if node.is_leaf() {
+                pages.push(Page::from_leaf(&node, &parents[..])?);
             } else {
-                let kids = d.kids();
-                parents.push(d);
+                let kids = node.kids();
+                parents.push(node);
                 for kid in kids {
                     handle(kid, resolver, pages, parents)?;
                 }
             }
             Ok(())
         }
-        handle(root_id, resolver, &mut pages, &mut parents)?;
+        handle(root, resolver, &mut pages, &mut parents)?;
         Ok(pages)
     }
 
     fn from_leaf<'a, 'b>(
-        id: u32,
         d: &PageDict<'a, 'b>,
         parents: &[PageDict<'a, 'b>],
     ) -> Result<Self, ObjectValueError> {
         let media_box = once(d)
             .chain(parents.iter())
-            .map(|d| d.media_box())
-            .find_map(|r| r)
+            .find_map(|d| d.media_box())
             .ok_or(ObjectValueError::DictSchemaError("Page", "MediaBox"))?;
-        let crop_box = once(d)
-            .chain(parents.iter())
-            .map(|d| d.crop_box())
-            .find_map(|r| r);
+        let crop_box = once(d).chain(parents.iter()).find_map(|d| d.crop_box());
         let content_ids =
             d.d.opt_single_or_arr("Contents", |o| Ok(o.as_ref()?.id().id()))?;
 
         Ok(Self {
-            id,
+            id: d.id(),
             media_box,
             crop_box,
             content_ids,
