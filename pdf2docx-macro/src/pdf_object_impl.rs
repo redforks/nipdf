@@ -83,6 +83,18 @@ fn has_attr<'a>(
     }
 }
 
+fn is_vec(t: &Type) -> bool {
+    if let Type::Path(tp) = t {
+        if let Some(seg) = tp.path.segments.last() {
+            seg.ident == "Vec"
+        } else {
+            false
+        }
+    } else {
+        false
+    }
+}
+
 fn nested_root<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
     has_attr("nested_root", rt, attrs)
 }
@@ -346,11 +358,19 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                             });
                         }
                         Right(ty) => {
-                            methods.push(quote! {
+                            if is_vec(ty) {
+                                methods.push(quote! {
+                                    fn #name(&self) -> #ty {
+                                        self.d.resolver().resolve_container_pdf_object_array(self.d.dict(), #key).unwrap()
+                                    }
+                                });
+                            } else {
+                                methods.push(quote! {
                                 fn #name(&self) -> #ty {
                                     self.d.resolver().resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key).unwrap()
                                 }
                             });
+                            }
                         }
                     }
                 } else if let Some(from_name_str_type) = from_name_str(rt, attrs) {
