@@ -21,12 +21,33 @@ pub struct Rectangle {
 }
 
 impl Rectangle {
+    /// From left, top, right, bottom, re-order them to make sure that
+    /// left <= right, top <= bottom
+    pub fn from_lbrt(left_x: f32, bottom_y: f32, right_x: f32, top_y: f32) -> Self {
+        Self {
+            left_x: left_x.min(right_x),
+            lower_y: bottom_y.min(top_y),
+            right_x: left_x.max(right_x),
+            upper_y: bottom_y.max(top_y),
+        }
+    }
+
+    pub fn from_xywh(x: f32, y: f32, w: f32, h: f32) -> Self {
+        Self::from_lbrt(x, y, x + w, y + h)
+    }
+
     pub fn width(&self) -> f32 {
         self.right_x - self.left_x
     }
 
     pub fn height(&self) -> f32 {
         self.upper_y - self.lower_y
+    }
+}
+
+impl From<Rectangle> for tiny_skia::Rect {
+    fn from(rect: Rectangle) -> Self {
+        Self::from_ltrb(rect.left_x, rect.lower_y, rect.right_x, rect.upper_y).unwrap()
     }
 }
 
@@ -39,12 +60,7 @@ impl<'a> From<&Array<'a>> for Rectangle {
         let lower_y = iter.next().unwrap().as_number().unwrap();
         let right_x = iter.next().unwrap().as_number().unwrap();
         let upper_y = iter.next().unwrap().as_number().unwrap();
-        Self {
-            left_x: left_x.min(right_x),
-            lower_y: lower_y.min(upper_y),
-            right_x: left_x.max(right_x),
-            upper_y: lower_y.max(upper_y),
-        }
+        Self::from_lbrt(left_x, lower_y, right_x, upper_y)
     }
 }
 

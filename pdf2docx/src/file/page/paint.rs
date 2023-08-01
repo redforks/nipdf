@@ -2,8 +2,8 @@ use crate::graphics::{
     Color, LineCapStyle, LineJoinStyle, Point, RenderingIntent, TransformMatrix,
 };
 
-use super::Operation;
-use tiny_skia::{Paint, Path, PathBuilder, Pixmap, Rect as SkiaRect, Shader, Stroke, StrokeDash};
+use super::{Operation, Rectangle};
+use tiny_skia::{Paint, Path, PathBuilder, Pixmap, Shader, Stroke, StrokeDash};
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
     fn from(cap: LineCapStyle) -> Self {
@@ -126,8 +126,8 @@ impl State {
     }
 
     fn append_rect(&mut self, p: Point, w: f32, h: f32) {
-        self.path
-            .push_rect(SkiaRect::from_xywh(p.x, p.y, w, h).unwrap());
+        let r = Rectangle::from_xywh(p.x, p.y, w, h);
+        self.path.push_rect(r.into());
     }
 
     fn get_fill_paint(&self) -> &Paint<'static> {
