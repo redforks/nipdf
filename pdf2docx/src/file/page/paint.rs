@@ -177,10 +177,6 @@ impl Render {
         self.stack.pop().unwrap();
     }
 
-    fn current(&self) -> &State {
-        self.stack.last().unwrap()
-    }
-
     fn current_mut(&mut self) -> &mut State {
         self.stack.last_mut().unwrap()
     }
