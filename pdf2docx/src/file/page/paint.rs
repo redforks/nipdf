@@ -155,15 +155,17 @@ impl State {
 pub struct Render {
     canvas: Pixmap,
     stack: Vec<State>,
+    height: u32,
 }
 
 impl Render {
-    pub fn new(mut canvas: Pixmap) -> Self {
+    pub fn new(mut canvas: Pixmap, height: u32) -> Self {
         // fill the whole canvas with white
         canvas.fill(tiny_skia::Color::WHITE);
         Self {
             canvas,
             stack: vec![State::new()],
+            height,
         }
     }
 
@@ -250,7 +252,7 @@ impl Render {
             &state.path(),
             state.get_fill_paint(),
             state.get_stroke(),
-            state.to_transform(),
+            self.flip_y_axis(state.to_transform()),
             None,
         );
     }
@@ -270,7 +272,7 @@ impl Render {
             &state.path(),
             state.get_fill_paint(),
             tiny_skia::FillRule::Winding,
-            state.to_transform(),
+            self.flip_y_axis(state.to_transform()),
             None,
         );
     }
@@ -281,7 +283,7 @@ impl Render {
             &state.path(),
             state.get_fill_paint(),
             tiny_skia::FillRule::EvenOdd,
-            state.to_transform(),
+            self.flip_y_axis(state.to_transform()),
             None,
         );
     }
@@ -304,6 +306,12 @@ impl Render {
     fn close_fill_and_stroke_even_odd(&mut self) {
         self.close_path();
         self.fill_and_stroke_even_odd();
+    }
+
+    fn flip_y_axis(&self, transform: tiny_skia::Transform) -> tiny_skia::Transform {
+        transform
+            .pre_scale(1.0, -1.0)
+            .pre_translate(0.0, -(self.height as f32))
     }
 }
 

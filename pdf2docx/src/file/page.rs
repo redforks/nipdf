@@ -186,7 +186,7 @@ impl<'a, 'b> Page<'a, 'b> {
     pub fn render(&self, resolver: &ObjectResolver<'_>) -> Result<Pixmap, ObjectValueError> {
         let media_box = self.media_box();
         let map = Pixmap::new(media_box.width() as u32, media_box.height() as u32).unwrap();
-        let mut renderer = paint::Render::new(map);
+        let mut renderer = paint::Render::new(map, media_box.height() as u32);
         let content = self.content(resolver)?;
         for op in content.operations() {
             renderer.exec(&op);
