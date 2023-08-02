@@ -352,9 +352,17 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                             }
                         }
                         Right(ty) => {
-                            quote! {
-                                fn #name(&self) -> #ty {
-                                    #type_name::new(self.d.required_dict(#key).unwrap(), self.d.resolver()).unwrap()
+                            if is_map(ty) {
+                                quote! {
+                                    fn #name(&self) -> #ty {
+                                        self.d.resolver().resolve_container_pdf_object_map(self.d.dict(), #key).unwrap()
+                                    }
+                                }
+                            } else {
+                                quote! {
+                                    fn #name(&self) -> #ty {
+                                        #type_name::new(self.d.required_dict(#key).unwrap(), self.d.resolver()).unwrap()
+                                    }
                                 }
                             }
                         }

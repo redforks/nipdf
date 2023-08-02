@@ -5,10 +5,12 @@ use itertools::Itertools;
 use nom::Finish;
 use once_cell::unsync::OnceCell;
 use pdf2docx_macro::pdf_object;
-use std::collections::HashMap;
+use std::{collections::HashMap, str::from_utf8};
 
 use crate::{
-    object::{Dictionary, FrameSet, Name, Object, ObjectValueError, RootPdfObject, SchemaDict},
+    object::{
+        Dictionary, FrameSet, Name, Object, ObjectValueError, PdfObject, RootPdfObject, SchemaDict,
+    },
     parser::{parse_frame_set, parse_header, parse_indirected_object},
 };
 use log::error;
@@ -240,18 +242,33 @@ impl<'a> ObjectResolver<'a> {
     /// Resolve pdf object from data container `c` with key `k`, if value is reference,
     /// resolve it recursively. Return empty Map if object is not found.
     /// The raw value should be a dictionary, that key is Name and value is Dictionary.
-    // pub fn resolve_container_pdf_object_hash<
-    //     'b: 'a,
-    //     'd: 'c,
-    //     'c,
-    //     C: DataContainer<'a>,
-    //     T: RootPdfObject<'a, 'c>,
-    // >(
-    //     &'d self,
-    //     c: &'c C,
-    //     id: &'b str,
-    // ) -> Result<HashMap<String, T>, ObjectValueError> {
-    // }
+    pub fn resolve_container_pdf_object_map<
+        'b: 'a,
+        'd: 'c,
+        'c,
+        C: DataContainer<'a>,
+        T: PdfObject<'a, 'c>,
+    >(
+        &'d self,
+        c: &'c C,
+        id: &'b str,
+    ) -> Result<HashMap<String, T>, ObjectValueError> {
+        let dict = c.get_value(id);
+        dict.map_or_else(
+            || Ok(HashMap::default()),
+            |dict| {
+                let dict = dict.as_dict()?;
+                let mut res = HashMap::with_capacity(dict.len());
+                for (k, v) in dict.iter() {
+                    let k = from_utf8(k.0.as_ref()).unwrap().to_owned();
+                    let v = v.as_dict()?;
+                    let obj = T::new(v, self)?;
+                    res.insert(k, obj);
+                }
+                Ok(res)
+            },
+        )
+    }
 
     /// Resolve root pdf_objects from data container `c` with key `k`, if value is reference,
     /// resolve it recursively. Return empty vector if object is not found.

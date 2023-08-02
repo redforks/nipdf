@@ -11,7 +11,7 @@ use crate::{
 };
 
 use super::ObjectResolver;
-use std::iter::once;
+use std::{collections::HashMap, iter::once};
 
 mod paint;
 
@@ -115,7 +115,7 @@ impl<'a, 'b> GraphicsStateParameterDict<'a, 'b> {
 #[pdf_object(())]
 trait ResourceDictTrait {
     #[nested]
-    fn ext_g_state() -> Option<GraphicsStateParameterDict<'a, 'b>>;
+    fn ext_g_state() -> HashMap<String, GraphicsStateParameterDict<'a, 'b>>;
     fn color_space(&self) -> Option<&'b Dictionary<'a>>;
     fn pattern(&self) -> Option<&'b Dictionary<'a>>;
     fn shading(&self) -> Option<&'b Dictionary<'a>>;
