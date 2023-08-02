@@ -237,10 +237,26 @@ impl<'a> ObjectResolver<'a> {
         }
     }
 
+    /// Resolve pdf object from data container `c` with key `k`, if value is reference,
+    /// resolve it recursively. Return empty Map if object is not found.
+    /// The raw value should be a dictionary, that key is Name and value is Dictionary.
+    // pub fn resolve_container_pdf_object_hash<
+    //     'b: 'a,
+    //     'd: 'c,
+    //     'c,
+    //     C: DataContainer<'a>,
+    //     T: RootPdfObject<'a, 'c>,
+    // >(
+    //     &'d self,
+    //     c: &'c C,
+    //     id: &'b str,
+    // ) -> Result<HashMap<String, T>, ObjectValueError> {
+    // }
+
     /// Resolve root pdf_objects from data container `c` with key `k`, if value is reference,
     /// resolve it recursively. Return empty vector if object is not found.
     /// The raw value should be an array of references.
-    pub fn resolve_container_pdf_object_array<
+    pub fn resolve_container_root_pdf_object_array<
         'b: 'a,
         'd: 'c,
         'c,

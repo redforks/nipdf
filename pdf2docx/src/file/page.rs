@@ -4,7 +4,10 @@ use tiny_skia::Pixmap;
 
 use crate::{
     graphics::{parse_operations, LineCapStyle, LineJoinStyle, Operation, RenderingIntent},
-    object::{Array, Dictionary, FilterDecodedData, ObjectValueError, RootPdfObject, SchemaDict},
+    object::{
+        Array, Dictionary, FilterDecodedData, ObjectValueError, PdfObject, RootPdfObject,
+        SchemaDict,
+    },
 };
 
 use super::ObjectResolver;

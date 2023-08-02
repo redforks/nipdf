@@ -95,6 +95,18 @@ fn is_vec(t: &Type) -> bool {
     }
 }
 
+fn is_map(t: &Type) -> bool {
+    if let Type::Path(tp) = t {
+        if let Some(seg) = tp.path.segments.last() {
+            seg.ident == "HashMap"
+        } else {
+            false
+        }
+    } else {
+        false
+    }
+}
+
 fn nested_root<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
     has_attr("nested_root", rt, attrs)
 }
@@ -361,7 +373,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                             if is_vec(ty) {
                                 quote! {
                                     fn #name(&self) -> #ty {
-                                        self.d.resolver().resolve_container_pdf_object_array(self.d.dict(), #key).unwrap()
+                                        self.d.resolver().resolve_container_root_pdf_object_array(self.d.dict(), #key).unwrap()
                                     }
                                 }
                             } else {
@@ -435,7 +447,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     Ok(Self {id, d})
                 }
 
-                fn from(id: u32, d: &'b Dictionary<'a>, r: &'b crate::file::ObjectResolver<'a>) -> Result<Option<Self>, ObjectValueError> {
+                fn checked(id: u32, d: &'b Dictionary<'a>, r: &'b crate::file::ObjectResolver<'a>) -> Result<Option<Self>, ObjectValueError> {
                     let d = SchemaDict::from(d, r, #valid_arg)?;
                     Ok(d.map(|d| Self {id,  d}))
                 }
@@ -456,17 +468,19 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 d: SchemaDict<'a, 'b, #valid_ty>,
             }
 
-            impl<'a, 'b> #struct_name<'a, 'b> {
-                pub fn new(dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
+            impl<'a, 'b> crate::object::PdfObject<'a, 'b> for #struct_name<'a, 'b> {
+                fn new(dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
                     let d = SchemaDict::new(dict, r, #valid_arg)?;
                     Ok(Self { d })
                 }
 
-                pub fn from(dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Option<Self>, ObjectValueError> {
+                fn checked(dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Option<Self>, ObjectValueError> {
                     let d = SchemaDict::from(dict, r, #valid_arg)?;
                     Ok(d.map(|d| Self { d }))
                 }
+            }
 
+            impl<'a, 'b> #struct_name<'a, 'b> {
                 #(pub #methods)*
             }
         }

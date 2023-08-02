@@ -14,6 +14,7 @@ use pdf2docx_macro::pdf_object;
 use crate::{
     ccitt::Flags,
     file::ObjectResolver,
+    object::PdfObject,
     parser::{ws_prefixed, ParseResult},
 };
 
@@ -343,7 +344,7 @@ impl<'a> Stream<'a> {
             decoded = filter(decoded.into_bytes()?, filter_name, params, image_to_raw)?;
         }
 
-        let img_dict = ImageDict::from(&self.0, resolver)?;
+        let img_dict = ImageDict::checked(&self.0, resolver)?;
         let Some(img_dict) = img_dict else {
             return Ok(decoded);
         };

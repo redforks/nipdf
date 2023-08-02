@@ -185,6 +185,17 @@ pub struct SchemaDict<'a, 'b, T: Clone + std::fmt::Debug> {
     r: &'b ObjectResolver<'a>,
 }
 
+pub trait PdfObject<'a, 'b>
+where
+    Self: Sized,
+{
+    fn new(dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError>;
+    fn checked(
+        dict: &'b Dictionary<'a>,
+        r: &'b ObjectResolver<'a>,
+    ) -> Result<Option<Self>, ObjectValueError>;
+}
+
 /// Trait implemented by PdfObject Dicts that are indirect object of PDF file,
 /// resolved by ObjectResolver.
 pub trait RootPdfObject<'a, 'b>
@@ -196,7 +207,7 @@ where
         dict: &'b Dictionary<'a>,
         r: &'b ObjectResolver<'a>,
     ) -> Result<Self, ObjectValueError>;
-    fn from(
+    fn checked(
         id: u32,
         dict: &'b Dictionary<'a>,
         r: &'b ObjectResolver<'a>,
