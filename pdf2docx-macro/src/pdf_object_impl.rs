@@ -383,13 +383,13 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                             if is_vec(ty) {
                                 quote! {
                                     fn #name(&self) -> #ty {
-                                        self.d.resolver().resolve_container_root_pdf_object_array(self.d.dict(), #key).unwrap()
+                                        self.d.resolver().resolve_container_pdf_object_array(self.d.dict(), #key).unwrap()
                                     }
                                 }
                             } else {
                                 quote! {
                                     fn #name(&self) -> #ty {
-                                        self.d.resolver().resolve_container_root_pdf_object::<_, #type_name>(self.d.dict(), #key).unwrap()
+                                        self.d.resolver().resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key).unwrap()
                                     }
                                 }
                             }
@@ -473,7 +473,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     } else {
         quote! {
-            #[derive(Clone)]
+            #[derive(Clone, Debug)]
             #vis struct #struct_name<'a, 'b> {
                 d: SchemaDict<'a, 'b, #valid_ty>,
                 id: Option<std::num::NonZeroU32>,

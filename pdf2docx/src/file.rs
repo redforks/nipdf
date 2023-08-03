@@ -8,9 +8,7 @@ use pdf2docx_macro::pdf_object;
 use std::{collections::HashMap, num::NonZeroU32};
 
 use crate::{
-    object::{
-        Dictionary, FrameSet, Name, Object, ObjectValueError, PdfObject, RootPdfObject, SchemaDict,
-    },
+    object::{Dictionary, FrameSet, Name, Object, ObjectValueError, PdfObject, SchemaDict},
     parser::{parse_frame_set, parse_header, parse_indirected_object},
 };
 use log::error;
@@ -139,7 +137,7 @@ impl<'a> ObjectResolver<'a> {
         self.objects.insert(id, OnceCell::with_value(v));
     }
 
-    pub fn resolve_pdf_object<'b, T: RootPdfObject<'a, 'b>>(
+    pub fn resolve_pdf_object<'b, T: PdfObject<'a, 'b>>(
         &'b self,
         id: u32,
     ) -> Result<T, ObjectValueError> {
@@ -147,7 +145,7 @@ impl<'a> ObjectResolver<'a> {
         T::new(NonZeroU32::new(id), obj, self)
     }
 
-    pub fn opt_resolve_pdf_object<'b, T: RootPdfObject<'a, 'b>>(
+    pub fn opt_resolve_pdf_object<'b, T: PdfObject<'a, 'b>>(
         &'b self,
         id: u32,
     ) -> Result<Option<T>, ObjectValueError> {
@@ -208,22 +206,6 @@ impl<'a> ObjectResolver<'a> {
         Self::to_opt(self.resolve_container_pdf_object(c, id))
     }
 
-    pub fn resolve_container_root_pdf_object<
-        'b: 'a,
-        'd: 'c,
-        'c,
-        C: DataContainer<'a>,
-        T: RootPdfObject<'a, 'c>,
-    >(
-        &'d self,
-        c: &'c C,
-        id: &str,
-    ) -> Result<T, ObjectValueError> {
-        let (id, obj) = self._resolve_container_value(c, id)?;
-        let obj = obj.as_dict()?;
-        T::new(id, obj, self)
-    }
-
     pub fn resolve_container_pdf_object<
         'b: 'a,
         'd: 'c,
@@ -253,6 +235,40 @@ impl<'a> ObjectResolver<'a> {
         } else {
             Ok((None, obj))
         }
+    }
+
+    /// Resolve root pdf_objects from data container `c` with key `k`, if value is reference,
+    /// resolve it recursively. Return empty vector if object is not found.
+    /// The raw value should be an array of references.
+    pub fn resolve_container_pdf_object_array<
+        'b: 'a,
+        'd: 'c,
+        'c,
+        C: DataContainer<'a>,
+        T: PdfObject<'a, 'c>,
+    >(
+        &'d self,
+        c: &'c C,
+        id: &str,
+    ) -> Result<Vec<T>, ObjectValueError> {
+        let arr = c.get_value(id);
+        arr.map_or_else(
+            || Ok(vec![]),
+            |arr| {
+                let arr = arr.as_arr()?;
+                let mut res = Vec::with_capacity(arr.len());
+                for obj in arr {
+                    let id = obj.as_ref()?;
+                    let dict = self.resolve(id.id().id())?;
+                    res.push(T::new(
+                        NonZeroU32::new(id.id().id()),
+                        dict.as_dict()?,
+                        self,
+                    )?);
+                }
+                Ok(res)
+            },
+        )
     }
 
     /// Resolve pdf object from data container `c` with key `k`, if value is reference,
@@ -286,40 +302,6 @@ impl<'a> ObjectResolver<'a> {
         )
     }
 
-    /// Resolve root pdf_objects from data container `c` with key `k`, if value is reference,
-    /// resolve it recursively. Return empty vector if object is not found.
-    /// The raw value should be an array of references.
-    pub fn resolve_container_root_pdf_object_array<
-        'b: 'a,
-        'd: 'c,
-        'c,
-        C: DataContainer<'a>,
-        T: RootPdfObject<'a, 'c>,
-    >(
-        &'d self,
-        c: &'c C,
-        id: &str,
-    ) -> Result<Vec<T>, ObjectValueError> {
-        let arr = c.get_value(id);
-        arr.map_or_else(
-            || Ok(vec![]),
-            |arr| {
-                let arr = arr.as_arr()?;
-                let mut res = Vec::with_capacity(arr.len());
-                for obj in arr {
-                    let id = obj.as_ref()?;
-                    let dict = self.resolve(id.id().id())?;
-                    res.push(T::new(
-                        NonZeroU32::new(id.id().id()),
-                        dict.as_dict()?,
-                        self,
-                    )?);
-                }
-                Ok(res)
-            },
-        )
-    }
-
     fn to_opt<T>(o: Result<T, ObjectValueError>) -> Result<Option<T>, ObjectValueError> {
         o.map(Some).or_else(|e| {
             if let ObjectValueError::ObjectIDNotFound = e {
@@ -332,7 +314,6 @@ impl<'a> ObjectResolver<'a> {
 }
 
 #[pdf_object("Catalog")]
-#[root_object]
 trait CatalogDictTrait {
     #[typ("Name")]
     fn version(&self) -> Option<&str>;

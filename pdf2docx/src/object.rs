@@ -211,26 +211,6 @@ where
     fn id(&self) -> Option<NonZeroU32>;
 }
 
-/// Trait implemented by PdfObject Dicts that are indirect object of PDF file,
-/// resolved by ObjectResolver.
-pub trait RootPdfObject<'a, 'b>
-where
-    Self: Sized,
-{
-    fn new(
-        id: Option<NonZeroU32>,
-        dict: &'b Dictionary<'a>,
-        r: &'b ObjectResolver<'a>,
-    ) -> Result<Self, ObjectValueError>;
-    fn checked(
-        id: Option<NonZeroU32>,
-        dict: &'b Dictionary<'a>,
-        r: &'b ObjectResolver<'a>,
-    ) -> Result<Option<Self>, ObjectValueError>;
-
-    fn id(&self) -> Option<NonZeroU32>;
-}
-
 impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
     pub fn new(
         d: &'b Dictionary<'a>,

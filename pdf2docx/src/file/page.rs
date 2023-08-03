@@ -4,10 +4,7 @@ use tiny_skia::Pixmap;
 
 use crate::{
     graphics::{parse_operations, LineCapStyle, LineJoinStyle, Operation, RenderingIntent},
-    object::{
-        Array, Dictionary, FilterDecodedData, ObjectValueError, PdfObject, RootPdfObject,
-        SchemaDict,
-    },
+    object::{Array, Dictionary, FilterDecodedData, ObjectValueError, PdfObject, SchemaDict},
 };
 
 use super::ObjectResolver;
@@ -125,7 +122,6 @@ pub trait ResourceDictTrait {
 }
 
 #[pdf_object(["Pages", "Page"])]
-#[root_object]
 pub trait PageDictTrait {
     #[nested_root]
     fn kids(&self) -> Vec<Self>;
