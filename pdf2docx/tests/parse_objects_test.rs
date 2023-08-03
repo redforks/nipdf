@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use glob::glob;
 use pdf2docx::{
     file::File,
@@ -12,9 +14,9 @@ fn scan_objects() {
         println!("parsing {path:?}");
         let (f, resolver) =
             File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {path:?}"));
-        for id in 0..f.total_objects() {
+        for id in 1..f.total_objects() {
             print!("scan object: {id}");
-            match resolver.resolve(id) {
+            match resolver.resolve(NonZeroU32::new(id).unwrap()) {
                 Err(ObjectValueError::ObjectIDNotFound) => {
                     print!(" not found")
                 }
