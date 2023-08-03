@@ -387,7 +387,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                             } else {
                                 quote! {
                                     fn #name(&self) -> #ty {
-                                        self.d.resolver().resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key).unwrap()
+                                        self.d.resolver().resolve_container_root_pdf_object::<_, #type_name>(self.d.dict(), #key).unwrap()
                                     }
                                 }
                             }

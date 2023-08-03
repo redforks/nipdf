@@ -68,7 +68,7 @@ impl<'a> From<&Array<'a>> for Rectangle {
 }
 
 #[pdf_object(Some("ExtGState"))]
-trait GraphicsStateParameterDictTrait {
+pub trait GraphicsStateParameterDictTrait {
     #[key("LW")]
     fn line_width(&self) -> Option<f32>;
 
@@ -113,7 +113,7 @@ impl<'a, 'b> GraphicsStateParameterDict<'a, 'b> {
 }
 
 #[pdf_object(())]
-trait ResourceDictTrait {
+pub trait ResourceDictTrait {
     #[nested]
     fn ext_g_state() -> HashMap<String, GraphicsStateParameterDict<'a, 'b>>;
     fn color_space(&self) -> Option<&'b Dictionary<'a>>;
@@ -186,13 +186,18 @@ impl<'a, 'b> Page<'a, 'b> {
         Ok(PageContent { bufs })
     }
 
-    pub fn render(&self, resolver: &ObjectResolver<'_>) -> Result<Pixmap, ObjectValueError> {
+    pub fn render(&self, resolver: &'b ObjectResolver<'a>) -> Result<Pixmap, ObjectValueError> {
         let media_box = self.media_box();
         let map = Pixmap::new(media_box.width() as u32, media_box.height() as u32).unwrap();
         let mut renderer = paint::Render::new(map, media_box.height() as u32);
         let content = self.content(resolver)?;
+        let empty_dict = Dictionary::new();
+        let resource = self
+            .d
+            .resources()
+            .unwrap_or_else(|| ResourceDict::new(&empty_dict, resolver).unwrap());
         for op in content.operations() {
-            renderer.exec(&op);
+            renderer.exec(&op, &resource);
         }
         Ok(renderer.into())
     }

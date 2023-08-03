@@ -208,6 +208,22 @@ impl<'a> ObjectResolver<'a> {
         Self::to_opt(self.resolve_container_pdf_object(c, id))
     }
 
+    pub fn resolve_container_root_pdf_object<
+        'b: 'a,
+        'd: 'c,
+        'c,
+        C: DataContainer<'a>,
+        T: RootPdfObject<'a, 'c>,
+    >(
+        &'d self,
+        c: &'c C,
+        id: &'b str,
+    ) -> Result<T, ObjectValueError> {
+        let (id, obj) = self._resolve_container_value(c, id)?;
+        let obj = obj.as_dict()?;
+        T::new(id.unwrap(), obj, self)
+    }
+
     pub fn resolve_container_pdf_object<
         'b: 'a,
         'd: 'c,
@@ -281,7 +297,7 @@ impl<'a> ObjectResolver<'a> {
     >(
         &'d self,
         c: &'c C,
-        id: &'b str,
+        id: &str,
     ) -> Result<Vec<T>, ObjectValueError> {
         let arr = c.get_value(id);
         arr.map_or_else(

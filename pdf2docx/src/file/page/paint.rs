@@ -2,7 +2,7 @@ use crate::graphics::{
     Color, LineCapStyle, LineJoinStyle, Point, RenderingIntent, TransformMatrix,
 };
 
-use super::{Operation, Rectangle};
+use super::{Operation, Rectangle, ResourceDict};
 use tiny_skia::{Paint, Path, PathBuilder, Pixmap, Shader, Stroke, StrokeDash};
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -149,6 +149,59 @@ impl State {
     fn path(&self) -> Path {
         self.path.clone().finish().unwrap()
     }
+
+    fn set_graphics_state(
+        &mut self,
+        nm: &crate::graphics::NameOfDict,
+        resources: &ResourceDict<'_, '_>,
+    ) {
+        let resources = resources.ext_g_state();
+        let res = resources.get(&nm.0);
+        let Some(res) = res else {
+            log::warn!("graphics state not found: {}", &nm.0);
+            return;
+        };
+
+        if let Some(line_width) = res.line_width() {
+            self.set_line_width(line_width);
+        }
+
+        if let Some(line_cap) = res.line_cap() {
+            self.set_line_cap(line_cap);
+        }
+
+        if let Some(line_join) = res.line_join() {
+            self.set_line_join(line_join);
+        }
+
+        if let Some(dash_pattern) = res.dash_pattern() {
+            self.set_dash_pattern(&dash_pattern.0, dash_pattern.1);
+        }
+
+        if let Some(miter_limit) = res.miter_limit() {
+            self.set_miter_limit(miter_limit);
+        }
+
+        if let Some(render_intent) = res.rendering_intent() {
+            self.set_render_intent(render_intent);
+        }
+
+        if let Some(stroke_color) = res.stroke_adjustment() {
+            eprintln!("stroke adjustment: {}", stroke_color);
+        }
+
+        if let Some(fill_alpha) = res.fill_alpha() {
+            eprintln!("fill alpha: {}", fill_alpha);
+        }
+
+        if let Some(alpha_source_flag) = res.alpha_source_flag() {
+            eprintln!("alpha source flag: {}", alpha_source_flag);
+        }
+
+        if let Some(text_knockout_flag) = res.text_knockout_flag() {
+            eprintln!("text knockout flag: {}", text_knockout_flag);
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -185,7 +238,7 @@ impl Render {
         self.canvas
     }
 
-    pub fn exec(&mut self, op: &Operation) {
+    pub fn exec(&mut self, op: &Operation, resources: &ResourceDict) {
         match op {
             // General Graphics State Operations
             Operation::SetLineWidth(width) => self.current_mut().set_line_width(*width),
@@ -197,6 +250,9 @@ impl Render {
             }
             Operation::SetRenderIntent(intent) => self.current_mut().set_render_intent(*intent),
             Operation::SetFlatness(flatness) => self.current_mut().set_flatness(*flatness),
+            Operation::SetGraphicsStateParameters(nm) => {
+                self.current_mut().set_graphics_state(nm, resources)
+            }
 
             // Special Graphics State Operations
             Operation::SaveGraphicsState => self.push(),
