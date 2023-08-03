@@ -416,7 +416,7 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
         Ok(self.opt_arr(id)?.map(|arr| arr.into()))
     }
 
-    pub fn required_ref(&self, id: &'static str) -> Result<u32, ObjectValueError> {
+    pub fn required_ref(&self, id: &'static str) -> Result<NonZeroU32, ObjectValueError> {
         self.d
             .get(id.as_bytes())
             .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
@@ -424,13 +424,13 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
             .map(|r| r.id().id())
     }
 
-    pub fn opt_ref(&self, id: &'static str) -> Result<Option<u32>, ObjectValueError> {
+    pub fn opt_ref(&self, id: &'static str) -> Result<Option<NonZeroU32>, ObjectValueError> {
         self.d
             .get(id.as_bytes())
             .map_or(Ok(None), |o| o.as_ref().map(|r| Some(r.id().id())))
     }
 
-    pub fn ref_id_arr(&self, id: &'static str) -> Result<Vec<u32>, ObjectValueError> {
+    pub fn ref_id_arr(&self, id: &'static str) -> Result<Vec<NonZeroU32>, ObjectValueError> {
         self.opt_arr_map(id, |o| o.as_ref().map(|r| r.id().id()))
             .map(|o| o.unwrap_or_default())
     }
@@ -438,16 +438,16 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
 pub struct ObjectId {
-    id: u32,
+    id: NonZeroU32,
     generation: u16,
 }
 
 impl ObjectId {
-    pub fn new(id: u32, generation: u16) -> Self {
+    pub fn new(id: NonZeroU32, generation: u16) -> Self {
         Self { id, generation }
     }
 
-    pub fn id(&self) -> u32 {
+    pub fn id(&self) -> NonZeroU32 {
         self.id
     }
 
@@ -524,7 +524,7 @@ pub enum Object<'a> {
 
 impl Object<'static> {
     pub fn new_ref(id: u32) -> Self {
-        Self::Reference(Reference::new(id, 0))
+        Self::Reference(Reference::new_u32(id, 0))
     }
 }
 
@@ -920,8 +920,13 @@ impl<'a> AsRef<str> for Name<'a> {
 pub struct Reference(ObjectId);
 
 impl Reference {
-    pub fn new(id: u32, generation: u16) -> Self {
+    pub fn new(id: NonZeroU32, generation: u16) -> Self {
         Self(ObjectId::new(id, generation))
+    }
+
+    /// Panic if id is Zero
+    pub fn new_u32(id: u32, generation: u16) -> Self {
+        Self(ObjectId::new(NonZeroU32::new(id).unwrap(), generation))
     }
 
     pub fn id(&self) -> ObjectId {

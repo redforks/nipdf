@@ -163,9 +163,15 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         Some("required_bool")
     } else if rt == &(parse_quote!(Vec<u32>)) {
         if get_type().is_some_and(|s| s == "Ref") {
-            Some("ref_id_arr")
+            unreachable!()
         } else {
             Some("u32_arr")
+        }
+    } else if rt == &(parse_quote!(Vec<NonZeroU32>)) {
+        if get_type().is_some_and(|s| s == "Ref") {
+            Some("ref_id_arr")
+        } else {
+            unreachable!()
         }
     } else if rt == &(parse_quote!(Option<&'b Dictionary<'a>>)) {
         Some("opt_dict")

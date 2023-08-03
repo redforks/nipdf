@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use crate::object::Object;
 use test_case::test_case;
 
@@ -55,6 +57,6 @@ fn parse_page_tree(root_id: u32, tree: Vec<(u32, Vec<u32>)>) -> Vec<u32> {
         resolver.setup_object(id, Object::Dictionary(dict));
     }
 
-    let pages = Page::parse(resolver.resolve_pdf_object(root_id).unwrap());
+    let pages = Page::parse(resolver.resolve_pdf_object(NonZeroU32::new(root_id).unwrap()).unwrap());
     pages.unwrap().into_iter().map(|p| p.id()).collect()
 }

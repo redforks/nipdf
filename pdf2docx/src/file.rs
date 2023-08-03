@@ -18,7 +18,7 @@ use nohash_hasher::BuildNoHashHasher;
 mod page;
 pub use page::*;
 
-type IDOffsetMap = HashMap<u32, u32, BuildNoHashHasher<u32>>;
+type IDOffsetMap = HashMap<NonZeroU32, u32, BuildNoHashHasher<u32>>;
 
 pub struct XRefTable<'a> {
     buf: &'a [u8],
@@ -42,9 +42,9 @@ impl<'a> XRefTable<'a> {
         let mut r = IDOffsetMap::with_capacity_and_hasher(5000, BuildNoHashHasher::default());
         for (id, entry) in frame_set.iter().rev().flat_map(|f| f.xref_section.iter()) {
             if entry.is_used() {
-                r.insert(*id, entry.offset());
+                r.insert(NonZeroU32::new(*id).unwrap(), entry.offset());
             } else {
-                r.remove(id);
+                r.remove(&NonZeroU32::new(*id).unwrap());
             }
         }
         r
@@ -55,13 +55,13 @@ impl<'a> XRefTable<'a> {
     }
 
     /// Return `buf` start from where `id` is
-    pub fn resolve_object_buf(&self, id: u32) -> Option<&'a [u8]> {
+    pub fn resolve_object_buf(&self, id: NonZeroU32) -> Option<&'a [u8]> {
         self.id_offset
             .get(&id)
             .map(|offset| &self.buf[*offset as usize..])
     }
 
-    pub fn parse_object(&self, id: u32) -> Result<Object<'a>, ObjectValueError> {
+    pub fn parse_object(&self, id: NonZeroU32) -> Result<Object<'a>, ObjectValueError> {
         self.resolve_object_buf(id)
             .ok_or(ObjectValueError::ObjectIDNotFound)
             .and_then(|buf| {
@@ -72,7 +72,7 @@ impl<'a> XRefTable<'a> {
             })
     }
 
-    pub fn iter_ids(&self) -> impl Iterator<Item = u32> + '_ {
+    pub fn iter_ids(&self) -> impl Iterator<Item = NonZeroU32> + '_ {
         self.id_offset.keys().copied()
     }
 
@@ -107,7 +107,7 @@ impl<'a> DataContainer<'a> for Vec<&Dictionary<'a>> {
 
 pub struct ObjectResolver<'a> {
     xref_table: XRefTable<'a>,
-    objects: HashMap<u32, OnceCell<Object<'a>>, BuildNoHashHasher<u32>>,
+    objects: HashMap<NonZeroU32, OnceCell<Object<'a>>, BuildNoHashHasher<u32>>,
 }
 
 impl<'a> ObjectResolver<'a> {
@@ -134,32 +134,33 @@ impl<'a> ObjectResolver<'a> {
 
     #[cfg(test)]
     pub fn setup_object(&mut self, id: u32, v: Object<'a>) {
-        self.objects.insert(id, OnceCell::with_value(v));
+        self.objects
+            .insert(NonZeroU32::new(id).unwrap(), OnceCell::with_value(v));
     }
 
     pub fn resolve_pdf_object<'b, T: PdfObject<'a, 'b>>(
         &'b self,
-        id: u32,
+        id: NonZeroU32,
     ) -> Result<T, ObjectValueError> {
         let obj = self.resolve(id)?.as_dict()?;
-        T::new(NonZeroU32::new(id), obj, self)
+        T::new(Some(id), obj, self)
     }
 
     pub fn opt_resolve_pdf_object<'b, T: PdfObject<'a, 'b>>(
         &'b self,
-        id: u32,
+        id: NonZeroU32,
     ) -> Result<Option<T>, ObjectValueError> {
         Self::to_opt(self.resolve_pdf_object(id))
     }
 
     /// Resolve object with id `id`, if object is reference, resolve it recursively.
     /// Return `None` if object is not found.
-    pub fn opt_resolve(&self, id: u32) -> Result<Option<&Object<'a>>, ObjectValueError> {
+    pub fn opt_resolve(&self, id: NonZeroU32) -> Result<Option<&Object<'a>>, ObjectValueError> {
         Self::to_opt(self.resolve(id))
     }
 
     /// Resolve object with id `id`, if object is reference, resolve it recursively.
-    pub fn resolve(&self, id: u32) -> Result<&Object<'a>, ObjectValueError> {
+    pub fn resolve(&self, id: NonZeroU32) -> Result<&Object<'a>, ObjectValueError> {
         self.objects
             .get(&id)
             .ok_or(ObjectValueError::ObjectIDNotFound)?
@@ -230,8 +231,7 @@ impl<'a> ObjectResolver<'a> {
         let obj = c.get_value(id).ok_or(ObjectValueError::ObjectIDNotFound)?;
 
         if let Object::Reference(id) = obj {
-            self.resolve(id.id().id())
-                .map(|o| (NonZeroU32::new(id.id().id()), o))
+            self.resolve(id.id().id()).map(|o| (Some(id.id().id()), o))
         } else {
             Ok((None, obj))
         }
@@ -260,11 +260,7 @@ impl<'a> ObjectResolver<'a> {
                 for obj in arr {
                     let id = obj.as_ref()?;
                     let dict = self.resolve(id.id().id())?;
-                    res.push(T::new(
-                        NonZeroU32::new(id.id().id()),
-                        dict.as_dict()?,
-                        self,
-                    )?);
+                    res.push(T::new(id.id().id().into(), dict.as_dict()?, self)?);
                 }
                 Ok(res)
             },
@@ -327,7 +323,7 @@ pub struct Catalog<'a, 'b> {
 }
 
 impl<'a, 'b> Catalog<'a, 'b> {
-    fn parse(id: u32, resolver: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
+    fn parse(id: NonZeroU32, resolver: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
         Ok(Self {
             d: resolver.resolve_pdf_object(id)?,
         })
@@ -345,7 +341,7 @@ impl<'a, 'b> Catalog<'a, 'b> {
 #[derive(Debug)]
 pub struct File {
     total_objects: u32,
-    root_id: u32,
+    root_id: NonZeroU32,
     head_ver: String,
 }
 

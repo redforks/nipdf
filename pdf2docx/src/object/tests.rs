@@ -10,7 +10,7 @@ fn test_name_borrow_eq() {
         <Name as Borrow<[u8]>>::borrow(&owned),
     );
 
-    use std::hash::{Hasher, Hash};
+    use std::hash::{Hash, Hasher};
     fn hash<T: Hash>(v: &T) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         let mut hasher = DefaultHasher::new();
@@ -203,5 +203,5 @@ fn schema_ref_id_arr(ids: Option<&[u32]>) -> Vec<u32> {
     }
     let resolver = ObjectResolver::empty();
     let d = SchemaDict::new(&d, &resolver, ()).unwrap();
-    d.ref_id_arr("ids").unwrap()
+    d.ref_id_arr("ids").unwrap().into_iter().map(|id| id.get()).collect()
 }

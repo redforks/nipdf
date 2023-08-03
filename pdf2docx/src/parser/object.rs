@@ -1,4 +1,7 @@
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    num::{NonZeroI128, NonZeroU32},
+};
 
 use nom::{
     branch::alt,
@@ -176,7 +179,10 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<Object> {
 pub fn parse_indirected_object(input: &[u8]) -> ParseResult<IndirectObject> {
     let (input, (id, gen)) = separated_pair(u32, multispace1, u16)(input)?;
     let (input, obj) = preceded(ws(tag(b"obj")), parse_object_and_stream)(input)?;
-    Ok((input, IndirectObject::new(id, gen, obj)))
+    Ok((
+        input,
+        IndirectObject::new(NonZeroU32::new(id).unwrap(), gen, obj),
+    ))
 }
 
 fn parse_reference(input: &[u8]) -> ParseResult<Reference> {
@@ -188,7 +194,7 @@ fn parse_reference(input: &[u8]) -> ParseResult<Reference> {
         // Integer(0), Reference(1 0)
         delimited(whitespace_or_comment, tag(b"R"), not(peek(tag("G")))),
     )(input)?;
-    Ok((input, Reference::new(id, gen)))
+    Ok((input, Reference::new_u32(id, gen)))
 }
 
 #[cfg(test)]

@@ -8,29 +8,45 @@ use super::*;
 fn xref_table_resolve_object_buf() {
     let buf = b"1234567890";
     let mut id_offset = IDOffsetMap::default();
-    id_offset.insert(1, 5);
-    id_offset.insert(2, 3);
+    id_offset.insert(to_non_zero_u32(1), 5);
+    id_offset.insert(to_non_zero_u32(2), 3);
     let xref_table = XRefTable::new(buf, id_offset);
 
-    assert_eq!(xref_table.resolve_object_buf(1), Some(&b"67890"[..]));
-    assert_eq!(xref_table.resolve_object_buf(2), Some(&b"4567890"[..]));
-    assert_eq!(xref_table.resolve_object_buf(3), None);
+    assert_eq!(
+        xref_table.resolve_object_buf(to_non_zero_u32(1)),
+        Some(&b"67890"[..])
+    );
+    assert_eq!(
+        xref_table.resolve_object_buf(to_non_zero_u32(2)),
+        Some(&b"4567890"[..])
+    );
+    assert_eq!(xref_table.resolve_object_buf(to_non_zero_u32(3)), None);
+}
+
+fn to_non_zero_u32(v: u32) -> NonZeroU32 {
+    NonZeroU32::new(v).unwrap()
 }
 
 #[test]
 fn object_resolver() {
     let buf = b"   2 0 obj 5 endobj 1 0 obj null endobj 3 0 obj 2 0 R endobj";
     let mut id_offset = IDOffsetMap::default();
-    id_offset.insert(1, 20);
-    id_offset.insert(2, 3);
-    id_offset.insert(3, 40);
+    id_offset.insert(to_non_zero_u32(1), 20);
+    id_offset.insert(to_non_zero_u32(2), 3);
+    id_offset.insert(to_non_zero_u32(3), 40);
     let xref_table = XRefTable::new(buf, id_offset);
     let resolver = ObjectResolver::new(xref_table);
 
-    assert_eq!(resolver.resolve(1), Ok(&Object::Null));
-    assert_eq!(resolver.resolve(2), Ok(&Object::Integer(5)));
-    assert_eq!(resolver.resolve(3), Ok(&Object::Integer(5)));
-    assert_eq!(resolver.resolve(1), Ok(&Object::Null));
+    assert_eq!(resolver.resolve(to_non_zero_u32(1)), Ok(&Object::Null));
+    assert_eq!(
+        resolver.resolve(to_non_zero_u32(2)),
+        Ok(&Object::Integer(5))
+    );
+    assert_eq!(
+        resolver.resolve(to_non_zero_u32(3)),
+        Ok(&Object::Integer(5))
+    );
+    assert_eq!(resolver.resolve(to_non_zero_u32(1)), Ok(&Object::Null));
 }
 
 #[test]
