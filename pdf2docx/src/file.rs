@@ -44,7 +44,9 @@ impl<'a> XRefTable<'a> {
             if entry.is_used() {
                 r.insert(NonZeroU32::new(*id).unwrap(), entry.offset());
             } else {
-                r.remove(&NonZeroU32::new(*id).unwrap());
+                if *id != 0 {
+                    r.remove(&NonZeroU32::new(*id).unwrap());
+                }
             }
         }
         r
