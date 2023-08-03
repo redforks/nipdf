@@ -1,7 +1,4 @@
-use std::{
-    borrow::Cow,
-    num::{NonZeroI128, NonZeroU32},
-};
+use std::{borrow::Cow, num::NonZeroU32};
 
 use nom::{
     branch::alt,

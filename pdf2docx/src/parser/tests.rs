@@ -1,4 +1,7 @@
-use std::str::from_utf8;
+use std::{
+    any::{Any, TypeId},
+    str::from_utf8,
+};
 
 use super::*;
 use test_case::test_case;
@@ -7,7 +10,10 @@ use test_case::test_case;
 #[test_case("%foo\r\n" => "\r\n"; "end without \r")]
 fn test_comment(input: &str) -> &str {
     let (input, v) = comment(input.as_bytes()).unwrap();
-    assert_eq!((), v);
+    fn is_unit<T: ?Sized + Any>(_v: &T) -> bool {
+        TypeId::of::<()>() == TypeId::of::<T>()
+    }
+    assert!(is_unit(&v));
     from_utf8(input).unwrap()
 }
 

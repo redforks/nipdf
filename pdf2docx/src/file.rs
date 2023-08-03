@@ -43,10 +43,8 @@ impl<'a> XRefTable<'a> {
         for (id, entry) in frame_set.iter().rev().flat_map(|f| f.xref_section.iter()) {
             if entry.is_used() {
                 r.insert(NonZeroU32::new(*id).unwrap(), entry.offset());
-            } else {
-                if *id != 0 {
-                    r.remove(&NonZeroU32::new(*id).unwrap());
-                }
+            } else if *id != 0 {
+                r.remove(&NonZeroU32::new(*id).unwrap());
             }
         }
         r
