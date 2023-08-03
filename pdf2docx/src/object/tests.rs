@@ -1,6 +1,26 @@
 use super::*;
 use test_case::test_case;
 
+#[test]
+fn test_name_borrow_eq() {
+    let borrowed = Name::borrowed(b"foobar");
+    let owned = Name::owned(b"foobar".to_vec());
+    assert_eq!(
+        <Name as Borrow<[u8]>>::borrow(&borrowed),
+        <Name as Borrow<[u8]>>::borrow(&owned),
+    );
+
+    use std::hash::{Hasher, Hash};
+    fn hash<T: Hash>(v: &T) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        let mut hasher = DefaultHasher::new();
+        v.hash(&mut hasher);
+        hasher.finish()
+    }
+    assert_eq!(hash(b"foobar"), hash(&borrowed));
+    assert_eq!(hash(b"foobar"), hash(&owned));
+}
+
 #[test_case("", b"()"; "empty")]
 #[test_case("a", b"(a)"; "single character")]
 #[test_case("a(", b"(a\\()"; "left square")]

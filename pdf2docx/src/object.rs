@@ -46,16 +46,20 @@ impl<'a> Dictionary<'a> {
 
     pub fn get_opt_int(&self, id: &str) -> Result<Option<i32>, ObjectValueError> {
         self.0
-            .get(&id.into())
+            .get(id.as_bytes())
             .map_or(Ok(None), |o| o.as_int().map(Some))
     }
 
     pub fn get_int(&self, id: &str, default: i32) -> Result<i32, ObjectValueError> {
-        self.0.get(&id.into()).map_or(Ok(default), |o| o.as_int())
+        self.0
+            .get(id.as_bytes())
+            .map_or(Ok(default), |o| o.as_int())
     }
 
     pub fn get_bool(&self, id: &str, default: bool) -> Result<bool, ObjectValueError> {
-        self.0.get(&id.into()).map_or(Ok(default), |o| o.as_bool())
+        self.0
+            .get(id.as_bytes())
+            .map_or(Ok(default), |o| o.as_bool())
     }
 
     pub fn set(&mut self, id: impl Into<Name<'a>>, value: impl Into<Object<'a>>) {
@@ -64,7 +68,7 @@ impl<'a> Dictionary<'a> {
 
     pub fn get_name(&self, id: &'static str) -> Result<Option<&str>, ObjectValueError> {
         self.0
-            .get(&id.into())
+            .get(id.as_bytes())
             .map_or(Ok(None), |o| o.as_name().map(Some))
     }
 
@@ -73,7 +77,9 @@ impl<'a> Dictionary<'a> {
         id: &'static str,
         default: &'static str,
     ) -> Result<&str, ObjectValueError> {
-        self.0.get(&id.into()).map_or(Ok(default), |o| o.as_name())
+        self.0
+            .get(id.as_bytes())
+            .map_or(Ok(default), |o| o.as_name())
     }
 }
 
@@ -103,7 +109,7 @@ pub trait SchemaTypeValidator: Clone + std::fmt::Debug {
     }
 
     fn get_type_opt<'a>(&self, d: &'a Dictionary) -> Result<Option<&'a str>, ObjectValueError> {
-        d.get(&"Type".into()).map_or(Ok(None), |o| {
+        d.get(b"Type".as_slice()).map_or(Ok(None), |o| {
             o.as_name()
                 .map(Some)
                 .map_err(|_| ObjectValueError::DictSchemaError(self.schema_type(), "Type"))
@@ -396,10 +402,12 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
         id: &'static str,
         f: impl Fn(&Object<'a>) -> Result<Item, ObjectValueError>,
     ) -> Result<Vec<Item>, ObjectValueError> {
-        self.d.get(&id.into()).map_or(Ok(Vec::new()), |o| match o {
-            Object::Array(arr) => arr.iter().map(f).collect(),
-            _ => f(o).map(|o| vec![o]),
-        })
+        self.d
+            .get(id.as_bytes())
+            .map_or(Ok(Vec::new()), |o| match o {
+                Object::Array(arr) => arr.iter().map(f).collect(),
+                _ => f(o).map(|o| vec![o]),
+            })
     }
 
     pub fn opt_dict(
@@ -421,7 +429,7 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn required_ref(&self, id: &'static str) -> Result<u32, ObjectValueError> {
         self.d
-            .get(&id.into())
+            .get(id.as_bytes())
             .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_ref()
             .map(|r| r.id().id())
@@ -429,7 +437,7 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn opt_ref(&self, id: &'static str) -> Result<Option<u32>, ObjectValueError> {
         self.d
-            .get(&id.into())
+            .get(id.as_bytes())
             .map_or(Ok(None), |o| o.as_ref().map(|r| Some(r.id().id())))
     }
 
@@ -878,6 +886,16 @@ impl<'a> From<HexString<'a>> for Object<'a> {
 /// A PDF name object, preceding '/' not included.
 #[derive(Eq, PartialEq, Hash, Debug, Clone)]
 pub struct Name<'a>(pub Cow<'a, [u8]>);
+
+/// Name can borrow to &[u8], for use as key in HashMap.
+///
+/// Note: do not impl `Borrow<str>` for Name, because it will use
+/// different hash algorithm, which may not get value from HashMap.
+impl<'a> Borrow<[u8]> for Name<'a> {
+    fn borrow(&self) -> &[u8] {
+        &self.0
+    }
+}
 
 impl<'a> From<&'a str> for Name<'a> {
     fn from(value: &'a str) -> Self {

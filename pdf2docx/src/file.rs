@@ -84,23 +84,22 @@ impl<'a> XRefTable<'a> {
 }
 
 pub trait DataContainer<'a> {
-    fn get_value(&self, key: &'a str) -> Option<&Object<'a>>;
+    fn get_value(&self, key: &str) -> Option<&Object<'a>>;
 }
 
 impl<'a> DataContainer<'a> for Dictionary<'a> {
-    fn get_value(&self, key: &'a str) -> Option<&Object<'a>> {
+    fn get_value(&self, key: &str) -> Option<&Object<'a>> {
         debug_assert!(!key.starts_with('/'));
-        self.get(&Name::borrowed(key.as_bytes()))
+        self.get(key.as_bytes())
     }
 }
 
 /// Get value from first dictionary that contains `key`.
 impl<'a> DataContainer<'a> for Vec<&Dictionary<'a>> {
-    fn get_value(&self, key: &'a str) -> Option<&Object<'a>> {
+    fn get_value(&self, key: &str) -> Option<&Object<'a>> {
         debug_assert!(!key.starts_with('/'));
-        let key = Name::borrowed(key.as_bytes());
         for dict in self {
-            if let Some(v) = dict.get(&key) {
+            if let Some(v) = dict.get(key.as_bytes()) {
                 return Some(v);
             }
         }
