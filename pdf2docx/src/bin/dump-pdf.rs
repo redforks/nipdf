@@ -1,4 +1,7 @@
-use std::io::{copy, stdout, BufWriter, Cursor};
+use std::{
+    io::{copy, stdout, BufWriter, Cursor},
+    num::NonZeroU32,
+};
 
 use anyhow::Result as AnyResult;
 
@@ -39,7 +42,13 @@ fn open<'a>(path: &str, buf: &'a mut Vec<u8>) -> AnyResult<(File, ObjectResolver
     File::parse(&buf[..])
 }
 
-fn dump_stream(path: &str, id: u32, raw: bool, as_image: bool, as_png: bool) -> AnyResult<()> {
+fn dump_stream(
+    path: &str,
+    id: NonZeroU32,
+    raw: bool,
+    as_image: bool,
+    as_png: bool,
+) -> AnyResult<()> {
     let mut buf: Vec<u8> = vec![];
     let (_f, resolver) = open(path, &mut buf)?;
     let obj = resolver.resolve(id)?;
