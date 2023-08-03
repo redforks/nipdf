@@ -921,6 +921,12 @@ impl<'a> Name<'a> {
     }
 }
 
+impl<'a> AsRef<str> for Name<'a> {
+    fn as_ref(&self) -> &str {
+        std::str::from_utf8(&self.0).unwrap()
+    }
+}
+
 #[derive(PartialEq, Eq, Hash, Debug, Clone)]
 pub struct Reference(ObjectId);
 

@@ -1,6 +1,6 @@
 //! Contains types of PDF file structures.
 
-use anyhow::Result as AnyResult;
+use anyhow::{Context, Result as AnyResult};
 use itertools::Itertools;
 use nom::Finish;
 use once_cell::unsync::OnceCell;
@@ -199,7 +199,7 @@ impl<'a> ObjectResolver<'a> {
         'd: 'c,
         'c,
         C: DataContainer<'a>,
-        T: RootPdfObject<'a, 'c>,
+        T: PdfObject<'a, 'c>,
     >(
         &'d self,
         c: &'c C,
@@ -229,15 +229,15 @@ impl<'a> ObjectResolver<'a> {
         'd: 'c,
         'c,
         C: DataContainer<'a>,
-        T: RootPdfObject<'a, 'c>,
+        T: PdfObject<'a, 'c>,
     >(
         &'d self,
         c: &'c C,
         id: &str,
     ) -> Result<T, ObjectValueError> {
-        let (id, obj) = self._resolve_container_value(c, id)?;
+        let (_, obj) = self._resolve_container_value(c, id)?;
         let obj = obj.as_dict()?;
-        T::new(id.expect("Should be root pdf object"), obj, self)
+        T::new(obj, self)
     }
 
     fn _resolve_container_value<'b: 'a, 'd: 'c, 'c, C: DataContainer<'a>>(
@@ -267,18 +267,18 @@ impl<'a> ObjectResolver<'a> {
         &'d self,
         c: &'c C,
         id: &str,
-    ) -> Result<HashMap<String, T>, ObjectValueError> {
+    ) -> anyhow::Result<HashMap<String, T>> {
         let dict = c.get_value(id);
         dict.map_or_else(
             || Ok(HashMap::default()),
             |dict| {
-                let dict = dict.as_dict()?;
+                let dict = dict.as_dict().context("Value not dict")?;
                 let mut res = HashMap::with_capacity(dict.len());
-                for (k, v) in dict.iter() {
-                    let k = from_utf8(k.0.as_ref()).unwrap().to_owned();
-                    let v = v.as_dict()?;
-                    let obj = T::new(v, self)?;
-                    res.insert(k, obj);
+                for k in dict.keys() {
+                    let obj: T = self
+                        .resolve_container_pdf_object(dict, k.as_ref())
+                        .with_context(|| format!("Key: {}", k.as_ref()))?;
+                    res.insert(k.as_ref().to_owned(), obj);
                 }
                 Ok(res)
             },
