@@ -317,7 +317,7 @@ impl<'a> ObjectResolver<'a> {
 trait CatalogDictTrait {
     #[typ("Name")]
     fn version(&self) -> Option<&str>;
-    #[nested_root]
+    #[nested]
     fn pages(&self) -> PageDict<'a, 'b>;
 }
 

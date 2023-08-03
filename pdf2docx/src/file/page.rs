@@ -123,7 +123,7 @@ pub trait ResourceDictTrait {
 
 #[pdf_object(["Pages", "Page"])]
 pub trait PageDictTrait {
-    #[nested_root]
+    #[nested]
     fn kids(&self) -> Vec<Self>;
     fn media_box(&self) -> Option<Rectangle>;
     fn crop_box(&self) -> Option<Rectangle>;

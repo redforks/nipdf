@@ -107,10 +107,6 @@ fn is_map(t: &Type) -> bool {
     }
 }
 
-fn nested_root<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
-    has_attr("nested_root", rt, attrs)
-}
-
 // Return left means Option<T>, right means T, Return None means not nested
 fn nested<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
     has_attr("nested", rt, attrs)
@@ -339,34 +335,6 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                         Left(ty) => {
                             quote! {
                                 fn #name(&self) -> Option<#ty> {
-                                    // TODO: resolve id instead of always None
-                                    self.d.opt_dict(#key).unwrap().map(|d| #type_name::new(None, d, self.d.resolver()).unwrap())
-                                }
-                            }
-                        }
-                        Right(ty) => {
-                            if is_map(ty) {
-                                quote! {
-                                    fn #name(&self) -> #ty {
-                                        self.d.resolver().resolve_container_pdf_object_map(self.d.dict(), #key).unwrap()
-                                    }
-                                }
-                            } else {
-                                quote! {
-                                    fn #name(&self) -> #ty {
-                                        // TODO: resolve id instead of always None
-                                        #type_name::new(None, self.d.required_dict(#key).unwrap(), self.d.resolver()).unwrap()
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else if let Some(nested_root) = nested_root(rt, attrs) {
-                    let type_name = remove_generic(&nested_root);
-                    match nested_root {
-                        Left(ty) => {
-                            quote! {
-                                fn #name(&self) -> Option<#ty> {
                                     self.d.resolver().opt_resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key).unwrap()
                                 }
                             }
@@ -376,6 +344,12 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                                 quote! {
                                     fn #name(&self) -> #ty {
                                         self.d.resolver().resolve_container_pdf_object_array(self.d.dict(), #key).unwrap()
+                                    }
+                                }
+                            } else if is_map(ty) {
+                                quote! {
+                                    fn #name(&self) -> #ty {
+                                        self.d.resolver().resolve_container_pdf_object_map(self.d.dict(), #key).unwrap()
                                     }
                                 }
                             } else {
