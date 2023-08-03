@@ -179,7 +179,7 @@ impl<'a> ObjectResolver<'a> {
     pub fn opt_resolve_container_value<'b: 'a, 'd: 'c, 'c, C: DataContainer<'a>>(
         &'d self,
         c: &'c C,
-        id: &'b str,
+        id: &str,
     ) -> Result<Option<&'c Object<'a>>, ObjectValueError> {
         Self::to_opt(self.resolve_container_value(c, id))
     }
@@ -189,7 +189,7 @@ impl<'a> ObjectResolver<'a> {
     pub fn resolve_container_value<'b: 'a, 'd: 'c, 'c, C: DataContainer<'a>>(
         &'d self,
         c: &'c C,
-        id: &'b str,
+        id: &str,
     ) -> Result<&'c Object<'a>, ObjectValueError> {
         self._resolve_container_value(c, id).map(|(_, o)| o)
     }
@@ -203,7 +203,7 @@ impl<'a> ObjectResolver<'a> {
     >(
         &'d self,
         c: &'c C,
-        id: &'b str,
+        id: &str,
     ) -> Result<Option<T>, ObjectValueError> {
         Self::to_opt(self.resolve_container_pdf_object(c, id))
     }
@@ -217,7 +217,7 @@ impl<'a> ObjectResolver<'a> {
     >(
         &'d self,
         c: &'c C,
-        id: &'b str,
+        id: &str,
     ) -> Result<T, ObjectValueError> {
         let (id, obj) = self._resolve_container_value(c, id)?;
         let obj = obj.as_dict()?;
@@ -233,7 +233,7 @@ impl<'a> ObjectResolver<'a> {
     >(
         &'d self,
         c: &'c C,
-        id: &'b str,
+        id: &str,
     ) -> Result<T, ObjectValueError> {
         let (id, obj) = self._resolve_container_value(c, id)?;
         let obj = obj.as_dict()?;
@@ -243,7 +243,7 @@ impl<'a> ObjectResolver<'a> {
     fn _resolve_container_value<'b: 'a, 'd: 'c, 'c, C: DataContainer<'a>>(
         &'d self,
         c: &'c C,
-        id: &'b str,
+        id: &str,
     ) -> Result<(Option<u32>, &'c Object<'a>), ObjectValueError> {
         let obj = c.get_value(id).ok_or(ObjectValueError::ObjectIDNotFound)?;
 
@@ -266,7 +266,7 @@ impl<'a> ObjectResolver<'a> {
     >(
         &'d self,
         c: &'c C,
-        id: &'b str,
+        id: &str,
     ) -> Result<HashMap<String, T>, ObjectValueError> {
         let dict = c.get_value(id);
         dict.map_or_else(
