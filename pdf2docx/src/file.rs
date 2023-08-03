@@ -5,7 +5,7 @@ use itertools::Itertools;
 use nom::Finish;
 use once_cell::unsync::OnceCell;
 use pdf2docx_macro::pdf_object;
-use std::{collections::HashMap, str::from_utf8};
+use std::{collections::HashMap, num::NonZeroU32};
 
 use crate::{
     object::{
@@ -221,7 +221,7 @@ impl<'a> ObjectResolver<'a> {
     ) -> Result<T, ObjectValueError> {
         let (id, obj) = self._resolve_container_value(c, id)?;
         let obj = obj.as_dict()?;
-        T::new(id.unwrap(), obj, self)
+        T::new(id.unwrap().get(), obj, self)
     }
 
     pub fn resolve_container_pdf_object<
@@ -235,20 +235,21 @@ impl<'a> ObjectResolver<'a> {
         c: &'c C,
         id: &str,
     ) -> Result<T, ObjectValueError> {
-        let (_, obj) = self._resolve_container_value(c, id)?;
+        let (id, obj) = self._resolve_container_value(c, id)?;
         let obj = obj.as_dict()?;
-        T::new(obj, self)
+        T::new(id, obj, self)
     }
 
     fn _resolve_container_value<'b: 'a, 'd: 'c, 'c, C: DataContainer<'a>>(
         &'d self,
         c: &'c C,
         id: &str,
-    ) -> Result<(Option<u32>, &'c Object<'a>), ObjectValueError> {
+    ) -> Result<(Option<NonZeroU32>, &'c Object<'a>), ObjectValueError> {
         let obj = c.get_value(id).ok_or(ObjectValueError::ObjectIDNotFound)?;
 
         if let Object::Reference(id) = obj {
-            self.resolve(id.id().id()).map(|o| (Some(id.id().id()), o))
+            self.resolve(id.id().id())
+                .map(|o| (NonZeroU32::new(id.id().id()), o))
         } else {
             Ok((None, obj))
         }

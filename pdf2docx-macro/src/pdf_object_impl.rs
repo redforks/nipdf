@@ -347,7 +347,8 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                         Left(ty) => {
                             quote! {
                                 fn #name(&self) -> Option<#ty> {
-                                    self.d.opt_dict(#key).unwrap().map(|d| #type_name::new(d, self.d.resolver()).unwrap())
+                                    // TODO: resolve id instead of always None
+                                    self.d.opt_dict(#key).unwrap().map(|d| #type_name::new(None, d, self.d.resolver()).unwrap())
                                 }
                             }
                         }
@@ -361,7 +362,8 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                             } else {
                                 quote! {
                                     fn #name(&self) -> #ty {
-                                        #type_name::new(self.d.required_dict(#key).unwrap(), self.d.resolver()).unwrap()
+                                        // TODO: resolve id instead of always None
+                                        #type_name::new(None, self.d.required_dict(#key).unwrap(), self.d.resolver()).unwrap()
                                     }
                                 }
                             }
@@ -474,17 +476,22 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             #[derive(Clone)]
             #vis struct #struct_name<'a, 'b> {
                 d: SchemaDict<'a, 'b, #valid_ty>,
+                id: Option<std::num::NonZeroU32>,
             }
 
             impl<'a, 'b> crate::object::PdfObject<'a, 'b> for #struct_name<'a, 'b> {
-                fn new(dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
+                fn new(id: Option<std::num::NonZeroU32>, dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
                     let d = SchemaDict::new(dict, r, #valid_arg)?;
-                    Ok(Self { d })
+                    Ok(Self { d, id})
                 }
 
-                fn checked(dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Option<Self>, ObjectValueError> {
+                fn checked(id: Option<std::num::NonZeroU32>, dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Option<Self>, ObjectValueError> {
                     let d = SchemaDict::from(dict, r, #valid_arg)?;
-                    Ok(d.map(|d| Self { d }))
+                    Ok(d.map(|d| Self { d, id}))
+                }
+
+                fn id(&self) -> Option<std::num::NonZeroU32> {
+                    self.id
                 }
             }
 

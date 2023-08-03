@@ -5,6 +5,7 @@ use educe::Educe;
 use std::{
     borrow::{Borrow, Cow},
     iter::Peekable,
+    num::NonZeroU32,
     str::from_utf8,
 };
 
@@ -195,11 +196,19 @@ pub trait PdfObject<'a, 'b>
 where
     Self: Sized,
 {
-    fn new(dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError>;
+    fn new(
+        id: Option<NonZeroU32>,
+        dict: &'b Dictionary<'a>,
+        r: &'b ObjectResolver<'a>,
+    ) -> Result<Self, ObjectValueError>;
+
     fn checked(
+        id: Option<NonZeroU32>,
         dict: &'b Dictionary<'a>,
         r: &'b ObjectResolver<'a>,
     ) -> Result<Option<Self>, ObjectValueError>;
+
+    fn id(&self) -> Option<NonZeroU32>;
 }
 
 /// Trait implemented by PdfObject Dicts that are indirect object of PDF file,

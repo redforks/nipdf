@@ -344,7 +344,8 @@ impl<'a> Stream<'a> {
             decoded = filter(decoded.into_bytes()?, filter_name, params, image_to_raw)?;
         }
 
-        let img_dict = ImageDict::checked(&self.0, resolver)?;
+        // TODO: assign Stream::id instead of None
+        let img_dict = ImageDict::checked(None, &self.0, resolver)?;
         let Some(img_dict) = img_dict else {
             return Ok(decoded);
         };

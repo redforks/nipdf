@@ -195,7 +195,7 @@ impl<'a, 'b> Page<'a, 'b> {
         let resource = self
             .d
             .resources()
-            .unwrap_or_else(|| ResourceDict::new(&empty_dict, resolver).unwrap());
+            .unwrap_or_else(|| ResourceDict::new(None, &empty_dict, resolver).unwrap());
         for op in content.operations() {
             renderer.exec(&op, &resource);
         }
