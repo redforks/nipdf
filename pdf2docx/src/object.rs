@@ -218,17 +218,17 @@ where
     Self: Sized,
 {
     fn new(
-        id: u32,
+        id: Option<NonZeroU32>,
         dict: &'b Dictionary<'a>,
         r: &'b ObjectResolver<'a>,
     ) -> Result<Self, ObjectValueError>;
     fn checked(
-        id: u32,
+        id: Option<NonZeroU32>,
         dict: &'b Dictionary<'a>,
         r: &'b ObjectResolver<'a>,
     ) -> Result<Option<Self>, ObjectValueError>;
 
-    fn id(&self) -> u32;
+    fn id(&self) -> Option<NonZeroU32>;
 }
 
 impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {

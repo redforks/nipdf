@@ -447,22 +447,22 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         quote! {
             #[derive(Clone, Debug)]
             #vis struct #struct_name<'a, 'b> {
-                id: u32,
+                id: Option<std::num::NonZeroU32>,
                 d: SchemaDict<'a, 'b, #valid_ty>,
             }
 
             impl<'a, 'b> crate::object::RootPdfObject<'a, 'b> for #struct_name<'a, 'b> {
-                fn new(id: u32, d: &'b Dictionary<'a>, r: &'b crate::file::ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
+                fn new(id: Option<std::num::NonZeroU32>, d: &'b Dictionary<'a>, r: &'b crate::file::ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
                     let d = SchemaDict::new(d, r, #valid_arg)?;
                     Ok(Self {id, d})
                 }
 
-                fn checked(id: u32, d: &'b Dictionary<'a>, r: &'b crate::file::ObjectResolver<'a>) -> Result<Option<Self>, ObjectValueError> {
+                fn checked(id: Option<std::num::NonZeroU32>, d: &'b Dictionary<'a>, r: &'b crate::file::ObjectResolver<'a>) -> Result<Option<Self>, ObjectValueError> {
                     let d = SchemaDict::from(d, r, #valid_arg)?;
                     Ok(d.map(|d| Self {id,  d}))
                 }
 
-                fn id(&self) -> u32 {
+                fn id(&self) -> Option<std::num::NonZeroU32>{
                     self.id
                 }
             }

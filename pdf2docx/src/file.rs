@@ -144,7 +144,7 @@ impl<'a> ObjectResolver<'a> {
         id: u32,
     ) -> Result<T, ObjectValueError> {
         let obj = self.resolve(id)?.as_dict()?;
-        T::new(id, obj, self)
+        T::new(NonZeroU32::new(id), obj, self)
     }
 
     pub fn opt_resolve_pdf_object<'b, T: RootPdfObject<'a, 'b>>(
@@ -221,7 +221,7 @@ impl<'a> ObjectResolver<'a> {
     ) -> Result<T, ObjectValueError> {
         let (id, obj) = self._resolve_container_value(c, id)?;
         let obj = obj.as_dict()?;
-        T::new(id.unwrap().get(), obj, self)
+        T::new(id, obj, self)
     }
 
     pub fn resolve_container_pdf_object<
@@ -309,7 +309,11 @@ impl<'a> ObjectResolver<'a> {
                 for obj in arr {
                     let id = obj.as_ref()?;
                     let dict = self.resolve(id.id().id())?;
-                    res.push(T::new(id.id().id(), dict.as_dict()?, self)?);
+                    res.push(T::new(
+                        NonZeroU32::new(id.id().id()),
+                        dict.as_dict()?,
+                        self,
+                    )?);
                 }
                 Ok(res)
             },

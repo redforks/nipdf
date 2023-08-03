@@ -149,7 +149,7 @@ pub struct Page<'a, 'b> {
 
 impl<'a, 'b> Page<'a, 'b> {
     pub fn id(&self) -> u32 {
-        self.d.id()
+        self.d.id().unwrap().get()
     }
 
     fn iter_to_root(&self) -> impl Iterator<Item = &PageDict<'a, 'b>> {
