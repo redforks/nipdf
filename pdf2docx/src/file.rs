@@ -219,7 +219,11 @@ impl<'a> ObjectResolver<'a> {
         id: &str,
     ) -> Result<T, ObjectValueError> {
         let (id, obj) = self._resolve_container_value(c, id)?;
-        let obj = obj.as_dict()?;
+        let obj = match obj {
+            Object::Dictionary(d) => d,
+            Object::Stream(s) => s.as_dict(),
+            _ => return Err(ObjectValueError::UnexpectedType),
+        };
         T::new(id, obj, self)
     }
 
