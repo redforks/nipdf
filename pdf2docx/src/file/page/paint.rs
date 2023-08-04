@@ -1,9 +1,12 @@
-use crate::graphics::{
-    Color, LineCapStyle, LineJoinStyle, Point, RenderingIntent, TransformMatrix,
+use crate::{
+    graphics::{Color, LineCapStyle, LineJoinStyle, Point, RenderingIntent, TransformMatrix},
+    object::FilterDecodedData,
 };
 
 use super::{Operation, Rectangle, ResourceDict};
-use tiny_skia::{Paint, Path, PathBuilder, Pixmap, Shader, Stroke, StrokeDash};
+use tiny_skia::{
+    IntSize, Paint, Path, PathBuilder, Pixmap, PixmapPaint, PixmapRef, Shader, Stroke, StrokeDash,
+};
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
     fn from(cap: LineCapStyle) -> Self {
@@ -238,7 +241,7 @@ impl Render {
         self.canvas
     }
 
-    pub fn exec(&mut self, op: &Operation, resources: &ResourceDict) {
+    pub(crate) fn exec(&mut self, op: &Operation, resources: &ResourceDict) {
         match op {
             // General Graphics State Operations
             Operation::SetLineWidth(width) => self.current_mut().set_line_width(*width),
@@ -291,6 +294,9 @@ impl Render {
             | Operation::SetFillGray(color)
             | Operation::SetFillCMYK(color)
             | Operation::SetFillRGB(color) => self.current_mut().set_fill_color(*color),
+
+            // XObject Operation
+            Operation::PaintXObject(name) => self.paint_x_object(name, resources),
 
             _ => {
                 eprintln!("unimplemented: {:?}", op);
@@ -364,6 +370,31 @@ impl Render {
         transform
             .pre_scale(1.0, -1.0)
             .pre_translate(0.0, -(self.height as f32))
+    }
+
+    /// Paints the specified XObject. Only XObjectType::Image supported
+    fn paint_x_object(&mut self, name: &crate::graphics::NameOfDict, resources: &ResourceDict) {
+        let xobjects = resources.x_object();
+        let xobject = xobjects.get(&name.0).unwrap();
+        let img = xobject.as_image().expect("Only Image XObject supported");
+        let img = img.decode(resources.d.resolver(), false).unwrap();
+        let FilterDecodedData::Image(img) = img  else {
+            panic!("Stream should decoded to image");
+        };
+        let state = self.stack.last().unwrap();
+
+        let img = img.into_rgba8();
+        let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
+        let paint = PixmapPaint::default();
+        let transform = state.to_transform();
+        // TODO: fix transform to move image to correct position
+        let transform = transform
+            .pre_scale(1.0 / img.width() as f32, 1.0 / img.height() as f32)
+            .pre_scale(1.0, -1.0)
+            .pre_translate(0.0, -(self.height as f32))
+            .pre_scale(1.0, -1.0)
+            .pre_translate(0.0, -(self.height as f32));
+        self.canvas.draw_pixmap(0, 0, img, &paint, transform, None);
     }
 }
 

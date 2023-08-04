@@ -1,10 +1,13 @@
 use nom::Finish;
-use pdf2docx_macro::pdf_object;
+use pdf2docx_macro::{pdf_object, TryFromNameObject};
 use tiny_skia::Pixmap;
 
 use crate::{
     graphics::{parse_operations, LineCapStyle, LineJoinStyle, Operation, RenderingIntent},
-    object::{Array, Dictionary, FilterDecodedData, ObjectValueError, PdfObject, SchemaDict},
+    object::{
+        Array, Dictionary, FilterDecodedData, ImageDict, Object, ObjectValueError, PdfObject,
+        SchemaDict, Stream,
+    },
 };
 
 use super::ObjectResolver;
@@ -109,20 +112,52 @@ impl<'a, 'b> GraphicsStateParameterDict<'a, 'b> {
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromNameObject)]
+pub enum XObjectType {
+    Image,
+    Form,
+    /// PostScript XObject
+    PS,
+}
+
+#[pdf_object(Some("XObject"))]
+pub(crate) trait XObjectDictTrait {
+    #[try_from]
+    fn subtype(&self) -> Option<XObjectType>;
+}
+
+impl<'a, 'b> XObjectDict<'a, 'b> {
+    fn as_image(&self) -> Option<&Stream<'a>> {
+        if self.subtype() == Some(XObjectType::Image) {
+            Some(
+                self.d
+                    .resolver()
+                    .resolve(self.id().unwrap())
+                    .unwrap()
+                    .as_stream()
+                    .unwrap(),
+            )
+        } else {
+            None
+        }
+    }
+}
+
 #[pdf_object(())]
-pub trait ResourceDictTrait {
+pub(crate) trait ResourceDictTrait {
     #[nested]
     fn ext_g_state() -> HashMap<String, GraphicsStateParameterDict<'a, 'b>>;
     fn color_space(&self) -> Option<&'b Dictionary<'a>>;
     fn pattern(&self) -> Option<&'b Dictionary<'a>>;
     fn shading(&self) -> Option<&'b Dictionary<'a>>;
-    fn x_object(&self) -> Option<&'b Dictionary<'a>>;
+    #[nested]
+    fn x_object(&self) -> HashMap<String, XObjectDict<'a, 'b>>;
     fn font(&self) -> Option<&'b Dictionary<'a>>;
     fn properties(&self) -> Option<&'b Dictionary<'a>>;
 }
 
 #[pdf_object(["Pages", "Page"])]
-pub trait PageDictTrait {
+pub(crate) trait PageDictTrait {
     #[nested]
     fn kids(&self) -> Vec<Self>;
     fn media_box(&self) -> Option<Rectangle>;

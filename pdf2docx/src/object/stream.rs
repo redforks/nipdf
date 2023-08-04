@@ -132,7 +132,7 @@ fn decode_jpx<'a>(
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, strum::EnumString)]
-enum ColorSpace {
+pub(crate) enum ColorSpace {
     DeviceGray,
     DeviceRGB,
     DeviceCMYK,
@@ -140,7 +140,7 @@ enum ColorSpace {
 }
 
 #[pdf_object((Some("XObject"), "Image"))]
-trait ImageDictTrait {
+pub(crate) trait ImageDictTrait {
     fn width(&self) -> u32;
     fn height(&self) -> u32;
     fn bits_per_component(&self) -> Option<u8>;
@@ -313,6 +313,10 @@ pub struct RawImage<'a> {
 impl<'a> Stream<'a> {
     pub fn new(dict: Dictionary<'a>, data: &'a [u8]) -> Self {
         Self(dict, data)
+    }
+
+    pub fn as_dict(&self) -> &Dictionary<'a> {
+        &self.0
     }
 
     /// Get stream un-decoded raw data.
