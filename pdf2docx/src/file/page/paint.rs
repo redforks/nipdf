@@ -90,14 +90,17 @@ impl State {
     }
 
     fn set_stroke_color(&mut self, color: Color) {
+        log::debug!("set stroke color: {:?}", color);
         self.stroke_paint.set_color(color.into());
     }
 
     fn set_fill_color(&mut self, color: Color) {
+        log::debug!("set fill color: {:?}", color);
         self.fill_paint.set_color(color.into());
     }
 
     fn set_ctm(&mut self, ctm: TransformMatrix) {
+        log::debug!("set ctm: {:?}", ctm);
         self.ctm = ctm;
     }
 
@@ -304,16 +307,20 @@ impl Render {
 
     fn stroke(&mut self) {
         let state = self.stack.last().unwrap();
+        let paint = state.get_stroke_paint();
+        let stroke = state.get_stroke();
+        log::debug!("stroke: {:?} {:?}", paint, stroke);
         self.canvas.stroke_path(
             &state.path(),
-            state.get_fill_paint(),
-            state.get_stroke(),
+            paint,
+            stroke,
             self.flip_y_axis(state.to_transform()),
             None,
         );
     }
 
     fn close_path(&mut self) {
+        log::debug!("close_path");
         self.current_mut().close_path();
     }
 
@@ -324,9 +331,11 @@ impl Render {
 
     fn fill_path_non_zero(&mut self) {
         let state = self.stack.last().unwrap();
+        let paint = state.get_fill_paint();
+        log::debug!("fill_path_non_zero: {:?}", paint);
         self.canvas.fill_path(
             &state.path(),
-            state.get_fill_paint(),
+            paint,
             tiny_skia::FillRule::Winding,
             self.flip_y_axis(state.to_transform()),
             None,
@@ -335,9 +344,11 @@ impl Render {
 
     fn fill_path_even_odd(&mut self) {
         let state = self.stack.last().unwrap();
+        let paint = state.get_fill_paint();
+        log::debug!("fill_path_even_odd: {:?}", paint);
         self.canvas.fill_path(
             &state.path(),
-            state.get_fill_paint(),
+            paint,
             tiny_skia::FillRule::EvenOdd,
             self.flip_y_axis(state.to_transform()),
             None,
@@ -395,6 +406,7 @@ impl Render {
         }
         .post_concat(state.to_transform());
         let transform = self.flip_y_axis(transform);
+        log::debug!("paint_x_object: {:?}", transform);
 
         // TODO: fix transform to move image to correct position
         // let transform = transform
