@@ -5,8 +5,8 @@ use crate::{
 
 use super::{Operation, Rectangle, ResourceDict};
 use tiny_skia::{
-    BlendMode, FillRule, Mask, Paint, Path, PathBuilder, Pixmap, PixmapPaint, PixmapRef, Stroke,
-    StrokeDash, Transform,
+    BlendMode, FillRule, FilterQuality, Mask, Paint, Path, PathBuilder, Pixmap, PixmapPaint,
+    PixmapRef, Stroke, StrokeDash, Transform,
 };
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -446,15 +446,15 @@ impl Render {
         let img = img.into_rgba8();
         let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
         let mut paint = PixmapPaint::default();
-        paint.blend_mode = BlendMode::Source;
-        let transform = tiny_skia::Transform {
-            sx: 1.0 / img.width() as f32,
-            kx: 0.0,
-            ky: 0.0,
-            sy: -1.0 / img.height() as f32,
-            tx: 0.0,
-            ty: 1.0,
-        }
+        paint.quality = FilterQuality::Bicubic;
+        let transform = tiny_skia::Transform::from_row(
+            1.0 / img.width() as f32,
+            0.0,
+            0.0,
+            -1.0 / img.height() as f32,
+            0.0,
+            1.0,
+        )
         .post_concat(state.to_transform());
         let transform = self.flip_y_axis(transform);
         log::debug!("paint_x_object: {:?}", transform);
