@@ -47,9 +47,6 @@ insta = "1.29.0"
 test-case = "3.1.0"
 test-log = "0.2.12"
 
-[profile.dev.package.insta]
-opt-level = 3
-
 [[bin]]
 name = "dump-pdf"
 required-features = ["clr"]

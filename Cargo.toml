@@ -1,8 +1,5 @@
 [workspace]
-members = [
-  "pdf2docx",
-  "pdf2docx-macro"
-]
+members = ["pdf2docx", "pdf2docx-macro"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
