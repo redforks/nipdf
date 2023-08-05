@@ -5,7 +5,8 @@ use crate::{
 
 use super::{Operation, Rectangle, ResourceDict};
 use tiny_skia::{
-    BlendMode, Paint, Path, PathBuilder, Pixmap, PixmapPaint, PixmapRef, Stroke, StrokeDash,
+    BlendMode, FillRule, Mask, Paint, Path, PathBuilder, Pixmap, PixmapPaint, PixmapRef, Stroke,
+    StrokeDash, Transform,
 };
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -51,6 +52,7 @@ pub struct State {
     fill_paint: Paint<'static>,
     stroke_paint: Paint<'static>,
     stroke: Stroke,
+    mask: Option<Mask>,
 }
 
 impl State {
@@ -134,6 +136,10 @@ impl State {
         self.path.push_rect(r.into());
     }
 
+    fn end_path(&mut self) {
+        self.path = PathBuilder::default();
+    }
+
     fn get_fill_paint(&self) -> &Paint<'static> {
         &self.fill_paint
     }
@@ -148,6 +154,10 @@ impl State {
 
     fn to_transform(&self) -> tiny_skia::Transform {
         self.ctm.into()
+    }
+
+    fn get_mask(&self) -> Option<&Mask> {
+        self.mask.as_ref()
     }
 
     fn path(&self) -> Path {
@@ -206,22 +216,52 @@ impl State {
             eprintln!("text knockout flag: {}", text_knockout_flag);
         }
     }
+
+    fn update_mask(&mut self, width: u32, height: u32, rule: FillRule) {
+        let mut mask = self
+            .mask
+            .take()
+            .unwrap_or_else(|| Mask::new(width, height).unwrap());
+        mask.intersect_path(
+            &self.path(),
+            rule,
+            true,
+            tiny_skia::Transform::identity()
+                .pre_scale(1.0, -1.0)
+                .pre_translate(0.0, -(height as f32)),
+        );
+        self.mask = Some(mask);
+    }
+
+    /// Apply current path to mask. Create mask if None, otherwise intersect with current path,
+    /// using Winding fill rule.
+    fn clip_non_zero(&mut self, width: u32, height: u32) {
+        self.update_mask(width, height, FillRule::Winding);
+    }
+
+    /// Apply current path to mask. Create mask if None, otherwise intersect with current path,
+    /// using Even-Odd fill rule.
+    fn clip_even_odd(&mut self, width: u32, height: u32) {
+        self.update_mask(width, height, FillRule::EvenOdd);
+    }
 }
 
 #[derive(Debug)]
 pub struct Render {
     canvas: Pixmap,
     stack: Vec<State>,
+    width: u32,
     height: u32,
 }
 
 impl Render {
-    pub fn new(mut canvas: Pixmap, height: u32) -> Self {
+    pub fn new(mut canvas: Pixmap, width: u32, height: u32) -> Self {
         // fill the whole canvas with white
         canvas.fill(tiny_skia::Color::WHITE);
         Self {
             canvas,
             stack: vec![State::new()],
+            width,
             height,
         }
     }
@@ -285,6 +325,17 @@ impl Render {
             Operation::FillAndStrokeEvenOdd => self.fill_and_stroke_even_odd(),
             Operation::CloseFillAndStrokeNonZero => self.close_fill_and_stroke_non_zero(),
             Operation::CloseFillAndStrokeEvenOdd => self.close_fill_and_stroke_even_odd(),
+            Operation::EndPath => self.current_mut().end_path(),
+
+            // Clipping Path Operations
+            Operation::ClipNonZero => {
+                let (w, h) = (self.width, self.height);
+                self.current_mut().clip_non_zero(w, h);
+            }
+            Operation::ClipEvenOdd => {
+                let (w, h) = (self.width, self.height);
+                self.current_mut().clip_even_odd(w, h);
+            }
 
             // Color Operations
             Operation::SetStrokeColor(color)
@@ -315,7 +366,7 @@ impl Render {
             paint,
             stroke,
             self.flip_y_axis(state.to_transform()),
-            None,
+            state.get_mask(),
         );
     }
 
@@ -338,7 +389,7 @@ impl Render {
             paint,
             tiny_skia::FillRule::Winding,
             self.flip_y_axis(state.to_transform()),
-            None,
+            state.get_mask(),
         );
     }
 
@@ -351,7 +402,7 @@ impl Render {
             paint,
             tiny_skia::FillRule::EvenOdd,
             self.flip_y_axis(state.to_transform()),
-            None,
+            state.get_mask(),
         );
     }
 
@@ -415,7 +466,8 @@ impl Render {
         //     .pre_translate(0.0, -(self.height as f32))
         //     .pre_scale(1.0, -1.0)
         //     .pre_translate(0.0, -(self.height as f32));
-        self.canvas.draw_pixmap(0, 0, img, &paint, transform, None);
+        self.canvas
+            .draw_pixmap(0, 0, img, &paint, transform, state.get_mask());
     }
 }
 
