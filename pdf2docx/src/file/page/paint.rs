@@ -5,7 +5,7 @@ use crate::{
 
 use super::{Operation, Rectangle, ResourceDict};
 use tiny_skia::{
-    IntSize, Paint, Path, PathBuilder, Pixmap, PixmapPaint, PixmapRef, Shader, Stroke, StrokeDash,
+    BlendMode, Paint, Path, PathBuilder, Pixmap, PixmapPaint, PixmapRef, Stroke, StrokeDash,
 };
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -383,15 +383,26 @@ impl Render {
 
         let img = img.into_rgba8();
         let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
-        let paint = PixmapPaint::default();
-        let transform = state.to_transform();
+        let mut paint = PixmapPaint::default();
+        paint.blend_mode = BlendMode::Source;
+        let transform = tiny_skia::Transform {
+            sx: 1.0 / img.width() as f32,
+            kx: 0.0,
+            ky: 0.0,
+            sy: -1.0 / img.height() as f32,
+            tx: 0.0,
+            ty: 1.0,
+        }
+        .post_concat(state.to_transform());
+        let transform = self.flip_y_axis(transform);
+
         // TODO: fix transform to move image to correct position
-        let transform = transform
-            .pre_scale(1.0 / img.width() as f32, 1.0 / img.height() as f32)
-            .pre_scale(1.0, -1.0)
-            .pre_translate(0.0, -(self.height as f32))
-            .pre_scale(1.0, -1.0)
-            .pre_translate(0.0, -(self.height as f32));
+        // let transform = transform
+        //     .pre_scale(1.0 / img.width() as f32, 1.0 / img.height() as f32)
+        //     .pre_scale(1.0, -1.0)
+        //     .pre_translate(0.0, -(self.height as f32))
+        //     .pre_scale(1.0, -1.0)
+        //     .pre_translate(0.0, -(self.height as f32));
         self.canvas.draw_pixmap(0, 0, img, &paint, transform, None);
     }
 }
