@@ -262,7 +262,7 @@ pub enum Operation<'a> {
 
     // Inline Image Operations
     #[op_tag("BI")]
-    BeginInlineImage(NameOfDict),
+    BeginInlineImage,
     #[op_tag("ID")]
     BeginInlineImageData,
     #[op_tag("EI")]
