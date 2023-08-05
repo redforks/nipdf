@@ -56,10 +56,8 @@ pub struct State {
 impl State {
     fn new() -> Self {
         let mut r = Self::default();
-        r.fill_paint.set_color(tiny_skia::Color::BLACK);
-        r.fill_paint.shader = Shader::SolidColor(tiny_skia::Color::BLACK);
+        r.fill_paint.set_color(tiny_skia::Color::TRANSPARENT);
         r.stroke_paint.set_color(tiny_skia::Color::BLACK);
-        r.stroke_paint.shader = Shader::SolidColor(tiny_skia::Color::BLACK);
         r
     }
 
@@ -92,11 +90,11 @@ impl State {
     }
 
     fn set_stroke_color(&mut self, color: Color) {
-        self.stroke_paint.shader = Shader::SolidColor(color.into());
+        self.stroke_paint.set_color(color.into());
     }
 
     fn set_fill_color(&mut self, color: Color) {
-        self.fill_paint.shader = Shader::SolidColor(color.into());
+        self.fill_paint.set_color(color.into());
     }
 
     fn set_ctm(&mut self, ctm: TransformMatrix) {
