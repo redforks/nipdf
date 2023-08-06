@@ -395,30 +395,25 @@ impl Render {
         self.stroke();
     }
 
-    fn fill_path_non_zero(&mut self) {
+    fn _fill(&mut self, fill_rule: FillRule) {
         let state = self.stack.last().unwrap();
         let paint = state.get_fill_paint();
-        log::debug!("fill_path_non_zero: {:?}", paint);
+        log::debug!("fill: {:?}/{:?}", paint, fill_rule);
         self.canvas.fill_path(
             &self.path.finish(),
             paint,
-            tiny_skia::FillRule::Winding,
+            fill_rule,
             self.flip_y_axis(state.to_transform()),
             state.get_mask(),
         );
     }
 
+    fn fill_path_non_zero(&mut self) {
+        self._fill(FillRule::Winding);
+    }
+
     fn fill_path_even_odd(&mut self) {
-        let state = self.stack.last().unwrap();
-        let paint = state.get_fill_paint();
-        log::debug!("fill_path_even_odd: {:?}", paint);
-        self.canvas.fill_path(
-            &self.path.finish(),
-            paint,
-            tiny_skia::FillRule::EvenOdd,
-            self.flip_y_axis(state.to_transform()),
-            state.get_mask(),
-        );
+        self._fill(FillRule::EvenOdd);
     }
 
     fn fill_and_stroke_non_zero(&mut self) {
