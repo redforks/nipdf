@@ -42,7 +42,7 @@ fn scan_objects() {
             println!("  media_box: {:?}", page.media_box());
             println!("  crop_box: {:?}", page.crop_box());
 
-            for op in page.content(&resolver).unwrap().operations() {
+            for op in page.content().unwrap().operations() {
                 println!("  {:?}", op);
             }
         }

@@ -386,7 +386,7 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
 
     /// Item can be a single object or an array of objects.
     /// If item not exist, returns empty vec.
-    pub fn opt_single_or_arr<Item: 'b>(
+    pub fn opt_single_or_arr<Item>(
         &self,
         id: &'static str,
         f: impl Fn(&Object<'a>) -> Result<Item, ObjectValueError>,
@@ -397,6 +397,20 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
                 Object::Array(arr) => arr.iter().map(f).collect(),
                 _ => f(o).map(|o| vec![o]),
             })
+    }
+
+    pub fn opt_single_or_arr_stream(
+        &self,
+        id: &'static str,
+    ) -> Result<Vec<&Stream<'a>>, ObjectValueError> {
+        let resolver = self.resolver();
+        match resolver.resolve_container_value(self.d, id)? {
+            Object::Array(arr) => arr
+                .iter()
+                .map(|o| resolver.resolve_reference(o)?.as_stream())
+                .collect(),
+            o => resolver.resolve_reference(o)?.as_stream().map(|o| vec![o]),
+        }
     }
 
     pub fn opt_dict(

@@ -164,6 +164,7 @@ pub(crate) trait PageDictTrait {
     fn crop_box(&self) -> Option<Rectangle>;
     #[nested]
     fn resources(&self) -> Option<ResourceDict<'a, 'b>>;
+    fn contents(&self) -> Vec<&Stream<'a>>;
 }
 
 impl<'a, 'b> PageDict<'a, 'b> {
@@ -197,23 +198,21 @@ impl<'a, 'b> Page<'a, 'b> {
         self.iter_to_root().find_map(|d| d.crop_box())
     }
 
-    pub fn content(&self, resolver: &ObjectResolver<'_>) -> Result<PageContent, ObjectValueError> {
-        let content_ids = self
+    pub fn content(&self) -> Result<PageContent, ObjectValueError> {
+        let bufs = self
             .d
-            .d
-            .opt_single_or_arr("Contents", |o| Ok(o.as_ref()?.id().id()))?;
-
-        let mut bufs = Vec::with_capacity(content_ids.len());
-        for id in &content_ids[..] {
-            let s = resolver.resolve(*id)?.as_stream()?;
-            let decoded = s.decode(resolver, false)?;
-            match decoded {
-                FilterDecodedData::Bytes(b) => bufs.push(b.into_owned()),
-                _ => {
-                    panic!("expected page content is stream");
+            .contents()
+            .into_iter()
+            .map(|s| {
+                let decoded = s.decode(self.d.d.resolver(), false)?;
+                match decoded {
+                    FilterDecodedData::Bytes(b) => Ok::<_, ObjectValueError>(b.into_owned()),
+                    _ => {
+                        panic!("expected page content is stream");
+                    }
                 }
-            }
-        }
+            })
+            .collect::<Result<_, _>>()?;
         Ok(PageContent { bufs })
     }
 
@@ -222,7 +221,7 @@ impl<'a, 'b> Page<'a, 'b> {
         let map = Pixmap::new(media_box.width() as u32, media_box.height() as u32).unwrap();
         let mut renderer =
             paint::Render::new(map, media_box.width() as u32, media_box.height() as u32);
-        let content = self.content(resolver)?;
+        let content = self.content()?;
         let empty_dict = Dictionary::new();
         let resource = self
             .d

@@ -105,7 +105,7 @@ fn dump_page(
         copy(&mut &buf[..], &mut BufWriter::new(&mut stdout()))?;
     } else if let Some(page_no) = page_no {
         let page = &catalog.pages()?[page_no as usize];
-        let contents = page.content(&resolver)?;
+        let contents = page.content()?;
         for op in contents.operations() {
             println!("{:?}", op);
         }

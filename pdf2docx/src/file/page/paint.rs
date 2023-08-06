@@ -5,8 +5,8 @@ use crate::{
 
 use super::{Operation, Rectangle, ResourceDict};
 use tiny_skia::{
-    BlendMode, FillRule, FilterQuality, Mask, Paint, Path, PathBuilder, Pixmap, PixmapPaint,
-    PixmapRef, Stroke, StrokeDash, Transform,
+    FillRule, FilterQuality, Mask, Paint, Path, PathBuilder, Pixmap, PixmapPaint, PixmapRef,
+    Stroke, StrokeDash,
 };
 
 impl From<LineCapStyle> for tiny_skia::LineCap {

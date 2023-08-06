@@ -159,6 +159,17 @@ impl<'a> ObjectResolver<'a> {
         Self::to_opt(self.resolve(id))
     }
 
+    pub fn resolve_reference<'b>(
+        &'b self,
+        v: &'b Object<'a>,
+    ) -> Result<&'b Object<'a>, ObjectValueError> {
+        if let Object::Reference(id) = v {
+            self.resolve(id.id().id())
+        } else {
+            Ok(v)
+        }
+    }
+
     /// Resolve object with id `id`, if object is reference, resolve it recursively.
     pub fn resolve(&self, id: NonZeroU32) -> Result<&Object<'a>, ObjectValueError> {
         self.objects
