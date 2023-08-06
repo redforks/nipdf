@@ -100,7 +100,7 @@ fn dump_page(
     } else if to_png {
         let page_no = page_no.expect("page number is required");
         let page = &catalog.pages()?[page_no as usize];
-        let pixmap = page.render(&resolver)?;
+        let pixmap = page.render()?;
         let buf = pixmap.encode_png()?;
         copy(&mut &buf[..], &mut BufWriter::new(&mut stdout()))?;
     } else if let Some(page_no) = page_no {

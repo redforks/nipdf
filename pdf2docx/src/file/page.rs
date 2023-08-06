@@ -198,6 +198,12 @@ impl<'a, 'b> Page<'a, 'b> {
         self.iter_to_root().find_map(|d| d.crop_box())
     }
 
+    fn resources(&self) -> ResourceDict<'a, 'b> {
+        self.iter_to_root()
+            .find_map(|d| d.resources())
+            .expect("page must have resources")
+    }
+
     pub fn content(&self) -> Result<PageContent, ObjectValueError> {
         let bufs = self
             .d
@@ -216,17 +222,13 @@ impl<'a, 'b> Page<'a, 'b> {
         Ok(PageContent { bufs })
     }
 
-    pub fn render(&self, resolver: &'b ObjectResolver<'a>) -> Result<Pixmap, ObjectValueError> {
+    pub fn render(&self) -> Result<Pixmap, ObjectValueError> {
         let media_box = self.media_box();
         let map = Pixmap::new(media_box.width() as u32, media_box.height() as u32).unwrap();
         let mut renderer =
             paint::Render::new(map, media_box.width() as u32, media_box.height() as u32);
         let content = self.content()?;
-        let empty_dict = Dictionary::new();
-        let resource = self
-            .d
-            .resources()
-            .unwrap_or_else(|| ResourceDict::new(None, &empty_dict, resolver).unwrap());
+        let resource = self.resources();
         for op in content.operations() {
             renderer.exec(&op, &resource);
         }
