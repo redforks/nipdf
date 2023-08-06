@@ -5,8 +5,8 @@ use crate::{
 
 use super::{Operation, Rectangle, ResourceDict};
 use tiny_skia::{
-    FillRule, FilterQuality, Mask, Paint, Path, PathBuilder, Pixmap, PixmapPaint, PixmapRef,
-    Stroke, StrokeDash,
+    FillRule, FilterQuality, Mask, Paint, Path as SkiaPath, PathBuilder, Pixmap, PixmapPaint,
+    PixmapRef, Stroke, StrokeDash,
 };
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -47,7 +47,6 @@ impl From<Color> for tiny_skia::Color {
 
 #[derive(Debug, Default, Clone)]
 pub struct State {
-    path: PathBuilder,
     ctm: TransformMatrix,
     fill_paint: Paint<'static>,
     stroke_paint: Paint<'static>,
@@ -106,40 +105,6 @@ impl State {
         self.ctm = ctm;
     }
 
-    fn close_path(&mut self) {
-        self.path.close();
-    }
-
-    fn move_to(&mut self, p: Point) {
-        self.path.move_to(p.x, p.y);
-    }
-
-    fn line_to(&mut self, p: Point) {
-        self.path.line_to(p.x, p.y);
-    }
-
-    fn curve_to(&mut self, p1: Point, p2: Point, p3: Point) {
-        self.path.cubic_to(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
-    }
-
-    fn curve_to_cur_point_as_control(&mut self, p2: Point, p3: Point) {
-        let p1 = self.path.last_point().unwrap();
-        self.curve_to(Point { x: p1.x, y: p2.y }, p2, p3);
-    }
-
-    fn curve_to_dest_point_as_control(&mut self, p1: Point, p3: Point) {
-        self.curve_to(p1, p3, p3);
-    }
-
-    fn append_rect(&mut self, p: Point, w: f32, h: f32) {
-        let r = Rectangle::from_xywh(p.x, p.y, w, h);
-        self.path.push_rect(r.into());
-    }
-
-    fn end_path(&mut self) {
-        self.path = PathBuilder::default();
-    }
-
     fn get_fill_paint(&self) -> &Paint<'static> {
         &self.fill_paint
     }
@@ -158,10 +123,6 @@ impl State {
 
     fn get_mask(&self) -> Option<&Mask> {
         self.mask.as_ref()
-    }
-
-    fn path(&self) -> Path {
-        self.path.clone().finish().unwrap()
     }
 
     fn set_graphics_state(
@@ -218,19 +179,19 @@ impl State {
     }
 
     fn update_mask(&mut self, width: u32, height: u32, rule: FillRule) {
-        let mut mask = self
-            .mask
-            .take()
-            .unwrap_or_else(|| Mask::new(width, height).unwrap());
-        mask.intersect_path(
-            &self.path(),
-            rule,
-            true,
-            tiny_skia::Transform::identity()
-                .pre_scale(1.0, -1.0)
-                .pre_translate(0.0, -(height as f32)),
-        );
-        self.mask = Some(mask);
+        // let mut mask = self
+        //     .mask
+        //     .take()
+        //     .unwrap_or_else(|| Mask::new(width, height).unwrap());
+        // mask.intersect_path(
+        //     &self.path.path(),
+        //     rule,
+        //     true,
+        //     tiny_skia::Transform::identity()
+        //         .pre_scale(1.0, -1.0)
+        //         .pre_translate(0.0, -(height as f32)),
+        // );
+        // self.mask = Some(mask);
     }
 
     /// Apply current path to mask. Create mask if None, otherwise intersect with current path,
@@ -246,12 +207,58 @@ impl State {
     }
 }
 
+#[derive(Debug, Default)]
+struct Path {
+    path: PathBuilder,
+}
+
+impl Path {
+    fn close_path(&mut self) {
+        self.path.close();
+    }
+
+    fn move_to(&mut self, p: Point) {
+        self.path.move_to(p.x, p.y);
+    }
+
+    fn line_to(&mut self, p: Point) {
+        self.path.line_to(p.x, p.y);
+    }
+
+    fn curve_to(&mut self, p1: Point, p2: Point, p3: Point) {
+        self.path.cubic_to(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+    }
+
+    fn curve_to_cur_point_as_control(&mut self, p2: Point, p3: Point) {
+        let p1 = self.path.last_point().unwrap();
+        self.curve_to(Point { x: p1.x, y: p2.y }, p2, p3);
+    }
+
+    fn curve_to_dest_point_as_control(&mut self, p1: Point, p3: Point) {
+        self.curve_to(p1, p3, p3);
+    }
+
+    fn append_rect(&mut self, p: Point, w: f32, h: f32) {
+        let r = Rectangle::from_xywh(p.x, p.y, w, h);
+        self.path.push_rect(r.into());
+    }
+
+    fn path(&self) -> SkiaPath {
+        self.path.clone().finish().unwrap()
+    }
+
+    fn end_path(&mut self) {
+        self.path = PathBuilder::default();
+    }
+}
+
 #[derive(Debug)]
 pub struct Render {
     canvas: Pixmap,
     stack: Vec<State>,
     width: u32,
     height: u32,
+    path: Path,
 }
 
 impl Render {
@@ -263,6 +270,7 @@ impl Render {
             stack: vec![State::new()],
             width,
             height,
+            path: Path::default(),
         }
     }
 
@@ -304,17 +312,17 @@ impl Render {
             Operation::ModifyCTM(ctm) => self.current_mut().set_ctm(*ctm),
 
             // Path Construction Operations
-            Operation::MoveToNext(p) => self.current_mut().move_to(*p),
-            Operation::LineToNext(p) => self.current_mut().line_to(*p),
-            Operation::AppendBezierCurve(p1, p2, p3) => self.current_mut().curve_to(*p1, *p2, *p3),
+            Operation::MoveToNext(p) => self.path.move_to(*p),
+            Operation::LineToNext(p) => self.path.line_to(*p),
+            Operation::AppendBezierCurve(p1, p2, p3) => self.path.curve_to(*p1, *p2, *p3),
             Operation::AppendBezierCurve2(p2, p3) => {
-                self.current_mut().curve_to_cur_point_as_control(*p2, *p3);
+                self.path.curve_to_cur_point_as_control(*p2, *p3);
             }
             Operation::AppendBezierCurve1(p1, p3) => {
-                self.current_mut().curve_to_dest_point_as_control(*p1, *p3);
+                self.path.curve_to_dest_point_as_control(*p1, *p3);
             }
-            Operation::ClosePath => self.current_mut().close_path(),
-            Operation::AppendRectangle(p, w, h) => self.current_mut().append_rect(*p, *w, *h),
+            Operation::ClosePath => self.path.close_path(),
+            Operation::AppendRectangle(p, w, h) => self.path.append_rect(*p, *w, *h),
 
             // Path Painting Operation
             Operation::Stroke => self.stroke(),
@@ -325,7 +333,7 @@ impl Render {
             Operation::FillAndStrokeEvenOdd => self.fill_and_stroke_even_odd(),
             Operation::CloseFillAndStrokeNonZero => self.close_fill_and_stroke_non_zero(),
             Operation::CloseFillAndStrokeEvenOdd => self.close_fill_and_stroke_even_odd(),
-            Operation::EndPath => self.current_mut().end_path(),
+            Operation::EndPath => self.path.end_path(),
 
             // Clipping Path Operations
             Operation::ClipNonZero => {
@@ -362,7 +370,7 @@ impl Render {
         let stroke = state.get_stroke();
         log::debug!("stroke: {:?} {:?}", paint, stroke);
         self.canvas.stroke_path(
-            &state.path(),
+            &self.path.path(),
             paint,
             stroke,
             self.flip_y_axis(state.to_transform()),
@@ -372,7 +380,7 @@ impl Render {
 
     fn close_path(&mut self) {
         log::debug!("close_path");
-        self.current_mut().close_path();
+        self.path.close_path();
     }
 
     fn close_and_stroke(&mut self) {
@@ -385,7 +393,7 @@ impl Render {
         let paint = state.get_fill_paint();
         log::debug!("fill_path_non_zero: {:?}", paint);
         self.canvas.fill_path(
-            &state.path(),
+            &self.path.path(),
             paint,
             tiny_skia::FillRule::Winding,
             self.flip_y_axis(state.to_transform()),
@@ -398,7 +406,7 @@ impl Render {
         let paint = state.get_fill_paint();
         log::debug!("fill_path_even_odd: {:?}", paint);
         self.canvas.fill_path(
-            &state.path(),
+            &self.path.path(),
             paint,
             tiny_skia::FillRule::EvenOdd,
             self.flip_y_axis(state.to_transform()),
