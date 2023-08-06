@@ -243,12 +243,15 @@ impl Path {
         self.path.push_rect(r.into());
     }
 
-    fn path(&self) -> SkiaPath {
-        self.path.clone().finish().unwrap()
+    /// Build path and clear the path builder
+    fn finish(&mut self) -> SkiaPath {
+        let r = self.path.clone().finish().unwrap();
+        self.path.clear();
+        return r;
     }
 
-    fn end_path(&mut self) {
-        self.path = PathBuilder::default();
+    fn clear(&mut self) {
+        self.path.clear();
     }
 }
 
@@ -333,7 +336,7 @@ impl Render {
             Operation::FillAndStrokeEvenOdd => self.fill_and_stroke_even_odd(),
             Operation::CloseFillAndStrokeNonZero => self.close_fill_and_stroke_non_zero(),
             Operation::CloseFillAndStrokeEvenOdd => self.close_fill_and_stroke_even_odd(),
-            Operation::EndPath => self.path.end_path(),
+            Operation::EndPath => self.end_path(),
 
             // Clipping Path Operations
             Operation::ClipNonZero => {
@@ -370,12 +373,16 @@ impl Render {
         let stroke = state.get_stroke();
         log::debug!("stroke: {:?} {:?}", paint, stroke);
         self.canvas.stroke_path(
-            &self.path.path(),
+            &self.path.finish(),
             paint,
             stroke,
             self.flip_y_axis(state.to_transform()),
             state.get_mask(),
         );
+    }
+
+    fn end_path(&mut self) {
+        self.path.clear();
     }
 
     fn close_path(&mut self) {
@@ -393,7 +400,7 @@ impl Render {
         let paint = state.get_fill_paint();
         log::debug!("fill_path_non_zero: {:?}", paint);
         self.canvas.fill_path(
-            &self.path.path(),
+            &self.path.finish(),
             paint,
             tiny_skia::FillRule::Winding,
             self.flip_y_axis(state.to_transform()),
@@ -406,7 +413,7 @@ impl Render {
         let paint = state.get_fill_paint();
         log::debug!("fill_path_even_odd: {:?}", paint);
         self.canvas.fill_path(
-            &self.path.path(),
+            &self.path.finish(),
             paint,
             tiny_skia::FillRule::EvenOdd,
             self.flip_y_axis(state.to_transform()),
@@ -442,40 +449,40 @@ impl Render {
 
     /// Paints the specified XObject. Only XObjectType::Image supported
     fn paint_x_object(&mut self, name: &crate::graphics::NameOfDict, resources: &ResourceDict) {
-        let xobjects = resources.x_object();
-        let xobject = xobjects.get(&name.0).unwrap();
-        let img = xobject.as_image().expect("Only Image XObject supported");
-        let img = img.decode(resources.d.resolver(), false).unwrap();
-        let FilterDecodedData::Image(img) = img  else {
-            panic!("Stream should decoded to image");
-        };
-        let state = self.stack.last().unwrap();
+        // let xobjects = resources.x_object();
+        // let xobject = xobjects.get(&name.0).unwrap();
+        // let img = xobject.as_image().expect("Only Image XObject supported");
+        // let img = img.decode(resources.d.resolver(), false).unwrap();
+        // let FilterDecodedData::Image(img) = img  else {
+        //     panic!("Stream should decoded to image");
+        // };
+        // let state = self.stack.last().unwrap();
 
-        let img = img.into_rgba8();
-        let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
-        let mut paint = PixmapPaint::default();
-        paint.quality = FilterQuality::Bicubic;
-        let transform = tiny_skia::Transform::from_row(
-            1.0 / img.width() as f32,
-            0.0,
-            0.0,
-            -1.0 / img.height() as f32,
-            0.0,
-            1.0,
-        )
-        .post_concat(state.to_transform());
-        let transform = self.flip_y_axis(transform);
-        log::debug!("paint_x_object: {:?}", transform);
+        // let img = img.into_rgba8();
+        // let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
+        // let mut paint = PixmapPaint::default();
+        // paint.quality = FilterQuality::Bicubic;
+        // let transform = tiny_skia::Transform::from_row(
+        //     1.0 / img.width() as f32,
+        //     0.0,
+        //     0.0,
+        //     -1.0 / img.height() as f32,
+        //     0.0,
+        //     1.0,
+        // )
+        // .post_concat(state.to_transform());
+        // let transform = self.flip_y_axis(transform);
+        // log::debug!("paint_x_object: {:?}", transform);
 
-        // TODO: fix transform to move image to correct position
-        // let transform = transform
-        //     .pre_scale(1.0 / img.width() as f32, 1.0 / img.height() as f32)
-        //     .pre_scale(1.0, -1.0)
-        //     .pre_translate(0.0, -(self.height as f32))
-        //     .pre_scale(1.0, -1.0)
-        //     .pre_translate(0.0, -(self.height as f32));
-        self.canvas
-            .draw_pixmap(0, 0, img, &paint, transform, state.get_mask());
+        // // TODO: fix transform to move image to correct position
+        // // let transform = transform
+        // //     .pre_scale(1.0 / img.width() as f32, 1.0 / img.height() as f32)
+        // //     .pre_scale(1.0, -1.0)
+        // //     .pre_translate(0.0, -(self.height as f32))
+        // //     .pre_scale(1.0, -1.0)
+        // //     .pre_translate(0.0, -(self.height as f32));
+        // self.canvas
+        //     .draw_pixmap(0, 0, img, &paint, transform, state.get_mask());
     }
 }
 
