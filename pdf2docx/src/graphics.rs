@@ -16,13 +16,13 @@ use pdf2docx_macro::{OperationParser, TryFromIntObject, TryFromNameObject};
 #[educe(Default)]
 pub struct TransformMatrix {
     #[educe(Default = 1.0)]
-    sx: f32,
-    kx: f32,
-    ky: f32,
+    pub sx: f32,
+    pub kx: f32,
+    pub ky: f32,
     #[educe(Default = 1.0)]
-    sy: f32,
-    tx: f32,
-    ty: f32,
+    pub sy: f32,
+    pub tx: f32,
+    pub ty: f32,
 }
 
 impl TransformMatrix {

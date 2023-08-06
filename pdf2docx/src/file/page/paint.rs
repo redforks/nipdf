@@ -6,7 +6,7 @@ use crate::{
 use super::{Operation, Rectangle, ResourceDict};
 use tiny_skia::{
     FillRule, FilterQuality, Mask, Paint, Path as SkiaPath, PathBuilder, Pixmap, PixmapPaint,
-    PixmapRef, Stroke, StrokeDash,
+    PixmapRef, Stroke, StrokeDash, Transform,
 };
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -45,9 +45,9 @@ impl From<Color> for tiny_skia::Color {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct State {
-    ctm: TransformMatrix,
+    ctm: MatrixMapper,
     fill_paint: Paint<'static>,
     stroke_paint: Paint<'static>,
     stroke: Stroke,
@@ -55,8 +55,14 @@ pub struct State {
 }
 
 impl State {
-    fn new() -> Self {
-        let mut r = Self::default();
+    fn new(height: u32) -> Self {
+        let mut r = Self {
+            ctm: MatrixMapper::new(height, TransformMatrix::identity()),
+            fill_paint: Paint::default(),
+            stroke_paint: Paint::default(),
+            stroke: Stroke::default(),
+            mask: None,
+        };
         r.fill_paint.set_color(tiny_skia::Color::TRANSPARENT);
         r.stroke_paint.set_color(tiny_skia::Color::BLACK);
         r
@@ -102,7 +108,7 @@ impl State {
 
     fn set_ctm(&mut self, ctm: TransformMatrix) {
         log::debug!("set ctm: {:?}", ctm);
-        self.ctm = ctm;
+        self.ctm.set_ctm(ctm);
     }
 
     fn get_fill_paint(&self) -> &Paint<'static> {
@@ -117,8 +123,12 @@ impl State {
         &self.stroke
     }
 
-    fn to_transform(&self) -> tiny_skia::Transform {
-        self.ctm.into()
+    fn path_transform(&self) -> Transform {
+        self.ctm.path_transform()
+    }
+
+    fn image_transform(&self, img_w: u32, img_h: u32) -> Transform {
+        self.ctm.image_transform(img_w, img_h)
     }
 
     fn get_mask(&self) -> Option<&Mask> {
@@ -270,7 +280,7 @@ impl Render {
         canvas.fill(tiny_skia::Color::WHITE);
         Self {
             canvas,
-            stack: vec![State::new()],
+            stack: vec![State::new(height)],
             width,
             height,
             path: Path::default(),
@@ -376,7 +386,7 @@ impl Render {
             &self.path.finish(),
             paint,
             stroke,
-            self.flip_y_axis(state.to_transform()),
+            state.path_transform(),
             state.get_mask(),
         );
     }
@@ -403,7 +413,7 @@ impl Render {
             &self.path.finish(),
             paint,
             fill_rule,
-            self.flip_y_axis(state.to_transform()),
+            state.path_transform(),
             state.get_mask(),
         );
     }
@@ -436,48 +446,73 @@ impl Render {
         self.fill_and_stroke_even_odd();
     }
 
-    fn flip_y_axis(&self, transform: tiny_skia::Transform) -> tiny_skia::Transform {
-        transform
-            .pre_scale(1.0, -1.0)
+    /// Paints the specified XObject. Only XObjectType::Image supported
+    fn paint_x_object(&mut self, name: &crate::graphics::NameOfDict, resources: &ResourceDict) {
+        let xobjects = resources.x_object();
+        let xobject = xobjects.get(&name.0).unwrap();
+        let img = xobject.as_image().expect("Only Image XObject supported");
+        let img = img.decode(resources.d.resolver(), false).unwrap();
+        let FilterDecodedData::Image(img) = img  else {
+            panic!("Stream should decoded to image");
+        };
+        let state = self.stack.last().unwrap();
+
+        let img = img.into_rgba8();
+        let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
+        let mut paint = PixmapPaint::default();
+        paint.quality = FilterQuality::Bilinear;
+        let transform = state.image_transform(img.width(), img.height());
+        log::debug!("paint_x_object: {:?}", transform);
+
+        // TODO: fix transform to move image to correct position
+        // let transform = transform
+        //     .pre_scale(1.0 / img.width() as f32, 1.0 / img.height() as f32)
+        //     .pre_scale(1.0, -1.0)
+        //     .pre_translate(0.0, -(self.height as f32))
+        //     .pre_scale(1.0, -1.0)
+        //     .pre_translate(0.0, -(self.height as f32));
+        self.canvas
+            .draw_pixmap(0, 0, img, &paint, transform, state.get_mask());
+    }
+}
+
+#[derive(Debug, Clone)]
+struct MatrixMapper {
+    height: f32,
+    ctm: TransformMatrix,
+}
+
+impl MatrixMapper {
+    pub fn new(height: u32, ctm: TransformMatrix) -> Self {
+        Self {
+            height: height as f32,
+            ctm,
+        }
+    }
+
+    pub fn set_ctm(&mut self, ctm: TransformMatrix) {
+        self.ctm = ctm;
+    }
+
+    pub fn path_transform(&self) -> Transform {
+        let r: Transform = self.ctm.into();
+        self.flip_y(r)
+    }
+
+    fn flip_y(&self, t: Transform) -> Transform {
+        t.pre_scale(1.0, -1.0)
             .pre_translate(0.0, -(self.height as f32))
     }
 
-    /// Paints the specified XObject. Only XObjectType::Image supported
-    fn paint_x_object(&mut self, name: &crate::graphics::NameOfDict, resources: &ResourceDict) {
-        // let xobjects = resources.x_object();
-        // let xobject = xobjects.get(&name.0).unwrap();
-        // let img = xobject.as_image().expect("Only Image XObject supported");
-        // let img = img.decode(resources.d.resolver(), false).unwrap();
-        // let FilterDecodedData::Image(img) = img  else {
-        //     panic!("Stream should decoded to image");
-        // };
-        // let state = self.stack.last().unwrap();
-
-        // let img = img.into_rgba8();
-        // let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
-        // let mut paint = PixmapPaint::default();
-        // paint.quality = FilterQuality::Bicubic;
-        // let transform = tiny_skia::Transform::from_row(
-        //     1.0 / img.width() as f32,
-        //     0.0,
-        //     0.0,
-        //     -1.0 / img.height() as f32,
-        //     0.0,
-        //     1.0,
-        // )
-        // .post_concat(state.to_transform());
-        // let transform = self.flip_y_axis(transform);
-        // log::debug!("paint_x_object: {:?}", transform);
-
-        // // TODO: fix transform to move image to correct position
-        // // let transform = transform
-        // //     .pre_scale(1.0 / img.width() as f32, 1.0 / img.height() as f32)
-        // //     .pre_scale(1.0, -1.0)
-        // //     .pre_translate(0.0, -(self.height as f32))
-        // //     .pre_scale(1.0, -1.0)
-        // //     .pre_translate(0.0, -(self.height as f32));
-        // self.canvas
-        //     .draw_pixmap(0, 0, img, &paint, transform, state.get_mask());
+    pub fn image_transform(&self, img_w: u32, img_h: u32) -> Transform {
+        Transform::from_row(
+            self.ctm.sx / img_w as f32,
+            0.0,
+            0.0,
+            self.ctm.sy / img_h as f32,
+            self.ctm.tx,
+            self.height as f32 - self.ctm.ty - self.ctm.sy as f32,
+        )
     }
 }
 
