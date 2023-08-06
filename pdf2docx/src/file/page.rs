@@ -222,17 +222,27 @@ impl<'a, 'b> Page<'a, 'b> {
         Ok(PageContent { bufs })
     }
 
-    pub fn render(&self) -> Result<Pixmap, ObjectValueError> {
+    pub fn render_steps(&self, steps: Option<usize>) -> Result<Pixmap, ObjectValueError> {
         let media_box = self.media_box();
         let map = Pixmap::new(media_box.width() as u32, media_box.height() as u32).unwrap();
         let mut renderer =
             paint::Render::new(map, media_box.width() as u32, media_box.height() as u32);
         let content = self.content()?;
         let resource = self.resources();
-        for op in content.operations() {
-            renderer.exec(&op, &resource);
-        }
+        if let Some(steps) = steps {
+            for op in content.operations().iter().take(steps) {
+                renderer.exec(&op, &resource);
+            }
+        } else {
+            for op in content.operations().iter() {
+                renderer.exec(&op, &resource);
+            }
+        };
         Ok(renderer.into())
+    }
+
+    pub fn render(&self) -> Result<Pixmap, ObjectValueError> {
+        self.render_steps(None)
     }
 
     /// Parse page tree to get all pages
