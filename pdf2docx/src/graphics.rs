@@ -49,23 +49,26 @@ impl Point {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, TryFromIntObject)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, TryFromIntObject)]
 pub enum LineCapStyle {
+    #[default]
     Butt = 0,
     Round = 1,
     Square = 2,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, TryFromIntObject)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, TryFromIntObject)]
 pub enum LineJoinStyle {
+    #[default]
     Miter = 0,
     Round = 1,
     Bevel = 2,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, strum::Display, TryFromNameObject)]
+#[derive(Debug, Clone, Copy, PartialEq, strum::Display, Default, TryFromNameObject)]
 pub enum RenderingIntent {
     AbsoluteColorimetric,
+    #[default]
     RelativeColorimetric,
     Saturation,
     Perceptual,

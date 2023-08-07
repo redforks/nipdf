@@ -68,6 +68,13 @@ impl State {
         };
         r.fill_paint.set_color(tiny_skia::Color::TRANSPARENT);
         r.stroke_paint.set_color(tiny_skia::Color::BLACK);
+
+        r.set_line_cap(LineCapStyle::default());
+        r.set_line_join(LineJoinStyle::default());
+        r.set_miter_limit(10.0);
+        r.set_dash_pattern(&[], 0.0);
+        r.set_render_intent(RenderingIntent::default());
+
         r
     }
 
