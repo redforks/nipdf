@@ -225,7 +225,7 @@ impl<'a, 'b> Page<'a, 'b> {
     }
 
     pub fn render_steps(&self, steps: Option<usize>) -> Result<Pixmap, ObjectValueError> {
-        let mut renderer = paint::Render::new(self, OptionBuilder::new().build());
+        let mut renderer = paint::Render::new(self, OptionBuilder::new().zoom(1.5).build());
         let content = self.content()?;
         let resource = self.resources();
         if let Some(steps) = steps {

@@ -56,9 +56,10 @@ pub struct State {
 }
 
 impl State {
-    fn new(height: u32) -> Self {
+    /// height: height in user space coordinate
+    fn new(height: u32, option: &RenderOption) -> Self {
         let mut r = Self {
-            ctm: MatrixMapper::new(height, TransformMatrix::identity()),
+            ctm: MatrixMapper::new(height as f32, option.zoom, TransformMatrix::identity()),
             fill_paint: Paint::default(),
             stroke_paint: Paint::default(),
             stroke: Stroke::default(),
@@ -269,17 +270,17 @@ impl Path {
 /// Option for Render
 #[derive(Debug, Educe)]
 #[educe(Default)]
-pub struct Option {
+pub struct RenderOption {
     /// zoom level default to 1.0
     #[educe(Default = 1.0)]
     zoom: f32,
 }
 
-pub struct OptionBuilder(Option);
+pub struct OptionBuilder(RenderOption);
 
 impl OptionBuilder {
     pub fn new() -> Self {
-        Self(Option::default())
+        Self(RenderOption::default())
     }
 
     pub fn zoom(mut self, zoom: f32) -> Self {
@@ -287,7 +288,7 @@ impl OptionBuilder {
         self
     }
 
-    pub fn build(self) -> Option {
+    pub fn build(self) -> RenderOption {
         self.0
     }
 }
@@ -299,20 +300,23 @@ pub struct Render {
     width: u32,
     height: u32,
     path: Path,
-    option: Option,
+    option: RenderOption,
 }
 
 impl Render {
-    pub fn new(page: &Page, option: Option) -> Self {
+    pub fn new(page: &Page, option: RenderOption) -> Self {
         let media_box = page.media_box();
-        let w = media_box.width() as u32;
-        let h = media_box.height() as u32;
+        let zoom = option.zoom;
+        let user_h = media_box.height();
+        let w = (media_box.width() * zoom) as u32;
+        let h = (user_h * zoom) as u32;
+
         let mut canvas = Pixmap::new(w, h).unwrap();
         // fill the whole canvas with white
         canvas.fill(tiny_skia::Color::WHITE);
         Self {
             canvas,
-            stack: vec![State::new(h)],
+            stack: vec![State::new(user_h as u32, &option)],
             width: w,
             height: h,
             path: Path::default(),
@@ -497,13 +501,6 @@ impl Render {
         let transform = state.image_transform(img.width(), img.height());
         log::debug!("paint_x_object: {:?}", transform);
 
-        // TODO: fix transform to move image to correct position
-        // let transform = transform
-        //     .pre_scale(1.0 / img.width() as f32, 1.0 / img.height() as f32)
-        //     .pre_scale(1.0, -1.0)
-        //     .pre_translate(0.0, -(self.height as f32))
-        //     .pre_scale(1.0, -1.0)
-        //     .pre_translate(0.0, -(self.height as f32));
         self.canvas
             .draw_pixmap(0, 0, img, &paint, transform, state.get_mask());
     }
@@ -511,16 +508,16 @@ impl Render {
 
 #[derive(Debug, Clone)]
 struct MatrixMapper {
+    // height of user space coordinate
     height: f32,
+    zoom: f32,
     ctm: TransformMatrix,
 }
 
 impl MatrixMapper {
-    pub fn new(height: u32, ctm: TransformMatrix) -> Self {
-        Self {
-            height: height as f32,
-            ctm,
-        }
+    /// height: height of user space coordinate
+    pub fn new(height: f32, zoom: f32, ctm: TransformMatrix) -> Self {
+        Self { height, zoom, ctm }
     }
 
     pub fn set_ctm(&mut self, ctm: TransformMatrix) {
@@ -528,23 +525,22 @@ impl MatrixMapper {
     }
 
     pub fn path_transform(&self) -> Transform {
-        let r: Transform = self.ctm.into();
-        self.flip_y(r)
+        self.flip_y(self.ctm.into())
     }
 
     fn flip_y(&self, t: Transform) -> Transform {
-        t.pre_scale(1.0, -1.0)
+        t.pre_scale(self.zoom, -self.zoom)
             .pre_translate(0.0, -(self.height as f32))
     }
 
     pub fn image_transform(&self, img_w: u32, img_h: u32) -> Transform {
         Transform::from_row(
-            self.ctm.sx / img_w as f32,
+            self.ctm.sx / img_w as f32 * self.zoom,
             0.0,
             0.0,
-            self.ctm.sy / img_h as f32,
-            self.ctm.tx,
-            self.height as f32 - self.ctm.ty - self.ctm.sy as f32,
+            self.ctm.sy / img_h as f32 * self.zoom,
+            self.ctm.tx * self.zoom,
+            self.height * self.zoom - self.ctm.ty * self.zoom - self.ctm.sy * self.zoom,
         )
     }
 }
