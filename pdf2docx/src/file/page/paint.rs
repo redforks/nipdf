@@ -3,7 +3,7 @@ use crate::{
     object::FilterDecodedData,
 };
 
-use super::{Operation, Rectangle, ResourceDict};
+use super::{Operation, Page, Rectangle, ResourceDict};
 use tiny_skia::{
     FillRule, FilterQuality, Mask, Paint, Path as SkiaPath, PathBuilder, Pixmap, PixmapPaint,
     PixmapRef, Stroke, StrokeDash, Transform,
@@ -275,14 +275,18 @@ pub struct Render {
 }
 
 impl Render {
-    pub fn new(mut canvas: Pixmap, width: u32, height: u32) -> Self {
+    pub fn new(page: &Page) -> Self {
+        let media_box = page.media_box();
+        let w = media_box.width() as u32;
+        let h = media_box.height() as u32;
+        let mut canvas = Pixmap::new(w, h).unwrap();
         // fill the whole canvas with white
         canvas.fill(tiny_skia::Color::WHITE);
         Self {
             canvas,
-            stack: vec![State::new(height)],
-            width,
-            height,
+            stack: vec![State::new(h)],
+            width: w,
+            height: h,
             path: Path::default(),
         }
     }

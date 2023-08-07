@@ -223,10 +223,7 @@ impl<'a, 'b> Page<'a, 'b> {
     }
 
     pub fn render_steps(&self, steps: Option<usize>) -> Result<Pixmap, ObjectValueError> {
-        let media_box = self.media_box();
-        let map = Pixmap::new(media_box.width() as u32, media_box.height() as u32).unwrap();
-        let mut renderer =
-            paint::Render::new(map, media_box.width() as u32, media_box.height() as u32);
+        let mut renderer = paint::Render::new(self);
         let content = self.content()?;
         let resource = self.resources();
         if let Some(steps) = steps {
