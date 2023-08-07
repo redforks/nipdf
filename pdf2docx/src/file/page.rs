@@ -10,7 +10,7 @@ use crate::{
     },
 };
 
-use self::paint::OptionBuilder;
+pub use self::paint::{RenderOption, RenderOptionBuilder};
 
 use super::ObjectResolver;
 use std::{collections::HashMap, iter::once};
@@ -224,8 +224,12 @@ impl<'a, 'b> Page<'a, 'b> {
         Ok(PageContent { bufs })
     }
 
-    pub fn render_steps(&self, steps: Option<usize>) -> Result<Pixmap, ObjectValueError> {
-        let mut renderer = paint::Render::new(self, OptionBuilder::new().zoom(1.5).build());
+    pub fn render_steps(
+        &self,
+        option: RenderOption,
+        steps: Option<usize>,
+    ) -> Result<Pixmap, ObjectValueError> {
+        let mut renderer = paint::Render::new(self, option);
         let content = self.content()?;
         let resource = self.resources();
         if let Some(steps) = steps {
@@ -240,8 +244,8 @@ impl<'a, 'b> Page<'a, 'b> {
         Ok(renderer.into())
     }
 
-    pub fn render(&self) -> Result<Pixmap, ObjectValueError> {
-        self.render_steps(None)
+    pub fn render(&self, option: RenderOption) -> Result<Pixmap, ObjectValueError> {
+        self.render_steps(option, None)
     }
 
     /// Parse page tree to get all pages

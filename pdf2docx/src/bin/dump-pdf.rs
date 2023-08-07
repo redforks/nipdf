@@ -8,7 +8,7 @@ use anyhow::Result as AnyResult;
 use clap::{arg, Command};
 use image::ImageOutputFormat;
 use pdf2docx::{
-    file::{File, ObjectResolver},
+    file::{File, ObjectResolver, RenderOptionBuilder},
     object::{FilterDecodedData, Object},
 };
 
@@ -33,6 +33,7 @@ fn cli() -> Command {
                 .arg(arg!(--pages "display total page numbers"))
                 .arg(arg!(--id "display page object ID"))
                 .arg(arg!(--png "Render page to PNG"))
+                .arg(arg!(--zoom [zoom] "Zoom factor for PNG rendering, default: 1.75"))
                 .arg(arg!(--steps <steps> "Stop render after <steps> graphic steps"))
                 .arg(arg!([page_no] "page number (start from zero) to dump")),
         )
@@ -88,6 +89,7 @@ fn dump_page(
     show_page_id: bool,
     to_png: bool,
     steps: Option<usize>,
+    zoom: Option<f32>,
 ) -> AnyResult<()> {
     let mut buf: Vec<u8> = vec![];
     let (f, resolver) = open(path, &mut buf)?;
@@ -102,7 +104,12 @@ fn dump_page(
     } else if to_png {
         let page_no = page_no.expect("page number is required");
         let page = &catalog.pages()?[page_no as usize];
-        let pixmap = page.render_steps(steps)?;
+        let pixmap = page.render_steps(
+            RenderOptionBuilder::new()
+                .zoom(zoom.unwrap_or(1.75))
+                .build(),
+            steps,
+        )?;
         let buf = pixmap.encode_png()?;
         copy(&mut &buf[..], &mut BufWriter::new(&mut stdout()))?;
     } else if let Some(page_no) = page_no {
@@ -141,6 +148,7 @@ fn main() -> AnyResult<()> {
             sub_m
                 .get_one::<String>("steps")
                 .and_then(|s| s.parse().ok()),
+            sub_m.get_one::<String>("zoom").and_then(|s| s.parse().ok()),
         ),
         _ => todo!(),
     }

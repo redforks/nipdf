@@ -276,9 +276,9 @@ pub struct RenderOption {
     zoom: f32,
 }
 
-pub struct OptionBuilder(RenderOption);
+pub struct RenderOptionBuilder(RenderOption);
 
-impl OptionBuilder {
+impl RenderOptionBuilder {
     pub fn new() -> Self {
         Self(RenderOption::default())
     }
