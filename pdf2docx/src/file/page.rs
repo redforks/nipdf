@@ -5,7 +5,7 @@ use tiny_skia::Pixmap;
 use crate::{
     graphics::{parse_operations, LineCapStyle, LineJoinStyle, Operation, RenderingIntent},
     object::{
-        Array, Dictionary, FilterDecodedData, ImageDict, Object, ObjectValueError, PdfObject,
+        Array, Dictionary, FilterDecodedData, Object, ObjectValueError, PdfObject,
         SchemaDict, Stream,
     },
 };
@@ -234,11 +234,11 @@ impl<'a, 'b> Page<'a, 'b> {
         let resource = self.resources();
         if let Some(steps) = steps {
             for op in content.operations().iter().take(steps) {
-                renderer.exec(&op, &resource);
+                renderer.exec(op, &resource);
             }
         } else {
             for op in content.operations().iter() {
-                renderer.exec(&op, &resource);
+                renderer.exec(op, &resource);
             }
         };
         Ok(renderer.into())

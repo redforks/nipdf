@@ -190,7 +190,7 @@ impl State {
         }
     }
 
-    fn update_mask(&mut self, width: u32, height: u32, rule: FillRule) {
+    fn update_mask(&mut self, _width: u32, _height: u32, _rule: FillRule) {
         // let mut mask = self
         //     .mask
         //     .take()
@@ -259,7 +259,7 @@ impl Path {
     fn finish(&mut self) -> SkiaPath {
         let r = self.path.clone().finish().unwrap();
         self.path.clear();
-        return r;
+        r
     }
 
     fn clear(&mut self) {
@@ -276,13 +276,11 @@ pub struct RenderOption {
     zoom: f32,
 }
 
+#[derive(Educe)]
+#[educe(Default(new))]
 pub struct RenderOptionBuilder(RenderOption);
 
 impl RenderOptionBuilder {
-    pub fn new() -> Self {
-        Self(RenderOption::default())
-    }
-
     pub fn zoom(mut self, zoom: f32) -> Self {
         self.0.zoom = zoom;
         self
@@ -300,7 +298,6 @@ pub struct Render {
     width: u32,
     height: u32,
     path: Path,
-    option: RenderOption,
 }
 
 impl Render {
@@ -320,7 +317,6 @@ impl Render {
             width: w,
             height: h,
             path: Path::default(),
-            option,
         }
     }
 
@@ -496,8 +492,10 @@ impl Render {
 
         let img = img.into_rgba8();
         let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
-        let mut paint = PixmapPaint::default();
-        paint.quality = FilterQuality::Bilinear;
+        let paint = PixmapPaint {
+            quality: FilterQuality::Bilinear,
+            ..Default::default()
+        };
         let transform = state.image_transform(img.width(), img.height());
         log::debug!("paint_x_object: {:?}", transform);
 
@@ -530,7 +528,7 @@ impl MatrixMapper {
 
     fn flip_y(&self, t: Transform) -> Transform {
         t.pre_scale(self.zoom, -self.zoom)
-            .pre_translate(0.0, -(self.height as f32))
+            .pre_translate(0.0, -self.height)
     }
 
     pub fn image_transform(&self, img_w: u32, img_h: u32) -> Transform {
