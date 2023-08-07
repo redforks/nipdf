@@ -3,6 +3,7 @@ use crate::{
     object::FilterDecodedData,
 };
 use educe::Educe;
+use itertools::Either;
 
 use super::{Operation, Page, Rectangle, ResourceDict};
 use tiny_skia::{
@@ -219,30 +220,43 @@ impl State {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct Path {
-    path: PathBuilder,
+    path: Either<PathBuilder, SkiaPath>,
+}
+
+impl Default for Path {
+    fn default() -> Self {
+        Self {
+            path: Either::Left(PathBuilder::new()),
+        }
+    }
 }
 
 impl Path {
+    fn path_builder(&mut self) -> &mut PathBuilder {
+        self.path.as_mut().left().unwrap()
+    }
+
     fn close_path(&mut self) {
-        self.path.close();
+        self.path_builder().close();
     }
 
     fn move_to(&mut self, p: Point) {
-        self.path.move_to(p.x, p.y);
+        self.path_builder().move_to(p.x, p.y);
     }
 
     fn line_to(&mut self, p: Point) {
-        self.path.line_to(p.x, p.y);
+        self.path_builder().line_to(p.x, p.y);
     }
 
     fn curve_to(&mut self, p1: Point, p2: Point, p3: Point) {
-        self.path.cubic_to(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+        self.path_builder()
+            .cubic_to(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
     }
 
     fn curve_to_cur_point_as_control(&mut self, p2: Point, p3: Point) {
-        let p1 = self.path.last_point().unwrap();
+        let p1 = self.path_builder().last_point().unwrap();
         self.curve_to(Point { x: p1.x, y: p2.y }, p2, p3);
     }
 
@@ -252,18 +266,35 @@ impl Path {
 
     fn append_rect(&mut self, p: Point, w: f32, h: f32) {
         let r = Rectangle::from_xywh(p.x, p.y, w, h);
-        self.path.push_rect(r.into());
+        self.path_builder().push_rect(r.into());
     }
 
     /// Build path and clear the path builder
-    fn finish(&mut self) -> SkiaPath {
-        let r = self.path.clone().finish().unwrap();
-        self.path.clear();
-        r
+    fn finish(&mut self) -> &SkiaPath {
+        match self.path {
+            Either::Left(_) => {
+                let temp = Either::Left(PathBuilder::new());
+                let p = std::mem::replace(&mut self.path, temp);
+                self.path = p.left_and_then(|p| Either::Right(p.finish().unwrap()));
+            }
+            _ => {}
+        };
+
+        match &self.path {
+            Either::Left(_) => unreachable!(),
+            Either::Right(p) => p,
+        }
+    }
+
+    fn reset(&mut self) {
+        let temp = Either::Left(PathBuilder::new());
+        let p = std::mem::replace(&mut self.path, temp);
+        self.path = p.right_and_then(|p| Either::Left(p.clear()));
     }
 
     fn clear(&mut self) {
-        self.path.clear();
+        self.reset();
+        self.path_builder().clear();
     }
 }
 
@@ -422,6 +453,7 @@ impl Render {
             state.path_transform(),
             state.get_mask(),
         );
+        self.path.reset();
     }
 
     fn end_path(&mut self) {
@@ -449,6 +481,7 @@ impl Render {
             state.path_transform(),
             state.get_mask(),
         );
+        self.path.reset();
     }
 
     fn fill_path_non_zero(&mut self) {
