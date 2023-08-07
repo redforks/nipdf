@@ -2,6 +2,7 @@ use crate::{
     graphics::{Color, LineCapStyle, LineJoinStyle, Point, RenderingIntent, TransformMatrix},
     object::FilterDecodedData,
 };
+use educe::Educe;
 
 use super::{Operation, Page, Rectangle, ResourceDict};
 use tiny_skia::{
@@ -265,6 +266,32 @@ impl Path {
     }
 }
 
+/// Option for Render
+#[derive(Debug, Educe)]
+#[educe(Default)]
+pub struct Option {
+    /// zoom level default to 1.0
+    #[educe(Default = 1.0)]
+    zoom: f32,
+}
+
+pub struct OptionBuilder(Option);
+
+impl OptionBuilder {
+    pub fn new() -> Self {
+        Self(Option::default())
+    }
+
+    pub fn zoom(mut self, zoom: f32) -> Self {
+        self.0.zoom = zoom;
+        self
+    }
+
+    pub fn build(self) -> Option {
+        self.0
+    }
+}
+
 #[derive(Debug)]
 pub struct Render {
     canvas: Pixmap,
@@ -272,10 +299,11 @@ pub struct Render {
     width: u32,
     height: u32,
     path: Path,
+    option: Option,
 }
 
 impl Render {
-    pub fn new(page: &Page) -> Self {
+    pub fn new(page: &Page, option: Option) -> Self {
         let media_box = page.media_box();
         let w = media_box.width() as u32;
         let h = media_box.height() as u32;
@@ -288,6 +316,7 @@ impl Render {
             width: w,
             height: h,
             path: Path::default(),
+            option,
         }
     }
 
