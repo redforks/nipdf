@@ -18,10 +18,13 @@ nohash-hasher = "0.2.0"
 anyhow = "1.0.71"
 ahash = "0.8.3"
 flate2 = "1.0.26"
-log = "0.4.19"
+log = { versior = "0.4.19", features = ["release_max_level_warn"] }
 clap = { version = "4.3.4", features = ["derive"], optional = true }
 jpeg-decoder = "0.3.0"
-image = { version = "0.24.6", default-features = false, features = ["png", "jpeg"] }
+image = { version = "0.24.6", default-features = false, features = [
+    "png",
+    "jpeg",
+] }
 env_logger = { version = "0.10.0", optional = true }
 bitstream-io = "1.6.0"
 strum = { version = "0.25.0", features = ["derive"] }
