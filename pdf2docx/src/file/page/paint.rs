@@ -157,44 +157,15 @@ impl State {
             return;
         };
 
-        if let Some(line_width) = res.line_width() {
-            self.set_line_width(line_width);
-        }
-
-        if let Some(line_cap) = res.line_cap() {
-            self.set_line_cap(line_cap);
-        }
-
-        if let Some(line_join) = res.line_join() {
-            self.set_line_join(line_join);
-        }
-
-        if let Some(dash_pattern) = res.dash_pattern() {
-            self.set_dash_pattern(&dash_pattern.0, dash_pattern.1);
-        }
-
-        if let Some(miter_limit) = res.miter_limit() {
-            self.set_miter_limit(miter_limit);
-        }
-
-        if let Some(render_intent) = res.rendering_intent() {
-            self.set_render_intent(render_intent);
-        }
-
-        if let Some(stroke_color) = res.stroke_adjustment() {
-            eprintln!("stroke adjustment: {}", stroke_color);
-        }
-
-        if let Some(fill_alpha) = res.fill_alpha() {
-            eprintln!("fill alpha: {}", fill_alpha);
-        }
-
-        if let Some(alpha_source_flag) = res.alpha_source_flag() {
-            eprintln!("alpha source flag: {}", alpha_source_flag);
-        }
-
-        if let Some(text_knockout_flag) = res.text_knockout_flag() {
-            eprintln!("text knockout flag: {}", text_knockout_flag);
+        for key in res.d.dict().keys() {
+            match key.as_ref() {
+                "LW" => self.set_line_width(res.line_width().unwrap()),
+                "LC" => self.set_line_cap(res.line_cap().unwrap()),
+                "LJ" => self.set_line_join(res.line_join().unwrap()),
+                "ML" => self.set_miter_limit(res.miter_limit().unwrap()),
+                "RI" => self.set_render_intent(res.rendering_intent().unwrap()),
+                _ => log::info!("Unknown or unsupported ExtGState key: {}", key.as_ref()),
+            }
         }
     }
 
