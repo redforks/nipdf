@@ -7,10 +7,11 @@ use lazy_static::lazy_static;
 use nom::{branch::alt, bytes::complete::is_not, combinator::map_res, multi::many0, Parser};
 
 use crate::{
-    object::{Dictionary, Name, Object, ObjectValueError, TextStringOrNumber},
+    file::ObjectResolver,
+    object::{Dictionary, Name, Object, ObjectValueError, SchemaDict, TextStringOrNumber},
     parser::{parse_object, ws_prefixed, ws_terminated, ParseError, ParseResult},
 };
-use pdf2docx_macro::{OperationParser, TryFromIntObject, TryFromNameObject};
+use pdf2docx_macro::{pdf_object, OperationParser, TryFromIntObject, TryFromNameObject};
 
 #[derive(Debug, Clone, Copy, PartialEq, Educe)]
 #[educe(Default)]
@@ -34,6 +35,32 @@ impl TransformMatrix {
 impl From<TransformMatrix> for tiny_skia::Transform {
     fn from(m: TransformMatrix) -> Self {
         Self::from_row(m.sx, m.ky, m.kx, m.sy, m.tx, m.ty)
+    }
+}
+
+/// Wraps TransformMatrix to create a new type with different TryFrom implementation
+/// `TransformMatrix` got `TryFrom` impl because `ConvertFromObject`
+/// trait impl `TryFrom` trait.
+#[derive(PartialEq, Debug)]
+pub struct TransformMatrixFromArray(pub TransformMatrix);
+
+/// Create TransformMatrix from Object::Array
+impl<'a> TryFrom<&Object<'a>> for TransformMatrixFromArray {
+    type Error = ObjectValueError;
+
+    fn try_from(obj: &Object) -> Result<Self, Self::Error> {
+        let arr = obj.as_arr()?;
+        if arr.len() != 6 {
+            return Err(ObjectValueError::UnexpectedType);
+        }
+        Ok(TransformMatrixFromArray(TransformMatrix {
+            sx: arr[0].as_number()?,
+            kx: arr[1].as_number()?,
+            ky: arr[2].as_number()?,
+            sy: arr[3].as_number()?,
+            tx: arr[4].as_number()?,
+            ty: arr[5].as_number()?,
+        }))
     }
 }
 
@@ -97,10 +124,52 @@ pub enum Color {
     Cmyk(f32, f32, f32, f32),
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromIntObject)]
+pub enum PatternType {
+    Tiling = 1,
+    Shading = 2,
+}
+
+#[pdf_object(Some("Pattern"))]
+pub(crate) trait PatternDictTrait {
+    #[try_from]
+    fn pattern_type(&self) -> PatternType;
+}
+
+#[pdf_object(Some("Pattern"))]
+pub(crate) trait TilingPatternDictTrait {
+    // TODO
+}
+
+#[pdf_object(Some("Pattern"))]
+pub(crate) trait ShadingPatternDictTrait {
+    #[try_from]
+    fn matrix(&self) -> Option<TransformMatrixFromArray>;
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ColorOrName {
     Color(Color),
     Name(String),
+}
+
+impl<'a, 'b> ConvertFromObject<'a, 'b> for TransformMatrix {
+    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+        let f = objects.pop().unwrap().as_number()?;
+        let e = objects.pop().unwrap().as_number()?;
+        let d = objects.pop().unwrap().as_number()?;
+        let c = objects.pop().unwrap().as_number()?;
+        let b = objects.pop().unwrap().as_number()?;
+        let a = objects.pop().unwrap().as_number()?;
+        Ok(Self {
+            sx: a,
+            kx: b,
+            ky: c,
+            sy: d,
+            tx: e,
+            ty: f,
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -401,25 +470,6 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for Point {
         let y = objects.pop().unwrap().as_number()?;
         let x = objects.pop().unwrap().as_number()?;
         Ok(Self { x, y })
-    }
-}
-
-impl<'a, 'b> ConvertFromObject<'a, 'b> for TransformMatrix {
-    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
-        let f = objects.pop().unwrap().as_number()?;
-        let e = objects.pop().unwrap().as_number()?;
-        let d = objects.pop().unwrap().as_number()?;
-        let c = objects.pop().unwrap().as_number()?;
-        let b = objects.pop().unwrap().as_number()?;
-        let a = objects.pop().unwrap().as_number()?;
-        Ok(Self {
-            sx: a,
-            kx: b,
-            ky: c,
-            sy: d,
-            tx: e,
-            ty: f,
-        })
     }
 }
 

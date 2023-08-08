@@ -105,3 +105,21 @@ fn color_convert_from_object_stop_on_non_number() {
 fn color_or_with_pattern_from_object(mut v: Vec<Object>) -> ColorOrName {
     ColorOrName::convert_from_object(&mut v).unwrap()
 }
+
+#[test]
+fn transform_matrix_try_from_array() {
+    let arr = vec![1.into(), 2.into(), 3.into(), 4.into(), 5.into(), 6.into()];
+    let o = Object::Array(arr);
+    let act = TransformMatrixFromArray::try_from(&o).unwrap();
+    assert_eq!(
+        act,
+        TransformMatrixFromArray(TransformMatrix {
+            sx: 1f32,
+            kx: 2f32,
+            ky: 3f32,
+            sy: 4f32,
+            tx: 5f32,
+            ty: 6f32
+        })
+    );
+}
