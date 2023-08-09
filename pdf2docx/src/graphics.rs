@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use ahash::RandomState;
 use arrayvec::ArrayVec;
@@ -7,8 +7,10 @@ use lazy_static::lazy_static;
 use nom::{branch::alt, bytes::complete::is_not, combinator::map_res, multi::many0, Parser};
 
 use crate::{
-    file::ObjectResolver,
-    object::{Dictionary, Name, Object, ObjectValueError, SchemaDict, TextStringOrNumber},
+    file::{GraphicsStateParameterDict, ObjectResolver, Rectangle},
+    object::{
+        Dictionary, Name, Object, ObjectValueError, PdfObject, SchemaDict, TextStringOrNumber,
+    },
     parser::{parse_object, ws_prefixed, ws_terminated, ParseError, ParseResult},
 };
 use pdf2docx_macro::{pdf_object, OperationParser, TryFromIntObject, TryFromNameObject};
@@ -125,15 +127,36 @@ pub enum Color {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromIntObject)]
-pub enum PatternType {
+pub(crate) enum PatternType {
     Tiling = 1,
     Shading = 2,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromIntObject)]
+pub(crate) enum ShadingType {
+    Function = 1,
+    Axial = 2,
+    Radial = 3,
+    FreeForm = 4,
+    LatticeForm = 5,
+    CoonsPatchMesh = 6,
+    TensorProductPatchMesh = 7,
 }
 
 #[pdf_object(Some("Pattern"))]
 pub(crate) trait PatternDictTrait {
     #[try_from]
     fn pattern_type(&self) -> PatternType;
+}
+
+impl<'a, 'b> PatternDict<'a, 'b> {
+    pub fn as_tiling(&self) -> TilingPatternDict<'a, 'b> {
+        TilingPatternDict::new(self.id(), self.d.dict(), self.d.resolver()).unwrap()
+    }
+
+    pub fn as_shading(&self) -> ShadingPatternDict<'a, 'b> {
+        ShadingPatternDict::new(self.id(), self.d.dict(), self.d.resolver()).unwrap()
+    }
 }
 
 #[pdf_object(Some("Pattern"))]
@@ -145,6 +168,20 @@ pub(crate) trait TilingPatternDictTrait {
 pub(crate) trait ShadingPatternDictTrait {
     #[try_from]
     fn matrix(&self) -> Option<TransformMatrixFromArray>;
+    #[nested]
+    fn ext_g_state() -> HashMap<String, GraphicsStateParameterDict<'a, 'b>>;
+}
+
+#[pdf_object(())]
+pub(crate) trait ShadingDictTrait {
+    #[try_from]
+    fn shading_type(&self) -> ShadingType;
+
+    // TODO:
+    // fn color_space(&self) -> ColorSpace;
+
+    fn b_box(&self) -> Option<Rectangle>;
+    fn anti_alias(&self) -> Option<bool>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
