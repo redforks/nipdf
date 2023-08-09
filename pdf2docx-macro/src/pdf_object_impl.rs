@@ -153,10 +153,6 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         Some("opt_f32")
     } else if rt == &(parse_quote!(Option<u8>)) {
         Some("opt_u8")
-    } else if rt == &(parse_quote!(Option<Rectangle>)) {
-        Some("opt_rect")
-    } else if rt == &(parse_quote!(Rectangle)) {
-        Some("required_rect")
     } else if rt == &(parse_quote!(Option<bool>)) {
         Some("opt_bool")
     } else if rt == &(parse_quote!(bool)) {

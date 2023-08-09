@@ -180,6 +180,7 @@ pub(crate) trait ShadingDictTrait {
     // TODO:
     // fn color_space(&self) -> ColorSpace;
 
+    #[try_from]
     fn b_box(&self) -> Option<Rectangle>;
     fn anti_alias(&self) -> Option<bool>;
 }

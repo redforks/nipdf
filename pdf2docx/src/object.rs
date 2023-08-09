@@ -309,10 +309,6 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
         self.opt_u8(id).map(|i| i.unwrap_or(default))
     }
 
-    pub fn opt_rect(&self, id: &'static str) -> Result<Option<Rectangle>, ObjectValueError> {
-        self.opt_arr(id).map(|arr| arr.map(|v| v.into()))
-    }
-
     pub fn opt_f32(&self, id: &'static str) -> Result<Option<f32>, ObjectValueError> {
         self.opt_get(id)?
             .map_or(Ok(None), |o| o.as_number().map(Some))
@@ -341,19 +337,6 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
     pub fn u32_arr(&self, id: &'static str) -> Result<Vec<u32>, ObjectValueError> {
         self.opt_arr_map(id, |o| o.as_int().map(|i| i as u32))
             .map(|o| o.unwrap_or_default())
-    }
-
-    pub fn required_rect(&self, id: &'static str) -> Result<Rectangle, ObjectValueError> {
-        self.opt_rect(id)?
-            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))
-    }
-
-    pub fn rect_or(
-        &self,
-        id: &'static str,
-        default: Rectangle,
-    ) -> Result<Rectangle, ObjectValueError> {
-        self.opt_rect(id).map(|r| r.unwrap_or(default))
     }
 
     pub fn required_arr_map<V>(
@@ -424,10 +407,6 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
     pub fn required_dict(&self, id: &'static str) -> Result<&'b Dictionary<'a>, ObjectValueError> {
         self.opt_dict(id)
             .and_then(|o| o.ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id)))
-    }
-
-    pub fn opt_rectangle(&self, id: &'static str) -> Result<Option<Rectangle>, ObjectValueError> {
-        Ok(self.opt_arr(id)?.map(|arr| arr.into()))
     }
 
     pub fn required_ref(&self, id: &'static str) -> Result<NonZeroU32, ObjectValueError> {

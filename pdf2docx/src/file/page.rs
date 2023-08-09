@@ -5,8 +5,8 @@ use tiny_skia::Pixmap;
 use crate::{
     graphics::{parse_operations, LineCapStyle, LineJoinStyle, Operation, RenderingIntent},
     object::{
-        Array, Dictionary, FilterDecodedData, Object, ObjectValueError, PdfObject,
-        SchemaDict, Stream,
+        Array, Dictionary, FilterDecodedData, Object, ObjectValueError, PdfObject, SchemaDict,
+        Stream,
     },
 };
 
@@ -58,14 +58,20 @@ impl From<Rectangle> for tiny_skia::Rect {
 
 /// Convert from raw array, auto re-order to (left_x, lower_y, right_x, upper_y),
 /// see PDF 32000-1:2008 7.9.5
-impl<'a> From<&Array<'a>> for Rectangle {
-    fn from(arr: &Array<'a>) -> Self {
-        let mut iter = arr.iter();
-        let left_x = iter.next().unwrap().as_number().unwrap();
-        let lower_y = iter.next().unwrap().as_number().unwrap();
-        let right_x = iter.next().unwrap().as_number().unwrap();
-        let upper_y = iter.next().unwrap().as_number().unwrap();
-        Self::from_lbrt(left_x, lower_y, right_x, upper_y)
+impl<'a> TryFrom<&Object<'a>> for Rectangle {
+    type Error = ObjectValueError;
+    fn try_from(object: &Object<'a>) -> Result<Self, Self::Error> {
+        match object {
+            Object::Array(arr) => {
+                let mut iter = arr.iter();
+                let left_x = iter.next().unwrap().as_number().unwrap();
+                let lower_y = iter.next().unwrap().as_number().unwrap();
+                let right_x = iter.next().unwrap().as_number().unwrap();
+                let upper_y = iter.next().unwrap().as_number().unwrap();
+                Ok(Self::from_lbrt(left_x, lower_y, right_x, upper_y))
+            }
+            _ => Err(ObjectValueError::GraphicsOperationSchemaError),
+        }
     }
 }
 
@@ -162,7 +168,9 @@ pub(crate) trait ResourceDictTrait {
 pub(crate) trait PageDictTrait {
     #[nested]
     fn kids(&self) -> Vec<Self>;
+    #[try_from]
     fn media_box(&self) -> Option<Rectangle>;
+    #[try_from]
     fn crop_box(&self) -> Option<Rectangle>;
     #[nested]
     fn resources(&self) -> Option<ResourceDict<'a, 'b>>;
