@@ -4,6 +4,7 @@ use educe::Educe;
 
 use std::{
     borrow::{Borrow, Cow},
+    fmt::Debug,
     iter::Peekable,
     num::NonZeroU32,
     str::from_utf8,
@@ -84,7 +85,147 @@ impl<'a> Dictionary<'a> {
     }
 }
 
-pub trait SchemaTypeValidator: Clone + std::fmt::Debug {
+/// Get type value from Dictionary.
+pub trait TypeValueGetter {
+    type Value: ?Sized;
+    /// Return None if type value is not exist
+    fn get<'a>(&self, d: &'a Dictionary) -> Result<Option<&'a Self::Value>, ObjectValueError>;
+    /// Type field name
+    fn field(&self) -> &'static str;
+}
+
+/// Implement `TypeValueGetter` returns non-option field type value
+#[derive(Debug, Clone)]
+pub struct NameTypeValueGetter {
+    field: &'static str,
+}
+
+impl NameTypeValueGetter {
+    pub fn new(field: &'static str) -> Self {
+        Self { field }
+    }
+
+    /// Create a new `RequiredNameTypeValueGetter` with field name "Type"
+    pub fn typ() -> Self {
+        Self::new("Type")
+    }
+}
+
+impl TypeValueGetter for NameTypeValueGetter {
+    type Value = str;
+
+    fn get<'a>(&self, d: &'a Dictionary) -> Result<Option<&'a Self::Value>, ObjectValueError> {
+        d.get_name(self.field)
+    }
+
+    fn field(&self) -> &'static str {
+        self.field
+    }
+}
+
+pub trait TypeValueCheck<V: ?Sized> {
+    fn schema_type(&self) -> Cow<'static, str>;
+    fn check2(&self, v: Option<&V>) -> bool;
+}
+
+impl TypeValueCheck<str> for &'static str {
+    fn schema_type(&self) -> Cow<'static, str> {
+        Cow::Borrowed(self)
+    }
+
+    fn check2(&self, v: Option<&str>) -> bool {
+        v.map_or(false, |v| v == *self)
+    }
+}
+
+/// Check type value to validate object Type.
+pub trait TypeValidator: Clone + Debug {
+    fn schema_type(&self) -> String;
+    fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError>;
+
+    fn valid(&self, d: &Dictionary) -> Result<(), ObjectValueError> {
+        if self.check(d)? {
+            Ok(())
+        } else {
+            Err(ObjectValueError::DictSchemaUnExpectedType(
+                self.schema_type().into(),
+            ))
+        }
+    }
+}
+
+/// Implement `TypeValidator` using `TypeValueGetter` and `TypeValueChecker`
+#[derive(Debug, Clone)]
+pub struct ValueTypeValidator<G, C>
+where
+    G: Clone + Debug,
+    C: Clone + Debug,
+{
+    getter: G,
+    checker: C,
+}
+
+impl<G, C> ValueTypeValidator<G, C>
+where
+    G: Clone + Debug,
+    C: Clone + Debug,
+{
+    pub fn new(getter: G, checker: C) -> Self {
+        Self { getter, checker }
+    }
+}
+
+impl<G, C, V> TypeValidator for ValueTypeValidator<G, C>
+where
+    G: TypeValueGetter<Value = V> + Clone + Debug,
+    C: TypeValueCheck<V> + Clone + Debug,
+{
+    fn schema_type(&self) -> String {
+        format!("{}: {}", self.getter.field(), self.checker.schema_type())
+    }
+
+    fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError> {
+        let v = self.getter.get(d)?;
+        Ok(self.checker.check2(v))
+    }
+}
+
+/// If both validator is valid, then the value is valid.
+#[derive(Debug, Clone)]
+pub struct AndValueTypeValidator<V1, V2>
+where
+    V1: Clone + Debug,
+    V2: Clone + Debug,
+{
+    v1: V1,
+    v2: V2,
+}
+
+impl<V1, V2> AndValueTypeValidator<V1, V2>
+where
+    V1: Clone + Debug,
+    V2: Clone + Debug,
+{
+    pub fn new(v1: V1, v2: V2) -> Self {
+        Self { v1, v2 }
+    }
+}
+
+impl<V1, V2> TypeValidator for AndValueTypeValidator<V1, V2>
+where
+    V1: Clone + Debug + TypeValidator,
+    V2: Clone + Debug + TypeValidator,
+{
+    fn schema_type(&self) -> String {
+        format!("{} and {}", self.v1.schema_type(), self.v2.schema_type())
+    }
+
+    fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError> {
+        self.v1.check(d).and(self.v2.check(d))
+    }
+}
+
+pub trait SchemaTypeValidator: Clone + Debug {
     fn schema_type(&self) -> Cow<'static, str>;
     fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError>;
 
@@ -185,7 +326,7 @@ impl<const N: usize> SchemaTypeValidator for [&'static str; N] {
 
 #[derive(Clone, Educe)]
 #[educe(Debug)]
-pub struct SchemaDict<'a, 'b, T: Clone + std::fmt::Debug> {
+pub struct SchemaDict<'a, 'b, T: Clone + Debug> {
     t: T,
     d: &'b Dictionary<'a>,
     #[educe(Debug(ignore))]
@@ -489,6 +630,8 @@ pub enum ObjectValueError {
     DictSchemaError(Cow<'static, str>, &'static str),
     #[error("Graphics operation schema error")]
     GraphicsOperationSchemaError,
+    #[error("Dict key not found")]
+    DictKeyNotFound,
 }
 
 impl<'a> From<parser::ParseError<'a>> for ObjectValueError {

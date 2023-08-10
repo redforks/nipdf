@@ -118,25 +118,9 @@ fn dict_get_name() {
 
 #[test]
 fn str_schema_type_validator() {
-    let mut d = Dictionary::new();
-    assert_eq!(
-        Err(ObjectValueError::DictSchemaError("Pages".into(), "Type")),
-        "Pages".valid(&d)
-    );
-
-    d.set("Type", 11i32);
-    assert_eq!(
-        Err(ObjectValueError::DictSchemaError("Pages".into(), "Type")),
-        "Pages".valid(&d)
-    );
-
-    d.set("Type", "/foo");
-    assert_eq!(
-        Err(ObjectValueError::DictSchemaUnExpectedType("Pages".into())),
-        "Pages".valid(&d)
-    );
-
-    assert_eq!(Ok(()), "foo".valid(&d));
+    assert_eq!(false, "Pages".check2(None));
+    assert_eq!(false, "Pages".check2("blah".into()));
+    assert_eq!(true, "foo".check2("foo".into()));
 }
 
 #[test]
