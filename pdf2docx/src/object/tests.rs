@@ -120,19 +120,19 @@ fn dict_get_name() {
 fn str_schema_type_validator() {
     let mut d = Dictionary::new();
     assert_eq!(
-        Err(ObjectValueError::DictSchemaError("Pages", "Type")),
+        Err(ObjectValueError::DictSchemaError("Pages".into(), "Type")),
         "Pages".valid(&d)
     );
 
     d.set("Type", 11i32);
     assert_eq!(
-        Err(ObjectValueError::DictSchemaError("Pages", "Type")),
+        Err(ObjectValueError::DictSchemaError("Pages".into(), "Type")),
         "Pages".valid(&d)
     );
 
     d.set("Type", "/foo");
     assert_eq!(
-        Err(ObjectValueError::DictSchemaUnExpectedType("Pages")),
+        Err(ObjectValueError::DictSchemaUnExpectedType("Pages".into())),
         "Pages".valid(&d)
     );
 
@@ -145,19 +145,27 @@ fn str_slice_schema_type_validator() {
 
     let mut d = Dictionary::new();
     assert_eq!(
-        Err(ObjectValueError::DictSchemaError("Pages", "Type")),
+        Err(ObjectValueError::DictSchemaError(
+            r#"["Pages", "Page"]"#.into(),
+            "Type"
+        )),
         page_or_pages.valid(&d)
     );
 
     d.set("Type", 11i32);
     assert_eq!(
-        Err(ObjectValueError::DictSchemaError("Pages", "Type")),
+        Err(ObjectValueError::DictSchemaError(
+            r#"["Pages", "Page"]"#.into(),
+            "Type"
+        )),
         page_or_pages.valid(&d)
     );
 
     d.set("Type", "/foo");
     assert_eq!(
-        Err(ObjectValueError::DictSchemaUnExpectedType("Pages")),
+        Err(ObjectValueError::DictSchemaUnExpectedType(
+            r#"["Pages", "Page"]"#.into(),
+        )),
         page_or_pages.valid(&d)
     );
 
@@ -203,5 +211,9 @@ fn schema_ref_id_arr(ids: Option<&[u32]>) -> Vec<u32> {
     }
     let resolver = ObjectResolver::empty();
     let d = SchemaDict::new(&d, &resolver, ()).unwrap();
-    d.ref_id_arr("ids").unwrap().into_iter().map(|id| id.get()).collect()
+    d.ref_id_arr("ids")
+        .unwrap()
+        .into_iter()
+        .map(|id| id.get())
+        .collect()
 }

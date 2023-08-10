@@ -85,7 +85,7 @@ impl<'a> Dictionary<'a> {
 }
 
 pub trait SchemaTypeValidator: Clone + std::fmt::Debug {
-    fn schema_type(&self) -> &'static str;
+    fn schema_type(&self) -> Cow<'static, str>;
     fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError>;
 
     fn valid(&self, d: &Dictionary) -> Result<(), ObjectValueError> {
@@ -119,8 +119,8 @@ pub trait SchemaTypeValidator: Clone + std::fmt::Debug {
 }
 
 impl SchemaTypeValidator for () {
-    fn schema_type(&self) -> &'static str {
-        "No Specific Type"
+    fn schema_type(&self) -> Cow<'static, str> {
+        Cow::Borrowed("No Specific Type")
     }
 
     fn check(&self, _: &Dictionary) -> Result<bool, ObjectValueError> {
@@ -129,8 +129,8 @@ impl SchemaTypeValidator for () {
 }
 
 impl SchemaTypeValidator for &'static str {
-    fn schema_type(&self) -> &'static str {
-        self
+    fn schema_type(&self) -> Cow<'static, str> {
+        Cow::Borrowed(*self)
     }
 
     fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError> {
@@ -139,8 +139,8 @@ impl SchemaTypeValidator for &'static str {
 }
 
 impl SchemaTypeValidator for Option<&'static str> {
-    fn schema_type(&self) -> &'static str {
-        self.expect("Should not happen")
+    fn schema_type(&self) -> Cow<'static, str> {
+        Cow::Borrowed(self.expect("Should not happen"))
     }
 
     fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError> {
@@ -151,8 +151,8 @@ impl SchemaTypeValidator for Option<&'static str> {
 
 /// Check Type/Subtype fields. If first element is None, check Subtype only.
 impl SchemaTypeValidator for (Option<&'static str>, &'static str) {
-    fn schema_type(&self) -> &'static str {
-        self.1
+    fn schema_type(&self) -> Cow<'static, str> {
+        Cow::Owned(format!("{:?}/{}", self.0, self.1))
     }
 
     fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError> {
@@ -174,8 +174,8 @@ impl SchemaTypeValidator for (Option<&'static str>, &'static str) {
 }
 
 impl<const N: usize> SchemaTypeValidator for [&'static str; N] {
-    fn schema_type(&self) -> &'static str {
-        self[0]
+    fn schema_type(&self) -> Cow<'static, str> {
+        Cow::Owned(format!("{:?}", self))
     }
 
     fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError> {
@@ -487,9 +487,9 @@ pub enum ObjectValueError {
     #[error("Parse error: {0}")]
     ParseError(String),
     #[error("Unexpected dict schema type, schema: {0}")]
-    DictSchemaUnExpectedType(&'static str),
+    DictSchemaUnExpectedType(Cow<'static, str>),
     #[error("Dict schema error, schema: {0}, key: {1}")]
-    DictSchemaError(&'static str, &'static str),
+    DictSchemaError(Cow<'static, str>, &'static str),
     #[error("Graphics operation schema error")]
     GraphicsOperationSchemaError,
 }
