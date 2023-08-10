@@ -49,38 +49,34 @@ fn has_attr<'a>(
     rt: &'a Type,
     attrs: &'a [Attribute],
 ) -> Option<Either<&'a Type, &'a Type>> {
-    if attrs.iter().any(|attr| attr.path().is_ident(attr_name)) {
-        // check `rt` is Option<T> or T
-        Some(if let Type::Path(tp) = rt {
-            if let Some(seg) = tp.path.segments.last() {
-                if seg.ident == "Option" {
-                    Left(
-                        if let syn::PathArguments::AngleBracketed(args) = &seg.arguments {
-                            if args.args.len() == 1 {
-                                if let syn::GenericArgument::Type(ty) = &args.args[0] {
-                                    ty
-                                } else {
-                                    panic!("expect type argument")
-                                }
-                            } else {
-                                rt
-                            }
-                        } else {
-                            panic!("expect angle bracketed arguments")
-                        },
-                    )
-                } else {
-                    Right(rt)
-                }
-            } else {
-                panic!("expect path segment")
-            }
-        } else {
-            Right(rt)
-        })
-    } else {
-        None
+    if attrs.iter().all(|attr| !attr.path().is_ident(attr_name)) {
+        return None;
     }
+
+    let Type::Path(tp) = rt else {
+        return Some(Right(rt));
+    };
+
+    let Some(seg) = tp.path.segments.last()  else {
+        panic!("expect path segment")
+    };
+
+    if seg.ident != "Option" {
+        return Some(Right(rt));
+    }
+
+    return Some(Left({
+        let syn::PathArguments::AngleBracketed(args) = &seg.arguments else {
+            panic!("expect angle bracketed arguments")
+        };
+
+        assert_eq!(1, args.args.len());
+        let syn::GenericArgument::Type(ty) = &args.args[0] else {
+            panic!("expect type argument")
+        };
+
+        ty
+    }));
 }
 
 fn _is_type(t: &Type, type_name: &'static str) -> bool {
