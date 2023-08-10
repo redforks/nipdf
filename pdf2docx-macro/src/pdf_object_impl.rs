@@ -83,28 +83,21 @@ fn has_attr<'a>(
     }
 }
 
-fn is_vec(t: &Type) -> bool {
+fn _is_type(t: &Type, type_name: &'static str) -> bool {
     if let Type::Path(tp) = t {
         if let Some(seg) = tp.path.segments.last() {
-            seg.ident == "Vec"
-        } else {
-            false
+            return seg.ident == type_name;
         }
-    } else {
-        false
     }
+    return false;
+}
+
+fn is_vec(t: &Type) -> bool {
+    _is_type(t, "Vec")
 }
 
 fn is_map(t: &Type) -> bool {
-    if let Type::Path(tp) = t {
-        if let Some(seg) = tp.path.segments.last() {
-            seg.ident == "HashMap"
-        } else {
-            false
-        }
-    } else {
-        false
-    }
+    _is_type(t, "HashMap")
 }
 
 // Return left means Option<T>, right means T, Return None means not nested
