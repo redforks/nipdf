@@ -18,7 +18,7 @@ nohash-hasher = "0.2.0"
 anyhow = "1.0.71"
 ahash = "0.8.3"
 flate2 = "1.0.26"
-log = { versior = "0.4.19", features = ["release_max_level_warn"] }
+log = { version = "0.4.19", features = ["release_max_level_warn"] }
 clap = { version = "4.3.4", features = ["derive"], optional = true }
 jpeg-decoder = "0.3.0"
 image = { version = "0.24.6", default-features = false, features = [
