@@ -122,6 +122,7 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
             }
         })
     };
+
     if rt == &(parse_quote! { &str }) {
         if get_type().is_some_and(|s| s == "Name") {
             Some("required_name")
@@ -178,6 +179,32 @@ fn remove_generic(t: &Type) -> Type {
         tp.into()
     } else {
         panic!("expect path type")
+    }
+}
+
+fn gen_option_method(
+    ty: Either<&Type, &Type>,
+    name: &Ident,
+    f_left: impl FnOnce(&Type) -> proc_macro2::TokenStream,
+    f_right: impl FnOnce(&Type) -> proc_macro2::TokenStream,
+) -> proc_macro2::TokenStream {
+    match ty {
+        Left(t) => {
+            let body = f_left(t);
+            quote! {
+                fn #name(&self) -> Option<#t> {
+                    #body
+                }
+            }
+        }
+        Right(t) => {
+            let body = f_right(t);
+            quote! {
+                fn #name(&self) -> #t {
+                    #body
+                }
+            }
+        }
     }
 }
 
@@ -315,8 +342,10 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 };
                 let key =
                     key_attr(attrs).unwrap_or_else(|| snake_case_to_pascal(&name.to_string()));
-                let method = schema_method_name(rt, &attrs[..]).map(|m| Ident::new(m, name.span()));
-                if let Some(method) = method {
+
+                if let Some(method) =
+                    schema_method_name(rt, &attrs[..]).map(|m| Ident::new(m, name.span()))
+                {
                     quote! {
                         fn #name(&self) -> #rt {
                             self.d.#method(#key).unwrap()
@@ -324,74 +353,42 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     }
                 } else if let Some(nested_type) = nested(rt, attrs) {
                     let type_name = remove_generic(&nested_type);
-                    match nested_type {
-                        Left(ty) => {
-                            quote! {
-                                fn #name(&self) -> Option<#ty> {
-                                    self.d.resolver().opt_resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key).unwrap()
-                                }
-                            }
-                        }
-                        Right(ty) => {
+                    gen_option_method(
+                        nested_type,
+                        &name,
+                        |_ty| quote! { self.d.resolver().opt_resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key).unwrap() },
+                        |ty| {
                             if is_vec(ty) {
-                                quote! {
-                                    fn #name(&self) -> #ty {
-                                        self.d.resolver().resolve_container_pdf_object_array(self.d.dict(), #key).unwrap()
-                                    }
-                                }
+                                quote! { self.d.resolver().resolve_container_pdf_object_array(self.d.dict(), #key).unwrap() }
                             } else if is_map(ty) {
-                                quote! {
-                                    fn #name(&self) -> #ty {
-                                        self.d.resolver().resolve_container_pdf_object_map(self.d.dict(), #key).unwrap()
-                                    }
-                                }
+                                quote! { self.d.resolver().resolve_container_pdf_object_map(self.d.dict(), #key).unwrap() }
                             } else {
-                                quote! {
-                                    fn #name(&self) -> #ty {
-                                        self.d.resolver().resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key).unwrap()
-                                    }
-                                }
+                                quote! { self.d.resolver().resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key).unwrap() }
                             }
-                        }
-                    }
+                        },
+                    )
                 } else if let Some(from_name_str_type) = from_name_str(rt, attrs) {
-                    match from_name_str_type {
-                        Left(ty) => {
-                            quote! {
-                                fn #name(&self) -> Option<#ty> {
-                                    self.d.opt_name(#key).unwrap().map(|s| <#ty as std::str::FromStr>::from_str(s).unwrap())
-                                }
-                            }
-                        }
-                        Right(ty) => {
-                            quote! {
-                                fn #name(&self) -> #ty {
-                                    <#ty as std::str::FromStr>::from_str(
-                                        self.d.required_name(#key).unwrap()
-                                    ).unwrap()
-                                }
-                            }
-                        }
-                    }
+                    gen_option_method(
+                        from_name_str_type,
+                        &name,
+                        |ty| {
+                            quote! { self.d.opt_name(#key).unwrap().map(|s| <#ty as std::str::FromStr>::from_str(s).unwrap()) }
+                        },
+                        |ty| {
+                            quote! { <#ty as std::str::FromStr>::from_str( self.d.required_name(#key).unwrap()).unwrap() }
+                        },
+                    )
                 } else if let Some(try_from_type) = try_from(rt, attrs) {
-                    match try_from_type {
-                        Left(ty) => {
-                            quote! {
-                                fn #name(&self) -> Option<#ty> {
-                                    self.d.opt_object(#key).unwrap().map(|d| <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from(d).unwrap())
-                                }
-                            }
-                        }
-                        Right(ty) => {
-                            quote! {
-                                fn #name(&self) -> #ty {
-                                    <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from(
-                                        self.d.required_object(#key).unwrap()
-                                    ).unwrap()
-                                }
-                            }
-                        }
-                    }
+                    gen_option_method(
+                        try_from_type,
+                        &name,
+                        |ty| {
+                            quote! { self.d.opt_object(#key).unwrap().map(|d| <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from(d).unwrap()) }
+                        },
+                        |ty| {
+                            quote! { <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from( self.d.required_object(#key).unwrap()).unwrap() }
+                        },
+                    )
                 } else {
                     panic!("unsupported return type")
                 }
