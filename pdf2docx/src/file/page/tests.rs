@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 
-use crate::object::Object;
+use crate::object::{Object, Array};
 use test_case::test_case;
 
 use super::*;

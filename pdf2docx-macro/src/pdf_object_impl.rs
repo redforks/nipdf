@@ -65,7 +65,7 @@ fn has_attr<'a>(
         return Some(Right(rt));
     }
 
-    return Some(Left({
+    Some(Left({
         let syn::PathArguments::AngleBracketed(args) = &seg.arguments else {
             panic!("expect angle bracketed arguments")
         };
@@ -76,7 +76,7 @@ fn has_attr<'a>(
         };
 
         ty
-    }));
+    }))
 }
 
 fn _is_type(t: &Type, type_name: &'static str) -> bool {
@@ -85,7 +85,7 @@ fn _is_type(t: &Type, type_name: &'static str) -> bool {
             return seg.ident == type_name;
         }
     }
-    return false;
+    false
 }
 
 fn is_vec(t: &Type) -> bool {

@@ -425,7 +425,7 @@ impl Render {
         let stroke = state.get_stroke();
         log::debug!("stroke: {:?} {:?}", paint, stroke);
         self.canvas.stroke_path(
-            &self.path.finish(),
+            self.path.finish(),
             paint,
             stroke,
             state.path_transform(),
@@ -453,7 +453,7 @@ impl Render {
         let paint = state.get_fill_paint();
         log::debug!("fill: {:?}/{:?}", paint, fill_rule);
         self.canvas.fill_path(
-            &self.path.finish(),
+            self.path.finish(),
             paint,
             fill_rule,
             state.path_transform(),

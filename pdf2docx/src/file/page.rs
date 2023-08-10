@@ -5,8 +5,7 @@ use tiny_skia::Pixmap;
 use crate::{
     graphics::{parse_operations, LineCapStyle, LineJoinStyle, Operation, RenderingIntent},
     object::{
-        Array, Dictionary, FilterDecodedData, Object, ObjectValueError, PdfObject, SchemaDict,
-        Stream,
+        Dictionary, FilterDecodedData, Object, ObjectValueError, PdfObject, SchemaDict, Stream,
     },
 };
 

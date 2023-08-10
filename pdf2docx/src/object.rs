@@ -455,10 +455,7 @@ pub use xref::{Entry as XRefEntry, Section as XRefSection, *};
 mod frame;
 pub use frame::*;
 
-use crate::{
-    file::{ObjectResolver, Rectangle},
-    parser,
-};
+use crate::{file::ObjectResolver, parser};
 
 #[derive(Clone, PartialEq, Debug, thiserror::Error)]
 pub enum ObjectValueError {
