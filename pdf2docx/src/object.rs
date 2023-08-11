@@ -6,7 +6,6 @@ use std::{
     borrow::{Borrow, Cow},
     fmt::{Debug, Display},
     iter::Peekable,
-    marker::PhantomData,
     num::NonZeroU32,
     str::from_utf8,
 };
@@ -124,9 +123,9 @@ impl TypeValueGetter for NameTypeValueGetter {
     }
 }
 
-pub trait TypeValueCheck<V: ?Sized> {
+pub trait TypeValueCheck<V: ?Sized>: Clone + Debug {
     fn schema_type(&self) -> Cow<str>;
-    fn check2(&self, v: Option<&V>) -> bool;
+    fn check(&self, v: Option<&V>) -> bool;
 
     /// Convert current checker to `OptionTypeValueChecker`, return `true` if value is `None`.
     fn option(self) -> OptionTypeValueChecker<Self>
@@ -138,52 +137,58 @@ pub trait TypeValueCheck<V: ?Sized> {
 }
 
 #[derive(Clone, Debug)]
-pub struct EqualTypeValueChecker<R> {
+pub struct EqualTypeValueChecker<R: Debug + Clone> {
     value: R,
 }
 
-impl<R> EqualTypeValueChecker<R> {
-    pub fn str(s: R) -> Self {
+impl<R: Debug + Clone> EqualTypeValueChecker<R> {
+    pub fn new(s: R) -> Self {
         Self { value: s }
     }
 }
 
-impl<R: Borrow<str>> TypeValueCheck<str> for EqualTypeValueChecker<R> {
+impl<R: Borrow<str> + Debug + Clone> TypeValueCheck<str> for EqualTypeValueChecker<R> {
     fn schema_type(&self) -> Cow<str> {
         Cow::Borrowed(self.value.borrow())
     }
 
-    fn check2(&self, v: Option<&str>) -> bool {
+    fn check(&self, v: Option<&str>) -> bool {
         v.map_or(false, |v| v == self.value.borrow())
     }
 }
 
 /// impl `TypeValueCheck` return true if value is None, otherwise check value using `inner`.
-pub struct OptionTypeValueChecker<Inner: Sized>(pub Inner);
+#[derive(Clone, Debug)]
+pub struct OptionTypeValueChecker<Inner: Sized + Clone + Debug>(pub Inner);
 
-impl<Inner: TypeValueCheck<V>, V: ?Sized> TypeValueCheck<V> for OptionTypeValueChecker<Inner> {
+impl<Inner: TypeValueCheck<V> + Clone + Debug, V: ?Sized> TypeValueCheck<V>
+    for OptionTypeValueChecker<Inner>
+{
     fn schema_type(&self) -> Cow<str> {
         self.0.schema_type()
     }
 
-    fn check2(&self, v: Option<&V>) -> bool {
-        v.map_or(true, |v| self.0.check2(Some(v)))
+    fn check(&self, v: Option<&V>) -> bool {
+        v.map_or(true, |v| self.0.check(Some(v)))
     }
 }
 
 /// Check type value equals to one of `values`.
-pub struct OneOfTypeValueChecker<R> {
+#[derive(Clone, Debug)]
+pub struct OneOfTypeValueChecker<R: Clone + Debug> {
     values: Vec<R>,
 }
 
-impl<R> OneOfTypeValueChecker<R> {
+impl<R: Clone + Debug> OneOfTypeValueChecker<R> {
     pub fn new(values: Vec<R>) -> Self {
         debug_assert!(values.len() > 0);
         Self { values }
     }
 }
 
-impl<V: Display + ?Sized + PartialEq, R: Borrow<V>> TypeValueCheck<V> for OneOfTypeValueChecker<R> {
+impl<V: Display + ?Sized + PartialEq, R: Borrow<V> + Clone + Debug> TypeValueCheck<V>
+    for OneOfTypeValueChecker<R>
+{
     fn schema_type(&self) -> Cow<str> {
         Cow::Owned(
             self.values
@@ -194,7 +199,7 @@ impl<V: Display + ?Sized + PartialEq, R: Borrow<V>> TypeValueCheck<V> for OneOfT
         )
     }
 
-    fn check2(&self, v: Option<&V>) -> bool {
+    fn check(&self, v: Option<&V>) -> bool {
         v.map_or(false, |v| self.values.iter().any(|r| v == r.borrow()))
     }
 }
@@ -204,7 +209,7 @@ pub trait TypeValidator: Debug + Clone {
     fn schema_type(&self) -> String;
     fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError>;
 
-    fn valid2(&self, d: &Dictionary) -> Result<(), ObjectValueError> {
+    fn valid(&self, d: &Dictionary) -> Result<(), ObjectValueError> {
         if self.check(d)? {
             Ok(())
         } else {
@@ -249,7 +254,7 @@ where
 
     fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError> {
         let v = self.getter.get(d)?;
-        Ok(self.checker.check2(v))
+        Ok(self.checker.check(v))
     }
 }
 
@@ -288,105 +293,6 @@ where
     }
 }
 
-pub trait SchemaTypeValidator: Clone + Debug {
-    fn schema_type(&self) -> Cow<'static, str>;
-    fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError>;
-
-    fn valid(&self, d: &Dictionary) -> Result<(), ObjectValueError> {
-        self.check_result(self.check(d)?)
-    }
-
-    fn check_result(&self, result: bool) -> Result<(), ObjectValueError> {
-        if result {
-            Ok(())
-        } else {
-            Err(ObjectValueError::DictSchemaUnExpectedType(
-                self.schema_type(),
-            ))
-        }
-    }
-
-    fn get_type<'a>(&self, d: &'a Dictionary) -> Result<&'a str, ObjectValueError> {
-        let name = d
-            .get_name("Type")
-            .map_err(|_| ObjectValueError::DictSchemaError(self.schema_type(), "Type"))?;
-        name.ok_or_else(|| ObjectValueError::DictSchemaError(self.schema_type(), "Type"))
-    }
-
-    fn get_type_opt<'a>(&self, d: &'a Dictionary) -> Result<Option<&'a str>, ObjectValueError> {
-        d.get(b"Type".as_slice()).map_or(Ok(None), |o| {
-            o.as_name()
-                .map(Some)
-                .map_err(|_| ObjectValueError::DictSchemaError(self.schema_type(), "Type"))
-        })
-    }
-}
-
-impl SchemaTypeValidator for () {
-    fn schema_type(&self) -> Cow<'static, str> {
-        Cow::Borrowed("No Specific Type")
-    }
-
-    fn check(&self, _: &Dictionary) -> Result<bool, ObjectValueError> {
-        Ok(true)
-    }
-}
-
-impl SchemaTypeValidator for &'static str {
-    fn schema_type(&self) -> Cow<'static, str> {
-        Cow::Borrowed(*self)
-    }
-
-    fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError> {
-        Ok(*self == self.get_type(d)?)
-    }
-}
-
-impl SchemaTypeValidator for Option<&'static str> {
-    fn schema_type(&self) -> Cow<'static, str> {
-        Cow::Borrowed(self.expect("Should not happen"))
-    }
-
-    fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError> {
-        self.get_type_opt(d)?
-            .map_or(Ok(true), |t| Ok(t == self.schema_type()))
-    }
-}
-
-/// Check Type/Subtype fields. If first element is None, check Subtype only.
-impl SchemaTypeValidator for (Option<&'static str>, &'static str) {
-    fn schema_type(&self) -> Cow<'static, str> {
-        Cow::Owned(format!("{:?}/{}", self.0, self.1))
-    }
-
-    fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError> {
-        fn get_sub_type<'a>(
-            this: &(Option<&'static str>, &'static str),
-            d: &'a Dictionary,
-        ) -> Result<Option<&'a str>, ObjectValueError> {
-            d.get_name("Subtype")
-                .map_err(|_| ObjectValueError::DictSchemaError(this.schema_type(), "Subtype"))
-        }
-
-        if let Some(t) = self.0 {
-            Ok(self.get_type_opt(d)?.map_or(true, |v| v == t)
-                && Some(self.1) == get_sub_type(self, d)?)
-        } else {
-            Ok(Some(self.1) == get_sub_type(self, d)?)
-        }
-    }
-}
-
-impl<const N: usize> SchemaTypeValidator for [&'static str; N] {
-    fn schema_type(&self) -> Cow<'static, str> {
-        Cow::Owned(format!("{:?}", self))
-    }
-
-    fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError> {
-        Ok(self.contains(&self.get_type(d)?))
-    }
-}
-
 #[derive(Clone, Educe)]
 #[educe(Debug)]
 pub struct SchemaDict<'a, 'b, T: Clone + Debug> {
@@ -415,7 +321,7 @@ where
     fn id(&self) -> Option<NonZeroU32>;
 }
 
-impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
+impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     pub fn new(
         d: &'b Dictionary<'a>,
         r: &'b ObjectResolver<'a>,
@@ -445,8 +351,8 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
         self.r
     }
 
-    pub fn type_name(&self) -> &'b str {
-        self.t.get_type(self.d).unwrap()
+    pub fn type_name(&self) -> String {
+        self.t.schema_type()
     }
 
     fn opt_get(&self, id: &'static str) -> Result<Option<&'b Object<'a>>, ObjectValueError> {
@@ -460,13 +366,19 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn required_name(&self, id: &'static str) -> Result<&'b str, ObjectValueError> {
         self.opt_get(id)?
-            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
+            .ok_or(ObjectValueError::DictSchemaError(
+                self.t.schema_type().into(),
+                id,
+            ))?
             .as_name()
     }
 
     pub fn required_int(&self, id: &'static str) -> Result<i32, ObjectValueError> {
         self.opt_get(id)?
-            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
+            .ok_or(ObjectValueError::DictSchemaError(
+                self.t.schema_type().into(),
+                id,
+            ))?
             .as_int()
     }
 
@@ -481,7 +393,10 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn required_bool(&self, id: &'static str) -> Result<bool, ObjectValueError> {
         self.opt_get(id)?
-            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
+            .ok_or(ObjectValueError::DictSchemaError(
+                self.t.schema_type().into(),
+                id,
+            ))?
             .as_bool()
     }
 
@@ -520,7 +435,10 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn required_f32(&self, id: &'static str) -> Result<f32, ObjectValueError> {
         self.opt_get(id)?
-            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
+            .ok_or(ObjectValueError::DictSchemaError(
+                self.t.schema_type().into(),
+                id,
+            ))?
             .as_number()
     }
 
@@ -534,7 +452,10 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn required_object(&self, id: &'static str) -> Result<&'b Object<'a>, ObjectValueError> {
         self.opt_object(id)?
-            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))
+            .ok_or(ObjectValueError::DictSchemaError(
+                self.t.schema_type().into(),
+                id,
+            ))
     }
 
     /// Return empty vec if not exist, error if not array
@@ -549,7 +470,10 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
         f: impl Fn(&Object) -> Result<V, ObjectValueError>,
     ) -> Result<Vec<V>, ObjectValueError> {
         self.opt_get(id)?
-            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
+            .ok_or(ObjectValueError::DictSchemaError(
+                self.t.schema_type().into(),
+                id,
+            ))?
             .as_arr()?
             .iter()
             .map(f)
@@ -609,14 +533,21 @@ impl<'a, 'b, T: SchemaTypeValidator> SchemaDict<'a, 'b, T> {
     }
 
     pub fn required_dict(&self, id: &'static str) -> Result<&'b Dictionary<'a>, ObjectValueError> {
-        self.opt_dict(id)
-            .and_then(|o| o.ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id)))
+        self.opt_dict(id).and_then(|o| {
+            o.ok_or(ObjectValueError::DictSchemaError(
+                self.t.schema_type().into(),
+                id,
+            ))
+        })
     }
 
     pub fn required_ref(&self, id: &'static str) -> Result<NonZeroU32, ObjectValueError> {
         self.d
             .get(id.as_bytes())
-            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
+            .ok_or(ObjectValueError::DictSchemaError(
+                self.t.schema_type().into(),
+                id,
+            ))?
             .as_ref()
             .map(|r| r.id().id())
     }

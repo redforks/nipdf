@@ -119,17 +119,17 @@ fn dict_get_name() {
 
 #[test]
 fn equal_schema_type_validator() {
-    let checker = EqualTypeValueChecker::str("Page");
-    assert_eq!(false, checker.check2(None));
-    assert_eq!(false, checker.check2(Some(&"blah")));
-    assert_eq!(true, checker.check2(Some(&"Page")));
+    let checker = EqualTypeValueChecker::new("Page");
+    assert_eq!(false, checker.check(None));
+    assert_eq!(false, checker.check(Some(&"blah")));
+    assert_eq!(true, checker.check(Some(&"Page")));
 }
 
 #[test]
 fn value_type_validator() {
     let validator = ValueTypeValidator::new(
         NameTypeValueGetter::typ(),
-        EqualTypeValueChecker::str("Page") as EqualTypeValueChecker<&str>,
+        EqualTypeValueChecker::new("Page") as EqualTypeValueChecker<&str>,
     );
     assert_impl_all!(
         ValueTypeValidator<NameTypeValueGetter, EqualTypeValueChecker<&str>>: TypeValidator
@@ -142,18 +142,18 @@ fn value_type_validator() {
         Err(ObjectValueError::DictSchemaUnExpectedType(
             "Type: Page".into()
         )),
-        validator.valid2(&d)
+        validator.valid(&d)
     );
 }
 
 #[test]
 fn option_value_type_validator() {
-    let checker = EqualTypeValueChecker::str("Page").option();
+    let checker = EqualTypeValueChecker::new("Page").option();
     assert_impl_all!(OptionTypeValueChecker<EqualTypeValueChecker<&str>>: TypeValueCheck<str>);
 
-    assert!(checker.check2(None));
-    assert!(!checker.check2(Some(&"blah")));
-    assert!(checker.check2(Some(&"Page")));
+    assert!(checker.check(None));
+    assert!(!checker.check(Some(&"blah")));
+    assert!(checker.check(Some(&"Page")));
 }
 
 #[test]
@@ -162,71 +162,10 @@ fn one_of_type_value_checker() {
     let schema_type = <OneOfTypeValueChecker<&str> as TypeValueCheck<str>>::schema_type(&checker);
     assert_eq!("Page|Pages", &schema_type);
 
-    assert!(!checker.check2(None::<&str>));
-    assert!(!checker.check2(Some(&"blah")));
-    assert!(checker.check2(Some(&"Page")));
-    assert!(checker.check2(Some(&"Pages")));
-}
-
-#[test]
-fn str_slice_schema_type_validator() {
-    let page_or_pages = ["Pages", "Page"];
-
-    let mut d = Dictionary::new();
-    assert_eq!(
-        Err(ObjectValueError::DictSchemaError(
-            r#"["Pages", "Page"]"#.into(),
-            "Type"
-        )),
-        page_or_pages.valid(&d)
-    );
-
-    d.set("Type", 11i32);
-    assert_eq!(
-        Err(ObjectValueError::DictSchemaError(
-            r#"["Pages", "Page"]"#.into(),
-            "Type"
-        )),
-        page_or_pages.valid(&d)
-    );
-
-    d.set("Type", "/foo");
-    assert_eq!(
-        Err(ObjectValueError::DictSchemaUnExpectedType(
-            r#"["Pages", "Page"]"#.into(),
-        )),
-        page_or_pages.valid(&d)
-    );
-
-    d.set("Type", "/Pages");
-    assert_eq!(Ok(()), page_or_pages.valid(&d));
-
-    d.set("Type", "/Page");
-    assert_eq!(Ok(()), page_or_pages.valid(&d));
-}
-
-#[test]
-fn sub_type_validator() {
-    let v = (Some("foo"), "bar");
-
-    let mut d = Dictionary::new();
-    assert!(!v.check(&d).unwrap());
-
-    d.set("Subtype", Object::from("/blah"));
-    assert!(!v.check(&d).unwrap());
-
-    d.set("Subtype", Object::from("/bar"));
-    assert!(v.check(&d).unwrap());
-
-    d.set("Type", Object::from("/X"));
-    assert!(!v.check(&d).unwrap());
-
-    d.set("Type", Object::from("/foo"));
-    assert!(v.check(&d).unwrap());
-
-    let v = (None, "bar");
-    d.set("Type", Object::from(1i32));
-    assert!(v.check(&d).unwrap());
+    assert!(!checker.check(None::<&str>));
+    assert!(!checker.check(Some(&"blah")));
+    assert!(checker.check(Some(&"Page")));
+    assert!(checker.check(Some(&"Pages")));
 }
 
 #[test_case(None => Vec::<u32>::new())]

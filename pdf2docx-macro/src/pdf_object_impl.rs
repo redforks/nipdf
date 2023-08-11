@@ -6,8 +6,8 @@ use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use quote::quote;
 use syn::{
-    parse_macro_input, parse_quote, Attribute, Expr, ExprLit, ExprTuple, ItemTrait, Lit, LitStr,
-    ReturnType, TraitItem, TraitItemFn, Type,
+    parse_macro_input, parse_quote, Attribute, Expr, ExprCall, ExprLit, ExprTuple, ItemTrait, Lit,
+    LitStr, ReturnType, TraitItem, TraitItemFn, Type,
 };
 
 /// If `#[key("key")]` attribute defined, return key value
@@ -65,7 +65,7 @@ fn has_attr<'a>(
         return Some(Right(rt));
     }
 
-    Some(Left({
+    return Some(Left({
         let syn::PathArguments::AngleBracketed(args) = &seg.arguments else {
             panic!("expect angle bracketed arguments")
         };
@@ -76,7 +76,7 @@ fn has_attr<'a>(
         };
 
         ty
-    }))
+    }));
 }
 
 fn _is_type(t: &Type, type_name: &'static str) -> bool {
@@ -85,7 +85,7 @@ fn _is_type(t: &Type, type_name: &'static str) -> bool {
             return seg.ident == type_name;
         }
     }
-    false
+    return false;
 }
 
 fn is_vec(t: &Type) -> bool {
@@ -208,6 +208,24 @@ fn gen_option_method(
     }
 }
 
+fn get_literal_from_some_call(c: &ExprCall) -> &Expr {
+    if let Expr::Path(ep) = &*c.func {
+        if let Some(seg) = ep.path.segments.last() {
+            if seg.ident == "Some" {
+                return &c.args[0];
+            }
+        }
+    }
+    panic!("expect Some literal")
+}
+
+fn get_literal_from_some(t: &Expr) -> &Expr {
+    if let Expr::Call(ec) = t {
+        return get_literal_from_some_call(ec);
+    }
+    panic!("expect Some literal")
+}
+
 pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attr_expr = parse_macro_input!(attr as Expr);
     // println!("{:#?}", attr_expr);
@@ -228,11 +246,18 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             let lit = lit.lit;
             match lit {
                 syn::Lit::Str(lit) => (
-                    parse_quote! { &'static str },
-                    Expr::Lit(ExprLit {
-                        attrs: vec![],
-                        lit: lit.into(),
-                    }),
+                    parse_quote! {
+                        crate::object::ValueTypeValidator<
+                            crate::object::NameTypeValueGetter,
+                            crate::object::EqualTypeValueChecker<&'static str>
+                        >
+                    },
+                    parse_quote! {
+                        crate::object::ValueTypeValidator::new(
+                            crate::object::NameTypeValueGetter::typ(),
+                            crate::object::EqualTypeValueChecker::new(#lit)
+                        )
+                    },
                 ),
                 _ => panic!("expect string literal"),
             }
@@ -250,27 +275,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             elems,
         }) if elems.len() == 2 => {
             let (t, st) = (&elems[0], &elems[1]);
-            match t {
-                Expr::Path(t) if t.path.is_ident("None") => (),
-                Expr::Call(c) => {
-                    let func = &c.func;
-                    match &func.deref() {
-                        Expr::Path(path) => {
-                            assert!(path.path.is_ident("Some"));
-                        }
-                        _ => panic!("expect path"),
-                    }
-                    assert_eq!(1, c.args.len());
-                    assert!(matches!(
-                        c.args[0],
-                        Expr::Lit(ExprLit {
-                            lit: Lit::Str(_),
-                            attrs: _
-                        })
-                    ));
-                }
-                _ => panic!("expect path"),
-            }
+            let t = get_literal_from_some(t);
             assert!(matches!(
                 st,
                 Expr::Lit(ExprLit {
@@ -279,8 +284,30 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 })
             ));
             (
-                parse_quote! { (Option<&'static str>, &'static str)},
-                parse_quote!( (#t, #st)),
+                parse_quote! {
+                    crate::object::AndValueTypeValidator<
+                        crate::object::ValueTypeValidator<
+                            crate::object::NameTypeValueGetter,
+                            crate::object::OptionTypeValueChecker<crate::object::EqualTypeValueChecker<&'static str>>
+                        >,
+                        crate::object::ValueTypeValidator<
+                            crate::object::NameTypeValueGetter,
+                            crate::object::EqualTypeValueChecker<&'static str>
+                        >
+                    >
+                },
+                parse_quote! {
+                    crate::object::AndValueTypeValidator::new(
+                        crate::object::ValueTypeValidator::new(
+                            crate::object::NameTypeValueGetter::typ(),
+                            <crate::object::EqualTypeValueChecker<&'static str> as crate::object::TypeValueCheck<_>>::option(crate::object::EqualTypeValueChecker::new(#t)),
+                        ),
+                        crate::object::ValueTypeValidator::new(
+                            crate::object::NameTypeValueGetter::new("Subtype"),
+                            crate::object::EqualTypeValueChecker::new(#st)
+                        ),
+                    )
+                },
             )
         }
 
@@ -305,22 +332,40 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     _ => panic!("expect string literal"),
                 }
             }
-            let len = ty.len();
             (
-                parse_quote! { [&'static str; #len] },
-                Expr::Array(parse_quote!([ #(#arg),* ])),
+                parse_quote! {
+                    crate::object::ValueTypeValidator<
+                        crate::object::NameTypeValueGetter,
+                        crate::object::OneOfTypeValueChecker<&'static str>,
+                    >
+                },
+                parse_quote! {
+                    crate::object::ValueTypeValidator::new(
+                        crate::object::NameTypeValueGetter::typ(),
+                        crate::object::OneOfTypeValueChecker::new(
+                            vec![ #(#arg),* ]
+                        )
+                    )
+                },
             )
         }
 
         Expr::Call(ref call) => {
-            let func = &call.func;
-            match &func.deref() {
-                Expr::Path(path) => {
-                    assert!(path.path.is_ident("Some"));
-                    (parse_quote! { Option<&'static str>}, attr_expr)
-                }
-                _ => panic!("expect path"),
-            }
+            let literal = get_literal_from_some_call(call);
+            (
+                parse_quote! {
+                    crate::object::ValueTypeValidator<
+                        crate::object::NameTypeValueGetter,
+                        crate::object::OptionTypeValueChecker<crate::object::EqualTypeValueChecker<&'static str>>
+                    >
+                },
+                parse_quote! {
+                    crate::object::ValueTypeValidator::new(
+                        crate::object::NameTypeValueGetter::typ(),
+                        <crate::object::EqualTypeValueChecker<&'static str> as crate::object::TypeValueCheck<_>>::option(crate::object::EqualTypeValueChecker::new(#literal)),
+                    )
+                },
+            )
         }
         _ => todo!(),
     };
