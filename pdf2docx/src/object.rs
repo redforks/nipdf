@@ -168,6 +168,16 @@ pub trait TypeValidator {
     }
 }
 
+impl TypeValidator for () {
+    fn schema_type(&self) -> String {
+        "Empty type validator".to_owned()
+    }
+
+    fn check(&self, _: &Dictionary) -> Result<bool, ObjectValueError> {
+        Ok(true)
+    }
+}
+
 /// Implement `TypeValidator` using `TypeValueGetter` and `TypeValueChecker`
 pub struct ValueTypeValidator<G, C> {
     getter: G,
