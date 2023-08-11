@@ -1,4 +1,5 @@
 use super::*;
+use static_assertions::assert_impl_all;
 use test_case::test_case;
 
 #[test]
@@ -117,10 +118,30 @@ fn dict_get_name() {
 }
 
 #[test]
-fn str_schema_type_validator() {
-    assert_eq!(false, "Pages".check2(None));
-    assert_eq!(false, "Pages".check2("blah".into()));
-    assert_eq!(true, "foo".check2("foo".into()));
+fn equal_schema_type_validator() {
+    let checker = EqualTypeValueChecker::str("Page");
+    assert_eq!(false, checker.check2(None));
+    assert_eq!(false, checker.check2(Some(&"blah")));
+    assert_eq!(true, checker.check2(Some(&"Page")));
+}
+
+#[test]
+fn value_type_validator() {
+    let validator = ValueTypeValidator::new(
+        NameTypeValueGetter::typ(),
+        EqualTypeValueChecker::str("Page") as EqualTypeValueChecker<str, &str>,
+    );
+    assert_impl_all!(
+        ValueTypeValidator<NameTypeValueGetter, EqualTypeValueChecker<str, &str>>: TypeValidator
+    );
+
+    let mut d = Dictionary::default();
+    d.set("a", "/foo");
+
+    assert_eq!(
+        Err(ObjectValueError::DictSchemaError("/foo".into(), "Type")),
+        validator.valid2(&d)
+    );
 }
 
 #[test]

@@ -6,6 +6,7 @@ use std::{
     borrow::{Borrow, Cow},
     fmt::Debug,
     iter::Peekable,
+    marker::PhantomData,
     num::NonZeroU32,
     str::from_utf8,
 };
@@ -95,7 +96,6 @@ pub trait TypeValueGetter {
 }
 
 /// Implement `TypeValueGetter` returns non-option field type value
-#[derive(Debug, Clone)]
 pub struct NameTypeValueGetter {
     field: &'static str,
 }
@@ -124,26 +124,40 @@ impl TypeValueGetter for NameTypeValueGetter {
 }
 
 pub trait TypeValueCheck<V: ?Sized> {
-    fn schema_type(&self) -> Cow<'static, str>;
+    fn schema_type(&self) -> Cow<str>;
     fn check2(&self, v: Option<&V>) -> bool;
 }
 
-impl TypeValueCheck<str> for &'static str {
-    fn schema_type(&self) -> Cow<'static, str> {
-        Cow::Borrowed(self)
+pub struct EqualTypeValueChecker<V: ?Sized, R: Borrow<V>> {
+    value: R,
+    _v: PhantomData<V>,
+}
+
+impl<R: Borrow<str>> EqualTypeValueChecker<str, R> {
+    pub fn str(s: R) -> Self {
+        Self {
+            value: s,
+            _v: PhantomData,
+        }
+    }
+}
+
+impl<R: Borrow<str>> TypeValueCheck<str> for EqualTypeValueChecker<str, R> {
+    fn schema_type(&self) -> Cow<str> {
+        Cow::Borrowed(self.value.borrow())
     }
 
     fn check2(&self, v: Option<&str>) -> bool {
-        v.map_or(false, |v| v == *self)
+        v.map_or(false, |v| v == self.value.borrow())
     }
 }
 
 /// Check type value to validate object Type.
-pub trait TypeValidator: Clone + Debug {
+pub trait TypeValidator {
     fn schema_type(&self) -> String;
     fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError>;
 
-    fn valid(&self, d: &Dictionary) -> Result<(), ObjectValueError> {
+    fn valid2(&self, d: &Dictionary) -> Result<(), ObjectValueError> {
         if self.check(d)? {
             Ok(())
         } else {
@@ -155,30 +169,21 @@ pub trait TypeValidator: Clone + Debug {
 }
 
 /// Implement `TypeValidator` using `TypeValueGetter` and `TypeValueChecker`
-#[derive(Debug, Clone)]
-pub struct ValueTypeValidator<G, C>
-where
-    G: Clone + Debug,
-    C: Clone + Debug,
-{
+pub struct ValueTypeValidator<G, C> {
     getter: G,
     checker: C,
 }
 
-impl<G, C> ValueTypeValidator<G, C>
-where
-    G: Clone + Debug,
-    C: Clone + Debug,
-{
+impl<G, C> ValueTypeValidator<G, C> {
     pub fn new(getter: G, checker: C) -> Self {
         Self { getter, checker }
     }
 }
 
-impl<G, C, V> TypeValidator for ValueTypeValidator<G, C>
+impl<G, C, V: ?Sized> TypeValidator for ValueTypeValidator<G, C>
 where
-    G: TypeValueGetter<Value = V> + Clone + Debug,
-    C: TypeValueCheck<V> + Clone + Debug,
+    G: TypeValueGetter<Value = V>,
+    C: TypeValueCheck<V>,
 {
     fn schema_type(&self) -> String {
         format!("{}: {}", self.getter.field(), self.checker.schema_type())

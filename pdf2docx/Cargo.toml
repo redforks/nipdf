@@ -47,6 +47,7 @@ clr = ["env_logger", "clap"]
 env_logger = "0.10.0"
 glob = "0.3.1"
 insta = "1.29.0"
+static_assertions = "1.1.0"
 test-case = "3.1.0"
 test-log = "0.2.12"
 
