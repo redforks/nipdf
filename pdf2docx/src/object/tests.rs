@@ -157,6 +157,18 @@ fn option_value_type_validator() {
 }
 
 #[test]
+fn one_of_type_value_checker() {
+    let checker = OneOfTypeValueChecker::new(vec!["Page", "Pages"]);
+    let schema_type = <OneOfTypeValueChecker<&str> as TypeValueCheck<str>>::schema_type(&checker);
+    assert_eq!("Page|Pages", &schema_type);
+
+    assert!(!checker.check2(None::<&str>));
+    assert!(!checker.check2(Some(&"blah")));
+    assert!(checker.check2(Some(&"Page")));
+    assert!(checker.check2(Some(&"Pages")));
+}
+
+#[test]
 fn str_slice_schema_type_validator() {
     let page_or_pages = ["Pages", "Page"];
 

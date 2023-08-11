@@ -4,7 +4,7 @@ use educe::Educe;
 
 use std::{
     borrow::{Borrow, Cow},
-    fmt::Debug,
+    fmt::{Debug, Display},
     iter::Peekable,
     marker::PhantomData,
     num::NonZeroU32,
@@ -170,6 +170,34 @@ impl<Inner: TypeValueCheck<V>, V: ?Sized> TypeValueCheck<V> for OptionTypeValueC
 
     fn check2(&self, v: Option<&V>) -> bool {
         v.map_or(true, |v| self.0.check2(Some(v)))
+    }
+}
+
+/// Check type value equals to one of `values`.
+pub struct OneOfTypeValueChecker<R> {
+    values: Vec<R>,
+}
+
+impl<R> OneOfTypeValueChecker<R> {
+    pub fn new(values: Vec<R>) -> Self {
+        debug_assert!(values.len() > 0);
+        Self { values }
+    }
+}
+
+impl<V: Display + ?Sized + PartialEq, R: Borrow<V>> TypeValueCheck<V> for OneOfTypeValueChecker<R> {
+    fn schema_type(&self) -> Cow<str> {
+        Cow::Owned(
+            self.values
+                .iter()
+                .map(|v| v.borrow().to_string())
+                .collect::<Vec<_>>()
+                .join("|"),
+        )
+    }
+
+    fn check2(&self, v: Option<&V>) -> bool {
+        v.map_or(false, |v| self.values.iter().any(|r| v == r.borrow()))
     }
 }
 
