@@ -96,6 +96,7 @@ pub trait TypeValueGetter {
 }
 
 /// Implement `TypeValueGetter` returns non-option field type value
+#[derive(Debug, Clone)]
 pub struct NameTypeValueGetter {
     field: &'static str,
 }
@@ -136,6 +137,7 @@ pub trait TypeValueCheck<V: ?Sized> {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct EqualTypeValueChecker<R> {
     value: R,
 }
@@ -198,7 +200,7 @@ impl<V: Display + ?Sized + PartialEq, R: Borrow<V>> TypeValueCheck<V> for OneOfT
 }
 
 /// Check type value to validate object Type.
-pub trait TypeValidator {
+pub trait TypeValidator: Debug + Clone {
     fn schema_type(&self) -> String;
     fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError>;
 
@@ -223,13 +225,14 @@ impl TypeValidator for () {
     }
 }
 
+#[derive(Debug, Clone)]
 /// Implement `TypeValidator` using `TypeValueGetter` and `TypeValueChecker`
-pub struct ValueTypeValidator<G, C> {
+pub struct ValueTypeValidator<G: Debug + Clone, C: Debug + Clone> {
     getter: G,
     checker: C,
 }
 
-impl<G, C> ValueTypeValidator<G, C> {
+impl<G: Debug + Clone, C: Debug + Clone> ValueTypeValidator<G, C> {
     pub fn new(getter: G, checker: C) -> Self {
         Self { getter, checker }
     }
@@ -237,8 +240,8 @@ impl<G, C> ValueTypeValidator<G, C> {
 
 impl<G, C, V: ?Sized> TypeValidator for ValueTypeValidator<G, C>
 where
-    G: TypeValueGetter<Value = V>,
-    C: TypeValueCheck<V>,
+    G: TypeValueGetter<Value = V> + Debug + Clone,
+    C: TypeValueCheck<V> + Debug + Clone,
 {
     fn schema_type(&self) -> String {
         format!("{}: {}", self.getter.field(), self.checker.schema_type())
