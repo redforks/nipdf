@@ -174,11 +174,14 @@ pub(crate) trait PageDictTrait {
     #[nested]
     fn resources(&self) -> Option<ResourceDict<'a, 'b>>;
     fn contents(&self) -> Vec<&Stream<'a>>;
+    #[key("Type")]
+    #[typ("Name")]
+    fn type_name(&self) -> &str;
 }
 
 impl<'a, 'b> PageDict<'a, 'b> {
     pub fn is_leaf(&self) -> bool {
-        self.d.type_name() == "Page"
+        self.type_name() == "Page"
     }
 }
 

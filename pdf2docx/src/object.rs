@@ -351,10 +351,6 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         self.r
     }
 
-    pub fn type_name(&self) -> String {
-        self.t.schema_type()
-    }
-
     fn opt_get(&self, id: &'static str) -> Result<Option<&'b Object<'a>>, ObjectValueError> {
         self.r.opt_resolve_container_value(self.d, id)
     }
