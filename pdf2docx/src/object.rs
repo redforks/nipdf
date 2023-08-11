@@ -181,7 +181,7 @@ pub struct OneOfTypeValueChecker<R: Clone + Debug> {
 
 impl<R: Clone + Debug> OneOfTypeValueChecker<R> {
     pub fn new(values: Vec<R>) -> Self {
-        debug_assert!(values.len() > 0);
+        debug_assert!(!values.is_empty());
         Self { values }
     }
 }

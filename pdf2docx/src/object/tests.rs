@@ -120,9 +120,9 @@ fn dict_get_name() {
 #[test]
 fn equal_schema_type_validator() {
     let checker = EqualTypeValueChecker::new("Page");
-    assert_eq!(false, checker.check(None));
-    assert_eq!(false, checker.check(Some(&"blah")));
-    assert_eq!(true, checker.check(Some(&"Page")));
+    assert!(!checker.check(None));
+    assert!(checker.check(Some("blah")));
+    assert!(checker.check(Some("Page")));
 }
 
 #[test]
@@ -152,8 +152,8 @@ fn option_value_type_validator() {
     assert_impl_all!(OptionTypeValueChecker<EqualTypeValueChecker<&str>>: TypeValueCheck<str>);
 
     assert!(checker.check(None));
-    assert!(!checker.check(Some(&"blah")));
-    assert!(checker.check(Some(&"Page")));
+    assert!(!checker.check(Some("blah")));
+    assert!(checker.check(Some("Page")));
 }
 
 #[test]

@@ -249,14 +249,11 @@ impl Path {
 
     /// Build path and clear the path builder
     fn finish(&mut self) -> &SkiaPath {
-        match self.path {
-            Either::Left(_) => {
-                let temp = Either::Left(PathBuilder::new());
-                let p = std::mem::replace(&mut self.path, temp);
-                self.path = p.left_and_then(|p| Either::Right(p.finish().unwrap()));
-            }
-            _ => {}
-        };
+        if let Either::Left(_) = self.path {
+            let temp = Either::Left(PathBuilder::new());
+            let p = std::mem::replace(&mut self.path, temp);
+            self.path = p.left_and_then(|p| Either::Right(p.finish().unwrap()));
+        }
 
         match &self.path {
             Either::Left(_) => unreachable!(),
