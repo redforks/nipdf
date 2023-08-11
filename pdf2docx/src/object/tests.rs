@@ -129,10 +129,10 @@ fn equal_schema_type_validator() {
 fn value_type_validator() {
     let validator = ValueTypeValidator::new(
         NameTypeValueGetter::typ(),
-        EqualTypeValueChecker::str("Page") as EqualTypeValueChecker<str, &str>,
+        EqualTypeValueChecker::str("Page") as EqualTypeValueChecker<&str>,
     );
     assert_impl_all!(
-        ValueTypeValidator<NameTypeValueGetter, EqualTypeValueChecker<str, &str>>: TypeValidator
+        ValueTypeValidator<NameTypeValueGetter, EqualTypeValueChecker<&str>>: TypeValidator
     );
 
     let mut d = Dictionary::default();
@@ -149,7 +149,7 @@ fn value_type_validator() {
 #[test]
 fn option_value_type_validator() {
     let checker = EqualTypeValueChecker::str("Page").option();
-    assert_impl_all!(OptionTypeValueChecker<EqualTypeValueChecker<str, &str>>: TypeValueCheck<str>);
+    assert_impl_all!(OptionTypeValueChecker<EqualTypeValueChecker<&str>>: TypeValueCheck<str>);
 
     assert!(checker.check2(None));
     assert!(!checker.check2(Some(&"blah")));

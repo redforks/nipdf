@@ -136,21 +136,17 @@ pub trait TypeValueCheck<V: ?Sized> {
     }
 }
 
-pub struct EqualTypeValueChecker<V: ?Sized, R: Borrow<V>> {
+pub struct EqualTypeValueChecker<R> {
     value: R,
-    _v: PhantomData<V>,
 }
 
-impl<R: Borrow<str>> EqualTypeValueChecker<str, R> {
+impl<R> EqualTypeValueChecker<R> {
     pub fn str(s: R) -> Self {
-        Self {
-            value: s,
-            _v: PhantomData,
-        }
+        Self { value: s }
     }
 }
 
-impl<R: Borrow<str>> TypeValueCheck<str> for EqualTypeValueChecker<str, R> {
+impl<R: Borrow<str>> TypeValueCheck<str> for EqualTypeValueChecker<R> {
     fn schema_type(&self) -> Cow<str> {
         Cow::Borrowed(self.value.borrow())
     }
