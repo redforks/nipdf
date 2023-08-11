@@ -126,6 +126,14 @@ impl TypeValueGetter for NameTypeValueGetter {
 pub trait TypeValueCheck<V: ?Sized> {
     fn schema_type(&self) -> Cow<str>;
     fn check2(&self, v: Option<&V>) -> bool;
+
+    /// Convert current checker to `OptionTypeValueChecker`, return `true` if value is `None`.
+    fn option(self) -> OptionTypeValueChecker<Self>
+    where
+        Self: Sized,
+    {
+        OptionTypeValueChecker(self)
+    }
 }
 
 pub struct EqualTypeValueChecker<V: ?Sized, R: Borrow<V>> {
@@ -149,6 +157,19 @@ impl<R: Borrow<str>> TypeValueCheck<str> for EqualTypeValueChecker<str, R> {
 
     fn check2(&self, v: Option<&str>) -> bool {
         v.map_or(false, |v| v == self.value.borrow())
+    }
+}
+
+/// impl `TypeValueCheck` return true if value is None, otherwise check value using `inner`.
+pub struct OptionTypeValueChecker<Inner: Sized>(pub Inner);
+
+impl<Inner: TypeValueCheck<V>, V: ?Sized> TypeValueCheck<V> for OptionTypeValueChecker<Inner> {
+    fn schema_type(&self) -> Cow<str> {
+        self.0.schema_type()
+    }
+
+    fn check2(&self, v: Option<&V>) -> bool {
+        v.map_or(true, |v| self.0.check2(Some(v)))
     }
 }
 

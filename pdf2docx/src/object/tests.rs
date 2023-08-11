@@ -139,9 +139,21 @@ fn value_type_validator() {
     d.set("a", "/foo");
 
     assert_eq!(
-        Err(ObjectValueError::DictSchemaError("/foo".into(), "Type")),
+        Err(ObjectValueError::DictSchemaUnExpectedType(
+            "Type: Page".into()
+        )),
         validator.valid2(&d)
     );
+}
+
+#[test]
+fn option_value_type_validator() {
+    let checker = EqualTypeValueChecker::str("Page").option();
+    assert_impl_all!(OptionTypeValueChecker<EqualTypeValueChecker<str, &str>>: TypeValueCheck<str>);
+
+    assert!(checker.check2(None));
+    assert!(!checker.check2(Some(&"blah")));
+    assert!(checker.check2(Some(&"Page")));
 }
 
 #[test]
