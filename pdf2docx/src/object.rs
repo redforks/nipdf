@@ -214,7 +214,7 @@ pub trait TypeValidator: Debug + Clone {
             Ok(())
         } else {
             Err(ObjectValueError::DictSchemaUnExpectedType(
-                self.schema_type().into(),
+                self.schema_type(),
             ))
         }
     }
@@ -362,19 +362,13 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn required_name(&self, id: &'static str) -> Result<&'b str, ObjectValueError> {
         self.opt_get(id)?
-            .ok_or(ObjectValueError::DictSchemaError(
-                self.t.schema_type().into(),
-                id,
-            ))?
+            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_name()
     }
 
     pub fn required_int(&self, id: &'static str) -> Result<i32, ObjectValueError> {
         self.opt_get(id)?
-            .ok_or(ObjectValueError::DictSchemaError(
-                self.t.schema_type().into(),
-                id,
-            ))?
+            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_int()
     }
 
@@ -389,10 +383,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn required_bool(&self, id: &'static str) -> Result<bool, ObjectValueError> {
         self.opt_get(id)?
-            .ok_or(ObjectValueError::DictSchemaError(
-                self.t.schema_type().into(),
-                id,
-            ))?
+            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_bool()
     }
 
@@ -431,10 +422,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn required_f32(&self, id: &'static str) -> Result<f32, ObjectValueError> {
         self.opt_get(id)?
-            .ok_or(ObjectValueError::DictSchemaError(
-                self.t.schema_type().into(),
-                id,
-            ))?
+            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_number()
     }
 
@@ -448,10 +436,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn required_object(&self, id: &'static str) -> Result<&'b Object<'a>, ObjectValueError> {
         self.opt_object(id)?
-            .ok_or(ObjectValueError::DictSchemaError(
-                self.t.schema_type().into(),
-                id,
-            ))
+            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))
     }
 
     /// Return empty vec if not exist, error if not array
@@ -466,10 +451,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         f: impl Fn(&Object) -> Result<V, ObjectValueError>,
     ) -> Result<Vec<V>, ObjectValueError> {
         self.opt_get(id)?
-            .ok_or(ObjectValueError::DictSchemaError(
-                self.t.schema_type().into(),
-                id,
-            ))?
+            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_arr()?
             .iter()
             .map(f)
@@ -529,21 +511,14 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     }
 
     pub fn required_dict(&self, id: &'static str) -> Result<&'b Dictionary<'a>, ObjectValueError> {
-        self.opt_dict(id).and_then(|o| {
-            o.ok_or(ObjectValueError::DictSchemaError(
-                self.t.schema_type().into(),
-                id,
-            ))
-        })
+        self.opt_dict(id)
+            .and_then(|o| o.ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id)))
     }
 
     pub fn required_ref(&self, id: &'static str) -> Result<NonZeroU32, ObjectValueError> {
         self.d
             .get(id.as_bytes())
-            .ok_or(ObjectValueError::DictSchemaError(
-                self.t.schema_type().into(),
-                id,
-            ))?
+            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_ref()
             .map(|r| r.id().id())
     }
@@ -615,9 +590,9 @@ pub enum ObjectValueError {
     #[error("Parse error: {0}")]
     ParseError(String),
     #[error("Unexpected dict schema type, schema: {0}")]
-    DictSchemaUnExpectedType(Cow<'static, str>),
+    DictSchemaUnExpectedType(String),
     #[error("Dict schema error, schema: {0}, key: {1}")]
-    DictSchemaError(Cow<'static, str>, &'static str),
+    DictSchemaError(String, &'static str),
     #[error("Graphics operation schema error")]
     GraphicsOperationSchemaError,
     #[error("Dict key not found")]
