@@ -9,7 +9,8 @@ use nom::{branch::alt, bytes::complete::is_not, combinator::map_res, multi::many
 use crate::{
     file::{GraphicsStateParameterDict, ObjectResolver, Rectangle},
     object::{
-        Dictionary, Name, Object, ObjectValueError, PdfObject, SchemaDict, TextStringOrNumber,
+        ColorSpace, Dictionary, Name, Object, ObjectValueError, PdfObject, SchemaDict,
+        TextStringOrNumber,
     },
     parser::{parse_object, ws_prefixed, ws_terminated, ParseError, ParseResult},
 };
@@ -177,8 +178,8 @@ pub(crate) trait ShadingDictTrait {
     #[try_from]
     fn shading_type(&self) -> ShadingType;
 
-    // TODO:
-    // fn color_space(&self) -> ColorSpace;
+    #[from_name_str]
+    fn color_space(&self) -> ColorSpace;
 
     #[try_from]
     fn b_box(&self) -> Option<Rectangle>;
