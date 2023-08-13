@@ -1,12 +1,11 @@
 ---
-source: src/parser/file/tests.rs
+source: pdf2docx/src/parser/file/tests.rs
 expression: "parse_frame(b\"xref\n1 2\n0000000000 00000 n\n0000000010 00000 n\ntrailer\n<< /Size 1 >>\nstartxref\n1234\n%%EOF\n\").unwrap()"
 ---
 (
     [],
-    Frame {
-        xref_pos: 1234,
-        trailer: Dictionary(
+    (
+        Dictionary(
             {
                 Name(
                     [
@@ -20,7 +19,7 @@ expression: "parse_frame(b\"xref\n1 2\n0000000000 00000 n\n0000000010 00000 n\nt
                 ),
             },
         ),
-        xref_section: {
+        {
             1: Entry(
                 0,
                 0,
@@ -32,5 +31,5 @@ expression: "parse_frame(b\"xref\n1 2\n0000000000 00000 n\n0000000010 00000 n\nt
                 true,
             ),
         },
-    },
+    ),
 )

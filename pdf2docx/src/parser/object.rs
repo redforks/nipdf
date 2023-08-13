@@ -7,13 +7,13 @@ use nom::{
         complete::{anychar, multispace1, u16, u32},
         is_hex_digit,
     },
-    combinator::{consumed, map, not, opt, peek, recognize, value},
+    combinator::{map, not, opt, peek, recognize, value},
     error::{ErrorKind, FromExternalError},
     multi::{many0, many0_count},
     number::complete::float,
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
 };
-use num::cast;
+
 
 use crate::object::{
     Array, Dictionary, HexString, IndirectObject, LiteralString, Name, Object, ObjectValueError,
