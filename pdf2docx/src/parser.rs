@@ -23,11 +23,6 @@ where
     #[error("nom parse error: {0:?}")]
     NomError(E),
 
-    #[error("Stream require length field in info dict")]
-    StreamRequireLength,
-    #[error("Stream length type is not integer")]
-    StreamInvalidLengthType,
-
     #[error("Not valid pdf file")]
     InvalidFile,
 
