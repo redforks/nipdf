@@ -121,7 +121,7 @@ fn dict_get_name() {
 fn equal_schema_type_validator() {
     let checker = EqualTypeValueChecker::new("Page");
     assert!(!checker.check(None));
-    assert!(checker.check(Some("blah")));
+    assert!(!checker.check(Some("blah")));
     assert!(checker.check(Some("Page")));
 }
 
@@ -139,7 +139,9 @@ fn value_type_validator() {
     d.set("a", "/foo");
 
     assert_eq!(
-        Err(ObjectValueError::DictSchemaUnExpectedType("Type: Page")),
+        Err(ObjectValueError::DictSchemaUnExpectedType(
+            "Type: Page".into()
+        )),
         validator.valid(&d)
     );
 }
