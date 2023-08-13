@@ -1,4 +1,4 @@
-use std::{borrow::Cow, num::NonZeroU32};
+use std::{borrow::Cow, num::NonZeroU32, str::from_utf8, str::FromStr};
 
 use nom::{
     branch::alt,
@@ -7,7 +7,7 @@ use nom::{
         complete::{anychar, multispace1, u16, u32},
         is_hex_digit,
     },
-    combinator::{map, not, opt, peek, recognize, value},
+    combinator::{consumed, map, not, opt, peek, recognize, value},
     error::{ErrorKind, FromExternalError},
     multi::{many0, many0_count},
     number::complete::float,
@@ -35,15 +35,15 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<Object> {
     let null = value(Object::Null, tag(b"null"));
     let true_parser = value(Object::Bool(true), tag(b"true"));
     let false_parser = value(Object::Bool(false), tag(b"false"));
-    let number_parser = map(float, |v| {
-        if let Some(i) = cast(v) {
-            if v.fract() == 0.0 {
-                Object::Integer(i)
-            } else {
-                Object::Number(v)
-            }
+    let number_parser = map(recognize(float), |s| {
+        if memchr::memchr(b'.', s).is_some() {
+            let s = from_utf8(s).unwrap();
+            f32::from_str(s).map(Object::Number).unwrap()
         } else {
-            Object::Number(v)
+            let s = from_utf8(s).unwrap();
+            i32::from_str(s)
+                .map(Object::Integer)
+                .unwrap_or_else(|_| Object::Number(f32::from_str(s).unwrap()))
         }
     });
 
