@@ -7,7 +7,7 @@ use nom::{
     bytes::complete::tag,
     character::complete::{char, satisfy},
     character::complete::{u16, u32},
-    combinator::{map, map_res, opt, recognize, value},
+    combinator::{map, map_res, recognize},
     error::{context, ErrorKind, ParseError as NomParseError},
     multi::{fold_many1, many0},
     sequence::{preceded, separated_pair, tuple},
@@ -121,20 +121,14 @@ fn parse_startxref(buf: &[u8]) -> ParseResult<u32> {
     preceded(ws_terminated(tag(b"startxref")), ws_terminated(u32))(buf)
 }
 
-fn parse_eof(buf: &[u8]) -> ParseResult<()> {
-    value((), ws_terminated(tag(b"%%EOF")))(buf)
-}
-
 // Assumes buf start from xref
 fn parse_frame(buf: &[u8]) -> ParseResult<(Dictionary, BTreeMap<u32, Entry>)> {
     map(
         tuple((
             context("xref table", parse_xref_table),
             context("trailer", parse_trailer),
-            context("startxref", opt(parse_startxref)),
-            context("eof", opt(parse_eof)),
         )),
-        |(xref_table, trailer, _, _)| (trailer, xref_table),
+        |(xref_table, trailer)| (trailer, xref_table),
     )(buf)
 }
 
