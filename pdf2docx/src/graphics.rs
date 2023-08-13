@@ -4,7 +4,14 @@ use ahash::RandomState;
 use arrayvec::ArrayVec;
 use educe::Educe;
 use lazy_static::lazy_static;
-use nom::{branch::alt, bytes::complete::is_not, combinator::map_res, multi::many0, Parser};
+use nom::{
+    branch::alt,
+    bytes::complete::is_not,
+    combinator::map_res,
+    error::{ErrorKind, FromExternalError, ParseError as NomParseError},
+    multi::many0,
+    Parser,
+};
 
 use crate::{
     file::{GraphicsStateParameterDict, ObjectResolver, Rectangle},
@@ -562,7 +569,7 @@ fn parse_operator(input: &[u8]) -> ParseResult<ObjectOrOperator> {
         if OPERATORS.contains(op) {
             Ok(ObjectOrOperator::Operator(op))
         } else {
-            Err(ParseError::UnknownGraphicOperator(op.to_owned()))
+            Err(ParseError::from_error_kind(input, ErrorKind::Tag))
         }
     })(input)
 }
@@ -582,7 +589,12 @@ fn parse_operation(mut input: &[u8]) -> ParseResult<Operation> {
             }
             (remains, ObjectOrOperator::Operator(op)) => {
                 input = remains;
-                let r = (input, create_operation(op, &mut operands)?);
+                let r = (
+                    input,
+                    create_operation(op, &mut operands).map_err(|e| {
+                        nom::Err::Error(ParseError::from_external_error(input, ErrorKind::Fail, e))
+                    })?,
+                );
                 assert!(operands.is_empty());
                 return Ok(r);
             }

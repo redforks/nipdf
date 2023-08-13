@@ -7,6 +7,7 @@ use nom::{
     character::complete::{char, satisfy},
     character::complete::{u16, u32},
     combinator::{map, map_res, recognize, value},
+    error::{ErrorKind, ParseError as NomParseError},
     multi::{fold_many1, many0},
     sequence::{preceded, separated_pair, tuple},
 };
@@ -68,7 +69,10 @@ fn to_tag_r<'a>(buf: &'a [u8], tag: &'static [u8]) -> ParseResult<'a, ()> {
     if let Some(pos) = pos {
         Ok((&buf[pos..], ()))
     } else {
-        Err(nom::Err::Error(ParseError::InvalidFile))
+        Err(nom::Err::Failure(ParseError::from_error_kind(
+            buf,
+            ErrorKind::Fail,
+        )))
     }
 }
 

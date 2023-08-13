@@ -1,7 +1,7 @@
 use nom::{
     branch::alt,
     combinator::value,
-    error::FromExternalError,
+    error::{ErrorKind, ParseError as NomParseError, VerboseError},
     multi::many0_count,
     sequence::{delimited, preceded, terminated},
     AsChar, IResult, InputTakeAtPosition, Parser,
@@ -13,69 +13,8 @@ mod object;
 pub use file::*;
 pub use object::*;
 
-use crate::object::ObjectValueError;
-
-#[derive(PartialEq, Debug, thiserror::Error)]
-pub enum PdfParseError<I, E>
-where
-    E: nom::error::ParseError<I> + std::fmt::Debug + PartialEq,
-{
-    #[error("nom parse error: {0:?}")]
-    NomError(E),
-
-    #[error("Not valid pdf file")]
-    InvalidFile,
-
-    #[error("phantom for generic type I, Not used")]
-    Phantom(I),
-
-    #[error("Invalid name format")]
-    InvalidNameFormat,
-
-    #[error("Unknown graphics operator {0:?}")]
-    UnknownGraphicOperator(String),
-
-    #[error("Object value error: {0:?}")]
-    ObjectValueError(#[from] ObjectValueError),
-}
-
-impl<'a> From<ObjectValueError> for nom::Err<ParseError<'a>> {
-    fn from(e: ObjectValueError) -> Self {
-        nom::Err::Error(ParseError::ObjectValueError(e))
-    }
-}
-
-impl<'a, E1, E2> FromExternalError<&'a [u8], E1> for PdfParseError<&'a [u8], E2>
-where
-    E2: nom::error::FromExternalError<&'a [u8], E1>
-        + nom::error::ParseError<&'a [u8]>
-        + std::fmt::Debug
-        + PartialEq,
-{
-    fn from_external_error(input: &'a [u8], kind: nom::error::ErrorKind, e: E1) -> Self {
-        Self::NomError(E2::from_external_error(
-            &input[..20.min(input.len())],
-            kind,
-            e,
-        ))
-    }
-}
-
-impl<'a, E> nom::error::ParseError<&'a [u8]> for PdfParseError<&'a [u8], E>
-where
-    E: nom::error::ParseError<&'a [u8]> + std::fmt::Debug + PartialEq,
-{
-    fn from_error_kind(input: &'a [u8], kind: nom::error::ErrorKind) -> Self {
-        Self::NomError(E::from_error_kind(&input[..20.min(input.len())], kind))
-    }
-
-    fn append(_input: &'a [u8], _kind: nom::error::ErrorKind, other: Self) -> Self {
-        other
-    }
-}
-
 // Set `nom::error:VerboseError<&'a[u8]>` for detail error
-pub type ParseError<'a> = PdfParseError<&'a [u8], nom::error::Error<&'a [u8]>>;
+pub type ParseError<'a> = VerboseError<&'a [u8]>;
 pub type ParseResult<'a, O, E = ParseError<'a>> = IResult<&'a [u8], O, E>;
 
 /// Error at file struct level.
@@ -91,7 +30,10 @@ fn comment(buf: &[u8]) -> ParseResult<'_, ()> {
     let (buf, _) = nom::bytes::complete::tag(b"%")(buf)?;
     let (buf, content) = nom::bytes::complete::is_not("\n\r")(buf)?;
     if content.starts_with(b"PDF-") || content.starts_with(b"%EOF") {
-        return Err(nom::Err::Error(ParseError::InvalidNameFormat));
+        return Err(nom::Err::Error(ParseError::from_error_kind(
+            buf,
+            ErrorKind::Fail,
+        )));
     }
     Ok((buf, ()))
 }

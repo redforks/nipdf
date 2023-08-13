@@ -8,6 +8,7 @@ use nom::{
         is_hex_digit,
     },
     combinator::{map, not, opt, peek, recognize, value},
+    error::{ErrorKind, FromExternalError},
     multi::{many0, many0_count},
     number::complete::float,
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
@@ -134,7 +135,7 @@ fn parse_name(input: &[u8]) -> ParseResult<Name> {
         }),
     ))(input)?;
     let name = normalize_name(buf)
-        .map_err(|_| nom::Err::Error(ParseError::InvalidNameFormat))
+        .map_err(|e| nom::Err::Error(ParseError::from_external_error(input, ErrorKind::Fail, e)))
         .map(Name)?;
     Ok((input, name))
 }

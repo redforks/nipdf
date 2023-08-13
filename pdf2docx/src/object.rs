@@ -601,7 +601,7 @@ pub enum ObjectValueError {
 
 impl<'a> From<parser::ParseError<'a>> for ObjectValueError {
     fn from(e: parser::ParseError) -> Self {
-        Self::ParseError(e.to_string())
+        Self::ParseError(format!("{:?}", e))
     }
 }
 
