@@ -416,13 +416,6 @@ where
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError>;
 }
 
-impl<'a, 'b, T: for<'c> TryFrom<&'c Object<'a>>> ConvertFromObject<'a, 'b> for T {
-    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
-        let o = objects.pop().unwrap();
-        T::try_from(&o).map_err(|_| ObjectValueError::GraphicsOperationSchemaError)
-    }
-}
-
 impl<'a, 'b, T: for<'c, 'd> ConvertFromObject<'c, 'd>> ConvertFromObject<'a, 'b> for Vec<T> {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let mut arr = objects.pop().unwrap().into_arr()?;

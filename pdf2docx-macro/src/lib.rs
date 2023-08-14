@@ -30,6 +30,13 @@ pub fn try_from_name_object(input: TokenStream) -> TokenStream {
                 }
             }
         }
+
+        impl<'a, 'b> crate::graphics::ConvertFromObject<'a, 'b> for #t {
+            fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+                let o = objects.pop().unwrap();
+                #t::try_from(&o).map_err(|_| ObjectValueError::GraphicsOperationSchemaError)
+            }
+        }
     };
     // println!("{}", tokens);
     tokens.into()
@@ -57,6 +64,13 @@ pub fn try_from_int_object(input: TokenStream) -> TokenStream {
                     #( #arms, )*
                     _ => Err(ObjectValueError::GraphicsOperationSchemaError),
                 }
+            }
+        }
+
+        impl<'a, 'b> crate::graphics::ConvertFromObject<'a, 'b> for #t {
+            fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+                let o = objects.pop().unwrap();
+                #t::try_from(&o).map_err(|_| ObjectValueError::GraphicsOperationSchemaError)
             }
         }
     };
