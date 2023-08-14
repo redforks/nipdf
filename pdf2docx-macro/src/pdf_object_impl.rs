@@ -2,7 +2,7 @@ use core::panic;
 
 use either::{Either, Left, Right};
 use proc_macro::TokenStream;
-use proc_macro2::Ident;
+use proc_macro2::{Ident};
 use quote::quote;
 use syn::{
     parse_macro_input, parse_quote, Attribute, Expr, ExprCall, ExprLit, ExprTuple, ItemTrait, Lit,
@@ -43,6 +43,25 @@ fn snake_case_to_pascal(s: &str) -> String {
     result
 }
 
+/// Get type from `Option<T>`
+fn unwrap_option_type(t: &Type) -> &Type {
+    if let Type::Path(tp) = t {
+        if let Some(seg) = tp.path.segments.last() {
+            if seg.ident == "Option" {
+                if let syn::PathArguments::AngleBracketed(args) = &seg.arguments {
+                    assert_eq!(1, args.args.len());
+                    if let syn::GenericArgument::Type(ty) = &args.args[0] {
+                        return ty;
+                    } else {
+                        panic!("expect type argument")
+                    };
+                }
+            }
+        }
+    }
+    panic!("expect Option<T>")
+}
+
 fn has_attr<'a>(
     attr_name: &str,
     rt: &'a Type,
@@ -64,18 +83,7 @@ fn has_attr<'a>(
         return Some(Right(rt));
     }
 
-    Some(Left({
-        let syn::PathArguments::AngleBracketed(args) = &seg.arguments else {
-            panic!("expect angle bracketed arguments")
-        };
-
-        assert_eq!(1, args.args.len());
-        let syn::GenericArgument::Type(ty) = &args.args[0] else {
-            panic!("expect type argument")
-        };
-
-        ty
-    }))
+    Some(Left(rt))
 }
 
 fn _is_type(t: &Type, type_name: &'static str) -> bool {
@@ -94,6 +102,41 @@ fn is_vec(t: &Type) -> bool {
 
 fn is_map(t: &Type) -> bool {
     _is_type(t, "HashMap")
+}
+
+/// Return Some(literal) if `#[default(literal)]` attribute defined, otherwise return None
+fn default_lit(attrs: &[Attribute]) -> Option<ExprLit> {
+    attrs.iter().find_map(|attr| {
+        if attr.path().is_ident("default") {
+            let lit: ExprLit = attr.parse_args().expect("expect literal");
+            Some(lit)
+        } else {
+            None
+        }
+    })
+}
+
+/// Return Some(func_name) if `#[default_fn("func_name")]` attribute defined, otherwise return None
+fn default_fn(attrs: &[Attribute]) -> Option<String> {
+    attrs.iter().find_map(|attr| {
+        if attr.path().is_ident("default_fn") {
+            let lit: LitStr = attr.parse_args().expect("expect string literal");
+            Some(lit.value())
+        } else {
+            None
+        }
+    })
+}
+
+enum DefaultAttr {
+    Literal(ExprLit),
+    Function(String),
+}
+
+fn parse_default_attr(attrs: &[Attribute]) -> Option<DefaultAttr> {
+    if let Some(lit) = default_lit(attrs) {
+        Some(DefaultAttr::Literal(lit))
+    } else { default_fn(attrs).map(DefaultAttr::Function) }
 }
 
 // Return left means Option<T>, right means T, Return None means not nested
@@ -190,29 +233,18 @@ fn remove_generic(t: &Type) -> Type {
 
 fn gen_option_method(
     ty: Either<&Type, &Type>,
-    name: &Ident,
     key: &str,
     f_left: impl FnOnce(&Type) -> proc_macro2::TokenStream,
     f_right: impl FnOnce(&Type) -> proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
     match ty {
         Left(t) => {
-            let body = f_left(t);
-            quote! {
-                fn #name(&self) -> anyhow::Result<Option<#t>> {
-                    use anyhow::Context;
-                    #body.context(#key)
-                }
-            }
+            let body = f_left(unwrap_option_type(t));
+            quote! ( #body.context(#key) )
         }
         Right(t) => {
             let body = f_right(t);
-            quote! {
-                fn #name(&self) -> anyhow::Result<#t> {
-                    use anyhow::Context;
-                    #body.context(#key)
-                }
-            }
+            quote! ( #body.context(#key) )
         }
     }
 }
@@ -387,72 +419,93 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let mut methods = vec![];
     for item in &def.items {
-        let method = match item {
-            TraitItem::Fn(TraitItemFn { sig, attrs, .. }) => {
-                let name = sig.ident.clone();
-                let rt: &Type = match &sig.output {
-                    ReturnType::Default => panic!("function must have return type"),
-                    ReturnType::Type(_, ty) => ty,
-                };
-                let key =
-                    key_attr(attrs).unwrap_or_else(|| snake_case_to_pascal(&name.to_string()));
+        let TraitItem::Fn(TraitItemFn { sig, attrs, .. }) = item  else {
+            panic!("only support function")
+        };
 
-                if let Some(method) =
-                    schema_method_name(rt, &attrs[..]).map(|m| Ident::new(m, name.span()))
-                {
-                    quote! {
-                        fn #name(&self) -> anyhow::Result<#rt> {
-                            use anyhow::Context;
-                            self.d.#method(#key).context(#key)
-                        }
+        let name = sig.ident.clone();
+
+        let default_attr = parse_default_attr(attrs);
+        let altered_rt_store: Type;
+        let mut rt: &Type = match &sig.output {
+            ReturnType::Default => panic!("function must have return type"),
+            ReturnType::Type(_, ty) => ty,
+        };
+        if default_attr.is_some() {
+            // if has default attribute, change return type `rt` to `Option<rt>`
+            altered_rt_store = parse_quote! { Option<#rt> };
+            rt = &altered_rt_store;
+        }
+
+        let key = key_attr(attrs).unwrap_or_else(|| snake_case_to_pascal(&name.to_string()));
+
+        let mut method = if let Some(method_name) =
+            schema_method_name(rt, &attrs[..]).map(|m| Ident::new(m, name.span()))
+        {
+            quote! { self.d.#method_name(#key) }
+        } else if let Some(nested_type) = nested(rt, attrs) {
+            gen_option_method(
+                nested_type,
+                &key,
+                |ty| {
+                    let type_name = remove_generic(ty);
+                    quote! { self.d.resolver().opt_resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key) }
+                },
+                |ty| {
+                    if is_vec(ty) {
+                        quote! { self.d.resolver().resolve_container_pdf_object_array(self.d.dict(), #key) }
+                    } else if is_map(ty) {
+                        quote! { self.d.resolver().resolve_container_pdf_object_map(self.d.dict(), #key) }
+                    } else {
+                        let type_name = remove_generic(ty);
+                        quote! { self.d.resolver().resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key) }
                     }
-                } else if let Some(nested_type) = nested(rt, attrs) {
-                    let type_name = remove_generic(&nested_type);
-                    gen_option_method(
-                        nested_type,
-                        &name,
-                        &key,
-                        |_ty| quote! { self.d.resolver().opt_resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key) },
-                        |ty| {
-                            if is_vec(ty) {
-                                quote! { self.d.resolver().resolve_container_pdf_object_array(self.d.dict(), #key) }
-                            } else if is_map(ty) {
-                                quote! { self.d.resolver().resolve_container_pdf_object_map(self.d.dict(), #key) }
-                            } else {
-                                quote! { self.d.resolver().resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key) }
-                            }
-                        },
-                    )
-                } else if let Some(from_name_str_type) = from_name_str(rt, attrs) {
-                    gen_option_method(
-                        from_name_str_type,
-                        &name,
-                        &key,
-                        |ty| {
-                            quote! { self.d.opt_name(#key).context(#key)?.map(|s| <#ty as std::str::FromStr>::from_str(s)).transpose() }
-                        },
-                        |ty| {
-                            quote! { <#ty as std::str::FromStr>::from_str( self.d.required_name(#key).unwrap()) }
-                        },
-                    )
-                } else if let Some(try_from_type) = try_from(rt, attrs) {
-                    gen_option_method(
-                        try_from_type,
-                        &name,
-                        &key,
-                        |ty| {
-                            quote! { self.d.opt_object(#key).context(#key)?.map(|d| <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from(d)).transpose() }
-                        },
-                        |ty| {
-                            quote! { <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from( self.d.required_object(#key).unwrap()) }
-                        },
-                    )
-                } else {
-                    panic!("unsupported return type")
+                },
+            )
+        } else if let Some(from_name_str_type) = from_name_str(rt, attrs) {
+            gen_option_method(
+                from_name_str_type,
+                &key,
+                |ty| {
+                    quote! { self.d.opt_name(#key).context(#key)?.map(|s| <#ty as std::str::FromStr>::from_str(s)).transpose() }
+                },
+                |ty| {
+                    quote! { <#ty as std::str::FromStr>::from_str( self.d.required_name(#key).unwrap()) }
+                },
+            )
+        } else if let Some(try_from_type) = try_from(rt, attrs) {
+            gen_option_method(
+                try_from_type,
+                &key,
+                |ty| {
+                    quote! { self.d.opt_object(#key).context(#key)?.map(|d| <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from(d)).transpose() }
+                },
+                |ty| {
+                    quote! { <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from( self.d.required_object(#key).unwrap()) }
+                },
+            )
+        } else {
+            panic!("unsupported return type")
+        };
+
+        if let Some(default_attr) = default_attr {
+            // unwrap Option<> type from rt
+            rt = unwrap_option_type(rt);
+            method = match default_attr {
+                DefaultAttr::Function(_) => todo!(),
+                DefaultAttr::Literal(lit) => {
+                    quote!( #method.map(|v| v.unwrap_or(#lit)))
                 }
             }
-            _ => panic!("only support function"),
+        }
+
+        let method = quote! {
+            fn #name(&self) -> anyhow::Result<#rt> {
+                use anyhow::Context;
+                #method.context(#key)
+            }
         };
+
         methods.push(method);
     }
 
@@ -485,6 +538,6 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
-    // println!("{}", tokens);
+    println!("{}", tokens);
     tokens.into()
 }

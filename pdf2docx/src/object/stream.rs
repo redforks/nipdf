@@ -63,6 +63,14 @@ fn handle_filter_error<V, E: Display>(
     })
 }
 
+#[pdf_object(())]
+trait LZWFlateDecodeDictTrait {
+    #[default(1i32)]
+    fn predictor(&self) -> i32;
+    #[default(1i32)]
+    fn early_change(&self) -> i32;
+}
+
 fn decode_flate(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, ObjectValueError> {
     assert!(params.is_none(), "TODO: handle params of FlateDecode");
 
