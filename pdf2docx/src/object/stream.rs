@@ -71,8 +71,14 @@ trait LZWFlateDecodeDictTrait {
     fn early_change(&self) -> i32;
 }
 
-fn decode_flate(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, ObjectValueError> {
-    assert!(params.is_none(), "TODO: handle params of FlateDecode");
+fn decode_flate(
+    buf: &[u8],
+    params: Option<LZWFlateDecodeDict>,
+) -> Result<Vec<u8>, ObjectValueError> {
+    assert!(
+        !params.is_some_and(|p| p.predictor().unwrap() == 1),
+        "TODO: handle params of FlateDecode"
+    );
 
     use flate2::bufread::{DeflateDecoder, ZlibDecoder};
     use std::io::Read;
@@ -289,12 +295,20 @@ fn decode_ccitt<'a: 'b, 'b>(
 
 fn filter<'a: 'b, 'b>(
     buf: Cow<'a, [u8]>,
+    resolver: &ObjectResolver<'a>,
     filter_name: &str,
     params: Option<&'b Dictionary<'a>>,
     image_to_raw: bool,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     match filter_name {
-        FILTER_FLATE_DECODE => decode_flate(&buf, params).map(FilterDecodedData::bytes),
+        FILTER_FLATE_DECODE => decode_flate(
+            &buf,
+            params
+                .map(|d| LZWFlateDecodeDict::checked(None, d, resolver))
+                .transpose()?
+                .flatten(),
+        )
+        .map(FilterDecodedData::bytes),
         FILTER_DCT_DECODE => decode_dct(buf, params, image_to_raw),
         FILTER_CCITT_FAX => decode_ccitt(&buf, params).map(FilterDecodedData::bytes),
         FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(FilterDecodedData::bytes),
@@ -353,7 +367,13 @@ impl<'a> Stream<'a> {
     ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
         let mut decoded = FilterDecodedData::Bytes(self.raw(resolver)?.into());
         for (filter_name, params) in self.iter_filter()? {
-            decoded = filter(decoded.into_bytes()?, filter_name, params, image_to_raw)?;
+            decoded = filter(
+                decoded.into_bytes()?,
+                resolver,
+                filter_name,
+                params,
+                image_to_raw,
+            )?;
         }
 
         let img_dict = ImageDict::checked(None, &self.0, resolver)?;
