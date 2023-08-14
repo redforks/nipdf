@@ -185,6 +185,7 @@ fn remove_generic(t: &Type) -> Type {
 fn gen_option_method(
     ty: Either<&Type, &Type>,
     name: &Ident,
+    key: &str,
     f_left: impl FnOnce(&Type) -> proc_macro2::TokenStream,
     f_right: impl FnOnce(&Type) -> proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
@@ -192,16 +193,18 @@ fn gen_option_method(
         Left(t) => {
             let body = f_left(t);
             quote! {
-                fn #name(&self) -> Option<#t> {
-                    #body
+                fn #name(&self) -> anyhow::Result<Option<#t>> {
+                    use anyhow::Context;
+                    #body.context(#key)
                 }
             }
         }
         Right(t) => {
             let body = f_right(t);
             quote! {
-                fn #name(&self) -> #t {
-                    #body
+                fn #name(&self) -> anyhow::Result<#t> {
+                    use anyhow::Context;
+                    #body.context(#key)
                 }
             }
         }
@@ -392,8 +395,9 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     schema_method_name(rt, &attrs[..]).map(|m| Ident::new(m, name.span()))
                 {
                     quote! {
-                        fn #name(&self) -> #rt {
-                            self.d.#method(#key).unwrap()
+                        fn #name(&self) -> anyhow::Result<#rt> {
+                            use anyhow::Context;
+                            self.d.#method(#key).context(#key)
                         }
                     }
                 } else if let Some(nested_type) = nested(rt, attrs) {
@@ -401,14 +405,15 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     gen_option_method(
                         nested_type,
                         &name,
-                        |_ty| quote! { self.d.resolver().opt_resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key).unwrap() },
+                        &key,
+                        |_ty| quote! { self.d.resolver().opt_resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key) },
                         |ty| {
                             if is_vec(ty) {
-                                quote! { self.d.resolver().resolve_container_pdf_object_array(self.d.dict(), #key).unwrap() }
+                                quote! { self.d.resolver().resolve_container_pdf_object_array(self.d.dict(), #key) }
                             } else if is_map(ty) {
-                                quote! { self.d.resolver().resolve_container_pdf_object_map(self.d.dict(), #key).unwrap() }
+                                quote! { self.d.resolver().resolve_container_pdf_object_map(self.d.dict(), #key) }
                             } else {
-                                quote! { self.d.resolver().resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key).unwrap() }
+                                quote! { self.d.resolver().resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key) }
                             }
                         },
                     )
@@ -416,22 +421,24 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     gen_option_method(
                         from_name_str_type,
                         &name,
+                        &key,
                         |ty| {
-                            quote! { self.d.opt_name(#key).unwrap().map(|s| <#ty as std::str::FromStr>::from_str(s).unwrap()) }
+                            quote! { self.d.opt_name(#key).context(#key)?.map(|s| <#ty as std::str::FromStr>::from_str(s)).transpose() }
                         },
                         |ty| {
-                            quote! { <#ty as std::str::FromStr>::from_str( self.d.required_name(#key).unwrap()).unwrap() }
+                            quote! { <#ty as std::str::FromStr>::from_str( self.d.required_name(#key).unwrap()) }
                         },
                     )
                 } else if let Some(try_from_type) = try_from(rt, attrs) {
                     gen_option_method(
                         try_from_type,
                         &name,
+                        &key,
                         |ty| {
-                            quote! { self.d.opt_object(#key).unwrap().map(|d| <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from(d).unwrap()) }
+                            quote! { self.d.opt_object(#key).context(#key)?.map(|d| <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from(d)).transpose() }
                         },
                         |ty| {
-                            quote! { <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from( self.d.required_object(#key).unwrap()).unwrap() }
+                            quote! { <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from( self.d.required_object(#key).unwrap()) }
                         },
                     )
                 } else {

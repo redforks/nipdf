@@ -359,13 +359,17 @@ impl<'a> Stream<'a> {
 
         if image_to_raw {
             match (
-                img_dict.color_space(),
-                img_dict.bits_per_component().unwrap(),
+                img_dict.color_space().unwrap(),
+                img_dict.bits_per_component().unwrap().unwrap(),
             ) {
                 (Some(ColorSpace::DeviceGray), 1) => {
                     use png::{BitDepth, ColorType, Encoder};
                     let mut bytes = Vec::new();
-                    let mut encoder = Encoder::new(&mut bytes, img_dict.width(), img_dict.height());
+                    let mut encoder = Encoder::new(
+                        &mut bytes,
+                        img_dict.width().unwrap(),
+                        img_dict.height().unwrap(),
+                    );
                     encoder.set_color(ColorType::Grayscale);
                     encoder.set_depth(BitDepth::One);
                     let mut writer = encoder.write_header().unwrap();
@@ -379,7 +383,11 @@ impl<'a> Stream<'a> {
                 (Some(ColorSpace::DeviceGray), 8) => {
                     use png::{BitDepth, ColorType, Encoder};
                     let mut bytes = Vec::new();
-                    let mut encoder = Encoder::new(&mut bytes, img_dict.width(), img_dict.height());
+                    let mut encoder = Encoder::new(
+                        &mut bytes,
+                        img_dict.width().unwrap(),
+                        img_dict.height().unwrap(),
+                    );
                     encoder.set_color(ColorType::Grayscale);
                     encoder.set_depth(BitDepth::Eight);
                     let mut writer = encoder.write_header().unwrap();
@@ -393,7 +401,11 @@ impl<'a> Stream<'a> {
                 (Some(ColorSpace::DeviceRGB), 8) => {
                     use png::{BitDepth, ColorType, Encoder};
                     let mut bytes = Vec::new();
-                    let mut encoder = Encoder::new(&mut bytes, img_dict.width(), img_dict.height());
+                    let mut encoder = Encoder::new(
+                        &mut bytes,
+                        img_dict.width().unwrap(),
+                        img_dict.height().unwrap(),
+                    );
                     encoder.set_color(ColorType::Rgb);
                     encoder.set_depth(BitDepth::Eight);
                     let mut writer = encoder.write_header().unwrap();
@@ -407,21 +419,22 @@ impl<'a> Stream<'a> {
                 _ => todo!(
                     "unsupported interoperate decoded stream data as raw image: {:?} {}",
                     img_dict.color_space(),
-                    img_dict.bits_per_component().unwrap()
+                    img_dict.bits_per_component().unwrap().unwrap()
                 ),
             }
         } else {
             match (
-                img_dict.color_space(),
-                img_dict.bits_per_component().unwrap(),
+                img_dict.color_space().unwrap(),
+                img_dict.bits_per_component().unwrap().unwrap(),
             ) {
                 (_, 1) => {
                     use bitstream_io::read::BitRead;
 
-                    let mut img = GrayImage::new(img_dict.width(), img_dict.height());
+                    let mut img =
+                        GrayImage::new(img_dict.width().unwrap(), img_dict.height().unwrap());
                     let mut r = BitReader::<_, BigEndian>::new(data.borrow() as &[u8]);
-                    for y in 0..img_dict.height() {
-                        for x in 0..img_dict.width() {
+                    for y in 0..img_dict.height().unwrap() {
+                        for x in 0..img_dict.width().unwrap() {
                             img.put_pixel(
                                 x,
                                 y,
@@ -432,21 +445,27 @@ impl<'a> Stream<'a> {
                     Ok(FilterDecodedData::Image(DynamicImage::ImageLuma8(img)))
                 }
                 (Some(ColorSpace::DeviceGray), 8) => {
-                    let img =
-                        GrayImage::from_raw(img_dict.width(), img_dict.height(), data.into_owned())
-                            .unwrap();
+                    let img = GrayImage::from_raw(
+                        img_dict.width().unwrap(),
+                        img_dict.height().unwrap(),
+                        data.into_owned(),
+                    )
+                    .unwrap();
                     Ok(FilterDecodedData::Image(DynamicImage::ImageLuma8(img)))
                 }
                 (Some(ColorSpace::DeviceRGB), 8) => {
-                    let img =
-                        RgbImage::from_raw(img_dict.width(), img_dict.height(), data.into_owned())
-                            .unwrap();
+                    let img = RgbImage::from_raw(
+                        img_dict.width().unwrap(),
+                        img_dict.height().unwrap(),
+                        data.into_owned(),
+                    )
+                    .unwrap();
                     Ok(FilterDecodedData::Image(DynamicImage::ImageRgb8(img)))
                 }
                 _ => todo!(
                     "unsupported interoperate decoded stream data as image: {:?} {}",
                     img_dict.color_space(),
-                    img_dict.bits_per_component().unwrap()
+                    img_dict.bits_per_component().unwrap().unwrap()
                 ),
             }
         }

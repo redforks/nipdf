@@ -345,11 +345,11 @@ impl<'a, 'b> Catalog<'a, 'b> {
     }
 
     pub fn pages(&self) -> Result<Vec<Page<'a, 'b>>, ObjectValueError> {
-        Page::parse(self.d.pages())
+        Page::parse(self.d.pages().unwrap())
     }
 
     pub fn ver(&self) -> Option<&str> {
-        self.d.version()
+        self.d.version().unwrap()
     }
 }
 

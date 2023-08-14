@@ -135,7 +135,7 @@ pub(crate) trait XObjectDictTrait {
 
 impl<'a, 'b> XObjectDict<'a, 'b> {
     fn as_image(&self) -> Option<&Stream<'a>> {
-        if self.subtype() == Some(XObjectType::Image) {
+        if self.subtype().unwrap() == Some(XObjectType::Image) {
             Some(
                 self.d
                     .resolver()
@@ -181,7 +181,7 @@ pub(crate) trait PageDictTrait {
 
 impl<'a, 'b> PageDict<'a, 'b> {
     pub fn is_leaf(&self) -> bool {
-        self.type_name() == "Page"
+        self.type_name().unwrap() == "Page"
     }
 }
 
@@ -202,17 +202,17 @@ impl<'a, 'b> Page<'a, 'b> {
 
     pub fn media_box(&self) -> Rectangle {
         self.iter_to_root()
-            .find_map(|d| d.media_box())
+            .find_map(|d| d.media_box().unwrap())
             .expect("page must have media box")
     }
 
     pub fn crop_box(&self) -> Option<Rectangle> {
-        self.iter_to_root().find_map(|d| d.crop_box())
+        self.iter_to_root().find_map(|d| d.crop_box().unwrap())
     }
 
     fn resources(&self) -> ResourceDict<'a, 'b> {
         self.iter_to_root()
-            .find_map(|d| d.resources())
+            .find_map(|d| d.resources().unwrap())
             .expect("page must have resources")
     }
 
@@ -220,6 +220,7 @@ impl<'a, 'b> Page<'a, 'b> {
         let bufs = self
             .d
             .contents()
+            .unwrap()
             .into_iter()
             .map(|s| {
                 let decoded = s.decode(self.d.d.resolver(), false)?;
@@ -270,7 +271,7 @@ impl<'a, 'b> Page<'a, 'b> {
             if node.is_leaf() {
                 pages.push(Page::from_leaf(&node, &parents[..])?);
             } else {
-                let kids = node.kids();
+                let kids = node.kids().unwrap();
                 parents.push(node);
                 for kid in kids {
                     handle(kid, pages, parents)?;

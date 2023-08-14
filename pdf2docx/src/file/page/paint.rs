@@ -150,7 +150,7 @@ impl State {
         nm: &crate::graphics::NameOfDict,
         resources: &ResourceDict<'_, '_>,
     ) {
-        let resources = resources.ext_g_state();
+        let resources = resources.ext_g_state().unwrap();
         let res = resources.get(&nm.0);
         let Some(res) = res else {
             log::warn!("graphics state not found: {}", &nm.0);
@@ -159,11 +159,11 @@ impl State {
 
         for key in res.d.dict().keys() {
             match key.as_ref() {
-                "LW" => self.set_line_width(res.line_width().unwrap()),
-                "LC" => self.set_line_cap(res.line_cap().unwrap()),
-                "LJ" => self.set_line_join(res.line_join().unwrap()),
-                "ML" => self.set_miter_limit(res.miter_limit().unwrap()),
-                "RI" => self.set_render_intent(res.rendering_intent().unwrap()),
+                "LW" => self.set_line_width(res.line_width().unwrap().unwrap()),
+                "LC" => self.set_line_cap(res.line_cap().unwrap().unwrap()),
+                "LJ" => self.set_line_join(res.line_join().unwrap().unwrap()),
+                "ML" => self.set_miter_limit(res.miter_limit().unwrap().unwrap()),
+                "RI" => self.set_render_intent(res.rendering_intent().unwrap().unwrap()),
                 _ => log::info!("Unknown or unsupported ExtGState key: {}", key.as_ref()),
             }
         }
@@ -489,7 +489,7 @@ impl Render {
 
     /// Paints the specified XObject. Only XObjectType::Image supported
     fn paint_x_object(&mut self, name: &crate::graphics::NameOfDict, resources: &ResourceDict) {
-        let xobjects = resources.x_object();
+        let xobjects = resources.x_object().unwrap();
         let xobject = xobjects.get(&name.0).unwrap();
         let img = xobject.as_image().expect("Only Image XObject supported");
         let img = img.decode(resources.d.resolver(), false).unwrap();
