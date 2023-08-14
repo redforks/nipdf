@@ -48,14 +48,8 @@ impl From<TransformMatrix> for tiny_skia::Transform {
     }
 }
 
-/// Wraps TransformMatrix to create a new type with different TryFrom implementation
-/// `TransformMatrix` got `TryFrom` impl because `ConvertFromObject`
-/// trait impl `TryFrom` trait.
-#[derive(PartialEq, Debug)]
-pub struct TransformMatrixFromArray(pub TransformMatrix);
-
 /// Create TransformMatrix from Object::Array
-impl<'a> TryFrom<&Object<'a>> for TransformMatrixFromArray {
+impl<'a> TryFrom<&Object<'a>> for TransformMatrix {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
@@ -63,14 +57,14 @@ impl<'a> TryFrom<&Object<'a>> for TransformMatrixFromArray {
         if arr.len() != 6 {
             return Err(ObjectValueError::UnexpectedType);
         }
-        Ok(TransformMatrixFromArray(TransformMatrix {
+        Ok(TransformMatrix {
             sx: arr[0].as_number()?,
             kx: arr[1].as_number()?,
             ky: arr[2].as_number()?,
             sy: arr[3].as_number()?,
             tx: arr[4].as_number()?,
             ty: arr[5].as_number()?,
-        }))
+        })
     }
 }
 
@@ -175,7 +169,7 @@ pub(crate) trait TilingPatternDictTrait {
 #[pdf_object(Some("Pattern"))]
 pub(crate) trait ShadingPatternDictTrait {
     #[try_from]
-    fn matrix(&self) -> Option<TransformMatrixFromArray>;
+    fn matrix(&self) -> Option<TransformMatrix>;
     #[nested]
     fn ext_g_state() -> HashMap<String, GraphicsStateParameterDict<'a, 'b>>;
 }
