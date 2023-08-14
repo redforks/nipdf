@@ -2,7 +2,7 @@ use core::panic;
 
 use either::{Either, Left, Right};
 use proc_macro::TokenStream;
-use proc_macro2::{Ident};
+use proc_macro2::Ident;
 use quote::quote;
 use syn::{
     parse_macro_input, parse_quote, Attribute, Expr, ExprCall, ExprLit, ExprTuple, ItemTrait, Lit,
@@ -128,15 +128,25 @@ fn default_fn(attrs: &[Attribute]) -> Option<String> {
     })
 }
 
+/// Return true if `#[or_default]` attribute defined.
+fn or_default(attrs: &[Attribute]) -> bool {
+    attrs.iter().any(|attr| attr.path().is_ident("or_default"))
+}
+
 enum DefaultAttr {
     Literal(ExprLit),
     Function(String),
+    OrDefault,
 }
 
 fn parse_default_attr(attrs: &[Attribute]) -> Option<DefaultAttr> {
     if let Some(lit) = default_lit(attrs) {
         Some(DefaultAttr::Literal(lit))
-    } else { default_fn(attrs).map(DefaultAttr::Function) }
+    } else if or_default(attrs) {
+        Some(DefaultAttr::OrDefault)
+    } else {
+        default_fn(attrs).map(DefaultAttr::Function)
+    }
 }
 
 // Return left means Option<T>, right means T, Return None means not nested
@@ -493,9 +503,8 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             rt = unwrap_option_type(rt);
             method = match default_attr {
                 DefaultAttr::Function(_) => todo!(),
-                DefaultAttr::Literal(lit) => {
-                    quote!( #method.map(|v| v.unwrap_or(#lit)))
-                }
+                DefaultAttr::Literal(lit) => quote!( #method.map(|v| v.unwrap_or(#lit))),
+                DefaultAttr::OrDefault => quote!( #method.map(|_| v.unwrap_or_default())),
             }
         }
 
