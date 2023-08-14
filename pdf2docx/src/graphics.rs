@@ -169,7 +169,8 @@ pub(crate) trait TilingPatternDictTrait {
 #[pdf_object(Some("Pattern"))]
 pub(crate) trait ShadingPatternDictTrait {
     #[try_from]
-    fn matrix(&self) -> Option<TransformMatrix>;
+    #[or_default]
+    fn matrix(&self) -> TransformMatrix;
     #[nested]
     fn ext_g_state() -> HashMap<String, GraphicsStateParameterDict<'a, 'b>>;
 }

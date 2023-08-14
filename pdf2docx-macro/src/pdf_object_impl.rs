@@ -504,7 +504,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             method = match default_attr {
                 DefaultAttr::Function(_) => todo!(),
                 DefaultAttr::Literal(lit) => quote!( #method.map(|v| v.unwrap_or(#lit))),
-                DefaultAttr::OrDefault => quote!( #method.map(|_| v.unwrap_or_default())),
+                DefaultAttr::OrDefault => quote!( #method.map(|v| v.unwrap_or_default())),
             }
         }
 
