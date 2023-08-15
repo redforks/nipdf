@@ -391,6 +391,14 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         self.opt_bool(id).map(|b| b.unwrap_or(default))
     }
 
+    pub fn opt_u16(&self, id: &'static str) -> Result<Option<u16>, ObjectValueError> {
+        self.opt_int(id).map(|i| i.map(|i| i as u16))
+    }
+
+    pub fn required_u16(&self, id: &'static str) -> Result<u16, ObjectValueError> {
+        self.required_int(id).map(|i| i as u16)
+    }
+
     pub fn opt_u32(&self, id: &'static str) -> Result<Option<u32>, ObjectValueError> {
         self.opt_int(id).map(|i| i.map(|i| i as u32))
     }

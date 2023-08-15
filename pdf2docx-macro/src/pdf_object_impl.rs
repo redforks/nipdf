@@ -192,6 +192,10 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         Some("required_u32")
     } else if rt == &(parse_quote!(Option<u32>)) {
         Some("opt_u32")
+    } else if rt == &(parse_quote!(u16)) {
+        Some("required_u16")
+    } else if rt == &(parse_quote!(Option<u16>)) {
+        Some("opt_u16")
     } else if rt == &(parse_quote!(i32)) {
         Some("required_int")
     } else if rt == &(parse_quote!(Option<i32>)) {
