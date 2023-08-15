@@ -199,7 +199,39 @@ pub(crate) trait ImageDictTrait {
     fn color_space(&self) -> Option<ColorSpace>;
 }
 
-struct CCITTFaxDecodeParams<'a: 'b, 'b>(&'b Dictionary<'a>);
+#[pdf_object(())]
+trait CCITTFaxDecodeParamsDictTrait {
+    #[try_from]
+    fn k(&self) -> CCITTFGroup;
+    #[or_default]
+    fn end_of_line(&self) -> bool;
+    #[or_default]
+    fn encoded_byte_align(&self) -> bool;
+    #[default(1728u16)]
+    fn columns(&self) -> u16;
+    #[or_default]
+    fn rows(&self) -> u16;
+    #[default(true)]
+    fn end_of_block(&self) -> bool;
+    #[or_default]
+    fn black_is1(&self) -> bool;
+    #[or_default]
+    fn damaged_rows_before_error(&self) -> i32;
+}
+
+impl<'a: 'b, 'b> TryFrom<&CCITTFaxDecodeParamsDict<'a, 'b>> for Flags {
+    type Error = anyhow::Error;
+    fn try_from(params: &CCITTFaxDecodeParamsDict<'a, 'b>) -> Result<Self, Self::Error> {
+        assert!(!params.end_of_line()?);
+        assert!(params.end_of_block()?);
+        assert_eq!(0, params.damaged_rows_before_error()?);
+
+        Ok(Flags {
+            encoded_byte_align: params.encoded_byte_align()?,
+            inverse_black_white: params.black_is1()?,
+        })
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CCITTFGroup {
@@ -210,16 +242,15 @@ enum CCITTFGroup {
     Group4,
 }
 
-impl<'a: 'b, 'b> From<&CCITTFaxDecodeParams<'a, 'b>> for Flags {
-    fn from(params: &CCITTFaxDecodeParams<'a, 'b>) -> Self {
-        assert!(!params.end_of_line());
-        assert!(params.end_of_block());
-        assert_eq!(0, params.damaged_rows_before_error());
+impl<'a, 'b> TryFrom<&'b Object<'a>> for CCITTFGroup {
+    type Error = ObjectValueError;
 
-        Flags {
-            encoded_byte_align: params.encoded_byte_align(),
-            inverse_black_white: params.black_is1(),
-        }
+    fn try_from(v: &'b Object<'a>) -> Result<Self, Self::Error> {
+        Ok(match v.as_int()? {
+            0 => Self::Group3_1D,
+            k @ 1.. => Self::Group3_2D(k),
+            ..=-1 => Self::Group4,
+        })
     }
 }
 
@@ -252,44 +283,6 @@ impl<'a> FilterDecodedData<'a> {
     }
 }
 
-impl<'a: 'b, 'b> CCITTFaxDecodeParams<'a, 'b> {
-    pub fn k(&self) -> CCITTFGroup {
-        match self.0.get_int("K", 0).unwrap() {
-            0 => CCITTFGroup::Group3_1D,
-            k @ 1.. => CCITTFGroup::Group3_2D(k),
-            ..=-1 => CCITTFGroup::Group4,
-        }
-    }
-
-    pub fn end_of_line(&self) -> bool {
-        self.0.get_bool("EndOfLine", false).unwrap()
-    }
-
-    pub fn encoded_byte_align(&self) -> bool {
-        self.0.get_bool("EncodedByteAlign", false).unwrap()
-    }
-
-    pub fn columns(&self) -> u16 {
-        self.0.get_int("Columns", 1728).unwrap() as u16
-    }
-
-    pub fn rows(&self) -> u16 {
-        self.0.get_int("Rows", 0).unwrap() as u16
-    }
-
-    pub fn end_of_block(&self) -> bool {
-        self.0.get_bool("EndOfBlock", true).unwrap()
-    }
-
-    pub fn black_is1(&self) -> bool {
-        self.0.get_bool("BlackIs1", false).unwrap()
-    }
-
-    pub fn damaged_rows_before_error(&self) -> i32 {
-        self.0.get_int("DamagedRowsBeforeError", 0).unwrap()
-    }
-}
-
 fn decode_ascii85(
     buf: &[u8],
     params: Option<&Dictionary<'_>>,
@@ -307,27 +300,21 @@ fn decode_run_length(buf: &[u8], params: Option<&Dictionary<'_>>) -> Vec<u8> {
 
 fn decode_ccitt<'a: 'b, 'b>(
     input: &[u8],
-    params: Option<&'b Dictionary<'a>>,
+    params: CCITTFaxDecodeParamsDict,
 ) -> Result<Vec<u8>, ObjectValueError> {
-    {
-        let params = params;
-        use crate::ccitt::decode;
+    use crate::ccitt::decode;
 
-        let empty_params = Lazy::new(Dictionary::new);
-        let params = CCITTFaxDecodeParams(params.unwrap_or_else(|| Lazy::force(&empty_params)));
-        assert_eq!(params.k(), CCITTFGroup::Group4);
-        let image = handle_filter_error(
-            decode(
-                input,
-                params.columns(),
-                Some(params.rows() as usize),
-                (&params).into(),
-            ),
-            FILTER_CCITT_FAX,
-        )?;
-        Ok((image, (params.columns() as u32, params.rows() as u32)))
-    }
-    .map(|(buf, _meta)| buf)
+    assert_eq!(params.k().unwrap(), CCITTFGroup::Group4);
+    let image = handle_filter_error(
+        decode(
+            input,
+            params.columns().unwrap(),
+            Some(params.rows().unwrap() as usize),
+            (&params).try_into().unwrap(),
+        ),
+        FILTER_CCITT_FAX,
+    )?;
+    Ok(image)
 }
 
 fn filter<'a: 'b, 'b>(
@@ -345,7 +332,15 @@ fn filter<'a: 'b, 'b>(
         )
         .map(FilterDecodedData::bytes),
         FILTER_DCT_DECODE => decode_dct(buf, params, image_to_raw),
-        FILTER_CCITT_FAX => decode_ccitt(&buf, params).map(FilterDecodedData::bytes),
+        FILTER_CCITT_FAX => decode_ccitt(
+            &buf,
+            CCITTFaxDecodeParamsDict::new(
+                None,
+                params.unwrap_or_else(|| empty_dict.deref()),
+                resolver,
+            )?,
+        )
+        .map(FilterDecodedData::bytes),
         FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(FilterDecodedData::bytes),
         FILTER_RUN_LENGTH_DECODE => Ok(FilterDecodedData::bytes(decode_run_length(&buf, params))),
         FILTER_JPX_DECODE => decode_jpx(buf, params, image_to_raw),
