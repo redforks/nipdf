@@ -7,7 +7,7 @@ use std::{
 
 use bitstream_io::{BigEndian, BitReader};
 use image::{DynamicImage, GrayImage, Luma, RgbImage};
-use log::error;
+use log::{debug, error};
 use once_cell::unsync::Lazy;
 use pdf2docx_macro::pdf_object;
 
@@ -25,6 +25,7 @@ const KEY_FILTER_PARAMS: &[u8] = b"DecodeParms";
 const KEY_FFILTER: &[u8] = b"FFilter";
 
 const FILTER_FLATE_DECODE: &str = "FlateDecode";
+const FILTER_LZW_DECODE: &str = "LZWDecode";
 const FILTER_CCITT_FAX: &str = "CCITTFaxDecode";
 const FILTER_DCT_DECODE: &str = "DCTDecode";
 const FILTER_ASCII85_DECODE: &str = "ASCII85Decode";
@@ -71,13 +72,54 @@ trait LZWFlateDecodeDictTrait {
     fn early_change(&self) -> i32;
 }
 
+fn decode_lzw(buf: &[u8], params: Option<LZWFlateDecodeDict>) -> Result<Vec<u8>, ObjectValueError> {
+    // assert!(
+    //     !&(params).is_some_and(|p| p.predictor().unwrap() == 1),
+    //     "TODO: handle predictor of LZWDecode"
+    // );
+
+    // use lzw crate instead of weezl, because weezl do not provide early change option
+    use lzw::{Decoder, DecoderEarlyChange, MsbReader};
+    let is_earch_change = match &params {
+        Some(params) => params.early_change().unwrap() != 0,
+        None => true,
+    };
+    for n in 8..=12 {
+        if is_earch_change {
+            let mut decoder = DecoderEarlyChange::new(MsbReader::new(), n);
+            debug!(
+                "Try to decode stream using LZWDecode EarlyChange with code size {}",
+                n
+            );
+            let rv = decoder
+                .decode_bytes(buf)
+                .map_err(|_| ObjectValueError::FilterDecodeError);
+            if rv.is_ok() {
+                return rv.map(|(_, v)| v.into());
+            }
+        } else {
+            let mut decoder = Decoder::new(MsbReader::new(), n);
+            debug!("Try to decode stream using LZWDecode with code size {}", n);
+            let rv = decoder
+                .decode_bytes(buf)
+                .map_err(|_| ObjectValueError::FilterDecodeError);
+            if rv.is_ok() {
+                return rv.map(|(_, v)| v.into());
+            }
+        }
+    }
+
+    error!("Failed to decode stream using {}", FILTER_LZW_DECODE);
+    Err(ObjectValueError::FilterDecodeError)
+}
+
 fn decode_flate(
     buf: &[u8],
     params: Option<LZWFlateDecodeDict>,
 ) -> Result<Vec<u8>, ObjectValueError> {
     assert!(
         !params.is_some_and(|p| p.predictor().unwrap() == 1),
-        "TODO: handle params of FlateDecode"
+        "TODO: handle predictor of FlateDecode"
     );
 
     use flate2::bufread::{DeflateDecoder, ZlibDecoder};
@@ -314,6 +356,14 @@ fn filter<'a: 'b, 'b>(
         FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(FilterDecodedData::bytes),
         FILTER_RUN_LENGTH_DECODE => Ok(FilterDecodedData::bytes(decode_run_length(&buf, params))),
         FILTER_JPX_DECODE => decode_jpx(buf, params, image_to_raw),
+        FILTER_LZW_DECODE => decode_lzw(
+            &buf,
+            params
+                .map(|d| LZWFlateDecodeDict::checked(None, d, resolver))
+                .transpose()?
+                .flatten(),
+        )
+        .map(FilterDecodedData::bytes),
         _ => {
             error!("Unknown filter: {}", filter_name);
             Err(ObjectValueError::UnknownFilter)
