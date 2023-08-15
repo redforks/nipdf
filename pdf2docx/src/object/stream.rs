@@ -7,6 +7,7 @@ use std::{
 
 use bitstream_io::{BigEndian, BitReader};
 use image::{DynamicImage, GrayImage, Luma, RgbImage};
+use lazy_static::__Deref;
 use log::{debug, error};
 use once_cell::unsync::Lazy;
 use pdf2docx_macro::pdf_object;
@@ -72,18 +73,15 @@ trait LZWFlateDecodeDictTrait {
     fn early_change(&self) -> i32;
 }
 
-fn decode_lzw(buf: &[u8], params: Option<LZWFlateDecodeDict>) -> Result<Vec<u8>, ObjectValueError> {
-    // assert!(
-    //     !&(params).is_some_and(|p| p.predictor().unwrap() == 1),
-    //     "TODO: handle predictor of LZWDecode"
-    // );
+fn decode_lzw(buf: &[u8], params: LZWFlateDecodeDict) -> Result<Vec<u8>, ObjectValueError> {
+    assert!(
+        params.predictor().unwrap() == 1,
+        "TODO: handle predictor of LZWDecode"
+    );
 
     // use lzw crate instead of weezl, because weezl do not provide early change option
     use lzw::{Decoder, DecoderEarlyChange, MsbReader};
-    let is_earch_change = match &params {
-        Some(params) => params.early_change().unwrap() != 0,
-        None => true,
-    };
+    let is_earch_change = params.early_change().unwrap() == 1;
     for n in 8..=12 {
         if is_earch_change {
             let mut decoder = DecoderEarlyChange::new(MsbReader::new(), n);
@@ -113,12 +111,9 @@ fn decode_lzw(buf: &[u8], params: Option<LZWFlateDecodeDict>) -> Result<Vec<u8>,
     Err(ObjectValueError::FilterDecodeError)
 }
 
-fn decode_flate(
-    buf: &[u8],
-    params: Option<LZWFlateDecodeDict>,
-) -> Result<Vec<u8>, ObjectValueError> {
+fn decode_flate(buf: &[u8], params: LZWFlateDecodeDict) -> Result<Vec<u8>, ObjectValueError> {
     assert!(
-        !params.is_some_and(|p| p.predictor().unwrap() == 1),
+        params.predictor().unwrap() == 1,
         "TODO: handle predictor of FlateDecode"
     );
 
@@ -342,13 +337,11 @@ fn filter<'a: 'b, 'b>(
     params: Option<&'b Dictionary<'a>>,
     image_to_raw: bool,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
+    let empty_dict = Lazy::new(Dictionary::new);
     match filter_name {
         FILTER_FLATE_DECODE => decode_flate(
             &buf,
-            params
-                .map(|d| LZWFlateDecodeDict::checked(None, d, resolver))
-                .transpose()?
-                .flatten(),
+            LZWFlateDecodeDict::new(None, params.unwrap_or_else(|| empty_dict.deref()), resolver)?,
         )
         .map(FilterDecodedData::bytes),
         FILTER_DCT_DECODE => decode_dct(buf, params, image_to_raw),
@@ -358,10 +351,7 @@ fn filter<'a: 'b, 'b>(
         FILTER_JPX_DECODE => decode_jpx(buf, params, image_to_raw),
         FILTER_LZW_DECODE => decode_lzw(
             &buf,
-            params
-                .map(|d| LZWFlateDecodeDict::checked(None, d, resolver))
-                .transpose()?
-                .flatten(),
+            LZWFlateDecodeDict::new(None, params.unwrap_or_else(|| empty_dict.deref()), resolver)?,
         )
         .map(FilterDecodedData::bytes),
         _ => {
