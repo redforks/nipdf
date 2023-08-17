@@ -180,7 +180,7 @@ pub(crate) trait ShadingDictTrait {
     #[try_from]
     fn shading_type(&self) -> ShadingType;
 
-    #[from_name_str]
+    #[try_from]
     fn color_space(&self) -> ColorSpace;
 
     #[try_from]

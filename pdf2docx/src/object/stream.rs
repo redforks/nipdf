@@ -2,7 +2,7 @@ use std::{
     borrow::{Borrow, Cow},
     fmt::Display,
     iter::repeat,
-    str::from_utf8,
+    str::{from_utf8, FromStr},
 };
 
 use bitstream_io::{BigEndian, BitReader};
@@ -182,7 +182,7 @@ fn decode_jpx<'a>(
     Ok(FilterDecodedData::Image(img))
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, strum::EnumString)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum ColorSpace {
     DeviceGray,
     DeviceRGB,
@@ -190,12 +190,36 @@ pub(crate) enum ColorSpace {
     CalGray,
 }
 
+impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpace {
+    type Error = ObjectValueError;
+
+    fn try_from(v: &'b Object<'a>) -> Result<Self, Self::Error> {
+        match v {
+            Object::Name(n) => match n.as_ref() {
+                "DeviceGray" => Ok(Self::DeviceGray),
+                "DeviceRGB" => Ok(Self::DeviceRGB),
+                "DeviceCMYK" => Ok(Self::DeviceCMYK),
+                "CalGray" => Ok(Self::CalGray),
+                _ => Err(ObjectValueError::UnexpectedType),
+            },
+            // Object::Array(vals) => {
+            //     let mut vals = vals.iter();
+            //     let name = vals.next().unwrap().as_name()?;
+            //     assert_eq!(name.0.borrow(), b"CalGray");
+            //     let _dict = vals.next().unwrap().as_dict()?;
+            //     Self::CalGray
+            // }
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
+    }
+}
+
 #[pdf_object((Some("XObject"), "Image"))]
 pub(crate) trait ImageDictTrait {
     fn width(&self) -> u32;
     fn height(&self) -> u32;
     fn bits_per_component(&self) -> Option<u8>;
-    #[from_name_str]
+    #[try_from]
     fn color_space(&self) -> Option<ColorSpace>;
 }
 
