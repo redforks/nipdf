@@ -185,3 +185,24 @@ fn schema_ref_id_arr(ids: Option<&[u32]>) -> Vec<u32> {
         .map(|id| id.get())
         .collect()
 }
+
+#[cfg(feature = "pretty")]
+#[test_case(Object::Null => "null")]
+#[test_case(true => "true")]
+#[test_case(1i32 => "1")]
+#[test_case(1.0f32 => "1.0")]
+#[test_case("(foo)" => "(foo)")]
+#[test_case("<901FA3>" => "<901FA3>")]
+#[test_case("/foo" => "/foo"; "Name")]
+#[test_case(vec![] => "[]"; "empty array")]
+#[test_case(vec![Object::Null] => "[null]"; "array with null")]
+#[test_case(vec![1i32.into(), 2i32.into()] => "[1 2]"; "array with two int")]
+#[test_case(15u32 => "15 0 R"; "reference")]
+#[test_case(Dictionary::new() => "<<>>"; "empty dict")]
+#[test_case([("a".into(), true.into())].into_iter().collect::<Dictionary>() => "<</a true>>"; "dict with one entry")]
+#[test_case([("a".into(), true.into()), ("b".into(), false.into())].into_iter().collect::<Dictionary>() => "<</a true /b false>>"; "dict with two entries")]
+fn pretty_print(o: impl Into<Object<'static>>) -> String {
+    let o = o.into();
+    let s = o.to_doc().pretty(20).to_string();
+    s
+}

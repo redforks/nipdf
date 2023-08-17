@@ -719,6 +719,74 @@ impl<'a> Object<'a> {
     }
 }
 
+#[cfg(feature = "pretty")]
+use pretty::RcDoc;
+
+#[cfg(feature = "pretty")]
+impl<'a> Object<'a> {
+    pub fn to_doc(&self) -> RcDoc {
+        fn name_to_doc<'a>(n: &'a Name) -> RcDoc<'a> {
+            RcDoc::text("/").append(RcDoc::text(n.as_ref()))
+        }
+
+        fn dict_to_doc<'a>(d: &'a Dictionary) -> RcDoc<'a> {
+            let mut keys = d.keys().collect::<Vec<_>>();
+            keys.sort();
+            RcDoc::text("<<")
+                .append(
+                    RcDoc::intersperse(
+                        keys.into_iter()
+                            .map(|k| {
+                                name_to_doc(k)
+                                    .append(RcDoc::space())
+                                    .append(d.get(k).unwrap().to_doc())
+                            })
+                            .collect::<Vec<_>>(),
+                        RcDoc::line(),
+                    )
+                    .nest(2)
+                    .group(),
+                )
+                .append(RcDoc::text(">>"))
+        }
+
+        match self {
+            Object::Null => RcDoc::text("null"),
+            Object::Bool(b) => RcDoc::text(if *b { "true" } else { "false" }),
+            Object::Integer(i) => RcDoc::as_string(i),
+            Object::Number(f) => RcDoc::as_string(PrettyNumber(*f)),
+            Object::LiteralString(s) => RcDoc::text(from_utf8(s.0).unwrap()),
+            Object::HexString(s) => RcDoc::text(from_utf8(s.0).unwrap()),
+            Object::Name(n) => name_to_doc(n),
+            Object::Dictionary(d) => dict_to_doc(d),
+            Object::Array(a) => RcDoc::text("[")
+                .append(RcDoc::intersperse(
+                    a.iter().map(|o| o.to_doc()),
+                    RcDoc::space(),
+                ))
+                .append(RcDoc::text("]")),
+            Object::Stream(s) => dict_to_doc(s.as_dict())
+                .append(RcDoc::line())
+                .append(RcDoc::text("<<stream>>")),
+            Object::Reference(r) => RcDoc::as_string(r.id().id())
+                .append(RcDoc::space())
+                .append(RcDoc::as_string(r.id().generation()))
+                .append(RcDoc::space())
+                .append(RcDoc::text("R")),
+        }
+    }
+}
+
+#[cfg(feature = "pretty")]
+struct PrettyNumber(f32);
+
+#[cfg(feature = "pretty")]
+impl Display for PrettyNumber {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
+
 impl<'a> From<Stream<'a>> for Object<'a> {
     fn from(value: Stream<'a>) -> Self {
         Self::Stream(value)
@@ -979,7 +1047,7 @@ impl<'a> From<HexString<'a>> for Object<'a> {
 }
 
 /// A PDF name object, preceding '/' not included.
-#[derive(Eq, PartialEq, Hash, Debug, Clone)]
+#[derive(Eq, PartialEq, Hash, Debug, Clone, PartialOrd, Ord)]
 pub struct Name<'a>(pub Cow<'a, [u8]>);
 
 /// Name can borrow to &[u8], for use as key in HashMap.
@@ -1037,6 +1105,13 @@ impl Reference {
 
     pub fn id(&self) -> ObjectId {
         self.0
+    }
+}
+
+#[cfg(test)]
+impl<'a> From<u32> for Object<'a> {
+    fn from(value: u32) -> Self {
+        Self::Reference(Reference::new_u32(value, 0))
     }
 }
 
