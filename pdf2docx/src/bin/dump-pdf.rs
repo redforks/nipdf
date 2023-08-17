@@ -37,6 +37,12 @@ fn cli() -> Command {
                 .arg(arg!(--steps <steps> "Stop render after <steps> graphic steps"))
                 .arg(arg!([page_no] "page number (start from zero) to dump")),
         )
+        .subcommand(
+            Command::new("object")
+            .about("dump pdf object by id")
+                .arg(arg!(-f <filename> "PDF file to dump"))
+                .arg(arg!([object_id] "object ID to dump")),
+        )
 }
 
 fn open<'a>(path: &str, buf: &'a mut Vec<u8>) -> AnyResult<(File, ObjectResolver<'a>)> {
@@ -123,6 +129,14 @@ fn dump_page(
     Ok(())
 }
 
+fn dump_object(path: &str, id: NonZeroU32) -> AnyResult<()> {
+    let mut buf: Vec<u8> = vec![];
+    let (_f, resolver) = open(path, &mut buf)?;
+    let obj = resolver.resolve(id)?;
+    obj.to_doc().render(80, &mut stdout())?;
+    Ok(())
+}
+
 fn main() -> AnyResult<()> {
     env_logger::init();
 
@@ -149,6 +163,13 @@ fn main() -> AnyResult<()> {
                 .get_one::<String>("steps")
                 .and_then(|s| s.parse().ok()),
             sub_m.get_one::<String>("zoom").and_then(|s| s.parse().ok()),
+        ),
+        Some(("object", sub_m)) => dump_object(
+            sub_m.get_one::<String>("filename").unwrap(),
+            sub_m
+                .get_one::<String>("object_id")
+                .and_then(|s| s.parse().ok())
+                .unwrap(),
         ),
         _ => todo!(),
     }
