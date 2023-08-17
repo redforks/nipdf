@@ -2,7 +2,7 @@ use std::{
     borrow::{Borrow, Cow},
     fmt::Display,
     iter::repeat,
-    str::{from_utf8, FromStr},
+    str::from_utf8,
 };
 
 use bitstream_io::{BigEndian, BitReader};

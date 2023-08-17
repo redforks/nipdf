@@ -154,11 +154,6 @@ fn nested<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &
     has_attr("nested", rt, attrs)
 }
 
-/// Return left means Option<T>, right means T, Return None means `from_name_str` attr not defined.
-fn from_name_str<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
-    has_attr("from_name_str", rt, attrs)
-}
-
 /// Return left means Option<T>, right means T, Return None means `try_from` attr not defined.
 fn try_from<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
     has_attr("try_from", rt, attrs)
@@ -474,17 +469,6 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                         let type_name = remove_generic(ty);
                         quote! { self.d.resolver().resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key) }
                     }
-                },
-            )
-        } else if let Some(from_name_str_type) = from_name_str(rt, attrs) {
-            gen_option_method(
-                from_name_str_type,
-                &key,
-                |ty| {
-                    quote! { self.d.opt_name(#key).context(#key)?.map(|s| <#ty as std::str::FromStr>::from_str(s)).transpose() }
-                },
-                |ty| {
-                    quote! { <#ty as std::str::FromStr>::from_str( self.d.required_name(#key).unwrap()) }
                 },
             )
         } else if let Some(try_from_type) = try_from(rt, attrs) {
