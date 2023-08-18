@@ -6,7 +6,7 @@ use proc_macro2::Ident;
 use quote::quote;
 use syn::{
     parse_macro_input, parse_quote, Attribute, Expr, ExprCall, ExprLit, ExprTuple, ItemTrait, Lit,
-    LitStr, ReturnType, TraitItem, TraitItemFn, Type,
+    LitStr, Meta, ReturnType, TraitItem, TraitItemFn, Type,
 };
 
 /// If `#[key("key")]` attribute defined, return key value
@@ -291,6 +291,22 @@ fn type_field(attrs: &[Attribute]) -> Option<String> {
     })
 }
 
+fn doc(attrs: &[Attribute]) -> Option<String> {
+    attrs.iter().find_map(|attr| {
+        if let Meta::NameValue(name_value) = &attr.meta {
+            if name_value.path.is_ident("doc") {
+                if let Expr::Lit(ExprLit {
+                    lit: Lit::Str(lit), ..
+                }) = &name_value.value
+                {
+                    return Some(lit.value());
+                }
+            }
+        }
+        return None;
+    })
+}
+
 pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attr_expr = parse_macro_input!(attr as Expr);
     let def = parse_macro_input!(item as ItemTrait);
@@ -544,13 +560,22 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
         }
 
-        let method = quote! {
-            fn #name(&self) -> anyhow::Result<#rt> {
-                use anyhow::Context;
-                #method.context(#key)
+        let method = if let Some(doc) = doc(attrs) {
+            quote! {
+                #[doc = #doc]
+                pub fn #name(&self) -> anyhow::Result<#rt> {
+                    use anyhow::Context;
+                    #method.context(#key)
+                }
+            }
+        } else {
+            quote! {
+                pub fn #name(&self) -> anyhow::Result<#rt> {
+                    use anyhow::Context;
+                    #method.context(#key)
+                }
             }
         };
-
         methods.push(method);
     }
 
@@ -579,7 +604,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         impl<'a, 'b> #struct_name<'a, 'b> {
-            #(pub #methods)*
+            #(#methods)*
         }
     };
 
