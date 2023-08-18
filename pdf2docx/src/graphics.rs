@@ -172,7 +172,7 @@ pub(crate) trait ShadingDictTrait {
     fn b_box(&self) -> Option<Rectangle>;
     fn anti_alias(&self) -> Option<bool>;
 
-    #[nested]
+    #[self_as]
     fn axial(&self) -> AxialShadingDict<'a, 'b>;
 }
 

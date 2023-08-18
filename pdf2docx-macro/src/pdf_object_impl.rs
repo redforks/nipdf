@@ -154,6 +154,10 @@ fn nested<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &
     has_attr("nested", rt, attrs)
 }
 
+fn self_as<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
+    has_attr("self_as", rt, attrs)
+}
+
 /// Return left means Option<T>, right means T, Return None means `try_from` attr not defined.
 fn try_from<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
     has_attr("try_from", rt, attrs)
@@ -515,6 +519,15 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 },
                 |ty| {
                     quote! { <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from( self.d.required_object(#key).unwrap()) }
+                },
+            )
+        } else if let Some(rt) = self_as(rt, attrs) {
+            gen_option_method(
+                rt,
+                &key,
+                |_| unreachable!("self_as methods never return Option"),
+                |ty| {
+                    quote! { <#ty as crate::object::PdfObject>::new(self.id, self.d.dict(), self.d.resolver()) }
                 },
             )
         } else {
