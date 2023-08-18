@@ -149,25 +149,10 @@ pub(crate) enum ShadingType {
 pub(crate) trait PatternDictTrait {
     #[try_from]
     fn pattern_type(&self) -> PatternType;
-}
 
-impl<'a, 'b> PatternDict<'a, 'b> {
-    pub fn as_tiling(&self) -> TilingPatternDict<'a, 'b> {
-        TilingPatternDict::new(self.id(), self.d.dict(), self.d.resolver()).unwrap()
-    }
-
-    pub fn as_shading(&self) -> ShadingPatternDict<'a, 'b> {
-        ShadingPatternDict::new(self.id(), self.d.dict(), self.d.resolver()).unwrap()
-    }
-}
-
-#[pdf_object(Some("Pattern"))]
-pub(crate) trait TilingPatternDictTrait {
-    // TODO
-}
-
-#[pdf_object(Some("Pattern"))]
-pub(crate) trait ShadingPatternDictTrait {
+    /// don't call these methods if pattern_type() != PatternType::Shading
+    #[nested]
+    fn shading(&self) -> ShadingDict<'a, 'b>;
     #[try_from]
     #[or_default]
     fn matrix(&self) -> TransformMatrix;

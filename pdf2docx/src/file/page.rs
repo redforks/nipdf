@@ -3,7 +3,9 @@ use pdf2docx_macro::{pdf_object, TryFromNameObject};
 use tiny_skia::Pixmap;
 
 use crate::{
-    graphics::{parse_operations, LineCapStyle, LineJoinStyle, Operation, RenderingIntent},
+    graphics::{
+        parse_operations, LineCapStyle, LineJoinStyle, Operation, PatternDict, RenderingIntent,
+    },
     object::{
         Dictionary, FilterDecodedData, Object, ObjectValueError, PdfObject, SchemaDict, Stream,
     },
@@ -155,7 +157,8 @@ pub(crate) trait ResourceDictTrait {
     #[nested]
     fn ext_g_state() -> HashMap<String, GraphicsStateParameterDict<'a, 'b>>;
     fn color_space(&self) -> Option<&'b Dictionary<'a>>;
-    fn pattern(&self) -> Option<&'b Dictionary<'a>>;
+    #[nested]
+    fn pattern(&self) -> HashMap<String, PatternDict<'a, 'b>>;
     fn shading(&self) -> Option<&'b Dictionary<'a>>;
     #[nested]
     fn x_object(&self) -> HashMap<String, XObjectDict<'a, 'b>>;
