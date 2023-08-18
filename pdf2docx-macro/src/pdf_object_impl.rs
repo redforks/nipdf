@@ -324,6 +324,24 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                         },
                     )
                 }
+                syn::Lit::Int(lit) => {
+                    let typ_field =
+                        type_field(def.attrs.as_slice()).unwrap_or_else(|| "Type".to_owned());
+                    (
+                        parse_quote! {
+                            crate::object::ValueTypeValidator<
+                                crate::object::IntTypeValueGetter,
+                                crate::object::EqualTypeValueChecker<i32>
+                            >
+                        },
+                        parse_quote! {
+                            crate::object::ValueTypeValidator::new(
+                                crate::object::IntTypeValueGetter::new(#typ_field),
+                                crate::object::EqualTypeValueChecker::new(#lit)
+                            )
+                        },
+                    )
+                }
                 _ => panic!("expect string literal"),
             }
         }

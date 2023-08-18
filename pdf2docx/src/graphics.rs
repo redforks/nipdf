@@ -171,7 +171,14 @@ pub(crate) trait ShadingDictTrait {
     #[try_from]
     fn b_box(&self) -> Option<Rectangle>;
     fn anti_alias(&self) -> Option<bool>;
+
+    #[nested]
+    fn axial(&self) -> AxialShadingDict<'a, 'b>;
 }
+
+#[pdf_object(2i32)]
+#[type_field("ShadingType")]
+pub(crate) trait AxialShadingDictTrait {}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ColorOrName {

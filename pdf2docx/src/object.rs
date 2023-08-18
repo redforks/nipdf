@@ -46,10 +46,10 @@ impl<'a> Dictionary<'a> {
         Self(HashMap::default())
     }
 
-    pub fn get_opt_int(&self, id: &str) -> Result<Option<i32>, ObjectValueError> {
+    pub fn get_opt_int_ref(&self, id: &str) -> Result<Option<&i32>, ObjectValueError> {
         self.0
             .get(id.as_bytes())
-            .map_or(Ok(None), |o| o.as_int().map(Some))
+            .map_or(Ok(None), |o| o.as_int_ref().map(Some))
     }
 
     pub fn get_int(&self, id: &str, default: i32) -> Result<i32, ObjectValueError> {
@@ -94,7 +94,31 @@ pub trait TypeValueGetter {
     fn field(&self) -> &'static str;
 }
 
-/// Implement `TypeValueGetter` returns non-option field type value
+/// Implement `TypeValueGetter` returns i32 value
+#[derive(Debug, Clone)]
+pub struct IntTypeValueGetter {
+    field: &'static str,
+}
+
+impl IntTypeValueGetter {
+    pub fn new(field: &'static str) -> Self {
+        Self { field }
+    }
+}
+
+impl TypeValueGetter for IntTypeValueGetter {
+    type Value = i32;
+
+    fn get<'a>(&self, d: &'a Dictionary) -> Result<Option<&'a Self::Value>, ObjectValueError> {
+        d.get_opt_int_ref(self.field)
+    }
+
+    fn field(&self) -> &'static str {
+        self.field
+    }
+}
+
+/// Implement `TypeValueGetter` returns str value
 #[derive(Debug, Clone)]
 pub struct NameTypeValueGetter {
     field: &'static str,
@@ -149,6 +173,16 @@ impl<R: Borrow<str> + Debug + Clone> TypeValueCheck<str> for EqualTypeValueCheck
 
     fn check(&self, v: Option<&str>) -> bool {
         v.map_or(false, |v| v == self.value.borrow())
+    }
+}
+
+impl TypeValueCheck<i32> for EqualTypeValueChecker<i32> {
+    fn schema_type(&self) -> Cow<str> {
+        Cow::Owned(self.value.to_string())
+    }
+
+    fn check(&self, v: Option<&i32>) -> bool {
+        v.map_or(false, |v| *v == self.value)
     }
 }
 
@@ -633,6 +667,13 @@ impl<'a> Object<'a> {
     pub fn as_int(&self) -> Result<i32, ObjectValueError> {
         match self {
             Object::Integer(i) => Ok(*i),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
+    }
+
+    pub fn as_int_ref(&self) -> Result<&i32, ObjectValueError> {
+        match self {
+            Object::Integer(i) => Ok(i),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
