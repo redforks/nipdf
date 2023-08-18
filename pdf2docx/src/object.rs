@@ -104,11 +104,6 @@ impl NameTypeValueGetter {
     pub fn new(field: &'static str) -> Self {
         Self { field }
     }
-
-    /// Create a new `RequiredNameTypeValueGetter` with field name "Type"
-    pub fn typ() -> Self {
-        Self::new("Type")
-    }
 }
 
 impl TypeValueGetter for NameTypeValueGetter {

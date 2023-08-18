@@ -128,7 +128,7 @@ fn equal_schema_type_validator() {
 #[test]
 fn value_type_validator() {
     let validator = ValueTypeValidator::new(
-        NameTypeValueGetter::typ(),
+        NameTypeValueGetter::new("Type"),
         EqualTypeValueChecker::new("Page") as EqualTypeValueChecker<&str>,
     );
     assert_impl_all!(

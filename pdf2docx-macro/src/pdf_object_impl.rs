@@ -276,9 +276,20 @@ fn get_literal_from_some(t: &Expr) -> &Expr {
     panic!("expect Some literal")
 }
 
+fn type_field(attrs: &[Attribute]) -> Option<String> {
+    attrs.iter().find_map(|attr| {
+        if attr.path().is_ident("type_field") {
+            let lit: LitStr = attr.parse_args().expect("expect string literal");
+            Some(lit.value())
+        } else {
+            None
+        }
+    })
+}
+
 pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attr_expr = parse_macro_input!(attr as Expr);
-    // println!("{:#?}", attr_expr);
+    let def = parse_macro_input!(item as ItemTrait);
 
     // Parse pdf_object attribute argument to (Type, Expr),
     // Type is `SchemaDict` 3rd generic parameter,
@@ -295,20 +306,24 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         Expr::Lit(lit) => {
             let lit = lit.lit;
             match lit {
-                syn::Lit::Str(lit) => (
-                    parse_quote! {
-                        crate::object::ValueTypeValidator<
-                            crate::object::NameTypeValueGetter,
-                            crate::object::EqualTypeValueChecker<&'static str>
-                        >
-                    },
-                    parse_quote! {
-                        crate::object::ValueTypeValidator::new(
-                            crate::object::NameTypeValueGetter::typ(),
-                            crate::object::EqualTypeValueChecker::new(#lit)
-                        )
-                    },
-                ),
+                syn::Lit::Str(lit) => {
+                    let typ_field =
+                        type_field(def.attrs.as_slice()).unwrap_or_else(|| "Type".to_owned());
+                    (
+                        parse_quote! {
+                            crate::object::ValueTypeValidator<
+                                crate::object::NameTypeValueGetter,
+                                crate::object::EqualTypeValueChecker<&'static str>
+                            >
+                        },
+                        parse_quote! {
+                            crate::object::ValueTypeValidator::new(
+                                crate::object::NameTypeValueGetter::new(#typ_field),
+                                crate::object::EqualTypeValueChecker::new(#lit)
+                            )
+                        },
+                    )
+                }
                 _ => panic!("expect string literal"),
             }
         }
@@ -333,6 +348,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     attrs: _
                 })
             ));
+            let typ_field = type_field(def.attrs.as_slice()).unwrap_or_else(|| "Type".to_owned());
             (
                 parse_quote! {
                     crate::object::AndValueTypeValidator<
@@ -349,7 +365,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 parse_quote! {
                     crate::object::AndValueTypeValidator::new(
                         crate::object::ValueTypeValidator::new(
-                            crate::object::NameTypeValueGetter::typ(),
+                            crate::object::NameTypeValueGetter::new(#typ_field),
                             <crate::object::EqualTypeValueChecker<&'static str> as crate::object::TypeValueCheck<_>>::option(crate::object::EqualTypeValueChecker::new(#t)),
                         ),
                         crate::object::ValueTypeValidator::new(
@@ -382,6 +398,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     _ => panic!("expect string literal"),
                 }
             }
+            let typ_field = type_field(def.attrs.as_slice()).unwrap_or_else(|| "Type".to_owned());
             (
                 parse_quote! {
                     crate::object::ValueTypeValidator<
@@ -391,7 +408,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 },
                 parse_quote! {
                     crate::object::ValueTypeValidator::new(
-                        crate::object::NameTypeValueGetter::typ(),
+                        crate::object::NameTypeValueGetter::new(#typ_field),
                         crate::object::OneOfTypeValueChecker::new(
                             vec![ #(#arg),* ]
                         )
@@ -402,6 +419,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
 
         Expr::Call(ref call) => {
             let literal = get_literal_from_some_call(call);
+            let typ_field = type_field(def.attrs.as_slice()).unwrap_or_else(|| "Type".to_owned());
             (
                 parse_quote! {
                     crate::object::ValueTypeValidator<
@@ -411,7 +429,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 },
                 parse_quote! {
                     crate::object::ValueTypeValidator::new(
-                        crate::object::NameTypeValueGetter::typ(),
+                        crate::object::NameTypeValueGetter::new(#typ_field),
                         <crate::object::EqualTypeValueChecker<&'static str> as crate::object::TypeValueCheck<_>>::option(crate::object::EqualTypeValueChecker::new(#literal)),
                     )
                 },
@@ -420,7 +438,6 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         _ => todo!(),
     };
 
-    let def = parse_macro_input!(item as ItemTrait);
     let name = def.ident.to_string();
     assert!(name.ends_with("Trait"));
     let struct_name = &name[..name.len() - 5];
