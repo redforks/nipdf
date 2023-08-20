@@ -176,9 +176,73 @@ pub(crate) trait ShadingDictTrait {
     fn axial(&self) -> AxialShadingDict<'a, 'b>;
 }
 
+/// Return type of `AxialShadingDict::extend()`
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct AxialExtend(bool, bool);
+
+impl AxialExtend {
+    pub fn begin(&self) -> bool {
+        self.0
+    }
+
+    pub fn end(&self) -> bool {
+        self.1
+    }
+}
+
+/// Return type of `AxialShadingDict::domain()`
+#[derive(Debug, Clone, Copy, Educe)]
+#[educe(Default)]
+pub(crate) struct AxialDomain(f32, #[educe(Default = 1.0)] f32);
+
+impl AxialDomain {
+    pub fn begin(&self) -> f32 {
+        self.0
+    }
+
+    pub fn end(&self) -> f32 {
+        self.1
+    }
+}
+
+impl<'a> TryFrom<&Object<'a>> for AxialDomain {
+    type Error = ObjectValueError;
+
+    fn try_from(obj: &Object) -> Result<Self, Self::Error> {
+        let arr = obj.as_arr()?;
+        if arr.len() != 2 {
+            return Err(ObjectValueError::UnexpectedType);
+        }
+        Ok(Self(arr[0].as_number()?, arr[1].as_number()?))
+    }
+}
+
+impl<'a> TryFrom<&Object<'a>> for AxialExtend {
+    type Error = ObjectValueError;
+
+    fn try_from(obj: &Object) -> Result<Self, Self::Error> {
+        let arr = obj.as_arr()?;
+        if arr.len() != 2 {
+            return Err(ObjectValueError::UnexpectedType);
+        }
+        Ok(Self(arr[0].as_bool()?, arr[1].as_bool()?))
+    }
+}
+
 #[pdf_object(2i32)]
 #[type_field("ShadingType")]
-pub(crate) trait AxialShadingDictTrait {}
+pub(crate) trait AxialShadingDictTrait {
+    #[try_from]
+    fn coords(&self) -> Rectangle;
+
+    #[try_from]
+    #[or_default]
+    fn domain(&self) -> AxialDomain;
+
+    #[try_from]
+    #[or_default]
+    fn extend(&self) -> AxialExtend;
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ColorOrName {
