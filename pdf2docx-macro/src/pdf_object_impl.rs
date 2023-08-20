@@ -5,8 +5,8 @@ use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use quote::quote;
 use syn::{
-    parse_macro_input, parse_quote, Attribute, Expr, ExprCall, ExprLit, ExprTuple, ItemTrait, Lit,
-    LitStr, Meta, ReturnType, TraitItem, TraitItemFn, Type,
+    parse_macro_input, parse_quote, Attribute, Expr, ExprCall, ExprLit, ExprPath, ExprTuple,
+    ItemTrait, Lit, LitStr, Meta, ReturnType, TraitItem, TraitItemFn, Type,
 };
 
 /// If `#[key("key")]` attribute defined, return key value
@@ -116,12 +116,12 @@ fn default_lit(attrs: &[Attribute]) -> Option<ExprLit> {
     })
 }
 
-/// Return Some(func_name) if `#[default_fn("func_name")]` attribute defined, otherwise return None
-fn default_fn(attrs: &[Attribute]) -> Option<String> {
+/// Return Some(func_name) if `#[default_fn(func)]` attribute defined, otherwise return None
+fn default_fn(attrs: &[Attribute]) -> Option<ExprPath> {
     attrs.iter().find_map(|attr| {
         if attr.path().is_ident("default_fn") {
-            let lit: LitStr = attr.parse_args().expect("expect string literal");
-            Some(lit.value())
+            let lit: ExprPath = attr.parse_args().expect("expect function");
+            Some(lit)
         } else {
             None
         }
@@ -135,7 +135,7 @@ fn or_default(attrs: &[Attribute]) -> bool {
 
 enum DefaultAttr {
     Literal(ExprLit),
-    Function(String),
+    Function(ExprPath),
     OrDefault,
 }
 
@@ -554,7 +554,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             // unwrap Option<> type from rt
             rt = unwrap_option_type(rt);
             method = match default_attr {
-                DefaultAttr::Function(_) => todo!(),
+                DefaultAttr::Function(func) => quote!( #method.map(|v| v.unwrap_or_else(#func))),
                 DefaultAttr::Literal(lit) => quote!( #method.map(|v| v.unwrap_or(#lit))),
                 DefaultAttr::OrDefault => quote!( #method.map(|v| v.unwrap_or_default())),
             }
