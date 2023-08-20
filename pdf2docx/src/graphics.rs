@@ -15,6 +15,7 @@ use nom::{
 
 use crate::{
     file::{GraphicsStateParameterDict, ObjectResolver, Rectangle},
+    function::{default_domain, Domain},
     object::{
         ColorSpace, Dictionary, Name, Object, ObjectValueError, PdfObject, SchemaDict,
         TextStringOrNumber,
@@ -190,33 +191,6 @@ impl AxialExtend {
     }
 }
 
-/// Return type of `AxialShadingDict::domain()`
-#[derive(Debug, Clone, Copy, Educe)]
-#[educe(Default)]
-pub(crate) struct AxialDomain(f32, #[educe(Default = 1.0)] f32);
-
-impl AxialDomain {
-    pub fn begin(&self) -> f32 {
-        self.0
-    }
-
-    pub fn end(&self) -> f32 {
-        self.1
-    }
-}
-
-impl<'a> TryFrom<&Object<'a>> for AxialDomain {
-    type Error = ObjectValueError;
-
-    fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.as_arr()?;
-        if arr.len() != 2 {
-            return Err(ObjectValueError::UnexpectedType);
-        }
-        Ok(Self(arr[0].as_number()?, arr[1].as_number()?))
-    }
-}
-
 impl<'a> TryFrom<&Object<'a>> for AxialExtend {
     type Error = ObjectValueError;
 
@@ -236,8 +210,8 @@ pub(crate) trait AxialShadingDictTrait {
     fn coords(&self) -> Rectangle;
 
     #[try_from]
-    #[or_default]
-    fn domain(&self) -> AxialDomain;
+    #[default_fn(default_domain)]
+    fn domain(&self) -> Domain;
 
     #[try_from]
     #[or_default]
