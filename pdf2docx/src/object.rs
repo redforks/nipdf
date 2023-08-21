@@ -488,6 +488,12 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
             .map(|o| o.unwrap_or_default())
     }
 
+    pub fn opt_f32_arr(&self, id: &'static str) -> Result<Option<Vec<f32>>, ObjectValueError> {
+        self.opt_arr_map(id, |o| o.as_number())
+            .map(|o| o.unwrap_or_default())
+            .map(Some)
+    }
+
     pub fn required_arr_map<V>(
         &self,
         id: &'static str,

@@ -225,6 +225,8 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         }
     } else if rt == &(parse_quote!(Vec<f32>)) {
         Some("f32_arr")
+    } else if rt == &(parse_quote!(Option<Vec<f32>>)) {
+        Some("opt_f32_arr")
     } else if rt == &(parse_quote!(Option<&'b Dictionary<'a>>)) {
         Some("opt_dict")
     } else if rt == &(parse_quote!(&'b Dictionary<'a>)) {
