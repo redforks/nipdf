@@ -15,6 +15,7 @@ use pdf2docx_macro::pdf_object;
 use crate::{
     ccitt::Flags,
     file::ObjectResolver,
+    graphics::ColorSpace,
     object::PdfObject,
     parser::{ws_prefixed, ParseResult},
 };
@@ -180,38 +181,6 @@ fn decode_jpx<'a>(
     let img = handle_filter_error(Image::from_bytes(buf.borrow()), FILTER_JPX_DECODE)?;
     let img = handle_filter_error((&img).try_into(), FILTER_JPX_DECODE)?;
     Ok(FilterDecodedData::Image(img))
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) enum ColorSpace {
-    DeviceGray,
-    DeviceRGB,
-    DeviceCMYK,
-    CalGray,
-}
-
-impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpace {
-    type Error = ObjectValueError;
-
-    fn try_from(v: &'b Object<'a>) -> Result<Self, Self::Error> {
-        match v {
-            Object::Name(n) => match n.as_ref() {
-                "DeviceGray" => Ok(Self::DeviceGray),
-                "DeviceRGB" => Ok(Self::DeviceRGB),
-                "DeviceCMYK" => Ok(Self::DeviceCMYK),
-                "CalGray" => Ok(Self::CalGray),
-                _ => Err(ObjectValueError::UnexpectedType),
-            },
-            // Object::Array(vals) => {
-            //     let mut vals = vals.iter();
-            //     let name = vals.next().unwrap().as_name()?;
-            //     assert_eq!(name.0.borrow(), b"CalGray");
-            //     let _dict = vals.next().unwrap().as_dict()?;
-            //     Self::CalGray
-            // }
-            _ => Err(ObjectValueError::UnexpectedType),
-        }
-    }
 }
 
 #[pdf_object((Some("XObject"), "Image"))]
