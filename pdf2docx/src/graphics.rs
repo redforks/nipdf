@@ -15,6 +15,7 @@ use nom::{
 
 use crate::{
     file::{GraphicsStateParameterDict, ObjectResolver, Rectangle},
+    function::FunctionDict,
     function::{default_domain, Domain},
     object::{
         ColorSpace, Dictionary, Name, Object, ObjectValueError, SchemaDict, TextStringOrNumber,
@@ -211,6 +212,9 @@ pub(crate) trait AxialShadingDictTrait {
     #[try_from]
     #[default_fn(default_domain)]
     fn domain(&self) -> Domain;
+
+    #[nested]
+    fn function(&self) -> FunctionDict<'a, 'b>;
 
     #[try_from]
     #[or_default]
