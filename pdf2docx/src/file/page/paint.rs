@@ -1,5 +1,7 @@
 use crate::{
-    graphics::{Color, LineCapStyle, LineJoinStyle, Point, RenderingIntent, TransformMatrix},
+    graphics::{
+        Color, ColorSpace, LineCapStyle, LineJoinStyle, Point, RenderingIntent, TransformMatrix,
+    },
     object::FilterDecodedData,
 };
 use educe::Educe;
@@ -54,6 +56,8 @@ pub struct State {
     stroke_paint: Paint<'static>,
     stroke: Stroke,
     mask: Option<Mask>,
+    fill_color_space: ColorSpace,
+    stroke_color_space: ColorSpace,
 }
 
 impl State {
@@ -65,6 +69,8 @@ impl State {
             stroke_paint: Paint::default(),
             stroke: Stroke::default(),
             mask: None,
+            fill_color_space: ColorSpace::DeviceRGB,
+            stroke_color_space: ColorSpace::DeviceRGB,
         };
         r.fill_paint.set_color(tiny_skia::Color::TRANSPARENT);
         r.stroke_paint.set_color(tiny_skia::Color::BLACK);
@@ -398,6 +404,8 @@ impl Render {
             }
 
             // Color Operations
+            Operation::SetStrokeColorSpace(space) => self.current_mut().stroke_color_space = *space,
+            Operation::SetFillColorSpace(space) => self.current_mut().fill_color_space = *space,
             Operation::SetStrokeColor(color)
             | Operation::SetStrokeGray(color)
             | Operation::SetStrokeCMYK(color)
