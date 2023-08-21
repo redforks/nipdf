@@ -482,6 +482,12 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
             .map(|o| o.unwrap_or_default())
     }
 
+    /// Return empty vec if not exist, error if not array
+    pub fn f32_arr(&self, id: &'static str) -> Result<Vec<f32>, ObjectValueError> {
+        self.opt_arr_map(id, |o| o.as_number())
+            .map(|o| o.unwrap_or_default())
+    }
+
     pub fn required_arr_map<V>(
         &self,
         id: &'static str,

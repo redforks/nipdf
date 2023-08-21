@@ -223,6 +223,8 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         } else {
             unreachable!()
         }
+    } else if rt == &(parse_quote!(Vec<f32>)) {
+        Some("f32_arr")
     } else if rt == &(parse_quote!(Option<&'b Dictionary<'a>>)) {
         Some("opt_dict")
     } else if rt == &(parse_quote!(&'b Dictionary<'a>)) {
@@ -303,7 +305,7 @@ fn doc(attrs: &[Attribute]) -> Option<String> {
                 }
             }
         }
-        return None;
+        None
     })
 }
 
