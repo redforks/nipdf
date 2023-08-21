@@ -70,6 +70,9 @@ pub(crate) trait FunctionDictTrait {
 
     #[self_as]
     fn exponential_interpolation(&self) -> ExponentialInterpolationFunctionDict<'a, 'b>;
+
+    #[self_as]
+    fn stitch(&self) -> StitchingFunctionDict<'a, 'b>;
 }
 
 fn f32_zero_arr() -> Vec<f32> {
@@ -90,4 +93,19 @@ pub(crate) trait ExponentialInterpolationFunctionDictTrait {
     fn c1(&self) -> Vec<f32>;
 
     fn n(&self) -> f32;
+}
+
+#[pdf_object(3i32)]
+#[type_field("FunctionType")]
+pub(crate) trait StitchingFunctionDictTrait {
+    #[nested]
+    fn functions(&self) -> Vec<FunctionDict<'a, 'b>>;
+
+    /// Number of input values that the stitching function uses. The number of input values shall be
+    /// one greater than the number of functions in the Functions array.
+    fn bounds(&self) -> Vec<f32>;
+
+    /// The number of values shall be one lesser than the number of functions in the Functions array.
+    #[try_from]
+    fn encode(&self) -> Domains;
 }
