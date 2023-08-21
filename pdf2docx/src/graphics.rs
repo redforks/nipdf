@@ -17,8 +17,7 @@ use crate::{
     file::{GraphicsStateParameterDict, ObjectResolver, Rectangle},
     function::{default_domain, Domain},
     object::{
-        ColorSpace, Dictionary, Name, Object, ObjectValueError, PdfObject, SchemaDict,
-        TextStringOrNumber,
+        ColorSpace, Dictionary, Name, Object, ObjectValueError, SchemaDict, TextStringOrNumber,
     },
     parser::{parse_object, ws_prefixed, ws_terminated, ParseError, ParseResult},
 };

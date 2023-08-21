@@ -67,4 +67,27 @@ pub(crate) trait FunctionDictTrait {
 
     #[try_from]
     fn range(&self) -> Option<Domains>;
+
+    #[self_as]
+    fn exponential_interpolation(&self) -> ExponentialInterpolationFunctionDict<'a, 'b>;
+}
+
+fn f32_zero_arr() -> Vec<f32> {
+    vec![0.0]
+}
+
+fn f32_one_arr() -> Vec<f32> {
+    vec![1.0]
+}
+
+#[pdf_object(2i32)]
+#[type_field("FunctionType")]
+pub(crate) trait ExponentialInterpolationFunctionDictTrait {
+    #[default_fn(f32_zero_arr)]
+    fn c0(&self) -> Vec<f32>;
+
+    #[default_fn(f32_one_arr)]
+    fn c1(&self) -> Vec<f32>;
+
+    fn n(&self) -> f32;
 }
