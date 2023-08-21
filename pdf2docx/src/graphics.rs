@@ -116,36 +116,13 @@ pub enum SetTextRenderingMode {
     Clip = 7,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) enum ColorSpace {
+#[derive(Clone, Copy, PartialEq, Eq, Debug, TryFromNameObject)]
+pub enum ColorSpace {
     DeviceGray,
     DeviceRGB,
     DeviceCMYK,
     CalGray,
-}
-
-impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpace {
-    type Error = ObjectValueError;
-
-    fn try_from(v: &'b Object<'a>) -> Result<Self, Self::Error> {
-        match v {
-            Object::Name(n) => match n.as_ref() {
-                "DeviceGray" => Ok(Self::DeviceGray),
-                "DeviceRGB" => Ok(Self::DeviceRGB),
-                "DeviceCMYK" => Ok(Self::DeviceCMYK),
-                "CalGray" => Ok(Self::CalGray),
-                _ => Err(ObjectValueError::UnexpectedType),
-            },
-            // Object::Array(vals) => {
-            //     let mut vals = vals.iter();
-            //     let name = vals.next().unwrap().as_name()?;
-            //     assert_eq!(name.0.borrow(), b"CalGray");
-            //     let _dict = vals.next().unwrap().as_dict()?;
-            //     Self::CalGray
-            // }
-            _ => Err(ObjectValueError::UnexpectedType),
-        }
-    }
+    Pattern,
 }
 
 /// Color for different color space
@@ -408,9 +385,9 @@ pub enum Operation<'a> {
 
     // Color Operations
     #[op_tag("CS")]
-    SetStrokeColorSpace(NameOfDict),
+    SetStrokeColorSpace(ColorSpace),
     #[op_tag("cs")]
-    SetFillColorSpace(NameOfDict),
+    SetFillColorSpace(ColorSpace),
     #[op_tag("SC")]
     SetStrokeColor(Color),
     #[op_tag("SCN")]
