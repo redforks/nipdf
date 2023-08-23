@@ -1,15 +1,29 @@
-use std::ops::RangeInclusive;
+use anyhow::Result as AnyResult;
 
 use pdf2docx_macro::{pdf_object, TryFromIntObject};
 
 use crate::file::ObjectResolver;
 use crate::object::{Dictionary, Object, ObjectValueError, SchemaDict};
 
-pub type Domain = RangeInclusive<f32>;
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Domain {
+    pub start: f32,
+    pub end: f32,
+}
+
+impl Domain {
+    pub fn new(start: f32, end: f32) -> Self {
+        Self { start, end }
+    }
+
+    fn clamp(&self, x: f32) -> f32 {
+        num::clamp(x, self.start, self.end)
+    }
+}
 
 /// Default domain is [0, 1]
 pub fn default_domain() -> Domain {
-    0.0..=1.0
+    Domain::new(0.0, 1.0)
 }
 
 impl<'a> TryFrom<&Object<'a>> for Domain {
@@ -49,6 +63,10 @@ impl Domains {
     }
 }
 
+pub trait Function {
+    fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>>;
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, TryFromIntObject)]
 pub(crate) enum Type {
     Sampled = 0,
@@ -75,6 +93,39 @@ pub(crate) trait FunctionDictTrait {
     fn stitch(&self) -> StitchingFunctionDict<'a, 'b>;
 }
 
+impl<'a, 'b> FunctionDict<'a, 'b> {
+    pub fn n_args(&self) -> usize {
+        self.domain().unwrap().n()
+    }
+
+    pub fn n_returns(&self) -> Option<usize> {
+        self.range().unwrap().map(|range| range.n())
+    }
+
+    fn clip_args(&self, args: &[f32]) -> Vec<f32> {
+        let domain = self.domain().unwrap();
+        assert_eq!(args.len(), domain.n());
+
+        args.iter()
+            .zip(domain.0.iter())
+            .map(|(&arg, domain)| domain.clamp(arg))
+            .collect()
+    }
+
+    fn clip_returns(&self, returns: Vec<f32>) -> Vec<f32> {
+        let Some(range) = self.range().unwrap() else {
+            return returns;
+        };
+        assert_eq!(returns.len(), range.n());
+
+        returns
+            .iter()
+            .zip(range.0.iter())
+            .map(|(&ret, domain)| domain.clamp(ret))
+            .collect()
+    }
+}
+
 fn f32_zero_arr() -> Vec<f32> {
     vec![0.0]
 }
@@ -93,6 +144,36 @@ pub(crate) trait ExponentialInterpolationFunctionDictTrait {
     fn c1(&self) -> Vec<f32>;
 
     fn n(&self) -> f32;
+
+    #[self_as]
+    fn function_dict(&self) -> FunctionDict<'a, 'b>;
+}
+
+impl<'a, 'b> Function for ExponentialInterpolationFunctionDict<'a, 'b> {
+    fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>> {
+        let f = self.function_dict()?;
+
+        assert_eq!(args.len(), 1);
+
+        let args = f.clip_args(args);
+        let x = args[0];
+        let c0 = self.c0()?;
+        let c1 = self.c1()?;
+
+        if x == 0.0 {
+            return Ok(c0.clone());
+        } else if x == 1.0 {
+            return Ok(c1.clone());
+        }
+
+        let n = self.n()?;
+        assert_eq!(n.fract(), 0.0);
+        let n_returns = f.n_returns().unwrap_or_else(|| c0.len());
+        let r = (0..n_returns)
+            .map(|i| c0[i] + x.powf(n) * (c1[i] - c0[i]))
+            .collect();
+        Ok(f.clip_returns(r))
+    }
 }
 
 #[pdf_object(3i32)]
@@ -109,3 +190,6 @@ pub(crate) trait StitchingFunctionDictTrait {
     #[try_from]
     fn encode(&self) -> Domains;
 }
+
+#[cfg(test)]
+mod tests;
