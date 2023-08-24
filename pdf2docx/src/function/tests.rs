@@ -1,5 +1,6 @@
 use super::*;
 use crate::object::PdfObject;
+use test_case::test_case;
 
 #[test]
 fn test_clip_args() {
@@ -76,4 +77,52 @@ fn test_exponential_function() {
     assert_eq!(f.call(&[0.0]).unwrap(), vec![0.1, 0.2]);
     assert_eq!(f.call(&[1.0]).unwrap(), vec![0.2, 0.4]);
     assert_eq!(f.call(&[0.5]).unwrap(), vec![0.15, 0.3]);
+}
+
+#[test]
+fn stitching_find_function() {
+    let bounds = vec![0.0f32, 0.5f32, 1.0f32];
+
+    let resolver = ObjectResolver::empty();
+    let f = StitchingFunctionDict::find_function;
+    assert_eq!(f(&bounds[..], -1.0), 0);
+    assert_eq!(f(&bounds[..], 0.0), 1);
+    assert_eq!(f(&bounds[..], 0.5), 2);
+    assert_eq!(f(&bounds[..], 1.0), 3);
+    assert_eq!(f(&bounds[..], 2.0), 3);
+
+    assert_eq!(f(&[], 2.0), 0);
+}
+
+#[test_case(0 => (0.0, 0.1))]
+#[test_case(1 => (0.1, 0.5))]
+#[test_case(2 => (0.5, 0.8))]
+#[test_case(3 => (0.8, 1.0))]
+fn stitching_sub_domain(idx: usize) -> (f32, f32) {
+    let domain = Domain::new(0.0, 1.0);
+    let bounds = vec![0.1f32, 0.5f32, 0.8f32];
+
+    let act = StitchingFunctionDict::sub_domain(&domain, &bounds[..], idx);
+    (act.start, act.end)
+}
+
+#[test]
+fn stitching_sub_domain_empty_bounds() {
+    let domain = Domain::new(0.0, 1.0);
+    let bounds = vec![];
+
+    assert_eq!(
+        domain.clone(),
+        StitchingFunctionDict::sub_domain(&domain, &bounds[..], 0)
+    );
+}
+
+#[test]
+fn interpolation() {
+    let a = Domain::new(0.0, 1.0);
+    let b = Domain::new(1.0, 0.0);
+
+    assert_eq!(StitchingFunctionDict::interpolation(&a, &b, 0.0), 1.0);
+    assert_eq!(StitchingFunctionDict::interpolation(&a, &b, 0.5), 0.5);
+    assert_eq!(StitchingFunctionDict::interpolation(&a, &b, 1.0), 0.0);
 }

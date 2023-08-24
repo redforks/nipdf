@@ -19,6 +19,10 @@ impl Domain {
     fn clamp(&self, x: f32) -> f32 {
         num::clamp(x, self.start, self.end)
     }
+
+    fn as_arr(&self) -> &[f32; 2] {
+        unsafe { &*(self as *const Self as *const [f32; 2]) }
+    }
 }
 
 /// Default domain is [0, 1]
@@ -131,7 +135,7 @@ impl<'a, 'b> Function for FunctionDict<'a, 'b> {
         match self.function_type()? {
             Type::Sampled => todo!(),
             Type::ExponentialInterpolation => self.exponential_interpolation()?.call(args),
-            Type::Stitching => todo!(),
+            Type::Stitching => self.stitch()?.call(args),
             Type::PostScriptCalculator => todo!(),
         }
     }
@@ -190,16 +194,71 @@ impl<'a, 'b> Function for ExponentialInterpolationFunctionDict<'a, 'b> {
 #[pdf_object(3i32)]
 #[type_field("FunctionType")]
 pub(crate) trait StitchingFunctionDictTrait {
+    /// Functions, its length is `k`
     #[nested]
     fn functions(&self) -> Vec<FunctionDict<'a, 'b>>;
 
-    /// Number of input values that the stitching function uses. The number of input values shall be
-    /// one greater than the number of functions in the Functions array.
+    /// The number of values shall be `k - 1`
     fn bounds(&self) -> Vec<f32>;
 
-    /// The number of values shall be one lesser than the number of functions in the Functions array.
+    /// The number of values shall be `k`
     #[try_from]
     fn encode(&self) -> Domains;
+
+    #[self_as]
+    fn function_dict(&self) -> FunctionDict<'a, 'b>;
+}
+
+impl<'a, 'b> StitchingFunctionDict<'a, 'b> {
+    fn find_function(bounds: &[f32], x: f32) -> usize {
+        bounds
+            .iter()
+            .position(|&bound| x < bound)
+            .unwrap_or_else(|| bounds.len())
+    }
+
+    fn sub_domain(domain: &Domain, bounds: &[f32], idx: usize) -> Domain {
+        let start = if idx == 0 {
+            domain.start
+        } else {
+            bounds[idx - 1]
+        };
+        let end = if idx == bounds.len() {
+            domain.end
+        } else {
+            bounds[idx]
+        };
+        Domain::new(start, end)
+    }
+
+    fn interpolation(a: &Domain, b: &Domain, t: f32) -> f32 {
+        let a_len = a.end - a.start;
+        let b_len = b.end - b.start;
+        let t = (t - a.start) / a_len;
+        b.start + t * b_len
+    }
+}
+
+impl<'a, 'b> Function for StitchingFunctionDict<'a, 'b> {
+    fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>> {
+        assert_eq!(args.len(), 1);
+
+        let f = self.function_dict()?;
+        let bounds = self.bounds()?;
+        let encode = self.encode()?;
+        let domains = f.domain()?;
+        assert_eq!(1, domains.n()); // stitching function only has 1 input argument
+
+        let args = f.clip_args(args);
+        let x = args[0];
+        let function_idx = Self::find_function(&bounds, x);
+        let sub_domain = Self::sub_domain(&domains.0[0], &bounds, function_idx);
+        let x = Self::interpolation(&sub_domain, &encode.0[function_idx], x);
+
+        let f = &self.functions()?[function_idx];
+        let r = f.call(&[x])?;
+        Ok(f.clip_returns(r))
+    }
 }
 
 #[cfg(test)]
