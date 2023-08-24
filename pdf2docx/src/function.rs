@@ -126,6 +126,17 @@ impl<'a, 'b> FunctionDict<'a, 'b> {
     }
 }
 
+impl<'a, 'b> Function for FunctionDict<'a, 'b> {
+    fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>> {
+        match self.function_type()? {
+            Type::Sampled => todo!(),
+            Type::ExponentialInterpolation => self.exponential_interpolation()?.call(args),
+            Type::Stitching => todo!(),
+            Type::PostScriptCalculator => todo!(),
+        }
+    }
+}
+
 fn f32_zero_arr() -> Vec<f32> {
     vec![0.0]
 }
