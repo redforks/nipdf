@@ -87,3 +87,19 @@ fn interpolation() {
     assert_eq!(StitchingFunctionDict::interpolation(&a, &b, 0.5), 0.5);
     assert_eq!(StitchingFunctionDict::interpolation(&a, &b, 1.0), 0.0);
 }
+
+#[test]
+fn stitching_function() {
+    let (_, d) = parse_dict(
+        br#"<</FunctionType 3/Domain[0 1]/Bounds[0.5]/Encode[1 0 1 0]
+        /Functions[
+            <</FunctionType 2/Domain[0 1]/C0[0.1 0.2]/C1[0.2 0.4]/N 1>>
+            <</FunctionType 2/Domain[0 1]/C0[0.5 0.6]/C1[0.6 0.7]/N 1>>
+        ]>>"#,
+    )
+    .unwrap();
+
+    let resolver = ObjectResolver::empty();
+    let f = StitchingFunctionDict::new(None, &d, &resolver).unwrap();
+    assert_eq!(f.call(&[0f32]).unwrap(), vec![0.2, 0.4]);
+}

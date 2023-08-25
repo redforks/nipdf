@@ -1,4 +1,4 @@
-use anyhow::Result as AnyResult;
+use anyhow::{Context, Result as AnyResult};
 
 use pdf2docx_macro::{pdf_object, TryFromIntObject};
 
