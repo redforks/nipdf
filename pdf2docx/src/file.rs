@@ -273,9 +273,12 @@ impl<'a> ObjectResolver<'a> {
                 let arr = arr.as_arr()?;
                 let mut res = Vec::with_capacity(arr.len());
                 for obj in arr {
-                    let id = obj.as_ref()?;
-                    let dict = self.resolve(id.id().id())?;
-                    res.push(T::new(id.id().id().into(), dict.as_dict()?, self)?);
+                    let dict = self.resolve_reference(obj)?;
+                    res.push(T::new(
+                        obj.as_ref().ok().map(|id| id.id().id()),
+                        dict.as_dict()?,
+                        self,
+                    )?);
                 }
                 Ok(res)
             },
