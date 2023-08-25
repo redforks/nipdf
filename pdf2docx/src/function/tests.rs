@@ -1,24 +1,10 @@
 use super::*;
-use crate::object::PdfObject;
+use crate::{object::PdfObject, parser::parse_dict};
 use test_case::test_case;
 
 #[test]
 fn test_clip_args() {
-    let d: Dictionary<'_> = [
-        ("FunctionType".into(), 2i32.into()),
-        (
-            "Domain".into(),
-            Object::Array(vec![
-                0.0f32.into(),
-                1.0f32.into(),
-                Object::from(-2.0f32),
-                2.0f32.into(),
-            ]),
-        ),
-    ]
-    .into_iter()
-    .collect();
-
+    let (_, d) = parse_dict(br#"<</FunctionType 2/Domain[0 1 -2 2]>>"#).unwrap();
     let resolver = ObjectResolver::empty();
     let f = FunctionDict::new(None, &d, &resolver).unwrap();
     assert_eq!(f.clip_args(&[0.5, 0.0]), vec![0.5, 0.0]);
@@ -27,30 +13,15 @@ fn test_clip_args() {
 
 #[test]
 fn test_clip_returns() {
-    let d: Dictionary<'_> = [("/FunctionType".into(), 2i32.into())]
-        .into_iter()
-        .collect();
-
+    let (_, d) = parse_dict(br#"<</FunctionType 2>>"#).unwrap();
     let resolver = ObjectResolver::empty();
     let f = FunctionDict::new(None, &d, &resolver).unwrap();
     assert_eq!(f.clip_returns(vec![100.0, -100.0]), vec![100.0, -100.0]);
     assert_eq!(f.clip_returns(vec![]), vec![]);
 
-    let d: Dictionary<'_> = [
-        ("FunctionType".into(), 2i32.into()),
-        (
-            "Range".into(),
-            Object::Array(vec![
-                0.0f32.into(),
-                1.0f32.into(),
-                Object::from(-2.0f32),
-                2.0f32.into(),
-            ]),
-        ),
-    ]
-    .into_iter()
-    .collect();
-
+    let d = parse_dict(br#"<</FunctionType 2/Range[0 1 -2 2]>>"#)
+        .unwrap()
+        .1;
     let f = FunctionDict::new(None, &d, &resolver).unwrap();
     assert_eq!(Type::ExponentialInterpolation, f.function_type().unwrap());
     assert_eq!(f.clip_returns(vec![0.5, 0.0]), vec![0.5, 0.0]);
@@ -59,18 +30,8 @@ fn test_clip_returns() {
 
 #[test]
 fn test_exponential_function() {
-    let d: Dictionary<'_> = [
-        ("FunctionType".into(), 2i32.into()),
-        (
-            "Domain".into(),
-            Object::Array(vec![0.0f32.into(), 1.0f32.into()]),
-        ),
-        ("C0".into(), Object::Array(vec![0.1.into(), 0.2.into()])),
-        ("C1".into(), Object::Array(vec![0.2.into(), 0.4.into()])),
-        ("N".into(), 1.0f32.into()),
-    ]
-    .into_iter()
-    .collect();
+    let (_, d) =
+        parse_dict(br#"<</FunctionType 2/Domain[0 1]/C0[0.1 0.2]/C1[0.2 0.4]/N 1>>"#).unwrap();
 
     let resolver = ObjectResolver::empty();
     let f = ExponentialInterpolationFunctionDict::new(None, &d, &resolver).unwrap();
