@@ -68,7 +68,7 @@ pub(crate) trait ShadingDictTrait {
 }
 
 /// Return type of `AxialShadingDict::extend()`
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct AxialExtend(bool, bool);
 
 impl AxialExtend {

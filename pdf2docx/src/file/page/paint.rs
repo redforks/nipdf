@@ -1,9 +1,11 @@
 use crate::{
+    function::{Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
-        AxialShadingDict, Color, ColorOrName, ColorSpace, LineCapStyle, LineJoinStyle, PatternType,
-        Point, RenderingIntent, ShadingType, TransformMatrix,
+        AxialExtend, AxialShadingDict, Color, ColorOrName, ColorSpace, ConvertFromObject,
+        LineCapStyle, LineJoinStyle, PatternType, Point, RenderingIntent, ShadingType,
+        TransformMatrix,
     },
-    object::FilterDecodedData,
+    object::{Array, FilterDecodedData, Object},
 };
 use anyhow::Result as AnyResult;
 use educe::Educe;
@@ -11,8 +13,8 @@ use itertools::Either;
 
 use super::{Operation, Page, Rectangle, ResourceDict};
 use tiny_skia::{
-    FillRule, FilterQuality, Mask, Paint, Path as SkiaPath, PathBuilder, Pixmap, PixmapPaint,
-    PixmapRef, Point as SkiaPoint, Stroke, StrokeDash, Transform,
+    FillRule, FilterQuality, GradientStop, Mask, Paint, Path as SkiaPath, PathBuilder, Pixmap,
+    PixmapPaint, PixmapRef, Point as SkiaPoint, Stroke, StrokeDash, Transform,
 };
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -541,11 +543,26 @@ impl Render {
 
         let pattern = resources.pattern()?;
         let pattern = pattern.get(name.as_str()).unwrap();
-        assert_eq!(pattern.pattern_type()?, PatternType::Shading);
+        if pattern.pattern_type()? != PatternType::Shading {
+            log::error!("Only shading pattern supported");
+            return Ok(());
+        }
         let pattern = pattern.shading_pattern()?;
+        assert_eq!(
+            pattern.matrix()?,
+            TransformMatrix::identity(),
+            "matrix not supported"
+        );
+        assert!(pattern.ext_g_state()?.is_empty(), "ExtGState not supported");
+
         let shading = pattern.shading()?;
         assert_eq!(shading.shading_type()?, ShadingType::Axial);
         let axial = shading.axial()?;
+        assert_eq!(
+            axial.extend()?,
+            AxialExtend::default(),
+            "Extend not supported"
+        );
         let pattern = build_linear_gradient(&axial)?;
         self.stack.last_mut().unwrap().fill_paint.shader = pattern;
         Ok(())
@@ -591,20 +608,50 @@ impl MatrixMapper {
     }
 }
 
+fn build_linear_gradient_stops(domain: Domain, f: FunctionDict) -> AnyResult<Vec<GradientStop>> {
+    fn create_stop<F: Function>(f: &F, x: f32) -> AnyResult<GradientStop> {
+        let rv = f.call(&[x])?;
+        let mut arr = rv.into_iter().map(Object::Number).collect::<Array>();
+        // TODO: Optimize speed of convert Vec<f32> to Color instead of using Object array
+        let color = Color::convert_from_object(&mut arr)?;
+        Ok(GradientStop::new(x, color.into()))
+    }
+
+    match f.function_type()? {
+        FunctionType::ExponentialInterpolation => {
+            let ef = f.exponential_interpolation()?;
+            assert_eq!(ef.n()?, 1f32, "Only linear gradient function supported");
+            Ok(vec![
+                create_stop(&ef, domain.start)?,
+                create_stop(&ef, domain.end)?,
+            ])
+        }
+        FunctionType::Stitching => {
+            let sf = f.stitch()?;
+            let mut stops = Vec::with_capacity(sf.functions()?.len() + 1);
+            stops.push(create_stop(&sf, domain.start)?);
+            let functions = sf.functions()?;
+            for f in &functions {
+                let ef = f.exponential_interpolation()?; // only support exponential interpolation
+                assert_eq!(ef.n()?, 1f32, "Only linear gradient function supported");
+            }
+            for t in sf.bounds()?.iter() {
+                stops.push(create_stop(&sf, *t)?);
+            }
+            stops.push(create_stop(&f, domain.end)?);
+            Ok(stops)
+        }
+        _ => {
+            todo!("Unsupported function type: {:?}", f.function_type()?);
+        }
+    }
+}
+
 fn build_linear_gradient(shading: &AxialShadingDict) -> AnyResult<tiny_skia::Shader<'static>> {
     let coords = shading.coords()?;
     let start = coords.left_lower();
     let end = coords.right_upper();
-    let mut stops = Vec::new();
-    // TODO: build stops
-    // for stop in shading.stops() {
-    //     let color = stop.color();
-    //     let offset = stop.offset();
-    //     stops.push(tiny_skia::GradientStop {
-    //         color: color.into(),
-    //         position: offset,
-    //     });
-    // }
+    let stops = build_linear_gradient_stops(shading.domain()?, shading.function()?)?;
     Ok(tiny_skia::LinearGradient::new(
         start.into(),
         end.into(),
