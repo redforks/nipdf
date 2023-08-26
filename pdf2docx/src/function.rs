@@ -1,4 +1,4 @@
-use anyhow::{Context, Result as AnyResult};
+use anyhow::Result as AnyResult;
 
 use pdf2docx_macro::{pdf_object, TryFromIntObject};
 
@@ -183,7 +183,7 @@ impl<'a, 'b> Function for ExponentialInterpolationFunctionDict<'a, 'b> {
 
         let n = self.n()?;
         assert_eq!(n.fract(), 0.0);
-        let n_returns = f.n_returns().unwrap_or_else(|| c0.len());
+        let n_returns = f.n_returns().unwrap_or(c0.len());
         let r = (0..n_returns)
             .map(|i| c0[i] + x.powf(n) * (c1[i] - c0[i]))
             .collect();
@@ -214,7 +214,7 @@ impl<'a, 'b> StitchingFunctionDict<'a, 'b> {
         bounds
             .iter()
             .position(|&bound| x < bound)
-            .unwrap_or_else(|| bounds.len())
+            .unwrap_or(bounds.len())
     }
 
     fn sub_domain(domain: &Domain, bounds: &[f32], idx: usize) -> Domain {

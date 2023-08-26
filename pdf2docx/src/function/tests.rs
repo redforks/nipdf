@@ -44,7 +44,6 @@ fn test_exponential_function() {
 fn stitching_find_function() {
     let bounds = vec![0.0f32, 0.5f32, 1.0f32];
 
-    let resolver = ObjectResolver::empty();
     let f = StitchingFunctionDict::find_function;
     assert_eq!(f(&bounds[..], -1.0), 0);
     assert_eq!(f(&bounds[..], 0.0), 1);
