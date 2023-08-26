@@ -21,7 +21,7 @@ use crate::{
 use pdf2docx_macro::{OperationParser, TryFromIntObject, TryFromNameObject};
 
 mod pattern;
-pub(crate) use pattern::PatternDict;
+pub(crate) use pattern::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Educe)]
 #[educe(Default)]

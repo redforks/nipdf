@@ -1,16 +1,18 @@
 use crate::{
     graphics::{
-        Color, ColorSpace, LineCapStyle, LineJoinStyle, Point, RenderingIntent, TransformMatrix,
+        AxialShadingDict, Color, ColorOrName, ColorSpace, LineCapStyle, LineJoinStyle, PatternType,
+        Point, RenderingIntent, ShadingType, TransformMatrix,
     },
     object::FilterDecodedData,
 };
+use anyhow::Result as AnyResult;
 use educe::Educe;
 use itertools::Either;
 
 use super::{Operation, Page, Rectangle, ResourceDict};
 use tiny_skia::{
     FillRule, FilterQuality, Mask, Paint, Path as SkiaPath, PathBuilder, Pixmap, PixmapPaint,
-    PixmapRef, Stroke, StrokeDash, Transform,
+    PixmapRef, Point as SkiaPoint, Stroke, StrokeDash, Transform,
 };
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -46,6 +48,12 @@ impl From<Color> for tiny_skia::Color {
             .unwrap(),
             Color::Gray(g) => tiny_skia::Color::from_rgba(g, g, g, 1.0).unwrap(),
         }
+    }
+}
+
+impl From<Point> for SkiaPoint {
+    fn from(p: Point) -> Self {
+        Self::from_xy(p.x, p.y)
     }
 }
 
@@ -414,6 +422,9 @@ impl Render {
             | Operation::SetFillGray(color)
             | Operation::SetFillCMYK(color)
             | Operation::SetFillRGB(color) => self.current_mut().set_fill_color(*color),
+            Operation::SetFillColorOrWithPattern(name) => {
+                self.set_fill_color_or_pattern(name, resources).unwrap()
+            }
 
             // XObject Operation
             Operation::PaintXObject(name) => self.paint_x_object(name, resources),
@@ -518,6 +529,27 @@ impl Render {
         self.canvas
             .draw_pixmap(0, 0, img, &paint, transform, state.get_mask());
     }
+
+    fn set_fill_color_or_pattern(
+        &mut self,
+        color_or_name: &crate::graphics::ColorOrName,
+        resources: &ResourceDict,
+    ) -> AnyResult<()> {
+        let ColorOrName::Name(name) = color_or_name else {
+            panic!("Only Name supported");
+        };
+
+        let pattern = resources.pattern()?;
+        let pattern = pattern.get(name.as_str()).unwrap();
+        assert_eq!(pattern.pattern_type()?, PatternType::Shading);
+        let pattern = pattern.shading_pattern()?;
+        let shading = pattern.shading()?;
+        assert_eq!(shading.shading_type()?, ShadingType::Axial);
+        let axial = shading.axial()?;
+        let pattern = build_linear_gradient(&axial)?;
+        self.stack.last_mut().unwrap().fill_paint.shader = pattern;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -557,6 +589,30 @@ impl MatrixMapper {
             self.height * self.zoom - self.ctm.ty * self.zoom - self.ctm.sy * self.zoom,
         )
     }
+}
+
+fn build_linear_gradient(shading: &AxialShadingDict) -> AnyResult<tiny_skia::Shader<'static>> {
+    let coords = shading.coords()?;
+    let start = coords.left_lower();
+    let end = coords.right_upper();
+    let mut stops = Vec::new();
+    // TODO: build stops
+    // for stop in shading.stops() {
+    //     let color = stop.color();
+    //     let offset = stop.offset();
+    //     stops.push(tiny_skia::GradientStop {
+    //         color: color.into(),
+    //         position: offset,
+    //     });
+    // }
+    Ok(tiny_skia::LinearGradient::new(
+        start.into(),
+        end.into(),
+        stops,
+        tiny_skia::SpreadMode::Pad,
+        Transform::identity(),
+    )
+    .unwrap())
 }
 
 #[cfg(test)]

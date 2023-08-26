@@ -4,7 +4,8 @@ use tiny_skia::Pixmap;
 
 use crate::{
     graphics::{
-        parse_operations, LineCapStyle, LineJoinStyle, Operation, PatternDict, RenderingIntent,
+        parse_operations, LineCapStyle, LineJoinStyle, Operation, PatternDict, Point,
+        RenderingIntent,
     },
     object::{
         Dictionary, FilterDecodedData, Object, ObjectValueError, PdfObject, SchemaDict, Stream,
@@ -48,6 +49,14 @@ impl Rectangle {
 
     pub fn height(&self) -> f32 {
         self.upper_y - self.lower_y
+    }
+
+    pub fn left_lower(&self) -> Point {
+        Point::new(self.left_x, self.lower_y)
+    }
+
+    pub fn right_upper(&self) -> Point {
+        Point::new(self.right_x, self.upper_y)
     }
 }
 
