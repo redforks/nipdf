@@ -137,10 +137,53 @@ pub enum Color {
     Cmyk(f32, f32, f32, f32),
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ColorOrName {
-    Color(Color),
-    Name(String),
+impl<'a> TryFrom<&Object<'a>> for Color {
+    type Error = ObjectValueError;
+
+    fn try_from(obj: &Object) -> Result<Self, Self::Error> {
+        match obj {
+            Object::Array(arr) => match arr.len() {
+                1 => Ok(Color::Gray(arr[0].as_number()?)),
+                3 => Ok(Color::Rgb(
+                    arr[0].as_number()?,
+                    arr[1].as_number()?,
+                    arr[2].as_number()?,
+                )),
+                4 => Ok(Color::Cmyk(
+                    arr[0].as_number()?,
+                    arr[1].as_number()?,
+                    arr[2].as_number()?,
+                    arr[3].as_number()?,
+                )),
+                _ => Err(ObjectValueError::GraphicsOperationSchemaError),
+            },
+            _ => Err(ObjectValueError::GraphicsOperationSchemaError),
+        }
+    }
+}
+
+impl<'a, 'b> ConvertFromObject<'a, 'b> for Color {
+    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+        let mut colors = ArrayVec::<f32, 4>::new();
+        while let Some(o) = objects.pop() {
+            if let Ok(num) = o.as_number() {
+                colors.push(num);
+                if colors.len() == 4 {
+                    break;
+                }
+            } else {
+                objects.push(o);
+                break;
+            }
+        }
+
+        match colors.len() {
+            1 => Ok(Color::Gray(colors[0])),
+            3 => Ok(Color::Rgb(colors[2], colors[1], colors[0])),
+            4 => Ok(Color::Cmyk(colors[3], colors[2], colors[1], colors[0])),
+            _ => Err(ObjectValueError::GraphicsOperationSchemaError),
+        }
+    }
 }
 
 impl<'a, 'b> ConvertFromObject<'a, 'b> for TransformMatrix {
@@ -160,6 +203,12 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for TransformMatrix {
             ty: f,
         })
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ColorOrName {
+    Color(Color),
+    Name(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -376,30 +425,6 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for TextStringOrNumber {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
         o.as_text_string_or_number()
-    }
-}
-
-impl<'a, 'b> ConvertFromObject<'a, 'b> for Color {
-    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
-        let mut colors = ArrayVec::<f32, 4>::new();
-        while let Some(o) = objects.pop() {
-            if let Ok(num) = o.as_number() {
-                colors.push(num);
-                if colors.len() == 4 {
-                    break;
-                }
-            } else {
-                objects.push(o);
-                break;
-            }
-        }
-
-        match colors.len() {
-            1 => Ok(Color::Gray(colors[0])),
-            3 => Ok(Color::Rgb(colors[2], colors[1], colors[0])),
-            4 => Ok(Color::Cmyk(colors[3], colors[2], colors[1], colors[0])),
-            _ => Err(ObjectValueError::GraphicsOperationSchemaError),
-        }
     }
 }
 

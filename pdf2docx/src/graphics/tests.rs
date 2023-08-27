@@ -92,6 +92,13 @@ fn color_convert_from_object(mut v: Vec<Object>) -> Color {
     Color::convert_from_object(&mut v).unwrap()
 }
 
+#[test_case(vec![1.into()] => Color::Gray(1.0); "Gray")]
+#[test_case(vec![1.into(), 2.0.into(), 3.into()] => Color::Rgb(1.0, 2.0, 3.0); "RGB")]
+#[test_case(vec![1.into(), 2.0.into(), 3.into(), 4.0.into()] => Color::Cmyk(1.0, 2.0, 3.0, 4.0); "CMYK")]
+fn color_try_from_object(v: Vec<Object>) -> Color {
+    Color::try_from(&Object::Array(v)).unwrap()
+}
+
 #[test]
 fn color_convert_from_object_stop_on_non_number() {
     let mut v = vec![true.into(), 1.into()];

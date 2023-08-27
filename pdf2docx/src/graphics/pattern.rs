@@ -5,7 +5,7 @@ use super::{ColorSpace, Rectangle};
 use crate::{
     file::{GraphicsStateParameterDict, ObjectResolver, ResourceDict},
     function::{default_domain, Domain, FunctionDict},
-    graphics::TransformMatrix,
+    graphics::{Color, TransformMatrix},
     object::{Dictionary, Object, ObjectValueError, SchemaDict},
 };
 
@@ -96,6 +96,9 @@ pub(crate) trait ShadingDictTrait {
 
     #[try_from]
     fn color_space(&self) -> ColorSpace;
+
+    #[try_from]
+    fn background(&self) -> Option<Color>;
 
     #[try_from]
     fn b_box(&self) -> Option<Rectangle>;
