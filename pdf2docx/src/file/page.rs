@@ -249,10 +249,15 @@ impl<'a, 'b> Page<'a, 'b> {
 
     pub fn render_steps(
         &self,
-        option: RenderOption,
+        option: RenderOptionBuilder,
         steps: Option<usize>,
     ) -> Result<Pixmap, ObjectValueError> {
-        let mut renderer = paint::Render::new(self, option);
+        let media_box = self.media_box();
+        let option = option
+            .width(media_box.width() as u32)
+            .height(media_box.height() as u32)
+            .build();
+        let mut renderer = paint::Render::new(option);
         let content = self.content()?;
         let resource = self.resources();
         if let Some(steps) = steps {
@@ -267,7 +272,7 @@ impl<'a, 'b> Page<'a, 'b> {
         Ok(renderer.into())
     }
 
-    pub fn render(&self, option: RenderOption) -> Result<Pixmap, ObjectValueError> {
+    pub fn render(&self, option: RenderOptionBuilder) -> Result<Pixmap, ObjectValueError> {
         self.render_steps(option, None)
     }
 

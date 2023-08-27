@@ -11,7 +11,7 @@ use anyhow::Result as AnyResult;
 use educe::Educe;
 use itertools::Either;
 
-use super::{Operation, Page, Rectangle, ResourceDict};
+use super::{Operation, Rectangle, ResourceDict};
 use tiny_skia::{
     FillRule, FilterQuality, GradientStop, Mask, Paint, Path as SkiaPath, PathBuilder, Pixmap,
     PixmapPaint, PixmapRef, Point as SkiaPoint, Stroke, StrokeDash, Transform,
@@ -72,9 +72,13 @@ pub struct State {
 
 impl State {
     /// height: height in user space coordinate
-    fn new(height: u32, option: &RenderOption) -> Self {
+    fn new(option: &RenderOption) -> Self {
         let mut r = Self {
-            ctm: MatrixMapper::new(height as f32, option.zoom, TransformMatrix::identity()),
+            ctm: MatrixMapper::new(
+                option.height as f32,
+                option.zoom,
+                TransformMatrix::identity(),
+            ),
             fill_paint: Paint::default(),
             stroke_paint: Paint::default(),
             stroke: Stroke::default(),
@@ -296,6 +300,8 @@ pub struct RenderOption {
     /// zoom level default to 1.0
     #[educe(Default = 1.0)]
     zoom: f32,
+    width: u32,
+    height: u32,
 }
 
 #[derive(Educe)]
@@ -305,6 +311,16 @@ pub struct RenderOptionBuilder(RenderOption);
 impl RenderOptionBuilder {
     pub fn zoom(mut self, zoom: f32) -> Self {
         self.0.zoom = zoom;
+        self
+    }
+
+    pub fn width(mut self, width: u32) -> Self {
+        self.0.width = width;
+        self
+    }
+
+    pub fn height(mut self, height: u32) -> Self {
+        self.0.height = height;
         self
     }
 
@@ -323,19 +339,16 @@ pub struct Render {
 }
 
 impl Render {
-    pub fn new(page: &Page, option: RenderOption) -> Self {
-        let media_box = page.media_box();
-        let zoom = option.zoom;
-        let user_h = media_box.height();
-        let w = (media_box.width() * zoom) as u32;
-        let h = (user_h * zoom) as u32;
+    pub fn new(option: RenderOption) -> Self {
+        let w = (option.width as f32 * option.zoom) as u32;
+        let h = (option.height as f32 * option.zoom) as u32;
 
         let mut canvas = Pixmap::new(w, h).unwrap();
         // fill the whole canvas with white
         canvas.fill(tiny_skia::Color::WHITE);
         Self {
             canvas,
-            stack: vec![State::new(user_h as u32, &option)],
+            stack: vec![State::new(&option)],
             width: w,
             height: h,
             path: Path::default(),
