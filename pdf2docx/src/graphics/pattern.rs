@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use super::{ColorSpace, Rectangle};
 use crate::{
-    file::{GraphicsStateParameterDict, ObjectResolver},
+    file::{GraphicsStateParameterDict, ObjectResolver, ResourceDict},
     function::{default_domain, Domain, FunctionDict},
     graphics::TransformMatrix,
     object::{Dictionary, Object, ObjectValueError, SchemaDict},
@@ -32,7 +32,47 @@ pub(crate) trait PatternDictTrait {
     fn pattern_type(&self) -> PatternType;
 
     #[self_as]
+    fn tiling_pattern(&self) -> TilingPatternDict<'a, 'b>;
+
+    #[self_as]
     fn shading_pattern(&self) -> ShadingPatternDict<'a, 'b>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, TryFromIntObject)]
+pub(crate) enum TilingPaintType {
+    Uncolored = 1,
+    Colored = 2,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, TryFromIntObject)]
+pub(crate) enum TilingType {
+    ConstantSpacing = 1,
+    NoDistortion = 2,
+    ConstantSpacingAndFasterTiling = 3,
+}
+
+#[pdf_object(1i32)]
+#[type_field("PatternType")]
+pub(crate) trait TilingPatternDictTrait {
+    #[try_from]
+    fn paint_type(&self) -> TilingPaintType;
+
+    #[try_from]
+    fn tiling_type(&self) -> TilingType;
+
+    #[try_from]
+    fn b_box(&self) -> Rectangle;
+
+    fn x_step(&self) -> f32;
+
+    fn y_step(&self) -> f32;
+
+    #[nested]
+    fn resources(&self) -> ResourceDict<'a, 'b>;
+
+    #[try_from]
+    #[or_default]
+    fn matrix(&self) -> TransformMatrix;
 }
 
 #[pdf_object(2i32)]
