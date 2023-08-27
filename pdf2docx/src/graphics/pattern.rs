@@ -115,6 +115,10 @@ pub(crate) trait ShadingDictTrait {
 pub(crate) struct AxialExtend(bool, bool);
 
 impl AxialExtend {
+    pub fn new(begin: bool, end: bool) -> Self {
+        Self(begin, end)
+    }
+
     pub fn begin(&self) -> bool {
         self.0
     }

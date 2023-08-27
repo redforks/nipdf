@@ -566,7 +566,7 @@ impl Render {
         let axial = shading.axial()?;
         assert_eq!(
             axial.extend()?,
-            AxialExtend::default(),
+            AxialExtend::new(true, true),
             "Extend not supported"
         );
         let pattern = build_linear_gradient(&axial)?;
