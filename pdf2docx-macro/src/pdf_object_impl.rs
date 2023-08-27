@@ -75,7 +75,7 @@ fn has_attr<'a>(
         return Some(Right(rt));
     };
 
-    let Some(seg) = tp.path.segments.last()  else {
+    let Some(seg) = tp.path.segments.last() else {
         panic!("expect path segment")
     };
 
@@ -487,7 +487,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let mut methods = vec![];
     for item in &def.items {
-        let TraitItem::Fn(TraitItemFn { sig, attrs, .. }) = item  else {
+        let TraitItem::Fn(TraitItemFn { sig, attrs, .. }) = item else {
             panic!("only support function")
         };
 
@@ -604,6 +604,10 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             fn id(&self) -> Option<std::num::NonZeroU32> {
                 self.id
+            }
+
+            fn resolver(&self) -> &'b ObjectResolver<'a> {
+                self.d.resolver()
             }
         }
 

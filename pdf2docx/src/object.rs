@@ -348,6 +348,8 @@ where
     ) -> Result<Option<Self>, ObjectValueError>;
 
     fn id(&self) -> Option<NonZeroU32>;
+
+    fn resolver(&self) -> &'b ObjectResolver<'a>;
 }
 
 impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
