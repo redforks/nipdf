@@ -514,7 +514,7 @@ impl Render {
         let xobject = xobjects.get(&name.0).unwrap();
         let img = xobject.as_image().expect("Only Image XObject supported");
         let img = img.decode(resources.d.resolver(), false).unwrap();
-        let FilterDecodedData::Image(img) = img  else {
+        let FilterDecodedData::Image(img) = img else {
             panic!("Stream should decoded to image");
         };
         let state = self.stack.last().unwrap();
@@ -556,6 +556,12 @@ impl Render {
         assert!(pattern.ext_g_state()?.is_empty(), "ExtGState not supported");
 
         let shading = pattern.shading()?;
+        assert!(shading.b_box()?.is_none(), "TODO: support BBox of shading");
+        assert!(
+            shading.background()?.is_none(),
+            "TODO: support Background of shading, paint background before shading"
+        );
+
         assert_eq!(shading.shading_type()?, ShadingType::Axial);
         let axial = shading.axial()?;
         assert_eq!(
