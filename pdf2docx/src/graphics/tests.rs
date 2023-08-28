@@ -11,6 +11,7 @@ use test_case::test_case;
 #[test_case("Tc[", "Tc"; "end with separator 1")]
 #[test_case("Tc<", "Tc"; "end with separator 2")]
 #[test_case("Tc(", "Tc"; "end with separator 3")]
+#[test_case("q/foo", "q"; "end with Name")]
 fn parse_operator_succeed(s: &str, op: &str) {
     let len = s.len();
     let (input, result) = parse_operator(s.as_bytes()).unwrap();
@@ -34,6 +35,21 @@ fn parse_operator_falied(s: &str) {
     ];
     "two ops"
 )]
+#[test_case("q 296.000000 0 0 295.000000 0 0 cm/Image80 Do Q " => vec![
+        Operation::SaveGraphicsState,
+        Operation::ModifyCTM(TransformMatrix {
+            sx: 296f32,
+            kx: 0f32,
+            ky: 0f32,
+            sy: 295f32,
+            tx: 0f32,
+            ty: 0f32
+        }),
+        Operation::PaintXObject(NameOfDict("Image80".into())),
+        Operation::RestoreGraphicsState
+    ];
+    "cm and Do"
+)]
 fn test_parse_opreations(s: &str) -> Vec<Operation> {
     let (_, result) = parse_operations(s.as_bytes()).unwrap();
     result
@@ -43,13 +59,13 @@ fn test_parse_opreations(s: &str) -> Vec<Operation> {
 #[test_case("Q" => Operation::RestoreGraphicsState; "restore")]
 #[test_case("1 w" => Operation::SetLineWidth(1f32))]
 #[test_case("1.5 w" => Operation::SetLineWidth(1.5f32))]
-#[test_case("1 2 3 1.5 -2 6 cm" => Operation::ModifyCTM(TransformMatrix {
-    sx: 1f32,
-    kx: 2f32,
-    ky: 3f32,
-    sy: 1.5f32,
-    tx: -2f32,
-    ty: 6f32,
+#[test_case("296.000000 0 0 295.000000 0 0 cm" => Operation::ModifyCTM(TransformMatrix {
+    sx: 296f32,
+    kx: 0f32,
+    ky: 0f32,
+    sy: 295f32,
+    tx: 0f32,
+    ty: 0f32,
 }); "cm")]
 #[test_case("[1 2] 0.5 d" => Operation::SetDashPattern(vec![1f32, 2f32], 0.5f32); "dash-pattern")]
 #[test_case("/stateName gs" => Operation::SetGraphicsStateParameters(NameOfDict("stateName".into())); "gs")]
