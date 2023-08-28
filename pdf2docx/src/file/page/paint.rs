@@ -1,15 +1,18 @@
+use std::borrow::Cow;
+
 use crate::{
     function::{Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
-        AxialExtend, AxialShadingDict, Color, ColorOrName, ColorSpace, ConvertFromObject,
-        LineCapStyle, LineJoinStyle, PatternType, Point, RenderingIntent, ShadingType,
-        TransformMatrix,
+        parse_operations, AxialExtend, AxialShadingDict, Color, ColorOrName, ColorSpace,
+        ConvertFromObject, LineCapStyle, LineJoinStyle, PatternType, Point, RenderingIntent,
+        ShadingPatternDict, ShadingType, TilingPatternDict, TransformMatrix,
     },
-    object::{Array, FilterDecodedData, Object},
+    object::{Array, FilterDecodedData, Object, PdfObject},
 };
 use anyhow::Result as AnyResult;
 use educe::Educe;
 use itertools::Either;
+use nom::{combinator::eof, sequence::terminated};
 
 use super::{Operation, Rectangle, ResourceDict};
 use tiny_skia::{
@@ -60,10 +63,43 @@ impl From<Point> for SkiaPoint {
 }
 
 #[derive(Debug, Clone)]
+enum PaintCreator {
+    Color(tiny_skia::Color),
+    Gradient(Paint<'static>),
+    Tile(Pixmap),
+}
+
+impl PaintCreator {
+    fn create(&self) -> Cow<'_, Paint<'_>> {
+        match self {
+            PaintCreator::Color(c) => {
+                let mut r = Paint::default();
+                r.set_color(*c);
+                Cow::Owned(r)
+            }
+
+            PaintCreator::Gradient(p) => Cow::Borrowed(p),
+
+            PaintCreator::Tile(p) => {
+                let mut r = Paint::default();
+                r.shader = tiny_skia::Pattern::new(
+                    p.as_ref(),
+                    tiny_skia::SpreadMode::Repeat,
+                    FilterQuality::Bicubic,
+                    1.0f32,
+                    Transform::identity(),
+                );
+                Cow::Owned(r)
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct State {
     ctm: MatrixMapper,
-    fill_paint: Paint<'static>,
-    stroke_paint: Paint<'static>,
+    fill_paint: PaintCreator,
+    stroke_paint: PaintCreator,
     stroke: Stroke,
     mask: Option<Mask>,
     fill_color_space: ColorSpace,
@@ -79,15 +115,13 @@ impl State {
                 option.zoom,
                 TransformMatrix::identity(),
             ),
-            fill_paint: Paint::default(),
-            stroke_paint: Paint::default(),
+            fill_paint: PaintCreator::Color(tiny_skia::Color::TRANSPARENT),
+            stroke_paint: PaintCreator::Color(tiny_skia::Color::BLACK),
             stroke: Stroke::default(),
             mask: None,
             fill_color_space: ColorSpace::DeviceRGB,
             stroke_color_space: ColorSpace::DeviceRGB,
         };
-        r.fill_paint.set_color(tiny_skia::Color::TRANSPARENT);
-        r.stroke_paint.set_color(tiny_skia::Color::BLACK);
 
         r.set_line_cap(LineCapStyle::default());
         r.set_line_join(LineJoinStyle::default());
@@ -128,12 +162,12 @@ impl State {
 
     fn set_stroke_color(&mut self, color: Color) {
         log::debug!("set stroke color: {:?}", color);
-        self.stroke_paint.set_color(color.into());
+        self.stroke_paint = PaintCreator::Color(color.into());
     }
 
     fn set_fill_color(&mut self, color: Color) {
         log::debug!("set fill color: {:?}", color);
-        self.fill_paint.set_color(color.into());
+        self.fill_paint = PaintCreator::Color(color.into());
     }
 
     fn set_ctm(&mut self, ctm: TransformMatrix) {
@@ -141,12 +175,12 @@ impl State {
         self.ctm.set_ctm(ctm);
     }
 
-    fn get_fill_paint(&self) -> &Paint<'static> {
-        &self.fill_paint
+    fn get_fill_paint(&self) -> Cow<'_, Paint<'_>> {
+        self.fill_paint.create()
     }
 
-    fn get_stroke_paint(&self) -> &Paint<'static> {
-        &self.stroke_paint
+    fn get_stroke_paint(&self) -> Cow<'_, Paint<'_>> {
+        self.stroke_paint.create()
     }
 
     fn get_stroke(&self) -> &Stroke {
@@ -457,7 +491,7 @@ impl Render {
         log::debug!("stroke: {:?} {:?}", paint, stroke);
         self.canvas.stroke_path(
             self.path.finish(),
-            paint,
+            &paint,
             stroke,
             state.path_transform(),
             state.get_mask(),
@@ -485,7 +519,7 @@ impl Render {
         log::debug!("fill: {:?}/{:?}", paint, fill_rule);
         self.canvas.fill_path(
             self.path.finish(),
-            paint,
+            &paint,
             fill_rule,
             state.path_transform(),
             state.get_mask(),
@@ -556,11 +590,13 @@ impl Render {
 
         let pattern = resources.pattern()?;
         let pattern = pattern.get(name.as_str()).unwrap();
-        if pattern.pattern_type()? != PatternType::Shading {
-            log::error!("Only shading pattern supported");
-            return Ok(());
+        match pattern.pattern_type()? {
+            PatternType::Tiling => self.set_tiling_pattern(pattern.tiling_pattern()?),
+            PatternType::Shading => self.set_shading_pattern(pattern.shading_pattern()?),
         }
-        let pattern = pattern.shading_pattern()?;
+    }
+
+    fn set_shading_pattern(&mut self, pattern: ShadingPatternDict) -> AnyResult<()> {
         assert_eq!(
             pattern.matrix()?,
             TransformMatrix::identity(),
@@ -582,8 +618,31 @@ impl Render {
             AxialExtend::new(true, true),
             "Extend not supported"
         );
-        let pattern = build_linear_gradient(&axial)?;
-        self.stack.last_mut().unwrap().fill_paint.shader = pattern;
+        let shader = build_linear_gradient(&axial)?;
+        let mut paint = Paint::default();
+        paint.shader = shader;
+        self.stack.last_mut().unwrap().fill_paint = PaintCreator::Gradient(paint);
+        Ok(())
+    }
+
+    fn set_tiling_pattern<'a, 'b>(&mut self, tile: TilingPatternDict<'a, 'b>) -> AnyResult<()> {
+        let stream: &'b Object<'a> = tile.resolver().resolve(tile.id().unwrap())?;
+        let stream = stream.as_stream()?;
+        let decoded = stream.decode(tile.resolver(), false)?;
+        let bytes = decoded.as_bytes();
+        let (_, ops) = terminated(parse_operations, eof)(bytes).unwrap();
+        let bbox = tile.b_box()?;
+        let mut render = Render::new(
+            RenderOptionBuilder::default()
+                .width(bbox.width() as u32)
+                .height(bbox.height() as u32)
+                .build(),
+        );
+        let resources = tile.resources()?;
+        for op in ops {
+            render.exec(&op, &resources);
+        }
+        self.stack.last_mut().unwrap().fill_paint = PaintCreator::Tile(render.into());
         Ok(())
     }
 }
