@@ -3,7 +3,7 @@ use core::panic;
 use either::{Either, Left, Right};
 use proc_macro::TokenStream;
 use proc_macro2::Ident;
-use quote::quote;
+use quote::{quote, ToTokens};
 use syn::{
     parse_macro_input, parse_quote, Attribute, Expr, ExprCall, ExprLit, ExprPath, ExprTuple,
     ItemTrait, Lit, LitStr, Meta, ReturnType, TraitItem, TraitItemFn, Type,
@@ -551,7 +551,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 },
             )
         } else {
-            panic!("unsupported return type")
+            panic!("unsupported return type: {}", rt.to_token_stream())
         };
 
         if let Some(default_attr) = default_attr {
@@ -587,18 +587,18 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
     let tokens = quote! {
         #[derive(Clone, Debug)]
         #vis struct #struct_name<'a, 'b> {
-            d: SchemaDict<'a, 'b, #valid_ty>,
+            d: crate::object::SchemaDict<'a, 'b, #valid_ty>,
             id: Option<std::num::NonZeroU32>,
         }
 
         impl<'a, 'b> crate::object::PdfObject<'a, 'b> for #struct_name<'a, 'b> {
-            fn new(id: Option<std::num::NonZeroU32>, dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
-                let d = SchemaDict::new(dict, r, #valid_arg)?;
+            fn new(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary<'a>, r: &'b crate::file::ObjectResolver<'a>) -> Result<Self, crate::object::ObjectValueError> {
+                let d = crate::object::SchemaDict::new(dict, r, #valid_arg)?;
                 Ok(Self { d, id})
             }
 
-            fn checked(id: Option<std::num::NonZeroU32>, dict: &'b Dictionary<'a>, r: &'b ObjectResolver<'a>) -> Result<Option<Self>, ObjectValueError> {
-                let d = SchemaDict::from(dict, r, #valid_arg)?;
+            fn checked(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary<'a>, r: &'b crate::file::ObjectResolver<'a>) -> Result<Option<Self>, crate::object::ObjectValueError> {
+                let d = crate::object::SchemaDict::from(dict, r, #valid_arg)?;
                 Ok(d.map(|d| Self { d, id}))
             }
 
@@ -606,7 +606,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 self.id
             }
 
-            fn resolver(&self) -> &'b ObjectResolver<'a> {
+            fn resolver(&self) -> &'b crate::file::ObjectResolver<'a> {
                 self.d.resolver()
             }
         }

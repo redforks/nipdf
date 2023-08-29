@@ -1,5 +1,5 @@
 use super::*;
-use crate::{object::PdfObject, parser::parse_dict};
+use crate::{file::ObjectResolver, object::PdfObject, parser::parse_dict};
 use test_case::test_case;
 
 #[test]

@@ -20,7 +20,7 @@ use crate::{
     parser::{ws_prefixed, ParseResult},
 };
 
-use super::{Dictionary, Name, Object, ObjectValueError, SchemaDict};
+use super::{Dictionary, Name, Object, ObjectValueError};
 
 const KEY_FILTER: &[u8] = b"Filter";
 const KEY_FILTER_PARAMS: &[u8] = b"DecodeParms";

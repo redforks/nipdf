@@ -8,7 +8,7 @@ use pdf2docx_macro::pdf_object;
 use std::{collections::HashMap, num::NonZeroU32};
 
 use crate::{
-    object::{Dictionary, FrameSet, Name, Object, ObjectValueError, PdfObject, SchemaDict},
+    object::{Dictionary, FrameSet, Name, Object, ObjectValueError, PdfObject},
     parser::{parse_frame_set, parse_header, parse_indirected_object},
 };
 use log::error;

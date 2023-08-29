@@ -3,10 +3,10 @@ use std::collections::HashMap;
 
 use super::{ColorSpace, Rectangle};
 use crate::{
-    file::{GraphicsStateParameterDict, ObjectResolver, ResourceDict},
+    file::{GraphicsStateParameterDict, ResourceDict},
     function::{default_domain, Domain, FunctionDict},
     graphics::{Color, TransformMatrix},
-    object::{Dictionary, Object, ObjectValueError, SchemaDict},
+    object::{Object, ObjectValueError},
 };
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromIntObject)]

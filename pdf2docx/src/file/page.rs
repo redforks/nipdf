@@ -8,13 +8,13 @@ use crate::{
         RenderingIntent,
     },
     object::{
-        Dictionary, FilterDecodedData, Object, ObjectValueError, PdfObject, SchemaDict, Stream,
+        Dictionary, FilterDecodedData, Object, ObjectValueError, PdfObject, Stream,
     },
 };
 
 pub use self::paint::{RenderOption, RenderOptionBuilder};
 
-use super::ObjectResolver;
+
 use std::{collections::HashMap, iter::once};
 
 mod paint;

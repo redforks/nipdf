@@ -2,8 +2,7 @@ use anyhow::Result as AnyResult;
 
 use pdf2docx_macro::{pdf_object, TryFromIntObject};
 
-use crate::file::ObjectResolver;
-use crate::object::{Dictionary, Object, ObjectValueError, SchemaDict};
+use crate::object::{Object, ObjectValueError};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Domain {
