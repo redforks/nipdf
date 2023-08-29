@@ -66,7 +66,7 @@ impl From<Point> for SkiaPoint {
 enum PaintCreator {
     Color(tiny_skia::Color),
     Gradient(Paint<'static>),
-    Tile(Pixmap),
+    Tile((Pixmap, TransformMatrix)),
 }
 
 impl PaintCreator {
@@ -80,10 +80,10 @@ impl PaintCreator {
 
             PaintCreator::Gradient(p) => Cow::Borrowed(p),
 
-            PaintCreator::Tile(p) => {
+            PaintCreator::Tile((p, matrix)) => {
                 let mut r = Paint::default();
                 let height = p.height() as f32;
-                let matrix_mapper = MatrixMapper::new(height, 1.0, TransformMatrix::identity());
+                let matrix_mapper = MatrixMapper::new(height, 1.0, *matrix);
                 r.shader = tiny_skia::Pattern::new(
                     p.as_ref(),
                     tiny_skia::SpreadMode::Repeat,
@@ -650,7 +650,8 @@ impl Render {
         for op in ops {
             render.exec(&op, &resources);
         }
-        self.stack.last_mut().unwrap().fill_paint = PaintCreator::Tile(render.into());
+        self.stack.last_mut().unwrap().fill_paint =
+            PaintCreator::Tile((render.into(), tile.matrix()?));
         Ok(())
     }
 }
