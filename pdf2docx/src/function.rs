@@ -19,10 +19,6 @@ impl Domain {
     fn clamp(&self, x: f32) -> f32 {
         num::clamp(x, self.start, self.end)
     }
-
-    fn as_arr(&self) -> &[f32; 2] {
-        unsafe { &*(self as *const Self as *const [f32; 2]) }
-    }
 }
 
 /// Default domain is [0, 1]
@@ -98,10 +94,6 @@ pub(crate) trait FunctionDictTrait {
 }
 
 impl<'a, 'b> FunctionDict<'a, 'b> {
-    pub fn n_args(&self) -> usize {
-        self.domain().unwrap().n()
-    }
-
     pub fn n_returns(&self) -> Option<usize> {
         self.range().unwrap().map(|range| range.n())
     }

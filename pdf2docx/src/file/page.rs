@@ -118,18 +118,6 @@ pub trait GraphicsStateParameterDictTrait {
     fn text_knockout_flag(&self) -> Option<bool>;
 }
 
-impl<'a, 'b> GraphicsStateParameterDict<'a, 'b> {
-    fn dash_pattern(&self) -> Option<(Vec<f32>, f32)> {
-        self.d.opt_arr("D").unwrap().map(|arr| {
-            let mut iter = arr.iter();
-            let dash_array = iter.next().unwrap().as_arr().unwrap();
-            let dash_phase = iter.next().unwrap().as_number().unwrap();
-            let dash_array = dash_array.iter().map(|o| o.as_number().unwrap()).collect();
-            (dash_array, dash_phase)
-        })
-    }
-}
-
 #[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromNameObject)]
 pub enum XObjectType {
     Image,
