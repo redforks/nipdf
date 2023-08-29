@@ -21,20 +21,20 @@ pub fn try_from_name_object(input: TokenStream) -> TokenStream {
             parse_quote!( #lit => Ok(#t::#b))
         });
     let tokens = quote! {
-        impl<'a, 'b> TryFrom<&'b Object<'a>> for #t {
-            type Error = ObjectValueError;
-            fn try_from(object: &'b Object<'a>) -> Result<Self, Self::Error> {
+        impl<'a, 'b> TryFrom<&'b crate::object::Object<'a>> for #t {
+            type Error = crate::object::ObjectValueError;
+            fn try_from(object: &'b crate::object::Object<'a>) -> Result<Self, Self::Error> {
                 match object.as_name()? {
                     #( #arms, )*
-                    _ => Err(ObjectValueError::GraphicsOperationSchemaError),
+                    _ => Err(crate::object::ObjectValueError::GraphicsOperationSchemaError),
                 }
             }
         }
 
         impl<'a, 'b> crate::graphics::ConvertFromObject<'a, 'b> for #t {
-            fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+            fn convert_from_object(objects: &'b mut Vec<crate::object::Object<'a>>) -> Result<Self, crate::object::ObjectValueError> {
                 let o = objects.pop().unwrap();
-                #t::try_from(&o).map_err(|_| ObjectValueError::GraphicsOperationSchemaError)
+                #t::try_from(&o).map_err(|_| crate::object::ObjectValueError::GraphicsOperationSchemaError)
             }
         }
     };
@@ -47,18 +47,28 @@ pub fn try_from_name_object(input: TokenStream) -> TokenStream {
 pub fn try_from_int_object(input: TokenStream) -> TokenStream {
     let enum_t = parse_macro_input!(input as ItemEnum);
     let t = enum_t.ident;
-    let arms = enum_t.variants.iter().map(|branch| -> proc_macro2::TokenStream {
-        let Some((_, Expr::Lit(ExprLit{lit: Lit::Int(ref lit), ..}))) = branch.discriminant else {
-            panic!("Enum discriminant must be literal");
-        };
-        let digit: i32 = lit.base10_parse().unwrap();
-        let b = &branch.ident;
-        parse_quote!( #digit=> Ok(#t::#b))
-    });
+    let arms = enum_t
+        .variants
+        .iter()
+        .map(|branch| -> proc_macro2::TokenStream {
+            let Some((
+                _,
+                Expr::Lit(ExprLit {
+                    lit: Lit::Int(ref lit),
+                    ..
+                }),
+            )) = branch.discriminant
+            else {
+                panic!("Enum discriminant must be literal");
+            };
+            let digit: i32 = lit.base10_parse().unwrap();
+            let b = &branch.ident;
+            parse_quote!( #digit=> Ok(#t::#b))
+        });
     let tokens = quote! {
-        impl<'a, 'b> TryFrom<&'b Object<'a>> for #t {
-            type Error = ObjectValueError;
-            fn try_from(object: &'b Object<'a>) -> Result<Self, Self::Error> {
+        impl<'a, 'b> TryFrom<&'b crate::object::Object<'a>> for #t {
+            type Error = crate::object::ObjectValueError;
+            fn try_from(object: &'b crate::object::Object<'a>) -> Result<Self, Self::Error> {
                 let n = object.as_int()?;
                 match n {
                     #( #arms, )*
@@ -68,7 +78,7 @@ pub fn try_from_int_object(input: TokenStream) -> TokenStream {
         }
 
         impl<'a, 'b> crate::graphics::ConvertFromObject<'a, 'b> for #t {
-            fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+            fn convert_from_object(objects: &'b mut Vec<crate::object::Object<'a>>) -> Result<Self, ObjectValueError> {
                 let o = objects.pop().unwrap();
                 #t::try_from(&o).map_err(|_| ObjectValueError::GraphicsOperationSchemaError)
             }
@@ -158,7 +168,7 @@ pub fn graphics_operation_parser(input: TokenStream) -> TokenStream {
     // }));
 
     let tokens = quote! {
-        fn create_operation<'a>(op: &str, operands: &mut Vec<Object<'a>>) -> Result<Operation<'a>, ObjectValueError> {
+        fn create_operation<'a>(op: &str, operands: &mut Vec<crate::object::Object<'a>>) -> Result<Operation<'a>, crate::object::ObjectValueError> {
             Ok(match op {
                 #( #arms, )*
                 _ => todo!(),
