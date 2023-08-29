@@ -5,7 +5,7 @@ use crate::{
     graphics::{
         parse_operations, AxialExtend, AxialShadingDict, Color, ColorOrName, ColorSpace,
         ConvertFromObject, LineCapStyle, LineJoinStyle, PatternType, Point, RenderingIntent,
-        ShadingPatternDict, ShadingType, TilingPatternDict, TransformMatrix,
+        ShadingPatternDict, ShadingType, TilingPaintType, TilingPatternDict, TransformMatrix,
     },
     object::{Array, FilterDecodedData, Object, PdfObject},
 };
@@ -628,6 +628,12 @@ impl Render {
     }
 
     fn set_tiling_pattern<'a, 'b>(&mut self, tile: TilingPatternDict<'a, 'b>) -> AnyResult<()> {
+        assert_eq!(
+            tile.paint_type()?,
+            TilingPaintType::Uncolored,
+            "Colored tiling pattern not supported"
+        );
+
         let stream: &'b Object<'a> = tile.resolver().resolve(tile.id().unwrap())?;
         let stream = stream.as_stream()?;
         let decoded = stream.decode(tile.resolver(), false)?;
