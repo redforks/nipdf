@@ -82,12 +82,14 @@ impl PaintCreator {
 
             PaintCreator::Tile(p) => {
                 let mut r = Paint::default();
+                let height = p.height() as f32;
+                let matrix_mapper = MatrixMapper::new(height, 1.0, TransformMatrix::identity());
                 r.shader = tiny_skia::Pattern::new(
                     p.as_ref(),
                     tiny_skia::SpreadMode::Repeat,
                     FilterQuality::Bicubic,
                     1.0f32,
-                    Transform::identity(),
+                    matrix_mapper.tile_transform(),
                 );
                 Cow::Owned(r)
             }
@@ -666,6 +668,10 @@ impl MatrixMapper {
     }
 
     pub fn path_transform(&self) -> Transform {
+        self.flip_y(self.ctm.into())
+    }
+
+    pub fn tile_transform(&self) -> Transform {
         self.flip_y(self.ctm.into())
     }
 
