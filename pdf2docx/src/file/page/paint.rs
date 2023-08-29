@@ -621,9 +621,10 @@ impl Render {
             "Extend not supported"
         );
         let shader = build_linear_gradient(&axial)?;
-        let mut paint = Paint::default();
-        paint.shader = shader;
-        self.stack.last_mut().unwrap().fill_paint = PaintCreator::Gradient(paint);
+        self.stack.last_mut().unwrap().fill_paint = PaintCreator::Gradient(Paint {
+            shader,
+            ..Default::default()
+        });
         Ok(())
     }
 
@@ -640,6 +641,9 @@ impl Render {
         let bytes = decoded.as_bytes();
         let (_, ops) = terminated(parse_operations, eof)(bytes).unwrap();
         let bbox = tile.b_box()?;
+        assert_eq!(bbox.width(), tile.x_step()?, "x_step not supported");
+        assert_eq!(bbox.height(), tile.y_step()?, "y_step not supported");
+
         let mut render = Render::new(
             RenderOptionBuilder::default()
                 .width(bbox.width() as u32)
