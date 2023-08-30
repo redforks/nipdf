@@ -542,7 +542,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     pub fn opt_single_or_arr_stream(
         &self,
         id: &'static str,
-    ) -> Result<Vec<&Stream<'a>>, ObjectValueError> {
+    ) -> Result<Vec<&'b Stream<'a>>, ObjectValueError> {
         let resolver = self.resolver();
         match resolver.resolve_container_value(self.d, id)? {
             Object::Array(arr) => arr
@@ -590,11 +590,11 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
             .map_or(Ok(None), |o| o.as_stream().map(Some))
     }
 
-    pub fn opt_str(&self, id: &'static str) -> Result<Option<&str>, ObjectValueError> {
+    pub fn opt_str(&self, id: &'static str) -> Result<Option<&'b str>, ObjectValueError> {
         self.opt_get(id)?.map_or(Ok(None), |o| o.as_str().map(Some))
     }
 
-    pub fn required_str(&self, id: &'static str) -> Result<&str, ObjectValueError> {
+    pub fn required_str(&self, id: &'static str) -> Result<&'b str, ObjectValueError> {
         self.opt_get(id)?
             .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_str()
