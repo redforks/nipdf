@@ -3,7 +3,7 @@ use proc_macro2::Span;
 use quote::quote;
 use syn::{
     parse_macro_input, parse_quote, Arm, Expr, ExprLit, Fields, FieldsUnnamed, Ident, ItemEnum,
-    Lit, LitStr, Meta, Pat, Token,
+    ItemStruct, Lit, LitStr, Meta, Pat, Token,
 };
 
 /// Generate `impl TryFrom` for enum that convert Object::Name to enum variant
@@ -81,6 +81,25 @@ pub fn try_from_int_object(input: TokenStream) -> TokenStream {
             fn convert_from_object(objects: &'b mut Vec<crate::object::Object<'a>>) -> Result<Self, ObjectValueError> {
                 let o = objects.pop().unwrap();
                 #t::try_from(&o).map_err(|_| ObjectValueError::GraphicsOperationSchemaError)
+            }
+        }
+    };
+    // println!("{}", tokens);
+    tokens.into()
+}
+
+/// derive macro to generate `TryFrom<&Object>` for bitflags struct type
+#[proc_macro_derive(TryFromIntObjectForBitflags)]
+pub fn try_from_int_object_for_bitflags(input: TokenStream) -> TokenStream {
+    let t = parse_macro_input!(input as ItemStruct);
+    let t = t.ident;
+    let tokens = quote! {
+        impl<'a> TryFrom<&crate::object::Object<'a>> for #t {
+            type Error = crate::object::ObjectValueError;
+
+            fn try_from(object: &crate::object::Object<'a>) -> Result<Self, Self::Error> {
+                let n = object.as_int()?;
+                Ok(<#t as bitflags::Flags>::from_bits(n as u32).unwrap())
             }
         }
     };
