@@ -372,6 +372,7 @@ pub struct Render {
     width: u32,
     height: u32,
     path: Path,
+    text_block: Option<TextBlock>,
 }
 
 impl Render {
@@ -388,6 +389,7 @@ impl Render {
             width: w,
             height: h,
             path: Path::default(),
+            text_block: None,
         }
     }
 
@@ -460,6 +462,16 @@ impl Render {
             Operation::ClipEvenOdd => {
                 let (w, h) = (self.width, self.height);
                 self.current_mut().clip_even_odd(w, h);
+            }
+
+            // Text Object Operations
+            Operation::BeginText => {
+                assert!(self.text_block.is_none(), "TextBlock should not nested");
+                self.text_block = Some(TextBlock::default());
+            }
+            Operation::EndText => {
+                assert!(self.text_block.is_some(), "EndText without BeginText");
+                self.text_block = None;
             }
 
             // Color Operations
@@ -755,6 +767,12 @@ fn build_linear_gradient(shading: &AxialShadingDict) -> AnyResult<tiny_skia::Sha
         Transform::identity(),
     )
     .unwrap())
+}
+
+#[derive(Debug, Default)]
+struct TextBlock {
+    matrix: TransformMatrix,
+    line_matrix: TransformMatrix,
 }
 
 #[cfg(test)]
