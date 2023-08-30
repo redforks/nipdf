@@ -26,6 +26,9 @@ pub(crate) trait FontDictTrait {
 
     #[self_as]
     fn type1(&self) -> Type1FontDict<'a, 'b>;
+
+    #[self_as]
+    fn truetype(&self) -> TrueTypeFontDict<'a, 'b>;
 }
 
 #[pdf_object(("Font", "Type0"))]
@@ -52,6 +55,20 @@ pub(crate) trait Type1FontDictTrait {
     /// if font is the standard 14 fonts, it may not exist.
     fn widths(&self) -> Vec<u32>;
     /// if font is the standard 14 fonts, it may not exist.
+    // #[try_from]
+    // fn font_descriptor(&self) -> Option<FontDescriptor<'a, 'b>>;
+    #[try_from]
+    fn encoding(&self) -> Option<NameOrDictByRef<'a, 'b>>;
+    fn to_unicode(&self) -> Option<&'b Stream<'a>>;
+}
+
+#[pdf_object(("Font", "TrueType"))]
+pub(crate) trait TrueTypeFontDictTrait {
+    #[typ("Name")]
+    fn base_font(&self) -> &str;
+    fn first_char(&self) -> Option<u32>;
+    fn last_char(&self) -> Option<u32>;
+    fn widths(&self) -> Vec<u32>;
     // #[try_from]
     // fn font_descriptor(&self) -> Option<FontDescriptor<'a, 'b>>;
     #[try_from]
