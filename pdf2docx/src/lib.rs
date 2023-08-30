@@ -6,3 +6,4 @@ mod graphics;
 pub mod object;
 pub mod parser;
 mod run_length;
+mod text;

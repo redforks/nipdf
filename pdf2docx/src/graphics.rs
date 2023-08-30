@@ -15,7 +15,7 @@ use nom::{
 
 use crate::{
     file::Rectangle,
-    object::{Dictionary, Name, Object, ObjectValueError, TextStringOrNumber},
+    object::{Dictionary, Name, Object, ObjectValueError, Stream, TextStringOrNumber},
     parser::{parse_object, ws_prefixed, ws_terminated, ParseError, ParseResult},
 };
 use pdf2docx_macro::{OperationParser, TryFromIntObject, TryFromNameObject};
@@ -218,6 +218,24 @@ pub struct NameOfDict(pub String);
 pub enum NameOrDict<'a> {
     Name(Name<'a>),
     Dict(Dictionary<'a>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum NameOrStream<'a, 'b> {
+    Name(&'b Name<'a>),
+    Stream(&'b Stream<'a>),
+}
+
+impl<'a, 'b> TryFrom<&'b Object<'a>> for NameOrStream<'a, 'b> {
+    type Error = ObjectValueError;
+
+    fn try_from(obj: &'b Object<'a>) -> Result<Self, Self::Error> {
+        match obj {
+            Object::Name(name) => Ok(NameOrStream::Name(name)),
+            Object::Stream(stream) => Ok(NameOrStream::Stream(stream)),
+            _ => Err(ObjectValueError::GraphicsOperationSchemaError),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, OperationParser)]
