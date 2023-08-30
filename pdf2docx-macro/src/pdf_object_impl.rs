@@ -277,11 +277,21 @@ fn get_literal_from_some_call(c: &ExprCall) -> &Expr {
     panic!("expect Some literal")
 }
 
-fn get_literal_from_some(t: &Expr) -> &Expr {
+/// `t` should be literal or `Some(literal)`, return `Left` if `t` is literal, return `Right` if `t` is `Some(literal)
+fn get_literal_from_possible_some(t: &Expr) -> Either<&Expr, &Expr> {
     if let Expr::Call(ec) = t {
-        return get_literal_from_some_call(ec);
+        Either::Right(get_literal_from_some_call(ec))
+    } else {
+        // assert `t` is str literal
+        assert!(matches!(
+            t,
+            Expr::Lit(ExprLit {
+                lit: Lit::Str(_),
+                attrs: _
+            })
+        ));
+        Either::Left(t)
     }
-    panic!("expect Some literal")
 }
 
 fn type_field(attrs: &[Attribute]) -> Option<String> {
@@ -382,7 +392,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             elems,
         }) if elems.len() == 2 => {
             let (t, st) = (&elems[0], &elems[1]);
-            let t = get_literal_from_some(t);
+            let t = get_literal_from_possible_some(t);
             assert!(matches!(
                 st,
                 Expr::Lit(ExprLit {
@@ -391,12 +401,20 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 })
             ));
             let typ_field = type_field(def.attrs.as_slice()).unwrap_or_else(|| "Type".to_owned());
+            let checker = t.map_either(
+                    |t| -> Expr {parse_quote!{<crate::object::EqualTypeValueChecker<&'static str> as crate::object::TypeValueCheck<_>>::option(crate::object::EqualTypeValueChecker::new(#t))}},
+                    |t|-> Expr {parse_quote!{crate::object::EqualTypeValueChecker::new(#t)} },
+                ).into_inner();
+            let checker_type = t.map_either(
+                    |_| -> Type {parse_quote!{crate::object::OptionTypeValueChecker<crate::object::EqualTypeValueChecker<&'static str>>}},
+                    |_|-> Type {parse_quote!{crate::object::EqualTypeValueChecker<&'static str>}},
+                ).into_inner();
             (
                 parse_quote! {
                     crate::object::AndValueTypeValidator<
                         crate::object::ValueTypeValidator<
                             crate::object::NameTypeValueGetter,
-                            crate::object::OptionTypeValueChecker<crate::object::EqualTypeValueChecker<&'static str>>
+                            #checker_type,
                         >,
                         crate::object::ValueTypeValidator<
                             crate::object::NameTypeValueGetter,
@@ -408,7 +426,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     crate::object::AndValueTypeValidator::new(
                         crate::object::ValueTypeValidator::new(
                             crate::object::NameTypeValueGetter::new(#typ_field),
-                            <crate::object::EqualTypeValueChecker<&'static str> as crate::object::TypeValueCheck<_>>::option(crate::object::EqualTypeValueChecker::new(#t)),
+                            #checker,
                         ),
                         crate::object::ValueTypeValidator::new(
                             crate::object::NameTypeValueGetter::new("Subtype"),
