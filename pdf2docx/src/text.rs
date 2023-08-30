@@ -1,6 +1,8 @@
-use pdf2docx_macro::{pdf_object, TryFromNameObject};
+use bitflags::bitflags;
+use pdf2docx_macro::{pdf_object, TryFromIntObjectForBitflags, TryFromNameObject};
 
 use crate::{
+    file::Rectangle,
     graphics::{NameOrDictByRef, NameOrStream},
     object::Stream,
 };
@@ -55,8 +57,8 @@ pub(crate) trait Type1FontDictTrait {
     /// if font is the standard 14 fonts, it may not exist.
     fn widths(&self) -> Vec<u32>;
     /// if font is the standard 14 fonts, it may not exist.
-    // #[try_from]
-    // fn font_descriptor(&self) -> Option<FontDescriptor<'a, 'b>>;
+    #[nested]
+    fn font_descriptor(&self) -> Option<FontDescriptorDict<'a, 'b>>;
     #[try_from]
     fn encoding(&self) -> Option<NameOrDictByRef<'a, 'b>>;
     fn to_unicode(&self) -> Option<&'b Stream<'a>>;
@@ -69,9 +71,79 @@ pub(crate) trait TrueTypeFontDictTrait {
     fn first_char(&self) -> Option<u32>;
     fn last_char(&self) -> Option<u32>;
     fn widths(&self) -> Vec<u32>;
-    // #[try_from]
-    // fn font_descriptor(&self) -> Option<FontDescriptor<'a, 'b>>;
+    #[nested]
+    fn font_descriptor(&self) -> Option<FontDescriptorDict<'a, 'b>>;
     #[try_from]
     fn encoding(&self) -> Option<NameOrDictByRef<'a, 'b>>;
     fn to_unicode(&self) -> Option<&'b Stream<'a>>;
+}
+
+#[pdf_object("FontDescriptor")]
+pub(crate) trait FontDescriptorDictTrait {
+    #[typ("Name")]
+    fn font_name(&self) -> &str;
+
+    fn font_family(&self) -> &str;
+
+    #[typ("Name")]
+    fn font_stretch(&self) -> Option<&str>;
+
+    fn font_weight(&self) -> Option<u32>;
+
+    #[try_from]
+    fn flags(&self) -> FontDescriptorFlags;
+
+    #[try_from]
+    fn font_b_box(&self) -> Rectangle;
+
+    fn italic_angle(&self) -> f32;
+
+    fn ascent(&self) -> f32;
+
+    fn descent(&self) -> f32;
+
+    #[or_default]
+    fn leading(&self) -> f32;
+
+    fn cap_height(&self) -> Option<f32>;
+
+    #[or_default]
+    fn x_height(&self) -> f32;
+
+    fn stem_v(&self) -> f32;
+
+    #[or_default]
+    fn stem_h(&self) -> f32;
+
+    #[or_default]
+    fn avg_width(&self) -> f32;
+
+    #[or_default]
+    fn max_width(&self) -> f32;
+
+    #[or_default]
+    fn missing_width(&self) -> f32;
+
+    fn font_file(&self) -> Option<&'b Stream<'a>>;
+
+    fn font_file2(&self) -> Option<&'b Stream<'a>>;
+
+    fn font_file3(&self) -> Option<&'b Stream<'a>>;
+
+    fn char_set(&self) -> Option<&str>;
+}
+
+bitflags! {
+    #[derive(TryFromIntObjectForBitflags)]
+    pub(crate) struct FontDescriptorFlags: u32 {
+        const FIXED_PITCH = 1;
+        const SERIF = 1 << 1;
+        const SYMBOLIC = 1 << 2;
+        const SCRIPT = 1 << 3;
+        const NONSYMBOLIC = 1 << 5;
+        const ITALIC = 1 << 6;
+        const ALL_CAP = 1 << 16;
+        const SMALL_CAP = 1 << 17;
+        const FORCE_BOLD = 1 << 18;
+    }
 }
