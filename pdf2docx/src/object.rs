@@ -584,6 +584,11 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         self.opt_arr_map(id, |o| o.as_ref().map(|r| r.id().id()))
             .map(|o| o.unwrap_or_default())
     }
+
+    pub fn opt_stream(&self, id: &'static str) -> Result<Option<&'b Stream<'a>>, ObjectValueError> {
+        self.opt_get(id)?
+            .map_or(Ok(None), |o| o.as_stream().map(Some))
+    }
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
