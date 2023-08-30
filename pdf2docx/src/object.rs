@@ -589,6 +589,16 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         self.opt_get(id)?
             .map_or(Ok(None), |o| o.as_stream().map(Some))
     }
+
+    pub fn opt_str(&self, id: &'static str) -> Result<Option<&str>, ObjectValueError> {
+        self.opt_get(id)?.map_or(Ok(None), |o| o.as_str().map(Some))
+    }
+
+    pub fn required_str(&self, id: &'static str) -> Result<&str, ObjectValueError> {
+        self.opt_get(id)?
+            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
+            .as_str()
+    }
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
@@ -759,6 +769,15 @@ impl<'a> Object<'a> {
     pub fn as_text_string(&self) -> Result<String, ObjectValueError> {
         match self {
             Object::LiteralString(s) => Ok(s.decoded()?.to_owned()),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
+    }
+
+    /// Return decoded string from LiteralString or HexString
+    pub fn as_str(&self) -> Result<&str, ObjectValueError> {
+        match self {
+            Object::LiteralString(s) => Ok(s.decoded()?),
+            Object::HexString(s) => Ok(from_utf8(s.decoded()?).unwrap()),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
