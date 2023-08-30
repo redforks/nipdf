@@ -7,13 +7,11 @@ use crate::{
         parse_operations, LineCapStyle, LineJoinStyle, Operation, PatternDict, Point,
         RenderingIntent,
     },
-    object::{
-        Dictionary, FilterDecodedData, Object, ObjectValueError, PdfObject, Stream,
-    },
+    object::{Dictionary, FilterDecodedData, Object, ObjectValueError, PdfObject, Stream},
+    text::FontDict,
 };
 
 pub use self::paint::{RenderOption, RenderOptionBuilder};
-
 
 use std::{collections::HashMap, iter::once};
 
@@ -159,7 +157,8 @@ pub(crate) trait ResourceDictTrait {
     fn shading(&self) -> Option<&'b Dictionary<'a>>;
     #[nested]
     fn x_object(&self) -> HashMap<String, XObjectDict<'a, 'b>>;
-    fn font(&self) -> Option<&'b Dictionary<'a>>;
+    #[nested]
+    fn font(&self) -> HashMap<String, FontDict<'a, 'b>>;
     fn properties(&self) -> Option<&'b Dictionary<'a>>;
 }
 
