@@ -221,6 +221,24 @@ pub enum NameOrDict<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum NameOrDictByRef<'a, 'b> {
+    Name(&'b Name<'a>),
+    Dict(&'b Dictionary<'a>),
+}
+
+impl<'a, 'b> TryFrom<&'b Object<'a>> for NameOrDictByRef<'a, 'b> {
+    type Error = ObjectValueError;
+
+    fn try_from(obj: &'b Object<'a>) -> Result<Self, Self::Error> {
+        match obj {
+            Object::Name(name) => Ok(NameOrDictByRef::Name(name)),
+            Object::Dictionary(dict) => Ok(NameOrDictByRef::Dict(dict)),
+            _ => Err(ObjectValueError::GraphicsOperationSchemaError),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum NameOrStream<'a, 'b> {
     Name(&'b Name<'a>),
     Stream(&'b Stream<'a>),
