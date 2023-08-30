@@ -11,6 +11,7 @@ use crate::{
     text::FontDict,
 };
 
+use self::paint::Render;
 pub use self::paint::{RenderOption, RenderOptionBuilder};
 
 use std::{collections::HashMap, iter::once};
@@ -244,16 +245,17 @@ impl<'a, 'b> Page<'a, 'b> {
             .width(media_box.width() as u32)
             .height(media_box.height() as u32)
             .build();
-        let mut renderer = paint::Render::new(option);
         let content = self.content()?;
+        let ops = content.operations();
+        let mut renderer = Render::new(option);
         let resource = self.resources();
         if let Some(steps) = steps {
-            for op in content.operations().iter().take(steps) {
-                renderer.exec(op, &resource);
+            for op in ops.into_iter().take(steps) {
+                renderer.exec(&op, &resource);
             }
         } else {
-            for op in content.operations().iter() {
-                renderer.exec(op, &resource);
+            for op in ops.into_iter() {
+                renderer.exec(&op, &resource);
             }
         };
         Ok(renderer.into())
@@ -306,7 +308,7 @@ pub struct PageContent {
 }
 
 impl PageContent {
-    pub fn operations(&self) -> Vec<Operation> {
+    pub fn operations(&self) -> Vec<Operation<'_>> {
         let mut r = vec![];
         for buf in &self.bufs {
             let (input, ops) = parse_operations(buf.as_ref()).finish().unwrap();

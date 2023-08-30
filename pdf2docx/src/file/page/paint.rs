@@ -4,10 +4,12 @@ use crate::{
     function::{Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
         parse_operations, AxialExtend, AxialShadingDict, Color, ColorOrName, ColorSpace,
-        ConvertFromObject, LineCapStyle, LineJoinStyle, PatternType, Point, RenderingIntent,
-        ShadingPatternDict, ShadingType, TilingPaintType, TilingPatternDict, TransformMatrix,
+        ConvertFromObject, LineCapStyle, LineJoinStyle, NameOfDict, PatternType, Point,
+        RenderingIntent, ShadingPatternDict, ShadingType, TilingPaintType, TilingPatternDict,
+        TransformMatrix,
     },
     object::{Array, FilterDecodedData, Object, PdfObject},
+    text::FontDict,
 };
 use anyhow::Result as AnyResult;
 use educe::Educe;
@@ -366,16 +368,16 @@ impl RenderOptionBuilder {
 }
 
 #[derive(Debug)]
-pub struct Render {
+pub struct Render<'a, 'b> {
     canvas: Pixmap,
     stack: Vec<State>,
     width: u32,
     height: u32,
     path: Path,
-    text_block: Option<TextBlock>,
+    text_block: Option<TextBlock<'a, 'b>>,
 }
 
-impl Render {
+impl<'a, 'b> Render<'a, 'b> {
     pub fn new(option: RenderOption) -> Self {
         let w = (option.width as f32 * option.zoom) as u32;
         let h = (option.height as f32 * option.zoom) as u32;
@@ -409,7 +411,11 @@ impl Render {
         self.canvas
     }
 
-    pub(crate) fn exec(&mut self, op: &Operation, resources: &ResourceDict) {
+    fn text_block_mut(&mut self) -> &mut TextBlock<'a, 'b> {
+        self.text_block.as_mut().expect("No current text block")
+    }
+
+    pub(crate) fn exec<'c>(&mut self, op: &Operation<'c>, resources: &'b ResourceDict<'a, 'b>) {
         match op {
             // General Graphics State Operations
             Operation::SetLineWidth(width) => self.current_mut().set_line_width(*width),
@@ -472,6 +478,11 @@ impl Render {
             Operation::EndText => {
                 assert!(self.text_block.is_some(), "EndText without BeginText");
                 self.text_block = None;
+            }
+
+            // Text State Operations
+            Operation::SetFont(name, size) => {
+                self.text_block_mut().set_font(name, *size, resources)
             }
 
             // Color Operations
@@ -596,7 +607,7 @@ impl Render {
     fn set_fill_color_or_pattern(
         &mut self,
         color_or_name: &crate::graphics::ColorOrName,
-        resources: &ResourceDict,
+        resources: &'b ResourceDict<'a, 'b>,
     ) -> AnyResult<()> {
         let ColorOrName::Name(name) = color_or_name else {
             panic!("Only Name supported");
@@ -640,14 +651,14 @@ impl Render {
         Ok(())
     }
 
-    fn set_tiling_pattern<'a, 'b>(&mut self, tile: TilingPatternDict<'a, 'b>) -> AnyResult<()> {
+    fn set_tiling_pattern(&mut self, tile: TilingPatternDict<'a, 'b>) -> AnyResult<()> {
         assert_eq!(
             tile.paint_type()?,
             TilingPaintType::Uncolored,
             "Colored tiling pattern not supported"
         );
 
-        let stream: &'b Object<'a> = tile.resolver().resolve(tile.id().unwrap())?;
+        let stream: &Object<'a> = tile.resolver().resolve(tile.id().unwrap())?;
         let stream = stream.as_stream()?;
         let decoded = stream.decode(tile.resolver(), false)?;
         let bytes = decoded.as_bytes();
@@ -770,9 +781,19 @@ fn build_linear_gradient(shading: &AxialShadingDict) -> AnyResult<tiny_skia::Sha
 }
 
 #[derive(Debug, Default)]
-struct TextBlock {
+struct TextBlock<'a, 'b> {
     matrix: TransformMatrix,
     line_matrix: TransformMatrix,
+    font_size: f32,
+    font: Option<FontDict<'a, 'b>>,
+}
+
+impl<'a, 'b> TextBlock<'a, 'b> {
+    fn set_font(&mut self, name: &NameOfDict, size: f32, resources: &ResourceDict<'a, 'b>) {
+        self.font_size = size;
+        let mut fonts = resources.font().unwrap();
+        self.font = Some(fonts.remove(&name.0).expect("Font not found"));
+    }
 }
 
 #[cfg(test)]
