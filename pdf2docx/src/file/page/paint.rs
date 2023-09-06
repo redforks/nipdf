@@ -485,6 +485,9 @@ impl<'a, 'b> Render<'a, 'b> {
                 self.text_block_mut().set_font(name, *size, resources)
             }
 
+            // Text Positioning Operations
+            Operation::MoveTextPosition(p) => self.text_block_mut().move_text_position(*p),
+
             // Color Operations
             Operation::SetStrokeColorSpace(space) => self.current_mut().stroke_color_space = *space,
             Operation::SetFillColorSpace(space) => self.current_mut().fill_color_space = *space,
@@ -793,6 +796,12 @@ impl<'a, 'b> TextBlock<'a, 'b> {
         self.font_size = size;
         let mut fonts = resources.font().unwrap();
         self.font = Some(fonts.remove(&name.0).expect("Font not found"));
+    }
+
+    fn move_text_position(&mut self, p: Point) {
+        let matrix: Transform = self.line_matrix.into();
+        self.matrix = matrix.pre_translate(p.x, p.y).into();
+        self.line_matrix = self.matrix;
     }
 }
 

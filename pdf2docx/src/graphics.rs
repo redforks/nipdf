@@ -12,6 +12,7 @@ use nom::{
     multi::many0,
     Parser,
 };
+use tiny_skia::Transform;
 
 use crate::{
     file::Rectangle,
@@ -42,9 +43,22 @@ impl TransformMatrix {
     }
 }
 
-impl From<TransformMatrix> for tiny_skia::Transform {
+impl From<TransformMatrix> for Transform {
     fn from(m: TransformMatrix) -> Self {
         Self::from_row(m.sx, m.ky, m.kx, m.sy, m.tx, m.ty)
+    }
+}
+
+impl From<Transform> for TransformMatrix {
+    fn from(m: Transform) -> Self {
+        Self {
+            sx: m.sx,
+            kx: m.kx,
+            ky: m.ky,
+            sy: m.sy,
+            tx: m.tx,
+            ty: m.ty,
+        }
     }
 }
 
