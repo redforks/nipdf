@@ -487,6 +487,7 @@ impl<'a, 'b> Render<'a, 'b> {
 
             // Text Positioning Operations
             Operation::MoveTextPosition(p) => self.text_block_mut().move_text_position(*p),
+            Operation::SetTextMatrix(m) => self.text_block_mut().set_text_matrix(*m),
 
             // Color Operations
             Operation::SetStrokeColorSpace(space) => self.current_mut().stroke_color_space = *space,
@@ -802,6 +803,11 @@ impl<'a, 'b> TextBlock<'a, 'b> {
         let matrix: Transform = self.line_matrix.into();
         self.matrix = matrix.pre_translate(p.x, p.y).into();
         self.line_matrix = self.matrix;
+    }
+
+    fn set_text_matrix(&mut self, m: TransformMatrix) {
+        self.matrix = m;
+        self.line_matrix = m;
     }
 }
 
