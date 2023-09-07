@@ -12,6 +12,7 @@ use crate::{
     text::FontDict,
 };
 use anyhow::Result as AnyResult;
+use cosmic_text::{Buffer, FontSystem, Metrics};
 use educe::Educe;
 use itertools::Either;
 use nom::{combinator::eof, sequence::terminated};
@@ -367,7 +368,8 @@ impl RenderOptionBuilder {
     }
 }
 
-#[derive(Debug)]
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct Render<'a, 'b> {
     canvas: Pixmap,
     stack: Vec<State>,
@@ -375,6 +377,8 @@ pub struct Render<'a, 'b> {
     height: u32,
     path: Path,
     text_block: Option<TextBlock<'a, 'b>>,
+    #[educe(Debug(ignore))]
+    font_cache: FontCache,
 }
 
 impl<'a, 'b> Render<'a, 'b> {
@@ -392,6 +396,7 @@ impl<'a, 'b> Render<'a, 'b> {
             height: h,
             path: Path::default(),
             text_block: None,
+            font_cache: FontCache::new(),
         }
     }
 
@@ -473,7 +478,7 @@ impl<'a, 'b> Render<'a, 'b> {
             // Text Object Operations
             Operation::BeginText => {
                 assert!(self.text_block.is_none(), "TextBlock should not nested");
-                self.text_block = Some(TextBlock::default());
+                self.text_block = Some(TextBlock::new(&mut self.font_cache));
             }
             Operation::EndText => {
                 assert!(self.text_block.is_some(), "EndText without BeginText");
@@ -488,6 +493,9 @@ impl<'a, 'b> Render<'a, 'b> {
             // Text Positioning Operations
             Operation::MoveTextPosition(p) => self.text_block_mut().move_text_position(*p),
             Operation::SetTextMatrix(m) => self.text_block_mut().set_text_matrix(*m),
+
+            // Text Showing Operations
+            Operation::ShowText(text) => self.show_text(text),
 
             // Color Operations
             Operation::SetStrokeColorSpace(space) => self.current_mut().stroke_color_space = *space,
@@ -685,6 +693,11 @@ impl<'a, 'b> Render<'a, 'b> {
             PaintCreator::Tile((render.into(), tile.matrix()?));
         Ok(())
     }
+
+    fn show_text(&mut self, text: &str) {
+        let text_block = self.text_block.as_mut().expect("No current text block");
+        text_block.show_text(text, &mut self.font_cache);
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -784,7 +797,20 @@ fn build_linear_gradient(shading: &AxialShadingDict) -> AnyResult<tiny_skia::Sha
     .unwrap())
 }
 
-#[derive(Debug, Default)]
+struct FontCache {
+    font_system: FontSystem,
+}
+
+impl FontCache {
+    fn new() -> Self {
+        Self {
+            font_system: FontSystem::new(),
+        }
+    }
+}
+
+#[derive(Educe)]
+#[educe(Debug)]
 struct TextBlock<'a, 'b> {
     matrix: TransformMatrix,
     line_matrix: TransformMatrix,
@@ -793,6 +819,15 @@ struct TextBlock<'a, 'b> {
 }
 
 impl<'a, 'b> TextBlock<'a, 'b> {
+    pub fn new(cache: &mut FontCache) -> Self {
+        Self {
+            matrix: TransformMatrix::identity(),
+            line_matrix: TransformMatrix::identity(),
+            font_size: 0.0,
+            font: None,
+        }
+    }
+
     fn set_font(&mut self, name: &NameOfDict, size: f32, resources: &ResourceDict<'a, 'b>) {
         self.font_size = size;
         let mut fonts = resources.font().unwrap();
@@ -808,6 +843,10 @@ impl<'a, 'b> TextBlock<'a, 'b> {
     fn set_text_matrix(&mut self, m: TransformMatrix) {
         self.matrix = m;
         self.line_matrix = m;
+    }
+
+    fn show_text(&mut self, text: &str, cache: &mut FontCache) {
+        todo!()
     }
 }
 

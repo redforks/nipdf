@@ -39,6 +39,7 @@ educe = "0.4.22"
 lzw = "0.10.0"
 pretty = { version = "0.12.1", optional = true }
 bitflags = "2.4.0"
+cosmic-text = "0.9.0"
 
 [features]
 clr = ["env_logger", "clap", "pretty"]
