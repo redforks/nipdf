@@ -56,7 +56,7 @@ use test_case::test_case;
 #[test_case(
     [(KEY_FFILTER, Name::borrowed(B_FILTER_FLATE_DECODE).into())] =>
     Err(ObjectValueError::ExternalStreamNotSupported);
-     "ffilter not supported"
+     "filter not supported"
 )]
 fn test_iter_filter(
     dict: impl IntoIterator<Item = (&'static [u8], Object<'static>)>,

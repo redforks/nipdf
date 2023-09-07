@@ -15,12 +15,12 @@ use test_case::test_case;
 fn parse_operator_succeed(s: &str, op: &str) {
     let len = s.len();
     let (input, result) = parse_operator(s.as_bytes()).unwrap();
-    assert!(input.len() + op.len() == len);
+    assert_eq!(input.len() + op.len(), len);
     assert_eq!(result, ObjectOrOperator::Operator(op));
 }
 
 #[test_case("foo " ; "unknown operator")]
-fn parse_operator_falied(s: &str) {
+fn parse_operator_failed(s: &str) {
     assert!(matches!(
         parse_operator(s.as_bytes()).unwrap_err(),
         nom::Err::Error(_)
@@ -50,7 +50,7 @@ fn parse_operator_falied(s: &str) {
     ];
     "cm and Do"
 )]
-fn test_parse_opreations(s: &str) -> Vec<Operation> {
+fn test_parse_operations(s: &str) -> Vec<Operation> {
     let (_, result) = parse_operations(s.as_bytes()).unwrap();
     result
 }
