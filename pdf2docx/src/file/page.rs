@@ -126,7 +126,7 @@ pub enum XObjectType {
 }
 
 #[pdf_object(Some("XObject"))]
-pub(crate) trait XObjectDictTrait {
+pub trait XObjectDictTrait {
     #[try_from]
     fn subtype(&self) -> Option<XObjectType>;
 }
@@ -149,7 +149,7 @@ impl<'a, 'b> XObjectDict<'a, 'b> {
 }
 
 #[pdf_object(())]
-pub(crate) trait ResourceDictTrait {
+pub trait ResourceDictTrait {
     #[nested]
     fn ext_g_state() -> HashMap<String, GraphicsStateParameterDict<'a, 'b>>;
     fn color_space(&self) -> Option<&'b Dictionary<'a>>;
@@ -247,15 +247,15 @@ impl<'a, 'b> Page<'a, 'b> {
             .build();
         let content = self.content()?;
         let ops = content.operations();
-        let mut renderer = Render::new(option);
         let resource = self.resources();
+        let mut renderer = Render::new(option, &resource);
         if let Some(steps) = steps {
             for op in ops.into_iter().take(steps) {
-                renderer.exec(&op, &resource);
+                renderer.exec(&op);
             }
         } else {
             for op in ops.into_iter() {
-                renderer.exec(&op, &resource);
+                renderer.exec(&op);
             }
         };
         Ok(renderer.into())

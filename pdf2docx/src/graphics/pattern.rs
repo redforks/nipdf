@@ -10,13 +10,13 @@ use crate::{
 };
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromIntObject)]
-pub(crate) enum PatternType {
+pub enum PatternType {
     Tiling = 1,
     Shading = 2,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromIntObject)]
-pub(crate) enum ShadingType {
+pub enum ShadingType {
     Function = 1,
     Axial = 2,
     Radial = 3,
@@ -27,7 +27,7 @@ pub(crate) enum ShadingType {
 }
 
 #[pdf_object(Some("Pattern"))]
-pub(crate) trait PatternDictTrait {
+pub trait PatternDictTrait {
     #[try_from]
     fn pattern_type(&self) -> PatternType;
 
@@ -39,13 +39,13 @@ pub(crate) trait PatternDictTrait {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, TryFromIntObject)]
-pub(crate) enum TilingPaintType {
+pub enum TilingPaintType {
     Uncolored = 1,
     Colored = 2,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, TryFromIntObject)]
-pub(crate) enum TilingType {
+pub enum TilingType {
     ConstantSpacing = 1,
     NoDistortion = 2,
     ConstantSpacingAndFasterTiling = 3,
@@ -53,7 +53,7 @@ pub(crate) enum TilingType {
 
 #[pdf_object(1i32)]
 #[type_field("PatternType")]
-pub(crate) trait TilingPatternDictTrait {
+pub trait TilingPatternDictTrait {
     #[try_from]
     fn paint_type(&self) -> TilingPaintType;
 
@@ -77,7 +77,7 @@ pub(crate) trait TilingPatternDictTrait {
 
 #[pdf_object(2i32)]
 #[type_field("PatternType")]
-pub(crate) trait ShadingPatternDictTrait {
+pub trait ShadingPatternDictTrait {
     #[nested]
     fn shading(&self) -> ShadingDict<'a, 'b>;
 
@@ -90,7 +90,7 @@ pub(crate) trait ShadingPatternDictTrait {
 }
 
 #[pdf_object(())]
-pub(crate) trait ShadingDictTrait {
+pub trait ShadingDictTrait {
     #[try_from]
     fn shading_type(&self) -> ShadingType;
 
@@ -112,7 +112,7 @@ pub(crate) trait ShadingDictTrait {
 
 /// Return type of `AxialShadingDict::extend()`
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) struct AxialExtend(bool, bool);
+pub struct AxialExtend(bool, bool);
 
 impl AxialExtend {
     pub fn new(begin: bool, end: bool) -> Self {
@@ -134,7 +134,7 @@ impl<'a> TryFrom<&Object<'a>> for AxialExtend {
 
 #[pdf_object(2i32)]
 #[type_field("ShadingType")]
-pub(crate) trait AxialShadingDictTrait {
+pub trait AxialShadingDictTrait {
     #[try_from]
     fn coords(&self) -> Rectangle;
 

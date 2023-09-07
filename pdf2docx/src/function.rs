@@ -37,7 +37,7 @@ impl<'a> TryFrom<&Object<'a>> for Domain {
     }
 }
 
-pub(crate) struct Domains(pub Vec<Domain>);
+pub struct Domains(pub Vec<Domain>);
 
 impl<'a> TryFrom<&Object<'a>> for Domains {
     type Error = ObjectValueError;
@@ -67,7 +67,7 @@ pub trait Function {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, TryFromIntObject)]
-pub(crate) enum Type {
+pub enum Type {
     Sampled = 0,
     ExponentialInterpolation = 2,
     Stitching = 3,
@@ -75,7 +75,7 @@ pub(crate) enum Type {
 }
 
 #[pdf_object(())]
-pub(crate) trait FunctionDictTrait {
+pub trait FunctionDictTrait {
     #[try_from]
     fn function_type(&self) -> Type;
 
@@ -142,7 +142,7 @@ fn f32_one_arr() -> Vec<f32> {
 
 #[pdf_object(2i32)]
 #[type_field("FunctionType")]
-pub(crate) trait ExponentialInterpolationFunctionDictTrait {
+pub trait ExponentialInterpolationFunctionDictTrait {
     #[default_fn(f32_zero_arr)]
     fn c0(&self) -> Vec<f32>;
 
@@ -184,7 +184,7 @@ impl<'a, 'b> Function for ExponentialInterpolationFunctionDict<'a, 'b> {
 
 #[pdf_object(3i32)]
 #[type_field("FunctionType")]
-pub(crate) trait StitchingFunctionDictTrait {
+pub trait StitchingFunctionDictTrait {
     /// Functions, its length is `k`
     #[nested]
     fn functions(&self) -> Vec<FunctionDict<'a, 'b>>;

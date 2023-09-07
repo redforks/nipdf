@@ -19,7 +19,7 @@ pub enum FontType {
 }
 
 #[pdf_object("Font")]
-pub(crate) trait FontDictTrait {
+pub trait FontDictTrait {
     #[try_from]
     fn subtype(&self) -> FontType;
 
@@ -34,7 +34,7 @@ pub(crate) trait FontDictTrait {
 }
 
 #[pdf_object(("Font", "Type0"))]
-pub(crate) trait Type0FontDictTrait {
+pub trait Type0FontDictTrait {
     #[typ("Name")]
     fn base_font(&self) -> &str;
     #[try_from]
@@ -47,7 +47,7 @@ pub(crate) trait Type0FontDictTrait {
 /// For standard 14 fonts, font_descriptor/first_char/last_char/widths may not exist.
 /// they should all exist or not exist. See PDF32000_2008.pdf page 255
 #[pdf_object(("Font", "Type1"))]
-pub(crate) trait Type1FontDictTrait {
+pub trait Type1FontDictTrait {
     #[typ("Name")]
     fn base_font(&self) -> &str;
     /// If font is the standard 14 fonts, it may not exist.
@@ -65,7 +65,7 @@ pub(crate) trait Type1FontDictTrait {
 }
 
 #[pdf_object(("Font", "TrueType"))]
-pub(crate) trait TrueTypeFontDictTrait {
+pub trait TrueTypeFontDictTrait {
     #[typ("Name")]
     fn base_font(&self) -> &str;
     fn first_char(&self) -> Option<u32>;
@@ -79,7 +79,7 @@ pub(crate) trait TrueTypeFontDictTrait {
 }
 
 #[pdf_object("FontDescriptor")]
-pub(crate) trait FontDescriptorDictTrait {
+pub trait FontDescriptorDictTrait {
     #[typ("Name")]
     fn font_name(&self) -> &str;
 
@@ -135,7 +135,7 @@ pub(crate) trait FontDescriptorDictTrait {
 
 bitflags! {
     #[derive(TryFromIntObjectForBitflags)]
-    pub(crate) struct FontDescriptorFlags: u32 {
+    pub struct FontDescriptorFlags: u32 {
         const FIXED_PITCH = 1;
         const SERIF = 1 << 1;
         const SYMBOLIC = 1 << 2;

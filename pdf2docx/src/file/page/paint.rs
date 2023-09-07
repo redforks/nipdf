@@ -17,7 +17,7 @@ use educe::Educe;
 use itertools::Either;
 use nom::{combinator::eof, sequence::terminated};
 
-use super::{Operation, Rectangle, ResourceDict};
+use super::{GraphicsStateParameterDict, Operation, Rectangle, ResourceDict};
 use tiny_skia::{
     FillRule, FilterQuality, GradientStop, Mask, Paint, Path as SkiaPath, PathBuilder, Pixmap,
     PixmapPaint, PixmapRef, Point as SkiaPoint, Stroke, StrokeDash, Transform,
@@ -204,18 +204,7 @@ impl State {
         self.mask.as_ref()
     }
 
-    fn set_graphics_state(
-        &mut self,
-        nm: &crate::graphics::NameOfDict,
-        resources: &ResourceDict<'_, '_>,
-    ) {
-        let resources = resources.ext_g_state().unwrap();
-        let res = resources.get(&nm.0);
-        let Some(res) = res else {
-            log::warn!("graphics state not found: {}", &nm.0);
-            return;
-        };
-
+    fn set_graphics_state(&mut self, res: &GraphicsStateParameterDict) {
         for key in res.d.dict().keys() {
             match key.as_ref() {
                 "LW" => self.set_line_width(res.line_width().unwrap().unwrap()),
@@ -379,10 +368,11 @@ pub struct Render<'a, 'b> {
     text_block: Option<TextBlock<'a, 'b>>,
     #[educe(Debug(ignore))]
     font_cache: FontCache,
+    resources: &'b ResourceDict<'a, 'b>,
 }
 
 impl<'a, 'b> Render<'a, 'b> {
-    pub fn new(option: RenderOption) -> Self {
+    pub fn new(option: RenderOption, resources: &'b ResourceDict<'a, 'b>) -> Self {
         let w = (option.width as f32 * option.zoom) as u32;
         let h = (option.height as f32 * option.zoom) as u32;
 
@@ -397,6 +387,7 @@ impl<'a, 'b> Render<'a, 'b> {
             path: Path::default(),
             text_block: None,
             font_cache: FontCache::new(),
+            resources,
         }
     }
 
@@ -420,7 +411,7 @@ impl<'a, 'b> Render<'a, 'b> {
         self.text_block.as_mut().expect("No current text block")
     }
 
-    pub(crate) fn exec<'c>(&mut self, op: &Operation<'c>, resources: &'b ResourceDict<'a, 'b>) {
+    pub(crate) fn exec<'c>(&mut self, op: &Operation<'c>) {
         match op {
             // General Graphics State Operations
             Operation::SetLineWidth(width) => self.current_mut().set_line_width(*width),
@@ -433,7 +424,9 @@ impl<'a, 'b> Render<'a, 'b> {
             Operation::SetRenderIntent(intent) => self.current_mut().set_render_intent(*intent),
             Operation::SetFlatness(flatness) => self.current_mut().set_flatness(*flatness),
             Operation::SetGraphicsStateParameters(nm) => {
-                self.current_mut().set_graphics_state(nm, resources)
+                let res = self.resources.ext_g_state().unwrap();
+                let res = res.get(&nm.0).expect("ExtGState not found");
+                self.current_mut().set_graphics_state(res);
             }
 
             // Special Graphics State Operations
@@ -487,7 +480,8 @@ impl<'a, 'b> Render<'a, 'b> {
 
             // Text State Operations
             Operation::SetFont(name, size) => {
-                self.text_block_mut().set_font(name, *size, resources)
+                let res = self.resources;
+                self.text_block_mut().set_font(name, *size, res)
             }
 
             // Text Positioning Operations
@@ -509,11 +503,11 @@ impl<'a, 'b> Render<'a, 'b> {
             | Operation::SetFillCMYK(color)
             | Operation::SetFillRGB(color) => self.current_mut().set_fill_color(*color),
             Operation::SetFillColorOrWithPattern(name) => {
-                self.set_fill_color_or_pattern(name, resources).unwrap()
+                self.set_fill_color_or_pattern(name).unwrap()
             }
 
             // XObject Operation
-            Operation::PaintXObject(name) => self.paint_x_object(name, resources),
+            Operation::PaintXObject(name) => self.paint_x_object(name),
 
             _ => {
                 eprintln!("unimplemented: {:?}", op);
@@ -593,11 +587,11 @@ impl<'a, 'b> Render<'a, 'b> {
     }
 
     /// Paints the specified XObject. Only XObjectType::Image supported
-    fn paint_x_object(&mut self, name: &crate::graphics::NameOfDict, resources: &ResourceDict) {
-        let xobjects = resources.x_object().unwrap();
+    fn paint_x_object(&mut self, name: &crate::graphics::NameOfDict) {
+        let xobjects = self.resources.x_object().unwrap();
         let xobject = xobjects.get(&name.0).unwrap();
         let img = xobject.as_image().expect("Only Image XObject supported");
-        let img = img.decode(resources.d.resolver(), false).unwrap();
+        let img = img.decode(self.resources.d.resolver(), false).unwrap();
         let FilterDecodedData::Image(img) = img else {
             panic!("Stream should decoded to image");
         };
@@ -619,13 +613,12 @@ impl<'a, 'b> Render<'a, 'b> {
     fn set_fill_color_or_pattern(
         &mut self,
         color_or_name: &crate::graphics::ColorOrName,
-        resources: &'b ResourceDict<'a, 'b>,
     ) -> AnyResult<()> {
         let ColorOrName::Name(name) = color_or_name else {
             panic!("Only Name supported");
         };
 
-        let pattern = resources.pattern()?;
+        let pattern = self.resources.pattern()?;
         let pattern = pattern.get(name.as_str()).unwrap();
         match pattern.pattern_type()? {
             PatternType::Tiling => self.set_tiling_pattern(pattern.tiling_pattern()?),
@@ -679,15 +672,16 @@ impl<'a, 'b> Render<'a, 'b> {
         assert_eq!(bbox.width(), tile.x_step()?, "x_step not supported");
         assert_eq!(bbox.height(), tile.y_step()?, "y_step not supported");
 
+        let resources = tile.resources()?;
         let mut render = Render::new(
             RenderOptionBuilder::default()
                 .width(bbox.width() as u32)
                 .height(bbox.height() as u32)
                 .build(),
+            &resources,
         );
-        let resources = tile.resources()?;
         for op in ops {
-            render.exec(&op, &resources);
+            render.exec(&op);
         }
         self.stack.last_mut().unwrap().fill_paint =
             PaintCreator::Tile((render.into(), tile.matrix()?));
