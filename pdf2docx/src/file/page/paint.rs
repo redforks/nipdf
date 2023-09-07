@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::Arc};
 
 use crate::{
     function::{Domain, Function, FunctionDict, Type as FunctionType},
@@ -9,12 +9,14 @@ use crate::{
         TransformMatrix,
     },
     object::{Array, FilterDecodedData, Object, PdfObject},
-    text::FontDict,
+    text::{FontDict, FontType},
 };
 use anyhow::Result as AnyResult;
-use cosmic_text::{Buffer, FontSystem, Metrics};
+use cosmic_text::{fontdb::Source as FontSource, Buffer, FontSystem, Metrics};
 use educe::Educe;
 use itertools::Either;
+use itertools::Itertools;
+use log::error;
 use nom::{combinator::eof, sequence::terminated};
 
 use super::{GraphicsStateParameterDict, Operation, Rectangle, ResourceDict};
@@ -386,7 +388,7 @@ impl<'a, 'b> Render<'a, 'b> {
             height: h,
             path: Path::default(),
             text_block: None,
-            font_cache: FontCache::new(),
+            font_cache: FontCache::new(resources).unwrap(),
             resources,
         }
     }
@@ -796,10 +798,38 @@ struct FontCache {
 }
 
 impl FontCache {
-    fn new() -> Self {
-        Self {
-            font_system: FontSystem::new(),
+    fn scan_font(font: &FontDict) -> anyhow::Result<Option<FontSource>> {
+        match font.subtype()? {
+            FontType::TrueType => {
+                let font = font.truetype()?;
+                let desc = font.font_descriptor()?.unwrap();
+                let bytes = desc.font_file2()?.unwrap();
+                let bytes = bytes.decode(desc.resolver(), false)?;
+                match bytes {
+                    FilterDecodedData::Bytes(bytes) => {
+                        Ok(Some(FontSource::Binary(Arc::new(bytes.into_owned()))))
+                    }
+                    _ => {
+                        todo!("Unsupported font file type");
+                    }
+                }
+            }
+            _ => {
+                error!("Unsupported font type: {:?}", font.subtype()?);
+                Ok(None)
+            }
         }
+    }
+
+    fn new<'a, 'b>(resource: &ResourceDict<'a, 'b>) -> anyhow::Result<Self> {
+        let fonts = resource.font()?;
+        let fonts: anyhow::Result<Vec<FontSource>> = fonts
+            .values()
+            .filter_map(|f| Self::scan_font(f).transpose())
+            .collect();
+        Ok(Self {
+            font_system: FontSystem::new_with_fonts(fonts?.into_iter()),
+        })
     }
 }
 
