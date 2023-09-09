@@ -715,11 +715,19 @@ impl<'a, 'b> Render<'a, 'b> {
         buffer.set_text(text, attrs, Shaping::Advanced);
         let mut paint = Paint::default();
 
+        let state = self.stack.last().unwrap();
+        // get stroke paint color
+        let PaintCreator::Color(color) = state.stroke_paint.clone() else {
+            // TODO: how to support fill color, fill color should used to draw text content,
+            // stroke color should used to draw text outline
+            panic!("Only color stroke paint supported");
+        };
+        let color = color.to_color_u8();
         // Perform shaping as desired
         buffer.shape_until_scroll();
         buffer.draw(
             &mut self.font_cache.swash_cache,
-            cosmic_text::Color::rgb(0xFF, 0x0, 0x0),
+            cosmic_text::Color::rgb(color.red(), color.green(), color.blue()),
             |x, y, w, h, color| {
                 // Fill in your code here for drawing rectangles
                 paint.set_color(tiny_skia::Color::from_rgba8(
@@ -729,7 +737,6 @@ impl<'a, 'b> Render<'a, 'b> {
                     color.a(),
                 ));
                 let matrix: Transform = text_block.matrix.into();
-                let state = self.stack.last().unwrap();
                 self.canvas.fill_rect(
                     Rect::from_xywh(x as f32, y as f32, w as f32, h as f32).unwrap(),
                     &paint,
