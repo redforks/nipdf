@@ -368,7 +368,7 @@ pub struct Render<'a, 'b> {
     width: u32,
     height: u32,
     path: Path,
-    text_block: Option<TextBlock<'a, 'b>>,
+    text_block: TextBlock<'a, 'b>,
     #[educe(Debug(ignore))]
     font_cache: FontCache,
     resources: &'b ResourceDict<'a, 'b>,
@@ -388,7 +388,7 @@ impl<'a, 'b> Render<'a, 'b> {
             width: w,
             height: h,
             path: Path::default(),
-            text_block: None,
+            text_block: TextBlock::new(),
             font_cache: FontCache::new(resources).unwrap(),
             resources,
         }
@@ -411,7 +411,7 @@ impl<'a, 'b> Render<'a, 'b> {
     }
 
     fn text_block_mut(&mut self) -> &mut TextBlock<'a, 'b> {
-        self.text_block.as_mut().expect("No current text block")
+        &mut self.text_block
     }
 
     pub(crate) fn exec<'c>(&mut self, op: &Operation<'c>) {
@@ -473,12 +473,12 @@ impl<'a, 'b> Render<'a, 'b> {
 
             // Text Object Operations
             Operation::BeginText => {
-                assert!(self.text_block.is_none(), "TextBlock should not nested");
-                self.text_block = Some(TextBlock::new(&mut self.font_cache));
+                // assert!(self.text_block.is_none(), "TextBlock should not nested");
+                // self.text_block = Some(TextBlock::new(&mut self.font_cache));
             }
             Operation::EndText => {
-                assert!(self.text_block.is_some(), "EndText without BeginText");
-                self.text_block = None;
+                // assert!(self.text_block.is_some(), "EndText without BeginText");
+                // self.text_block = None;
             }
 
             // Text State Operations
@@ -695,9 +695,9 @@ impl<'a, 'b> Render<'a, 'b> {
     fn show_text(&mut self, text: &str) {
         info!("show_text: {:?}", text);
 
-        let text_block = self.text_block.as_mut().expect("No current text block");
+        let font_size = self.text_block.font_size;
         // Text metrics indicate the font size and line height of a buffer
-        let metrics = Metrics::new(14.0, 20.0);
+        let metrics = Metrics::new(font_size, font_size);
 
         // A Buffer provides shaping and layout for a UTF-8 string, create one per text widget
         let mut buffer = Buffer::new(&mut self.font_cache.font_system, metrics);
@@ -706,7 +706,7 @@ impl<'a, 'b> Render<'a, 'b> {
         let mut buffer = buffer.borrow_with(&mut self.font_cache.font_system);
 
         // Set a size for the text buffer, in pixels
-        buffer.set_size(80.0, 25.0);
+        buffer.set_size(80.0, font_size);
 
         // Attributes indicate what font to choose
         let attrs = Attrs::new();
@@ -736,7 +736,7 @@ impl<'a, 'b> Render<'a, 'b> {
                     color.b(),
                     color.a(),
                 ));
-                let matrix: Transform = text_block.matrix.into();
+                let matrix: Transform = self.text_block.matrix.into();
                 self.canvas.fill_rect(
                     Rect::from_xywh(x as f32, y as f32, w as f32, h as f32).unwrap(),
                     &paint,
@@ -752,8 +752,7 @@ impl<'a, 'b> Render<'a, 'b> {
             match t {
                 TextStringOrNumber::Text(s) => self.show_text(s),
                 TextStringOrNumber::Number(n) => {
-                    let text_block = self.text_block.as_mut().expect("No current text block");
-                    text_block.move_right(*n);
+                    self.text_block.move_right(*n);
                 }
                 TextStringOrNumber::HexText(_) => {
                     error!("HexText not supported");
@@ -913,7 +912,7 @@ struct TextBlock<'a, 'b> {
 }
 
 impl<'a, 'b> TextBlock<'a, 'b> {
-    pub fn new(cache: &mut FontCache) -> Self {
+    pub fn new() -> Self {
         Self {
             matrix: TransformMatrix::identity(),
             line_matrix: TransformMatrix::identity(),
