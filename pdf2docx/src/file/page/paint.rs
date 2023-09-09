@@ -8,21 +8,22 @@ use crate::{
         RenderingIntent, ShadingPatternDict, ShadingType, TilingPaintType, TilingPatternDict,
         TransformMatrix,
     },
-    object::{Array, FilterDecodedData, Object, PdfObject},
+    object::{Array, FilterDecodedData, Object, PdfObject, TextStringOrNumber},
     text::{FontDict, FontType},
 };
 use anyhow::Result as AnyResult;
-use cosmic_text::{fontdb::Source as FontSource, Buffer, FontSystem, Metrics};
+use cosmic_text::{
+    fontdb::Source as FontSource, Attrs, Buffer, FontSystem, Metrics, Shaping, SwashCache,
+};
 use educe::Educe;
 use itertools::Either;
-use itertools::Itertools;
-use log::error;
+use log::{error, info};
 use nom::{combinator::eof, sequence::terminated};
 
 use super::{GraphicsStateParameterDict, Operation, Rectangle, ResourceDict};
 use tiny_skia::{
     FillRule, FilterQuality, GradientStop, Mask, Paint, Path as SkiaPath, PathBuilder, Pixmap,
-    PixmapPaint, PixmapRef, Point as SkiaPoint, Stroke, StrokeDash, Transform,
+    PixmapPaint, PixmapRef, Point as SkiaPoint, Rect, Stroke, StrokeDash, Transform,
 };
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -492,6 +493,7 @@ impl<'a, 'b> Render<'a, 'b> {
 
             // Text Showing Operations
             Operation::ShowText(text) => self.show_text(text),
+            Operation::ShowTexts(texts) => self.show_texts(texts),
 
             // Color Operations
             Operation::SetStrokeColorSpace(space) => self.current_mut().stroke_color_space = *space,
@@ -691,8 +693,66 @@ impl<'a, 'b> Render<'a, 'b> {
     }
 
     fn show_text(&mut self, text: &str) {
+        info!("show_text: {:?}", text);
+
         let text_block = self.text_block.as_mut().expect("No current text block");
-        text_block.show_text(text, &mut self.font_cache);
+        // Text metrics indicate the font size and line height of a buffer
+        let metrics = Metrics::new(14.0, 20.0);
+
+        // A Buffer provides shaping and layout for a UTF-8 string, create one per text widget
+        let mut buffer = Buffer::new(&mut self.font_cache.font_system, metrics);
+
+        // Borrow buffer together with the font system for more convenient method calls
+        let mut buffer = buffer.borrow_with(&mut self.font_cache.font_system);
+
+        // Set a size for the text buffer, in pixels
+        buffer.set_size(80.0, 25.0);
+
+        // Attributes indicate what font to choose
+        let attrs = Attrs::new();
+
+        // Add some text!
+        buffer.set_text(text, attrs, Shaping::Advanced);
+        let mut paint = Paint::default();
+
+        // Perform shaping as desired
+        buffer.shape_until_scroll();
+        buffer.draw(
+            &mut self.font_cache.swash_cache,
+            cosmic_text::Color::rgb(0xFF, 0x0, 0x0),
+            |x, y, w, h, color| {
+                // Fill in your code here for drawing rectangles
+                paint.set_color(tiny_skia::Color::from_rgba8(
+                    color.r(),
+                    color.g(),
+                    color.b(),
+                    color.a(),
+                ));
+                let matrix: Transform = text_block.matrix.into();
+                let state = self.stack.last().unwrap();
+                self.canvas.fill_rect(
+                    Rect::from_xywh(x as f32, y as f32, w as f32, h as f32).unwrap(),
+                    &paint,
+                    matrix.post_concat(state.ctm.ctm.into()),
+                    None,
+                );
+            },
+        );
+    }
+
+    fn show_texts(&mut self, texts: &[TextStringOrNumber]) {
+        for t in texts {
+            match t {
+                TextStringOrNumber::Text(s) => self.show_text(s),
+                TextStringOrNumber::Number(n) => {
+                    let text_block = self.text_block.as_mut().expect("No current text block");
+                    text_block.move_right(*n);
+                }
+                TextStringOrNumber::HexText(_) => {
+                    error!("HexText not supported");
+                }
+            }
+        }
     }
 }
 
@@ -795,6 +855,7 @@ fn build_linear_gradient(shading: &AxialShadingDict) -> AnyResult<tiny_skia::Sha
 
 struct FontCache {
     font_system: FontSystem,
+    swash_cache: SwashCache,
 }
 
 impl FontCache {
@@ -822,13 +883,15 @@ impl FontCache {
     }
 
     fn new<'a, 'b>(resource: &ResourceDict<'a, 'b>) -> anyhow::Result<Self> {
-        let fonts = resource.font()?;
-        let fonts: anyhow::Result<Vec<FontSource>> = fonts
-            .values()
-            .filter_map(|f| Self::scan_font(f).transpose())
-            .collect();
+        // let fonts = resource.font()?;
+        // let fonts: anyhow::Result<Vec<FontSource>> = fonts
+        //     .values()
+        //     .filter_map(|f| Self::scan_font(f).transpose())
+        //     .collect();
         Ok(Self {
-            font_system: FontSystem::new_with_fonts(fonts?.into_iter()),
+            // font_system: FontSystem::new_with_fonts(fonts?.into_iter()),
+            font_system: FontSystem::new(),
+            swash_cache: SwashCache::new(),
         })
     }
 }
@@ -869,8 +932,9 @@ impl<'a, 'b> TextBlock<'a, 'b> {
         self.line_matrix = m;
     }
 
-    fn show_text(&mut self, text: &str, cache: &mut FontCache) {
-        todo!()
+    fn move_right(&mut self, n: f32) {
+        // let matrix: Transform = self.line_matrix.into();
+        // self.line_matrix = matrix.pre_translate(n / 1000.0, 0.0).into();
     }
 }
 
