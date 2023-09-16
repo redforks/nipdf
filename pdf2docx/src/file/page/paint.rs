@@ -753,6 +753,7 @@ impl<'a, 'b> Render<'a, 'b> {
                 })
             });
             if path.is_empty() {
+                transform = transform.pre_translate(4.0, 0.0);
                 continue;
             }
             let path = path.finish().unwrap();
@@ -790,7 +791,7 @@ impl<'a, 'b> Render<'a, 'b> {
             match t {
                 TextStringOrNumber::Text(s) => self.show_text(s),
                 TextStringOrNumber::Number(n) => {
-                    // self.text_block_mut().move_right(*n);
+                    self.text_block_mut().move_right(*n);
                 }
                 TextStringOrNumber::HexText(_) => {
                     error!("HexText not supported");
@@ -1022,7 +1023,14 @@ impl TextBlock {
 
     fn move_right(&mut self, n: f32) {
         let matrix: Transform = self.matrix.into();
-        self.matrix = matrix.pre_translate(n, 0.0).into();
+        let tx = -n * 0.001 * self.font_size;
+        let ty = 0.0;
+        let dx = matrix.sx * tx + matrix.kx * ty;
+        let dy = matrix.ky * tx + matrix.sy * ty;
+        debug!("move_right: {} {} {} {} {}", n, tx, ty, dx, dy);
+        debug!("matrix: {:?}", matrix);
+        self.matrix = matrix.post_translate(dx, dy).into();
+        debug!("matrix after move right: {:?}", self.matrix);
     }
 
     fn set_character_spacing(&mut self, spacing: f32) {
