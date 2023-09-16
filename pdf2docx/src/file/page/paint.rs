@@ -486,6 +486,7 @@ impl<'a, 'b> Render<'a, 'b> {
             Operation::BeginText => {
                 // assert!(self.text_block.is_none(), "TextBlock should not nested");
                 // self.text_block = Some(TextBlock::new(&mut self.font_cache));
+                self.text_block_mut().reset();
             }
             Operation::EndText => {
                 // assert!(self.text_block.is_some(), "EndText without BeginText");
@@ -1000,6 +1001,11 @@ impl TextBlock {
             rise: 0.0,
             knockout: true,
         }
+    }
+
+    fn reset(&mut self) {
+        self.matrix = TransformMatrix::identity();
+        self.line_matrix = TransformMatrix::identity();
     }
 
     fn set_font(&mut self, name: &NameOfDict, size: f32) {
