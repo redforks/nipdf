@@ -1,12 +1,12 @@
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
 use crate::{
     function::{Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
         parse_operations, AxialExtend, AxialShadingDict, Color, ColorOrName, ColorSpace,
         ConvertFromObject, LineCapStyle, LineJoinStyle, NameOfDict, PatternType, Point,
-        RenderingIntent, ShadingPatternDict, ShadingType, TilingPaintType, TilingPatternDict,
-        TransformMatrix,
+        RenderingIntent, ShadingPatternDict, ShadingType, TextRenderingMode, TilingPaintType,
+        TilingPatternDict, TransformMatrix,
     },
     object::{Array, FilterDecodedData, Object, PdfObject, TextStringOrNumber},
     text::{FontDict, FontType},
@@ -106,7 +106,7 @@ impl PaintCreator {
 }
 
 #[derive(Debug, Clone)]
-pub struct State {
+pub struct State<'a, 'b> {
     ctm: MatrixMapper,
     fill_paint: PaintCreator,
     stroke_paint: PaintCreator,
@@ -114,9 +114,10 @@ pub struct State {
     mask: Option<Mask>,
     fill_color_space: ColorSpace,
     stroke_color_space: ColorSpace,
+    text_block: TextBlock<'a, 'b>,
 }
 
-impl State {
+impl<'a, 'b> State<'a, 'b> {
     /// height: height in user space coordinate
     fn new(option: &RenderOption) -> Self {
         let mut r = Self {
@@ -131,6 +132,7 @@ impl State {
             mask: None,
             fill_color_space: ColorSpace::DeviceRGB,
             stroke_color_space: ColorSpace::DeviceRGB,
+            text_block: TextBlock::new(),
         };
 
         r.set_line_cap(LineCapStyle::default());
@@ -217,6 +219,7 @@ impl State {
                 "LJ" => self.set_line_join(res.line_join().unwrap().unwrap()),
                 "ML" => self.set_miter_limit(res.miter_limit().unwrap().unwrap()),
                 "RI" => self.set_render_intent(res.rendering_intent().unwrap().unwrap()),
+                "TK" => self.set_text_knockout_flag(res.text_knockout_flag().unwrap().unwrap()),
                 _ => log::info!("Unknown or unsupported ExtGState key: {}", key.as_ref()),
             }
         }
@@ -248,6 +251,10 @@ impl State {
     /// using Even-Odd fill rule.
     fn clip_even_odd(&mut self, width: u32, height: u32) {
         self.update_mask(width, height, FillRule::EvenOdd);
+    }
+
+    fn set_text_knockout_flag(&self, unwrap: bool) {
+        todo!()
     }
 }
 
@@ -366,11 +373,10 @@ impl RenderOptionBuilder {
 #[educe(Debug)]
 pub struct Render<'a, 'b> {
     canvas: Pixmap,
-    stack: Vec<State>,
+    stack: Vec<State<'a, 'b>>,
     width: u32,
     height: u32,
     path: Path,
-    text_block: TextBlock<'a, 'b>,
     #[educe(Debug(ignore))]
     font_cache: FontCache,
     resources: &'b ResourceDict<'a, 'b>,
@@ -390,7 +396,6 @@ impl<'a, 'b> Render<'a, 'b> {
             width: w,
             height: h,
             path: Path::default(),
-            text_block: TextBlock::new(),
             font_cache: FontCache::new(resources).unwrap(),
             resources,
         }
@@ -404,7 +409,7 @@ impl<'a, 'b> Render<'a, 'b> {
         self.stack.pop().unwrap();
     }
 
-    fn current_mut(&mut self) -> &mut State {
+    fn current_mut(&mut self) -> &mut State<'a, 'b> {
         self.stack.last_mut().unwrap()
     }
 
@@ -413,7 +418,7 @@ impl<'a, 'b> Render<'a, 'b> {
     }
 
     fn text_block_mut(&mut self) -> &mut TextBlock<'a, 'b> {
-        &mut self.text_block
+        &mut self.current_mut().text_block
     }
 
     pub(crate) fn exec<'c>(&mut self, op: &Operation<'c>) {
@@ -702,9 +707,7 @@ impl<'a, 'b> Render<'a, 'b> {
         for t in texts {
             match t {
                 TextStringOrNumber::Text(s) => self.show_text(s),
-                TextStringOrNumber::Number(n) => {
-                    self.text_block.move_right(*n);
-                }
+                TextStringOrNumber::Number(n) => self.text_block_mut().move_right(*n),
                 TextStringOrNumber::HexText(_) => {
                     error!("HexText not supported");
                 }
@@ -853,13 +856,21 @@ impl FontCache {
     }
 }
 
-#[derive(Educe)]
+#[derive(Educe, Clone)]
 #[educe(Debug)]
 struct TextBlock<'a, 'b> {
     matrix: TransformMatrix,
     line_matrix: TransformMatrix,
     font_size: f32,
     font: Option<FontDict<'a, 'b>>,
+
+    char_spacing: f32,              // Tc
+    word_spacing: f32,              // Tw
+    horiz_scaling: f32,             // Th
+    leading: f32,                   // Tl
+    render_mode: TextRenderingMode, // Tmode
+    rise: f32,                      // Trise
+    knockout: bool,                 // Tk
 }
 
 impl<'a, 'b> TextBlock<'a, 'b> {
@@ -869,6 +880,14 @@ impl<'a, 'b> TextBlock<'a, 'b> {
             line_matrix: TransformMatrix::identity(),
             font_size: 0.0,
             font: None,
+
+            char_spacing: 0.0,
+            word_spacing: 0.0,
+            horiz_scaling: 100.0,
+            leading: 0.0,
+            render_mode: TextRenderingMode::Fill,
+            rise: 0.0,
+            knockout: true,
         }
     }
 

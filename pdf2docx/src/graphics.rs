@@ -120,7 +120,7 @@ pub enum RenderingIntent {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, TryFromIntObject)]
-pub enum SetTextRenderingMode {
+pub enum TextRenderingMode {
     Fill = 0,
     Stroke = 1,
     FillAndStroke = 2,
@@ -361,7 +361,7 @@ pub enum Operation<'a> {
     #[op_tag("Tf")]
     SetFont(NameOfDict, f32),
     #[op_tag("Tr")]
-    SetTextRenderingMode(SetTextRenderingMode),
+    SetTextRenderingMode(TextRenderingMode),
     #[op_tag("Ts")]
     SetTextRise(f32),
 
