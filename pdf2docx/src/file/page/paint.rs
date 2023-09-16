@@ -12,13 +12,15 @@ use crate::{
     text::{FontDict, FontType},
 };
 use anyhow::Result as AnyResult;
-use cosmic_text::{
-    fontdb::Source as FontSource, Attrs, Buffer, FontSystem, Metrics, Shaping, SwashCache,
-};
 use educe::Educe;
 use itertools::Either;
 use log::{error, info};
 use nom::{combinator::eof, sequence::terminated};
+use swash::{
+    scale::{Render as SwashRender, ScaleContext, Source, StrikeWith},
+    zeno::{Command as PathCommand, PathData},
+    FontRef,
+};
 
 use super::{GraphicsStateParameterDict, Operation, Rectangle, ResourceDict};
 use tiny_skia::{
@@ -694,57 +696,6 @@ impl<'a, 'b> Render<'a, 'b> {
 
     fn show_text(&mut self, text: &str) {
         info!("show_text: {:?}", text);
-
-        let font_size = self.text_block.font_size;
-        // Text metrics indicate the font size and line height of a buffer
-        let metrics = Metrics::new(font_size, font_size);
-
-        // A Buffer provides shaping and layout for a UTF-8 string, create one per text widget
-        let mut buffer = Buffer::new(&mut self.font_cache.font_system, metrics);
-
-        // Borrow buffer together with the font system for more convenient method calls
-        let mut buffer = buffer.borrow_with(&mut self.font_cache.font_system);
-
-        // Set a size for the text buffer, in pixels
-        buffer.set_size(80.0, font_size);
-
-        // Attributes indicate what font to choose
-        let attrs = Attrs::new();
-
-        // Add some text!
-        buffer.set_text(text, attrs, Shaping::Advanced);
-        let mut paint = Paint::default();
-
-        let state = self.stack.last().unwrap();
-        // get stroke paint color
-        let PaintCreator::Color(color) = state.stroke_paint.clone() else {
-            // TODO: how to support fill color, fill color should used to draw text content,
-            // stroke color should used to draw text outline
-            panic!("Only color stroke paint supported");
-        };
-        let color = color.to_color_u8();
-        // Perform shaping as desired
-        buffer.shape_until_scroll();
-        buffer.draw(
-            &mut self.font_cache.swash_cache,
-            cosmic_text::Color::rgb(color.red(), color.green(), color.blue()),
-            |x, y, w, h, color| {
-                // Fill in your code here for drawing rectangles
-                paint.set_color(tiny_skia::Color::from_rgba8(
-                    color.r(),
-                    color.g(),
-                    color.b(),
-                    color.a(),
-                ));
-                let matrix: Transform = self.text_block.matrix.into();
-                self.canvas.fill_rect(
-                    Rect::from_xywh(x as f32, y as f32, w as f32, h as f32).unwrap(),
-                    &paint,
-                    matrix.post_concat(state.ctm.ctm.into()),
-                    None,
-                );
-            },
-        );
     }
 
     fn show_texts(&mut self, texts: &[TextStringOrNumber]) {
@@ -860,33 +811,33 @@ fn build_linear_gradient(shading: &AxialShadingDict) -> AnyResult<tiny_skia::Sha
 }
 
 struct FontCache {
-    font_system: FontSystem,
-    swash_cache: SwashCache,
+    // font_system: FontSystem,
+    // swash_cache: SwashCache,
 }
 
 impl FontCache {
-    fn scan_font(font: &FontDict) -> anyhow::Result<Option<FontSource>> {
-        match font.subtype()? {
-            FontType::TrueType => {
-                let font = font.truetype()?;
-                let desc = font.font_descriptor()?.unwrap();
-                let bytes = desc.font_file2()?.unwrap();
-                let bytes = bytes.decode(desc.resolver(), false)?;
-                match bytes {
-                    FilterDecodedData::Bytes(bytes) => {
-                        Ok(Some(FontSource::Binary(Arc::new(bytes.into_owned()))))
-                    }
-                    _ => {
-                        todo!("Unsupported font file type");
-                    }
-                }
-            }
-            _ => {
-                error!("Unsupported font type: {:?}", font.subtype()?);
-                Ok(None)
-            }
-        }
-    }
+    // fn scan_font(font: &FontDict) -> anyhow::Result<Option<FontSource>> {
+    // match font.subtype()? {
+    //     FontType::TrueType => {
+    //         let font = font.truetype()?;
+    //         let desc = font.font_descriptor()?.unwrap();
+    //         let bytes = desc.font_file2()?.unwrap();
+    //         let bytes = bytes.decode(desc.resolver(), false)?;
+    //         match bytes {
+    //             FilterDecodedData::Bytes(bytes) => {
+    //                 Ok(Some(FontSource::Binary(Arc::new(bytes.into_owned()))))
+    //             }
+    //             _ => {
+    //                 todo!("Unsupported font file type");
+    //             }
+    //         }
+    //     }
+    //     _ => {
+    //         error!("Unsupported font type: {:?}", font.subtype()?);
+    //         Ok(None)
+    //     }
+    // }
+    // }
 
     fn new<'a, 'b>(resource: &ResourceDict<'a, 'b>) -> anyhow::Result<Self> {
         // let fonts = resource.font()?;
@@ -896,8 +847,8 @@ impl FontCache {
         //     .collect();
         Ok(Self {
             // font_system: FontSystem::new_with_fonts(fonts?.into_iter()),
-            font_system: FontSystem::new(),
-            swash_cache: SwashCache::new(),
+            // font_system: FontSystem::new(),
+            // swash_cache: SwashCache::new(),
         })
     }
 }
