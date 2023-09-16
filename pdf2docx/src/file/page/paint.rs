@@ -253,8 +253,8 @@ impl<'a, 'b> State<'a, 'b> {
         self.update_mask(width, height, FillRule::EvenOdd);
     }
 
-    fn set_text_knockout_flag(&self, unwrap: bool) {
-        todo!()
+    fn set_text_knockout_flag(&mut self, knockout: bool) {
+        self.text_block.knockout = knockout;
     }
 }
 
