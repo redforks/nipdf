@@ -725,7 +725,7 @@ impl<'a, 'b> Render<'a, 'b> {
         let mut context = ScaleContext::new();
         let mut scaler = context.builder(font).size(font_size).hint(true).build();
         let state = self.stack.last().unwrap();
-        let mut transform: Transform = text_block.line_matrix.into();
+        let mut transform: Transform = text_block.matrix.into();
         let ctm = &state.ctm;
         for ch in text.chars() {
             let glyph_id = font.charmap().map(ch);
@@ -782,7 +782,7 @@ impl<'a, 'b> Render<'a, 'b> {
             );
             transform = transform.pre_translate(offset_x + width, 0.0);
         }
-        self.text_block_mut().line_matrix = transform.into();
+        self.text_block_mut().matrix = transform.into();
     }
 
     fn show_texts(&mut self, texts: &[TextStringOrNumber]) {
@@ -972,7 +972,6 @@ impl FontCache {
 #[educe(Debug)]
 struct TextBlock {
     matrix: TransformMatrix,
-    line_matrix: TransformMatrix,
     font_size: f32,
     font_name: Option<String>,
 
@@ -989,7 +988,6 @@ impl TextBlock {
     pub fn new() -> Self {
         Self {
             matrix: TransformMatrix::identity(),
-            line_matrix: TransformMatrix::identity(),
             font_size: 0.0,
             font_name: None,
 
@@ -1005,7 +1003,6 @@ impl TextBlock {
 
     fn reset(&mut self) {
         self.matrix = TransformMatrix::identity();
-        self.line_matrix = TransformMatrix::identity();
     }
 
     fn set_font(&mut self, name: &NameOfDict, size: f32) {
@@ -1014,19 +1011,18 @@ impl TextBlock {
     }
 
     fn move_text_position(&mut self, p: Point) {
-        let matrix: Transform = self.line_matrix.into();
+        let matrix: Transform = self.matrix.into();
         self.matrix = matrix.pre_translate(p.x, p.y).into();
-        self.line_matrix = self.matrix;
+        self.matrix = self.matrix;
     }
 
     fn set_text_matrix(&mut self, m: TransformMatrix) {
         self.matrix = m;
-        self.line_matrix = m;
     }
 
     fn move_right(&mut self, n: f32) {
-        let matrix: Transform = self.line_matrix.into();
-        self.line_matrix = matrix.pre_translate(n, 0.0).into();
+        let matrix: Transform = self.matrix.into();
+        self.matrix = matrix.pre_translate(n, 0.0).into();
     }
 
     fn set_character_spacing(&mut self, spacing: f32) {
