@@ -489,10 +489,22 @@ impl<'a, 'b> Render<'a, 'b> {
             }
 
             // Text State Operations
+            Operation::SetCharacterSpacing(spacing) => {
+                self.text_block_mut().set_character_spacing(*spacing)
+            }
+            Operation::SetWordSpacing(spacing) => self.text_block_mut().set_word_spacing(*spacing),
+            Operation::SetHorizontalScaling(scale) => {
+                self.text_block_mut().set_horizontal_scaling(*scale)
+            }
+            Operation::SetLeading(leading) => self.text_block_mut().set_leading(*leading),
             Operation::SetFont(name, size) => {
                 let res = self.resources;
                 self.text_block_mut().set_font(name, *size, res)
             }
+            Operation::SetTextRenderingMode(mode) => {
+                self.text_block_mut().set_text_rendering_mode(*mode)
+            }
+            Operation::SetTextRise(rise) => self.text_block_mut().set_text_rise(*rise),
 
             // Text Positioning Operations
             Operation::MoveTextPosition(p) => self.text_block_mut().move_text_position(*p),
@@ -911,6 +923,30 @@ impl<'a, 'b> TextBlock<'a, 'b> {
     fn move_right(&mut self, n: f32) {
         // let matrix: Transform = self.line_matrix.into();
         // self.line_matrix = matrix.pre_translate(n / 1000.0, 0.0).into();
+    }
+
+    fn set_character_spacing(&mut self, spacing: f32) {
+        self.char_spacing = spacing;
+    }
+
+    fn set_word_spacing(&mut self, spacing: f32) {
+        self.word_spacing = spacing;
+    }
+
+    fn set_horizontal_scaling(&mut self, scale: f32) {
+        self.horiz_scaling = scale;
+    }
+
+    fn set_leading(&mut self, leading: f32) {
+        self.leading = leading;
+    }
+
+    fn set_text_rendering_mode(&mut self, mode: TextRenderingMode) {
+        self.render_mode = mode;
+    }
+
+    fn set_text_rise(&mut self, rise: f32) {
+        self.rise = rise;
     }
 }
 
