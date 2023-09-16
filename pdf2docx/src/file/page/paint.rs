@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::HashMap};
 
 use crate::{
     function::{Domain, Function, FunctionDict, Type as FunctionType},
@@ -11,7 +11,7 @@ use crate::{
     object::{Array, FilterDecodedData, Object, PdfObject, TextStringOrNumber},
     text::{FontDict, FontType},
 };
-use anyhow::Result as AnyResult;
+use anyhow::{anyhow, Result as AnyResult};
 use educe::Educe;
 use itertools::Either;
 use log::{error, info};
@@ -19,7 +19,7 @@ use nom::{combinator::eof, sequence::terminated};
 use swash::{
     scale::{Render as SwashRender, ScaleContext, Source, StrikeWith},
     zeno::{Command as PathCommand, PathData},
-    FontRef,
+    CacheKey, FontRef,
 };
 
 use super::{GraphicsStateParameterDict, Operation, Rectangle, ResourceDict};
@@ -825,46 +825,73 @@ fn build_linear_gradient(shading: &AxialShadingDict) -> AnyResult<tiny_skia::Sha
     .unwrap())
 }
 
+struct Font {
+    data: Vec<u8>,
+    offset: u32,
+    key: CacheKey,
+}
+
+impl Font {
+    fn as_ref(&self) -> FontRef {
+        FontRef {
+            data: &self.data[..],
+            offset: self.offset,
+            key: self.key,
+        }
+    }
+}
+
 struct FontCache {
-    // font_system: FontSystem,
-    // swash_cache: SwashCache,
+    fonts: HashMap<String, Font>,
 }
 
 impl FontCache {
-    // fn scan_font(font: &FontDict) -> anyhow::Result<Option<FontSource>> {
-    // match font.subtype()? {
-    //     FontType::TrueType => {
-    //         let font = font.truetype()?;
-    //         let desc = font.font_descriptor()?.unwrap();
-    //         let bytes = desc.font_file2()?.unwrap();
-    //         let bytes = bytes.decode(desc.resolver(), false)?;
-    //         match bytes {
-    //             FilterDecodedData::Bytes(bytes) => {
-    //                 Ok(Some(FontSource::Binary(Arc::new(bytes.into_owned()))))
-    //             }
-    //             _ => {
-    //                 todo!("Unsupported font file type");
-    //             }
-    //         }
-    //     }
-    //     _ => {
-    //         error!("Unsupported font type: {:?}", font.subtype()?);
-    //         Ok(None)
-    //     }
-    // }
-    // }
+    fn scan_font(font: &FontDict) -> AnyResult<Option<Font>> {
+        match font.subtype()? {
+            FontType::TrueType => {
+                let font = font.truetype()?;
+                let desc = font.font_descriptor()?.unwrap();
+                let bytes = desc.font_file2()?.unwrap();
+                let bytes = bytes.decode(desc.resolver(), false)?;
+                match bytes {
+                    FilterDecodedData::Bytes(_) => {
+                        let bytes = bytes.to_owned();
+                        let font = FontRef::from_index(&bytes[..], 0)
+                            .ok_or_else(|| anyhow!("Failed to load font"))?;
+                        let offset = font.offset;
+                        let key = font.key;
+                        Ok(Some(Font {
+                            data: bytes,
+                            offset,
+                            key,
+                        }))
+                    }
+                    _ => {
+                        todo!("Unsupported font file type");
+                    }
+                }
+            }
+            _ => {
+                error!("Unsupported font type: {:?}", font.subtype()?);
+                Ok(None)
+            }
+        }
+    }
 
     fn new<'a, 'b>(resource: &ResourceDict<'a, 'b>) -> anyhow::Result<Self> {
-        // let fonts = resource.font()?;
-        // let fonts: anyhow::Result<Vec<FontSource>> = fonts
-        //     .values()
-        //     .filter_map(|f| Self::scan_font(f).transpose())
-        //     .collect();
-        Ok(Self {
-            // font_system: FontSystem::new_with_fonts(fonts?.into_iter()),
-            // font_system: FontSystem::new(),
-            // swash_cache: SwashCache::new(),
-        })
+        let font_res = resource.font()?;
+        let mut fonts = HashMap::with_capacity(font_res.len());
+        for (k, v) in font_res.into_iter() {
+            let font = Self::scan_font(&v)?;
+            if let Some(font) = font {
+                fonts.insert(k, font);
+            }
+        }
+        Ok(Self { fonts })
+    }
+
+    fn get_font(&self, s: &str) -> Option<FontRef> {
+        self.fonts.get(s).map(|f| f.as_ref())
     }
 }
 
@@ -921,8 +948,8 @@ impl<'a, 'b> TextBlock<'a, 'b> {
     }
 
     fn move_right(&mut self, n: f32) {
-        // let matrix: Transform = self.line_matrix.into();
-        // self.line_matrix = matrix.pre_translate(n / 1000.0, 0.0).into();
+        let matrix: Transform = self.line_matrix.into();
+        self.line_matrix = matrix.pre_translate(n, 0.0).into();
     }
 
     fn set_character_spacing(&mut self, spacing: f32) {

@@ -274,6 +274,14 @@ impl<'a> FilterDecodedData<'a> {
             Self::RawImage(img) => &img.data[..],
         }
     }
+
+    pub fn to_owned(self) -> Vec<u8> {
+        match self {
+            Self::Bytes(bytes) => bytes.into_owned(),
+            Self::Image(img) => img.into_bytes(),
+            Self::RawImage(img) => img.data.into_owned(),
+        }
+    }
 }
 
 fn decode_ascii85(
