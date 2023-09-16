@@ -14,7 +14,7 @@ use crate::{
 use anyhow::{anyhow, Result as AnyResult};
 use educe::Educe;
 use itertools::Either;
-use log::{error, info};
+use log::{debug, error, info};
 use nom::{combinator::eof, sequence::terminated};
 use swash::{
     scale::{Render as SwashRender, ScaleContext, Source, StrikeWith},
@@ -106,7 +106,7 @@ impl PaintCreator {
 }
 
 #[derive(Debug, Clone)]
-pub struct State<'a, 'b> {
+pub struct State {
     ctm: MatrixMapper,
     fill_paint: PaintCreator,
     stroke_paint: PaintCreator,
@@ -114,10 +114,10 @@ pub struct State<'a, 'b> {
     mask: Option<Mask>,
     fill_color_space: ColorSpace,
     stroke_color_space: ColorSpace,
-    text_block: TextBlock<'a, 'b>,
+    text_block: TextBlock,
 }
 
-impl<'a, 'b> State<'a, 'b> {
+impl State {
     /// height: height in user space coordinate
     fn new(option: &RenderOption) -> Self {
         let mut r = Self {
@@ -373,7 +373,7 @@ impl RenderOptionBuilder {
 #[educe(Debug)]
 pub struct Render<'a, 'b> {
     canvas: Pixmap,
-    stack: Vec<State<'a, 'b>>,
+    stack: Vec<State>,
     width: u32,
     height: u32,
     path: Path,
@@ -409,7 +409,7 @@ impl<'a, 'b> Render<'a, 'b> {
         self.stack.pop().unwrap();
     }
 
-    fn current_mut(&mut self) -> &mut State<'a, 'b> {
+    fn current_mut(&mut self) -> &mut State {
         self.stack.last_mut().unwrap()
     }
 
@@ -417,7 +417,11 @@ impl<'a, 'b> Render<'a, 'b> {
         self.canvas
     }
 
-    fn text_block_mut(&mut self) -> &mut TextBlock<'a, 'b> {
+    fn text_block(&self) -> &TextBlock {
+        &self.stack.last().unwrap().text_block
+    }
+
+    fn text_block_mut(&mut self) -> &mut TextBlock {
         &mut self.current_mut().text_block
     }
 
@@ -497,10 +501,7 @@ impl<'a, 'b> Render<'a, 'b> {
                 self.text_block_mut().set_horizontal_scaling(*scale)
             }
             Operation::SetLeading(leading) => self.text_block_mut().set_leading(*leading),
-            Operation::SetFont(name, size) => {
-                let res = self.resources;
-                self.text_block_mut().set_font(name, *size, res)
-            }
+            Operation::SetFont(name, size) => self.text_block_mut().set_font(name, *size),
             Operation::SetTextRenderingMode(mode) => {
                 self.text_block_mut().set_text_rendering_mode(*mode)
             }
@@ -713,13 +714,83 @@ impl<'a, 'b> Render<'a, 'b> {
 
     fn show_text(&mut self, text: &str) {
         info!("show_text: {:?}", text);
+
+        let text_block = self.text_block();
+        let font_size = text_block.font_size;
+        let font = self
+            .font_cache
+            .get_font(text_block.font_name.as_ref().unwrap())
+            .unwrap();
+        let mut context = ScaleContext::new();
+        let mut scaler = context.builder(font).size(font_size).hint(true).build();
+        let state = self.stack.last().unwrap();
+        let mut transform: Transform = text_block.line_matrix.into();
+        let ctm = &state.ctm;
+        for ch in text.chars() {
+            let glyph_id = font.charmap().map(ch);
+            let outline = scaler.scale_outline(glyph_id).unwrap();
+
+            let mut path = PathBuilder::new();
+            (0..outline.len()).into_iter().for_each(|idx| {
+                let layer = outline.get(idx).unwrap();
+                layer.path().commands().for_each(|v| match v {
+                    PathCommand::MoveTo(p) => {
+                        path.move_to(p.x, p.y);
+                    }
+                    PathCommand::LineTo(p) => {
+                        path.line_to(p.x, p.y);
+                    }
+                    PathCommand::CurveTo(p1, p2, p3) => {
+                        path.cubic_to(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+                    }
+                    PathCommand::QuadTo(p1, p2) => {
+                        path.quad_to(p1.x, p1.y, p2.x, p2.y);
+                    }
+                    PathCommand::Close => {
+                        path.close();
+                    }
+                })
+            });
+            if path.is_empty() {
+                continue;
+            }
+            let path = path.finish().unwrap();
+            let width = path.bounds().width();
+            let offset_x = path.bounds().left();
+            let ctm_transform: Transform = ctm.ctm.into();
+            debug!("ctm: {:?}", ctm_transform);
+            debug!("transform: {:?}", transform);
+            let trans = transform;
+            let trans = ctm_transform.pre_concat(trans);
+            debug!("trans: {:?}", trans);
+            let trans = Transform {
+                sx: trans.sx * ctm.zoom,
+                kx: trans.kx,
+                ky: trans.ky,
+                sy: trans.sy * -ctm.zoom,
+                tx: trans.tx * ctm.zoom,
+                ty: ctm.height * ctm.zoom - trans.ty * ctm.zoom,
+            };
+            debug!("trans: {:?}, height: {}", trans, ctm.height);
+            self.canvas.fill_path(
+                &path,
+                &state.get_fill_paint(),
+                FillRule::EvenOdd,
+                trans,
+                None,
+            );
+            transform = transform.pre_translate(offset_x + width, 0.0);
+        }
+        self.text_block_mut().line_matrix = transform.into();
     }
 
     fn show_texts(&mut self, texts: &[TextStringOrNumber]) {
         for t in texts {
             match t {
                 TextStringOrNumber::Text(s) => self.show_text(s),
-                TextStringOrNumber::Number(n) => self.text_block_mut().move_right(*n),
+                TextStringOrNumber::Number(n) => {
+                    // self.text_block_mut().move_right(*n);
+                }
                 TextStringOrNumber::HexText(_) => {
                     error!("HexText not supported");
                 }
@@ -882,6 +953,7 @@ impl FontCache {
         let font_res = resource.font()?;
         let mut fonts = HashMap::with_capacity(font_res.len());
         for (k, v) in font_res.into_iter() {
+            info!("load font: {:?}", k);
             let font = Self::scan_font(&v)?;
             if let Some(font) = font {
                 fonts.insert(k, font);
@@ -897,11 +969,11 @@ impl FontCache {
 
 #[derive(Educe, Clone)]
 #[educe(Debug)]
-struct TextBlock<'a, 'b> {
+struct TextBlock {
     matrix: TransformMatrix,
     line_matrix: TransformMatrix,
     font_size: f32,
-    font: Option<FontDict<'a, 'b>>,
+    font_name: Option<String>,
 
     char_spacing: f32,              // Tc
     word_spacing: f32,              // Tw
@@ -912,13 +984,13 @@ struct TextBlock<'a, 'b> {
     knockout: bool,                 // Tk
 }
 
-impl<'a, 'b> TextBlock<'a, 'b> {
+impl TextBlock {
     pub fn new() -> Self {
         Self {
             matrix: TransformMatrix::identity(),
             line_matrix: TransformMatrix::identity(),
             font_size: 0.0,
-            font: None,
+            font_name: None,
 
             char_spacing: 0.0,
             word_spacing: 0.0,
@@ -930,10 +1002,9 @@ impl<'a, 'b> TextBlock<'a, 'b> {
         }
     }
 
-    fn set_font(&mut self, name: &NameOfDict, size: f32, resources: &ResourceDict<'a, 'b>) {
+    fn set_font(&mut self, name: &NameOfDict, size: f32) {
         self.font_size = size;
-        let mut fonts = resources.font().unwrap();
-        self.font = Some(fonts.remove(&name.0).expect("Font not found"));
+        self.font_name = Some(name.0.to_owned());
     }
 
     fn move_text_position(&mut self, p: Point) {
