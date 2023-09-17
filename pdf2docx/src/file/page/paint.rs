@@ -724,7 +724,13 @@ impl<'a, 'b> Render<'a, 'b> {
             .unwrap();
         let font_ref = font.as_ref();
         let mut context = ScaleContext::new();
-        let mut scaler = context.builder(font_ref).size(font_size).hint(true).build();
+        let builder = context.builder(font_ref).size(font_size).hint(true);
+        let builder = if let Some(weight) = font.weight {
+            builder.variations(&[("wght", weight as f32)])
+        } else {
+            builder
+        };
+        let mut scaler = builder.build();
         let state = self.stack.last().unwrap();
         let mut transform: Transform = text_block.matrix.into();
         let ctm = &state.ctm;
@@ -963,6 +969,7 @@ struct Font {
     offset: u32,
     key: CacheKey,
     font_width: FontWidth,
+    weight: Option<u16>,
 }
 
 impl Font {
@@ -1003,6 +1010,7 @@ impl FontCache {
                             offset,
                             key,
                             font_width: FontWidth::new(font)?,
+                            weight: desc.font_weight()?.map(|v| v as u16),
                         }))
                     }
                     _ => {
