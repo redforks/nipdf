@@ -58,3 +58,29 @@ fn image_transform(zoom: f32, exp: (f32, f32)) {
     let assert_mp = map_point_asserter(m.image_transform(1301, 5));
     assert_mp((0.0, 0.0), exp);
 }
+
+#[test]
+fn font_width_empty() {
+    let font_width = FontWidth {
+        range: None,
+        widths: vec![],
+        default_width: 15,
+    };
+
+    assert_eq!(15, font_width.char_width('f'));
+    assert_eq!(15, font_width.char_width('g'));
+}
+
+#[test]
+fn font_width() {
+    let font_width = FontWidth {
+        range: Some('a' as u32..='d' as u32),
+        widths: vec![100, 200, 300, 400],
+        default_width: 15,
+    };
+
+    assert_eq!(100, font_width.char_width('a'));
+    assert_eq!(200, font_width.char_width('b'));
+    assert_eq!(400, font_width.char_width('d'));
+    assert_eq!(15, font_width.char_width('e'));
+}

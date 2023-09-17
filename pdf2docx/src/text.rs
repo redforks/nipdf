@@ -122,7 +122,7 @@ pub trait FontDescriptorDictTrait {
     fn max_width(&self) -> f32;
 
     #[or_default]
-    fn missing_width(&self) -> f32;
+    fn missing_width(&self) -> u32;
 
     fn font_file(&self) -> Option<&'b Stream<'a>>;
 

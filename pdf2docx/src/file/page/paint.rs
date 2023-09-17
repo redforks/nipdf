@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::{borrow::Cow, collections::HashMap, ops::RangeInclusive};
 
 use crate::{
     function::{Domain, Function, FunctionDict, Type as FunctionType},
@@ -9,7 +9,7 @@ use crate::{
         TilingPatternDict, TransformMatrix,
     },
     object::{Array, FilterDecodedData, Object, PdfObject, TextStringOrNumber},
-    text::{FontDict, FontType},
+    text::{FontDescriptorDict, FontDict, FontType},
 };
 use anyhow::{anyhow, Result as AnyResult};
 use educe::Educe;
@@ -722,13 +722,14 @@ impl<'a, 'b> Render<'a, 'b> {
             .font_cache
             .get_font(text_block.font_name.as_ref().unwrap())
             .unwrap();
+        let font_ref = font.as_ref();
         let mut context = ScaleContext::new();
-        let mut scaler = context.builder(font).size(font_size).hint(true).build();
+        let mut scaler = context.builder(font_ref).size(font_size).hint(true).build();
         let state = self.stack.last().unwrap();
         let mut transform: Transform = text_block.matrix.into();
         let ctm = &state.ctm;
         for ch in text.chars() {
-            let glyph_id = font.charmap().map(ch);
+            let glyph_id = font_ref.charmap().map(ch);
             let outline = scaler.scale_outline(glyph_id).unwrap();
 
             let mut path = PathBuilder::new();
@@ -752,13 +753,14 @@ impl<'a, 'b> Render<'a, 'b> {
                     }
                 })
             });
+            let width = font.font_width(ch) as f32 / 1000.0 * font_size;
+            debug!("width: {width}");
             if path.is_empty() {
-                transform = transform.pre_translate(4.0, 0.0);
+                transform = transform.pre_translate(width, 0.0);
                 continue;
             }
+
             let path = path.finish().unwrap();
-            let width = path.bounds().width();
-            let offset_x = path.bounds().left();
             let ctm_transform: Transform = ctm.ctm.into();
             debug!("ctm: {:?}", ctm_transform);
             debug!("transform: {:?}", transform);
@@ -781,7 +783,7 @@ impl<'a, 'b> Render<'a, 'b> {
                 trans,
                 None,
             );
-            transform = transform.pre_translate(offset_x + width, 0.0);
+            transform = transform.pre_translate(width, 0.0);
         }
         self.text_block_mut().matrix = transform.into();
     }
@@ -898,10 +900,69 @@ fn build_linear_gradient(shading: &AxialShadingDict) -> AnyResult<tiny_skia::Sha
     .unwrap())
 }
 
+struct FontWidth {
+    range: Option<RangeInclusive<u32>>,
+    widths: Vec<u32>,
+    default_width: u32,
+}
+
+impl FontWidth {
+    fn new(font: &FontDict) -> AnyResult<Self> {
+        let (first_char, last_char, default_width, widths) = match font.subtype()? {
+            FontType::TrueType => {
+                let font = font.truetype()?;
+                let desc = font
+                    .font_descriptor()?
+                    .ok_or_else(|| anyhow!("font descriptor failed to load"))?;
+                let widths = font.widths()?;
+                let first_char = font.first_char()?;
+                let last_char = font.last_char()?;
+                let default_width = desc.missing_width()?;
+                (first_char, last_char, default_width, widths)
+            }
+            FontType::Type1 => {
+                let font = font.type1()?;
+                let desc = font
+                    .font_descriptor()?
+                    .ok_or_else(|| anyhow!("font descriptor failed to load"))?;
+                let widths = font.widths()?;
+                let first_char = font.first_char()?;
+                let last_char = font.last_char()?;
+                let default_width = desc.missing_width()?;
+                (first_char, last_char, default_width, widths)
+            }
+            _ => anyhow::bail!("Unsupported font type: {:?}", font.subtype()?),
+        };
+
+        let range = if let (Some(first_char), Some(last_char)) = (first_char, last_char) {
+            Some(first_char..=last_char)
+        } else {
+            None
+        };
+
+        Ok(Self {
+            range,
+            widths,
+            default_width,
+        })
+    }
+
+    fn char_width(&self, ch: char) -> u32 {
+        match &self.range {
+            Some(range) if range.contains(&(ch as u32)) => {
+                let idx = (ch as u32 - range.start()) as usize;
+                self.widths[idx]
+            }
+            _ => self.default_width,
+        }
+    }
+}
+
 struct Font {
     data: Vec<u8>,
     offset: u32,
     key: CacheKey,
+    font_width: FontWidth,
 }
 
 impl Font {
@@ -911,6 +972,10 @@ impl Font {
             offset: self.offset,
             key: self.key,
         }
+    }
+
+    fn font_width(&self, ch: char) -> u32 {
+        self.font_width.char_width(ch)
     }
 }
 
@@ -922,21 +987,22 @@ impl FontCache {
     fn scan_font(font: &FontDict) -> AnyResult<Option<Font>> {
         match font.subtype()? {
             FontType::TrueType => {
-                let font = font.truetype()?;
-                let desc = font.font_descriptor()?.unwrap();
+                let true_type_font = font.truetype()?;
+                let desc = true_type_font.font_descriptor()?.unwrap();
                 let bytes = desc.font_file2()?.unwrap();
                 let bytes = bytes.decode(desc.resolver(), false)?;
                 match bytes {
                     FilterDecodedData::Bytes(_) => {
                         let bytes = bytes.to_owned();
-                        let font = FontRef::from_index(&bytes[..], 0)
+                        let font_ref = FontRef::from_index(&bytes[..], 0)
                             .ok_or_else(|| anyhow!("Failed to load font"))?;
-                        let offset = font.offset;
-                        let key = font.key;
+                        let offset = font_ref.offset;
+                        let key = font_ref.key;
                         Ok(Some(Font {
                             data: bytes,
                             offset,
                             key,
+                            font_width: FontWidth::new(font)?,
                         }))
                     }
                     _ => {
@@ -964,8 +1030,8 @@ impl FontCache {
         Ok(Self { fonts })
     }
 
-    fn get_font(&self, s: &str) -> Option<FontRef> {
-        self.fonts.get(s).map(|f| f.as_ref())
+    fn get_font(&self, s: &str) -> Option<&Font> {
+        self.fonts.get(s)
     }
 }
 
