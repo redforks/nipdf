@@ -4,7 +4,7 @@ use tiny_skia::Pixmap;
 
 use crate::{
     graphics::{
-        parse_operations, LineCapStyle, LineJoinStyle, Operation, PatternDict, Point,
+        parse_operations, Color, LineCapStyle, LineJoinStyle, Operation, PatternDict, Point,
         RenderingIntent,
     },
     object::{Dictionary, FilterDecodedData, Object, ObjectValueError, PdfObject, Stream},
@@ -129,6 +129,13 @@ pub enum XObjectType {
 pub trait XObjectDictTrait {
     #[try_from]
     fn subtype(&self) -> Option<XObjectType>;
+
+    // available if it is soft-mask image, see Table 146
+    #[try_from]
+    fn matte(&self) -> Option<Color>;
+
+    #[nested]
+    fn s_mask(&self) -> Option<XObjectDict<'a, 'b>>;
 }
 
 impl<'a, 'b> XObjectDict<'a, 'b> {

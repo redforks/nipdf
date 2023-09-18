@@ -1,6 +1,7 @@
 use std::{borrow::Cow, collections::HashMap, ops::RangeInclusive};
 
 use crate::{
+    file::XObjectDict,
     function::{Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
         parse_operations, AxialExtend, AxialShadingDict, Color, ColorOrName, ColorSpace,
@@ -8,11 +9,12 @@ use crate::{
         RenderingIntent, ShadingPatternDict, ShadingType, TextRenderingMode, TilingPaintType,
         TilingPatternDict, TransformMatrix,
     },
-    object::{Array, FilterDecodedData, Object, PdfObject, TextStringOrNumber},
+    object::{Array, FilterDecodedData, ImageDict, Object, PdfObject, TextStringOrNumber},
     text::{FontDescriptorDict, FontDict, FontType},
 };
 use anyhow::{anyhow, Result as AnyResult};
 use educe::Educe;
+use image::RgbaImage;
 use itertools::Either;
 use log::{debug, error, info};
 use nom::{combinator::eof, sequence::terminated};
@@ -24,8 +26,8 @@ use swash::{
 
 use super::{GraphicsStateParameterDict, Operation, Rectangle, ResourceDict};
 use tiny_skia::{
-    FillRule, FilterQuality, GradientStop, Mask, Paint, Path as SkiaPath, PathBuilder, Pixmap,
-    PixmapPaint, PixmapRef, Point as SkiaPoint, Rect, Stroke, StrokeDash, Transform,
+    FillRule, FilterQuality, GradientStop, Mask, MaskType, Paint, Path as SkiaPath, PathBuilder,
+    Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect, Stroke, StrokeDash, Transform,
 };
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -607,26 +609,41 @@ impl<'a, 'b> Render<'a, 'b> {
 
     /// Paints the specified XObject. Only XObjectType::Image supported
     fn paint_x_object(&mut self, name: &crate::graphics::NameOfDict) {
+        fn load_image<'a>(image_dict: &'a XObjectDict) -> RgbaImage {
+            let image = image_dict.as_image().expect("Only Image XObject supported");
+            let image = image.decode(image_dict.resolver(), false).unwrap();
+            let FilterDecodedData::Image(img) = image else {
+                panic!("Stream should decoded to image");
+            };
+            img.into_rgba8()
+        }
+
         let xobjects = self.resources.x_object().unwrap();
         let xobject = xobjects.get(&name.0).unwrap();
-        let img = xobject.as_image().expect("Only Image XObject supported");
-        let img = img.decode(self.resources.d.resolver(), false).unwrap();
-        let FilterDecodedData::Image(img) = img else {
-            panic!("Stream should decoded to image");
-        };
-        let state = self.stack.last().unwrap();
 
-        let img = img.into_rgba8();
+        let img = load_image(&xobject);
         let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
         let paint = PixmapPaint {
             quality: FilterQuality::Bilinear,
             ..Default::default()
         };
-        let transform = state.image_transform(img.width(), img.height());
-        log::debug!("paint_x_object: {:?}", transform);
 
+        let smask = xobject.s_mask().unwrap();
+        let smask_img: RgbaImage;
+        let smask = if let Some(smask) = smask {
+            smask_img = load_image(&smask);
+            let img =
+                PixmapRef::from_bytes(smask_img.as_raw(), smask_img.width(), smask_img.height())
+                    .unwrap();
+            Some(Mask::from_pixmap(img, MaskType::Alpha))
+        } else {
+            None
+        };
+
+        let state = self.stack.last().unwrap();
+        let transform = state.image_transform(img.width(), img.height());
         self.canvas
-            .draw_pixmap(0, 0, img, &paint, transform, state.get_mask());
+            .draw_pixmap(0, 0, img, &paint, transform, smask.as_ref());
     }
 
     fn set_fill_color_or_pattern(
