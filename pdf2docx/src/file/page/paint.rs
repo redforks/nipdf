@@ -784,7 +784,7 @@ impl<'a, 'b> Render<'a, 'b> {
                 &state.get_fill_paint(),
                 FillRule::EvenOdd,
                 trans,
-                None,
+                state.get_mask(),
             );
             transform = transform.pre_translate(width, 0.0);
         }
