@@ -9,8 +9,8 @@ use crate::{
         RenderingIntent, ShadingPatternDict, ShadingType, TextRenderingMode, TilingPaintType,
         TilingPatternDict, TransformMatrix,
     },
-    object::{Array, FilterDecodedData, ImageDict, Object, PdfObject, TextStringOrNumber},
-    text::{FontDescriptorDict, FontDict, FontType},
+    object::{Array, FilterDecodedData, Object, PdfObject, TextStringOrNumber},
+    text::{FontDict, FontType},
 };
 use anyhow::{anyhow, Result as AnyResult};
 use educe::Educe;
@@ -19,7 +19,7 @@ use itertools::Either;
 use log::{debug, error, info};
 use nom::{combinator::eof, sequence::terminated};
 use swash::{
-    scale::{Render as SwashRender, ScaleContext, Source, StrikeWith},
+    scale::ScaleContext,
     zeno::{Command as PathCommand, PathData},
     CacheKey, FontRef,
 };
@@ -27,7 +27,7 @@ use swash::{
 use super::{GraphicsStateParameterDict, Operation, Rectangle, ResourceDict};
 use tiny_skia::{
     FillRule, FilterQuality, GradientStop, Mask, MaskType, Paint, Path as SkiaPath, PathBuilder,
-    Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect, Stroke, StrokeDash, Transform,
+    Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Stroke, StrokeDash, Transform,
 };
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -426,7 +426,7 @@ impl<'a, 'b> Render<'a, 'b> {
         &mut self.current_mut().text_block
     }
 
-    pub(crate) fn exec<'c>(&mut self, op: &Operation<'c>) {
+    pub(crate) fn exec(&mut self, op: &Operation<'_>) {
         match op {
             // General Graphics State Operations
             Operation::SetLineWidth(width) => self.current_mut().set_line_width(*width),
@@ -609,7 +609,7 @@ impl<'a, 'b> Render<'a, 'b> {
 
     /// Paints the specified XObject. Only XObjectType::Image supported
     fn paint_x_object(&mut self, name: &crate::graphics::NameOfDict) {
-        fn load_image<'a>(image_dict: &'a XObjectDict) -> RgbaImage {
+        fn load_image(image_dict: &XObjectDict) -> RgbaImage {
             let image = image_dict.as_image().expect("Only Image XObject supported");
             let image = image.decode(image_dict.resolver(), false).unwrap();
             let FilterDecodedData::Image(img) = image else {
@@ -621,7 +621,7 @@ impl<'a, 'b> Render<'a, 'b> {
         let xobjects = self.resources.x_object().unwrap();
         let xobject = xobjects.get(&name.0).unwrap();
 
-        let img = load_image(&xobject);
+        let img = load_image(xobject);
         let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
         let paint = PixmapPaint {
             quality: FilterQuality::Bilinear,
@@ -750,7 +750,7 @@ impl<'a, 'b> Render<'a, 'b> {
             let outline = scaler.scale_outline(glyph_id).unwrap();
 
             let mut path = PathBuilder::new();
-            (0..outline.len()).into_iter().for_each(|idx| {
+            (0..outline.len()).for_each(|idx| {
                 let layer = outline.get(idx).unwrap();
                 layer.path().commands().for_each(|v| match v {
                     PathCommand::MoveTo(p) => {
@@ -1036,7 +1036,7 @@ impl FontCache {
         }
     }
 
-    fn new<'a, 'b>(resource: &ResourceDict<'a, 'b>) -> anyhow::Result<Self> {
+    fn new(resource: &ResourceDict<'_, '_>) -> anyhow::Result<Self> {
         let font_res = resource.font()?;
         let mut fonts = HashMap::with_capacity(font_res.len());
         for (k, v) in font_res.into_iter() {
@@ -1099,7 +1099,6 @@ impl TextBlock {
     fn move_text_position(&mut self, p: Point) {
         let matrix: Transform = self.matrix.into();
         self.matrix = matrix.pre_translate(p.x, p.y).into();
-        self.matrix = self.matrix;
     }
 
     fn set_text_matrix(&mut self, m: TransformMatrix) {
