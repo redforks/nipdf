@@ -329,7 +329,6 @@ impl Path {
 
     fn clear(&mut self) {
         self.reset();
-        self.path_builder().clear();
     }
 }
 
@@ -557,7 +556,6 @@ impl<'a, 'b> Render<'a, 'b> {
     }
 
     fn close_path(&mut self) {
-        log::debug!("close_path");
         self.path.close_path();
     }
 
@@ -569,7 +567,6 @@ impl<'a, 'b> Render<'a, 'b> {
     fn _fill(&mut self, fill_rule: FillRule) {
         let state = self.stack.last().unwrap();
         let paint = state.get_fill_paint();
-        log::debug!("fill: {:?}/{:?}", paint, fill_rule);
         self.canvas.fill_path(
             self.path.finish(),
             &paint,
