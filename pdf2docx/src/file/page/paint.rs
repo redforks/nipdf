@@ -225,32 +225,32 @@ impl State {
         }
     }
 
-    fn update_mask(&mut self, _width: u32, _height: u32, _rule: FillRule) {
-        // let mut mask = self
-        //     .mask
-        //     .take()
-        //     .unwrap_or_else(|| Mask::new(width, height).unwrap());
-        // mask.intersect_path(
-        //     &self.path.path(),
-        //     rule,
-        //     true,
-        //     tiny_skia::Transform::identity()
-        //         .pre_scale(1.0, -1.0)
-        //         .pre_translate(0.0, -(height as f32)),
-        // );
-        // self.mask = Some(mask);
+    fn update_mask(&mut self, path: &SkiaPath, width: u32, height: u32, rule: FillRule) {
+        let mut mask = self
+            .mask
+            .take()
+            .unwrap_or_else(|| Mask::new(width, height).unwrap());
+        mask.intersect_path(
+            path,
+            rule,
+            true,
+            tiny_skia::Transform::identity()
+                .pre_scale(1.0, -1.0)
+                .pre_translate(0.0, -(height as f32)),
+        );
+        self.mask = Some(mask);
     }
 
     /// Apply current path to mask. Create mask if None, otherwise intersect with current path,
     /// using Winding fill rule.
-    fn clip_non_zero(&mut self, width: u32, height: u32) {
-        self.update_mask(width, height, FillRule::Winding);
+    fn clip_non_zero(&mut self, path: &SkiaPath, width: u32, height: u32) {
+        self.update_mask(path, width, height, FillRule::Winding);
     }
 
     /// Apply current path to mask. Create mask if None, otherwise intersect with current path,
     /// using Even-Odd fill rule.
-    fn clip_even_odd(&mut self, width: u32, height: u32) {
-        self.update_mask(width, height, FillRule::EvenOdd);
+    fn clip_even_odd(&mut self, path: &SkiaPath, width: u32, height: u32) {
+        self.update_mask(path, width, height, FillRule::EvenOdd);
     }
 
     fn set_text_knockout_flag(&mut self, knockout: bool) {
@@ -475,23 +475,20 @@ impl<'a, 'b> Render<'a, 'b> {
             // Clipping Path Operations
             Operation::ClipNonZero => {
                 let (w, h) = (self.width, self.height);
-                self.current_mut().clip_non_zero(w, h);
+                let state = self.stack.last_mut().unwrap();
+                state.clip_non_zero(self.path.finish(), w, h);
             }
             Operation::ClipEvenOdd => {
                 let (w, h) = (self.width, self.height);
-                self.current_mut().clip_even_odd(w, h);
+                let state = self.stack.last_mut().unwrap();
+                state.clip_even_odd(self.path.finish(), w, h);
             }
 
             // Text Object Operations
             Operation::BeginText => {
-                // assert!(self.text_block.is_none(), "TextBlock should not nested");
-                // self.text_block = Some(TextBlock::new(&mut self.font_cache));
                 self.text_block_mut().reset();
             }
-            Operation::EndText => {
-                // assert!(self.text_block.is_some(), "EndText without BeginText");
-                // self.text_block = None;
-            }
+            Operation::EndText => {}
 
             // Text State Operations
             Operation::SetCharacterSpacing(spacing) => {
