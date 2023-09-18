@@ -729,6 +729,7 @@ impl<'a, 'b> Render<'a, 'b> {
 
         let text_block = self.text_block();
         let font_size = text_block.font_size;
+        let render_mode = text_block.render_mode;
         let font = self
             .font_cache
             .get_font(text_block.font_name.as_ref().unwrap())
@@ -793,13 +794,36 @@ impl<'a, 'b> Render<'a, 'b> {
                 ty: ctm.height * ctm.zoom - trans.ty * ctm.zoom,
             };
             debug!("trans: {:?}, height: {}", trans, ctm.height);
-            self.canvas.fill_path(
-                &path,
-                &state.get_fill_paint(),
-                FillRule::EvenOdd,
-                trans,
-                state.get_mask(),
-            );
+            match render_mode {
+                TextRenderingMode::Fill => {
+                    self.canvas.fill_path(
+                        &path,
+                        &state.get_fill_paint(),
+                        FillRule::Winding,
+                        trans,
+                        state.get_mask(),
+                    );
+                }
+                TextRenderingMode::FillAndStroke => {
+                    self.canvas.fill_path(
+                        &path,
+                        &state.get_fill_paint(),
+                        FillRule::Winding,
+                        trans,
+                        state.get_mask(),
+                    );
+                    self.canvas.stroke_path(
+                        &path,
+                        &state.get_stroke_paint(),
+                        &state.get_stroke(),
+                        trans,
+                        state.get_mask(),
+                    );
+                }
+                _ => {
+                    todo!("Unsupported text rendering mode: {:?}", render_mode);
+                }
+            }
             transform = transform.pre_translate(width, 0.0);
         }
         self.text_block_mut().matrix = transform.into();
