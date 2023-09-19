@@ -228,18 +228,15 @@ impl State {
     }
 
     fn update_mask(&mut self, path: &SkiaPath, width: u32, height: u32, rule: FillRule) {
-        let mut mask = self
-            .mask
-            .take()
-            .unwrap_or_else(|| Mask::new(width, height).unwrap());
-        mask.intersect_path(
-            path,
-            rule,
-            true,
-            tiny_skia::Transform::identity()
-                .pre_scale(1.0, -1.0)
-                .pre_translate(0.0, -(height as f32)),
-        );
+        let mut mask = self.mask.take().unwrap_or_else(|| {
+            let mut r = Mask::new(width, height).unwrap();
+            let p = PathBuilder::from_rect(
+                tiny_skia::Rect::from_xywh(0.0, 0.0, width as f32, height as f32).unwrap(),
+            );
+            r.fill_path(&p, FillRule::Winding, true, Transform::identity());
+            r
+        });
+        mask.intersect_path(path, rule, true, self.ctm.flip_y(Transform::identity()));
         self.mask = Some(mask);
     }
 
@@ -632,7 +629,6 @@ impl<'a, 'b> Render<'a, 'b> {
                 PixmapRef::from_bytes(smask_img.as_raw(), smask_img.width(), smask_img.height())
                     .unwrap();
             let mask = Mask::from_pixmap(img, MaskType::Alpha);
-            mask.save_png("/tmp/mask.png").unwrap();
             Some(mask)
         } else {
             None
