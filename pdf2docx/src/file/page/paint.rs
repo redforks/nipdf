@@ -621,27 +621,34 @@ impl<'a, 'b> Render<'a, 'b> {
         let xobjects = self.resources.x_object().unwrap();
         let xobject = xobjects.get(&name.0).unwrap();
 
-        let img = load_image(xobject);
-        let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
-        let paint = PixmapPaint {
-            quality: FilterQuality::Bilinear,
-            ..Default::default()
-        };
-
         let smask = xobject.s_mask().unwrap();
-        let smask_img: RgbaImage;
+        let mut smask_img: RgbaImage;
         let smask = if let Some(smask) = smask {
             smask_img = load_image(&smask);
+            smask_img.pixels_mut().for_each(|p| {
+                p[3] = 255 - p[0];
+            });
             let img =
                 PixmapRef::from_bytes(smask_img.as_raw(), smask_img.width(), smask_img.height())
                     .unwrap();
-            Some(Mask::from_pixmap(img, MaskType::Alpha))
+            let mask = Mask::from_pixmap(img, MaskType::Alpha);
+            mask.save_png("/tmp/mask.png").unwrap();
+            Some(mask)
         } else {
             None
         };
 
-        let state = self.stack.last().unwrap();
-        let transform = state.image_transform(img.width(), img.height());
+        let paint = PixmapPaint {
+            quality: FilterQuality::Bilinear,
+            ..Default::default()
+        };
+        let img = load_image(xobject);
+        let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
+        let transform = self
+            .stack
+            .last()
+            .unwrap()
+            .image_transform(img.width(), img.height());
         self.canvas
             .draw_pixmap(0, 0, img, &paint, transform, smask.as_ref());
     }
@@ -725,7 +732,13 @@ impl<'a, 'b> Render<'a, 'b> {
     }
 
     fn show_text(&mut self, text: &str) {
-        info!("show_text: {:?}", text);
+        let state = self.stack.last().unwrap();
+        debug!(
+            "show_text: {:?}, paint: {:?}/{:?}",
+            text,
+            &state.get_fill_paint(),
+            &state.get_stroke_paint(),
+        );
 
         let text_block = self.text_block();
         let font_size = text_block.font_size;
@@ -743,7 +756,6 @@ impl<'a, 'b> Render<'a, 'b> {
             builder
         };
         let mut scaler = builder.build();
-        let state = self.stack.last().unwrap();
         let mut transform: Transform = text_block.matrix.into();
         let ctm = &state.ctm;
         for ch in text.chars() {
