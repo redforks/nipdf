@@ -92,8 +92,9 @@ impl PaintCreator {
 
             PaintCreator::Tile((p, matrix)) => {
                 let mut r = Paint::default();
+                let width = p.width() as f32;
                 let height = p.height() as f32;
-                let matrix_mapper = MatrixMapper::new(height, 1.0, *matrix);
+                let matrix_mapper = MatrixMapper::new(width, height, 1.0, *matrix);
                 r.shader = tiny_skia::Pattern::new(
                     p.as_ref(),
                     tiny_skia::SpreadMode::Repeat,
@@ -124,6 +125,7 @@ impl State {
     fn new(option: &RenderOption) -> Self {
         let mut r = Self {
             ctm: MatrixMapper::new(
+                option.width as f32 * option.zoom,
                 option.height as f32 * option.zoom,
                 option.zoom,
                 TransformMatrix::identity(),
@@ -227,12 +229,12 @@ impl State {
         }
     }
 
-    fn update_mask(&mut self, path: &SkiaPath, width: u32, height: u32, rule: FillRule) {
+    fn update_mask(&mut self, path: &SkiaPath, rule: FillRule) {
+        let w = self.ctm.width;
+        let h = self.ctm.height;
         let mut mask = self.mask.take().unwrap_or_else(|| {
-            let mut r = Mask::new(width, height).unwrap();
-            let p = PathBuilder::from_rect(
-                tiny_skia::Rect::from_xywh(0.0, 0.0, width as f32, height as f32).unwrap(),
-            );
+            let mut r = Mask::new(w as u32, h as u32).unwrap();
+            let p = PathBuilder::from_rect(tiny_skia::Rect::from_xywh(0.0, 0.0, w, h).unwrap());
             r.fill_path(&p, FillRule::Winding, true, Transform::identity());
             r
         });
@@ -242,14 +244,14 @@ impl State {
 
     /// Apply current path to mask. Create mask if None, otherwise intersect with current path,
     /// using Winding fill rule.
-    fn clip_non_zero(&mut self, path: &SkiaPath, width: u32, height: u32) {
-        self.update_mask(path, width, height, FillRule::Winding);
+    fn clip_non_zero(&mut self, path: &SkiaPath) {
+        self.update_mask(path, FillRule::Winding);
     }
 
     /// Apply current path to mask. Create mask if None, otherwise intersect with current path,
     /// using Even-Odd fill rule.
-    fn clip_even_odd(&mut self, path: &SkiaPath, width: u32, height: u32) {
-        self.update_mask(path, width, height, FillRule::EvenOdd);
+    fn clip_even_odd(&mut self, path: &SkiaPath) {
+        self.update_mask(path, FillRule::EvenOdd);
     }
 
     fn set_text_knockout_flag(&mut self, knockout: bool) {
@@ -472,14 +474,12 @@ impl<'a, 'b> Render<'a, 'b> {
 
             // Clipping Path Operations
             Operation::ClipNonZero => {
-                let (w, h) = (self.width, self.height);
                 let state = self.stack.last_mut().unwrap();
-                state.clip_non_zero(self.path.finish(), w, h);
+                state.clip_non_zero(self.path.finish());
             }
             Operation::ClipEvenOdd => {
-                let (w, h) = (self.width, self.height);
                 let state = self.stack.last_mut().unwrap();
-                state.clip_even_odd(self.path.finish(), w, h);
+                state.clip_even_odd(self.path.finish());
             }
 
             // Text Object Operations
@@ -858,14 +858,21 @@ impl<'a, 'b> Render<'a, 'b> {
 struct MatrixMapper {
     // height of device space coordinate
     height: f32,
+    // width of device space coordinate
+    width: f32,
     zoom: f32,
     ctm: TransformMatrix,
 }
 
 impl MatrixMapper {
-    /// height: height of device space coordinate
-    pub fn new(height: f32, zoom: f32, ctm: TransformMatrix) -> Self {
-        Self { height, zoom, ctm }
+    /// width/height: height of device space coordinate
+    pub fn new(width: f32, height: f32, zoom: f32, ctm: TransformMatrix) -> Self {
+        Self {
+            width,
+            height,
+            zoom,
+            ctm,
+        }
     }
 
     pub fn set_ctm(&mut self, ctm: TransformMatrix) {

@@ -26,13 +26,13 @@ fn map_point_asserter(m: Transform) -> impl Fn((f32, f32), (f32, f32)) {
 
 #[test]
 fn path_transform() {
-    let m = MatrixMapper::new(600.0, 1.0, TransformMatrix::identity());
+    let m = MatrixMapper::new(100., 600.0, 1.0, TransformMatrix::identity());
     let assert_mp = map_point_asserter(m.path_transform());
     assert_mp((10.0, 20.0), (10.0, 600.0 - 20.0));
     assert_mp((10.0, 1.0), (10.0, 599.0));
 
     // zoom 1.5
-    let m = MatrixMapper::new(600.0, 1.5, TransformMatrix::identity());
+    let m = MatrixMapper::new(100., 600.0, 1.5, TransformMatrix::identity());
     let assert_mp = map_point_asserter(m.path_transform());
     assert_mp((10.0, 20.0), (15.0, 600.0 * 1.5 - 20.0 * 1.5));
     assert_mp((10.0, 1.0), (15.0, 600.0 * 1.5 - 1.0 * 1.5));
@@ -44,6 +44,7 @@ fn path_transform() {
 #[test_case(1.5, (81.36, 792.0*1.5 - 279.12*1.5 - 1.92*1.5))]
 fn image_transform(zoom: f32, exp: (f32, f32)) {
     let m = MatrixMapper::new(
+        10.,
         792.0 * zoom,
         zoom,
         TransformMatrix {
