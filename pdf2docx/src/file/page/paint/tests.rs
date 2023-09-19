@@ -32,7 +32,7 @@ fn path_transform() {
     assert_mp((10.0, 1.0), (10.0, 599.0));
 
     // zoom 1.5
-    let m = MatrixMapper::new(100., 600.0, 1.5, TransformMatrix::identity());
+    let m = MatrixMapper::new(100., 600.0 * 1.5, 1.5, TransformMatrix::identity());
     let assert_mp = map_point_asserter(m.path_transform());
     assert_mp((10.0, 20.0), (15.0, 600.0 * 1.5 - 20.0 * 1.5));
     assert_mp((10.0, 1.0), (15.0, 600.0 * 1.5 - 1.0 * 1.5));
