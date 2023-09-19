@@ -124,7 +124,7 @@ impl State {
     fn new(option: &RenderOption) -> Self {
         let mut r = Self {
             ctm: MatrixMapper::new(
-                option.height as f32,
+                option.height as f32 * option.zoom,
                 option.zoom,
                 TransformMatrix::identity(),
             ),
@@ -623,12 +623,14 @@ impl<'a, 'b> Render<'a, 'b> {
         let smask = if let Some(smask) = smask {
             smask_img = load_image(&smask);
             smask_img.pixels_mut().for_each(|p| {
-                p[3] = 255 - p[0];
+                p[3] = p[0];
             });
             let img =
                 PixmapRef::from_bytes(smask_img.as_raw(), smask_img.width(), smask_img.height())
                     .unwrap();
+            img.save_png("/tmp/mask2.png").unwrap();
             let mask = Mask::from_pixmap(img, MaskType::Alpha);
+            mask.save_png("/tmp/mask.png").unwrap();
             Some(mask)
         } else {
             None
@@ -854,14 +856,14 @@ impl<'a, 'b> Render<'a, 'b> {
 
 #[derive(Debug, Clone)]
 struct MatrixMapper {
-    // height of user space coordinate
+    // height of device space coordinate
     height: f32,
     zoom: f32,
     ctm: TransformMatrix,
 }
 
 impl MatrixMapper {
-    /// height: height of user space coordinate
+    /// height: height of device space coordinate
     pub fn new(height: f32, zoom: f32, ctm: TransformMatrix) -> Self {
         Self { height, zoom, ctm }
     }
@@ -890,7 +892,7 @@ impl MatrixMapper {
             0.0,
             self.ctm.sy / img_h as f32 * self.zoom,
             self.ctm.tx * self.zoom,
-            self.height * self.zoom - self.ctm.ty * self.zoom - self.ctm.sy * self.zoom,
+            self.height - self.ctm.ty * self.zoom - self.ctm.sy * self.zoom,
         )
     }
 }

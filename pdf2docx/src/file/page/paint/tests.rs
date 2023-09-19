@@ -44,7 +44,7 @@ fn path_transform() {
 #[test_case(1.5, (81.36, 792.0*1.5 - 279.12*1.5 - 1.92*1.5))]
 fn image_transform(zoom: f32, exp: (f32, f32)) {
     let m = MatrixMapper::new(
-        792.0,
+        792.0 * zoom,
         zoom,
         TransformMatrix {
             sx: 468.48,
