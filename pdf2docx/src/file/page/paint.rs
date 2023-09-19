@@ -12,7 +12,7 @@ use crate::{
     object::{Array, FilterDecodedData, Object, PdfObject, TextStringOrNumber},
     text::{FontDict, FontType},
 };
-use anyhow::{anyhow, Result as AnyResult};
+use anyhow::{anyhow, bail, Result as AnyResult};
 use educe::Educe;
 use image::RgbaImage;
 use itertools::Either;
@@ -230,14 +230,7 @@ impl State {
     }
 
     fn update_mask(&mut self, path: &SkiaPath, rule: FillRule) {
-        let w = self.ctm.width;
-        let h = self.ctm.height;
-        let mut mask = self.mask.take().unwrap_or_else(|| {
-            let mut r = Mask::new(w as u32, h as u32).unwrap();
-            let p = PathBuilder::from_rect(tiny_skia::Rect::from_xywh(0.0, 0.0, w, h).unwrap());
-            r.fill_path(&p, FillRule::Winding, true, Transform::identity());
-            r
-        });
+        let mut mask = self.mask.take().unwrap_or_else(|| self.ctm.new_mask());
         mask.intersect_path(path, rule, true, self.ctm.flip_y(Transform::identity()));
         self.mask = Some(mask);
     }
@@ -618,23 +611,8 @@ impl<'a, 'b> Render<'a, 'b> {
         let xobjects = self.resources.x_object().unwrap();
         let xobject = xobjects.get(&name.0).unwrap();
 
-        let smask = xobject.s_mask().unwrap();
-        let mut smask_img: RgbaImage;
-        let smask = if let Some(smask) = smask {
-            smask_img = load_image(&smask);
-            smask_img.pixels_mut().for_each(|p| {
-                p[3] = p[0];
-            });
-            let img =
-                PixmapRef::from_bytes(smask_img.as_raw(), smask_img.width(), smask_img.height())
-                    .unwrap();
-            img.save_png("/tmp/mask2.png").unwrap();
-            let mask = Mask::from_pixmap(img, MaskType::Alpha);
-            mask.save_png("/tmp/mask.png").unwrap();
-            Some(mask)
-        } else {
-            None
-        };
+        let state = self.stack.last().unwrap();
+        let smask = state.ctm.img_mask(&xobject).unwrap();
 
         let paint = PixmapPaint {
             quality: FilterQuality::Bilinear,
@@ -642,11 +620,7 @@ impl<'a, 'b> Render<'a, 'b> {
         };
         let img = load_image(xobject);
         let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
-        let transform = self
-            .stack
-            .last()
-            .unwrap()
-            .image_transform(img.width(), img.height());
+        let transform = state.image_transform(img.width(), img.height());
         self.canvas
             .draw_pixmap(0, 0, img, &paint, transform, smask.as_ref());
     }
@@ -801,7 +775,7 @@ impl<'a, 'b> Render<'a, 'b> {
                 ky: trans.ky,
                 sy: trans.sy * -ctm.zoom,
                 tx: trans.tx * ctm.zoom,
-                ty: ctm.height * ctm.zoom - trans.ty * ctm.zoom,
+                ty: ctm.height - trans.ty * ctm.zoom,
             };
             debug!("trans: {:?}, height: {}", trans, ctm.height);
             match render_mode {
@@ -889,7 +863,7 @@ impl MatrixMapper {
 
     fn flip_y(&self, t: Transform) -> Transform {
         t.pre_scale(self.zoom, -self.zoom)
-            .pre_translate(0.0, -self.height)
+            .pre_translate(0.0, -self.height / self.zoom)
     }
 
     pub fn image_transform(&self, img_w: u32, img_h: u32) -> Transform {
@@ -901,6 +875,46 @@ impl MatrixMapper {
             self.ctm.tx * self.zoom,
             self.height - self.ctm.ty * self.zoom - self.ctm.sy * self.zoom,
         )
+    }
+
+    pub fn new_mask(&self) -> Mask {
+        let w = self.width;
+        let h = self.height;
+        let mut r = Mask::new(w as u32, h as u32).unwrap();
+        let p = PathBuilder::from_rect(tiny_skia::Rect::from_xywh(0.0, 0.0, w, h).unwrap());
+        r.fill_path(&p, FillRule::Winding, true, Transform::identity());
+        r
+    }
+
+    /// if s_mask exist in `img`, load it as mask
+    /// the mask size identical to device width/height,
+    /// s_mask zoomed and transformed by image_transform,
+    /// area out of image are blacked out.
+    pub fn img_mask(&self, img_dict: &XObjectDict) -> AnyResult<Option<Mask>> {
+        let s_mask = img_dict.s_mask()?;
+        let s_mask = if let Some(s_mask) = s_mask {
+            s_mask
+        } else {
+            return Ok(None);
+        };
+
+        let mut paint = PixmapPaint::default();
+        paint.quality = FilterQuality::Bilinear;
+
+        let mut canvas = Pixmap::new(self.width as u32, self.height as u32).unwrap();
+        let img = s_mask.as_image().unwrap();
+        let img = img.decode(img_dict.resolver(), false).unwrap();
+        let FilterDecodedData::Image(img) = img else {
+            bail!("Stream should decoded to image");
+        };
+        let mut img = img.into_rgba8();
+        let transform = self.image_transform(img.width(), img.height());
+        img.pixels_mut().for_each(|p| {
+            p[3] = p[0];
+        });
+        let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
+        canvas.draw_pixmap(0, 0, img, &paint, transform, None);
+        Ok(Some(Mask::from_pixmap(canvas.as_ref(), MaskType::Alpha)))
     }
 }
 
