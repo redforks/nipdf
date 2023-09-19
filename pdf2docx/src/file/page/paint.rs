@@ -816,7 +816,7 @@ impl<'a, 'b> Render<'a, 'b> {
     fn show_texts(&mut self, texts: &[TextStringOrNumber]) {
         for t in texts {
             match t {
-                TextStringOrNumber::Text(s) => self.show_text(s),
+                TextStringOrNumber::Text(s) => self.show_text(s.decoded().unwrap()),
                 TextStringOrNumber::Number(n) => {
                     self.text_block_mut().move_right(*n);
                 }

@@ -71,7 +71,7 @@ fn test_parse_operations(s: &str) -> Vec<Operation> {
 #[test_case("/stateName gs" => Operation::SetGraphicsStateParameters(NameOfDict("stateName".into())); "gs")]
 #[test_case("1 2 3 4 5 6 c" => Operation::AppendBezierCurve(Point::new(1f32, 2f32), Point::new(3f32, 4f32), Point::new(5f32, 6f32)); "c")]
 #[test_case("(foo)Tj" => Operation::ShowText("foo".into()); "Tj")]
-#[test_case("[(foo) 1]TJ" => Operation::ShowTexts(vec![TextStringOrNumber::Text("foo".into()), TextStringOrNumber::Number(1f32)]); "show texts")]
+#[test_case("[(foo) 1]TJ" => Operation::ShowTexts(vec![TextStringOrNumber::Text("(foo)".into()), TextStringOrNumber::Number(1f32)]); "show texts")]
 #[test_case("/tag /name DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict("tag".into()), NameOrDict::Name("name".into())); "DP with name")]
 #[test_case("/tag<<>>DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict("tag".into()), NameOrDict::Dict(Dictionary::new())); "DP with dict")]
 #[test_case("0 0 1 RG" => Operation::SetStrokeRGB(Color::Rgb(0f32, 0f32, 1f32)); "RG")]

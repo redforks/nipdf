@@ -379,7 +379,7 @@ pub enum Operation<'a> {
     #[op_tag("Tj")]
     ShowText(String),
     #[op_tag("TJ")]
-    ShowTexts(Vec<TextStringOrNumber>),
+    ShowTexts(Vec<TextStringOrNumber<'a>>),
     #[op_tag("'")]
     MoveToNextLineAndShowText(String),
     #[op_tag("\"")]
@@ -459,7 +459,7 @@ where
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError>;
 }
 
-impl<'a, 'b, T: for<'c, 'd> ConvertFromObject<'c, 'd>> ConvertFromObject<'a, 'b> for Vec<T> {
+impl<'a, 'b, T: for<'c> ConvertFromObject<'a, 'c>> ConvertFromObject<'a, 'b> for Vec<T> {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let mut arr = objects.pop().unwrap().into_arr()?;
         let mut result = Vec::new();
@@ -471,7 +471,7 @@ impl<'a, 'b, T: for<'c, 'd> ConvertFromObject<'c, 'd>> ConvertFromObject<'a, 'b>
     }
 }
 
-impl<'a, 'b> ConvertFromObject<'a, 'b> for TextStringOrNumber {
+impl<'a, 'b> ConvertFromObject<'a, 'b> for TextStringOrNumber<'a> {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
         o.as_text_string_or_number()
