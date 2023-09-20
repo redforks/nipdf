@@ -1,6 +1,7 @@
 //! object mod contains data structure map to low level pdf objects
 use ahash::HashMap;
 use educe::Educe;
+use log::error;
 
 use std::{
     borrow::{Borrow, Cow},
@@ -785,7 +786,7 @@ impl<'a> Object<'a> {
     pub fn as_text_string_or_number(self) -> Result<TextStringOrNumber<'a>, ObjectValueError> {
         match self {
             Object::LiteralString(s) => Ok(TextStringOrNumber::Text(s)),
-            Object::HexString(s) => Ok(TextStringOrNumber::HexText(s.0.to_owned())),
+            Object::HexString(s) => Ok(TextStringOrNumber::HexText(s)),
             Object::Number(n) => Ok(TextStringOrNumber::Number(n)),
             Object::Integer(v) => Ok(TextStringOrNumber::Number(v as f32)),
             _ => Err(ObjectValueError::UnexpectedType),
@@ -1051,7 +1052,7 @@ impl<'a> From<LiteralString<'a>> for Object<'a> {
 pub enum TextStringOrNumber<'a> {
     Text(LiteralString<'a>),
     // maybe CID font
-    HexText(Vec<u8>),
+    HexText(HexString<'a>),
     Number(f32),
 }
 
@@ -1074,6 +1075,14 @@ impl<'a> From<&'a str> for HexString<'a> {
 impl<'a> HexString<'a> {
     pub fn new(s: &'a [u8]) -> Self {
         Self(s, OnceCell::new())
+    }
+
+    pub fn as_str(&self) -> Result<&str, ObjectValueError> {
+        let buf = self.decoded()?;
+        from_utf8(buf).map_err(|_| {
+            error!("invalid hex string: {:?}/{:?}", buf, self.0);
+            ObjectValueError::InvalidHexString
+        })
     }
 
     /// Get decoded binary string.

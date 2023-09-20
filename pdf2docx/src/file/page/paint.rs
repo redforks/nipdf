@@ -820,8 +820,9 @@ impl<'a, 'b> Render<'a, 'b> {
                 TextStringOrNumber::Number(n) => {
                     self.text_block_mut().move_right(*n);
                 }
-                TextStringOrNumber::HexText(_) => {
+                TextStringOrNumber::HexText(_s) => {
                     error!("HexText not supported");
+                    // self.show_text(s.as_str().unwrap())
                 }
             }
         }
