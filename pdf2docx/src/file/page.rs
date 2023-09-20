@@ -136,6 +136,9 @@ pub trait XObjectDictTrait {
 
     #[nested]
     fn s_mask(&self) -> Option<XObjectDict<'a, 'b>>;
+
+    #[or_default]
+    fn interpolate(&self) -> bool;
 }
 
 impl<'a, 'b> XObjectDict<'a, 'b> {

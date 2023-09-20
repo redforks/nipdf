@@ -615,7 +615,11 @@ impl<'a, 'b> Render<'a, 'b> {
         let smask = state.ctm.img_mask(&xobject).unwrap();
 
         let paint = PixmapPaint {
-            quality: FilterQuality::Bilinear,
+            quality: if xobject.interpolate().unwrap() {
+                FilterQuality::Nearest
+            } else {
+                FilterQuality::Bilinear
+            },
             ..Default::default()
         };
         let img = load_image(xobject);
@@ -900,7 +904,11 @@ impl MatrixMapper {
         };
 
         let mut paint = PixmapPaint::default();
-        paint.quality = FilterQuality::Bilinear;
+        paint.quality = if img_dict.interpolate()? {
+            FilterQuality::Nearest
+        } else {
+            FilterQuality::Bilinear
+        };
 
         let mut canvas = Pixmap::new(self.width as u32, self.height as u32).unwrap();
         let img = s_mask.as_image().unwrap();
