@@ -612,7 +612,7 @@ impl<'a, 'b> Render<'a, 'b> {
         let xobject = xobjects.get(&name.0).unwrap();
 
         let state = self.stack.last().unwrap();
-        let smask = state.ctm.img_mask(&xobject).unwrap();
+        let smask = state.ctm.img_mask(xobject).unwrap();
 
         let paint = PixmapPaint {
             quality: if xobject.interpolate().unwrap() {
@@ -803,7 +803,7 @@ impl<'a, 'b> Render<'a, 'b> {
                     self.canvas.stroke_path(
                         &path,
                         &state.get_stroke_paint(),
-                        &state.get_stroke(),
+                        state.get_stroke(),
                         trans,
                         state.get_mask(),
                     );
@@ -903,11 +903,13 @@ impl MatrixMapper {
             return Ok(None);
         };
 
-        let mut paint = PixmapPaint::default();
-        paint.quality = if img_dict.interpolate()? {
-            FilterQuality::Nearest
-        } else {
-            FilterQuality::Bilinear
+        let paint = PixmapPaint {
+            quality: if img_dict.interpolate()? {
+                FilterQuality::Nearest
+            } else {
+                FilterQuality::Bilinear
+            },
+            ..Default::default()
         };
 
         let mut canvas = Pixmap::new(self.width as u32, self.height as u32).unwrap();
