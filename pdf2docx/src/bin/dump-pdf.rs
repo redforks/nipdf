@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     io::{copy, stdout, BufWriter, Cursor},
     num::NonZeroU32,
 };
@@ -128,8 +129,26 @@ fn dump_page(
 fn dump_object(path: &str, id: NonZeroU32) -> AnyResult<()> {
     let mut buf: Vec<u8> = vec![];
     let (_f, resolver) = open(path, &mut buf)?;
-    let obj = resolver.resolve(id)?;
-    obj.to_doc().render(80, &mut stdout())?;
+
+    let mut id_wait_scaned = vec![id];
+    let mut ids = HashSet::new();
+    while let Some(id) = id_wait_scaned.pop() {
+        if ids.insert(id) {
+            println!("OBJ {}:", id);
+            let obj = resolver.resolve(id)?;
+            obj.to_doc().render(80, &mut stdout())?;
+            print!("\n\n\n");
+
+            id_wait_scaned.extend(obj.iter_values().filter_map(|o| {
+                if let Object::Reference(r) = o {
+                    Some(r.id().id())
+                } else {
+                    None
+                }
+            }));
+        }
+    }
+
     Ok(())
 }
 

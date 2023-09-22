@@ -792,6 +792,16 @@ impl<'a> Object<'a> {
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
+
+    /// iter values of current object recursively, for array recursively iter item values,
+    /// for Dictionary iter values (key are ignored), other object types return itself.
+    pub fn iter_values(&self) -> Box<dyn Iterator<Item = &'_ Self> + '_> {
+        match self {
+            Object::Array(a) => Box::new(a.iter().flat_map(|o| o.iter_values())),
+            Object::Dictionary(d) => Box::new(d.values().flat_map(|o| o.iter_values())),
+            _ => Box::new(std::iter::once(self)),
+        }
+    }
 }
 
 #[cfg(feature = "pretty")]
