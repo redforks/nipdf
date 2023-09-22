@@ -117,7 +117,7 @@ pub struct State {
     mask: Option<Mask>,
     fill_color_space: ColorSpace,
     stroke_color_space: ColorSpace,
-    text_block: TextBlock,
+    text_object: TextObject,
 }
 
 impl State {
@@ -136,7 +136,7 @@ impl State {
             mask: None,
             fill_color_space: ColorSpace::DeviceRGB,
             stroke_color_space: ColorSpace::DeviceRGB,
-            text_block: TextBlock::new(),
+            text_object: TextObject::new(),
         };
 
         r.set_line_cap(LineCapStyle::default());
@@ -248,7 +248,7 @@ impl State {
     }
 
     fn set_text_knockout_flag(&mut self, knockout: bool) {
-        self.text_block.knockout = knockout;
+        self.text_object.knockout = knockout;
     }
 }
 
@@ -410,12 +410,12 @@ impl<'a, 'b> Render<'a, 'b> {
         self.canvas
     }
 
-    fn text_block(&self) -> &TextBlock {
-        &self.stack.last().unwrap().text_block
+    fn text_object(&self) -> &TextObject {
+        &self.stack.last().unwrap().text_object
     }
 
-    fn text_block_mut(&mut self) -> &mut TextBlock {
-        &mut self.current_mut().text_block
+    fn text_object_mut(&mut self) -> &mut TextObject {
+        &mut self.current_mut().text_object
     }
 
     pub(crate) fn exec(&mut self, op: &Operation<'_>) {
@@ -477,28 +477,28 @@ impl<'a, 'b> Render<'a, 'b> {
 
             // Text Object Operations
             Operation::BeginText => {
-                self.text_block_mut().reset();
+                self.text_object_mut().reset();
             }
             Operation::EndText => {}
 
             // Text State Operations
             Operation::SetCharacterSpacing(spacing) => {
-                self.text_block_mut().set_character_spacing(*spacing)
+                self.text_object_mut().set_character_spacing(*spacing)
             }
-            Operation::SetWordSpacing(spacing) => self.text_block_mut().set_word_spacing(*spacing),
+            Operation::SetWordSpacing(spacing) => self.text_object_mut().set_word_spacing(*spacing),
             Operation::SetHorizontalScaling(scale) => {
-                self.text_block_mut().set_horizontal_scaling(*scale)
+                self.text_object_mut().set_horizontal_scaling(*scale)
             }
-            Operation::SetLeading(leading) => self.text_block_mut().set_leading(*leading),
-            Operation::SetFont(name, size) => self.text_block_mut().set_font(name, *size),
+            Operation::SetLeading(leading) => self.text_object_mut().set_leading(*leading),
+            Operation::SetFont(name, size) => self.text_object_mut().set_font(name, *size),
             Operation::SetTextRenderingMode(mode) => {
-                self.text_block_mut().set_text_rendering_mode(*mode)
+                self.text_object_mut().set_text_rendering_mode(*mode)
             }
-            Operation::SetTextRise(rise) => self.text_block_mut().set_text_rise(*rise),
+            Operation::SetTextRise(rise) => self.text_object_mut().set_text_rise(*rise),
 
             // Text Positioning Operations
-            Operation::MoveTextPosition(p) => self.text_block_mut().move_text_position(*p),
-            Operation::SetTextMatrix(m) => self.text_block_mut().set_text_matrix(*m),
+            Operation::MoveTextPosition(p) => self.text_object_mut().move_text_position(*p),
+            Operation::SetTextMatrix(m) => self.text_object_mut().set_text_matrix(*m),
 
             // Text Showing Operations
             Operation::ShowText(text) => self.show_text(text),
@@ -716,12 +716,12 @@ impl<'a, 'b> Render<'a, 'b> {
             &state.get_stroke_paint(),
         );
 
-        let text_block = self.text_block();
-        let font_size = text_block.font_size;
-        let render_mode = text_block.render_mode;
+        let text_object = self.text_object();
+        let font_size = text_object.font_size;
+        let render_mode = text_object.render_mode;
         let font = self
             .font_cache
-            .get_font(text_block.font_name.as_ref().unwrap())
+            .get_font(text_object.font_name.as_ref().unwrap())
             .unwrap();
         let font_ref = font.as_ref();
         let mut context = ScaleContext::new();
@@ -732,7 +732,7 @@ impl<'a, 'b> Render<'a, 'b> {
             builder
         };
         let mut scaler = builder.build();
-        let mut transform: Transform = text_block.matrix.into();
+        let mut transform: Transform = text_object.matrix.into();
         let ctm = &state.ctm;
         for ch in text.chars() {
             let glyph_id = font_ref.charmap().map(ch);
@@ -814,7 +814,7 @@ impl<'a, 'b> Render<'a, 'b> {
             }
             transform = transform.pre_translate(width, 0.0);
         }
-        self.text_block_mut().matrix = transform.into();
+        self.text_object_mut().matrix = transform.into();
     }
 
     fn show_texts(&mut self, texts: &[TextStringOrNumber]) {
@@ -822,7 +822,7 @@ impl<'a, 'b> Render<'a, 'b> {
             match t {
                 TextStringOrNumber::Text(s) => self.show_text(s.decoded().unwrap()),
                 TextStringOrNumber::Number(n) => {
-                    self.text_block_mut().move_right(*n);
+                    self.text_object_mut().move_right(*n);
                 }
                 TextStringOrNumber::HexText(_s) => {
                     error!("HexText not supported");
@@ -1120,7 +1120,7 @@ impl FontCache {
 
 #[derive(Educe, Clone)]
 #[educe(Debug)]
-struct TextBlock {
+struct TextObject {
     matrix: TransformMatrix,
     font_size: f32,
     font_name: Option<String>,
@@ -1134,7 +1134,7 @@ struct TextBlock {
     knockout: bool,                 // Tk
 }
 
-impl TextBlock {
+impl TextObject {
     pub fn new() -> Self {
         Self {
             matrix: TransformMatrix::identity(),
