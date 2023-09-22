@@ -14,6 +14,10 @@ pub enum FontType {
     MMType1,
     Type3,
     TrueType,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, TryFromNameObject)]
+pub enum CIDFontType {
     CIDFontType0,
     CIDFontType2,
 }
