@@ -68,8 +68,8 @@ fn font_width_empty() {
         default_width: 15,
     };
 
-    assert_eq!(15, font_width.char_width('f'));
-    assert_eq!(15, font_width.char_width('g'));
+    assert_eq!(15, font_width.char_width('f' as u32));
+    assert_eq!(15, font_width.char_width('g' as u32));
 }
 
 #[test]
@@ -80,8 +80,8 @@ fn font_width() {
         default_width: 15,
     };
 
-    assert_eq!(100, font_width.char_width('a'));
-    assert_eq!(200, font_width.char_width('b'));
-    assert_eq!(400, font_width.char_width('d'));
-    assert_eq!(15, font_width.char_width('e'));
+    assert_eq!(100, font_width.char_width('a' as u32));
+    assert_eq!(200, font_width.char_width('b' as u32));
+    assert_eq!(400, font_width.char_width('d' as u32));
+    assert_eq!(15, font_width.char_width('e' as u32));
 }
