@@ -10,7 +10,7 @@ use crate::{
         TilingPatternDict, TransformMatrix,
     },
     object::{Array, FilterDecodedData, Object, PdfObject, TextStringOrNumber},
-    text::{FontDescriptorDict, FontDict, FontType},
+    text::{CIDFontType, FontDescriptorDict, FontDict, FontType},
 };
 use anyhow::{anyhow, bail, Result as AnyResult};
 use educe::Educe;
@@ -1120,7 +1120,13 @@ impl<'a, 'b> FontCache<'a, 'b> {
                     "Type0 font should have one descendant fonts"
                 );
                 let descentdant_font = descentdant_fonts.into_iter().next().unwrap();
-                todo!()
+                assert_eq!(
+                    descentdant_font.subtype()?,
+                    CIDFontType::CIDFontType2,
+                    "Only CIDFontType2 supported"
+                );
+                let desc = descentdant_font.font_descriptor()?.unwrap();
+                Self::load_true_type_font(&desc)?
             }
             _ => {
                 error!("Unsupported font type: {:?}", font.subtype()?);
