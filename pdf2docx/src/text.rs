@@ -4,7 +4,7 @@ use pdf2docx_macro::{pdf_object, TryFromIntObjectForBitflags, TryFromNameObject}
 use crate::{
     file::Rectangle,
     graphics::{NameOrDictByRef, NameOrStream},
-    object::Stream,
+    object::{Object, ObjectValueError, Stream},
 };
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, TryFromNameObject)]
@@ -82,6 +82,53 @@ pub trait TrueTypeFontDictTrait {
     fn to_unicode(&self) -> Option<&'b Stream<'a>>;
 }
 
+#[derive(Debug, PartialEq)]
+pub enum CIDFontWidthGroup {
+    NConsecutive((u32, Vec<u16>)),
+    FirstLast { first: u32, last: u32, width: u16 },
+}
+
+#[derive(Debug, PartialEq)]
+pub struct CIDFontWidths(Vec<CIDFontWidthGroup>);
+
+impl<'a, 'b> TryFrom<&'b Object<'a>> for CIDFontWidths {
+    type Error = ObjectValueError;
+
+    fn try_from(obj: &'b Object<'a>) -> Result<Self, Self::Error> {
+        let mut widths = Vec::new();
+        let Object::Array(arr) = obj else {
+            return Err(Self::Error::UnexpectedType);
+        };
+
+        let mut iter = arr.iter();
+        while let Some(first) = iter.next() {
+            let first = first.as_int()?;
+            let second = iter.next().ok_or(Self::Error::UnexpectedType)?;
+            match second {
+                Object::Array(arr) => {
+                    let mut iter = arr.iter();
+                    let mut width = Vec::with_capacity(arr.len());
+                    while let Some(ref num) = iter.next() {
+                        let num = num.as_int()? as u16;
+                        width.push(num);
+                    }
+                    widths.push(CIDFontWidthGroup::NConsecutive((first as u32, width)));
+                }
+                Object::Integer(last) => {
+                    let width = iter.next().ok_or(Self::Error::UnexpectedType)?;
+                    widths.push(CIDFontWidthGroup::FirstLast {
+                        first: first as u32,
+                        last: *last as u32,
+                        width: width.as_int()? as u16,
+                    });
+                }
+                _ => return Err(Self::Error::UnexpectedType),
+            }
+        }
+        Ok(CIDFontWidths(widths))
+    }
+}
+
 #[pdf_object("Font")]
 pub trait CIDFontDictTrait {
     #[try_from]
@@ -92,6 +139,8 @@ pub trait CIDFontDictTrait {
     fn font_descriptor(&self) -> Option<FontDescriptorDict<'a, 'b>>;
     #[default(1000u32)]
     fn dw(&self) -> u32;
+    #[try_from]
+    fn w(&self) -> CIDFontWidths;
     #[try_from]
     fn cid_to_gid_map(&self) -> Option<NameOrStream<'a, 'b>>;
 }
