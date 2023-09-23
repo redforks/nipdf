@@ -795,11 +795,6 @@ impl<'a, 'b> Render<'a, 'b> {
         let font_ref = font.as_ref();
         let mut context = ScaleContext::new();
         let builder = context.builder(font_ref).size(font_size).hint(true);
-        let builder = if let Some(weight) = font.weight {
-            builder.variations(&[("wght", weight as f32)])
-        } else {
-            builder
-        };
         let mut scaler = builder.build();
 
         let ctm = &state.ctm;
@@ -1069,7 +1064,6 @@ struct Font<'a, 'b> {
     data: Vec<u8>,
     offset: u32,
     key: CacheKey,
-    weight: Option<u16>,
     font_dict: FontDict<'a, 'b>,
 }
 
@@ -1111,7 +1105,6 @@ impl<'a, 'b> FontCache<'a, 'b> {
                             data: bytes,
                             offset,
                             key,
-                            weight: desc.font_weight()?.map(|v| v as u16),
                             font_dict: font.clone(),
                         }))
                     }
