@@ -371,7 +371,7 @@ pub struct Render<'a, 'b> {
     height: u32,
     path: Path,
     #[educe(Debug(ignore))]
-    font_cache: FontCache,
+    font_cache: FontCache<'a, 'b>,
     resources: &'b ResourceDict<'a, 'b>,
 }
 
@@ -779,12 +779,8 @@ impl<'a, 'b> Render<'a, 'b> {
             .font_cache
             .get_font(text_object.font_name.as_ref().unwrap())
             .unwrap();
-        let font_ref = font.as_ref();
         let op = match font.font_type() {
-            FontType::TrueType => Box::new(TrueTypeFontOp {
-                font: font_ref,
-                font_width: &font.font_width,
-            }),
+            FontType::TrueType => TrueTypeFontOp::new(&font.font_dict, font.as_ref()).unwrap(),
             _ => todo!(),
         };
         let text = text;
@@ -1068,16 +1064,16 @@ impl TrueTypeFontWidth {
     }
 }
 
-struct Font {
+struct Font<'a, 'b> {
     typ: FontType,
     data: Vec<u8>,
     offset: u32,
     key: CacheKey,
-    font_width: TrueTypeFontWidth,
     weight: Option<u16>,
+    font_dict: FontDict<'a, 'b>,
 }
 
-impl Font {
+impl Font<'_, '_> {
     fn font_type(&self) -> FontType {
         self.typ
     }
@@ -1091,12 +1087,12 @@ impl Font {
     }
 }
 
-struct FontCache {
-    fonts: HashMap<String, Font>,
+struct FontCache<'a, 'b> {
+    fonts: HashMap<String, Font<'a, 'b>>,
 }
 
-impl FontCache {
-    fn scan_font(font: &FontDict) -> AnyResult<Option<Font>> {
+impl<'a, 'b> FontCache<'a, 'b> {
+    fn scan_font(font: &FontDict<'a, 'b>) -> AnyResult<Option<Font<'a, 'b>>> {
         match font.subtype()? {
             FontType::TrueType => {
                 let true_type_font = font.truetype()?;
@@ -1115,8 +1111,8 @@ impl FontCache {
                             data: bytes,
                             offset,
                             key,
-                            font_width: TrueTypeFontWidth::new(font)?,
                             weight: desc.font_weight()?.map(|v| v as u16),
+                            font_dict: font.clone(),
                         }))
                     }
                     _ => {
@@ -1131,7 +1127,7 @@ impl FontCache {
         }
     }
 
-    fn new(resource: &ResourceDict<'_, '_>) -> anyhow::Result<Self> {
+    fn new(resource: &ResourceDict<'a, 'b>) -> anyhow::Result<Self> {
         let font_res = resource.font()?;
         let mut fonts = HashMap::with_capacity(font_res.len());
         for (k, v) in font_res.into_iter() {
@@ -1144,7 +1140,7 @@ impl FontCache {
         Ok(Self { fonts })
     }
 
-    fn get_font(&self, s: &str) -> Option<&Font> {
+    fn get_font(&self, s: &str) -> Option<&Font<'a, 'b>> {
         self.fonts.get(s)
     }
 }
@@ -1157,8 +1153,17 @@ trait FontOp {
 }
 
 struct TrueTypeFontOp<'a> {
-    font_width: &'a TrueTypeFontWidth,
+    font_width: TrueTypeFontWidth,
     font: FontRef<'a>,
+}
+
+impl<'a> TrueTypeFontOp<'a> {
+    fn new(font_dict: &FontDict, font_ref: FontRef<'a>) -> AnyResult<Self> {
+        Ok(Self {
+            font_width: TrueTypeFontWidth::new(font_dict)?,
+            font: font_ref,
+        })
+    }
 }
 
 impl<'a> FontOp for TrueTypeFontOp<'a> {
