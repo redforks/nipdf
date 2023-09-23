@@ -266,7 +266,7 @@ impl<'a> ObjectResolver<'a> {
         c: &'c C,
         id: &str,
     ) -> Result<Vec<T>, ObjectValueError> {
-        let arr = c.get_value(id);
+        let arr = self.opt_resolve_container_value(c, id)?;
         arr.map_or_else(
             || Ok(vec![]),
             |arr| {
