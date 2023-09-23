@@ -1042,6 +1042,7 @@ impl FontWidth {
 }
 
 struct Font {
+    typ: FontType,
     data: Vec<u8>,
     offset: u32,
     key: CacheKey,
@@ -1050,6 +1051,10 @@ struct Font {
 }
 
 impl Font {
+    fn font_type(&self) -> FontType {
+        self.typ
+    }
+
     fn as_ref(&self) -> FontRef {
         FontRef {
             data: &self.data[..],
@@ -1083,6 +1088,7 @@ impl FontCache {
                         let offset = font_ref.offset;
                         let key = font_ref.key;
                         Ok(Some(Font {
+                            typ: FontType::TrueType,
                             data: bytes,
                             offset,
                             key,
