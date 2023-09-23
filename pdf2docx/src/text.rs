@@ -132,9 +132,8 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for CIDFontWidths {
             let second = iter.next().ok_or(Self::Error::UnexpectedType)?;
             match second {
                 Object::Array(arr) => {
-                    let mut iter = arr.iter();
                     let mut width = Vec::with_capacity(arr.len());
-                    while let Some(ref num) = iter.next() {
+                    for num in arr.iter() {
                         let num = num.as_int()? as u16;
                         width.push(num);
                     }

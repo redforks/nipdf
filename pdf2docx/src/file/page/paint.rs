@@ -5,15 +5,12 @@ use crate::{
     function::{Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
         parse_operations, AxialExtend, AxialShadingDict, Color, ColorOrName, ColorSpace,
-        ConvertFromObject, LineCapStyle, LineJoinStyle, NameOfDict, NameOrDict, NameOrStream,
-        PatternType, Point, RenderingIntent, ShadingPatternDict, ShadingType, TextRenderingMode,
+        ConvertFromObject, LineCapStyle, LineJoinStyle, NameOfDict, NameOrStream, PatternType,
+        Point, RenderingIntent, ShadingPatternDict, ShadingType, TextRenderingMode,
         TilingPaintType, TilingPatternDict, TransformMatrix,
     },
     object::{Array, FilterDecodedData, Object, PdfObject, TextStringOrNumber},
-    text::{
-        CIDFontEncding, CIDFontType, CIDFontWidths, FontDescriptorDict, FontDict, FontType,
-        Type0FontDict,
-    },
+    text::{CIDFontType, CIDFontWidths, FontDescriptorDict, FontDict, FontType, Type0FontDict},
 };
 use anyhow::{anyhow, bail, Result as AnyResult};
 use educe::Educe;
@@ -842,7 +839,7 @@ impl<'a, 'b> Render<'a, 'b> {
                 ty: ctm.height - trans.ty * ctm.zoom,
             };
             debug!("trans: {:?}, height: {}", trans, ctm.height);
-            Self::render_glyph(&mut self.canvas, &state, path, render_mode, trans);
+            Self::render_glyph(&mut self.canvas, state, path, render_mode, trans);
             transform = transform.pre_translate(width, 0.0);
         }
         drop(op);
