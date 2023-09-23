@@ -62,7 +62,7 @@ fn image_transform(zoom: f32, exp: (f32, f32)) {
 
 #[test]
 fn font_width_empty() {
-    let font_width = FontWidth {
+    let font_width = TrueTypeFontWidth {
         range: None,
         widths: vec![],
         default_width: 15,
@@ -74,7 +74,7 @@ fn font_width_empty() {
 
 #[test]
 fn font_width() {
-    let font_width = FontWidth {
+    let font_width = TrueTypeFontWidth {
         range: Some('a' as u32..='d' as u32),
         widths: vec![100, 200, 300, 400],
         default_width: 15,

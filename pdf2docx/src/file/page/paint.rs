@@ -19,7 +19,7 @@ use itertools::Either;
 use log::{debug, error, info};
 use nom::{combinator::eof, sequence::terminated};
 use swash::{
-    scale::ScaleContext,
+    scale::{ScaleContext, Scaler},
     zeno::{Command as PathCommand, PathData},
     CacheKey, FontRef,
 };
@@ -501,7 +501,7 @@ impl<'a, 'b> Render<'a, 'b> {
             Operation::SetTextMatrix(m) => self.text_object_mut().set_text_matrix(*m),
 
             // Text Showing Operations
-            Operation::ShowText(text) => self.show_text(text),
+            Operation::ShowText(text) => self.show_text(text.as_bytes()),
             Operation::ShowTexts(texts) => self.show_texts(texts),
 
             // Color Operations
@@ -707,18 +707,91 @@ impl<'a, 'b> Render<'a, 'b> {
         Ok(())
     }
 
-    fn show_text(&mut self, text: &str) {
+    fn gen_glyph_path(scaler: &mut Scaler, gid: u16) -> PathBuilder {
+        let outline = scaler.scale_outline(gid).unwrap();
+
+        let mut path = PathBuilder::new();
+        (0..outline.len()).for_each(|idx| {
+            let layer = outline.get(idx).unwrap();
+            layer.path().commands().for_each(|v| match v {
+                PathCommand::MoveTo(p) => {
+                    path.move_to(p.x, p.y);
+                }
+                PathCommand::LineTo(p) => {
+                    path.line_to(p.x, p.y);
+                }
+                PathCommand::CurveTo(p1, p2, p3) => {
+                    path.cubic_to(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+                }
+                PathCommand::QuadTo(p1, p2) => {
+                    path.quad_to(p1.x, p1.y, p2.x, p2.y);
+                }
+                PathCommand::Close => {
+                    path.close();
+                }
+            })
+        });
+        path
+    }
+
+    fn render_glyph(
+        canvas: &mut Pixmap,
+        state: &State,
+        path: SkiaPath,
+        render_mode: TextRenderingMode,
+        trans: Transform,
+    ) {
+        match render_mode {
+            TextRenderingMode::Fill => {
+                canvas.fill_path(
+                    &path,
+                    &state.get_fill_paint(),
+                    FillRule::Winding,
+                    trans,
+                    state.get_mask(),
+                );
+            }
+            TextRenderingMode::FillAndStroke => {
+                canvas.fill_path(
+                    &path,
+                    &state.get_fill_paint(),
+                    FillRule::Winding,
+                    trans,
+                    state.get_mask(),
+                );
+                canvas.stroke_path(
+                    &path,
+                    &state.get_stroke_paint(),
+                    state.get_stroke(),
+                    trans,
+                    state.get_mask(),
+                );
+            }
+            _ => {
+                todo!("Unsupported text rendering mode: {:?}", render_mode);
+            }
+        }
+    }
+
+    fn show_text(&mut self, text: &[u8]) {
+        let text_object = self.text_object();
+        let font = self
+            .font_cache
+            .get_font(text_object.font_name.as_ref().unwrap())
+            .unwrap();
+        let font_ref = font.as_ref();
+        let op = match font.font_type() {
+            FontType::TrueType => Box::new(TrueTypeFontOp {
+                font: font_ref,
+                font_width: &font.font_width,
+            }),
+            _ => todo!(),
+        };
+        let text = text;
         let state = self.stack.last().unwrap();
-        debug!(
-            "show_text: {:?}, paint: {:?}/{:?}",
-            text,
-            &state.get_fill_paint(),
-            &state.get_stroke_paint(),
-        );
 
         let text_object = self.text_object();
         let font_size = text_object.font_size;
-        let render_mode = text_object.render_mode;
         let font = self
             .font_cache
             .get_font(text_object.font_name.as_ref().unwrap())
@@ -732,35 +805,18 @@ impl<'a, 'b> Render<'a, 'b> {
             builder
         };
         let mut scaler = builder.build();
-        let mut transform: Transform = text_object.matrix.into();
-        let ctm = &state.ctm;
-        for ch in text.chars() {
-            let glyph_id = font_ref.charmap().map(ch);
-            let outline = scaler.scale_outline(glyph_id).unwrap();
 
-            let mut path = PathBuilder::new();
-            (0..outline.len()).for_each(|idx| {
-                let layer = outline.get(idx).unwrap();
-                layer.path().commands().for_each(|v| match v {
-                    PathCommand::MoveTo(p) => {
-                        path.move_to(p.x, p.y);
-                    }
-                    PathCommand::LineTo(p) => {
-                        path.line_to(p.x, p.y);
-                    }
-                    PathCommand::CurveTo(p1, p2, p3) => {
-                        path.cubic_to(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
-                    }
-                    PathCommand::QuadTo(p1, p2) => {
-                        path.quad_to(p1.x, p1.y, p2.x, p2.y);
-                    }
-                    PathCommand::Close => {
-                        path.close();
-                    }
-                })
-            });
-            let width = font.font_width(ch) as f32 / 1000.0 * font_size;
+        let ctm = &state.ctm;
+        let text_object = self.text_object();
+        let font_size = text_object.font_size;
+        let mut transform: Transform = text_object.matrix.into();
+        let render_mode = text_object.render_mode;
+        for ch in op.decode_chars(text) {
+            let width = op.glyph_width(ch) as f32 / 1000.0 * font_size;
             debug!("width: {width}");
+
+            let gid = op.char_to_gid(ch);
+            let path = Self::gen_glyph_path(&mut scaler, gid);
             if path.is_empty() {
                 transform = transform.pre_translate(width, 0.0);
                 continue;
@@ -782,36 +838,7 @@ impl<'a, 'b> Render<'a, 'b> {
                 ty: ctm.height - trans.ty * ctm.zoom,
             };
             debug!("trans: {:?}, height: {}", trans, ctm.height);
-            match render_mode {
-                TextRenderingMode::Fill => {
-                    self.canvas.fill_path(
-                        &path,
-                        &state.get_fill_paint(),
-                        FillRule::Winding,
-                        trans,
-                        state.get_mask(),
-                    );
-                }
-                TextRenderingMode::FillAndStroke => {
-                    self.canvas.fill_path(
-                        &path,
-                        &state.get_fill_paint(),
-                        FillRule::Winding,
-                        trans,
-                        state.get_mask(),
-                    );
-                    self.canvas.stroke_path(
-                        &path,
-                        &state.get_stroke_paint(),
-                        state.get_stroke(),
-                        trans,
-                        state.get_mask(),
-                    );
-                }
-                _ => {
-                    todo!("Unsupported text rendering mode: {:?}", render_mode);
-                }
-            }
+            Self::render_glyph(&mut self.canvas, &state, path, render_mode, trans);
             transform = transform.pre_translate(width, 0.0);
         }
         self.text_object_mut().matrix = transform.into();
@@ -820,7 +847,7 @@ impl<'a, 'b> Render<'a, 'b> {
     fn show_texts(&mut self, texts: &[TextStringOrNumber]) {
         for t in texts {
             match t {
-                TextStringOrNumber::Text(s) => self.show_text(s.decoded().unwrap()),
+                TextStringOrNumber::Text(s) => self.show_text(s.decoded().unwrap().as_bytes()),
                 TextStringOrNumber::Number(n) => {
                     self.text_object_mut().move_right(*n);
                 }
@@ -983,13 +1010,13 @@ fn build_linear_gradient(shading: &AxialShadingDict) -> AnyResult<tiny_skia::Sha
     .unwrap())
 }
 
-struct FontWidth {
+struct TrueTypeFontWidth {
     range: Option<RangeInclusive<u32>>,
     widths: Vec<u32>,
     default_width: u32,
 }
 
-impl FontWidth {
+impl TrueTypeFontWidth {
     fn new(font: &FontDict) -> AnyResult<Self> {
         let (first_char, last_char, default_width, widths) = match font.subtype()? {
             FontType::TrueType => {
@@ -1030,10 +1057,10 @@ impl FontWidth {
         })
     }
 
-    fn char_width(&self, ch: char) -> u32 {
+    fn char_width(&self, ch: u32) -> u32 {
         match &self.range {
-            Some(range) if range.contains(&(ch as u32)) => {
-                let idx = (ch as u32 - range.start()) as usize;
+            Some(range) if range.contains(&ch) => {
+                let idx = (ch - range.start()) as usize;
                 self.widths[idx]
             }
             _ => self.default_width,
@@ -1046,7 +1073,7 @@ struct Font {
     data: Vec<u8>,
     offset: u32,
     key: CacheKey,
-    font_width: FontWidth,
+    font_width: TrueTypeFontWidth,
     weight: Option<u16>,
 }
 
@@ -1061,10 +1088,6 @@ impl Font {
             offset: self.offset,
             key: self.key,
         }
-    }
-
-    fn font_width(&self, ch: char) -> u32 {
-        self.font_width.char_width(ch)
     }
 }
 
@@ -1092,7 +1115,7 @@ impl FontCache {
                             data: bytes,
                             offset,
                             key,
-                            font_width: FontWidth::new(font)?,
+                            font_width: TrueTypeFontWidth::new(font)?,
                             weight: desc.font_weight()?.map(|v| v as u16),
                         }))
                     }
@@ -1123,6 +1146,33 @@ impl FontCache {
 
     fn get_font(&self, s: &str) -> Option<&Font> {
         self.fonts.get(s)
+    }
+}
+
+trait FontOp {
+    /// Decode char codes to glyph ids, gid is an index to glyph shapes, not a char
+    fn decode_chars(&self, s: &[u8]) -> Vec<u32>;
+    fn char_to_gid(&self, ch: u32) -> u16;
+    fn glyph_width(&self, ch: u32) -> u32;
+}
+
+struct TrueTypeFontOp<'a> {
+    font_width: &'a TrueTypeFontWidth,
+    font: FontRef<'a>,
+}
+
+impl<'a> FontOp for TrueTypeFontOp<'a> {
+    /// Each byte as a char code
+    fn decode_chars(&self, s: &[u8]) -> Vec<u32> {
+        s.iter().map(|v| *v as u32).collect()
+    }
+
+    fn char_to_gid(&self, ch: u32) -> u16 {
+        self.font.charmap().map(ch)
+    }
+
+    fn glyph_width(&self, ch: u32) -> u32 {
+        self.font_width.char_width(ch)
     }
 }
 
