@@ -1,16 +1,19 @@
-use std::{borrow::Cow, collections::HashMap, ops::RangeInclusive};
+use std::{borrow::Cow, collections::HashMap, convert::AsRef, ops::RangeInclusive};
 
 use crate::{
     file::XObjectDict,
     function::{Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
         parse_operations, AxialExtend, AxialShadingDict, Color, ColorOrName, ColorSpace,
-        ConvertFromObject, LineCapStyle, LineJoinStyle, NameOfDict, PatternType, Point,
-        RenderingIntent, ShadingPatternDict, ShadingType, TextRenderingMode, TilingPaintType,
-        TilingPatternDict, TransformMatrix,
+        ConvertFromObject, LineCapStyle, LineJoinStyle, NameOfDict, NameOrDict, NameOrStream,
+        PatternType, Point, RenderingIntent, ShadingPatternDict, ShadingType, TextRenderingMode,
+        TilingPaintType, TilingPatternDict, TransformMatrix,
     },
     object::{Array, FilterDecodedData, Object, PdfObject, TextStringOrNumber},
-    text::{CIDFontType, FontDescriptorDict, FontDict, FontType},
+    text::{
+        CIDFontEncding, CIDFontType, CIDFontWidths, FontDescriptorDict, FontDict, FontType,
+        Type0FontDict,
+    },
 };
 use anyhow::{anyhow, bail, Result as AnyResult};
 use educe::Educe;
@@ -1166,6 +1169,45 @@ trait FontOp {
     fn decode_chars(&self, s: &[u8]) -> Vec<u32>;
     fn char_to_gid(&self, ch: u32) -> u16;
     fn glyph_width(&self, ch: u32) -> u32;
+}
+
+struct Type0FontOp {
+    widths: CIDFontWidths,
+}
+
+impl Type0FontOp {
+    fn new(font: &Type0FontDict) -> AnyResult<Self> {
+        if let NameOrStream::Name(ref encoding) = font.encoding()? {
+            assert_eq!(encoding.as_ref(), CIDFontEncding::IdentityH.as_ref());
+        } else {
+            todo!("Only IdentityH encoding supported");
+        }
+        let cid_fonts = font.descendant_fonts()?;
+        let cid_font = cid_fonts.get(0).unwrap();
+        let widths = cid_font.w()?;
+        Ok(Self { widths })
+    }
+}
+
+impl FontOp for Type0FontOp {
+    /// `s` length must be even, each two bytes as a char code, big endian.
+    fn decode_chars(&self, s: &[u8]) -> Vec<u32> {
+        debug_assert!(s.len() / 2 == 0);
+        let mut rv = Vec::with_capacity(s.len() / 2);
+        for i in 0..s.len() / 2 {
+            let ch = u16::from_be_bytes([s[i * 2], s[i * 2 + 1]]);
+            rv.push(ch as u32);
+        }
+        rv
+    }
+
+    fn char_to_gid(&self, ch: u32) -> u16 {
+        ch as u16
+    }
+
+    fn glyph_width(&self, ch: u32) -> u32 {
+        self.widths.char_width(ch)
+    }
 }
 
 struct TrueTypeFontOp<'a> {

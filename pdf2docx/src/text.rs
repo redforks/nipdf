@@ -82,6 +82,12 @@ pub trait TrueTypeFontDictTrait {
     fn to_unicode(&self) -> Option<&'b Stream<'a>>;
 }
 
+#[derive(Debug, PartialEq, Clone, Copy, strum::AsRefStr)]
+pub enum CIDFontEncding {
+    IdentityH,
+    IdentityV,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum CIDFontWidthGroup {
     NConsecutive((u32, Vec<u16>)),
@@ -90,6 +96,11 @@ pub enum CIDFontWidthGroup {
 
 #[derive(Debug, PartialEq)]
 pub struct CIDFontWidths(Vec<CIDFontWidthGroup>);
+impl CIDFontWidths {
+    pub(crate) fn char_width(&self, ch: u32) -> u32 {
+        todo!()
+    }
+}
 
 impl<'a, 'b> TryFrom<&'b Object<'a>> for CIDFontWidths {
     type Error = ObjectValueError;
