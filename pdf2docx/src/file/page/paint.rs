@@ -10,7 +10,7 @@ use crate::{
         TilingPatternDict, TransformMatrix,
     },
     object::{Array, FilterDecodedData, Object, PdfObject, TextStringOrNumber},
-    text::{FontDict, FontType},
+    text::{FontDescriptorDict, FontDict, FontType},
 };
 use anyhow::{anyhow, bail, Result as AnyResult};
 use educe::Educe;
@@ -1086,38 +1086,55 @@ struct FontCache<'a, 'b> {
 }
 
 impl<'a, 'b> FontCache<'a, 'b> {
+    fn load_true_type_font(desc: &FontDescriptorDict) -> AnyResult<(Vec<u8>, u32, CacheKey)> {
+        let bytes = desc.font_file2()?.unwrap();
+        let bytes = bytes.decode(desc.resolver(), false)?;
+        match bytes {
+            FilterDecodedData::Bytes(_) => {
+                let bytes = bytes.to_owned();
+                let font_ref = FontRef::from_index(&bytes[..], 0)
+                    .ok_or_else(|| anyhow!("Failed to load font"))?;
+                let offset = font_ref.offset;
+                let key = font_ref.key;
+                Ok((bytes, offset, key))
+            }
+            _ => {
+                todo!("Unsupported font file type");
+            }
+        }
+    }
+
     fn scan_font(font: &FontDict<'a, 'b>) -> AnyResult<Option<Font<'a, 'b>>> {
-        match font.subtype()? {
+        let (data, offset, key) = match font.subtype()? {
             FontType::TrueType => {
                 let true_type_font = font.truetype()?;
                 let desc = true_type_font.font_descriptor()?.unwrap();
-                let bytes = desc.font_file2()?.unwrap();
-                let bytes = bytes.decode(desc.resolver(), false)?;
-                match bytes {
-                    FilterDecodedData::Bytes(_) => {
-                        let bytes = bytes.to_owned();
-                        let font_ref = FontRef::from_index(&bytes[..], 0)
-                            .ok_or_else(|| anyhow!("Failed to load font"))?;
-                        let offset = font_ref.offset;
-                        let key = font_ref.key;
-                        Ok(Some(Font {
-                            typ: FontType::TrueType,
-                            data: bytes,
-                            offset,
-                            key,
-                            font_dict: font.clone(),
-                        }))
-                    }
-                    _ => {
-                        todo!("Unsupported font file type");
-                    }
-                }
+                Self::load_true_type_font(&desc)?
+            }
+            FontType::Type0 => {
+                let type0_font = font.type0()?;
+                let descentdant_fonts = type0_font.descendant_fonts()?;
+                assert_eq!(
+                    descentdant_fonts.len(),
+                    1,
+                    "Type0 font should have one descendant fonts"
+                );
+                let descentdant_font = descentdant_fonts.into_iter().next().unwrap();
+                todo!()
             }
             _ => {
                 error!("Unsupported font type: {:?}", font.subtype()?);
-                Ok(None)
+                return Ok(None);
             }
-        }
+        };
+
+        Ok(Some(Font {
+            typ: font.subtype()?,
+            data,
+            offset,
+            key,
+            font_dict: font.clone(),
+        }))
     }
 
     fn new(resource: &ResourceDict<'a, 'b>) -> anyhow::Result<Self> {

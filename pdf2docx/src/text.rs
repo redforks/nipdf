@@ -44,7 +44,7 @@ pub trait Type0FontDictTrait {
     #[try_from]
     fn encoding(&self) -> NameOrStream<'a, 'b>;
     #[nested]
-    fn descendant_fonts(&self) -> Vec<FontDict<'a, 'b>>;
+    fn descendant_fonts(&self) -> Vec<CIDFontDict<'a, 'b>>;
     fn to_unicode(&self) -> Option<&'b Stream<'a>>;
 }
 
@@ -80,6 +80,20 @@ pub trait TrueTypeFontDictTrait {
     #[try_from]
     fn encoding(&self) -> Option<NameOrDictByRef<'a, 'b>>;
     fn to_unicode(&self) -> Option<&'b Stream<'a>>;
+}
+
+#[pdf_object("Font")]
+pub trait CIDFontDictTrait {
+    #[try_from]
+    fn subtype(&self) -> CIDFontType;
+    #[typ("Name")]
+    fn base_font(&self) -> &str;
+    #[nested]
+    fn font_descriptor(&self) -> Option<FontDescriptorDict<'a, 'b>>;
+    #[default(1000u32)]
+    fn dw(&self) -> u32;
+    #[try_from]
+    fn cid_to_gid_map(&self) -> Option<NameOrStream<'a, 'b>>;
 }
 
 #[pdf_object("FontDescriptor")]
