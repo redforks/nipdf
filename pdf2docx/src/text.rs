@@ -82,12 +82,6 @@ pub trait TrueTypeFontDictTrait {
     fn to_unicode(&self) -> Option<&'b Stream<'a>>;
 }
 
-#[derive(Debug, PartialEq, Clone, Copy, strum::AsRefStr)]
-pub enum CIDFontEncding {
-    IdentityH,
-    IdentityV,
-}
-
 #[derive(Debug, PartialEq)]
 pub enum CIDFontWidthGroup {
     NConsecutive((u32, Vec<u16>)),
