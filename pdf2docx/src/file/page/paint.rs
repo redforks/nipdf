@@ -1,4 +1,6 @@
-use std::{borrow::Cow, collections::HashMap, convert::AsRef, ops::RangeInclusive};
+use std::{
+    borrow::Cow, collections::HashMap, convert::AsRef, fs::File, io::Read, ops::RangeInclusive,
+};
 
 use crate::{
     file::XObjectDict,
@@ -14,10 +16,12 @@ use crate::{
 };
 use anyhow::{anyhow, bail, Result as AnyResult};
 use educe::Educe;
+use fontdb::{Database, Family, Query, Source};
 use image::RgbaImage;
 use itertools::Either;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use nom::{combinator::eof, sequence::terminated};
+use once_cell::sync::Lazy;
 use swash::{
     scale::{ScaleContext, Scaler},
     zeno::{Command as PathCommand, PathData},
@@ -1089,27 +1093,60 @@ impl Font<'_, '_> {
     }
 }
 
+static FONT_DB: Lazy<Database> = Lazy::new(|| {
+    let mut db = Database::new();
+    db.load_system_fonts();
+    db
+});
+
 struct FontCache<'a, 'b> {
     fonts: HashMap<String, Font<'a, 'b>>,
 }
 
 impl<'a, 'b> FontCache<'a, 'b> {
     fn load_true_type_font(desc: &FontDescriptorDict) -> AnyResult<(Vec<u8>, u32, CacheKey)> {
-        let bytes = desc.font_file2()?.unwrap();
-        let bytes = bytes.decode(desc.resolver(), false)?;
-        match bytes {
-            FilterDecodedData::Bytes(_) => {
-                let bytes = bytes.to_owned();
-                let font_ref = FontRef::from_index(&bytes[..], 0)
-                    .ok_or_else(|| anyhow!("Failed to load font"))?;
-                let offset = font_ref.offset;
-                let key = font_ref.key;
-                Ok((bytes, offset, key))
+        let bytes = match desc.font_file2()? {
+            Some(bytes) => {
+                let bytes = bytes.decode(desc.resolver(), false)?;
+                match bytes {
+                    FilterDecodedData::Bytes(_) => bytes.to_owned(),
+                    _ => {
+                        todo!("Unsupported font file type");
+                    }
+                }
             }
-            _ => {
-                todo!("Unsupported font file type");
+            None => {
+                warn!(
+                    "font {} not found in file, try to load from system",
+                    desc.font_name()?
+                );
+                let mut q = Query {
+                    families: &[Family::Name(desc.font_name()?)][..],
+                    ..Default::default()
+                };
+                if let Some(weight) = desc.font_weight()? {
+                    q.weight = fontdb::Weight(weight as u16);
+                }
+                let id = FONT_DB.query(&q).expect("font not found in system");
+                let face = FONT_DB.face(id).unwrap();
+                assert_eq!(face.index, 0, "Only one face supported");
+                match face.source {
+                    Source::File(ref path) => {
+                        let mut file = File::open(path)?;
+                        let mut bytes = Vec::new();
+                        file.read_to_end(&mut bytes)?;
+                        bytes
+                    }
+                    Source::Binary(ref bytes) => bytes.as_ref().as_ref().to_owned(),
+                    Source::SharedFile(_, ref bytes) => bytes.as_ref().as_ref().to_owned(),
+                }
             }
-        }
+        };
+        let font_ref =
+            FontRef::from_index(&bytes[..], 0).ok_or_else(|| anyhow!("Failed to load font"))?;
+        let offset = font_ref.offset;
+        let key = font_ref.key;
+        Ok((bytes, offset, key))
     }
 
     fn scan_font(font: &FontDict<'a, 'b>) -> AnyResult<Option<Font<'a, 'b>>> {
