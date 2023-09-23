@@ -782,8 +782,18 @@ impl<'a, 'b> Render<'a, 'b> {
             .font_cache
             .get_font(text_object.font_name.as_ref().unwrap())
             .unwrap();
-        let op = match font.font_type() {
-            FontType::TrueType => TrueTypeFontOp::new(&font.font_dict, font.as_ref()).unwrap(),
+        debug!(
+            "font: {}, type: {:?}",
+            text_object.font_name.as_ref().unwrap(),
+            font.font_type()
+        );
+        let op: Box<dyn FontOp> = match font.font_type() {
+            FontType::TrueType => {
+                Box::new(TrueTypeFontOp::new(&font.font_dict, font.as_ref()).unwrap())
+            }
+            FontType::Type0 => {
+                Box::new(Type0FontOp::new(&font.font_dict.type0().unwrap()).unwrap())
+            }
             _ => todo!(),
         };
         let text = text;
@@ -835,6 +845,7 @@ impl<'a, 'b> Render<'a, 'b> {
             Self::render_glyph(&mut self.canvas, &state, path, render_mode, trans);
             transform = transform.pre_translate(width, 0.0);
         }
+        drop(op);
         self.text_object_mut().matrix = transform.into();
     }
 
@@ -845,10 +856,7 @@ impl<'a, 'b> Render<'a, 'b> {
                 TextStringOrNumber::Number(n) => {
                     self.text_object_mut().move_right(*n);
                 }
-                TextStringOrNumber::HexText(_s) => {
-                    error!("HexText not supported");
-                    // self.show_text(s.as_str().unwrap())
-                }
+                TextStringOrNumber::HexText(s) => self.show_text(s.decoded().unwrap()),
             }
         }
     }
@@ -1173,26 +1181,31 @@ trait FontOp {
 
 struct Type0FontOp {
     widths: CIDFontWidths,
+    default_width: u32,
 }
 
 impl Type0FontOp {
     fn new(font: &Type0FontDict) -> AnyResult<Self> {
         if let NameOrStream::Name(ref encoding) = font.encoding()? {
-            assert_eq!(encoding.as_ref(), CIDFontEncding::IdentityH.as_ref());
+            assert_eq!(encoding.as_ref(), "Identity-H");
+            // assert_eq!(encoding.as_ref(), CIDFontEncding::IdentityH.as_ref());
         } else {
             todo!("Only IdentityH encoding supported");
         }
         let cid_fonts = font.descendant_fonts()?;
         let cid_font = cid_fonts.get(0).unwrap();
         let widths = cid_font.w()?;
-        Ok(Self { widths })
+        Ok(Self {
+            widths,
+            default_width: cid_font.dw()?,
+        })
     }
 }
 
 impl FontOp for Type0FontOp {
-    /// `s` length must be even, each two bytes as a char code, big endian.
+    /// `s` each two bytes as a char code, big endian. append 0 if len(s) is odd
     fn decode_chars(&self, s: &[u8]) -> Vec<u32> {
-        debug_assert!(s.len() / 2 == 0);
+        debug_assert!(s.len() % 2 == 0, "{:?}", s);
         let mut rv = Vec::with_capacity(s.len() / 2);
         for i in 0..s.len() / 2 {
             let ch = u16::from_be_bytes([s[i * 2], s[i * 2 + 1]]);
@@ -1206,7 +1219,7 @@ impl FontOp for Type0FontOp {
     }
 
     fn glyph_width(&self, ch: u32) -> u32 {
-        self.widths.char_width(ch)
+        self.widths.char_width(ch).unwrap_or(self.default_width)
     }
 }
 

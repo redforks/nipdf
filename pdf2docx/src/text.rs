@@ -97,8 +97,23 @@ pub enum CIDFontWidthGroup {
 #[derive(Debug, PartialEq)]
 pub struct CIDFontWidths(Vec<CIDFontWidthGroup>);
 impl CIDFontWidths {
-    pub(crate) fn char_width(&self, ch: u32) -> u32 {
-        todo!()
+    /// Return None if ch out of range
+    pub(crate) fn char_width(&self, ch: u32) -> Option<u32> {
+        for group in &self.0 {
+            match group {
+                CIDFontWidthGroup::NConsecutive((first, widths)) => {
+                    if ch >= *first && ch < *first + widths.len() as u32 {
+                        return Some(widths[(ch - first) as usize] as u32);
+                    }
+                }
+                CIDFontWidthGroup::FirstLast { first, last, width } => {
+                    if ch >= *first && ch <= *last {
+                        return Some(*width as u32);
+                    }
+                }
+            }
+        }
+        None
     }
 }
 
