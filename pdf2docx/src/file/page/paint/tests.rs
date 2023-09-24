@@ -61,21 +61,9 @@ fn image_transform(zoom: f32, exp: (f32, f32)) {
 }
 
 #[test]
-fn font_width_empty() {
-    let font_width = TrueTypeFontWidth {
-        range: None,
-        widths: vec![],
-        default_width: 15,
-    };
-
-    assert_eq!(15, font_width.char_width('f' as u32));
-    assert_eq!(15, font_width.char_width('g' as u32));
-}
-
-#[test]
-fn font_width() {
-    let font_width = TrueTypeFontWidth {
-        range: Some('a' as u32..='d' as u32),
+fn first_last_font_width() {
+    let font_width = FirstLastFontWidth {
+        range: 'a' as u32..='d' as u32,
         widths: vec![100, 200, 300, 400],
         default_width: 15,
     };

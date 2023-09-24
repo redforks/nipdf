@@ -93,8 +93,8 @@ pub trait Type1FontDictTrait {
 pub trait TrueTypeFontDictTrait {
     #[typ("Name")]
     fn base_font(&self) -> &str;
-    fn first_char(&self) -> Option<u32>;
-    fn last_char(&self) -> Option<u32>;
+    fn first_char(&self) -> u32;
+    fn last_char(&self) -> u32;
     fn widths(&self) -> Vec<u32>;
     #[nested]
     fn font_descriptor(&self) -> Option<FontDescriptorDict<'a, 'b>>;

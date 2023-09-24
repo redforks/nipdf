@@ -12,7 +12,10 @@ use crate::{
         TilingPaintType, TilingPatternDict, TransformMatrix,
     },
     object::{Array, FilterDecodedData, Object, PdfObject, TextStringOrNumber},
-    text::{CIDFontType, CIDFontWidths, FontDescriptorDict, FontDict, FontType, Type0FontDict},
+    text::{
+        CIDFontType, CIDFontWidths, FontDescriptorDict, FontDict, FontType, TrueTypeFontDict,
+        Type0FontDict, Type1FontDict,
+    },
 };
 use anyhow::{anyhow, bail, Result as AnyResult};
 use educe::Educe;
@@ -1013,60 +1016,60 @@ fn build_linear_gradient(shading: &AxialShadingDict) -> AnyResult<tiny_skia::Sha
     .unwrap())
 }
 
-struct TrueTypeFontWidth {
-    range: Option<RangeInclusive<u32>>,
+/// FontWidth used in Type1 and TrueType fonts
+struct FirstLastFontWidth {
+    range: RangeInclusive<u32>,
     widths: Vec<u32>,
     default_width: u32,
 }
 
-impl TrueTypeFontWidth {
-    fn new(font: &FontDict) -> AnyResult<Self> {
-        let (first_char, last_char, default_width, widths) = match font.subtype()? {
-            FontType::TrueType => {
-                let font = font.truetype()?;
-                let desc = font
-                    .font_descriptor()?
-                    .ok_or_else(|| anyhow!("font descriptor failed to load"))?;
-                let widths = font.widths()?;
-                let first_char = font.first_char()?;
-                let last_char = font.last_char()?;
-                let default_width = desc.missing_width()?;
-                (first_char, last_char, default_width, widths)
-            }
-            FontType::Type1 => {
-                let font = font.type1()?;
-                let desc = font
-                    .font_descriptor()?
-                    .ok_or_else(|| anyhow!("font descriptor failed to load"))?;
-                let widths = font.widths()?;
-                let first_char = font.first_char()?;
-                let last_char = font.last_char()?;
-                let default_width = desc.missing_width()?;
-                (first_char, last_char, default_width, widths)
-            }
-            _ => anyhow::bail!("Unsupported font type: {:?}", font.subtype()?),
-        };
+impl FirstLastFontWidth {
+    fn _new(first_char: u32, last_char: u32, default_width: u32, widths: Vec<u32>) -> Self {
+        let range = first_char..=last_char;
 
-        let range = if let (Some(first_char), Some(last_char)) = (first_char, last_char) {
-            Some(first_char..=last_char)
-        } else {
-            None
-        };
-
-        Ok(Self {
+        Self {
             range,
             widths,
             default_width,
-        })
+        }
+    }
+
+    pub fn from_true_type(font: &TrueTypeFontDict) -> AnyResult<Self> {
+        let desc = font
+            .font_descriptor()?
+            .ok_or_else(|| anyhow!("font descriptor failed to load"))?;
+        let widths = font.widths()?;
+        let first_char = font.first_char()?;
+        let last_char = font.last_char()?;
+        let default_width = desc.missing_width()?;
+        Ok(Self::_new(first_char, last_char, default_width, widths))
+    }
+
+    pub fn from_type1_type(font: &Type1FontDict) -> AnyResult<Option<Self>> {
+        let desc = font
+            .font_descriptor()?
+            .ok_or_else(|| anyhow!("font descriptor failed to load"))?;
+        let widths = font.widths()?;
+        let first_char = font.first_char()?;
+        let last_char = font.last_char()?;
+        if first_char.is_none() || last_char.is_none() {
+            return Ok(None);
+        }
+        let default_width = desc.missing_width()?;
+        Ok(Some(Self::_new(
+            first_char.unwrap(),
+            last_char.unwrap(),
+            default_width,
+            widths,
+        )))
     }
 
     fn char_width(&self, ch: u32) -> u32 {
-        match &self.range {
-            Some(range) if range.contains(&ch) => {
-                let idx = (ch - range.start()) as usize;
-                self.widths[idx]
-            }
-            _ => self.default_width,
+        if self.range.contains(&ch) {
+            let idx = (ch - self.range.start()) as usize;
+            self.widths[idx]
+        } else {
+            self.default_width
         }
     }
 }
@@ -1258,14 +1261,14 @@ impl FontOp for Type0FontOp {
 }
 
 struct TrueTypeFontOp<'a> {
-    font_width: TrueTypeFontWidth,
+    font_width: FirstLastFontWidth,
     font: FontRef<'a>,
 }
 
 impl<'a> TrueTypeFontOp<'a> {
     fn new(font_dict: &FontDict, font_ref: FontRef<'a>) -> AnyResult<Self> {
         Ok(Self {
-            font_width: TrueTypeFontWidth::new(font_dict)?,
+            font_width: FirstLastFontWidth::from_true_type(&font_dict.truetype()?)?,
             font: font_ref,
         })
     }
