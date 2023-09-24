@@ -1,5 +1,6 @@
 use std::{
     borrow::Cow, collections::HashMap, convert::AsRef, fs::File, io::Read, ops::RangeInclusive,
+    slice,
 };
 
 use crate::{
@@ -19,7 +20,7 @@ use crate::{
 };
 use anyhow::{anyhow, bail, Result as AnyResult};
 use educe::Educe;
-use fontdb::{Database, Family, Query, Source};
+use fontdb::{Database, Family, Query, Source, Style, Weight};
 use image::RgbaImage;
 use itertools::Either;
 use log::{debug, error, info, warn};
@@ -1102,54 +1103,130 @@ static SYSTEM_FONTS: Lazy<Database> = Lazy::new(|| {
     db
 });
 
+struct FontQueryBuilder<'a> {
+    font_name: Family<'a>,
+    weight: Weight,
+    style: Style,
+}
+
+impl<'a> FontQueryBuilder<'a> {
+    fn new(font_name: &'a str, weight: Weight, style: Style) -> Self {
+        Self {
+            font_name: Family::Name(font_name),
+            weight,
+            style,
+        }
+    }
+}
+
+impl<'a, 'b> From<&'b FontQueryBuilder<'a>> for Query<'b> {
+    fn from(builder: &'b FontQueryBuilder<'a>) -> Self {
+        Query {
+            families: slice::from_ref(&builder.font_name),
+            weight: builder.weight,
+            style: builder.style,
+            ..Default::default()
+        }
+    }
+}
+
+/// If font_name is a standard 14 font, return TrueType font query to replace it with true type font,
+/// otherwise return None
+fn replace_standard_14_type1_font_with_true_type(
+    font_name: &str,
+) -> Option<FontQueryBuilder<'static>> {
+    let font_name = font_name.to_lowercase();
+    let (font_name, weight, style) = match font_name.as_str() {
+        "courier" => ("Courier New", Weight::NORMAL, Style::Normal),
+        "courier-bold" => ("Courier New", Weight::BOLD, Style::Normal),
+        "courier-boldoblique" => ("Courier New", Weight::BOLD, Style::Oblique),
+        "courier-oblique" => ("Courier New", Weight::NORMAL, Style::Oblique),
+        "helvetica" => ("Arial", Weight::NORMAL, Style::Normal),
+        "helvetica-bold" => ("Arial", Weight::BOLD, Style::Normal),
+        "helvetica-boldoblique" => ("Arial", Weight::BOLD, Style::Oblique),
+        "helvetica-oblique" => ("Arial", Weight::NORMAL, Style::Oblique),
+        "symbol" => ("Symbol", Weight::NORMAL, Style::Normal),
+        "times-bold" => ("Times New Roman", Weight::BOLD, Style::Normal),
+        "times-bolditalic" => ("Times New Roman", Weight::BOLD, Style::Italic),
+        "times-italic" => ("Times New Roman", Weight::NORMAL, Style::Italic),
+        "times-roman" => ("Times New Roman", Weight::NORMAL, Style::Normal),
+        "zapfdingbats" => ("ZapfDingbats", Weight::NORMAL, Style::Normal),
+        _ => return None,
+    };
+    Some(FontQueryBuilder::new(font_name, weight, style))
+}
+
 struct FontCache<'a, 'b> {
     fonts: HashMap<String, Font<'a, 'b>>,
 }
 
 impl<'a, 'b> FontCache<'a, 'b> {
-    fn load_true_type_font(desc: &FontDescriptorDict) -> AnyResult<(Vec<u8>, u32, CacheKey)> {
-        let bytes = match desc.font_file2()? {
-            Some(bytes) => {
-                let bytes = bytes.decode(desc.resolver(), false)?;
-                match bytes {
-                    FilterDecodedData::Bytes(_) => bytes.to_owned(),
-                    _ => {
-                        todo!("Unsupported font file type");
-                    }
-                }
-            }
-            None => {
-                warn!(
-                    "font {} not found in file, try to load from system",
-                    desc.font_name()?
-                );
-                let mut q = Query {
-                    families: &[Family::Name(desc.font_name()?)][..],
-                    ..Default::default()
-                };
-                if let Some(weight) = desc.font_weight()? {
-                    q.weight = fontdb::Weight(weight as u16);
-                }
-                let id = SYSTEM_FONTS.query(&q).expect("font not found in system");
-                let face = SYSTEM_FONTS.face(id).unwrap();
-                assert_eq!(face.index, 0, "Only one face supported");
-                match face.source {
-                    Source::File(ref path) => {
-                        let mut file = File::open(path)?;
-                        let mut bytes = Vec::new();
-                        file.read_to_end(&mut bytes)?;
-                        bytes
-                    }
-                    Source::Binary(ref bytes) => bytes.as_ref().as_ref().to_owned(),
-                    Source::SharedFile(_, ref bytes) => bytes.as_ref().as_ref().to_owned(),
-                }
-            }
-        };
+    fn load_true_type_font_from_bytes(bytes: Vec<u8>) -> AnyResult<(Vec<u8>, u32, CacheKey)> {
         let font_ref =
             FontRef::from_index(&bytes[..], 0).ok_or_else(|| anyhow!("Failed to load font"))?;
         let offset = font_ref.offset;
         let key = font_ref.key;
         Ok((bytes, offset, key))
+    }
+
+    fn load_true_type_from_os<'c>(q: impl Into<Query<'c>>) -> AnyResult<Vec<u8>> {
+        let q = q.into();
+        let id = SYSTEM_FONTS.query(&q).expect("font not found in system");
+        let face = SYSTEM_FONTS.face(id).unwrap();
+        assert_eq!(face.index, 0, "Only one face supported");
+        match face.source {
+            Source::File(ref path) => {
+                let mut file = File::open(path)?;
+                let mut bytes = Vec::new();
+                file.read_to_end(&mut bytes)?;
+                Ok(bytes)
+            }
+            Source::Binary(ref bytes) => Ok(bytes.as_ref().as_ref().to_owned()),
+            Source::SharedFile(_, ref bytes) => Ok(bytes.as_ref().as_ref().to_owned()),
+        }
+    }
+
+    fn load_true_type_font(
+        desc: &FontDescriptorDict<'a, 'b>,
+    ) -> AnyResult<(Vec<u8>, u32, CacheKey)> {
+        let bytes = match desc.font_file2()? {
+            Some(stream) => {
+                let bytes = stream.decode(desc.resolver(), false)?;
+                match bytes {
+                    FilterDecodedData::Bytes(_) => bytes.to_owned(),
+                    _ => todo!("Unsupported font file type"),
+                }
+            }
+            None => {
+                let font_name = desc.font_name()?;
+                warn!(
+                    "font {} not found in file, try to load from system",
+                    font_name,
+                );
+                Self::load_true_type_from_os(Query {
+                    families: &[Family::Name(font_name)][..],
+                    weight: desc
+                        .font_weight()?
+                        .map(|v| Weight(v as u16))
+                        .unwrap_or(Weight::NORMAL),
+                    ..Default::default()
+                })?
+            }
+        };
+        Self::load_true_type_font_from_bytes(bytes)
+    }
+
+    /// Load Type1 font, only standard 14 fonts supported, these fonts are replaced
+    /// by TrueType fonts scanned from current OS. Because Type1 fonts are not
+    /// supported by swash, and the only crate support Type1 fonts is `font`, which
+    /// I am not familiar with.
+    fn load_type1_font(font: &Type1FontDict<'a, 'b>) -> AnyResult<(Vec<u8>, u32, CacheKey)> {
+        let font_name = font.base_font()?;
+        let font_name = font_name.to_lowercase();
+        let query = replace_standard_14_type1_font_with_true_type(font_name.as_str())
+            .expect("Only standard 14 fonts supported");
+        let bytes = Self::load_true_type_from_os(&query)?;
+        Self::load_true_type_font_from_bytes(bytes)
     }
 
     fn scan_font(font: &FontDict<'a, 'b>) -> AnyResult<Option<Font<'a, 'b>>> {
@@ -1175,6 +1252,10 @@ impl<'a, 'b> FontCache<'a, 'b> {
                 );
                 let desc = descentdant_font.font_descriptor()?.unwrap();
                 Self::load_true_type_font(&desc)?
+            }
+            FontType::Type1 => {
+                let type1_font = font.type1()?;
+                Self::load_type1_font(&type1_font)?
             }
             _ => {
                 error!("Unsupported font type: {:?}", font.subtype()?);
