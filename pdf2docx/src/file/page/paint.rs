@@ -1093,7 +1093,7 @@ impl Font<'_, '_> {
     }
 }
 
-static FONT_DB: Lazy<Database> = Lazy::new(|| {
+static SYSTEM_FONTS: Lazy<Database> = Lazy::new(|| {
     let mut db = Database::new();
     db.load_system_fonts();
     db
@@ -1127,8 +1127,8 @@ impl<'a, 'b> FontCache<'a, 'b> {
                 if let Some(weight) = desc.font_weight()? {
                     q.weight = fontdb::Weight(weight as u16);
                 }
-                let id = FONT_DB.query(&q).expect("font not found in system");
-                let face = FONT_DB.face(id).unwrap();
+                let id = SYSTEM_FONTS.query(&q).expect("font not found in system");
+                let face = SYSTEM_FONTS.face(id).unwrap();
                 assert_eq!(face.index, 0, "Only one face supported");
                 match face.source {
                     Source::File(ref path) => {
