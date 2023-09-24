@@ -7,6 +7,27 @@ use crate::{
     object::{Object, ObjectValueError, Stream},
 };
 
+static STANDARD_14_FONT_NAMES: &[&str] = &[
+    "Times-Roman",
+    "Times-Bold",
+    "Times-Italic",
+    "Times-BoldItalic",
+    "Helvetica",
+    "Helvetica-Bold",
+    "Helvetica-Oblique",
+    "Helvetica-BoldOblique",
+    "Courier",
+    "Courier-Bold",
+    "Courier-Oblique",
+    "Courier-BoldOblique",
+    "Symbol",
+    "ZapfDingbats",
+];
+
+pub fn is_standard_14_font(name: &str) -> bool {
+    STANDARD_14_FONT_NAMES.contains(&name)
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, TryFromNameObject)]
 pub enum FontType {
     Type0,
