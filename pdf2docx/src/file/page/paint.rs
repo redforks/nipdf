@@ -792,15 +792,7 @@ impl<'a, 'b> Render<'a, 'b> {
             text_object.font_name.as_ref().unwrap(),
             font.font_type()
         );
-        let op: Box<dyn FontOp> = match font.font_type() {
-            FontType::TrueType => {
-                Box::new(TrueTypeFontOp::new(&font.font_dict, font.as_ref()).unwrap())
-            }
-            FontType::Type0 => {
-                Box::new(Type0FontOp::new(&font.font_dict.type0().unwrap()).unwrap())
-            }
-            _ => todo!(),
-        };
+        let op = font.create_op().unwrap();
         let text = text;
         let state = self.stack.last().unwrap();
 
@@ -1095,6 +1087,14 @@ impl Font<'_, '_> {
             key: self.key,
         }
     }
+
+    pub fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
+        Ok(match self.typ {
+            FontType::TrueType => Box::new(TrueTypeFontOp::new(&self.font_dict, self.as_ref())?),
+            FontType::Type0 => Box::new(Type0FontOp::new(&self.font_dict.type0()?)?),
+            _ => todo!(),
+        })
+    }
 }
 
 static SYSTEM_FONTS: Lazy<Database> = Lazy::new(|| {
@@ -1306,7 +1306,7 @@ impl Type0FontOp {
     fn new(font: &Type0FontDict) -> AnyResult<Self> {
         if let NameOrStream::Name(ref encoding) = font.encoding()? {
             assert_eq!(encoding.as_ref(), "Identity-H");
-            // assert_eq!(encoding.as_ref(), CIDFontEncding::IdentityH.as_ref());
+            // assert_eq!(encoding.as_ref(), CIDFontEncoding::IdentityH.as_ref());
         } else {
             todo!("Only IdentityH encoding supported");
         }
