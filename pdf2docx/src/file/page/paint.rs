@@ -27,7 +27,7 @@ use log::{debug, error, info, warn};
 use nom::{combinator::eof, sequence::terminated};
 use once_cell::sync::Lazy;
 use swash::{
-    scale::{ScaleContext, Scaler},
+    scale::ScaleContext,
     zeno::{Command as PathCommand, PathData},
     CacheKey, FontRef,
 };
@@ -715,30 +715,10 @@ impl<'a, 'b> Render<'a, 'b> {
         Ok(())
     }
 
-    fn gen_glyph_path(scaler: &mut Scaler, gid: u16) -> PathBuilder {
-        let outline = scaler.scale_outline(gid).unwrap();
-
+    fn gen_glyph_path(glyph_render: &mut dyn GlyphRender, gid: u16) -> PathBuilder {
         let mut path = PathBuilder::new();
-        (0..outline.len()).for_each(|idx| {
-            let layer = outline.get(idx).unwrap();
-            layer.path().commands().for_each(|v| match v {
-                PathCommand::MoveTo(p) => {
-                    path.move_to(p.x, p.y);
-                }
-                PathCommand::LineTo(p) => {
-                    path.line_to(p.x, p.y);
-                }
-                PathCommand::CurveTo(p1, p2, p3) => {
-                    path.cubic_to(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
-                }
-                PathCommand::QuadTo(p1, p2) => {
-                    path.quad_to(p1.x, p1.y, p2.x, p2.y);
-                }
-                PathCommand::Close => {
-                    path.close();
-                }
-            })
-        });
+        let mut sink = PathSink(&mut path);
+        glyph_render.render(gid, &mut sink).unwrap();
         path
     }
 
@@ -802,10 +782,7 @@ impl<'a, 'b> Render<'a, 'b> {
             .font_cache
             .get_font(text_object.font_name.as_ref().unwrap())
             .unwrap();
-        let font_ref = font.as_ref();
-        let mut context = ScaleContext::new();
-        let builder = context.builder(font_ref).size(font_size).hint(true);
-        let mut scaler = builder.build();
+        let mut glyph_render = font.create_glyph_render(font_size).unwrap();
 
         let ctm = &state.ctm;
         let text_object = self.text_object();
@@ -817,7 +794,7 @@ impl<'a, 'b> Render<'a, 'b> {
             debug!("width: {width}");
 
             let gid = op.char_to_gid(ch);
-            let path = Self::gen_glyph_path(&mut scaler, gid);
+            let path = Self::gen_glyph_path(glyph_render.as_mut(), gid);
             if path.is_empty() {
                 transform = transform.pre_translate(width, 0.0);
                 continue;
@@ -843,6 +820,7 @@ impl<'a, 'b> Render<'a, 'b> {
             transform = transform.pre_translate(width, 0.0);
         }
         drop(op);
+        drop(glyph_render);
         self.text_object_mut().matrix = transform.into();
     }
 
@@ -1067,6 +1045,73 @@ impl FirstLastFontWidth {
     }
 }
 
+struct PathSink<'a>(pub &'a mut PathBuilder);
+
+impl PathSink<'_> {
+    pub fn move_to(&mut self, x: f32, y: f32) {
+        self.0.move_to(x, y);
+    }
+
+    pub fn line_to(&mut self, x: f32, y: f32) {
+        self.0.line_to(x, y);
+    }
+
+    pub fn quad_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32) {
+        self.0.quad_to(x1, y1, x2, y2);
+    }
+
+    pub fn cubic_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) {
+        self.0.cubic_to(x1, y1, x2, y2, x3, y3);
+    }
+
+    pub fn close(&mut self) {
+        self.0.close();
+    }
+}
+
+trait GlyphRender {
+    fn render(&mut self, gid: u16, sink: &mut PathSink) -> AnyResult<()>;
+}
+
+struct TrueTypeGlyphRender<'a> {
+    font_ref: FontRef<'a>,
+    context: ScaleContext,
+    font_size: f32,
+}
+
+impl<'a> GlyphRender for TrueTypeGlyphRender<'a> {
+    fn render(&mut self, gid: u16, sink: &mut PathSink) -> AnyResult<()> {
+        let builder = self
+            .context
+            .builder(self.font_ref)
+            .size(self.font_size)
+            .hint(true);
+        let mut scaler = builder.build();
+        let outline = scaler.scale_outline(gid).unwrap();
+        (0..outline.len()).for_each(|idx| {
+            let layer = outline.get(idx).unwrap();
+            layer.path().commands().for_each(|v| match v {
+                PathCommand::MoveTo(p) => {
+                    sink.move_to(p.x, p.y);
+                }
+                PathCommand::LineTo(p) => {
+                    sink.line_to(p.x, p.y);
+                }
+                PathCommand::CurveTo(p1, p2, p3) => {
+                    sink.cubic_to(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+                }
+                PathCommand::QuadTo(p1, p2) => {
+                    sink.quad_to(p1.x, p1.y, p2.x, p2.y);
+                }
+                PathCommand::Close => {
+                    sink.close();
+                }
+            })
+        });
+        Ok(())
+    }
+}
+
 struct Font<'a, 'b> {
     typ: FontType,
     data: Vec<u8>,
@@ -1089,9 +1134,24 @@ impl Font<'_, '_> {
     }
 
     pub fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
-        Ok(match self.typ {
+        Ok(match self.font_type() {
             FontType::TrueType => Box::new(TrueTypeFontOp::new(&self.font_dict, self.as_ref())?),
             FontType::Type0 => Box::new(Type0FontOp::new(&self.font_dict.type0()?)?),
+            _ => todo!(),
+        })
+    }
+
+    pub fn create_glyph_render(&self, font_size: f32) -> AnyResult<Box<dyn GlyphRender + '_>> {
+        Ok(match self.font_type() {
+            FontType::TrueType | FontType::Type0 => {
+                let font_ref = self.as_ref();
+                let context = ScaleContext::new();
+                Box::new(TrueTypeGlyphRender {
+                    font_ref,
+                    context,
+                    font_size,
+                })
+            }
             _ => todo!(),
         })
     }
