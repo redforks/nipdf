@@ -372,19 +372,23 @@ impl RenderOptionBuilder {
 
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct Render<'a, 'b> {
+pub struct Render<'a, 'b, 'c> {
     canvas: Pixmap,
     stack: Vec<State>,
     width: u32,
     height: u32,
     path: Path,
     #[educe(Debug(ignore))]
-    font_cache: FontCache<'a, 'b>,
-    resources: &'b ResourceDict<'a, 'b>,
+    font_cache: FontCache<'c>,
+    resources: &'c ResourceDict<'a, 'b>,
 }
 
-impl<'a, 'b> Render<'a, 'b> {
-    pub fn new(option: RenderOption, resources: &'b ResourceDict<'a, 'b>) -> Self {
+impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
+    pub fn new(option: RenderOption, resources: &'c ResourceDict<'a, 'b>) -> Self
+    where
+        'a: 'c,
+        'b: 'c,
+    {
         let w = (option.width as f32 * option.zoom) as u32;
         let h = (option.height as f32 * option.zoom) as u32;
 
@@ -683,7 +687,10 @@ impl<'a, 'b> Render<'a, 'b> {
         Ok(())
     }
 
-    fn set_tiling_pattern(&mut self, tile: TilingPatternDict<'a, 'b>) -> AnyResult<()> {
+    fn set_tiling_pattern(&mut self, tile: TilingPatternDict<'a, 'b>) -> AnyResult<()>
+    where
+        'a: 'b,
+    {
         assert_eq!(
             tile.paint_type()?,
             TilingPaintType::Uncolored,
@@ -1112,7 +1119,13 @@ impl<'a> GlyphRender for TrueTypeGlyphRender<'a> {
     }
 }
 
-struct Font<'a, 'b> {
+trait Font {
+    fn font_type(&self) -> FontType;
+    fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>>;
+    fn create_glyph_render(&self, font_size: f32) -> AnyResult<Box<dyn GlyphRender + '_>>;
+}
+
+struct SwashFont<'a, 'b> {
     typ: FontType,
     data: Vec<u8>,
     offset: u32,
@@ -1120,20 +1133,12 @@ struct Font<'a, 'b> {
     font_dict: FontDict<'a, 'b>,
 }
 
-impl Font<'_, '_> {
+impl<'a, 'b> Font for SwashFont<'a, 'b> {
     fn font_type(&self) -> FontType {
         self.typ
     }
 
-    fn as_ref(&self) -> FontRef {
-        FontRef {
-            data: &self.data[..],
-            offset: self.offset,
-            key: self.key,
-        }
-    }
-
-    pub fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
+    fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
         Ok(match self.font_type() {
             FontType::TrueType => Box::new(TrueTypeFontOp::new(&self.font_dict, self.as_ref())?),
             FontType::Type0 => Box::new(Type0FontOp::new(&self.font_dict.type0()?)?),
@@ -1141,7 +1146,7 @@ impl Font<'_, '_> {
         })
     }
 
-    pub fn create_glyph_render(&self, font_size: f32) -> AnyResult<Box<dyn GlyphRender + '_>> {
+    fn create_glyph_render(&self, font_size: f32) -> AnyResult<Box<dyn GlyphRender + '_>> {
         Ok(match self.font_type() {
             FontType::TrueType | FontType::Type0 => {
                 let font_ref = self.as_ref();
@@ -1154,6 +1159,16 @@ impl Font<'_, '_> {
             }
             _ => todo!(),
         })
+    }
+}
+
+impl SwashFont<'_, '_> {
+    fn as_ref(&self) -> FontRef {
+        FontRef {
+            data: &self.data[..],
+            offset: self.offset,
+            key: self.key,
+        }
     }
 }
 
@@ -1216,11 +1231,11 @@ fn replace_standard_14_type1_font_with_true_type(
     Some(FontQueryBuilder::new(font_name, weight, style))
 }
 
-struct FontCache<'a, 'b> {
-    fonts: HashMap<String, Font<'a, 'b>>,
+struct FontCache<'c> {
+    fonts: HashMap<String, Box<dyn Font + 'c>>,
 }
 
-impl<'a, 'b> FontCache<'a, 'b> {
+impl<'c> FontCache<'c> {
     fn load_true_type_font_from_bytes(bytes: Vec<u8>) -> AnyResult<(Vec<u8>, u32, CacheKey)> {
         let font_ref =
             FontRef::from_index(&bytes[..], 0).ok_or_else(|| anyhow!("Failed to load font"))?;
@@ -1229,7 +1244,7 @@ impl<'a, 'b> FontCache<'a, 'b> {
         Ok((bytes, offset, key))
     }
 
-    fn load_true_type_from_os<'c>(q: impl Into<Query<'c>>) -> AnyResult<Vec<u8>> {
+    fn load_true_type_from_os<'a>(q: impl Into<Query<'a>>) -> AnyResult<Vec<u8>> {
         let q = q.into();
         let id = SYSTEM_FONTS.query(&q).expect("font not found in system");
         let face = SYSTEM_FONTS.face(id).unwrap();
@@ -1246,9 +1261,7 @@ impl<'a, 'b> FontCache<'a, 'b> {
         }
     }
 
-    fn load_true_type_font(
-        desc: &FontDescriptorDict<'a, 'b>,
-    ) -> AnyResult<(Vec<u8>, u32, CacheKey)> {
+    fn load_true_type_font(desc: &FontDescriptorDict) -> AnyResult<(Vec<u8>, u32, CacheKey)> {
         let bytes = match desc.font_file2()? {
             Some(stream) => {
                 let bytes = stream.decode(desc.resolver(), false)?;
@@ -1280,7 +1293,7 @@ impl<'a, 'b> FontCache<'a, 'b> {
     /// by TrueType fonts scanned from current OS. Because Type1 fonts are not
     /// supported by swash, and the only crate support Type1 fonts is `font`, which
     /// I am not familiar with.
-    fn load_type1_font(font: &Type1FontDict<'a, 'b>) -> AnyResult<(Vec<u8>, u32, CacheKey)> {
+    fn load_type1_font(font: &Type1FontDict) -> AnyResult<(Vec<u8>, u32, CacheKey)> {
         let font_name = font.base_font()?;
         let font_name = font_name.to_lowercase();
         let query = replace_standard_14_type1_font_with_true_type(font_name.as_str())
@@ -1289,7 +1302,11 @@ impl<'a, 'b> FontCache<'a, 'b> {
         Self::load_true_type_font_from_bytes(bytes)
     }
 
-    fn scan_font(font: &FontDict<'a, 'b>) -> AnyResult<Option<Font<'a, 'b>>> {
+    fn scan_font<'a, 'b>(font: FontDict<'a, 'b>) -> AnyResult<Option<Box<dyn Font + 'c>>>
+    where
+        'a: 'c,
+        'b: 'c,
+    {
         let (data, offset, key) = match font.subtype()? {
             FontType::TrueType => {
                 let true_type_font = font.truetype()?;
@@ -1323,21 +1340,25 @@ impl<'a, 'b> FontCache<'a, 'b> {
             }
         };
 
-        Ok(Some(Font {
+        Ok(Some(Box::new(SwashFont {
             typ: font.subtype()?,
             data,
             offset,
             key,
-            font_dict: font.clone(),
-        }))
+            font_dict: font,
+        })))
     }
 
-    fn new(resource: &ResourceDict<'a, 'b>) -> anyhow::Result<Self> {
+    fn new<'a, 'b>(resource: &'c ResourceDict<'a, 'b>) -> anyhow::Result<Self>
+    where
+        'a: 'c,
+        'b: 'c,
+    {
         let font_res = resource.font()?;
         let mut fonts = HashMap::with_capacity(font_res.len());
         for (k, v) in font_res.into_iter() {
             info!("load font: {:?}", k);
-            let font = Self::scan_font(&v)?;
+            let font = Self::scan_font(v)?;
             if let Some(font) = font {
                 fonts.insert(k, font);
             }
@@ -1345,8 +1366,8 @@ impl<'a, 'b> FontCache<'a, 'b> {
         Ok(Self { fonts })
     }
 
-    fn get_font(&self, s: &str) -> Option<&Font<'a, 'b>> {
-        self.fonts.get(s)
+    fn get_font(&self, s: &str) -> Option<&dyn Font> {
+        self.fonts.get(s).map(|x| x.as_ref())
     }
 }
 
