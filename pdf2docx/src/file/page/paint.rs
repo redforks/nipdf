@@ -512,6 +512,10 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
 
             // Text Positioning Operations
             Operation::MoveTextPosition(p) => self.text_object_mut().move_text_position(*p),
+            Operation::MoveTextPositionAndSetLeading(p) => {
+                self.text_object_mut().set_leading(-p.y);
+                self.text_object_mut().move_text_position(*p);
+            }
             Operation::SetTextMatrix(m) => self.text_object_mut().set_text_matrix(*m),
 
             // Text Showing Operations
