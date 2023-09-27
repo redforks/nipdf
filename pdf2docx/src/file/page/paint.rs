@@ -1267,30 +1267,24 @@ impl<'a, 'b> From<&'b FontQueryBuilder<'a>> for Query<'b> {
     }
 }
 
-/// If font_name is a standard 14 font, return TrueType font query to replace it with true type font,
-/// otherwise return None
-fn replace_standard_14_type1_font_with_true_type(
-    font_name: &str,
-) -> Option<FontQueryBuilder<'static>> {
-    let font_name = font_name.to_lowercase();
-    let (font_name, weight, style) = match font_name.as_str() {
-        "courier" => ("Courier New", Weight::NORMAL, Style::Normal),
-        "courier-bold" => ("Courier New", Weight::BOLD, Style::Normal),
-        "courier-boldoblique" => ("Courier New", Weight::BOLD, Style::Oblique),
-        "courier-oblique" => ("Courier New", Weight::NORMAL, Style::Oblique),
-        "helvetica" => ("Arial", Weight::NORMAL, Style::Normal),
-        "helvetica-bold" => ("Arial", Weight::BOLD, Style::Normal),
-        "helvetica-boldoblique" => ("Arial", Weight::BOLD, Style::Oblique),
-        "helvetica-oblique" => ("Arial", Weight::NORMAL, Style::Oblique),
-        "symbol" => ("Symbol", Weight::NORMAL, Style::Normal),
-        "times-bold" => ("Times New Roman", Weight::BOLD, Style::Normal),
-        "times-bolditalic" => ("Times New Roman", Weight::BOLD, Style::Italic),
-        "times-italic" => ("Times New Roman", Weight::NORMAL, Style::Italic),
-        "times-roman" => ("Times New Roman", Weight::NORMAL, Style::Normal),
-        "zapfdingbats" => ("ZapfDingbats", Weight::NORMAL, Style::Normal),
-        _ => return None,
-    };
-    Some(FontQueryBuilder::new(font_name, weight, style))
+fn standard_14_type1_font_data(font_name: &str) -> Option<&'static [u8]> {
+    match font_name {
+        "courier" => Some(&include_bytes!("../../../fonts/n022003l.pfb")[..]),
+        "courier-bold" => Some(&include_bytes!("../../../fonts/n022004l.pfb")[..]),
+        "courier-boldoblique" => Some(&include_bytes!("../../../fonts/n022024l.pfb")[..]),
+        "courier-oblique" => Some(&include_bytes!("../../../fonts/n022023l.pfb")[..]),
+        "helvetica" => Some(&include_bytes!("../../../fonts/n019003l.pfb")[..]),
+        "helvetica-bold" => Some(&include_bytes!("../../../fonts/n019004l.pfb")[..]),
+        "helvetica-boldoblique" => Some(&include_bytes!("../../../fonts/n019024l.pfb")[..]),
+        "helvetica-oblique" => Some(&include_bytes!("../../../fonts/n019023l.pfb")[..]),
+        "symbol" => Some(&include_bytes!("../../../fonts/s050000l.pfb")[..]),
+        "times-bold" => Some(&include_bytes!("../../../fonts/n021004l.pfb")[..]),
+        "times-bolditalic" => Some(&include_bytes!("../../../fonts/n021024l.pfb")[..]),
+        "times-italic" => Some(&include_bytes!("../../../fonts/n021023l.pfb")[..]),
+        "times-roman" => Some(&include_bytes!("../../../fonts/n021003l.pfb")[..]),
+        "zapfdingbats" => Some(&include_bytes!("../../../fonts/d050000l.pfb")[..]),
+        _ => None,
+    }
 }
 
 struct FontCache<'c> {
@@ -1374,7 +1368,7 @@ impl<'c> FontCache<'c> {
     /// by TrueType fonts scanned from current OS. Because Type1 fonts are not
     /// supported by swash, and the only crate support Type1 fonts is `font`, which
     /// I am not familiar with.
-    fn load_type1_font<'a, 'b>(font: FontDict<'a, 'b>) -> AnyResult<Box<dyn Font + 'c>>
+    fn load_type1_font<'a, 'b>(font: FontDict<'a, 'b>) -> AnyResult<Type1Font<'a, 'b>>
     where
         'a: 'c,
         'b: 'c,
@@ -1382,24 +1376,19 @@ impl<'c> FontCache<'c> {
         let f = font.type1()?;
         let font_name = f.base_font()?;
         let font_name = font_name.to_lowercase();
-        match replace_standard_14_type1_font_with_true_type(font_name.as_str()) {
-            Some(query) => {
-                let bytes = Self::load_true_type_from_os(&query)?;
-                let r = Self::load_true_type_font_from_bytes(font, bytes)?;
-                Ok(Box::new(r))
-            }
+        let bytes = match standard_14_type1_font_data(font_name.as_str()) {
+            Some(data) => data.to_owned(),
             None => {
                 let desc = f.font_descriptor()?.unwrap();
-                let bytes = Self::load_embed_font_bytes(
+                Self::load_embed_font_bytes(
                     desc.resolver(),
                     desc.font_file()? // maybe font_file3 if use CFF(Compact Font Format)
                         .or_else(|| desc.font_file3().unwrap())
                         .unwrap(),
-                )?;
-                let r = Type1Font::new(bytes, font)?;
-                Ok(Box::new(r))
+                )?
             }
-        }
+        };
+        Type1Font::new(bytes, font)
     }
 
     fn scan_font<'a, 'b>(font: FontDict<'a, 'b>) -> AnyResult<Option<Box<dyn Font + 'c>>>
@@ -1430,7 +1419,9 @@ impl<'c> FontCache<'c> {
                 Ok(descentdant_font.font_descriptor()?.unwrap())
             })?))),
 
-            FontType::Type1 => Self::load_type1_font(font).map(Some),
+            FontType::Type1 => {
+                Self::load_type1_font(font).map(|v| Some(Box::new(v) as Box<dyn Font + 'c>))
+            }
             _ => {
                 error!("Unsupported font type: {:?}", font.subtype()?);
                 return Ok(None);
