@@ -1,3 +1,5 @@
+use std::{collections::HashMap, convert::AsRef};
+
 use bitflags::bitflags;
 use pdf2docx_macro::{pdf_object, TryFromIntObjectForBitflags, TryFromNameObject};
 
@@ -233,3 +235,60 @@ bitflags! {
         const FORCE_BOLD = 1 << 18;
     }
 }
+
+/// Map to pdf Encoding object Differences field. Override character code
+/// to glyph names from BaseEncoding.
+pub struct EncodingDifferences(HashMap<u32, String>);
+
+impl EncodingDifferences {
+    pub fn replace(&self, ch: u32) -> Option<&str> {
+        self.0.get(&ch).map(|s| s.as_str())
+    }
+}
+
+/// Parse Differences field in Encoding object, which is an array of
+/// character code and one or several glyph names. First name is mapped
+/// to character code, second name is mapped to character code + 1, and so on.
+impl<'a, 'b> TryFrom<&'b Object<'a>> for EncodingDifferences {
+    type Error = ObjectValueError;
+
+    fn try_from(obj: &'b Object<'a>) -> Result<Self, Self::Error> {
+        let mut map = HashMap::new();
+        let Object::Array(arr) = obj else {
+            return Err(Self::Error::UnexpectedType);
+        };
+
+        let mut iter = arr.iter();
+        let Some(o) = iter.next() else {
+            return Ok(EncodingDifferences(map));
+        };
+
+        let mut code = o.as_int()?;
+        while let Some(o) = iter.next() {
+            match o {
+                Object::Name(name) => {
+                    map.insert(code as u32, name.as_ref().to_owned());
+                    code += 1;
+                }
+                Object::Integer(num) => {
+                    code = *num;
+                }
+                _ => return Err(Self::Error::UnexpectedType),
+            };
+        }
+        Ok(EncodingDifferences(map))
+    }
+}
+
+/// Encoding object for Non Type0 and Type3 fonts
+#[pdf_object(Some("Encoding"))]
+pub trait EncodingDictTrait {
+    #[typ("Name")]
+    fn base_encoding(&self) -> Option<&str>;
+
+    #[try_from]
+    fn differences(&self) -> Option<EncodingDifferences>;
+}
+
+#[cfg(test)]
+mod tests;
