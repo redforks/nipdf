@@ -946,8 +946,9 @@ impl<'a> From<bool> for Object<'a> {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone)]
-pub struct LiteralString<'a>(&'a [u8], OnceCell<Cow<'a, str>>);
+#[derive(Clone, Educe, Eq, PartialEq)]
+#[educe(Debug)]
+pub struct LiteralString<'a>(&'a [u8], #[educe(Debug(ignore))] OnceCell<Cow<'a, str>>);
 
 impl<'a> From<&'a [u8]> for LiteralString<'a> {
     fn from(s: &'a [u8]) -> Self {
