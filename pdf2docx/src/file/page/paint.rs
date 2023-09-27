@@ -27,6 +27,7 @@ use itertools::Either;
 use log::{debug, error, info, warn};
 use nom::{combinator::eof, sequence::terminated};
 use once_cell::sync::Lazy;
+use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
 use swash::{
     scale::ScaleContext,
     zeno::{Command as PathCommand, PathData},
@@ -1055,6 +1056,70 @@ impl FirstLastFontWidth {
 
 struct PathSink<'a>(pub &'a mut PathBuilder);
 
+struct FreeTypePathSink<'a> {
+    path: &'a mut PathBuilder,
+    scale: f32,
+}
+
+impl<'a> FreeTypePathSink<'a> {
+    fn new(path: &'a mut PathBuilder, font_size: f32) -> Self {
+        Self {
+            path,
+            scale: font_size / 1000.0,
+        }
+    }
+}
+
+impl<'a> font_kit::outline::OutlineSink for FreeTypePathSink<'a> {
+    fn move_to(&mut self, to: Vector2F) {
+        self.path.move_to(to.x() * self.scale, to.y() * self.scale);
+    }
+
+    fn line_to(&mut self, to: Vector2F) {
+        self.path.line_to(to.x() * self.scale, to.y() * self.scale);
+    }
+
+    fn quadratic_curve_to(&mut self, ctrl: Vector2F, to: Vector2F) {
+        self.path.quad_to(
+            ctrl.x() * self.scale,
+            ctrl.y() * self.scale,
+            to.x() * self.scale,
+            to.y() * self.scale,
+        );
+    }
+
+    fn cubic_curve_to(&mut self, ctrl: LineSegment2F, to: Vector2F) {
+        self.path.cubic_to(
+            ctrl.from().x() * self.scale,
+            ctrl.from().y() * self.scale,
+            ctrl.to().x() * self.scale,
+            ctrl.to().y() * self.scale,
+            to.x() * self.scale,
+            to.y() * self.scale,
+        );
+    }
+
+    fn close(&mut self) {
+        self.path.close();
+    }
+}
+
+struct Type1GlyphRender<'a> {
+    font: &'a FontKitFont,
+    font_size: f32,
+}
+
+impl<'a> GlyphRender for Type1GlyphRender<'a> {
+    fn render(&mut self, gid: u16, sink: &mut PathSink) -> AnyResult<()> {
+        let mut sink = FreeTypePathSink::new(sink.0, self.font_size);
+        Ok(self.font.outline(
+            gid as u32,
+            font_kit::hinting::HintingOptions::None,
+            &mut sink,
+        )?)
+    }
+}
+
 impl PathSink<'_> {
     pub fn move_to(&mut self, x: f32, y: f32) {
         self.0.move_to(x, y);
@@ -1079,6 +1144,11 @@ impl PathSink<'_> {
 
 trait GlyphRender {
     fn render(&mut self, gid: u16, sink: &mut PathSink) -> AnyResult<()>;
+}
+
+struct FreeTypeGlyphRender<'a> {
+    font: &'a FontKitFont,
+    font_size: f32,
 }
 
 struct TrueTypeGlyphRender<'a> {
@@ -1133,7 +1203,8 @@ struct Type1FontOp<'a> {
 
 impl<'a> Type1FontOp<'a> {
     fn new(font_dict: Type1FontDict, font: &'a FontKitFont) -> AnyResult<Self> {
-        todo!()
+        let font_width = FirstLastFontWidth::from_type1_type(&font_dict)?.unwrap();
+        Ok(Self { font_width, font })
     }
 }
 
@@ -1143,9 +1214,10 @@ impl<'a> FontOp for Type1FontOp<'a> {
     }
 
     fn char_to_gid(&self, ch: u32) -> u16 {
-        self.font
-            .glyph_for_char(char::from_u32(ch).unwrap())
-            .unwrap() as u16
+        match self.font.glyph_for_char(char::from_u32(ch).unwrap()) {
+            Some(r) => r as u16,
+            None => ch as u16, // TODO: decoding by font dictionary encoding before call char_to_gid()
+        }
     }
 
     fn glyph_width(&self, gid: u32) -> u32 {
@@ -1179,11 +1251,10 @@ impl<'a, 'b> Font for Type1Font<'a, 'b> {
     }
 
     fn create_glyph_render(&self, font_size: f32) -> AnyResult<Box<dyn GlyphRender + '_>> {
-        todo!()
-        // Ok(Box::new(Type1GlyphRender {
-        //     font: &self.font,
-        //     font_size,
-        // }))
+        Ok(Box::new(Type1GlyphRender {
+            font: &self.font,
+            font_size,
+        }))
     }
 }
 
