@@ -41,6 +41,7 @@ pretty = { version = "0.12.1", optional = true }
 bitflags = "2.4.0"
 swash = "0.1.8"
 fontdb = "0.14.1"
+font-kit = { version = "0.11.0", features = ["loader-freetype"] }
 
 [features]
 clr = ["env_logger", "clap", "pretty"]

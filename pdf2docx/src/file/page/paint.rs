@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    file::XObjectDict,
+    file::{ObjectResolver, XObjectDict},
     function::{Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
         parse_operations, AxialExtend, AxialShadingDict, Color, ColorOrName, ColorSpace,
@@ -12,14 +12,15 @@ use crate::{
         Point, RenderingIntent, ShadingPatternDict, ShadingType, TextRenderingMode,
         TilingPaintType, TilingPatternDict, TransformMatrix,
     },
-    object::{Array, FilterDecodedData, Object, PdfObject, TextStringOrNumber},
+    object::{Array, FilterDecodedData, Object, PdfObject, Stream, TextStringOrNumber},
     text::{
         CIDFontType, CIDFontWidths, FontDescriptorDict, FontDict, FontType, TrueTypeFontDict,
         Type0FontDict, Type1FontDict,
     },
 };
-use anyhow::{anyhow, bail, Result as AnyResult};
+use anyhow::{anyhow, bail, Ok, Result as AnyResult};
 use educe::Educe;
+use font_kit::loaders::freetype::Font as FontKitFont;
 use fontdb::{Database, Family, Query, Source, Style, Weight};
 use image::RgbaImage;
 use itertools::Either;
@@ -1125,12 +1126,83 @@ trait Font {
     fn create_glyph_render(&self, font_size: f32) -> AnyResult<Box<dyn GlyphRender + '_>>;
 }
 
+struct Type1FontOp<'a> {
+    font_width: FirstLastFontWidth,
+    font: &'a FontKitFont,
+}
+
+impl<'a> Type1FontOp<'a> {
+    fn new(font_dict: Type1FontDict, font: &'a FontKitFont) -> AnyResult<Self> {
+        todo!()
+    }
+}
+
+impl<'a> FontOp for Type1FontOp<'a> {
+    fn decode_chars<'b>(&'b self, text: &'b [u8]) -> Vec<u32> {
+        text.iter().map(|v| *v as u32).collect()
+    }
+
+    fn char_to_gid(&self, ch: u32) -> u16 {
+        self.font
+            .glyph_for_char(char::from_u32(ch).unwrap())
+            .unwrap() as u16
+    }
+
+    fn glyph_width(&self, gid: u32) -> u32 {
+        self.font_width.char_width(gid as u32)
+    }
+}
+
+/// Font implementation using freetype/(font-kit), to handle Type1 fonts
+struct Type1Font<'a, 'b> {
+    font: FontKitFont,
+    font_dict: FontDict<'a, 'b>,
+}
+
+impl<'a, 'b> Type1Font<'a, 'b> {
+    fn new(data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> AnyResult<Self> {
+        let font = FontKitFont::from_bytes(data.into(), 0)?;
+        Ok(Self { font, font_dict })
+    }
+}
+
+impl<'a, 'b> Font for Type1Font<'a, 'b> {
+    fn font_type(&self) -> FontType {
+        FontType::Type1
+    }
+
+    fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
+        Ok(Box::new(Type1FontOp::new(
+            self.font_dict.type1()?,
+            &self.font,
+        )?))
+    }
+
+    fn create_glyph_render(&self, font_size: f32) -> AnyResult<Box<dyn GlyphRender + '_>> {
+        todo!()
+        // Ok(Box::new(Type1GlyphRender {
+        //     font: &self.font,
+        //     font_size,
+        // }))
+    }
+}
+
 struct SwashFont<'a, 'b> {
     typ: FontType,
     data: Vec<u8>,
     offset: u32,
     key: CacheKey,
     font_dict: FontDict<'a, 'b>,
+}
+
+impl SwashFont<'_, '_> {
+    fn as_ref(&self) -> FontRef {
+        FontRef {
+            data: &self.data[..],
+            offset: self.offset,
+            key: self.key,
+        }
+    }
 }
 
 impl<'a, 'b> Font for SwashFont<'a, 'b> {
@@ -1140,9 +1212,9 @@ impl<'a, 'b> Font for SwashFont<'a, 'b> {
 
     fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
         Ok(match self.font_type() {
-            FontType::TrueType => Box::new(TrueTypeFontOp::new(&self.font_dict, self.as_ref())?),
+            FontType::Type1 => Box::new(TrueTypeFontOp::new(&self.font_dict, self.as_ref())?),
             FontType::Type0 => Box::new(Type0FontOp::new(&self.font_dict.type0()?)?),
-            _ => todo!(),
+            _ => unreachable!("SwashFont not support font type: {:?}", self.font_type()),
         })
     }
 
@@ -1159,16 +1231,6 @@ impl<'a, 'b> Font for SwashFont<'a, 'b> {
             }
             _ => todo!(),
         })
-    }
-}
-
-impl SwashFont<'_, '_> {
-    fn as_ref(&self) -> FontRef {
-        FontRef {
-            data: &self.data[..],
-            offset: self.offset,
-            key: self.key,
-        }
     }
 }
 
@@ -1236,12 +1298,22 @@ struct FontCache<'c> {
 }
 
 impl<'c> FontCache<'c> {
-    fn load_true_type_font_from_bytes(bytes: Vec<u8>) -> AnyResult<(Vec<u8>, u32, CacheKey)> {
+    fn load_true_type_font_from_bytes<'a, 'b>(
+        font: FontDict<'a, 'b>,
+        bytes: Vec<u8>,
+    ) -> AnyResult<SwashFont<'a, 'b>> {
         let font_ref =
             FontRef::from_index(&bytes[..], 0).ok_or_else(|| anyhow!("Failed to load font"))?;
         let offset = font_ref.offset;
         let key = font_ref.key;
-        Ok((bytes, offset, key))
+
+        Ok(SwashFont {
+            typ: font.subtype()?,
+            data: bytes,
+            offset,
+            key,
+            font_dict: font,
+        })
     }
 
     fn load_true_type_from_os<'a>(q: impl Into<Query<'a>>) -> AnyResult<Vec<u8>> {
@@ -1261,15 +1333,24 @@ impl<'c> FontCache<'c> {
         }
     }
 
-    fn load_true_type_font(desc: &FontDescriptorDict) -> AnyResult<(Vec<u8>, u32, CacheKey)> {
+    fn load_embed_font_bytes<'a>(
+        resolver: &ObjectResolver<'a>,
+        s: &Stream<'a>,
+    ) -> AnyResult<Vec<u8>> {
+        let bytes = s.decode(resolver, false)?;
+        match bytes {
+            FilterDecodedData::Bytes(_) => Ok(bytes.to_owned()),
+            _ => panic!("Font not embedded"),
+        }
+    }
+
+    fn load_swash_font<'a, 'b>(
+        font: FontDict<'a, 'b>,
+        resolve_desc: fn(&FontDict<'a, 'b>) -> AnyResult<FontDescriptorDict<'a, 'b>>,
+    ) -> AnyResult<SwashFont<'a, 'b>> {
+        let desc = resolve_desc(&font)?;
         let bytes = match desc.font_file2()? {
-            Some(stream) => {
-                let bytes = stream.decode(desc.resolver(), false)?;
-                match bytes {
-                    FilterDecodedData::Bytes(_) => bytes.to_owned(),
-                    _ => todo!("Unsupported font file type"),
-                }
-            }
+            Some(stream) => Self::load_embed_font_bytes(desc.resolver(), stream)?,
             None => {
                 let font_name = desc.font_name()?;
                 warn!(
@@ -1286,20 +1367,39 @@ impl<'c> FontCache<'c> {
                 })?
             }
         };
-        Self::load_true_type_font_from_bytes(bytes)
+        Self::load_true_type_font_from_bytes(font, bytes)
     }
 
     /// Load Type1 font, only standard 14 fonts supported, these fonts are replaced
     /// by TrueType fonts scanned from current OS. Because Type1 fonts are not
     /// supported by swash, and the only crate support Type1 fonts is `font`, which
     /// I am not familiar with.
-    fn load_type1_font(font: &Type1FontDict) -> AnyResult<(Vec<u8>, u32, CacheKey)> {
-        let font_name = font.base_font()?;
+    fn load_type1_font<'a, 'b>(font: FontDict<'a, 'b>) -> AnyResult<Box<dyn Font + 'c>>
+    where
+        'a: 'c,
+        'b: 'c,
+    {
+        let f = font.type1()?;
+        let font_name = f.base_font()?;
         let font_name = font_name.to_lowercase();
-        let query = replace_standard_14_type1_font_with_true_type(font_name.as_str())
-            .expect("Only standard 14 fonts supported");
-        let bytes = Self::load_true_type_from_os(&query)?;
-        Self::load_true_type_font_from_bytes(bytes)
+        match replace_standard_14_type1_font_with_true_type(font_name.as_str()) {
+            Some(query) => {
+                let bytes = Self::load_true_type_from_os(&query)?;
+                let r = Self::load_true_type_font_from_bytes(font, bytes)?;
+                Ok(Box::new(r))
+            }
+            None => {
+                let desc = f.font_descriptor()?.unwrap();
+                let bytes = Self::load_embed_font_bytes(
+                    desc.resolver(),
+                    desc.font_file()? // maybe font_file3 if use CFF(Compact Font Format)
+                        .or_else(|| desc.font_file3().unwrap())
+                        .unwrap(),
+                )?;
+                let r = Type1Font::new(bytes, font)?;
+                Ok(Box::new(r))
+            }
+        }
     }
 
     fn scan_font<'a, 'b>(font: FontDict<'a, 'b>) -> AnyResult<Option<Box<dyn Font + 'c>>>
@@ -1307,14 +1407,14 @@ impl<'c> FontCache<'c> {
         'a: 'c,
         'b: 'c,
     {
-        let (data, offset, key) = match font.subtype()? {
-            FontType::TrueType => {
-                let true_type_font = font.truetype()?;
-                let desc = true_type_font.font_descriptor()?.unwrap();
-                Self::load_true_type_font(&desc)?
-            }
-            FontType::Type0 => {
-                let type0_font = font.type0()?;
+        match font.subtype()? {
+            FontType::TrueType => Ok(Some(Box::new(Self::load_swash_font(font, |f| {
+                let tt = f.truetype()?;
+                Ok(tt.font_descriptor()?.unwrap())
+            })?))),
+
+            FontType::Type0 => Ok(Some(Box::new(Self::load_swash_font(font, |f| {
+                let type0_font = f.type0()?;
                 let descentdant_fonts = type0_font.descendant_fonts()?;
                 assert_eq!(
                     descentdant_fonts.len(),
@@ -1327,26 +1427,15 @@ impl<'c> FontCache<'c> {
                     CIDFontType::CIDFontType2,
                     "Only CIDFontType2 supported"
                 );
-                let desc = descentdant_font.font_descriptor()?.unwrap();
-                Self::load_true_type_font(&desc)?
-            }
-            FontType::Type1 => {
-                let type1_font = font.type1()?;
-                Self::load_type1_font(&type1_font)?
-            }
+                Ok(descentdant_font.font_descriptor()?.unwrap())
+            })?))),
+
+            FontType::Type1 => Self::load_type1_font(font).map(Some),
             _ => {
                 error!("Unsupported font type: {:?}", font.subtype()?);
                 return Ok(None);
             }
-        };
-
-        Ok(Some(Box::new(SwashFont {
-            typ: font.subtype()?,
-            data,
-            offset,
-            key,
-            font_dict: font,
-        })))
+        }
     }
 
     fn new<'a, 'b>(resource: &'c ResourceDict<'a, 'b>) -> anyhow::Result<Self>
