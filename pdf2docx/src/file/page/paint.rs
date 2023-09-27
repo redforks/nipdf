@@ -1626,6 +1626,7 @@ impl<'a> FontOp for TrueTypeFontOp<'a> {
 #[educe(Debug)]
 struct TextObject {
     matrix: TransformMatrix,
+    line_matrix: TransformMatrix,
     font_size: f32,
     font_name: Option<String>,
 
@@ -1642,6 +1643,7 @@ impl TextObject {
     pub fn new() -> Self {
         Self {
             matrix: TransformMatrix::identity(),
+            line_matrix: TransformMatrix::identity(),
             font_size: 0.0,
             font_name: None,
 
@@ -1657,6 +1659,7 @@ impl TextObject {
 
     fn reset(&mut self) {
         self.matrix = TransformMatrix::identity();
+        self.line_matrix = TransformMatrix::identity();
     }
 
     fn set_font(&mut self, name: &NameOfDict, size: f32) {
@@ -1665,12 +1668,15 @@ impl TextObject {
     }
 
     fn move_text_position(&mut self, p: Point) {
-        let matrix: Transform = self.matrix.into();
-        self.matrix = matrix.pre_translate(p.x, p.y).into();
+        let matrix: Transform = self.line_matrix.into();
+        let matrix = matrix.pre_translate(p.x, p.y).into();
+        self.matrix = matrix;
+        self.line_matrix = matrix;
     }
 
     fn set_text_matrix(&mut self, m: TransformMatrix) {
         self.matrix = m;
+        self.line_matrix = m;
     }
 
     fn move_right(&mut self, n: f32) {
