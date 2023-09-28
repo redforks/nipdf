@@ -1233,7 +1233,7 @@ impl<'a> FontOp for Type1FontOp<'a> {
     /// Use font.glyph_for_char() if encoding is None or encoding.replace() returns None
     fn char_to_gid(&self, ch: u32) -> u16 {
         if let Some(encoding) = &self.encoding {
-            if let Some(gid_name) = encoding.replace(ch) {
+            if let Some(gid_name) = encoding.replace(ch as u8) {
                 return self.font.glyph_by_name(gid_name).unwrap() as u16;
             }
         }

@@ -238,10 +238,10 @@ bitflags! {
 
 /// Map to pdf Encoding object Differences field. Override character code
 /// to glyph names from BaseEncoding.
-pub struct EncodingDifferences(HashMap<u32, String>);
+pub struct EncodingDifferences(HashMap<u8, String>);
 
 impl EncodingDifferences {
-    pub fn replace(&self, ch: u32) -> Option<&str> {
+    pub fn replace(&self, ch: u8) -> Option<&str> {
         self.0.get(&ch).map(|s| s.as_str())
     }
 }
@@ -267,7 +267,7 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for EncodingDifferences {
         while let Some(o) = iter.next() {
             match o {
                 Object::Name(name) => {
-                    map.insert(code as u32, name.as_ref().to_owned());
+                    map.insert(code as u8, name.as_ref().to_owned());
                     code += 1;
                 }
                 Object::Integer(num) => {
