@@ -775,6 +775,8 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
     }
 
     fn show_text(&mut self, text: &[u8]) {
+        debug!("show text: {:?}", text);
+
         let text_object = self.text_object();
         let font = self
             .font_cache
@@ -1237,6 +1239,8 @@ impl<'a> FontOp for Type1FontOp<'a> {
         }
         self.font
             .glyph_for_char(char::from_u32(ch).unwrap())
+            .or_else(|| self.font.glyph_by_name(".notdef"))
+            .or_else(|| self.font.glyph_by_name("space"))
             .unwrap() as u16
     }
 
