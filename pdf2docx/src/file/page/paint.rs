@@ -553,6 +553,11 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 self.text_object_mut().move_text_position(*p);
             }
             Operation::SetTextMatrix(m) => self.text_object_mut().set_text_matrix(*m),
+            Operation::MoveToStartOfNextLine => {
+                let leading = self.stack.last().unwrap().text_object.leading;
+                self.text_object_mut()
+                    .move_text_position(Point::new(0.0, -leading));
+            }
 
             // Text Showing Operations
             Operation::ShowText(text) => self.show_text(text.as_bytes()),
