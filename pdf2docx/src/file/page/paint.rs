@@ -14,8 +14,8 @@ use crate::{
     },
     object::{Array, FilterDecodedData, Object, PdfObject, Stream, TextStringOrNumber},
     text::{
-        CIDFontType, CIDFontWidths, EncodingDict, EncodingDifferences, FontDescriptorDict,
-        FontDict, FontType, TrueTypeFontDict, Type0FontDict, Type1FontDict,
+        CIDFontType, CIDFontWidths, Encoding, EncodingDict, EncodingDifferences,
+        FontDescriptorDict, FontDict, FontType, TrueTypeFontDict, Type0FontDict, Type1FontDict,
     },
 };
 use anyhow::{anyhow, bail, Ok, Result as AnyResult};
@@ -1205,7 +1205,7 @@ trait Font {
 struct Type1FontOp<'a> {
     font_width: FirstLastFontWidth,
     font: &'a FontKitFont,
-    encoding: Option<EncodingDifferences<'a>>,
+    encoding: Encoding<'a>,
 }
 
 impl<'c> Type1FontOp<'c> {
@@ -1215,11 +1215,18 @@ impl<'c> Type1FontOp<'c> {
     ) -> AnyResult<Self> {
         let font_width = FirstLastFontWidth::from_type1_type(&font_dict)?.unwrap();
         let encoding = font_dict.encoding()?;
-        let encoding = if let Some(NameOrDictByRef::Dict(d)) = encoding {
-            let encoding_dict = EncodingDict::new(None, d, font_dict.resolver())?;
-            encoding_dict.differences()?
-        } else {
-            None
+        let encoding = match encoding {
+            Some(NameOrDictByRef::Dict(d)) => {
+                let encoding_dict = EncodingDict::new(None, d, font_dict.resolver())?;
+                let r = Encoding::STANDARD;
+                if let Some(diff) = encoding_dict.differences()? {
+                    r.apply_differences(&diff)
+                } else {
+                    r
+                }
+            }
+            Some(NameOrDictByRef::Name(name)) => Encoding::predefined(name.as_ref()).unwrap(),
+            None => Encoding::STANDARD,
         };
         Ok(Self {
             font_width,
@@ -1236,16 +1243,14 @@ impl<'a> FontOp for Type1FontOp<'a> {
 
     /// Use font.glyph_for_char() if encoding is None or encoding.replace() returns None
     fn char_to_gid(&self, ch: u32) -> u16 {
-        if let Some(encoding) = &self.encoding {
-            if let Some(gid_name) = encoding.replace(ch as u8) {
-                return self.font.glyph_by_name(gid_name).unwrap() as u16;
-            }
+        if let Some(gid_name) = self.encoding.decode(ch as u8) {
+            self.font.glyph_by_name(gid_name).unwrap() as u16
+        } else {
+            self.font
+                .glyph_by_name(".notdef")
+                .or_else(|| self.font.glyph_by_name("space"))
+                .unwrap() as u16
         }
-        self.font
-            .glyph_for_char(char::from_u32(ch).unwrap())
-            .or_else(|| self.font.glyph_by_name(".notdef"))
-            .or_else(|| self.font.glyph_by_name("space"))
-            .unwrap() as u16
     }
 
     fn glyph_width(&self, gid: u32) -> u32 {
