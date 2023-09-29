@@ -1,5 +1,5 @@
 ---
-source: src/parser/object/tests.rs
+source: pdf2docx/src/parser/object/tests.rs
 expression: parse_dict(buf.as_ref()).unwrap()
 ---
 (
@@ -17,7 +17,6 @@ expression: parse_dict(buf.as_ref()).unwrap()
                         40,
                         41,
                     ],
-                    OnceCell(Uninit),
                 ),
             ),
         },
