@@ -17,7 +17,7 @@ fn try_from_object_encoding_differences() {
     ]);
     let res = EncodingDifferences::try_from(&obj).unwrap();
     assert_eq!(res.0.len(), 3);
-    assert_eq!(res.0.get(&1).unwrap(), "A");
-    assert_eq!(res.0.get(&3).unwrap(), "B");
-    assert_eq!(res.0.get(&4).unwrap(), "C");
+    assert_eq!(res.0.get(&1).unwrap(), &"A");
+    assert_eq!(res.0.get(&3).unwrap(), &"B");
+    assert_eq!(res.0.get(&4).unwrap(), &"C");
 }

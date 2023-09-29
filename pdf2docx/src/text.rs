@@ -238,18 +238,18 @@ bitflags! {
 
 /// Map to pdf Encoding object Differences field. Override character code
 /// to glyph names from BaseEncoding.
-pub struct EncodingDifferences(HashMap<u8, String>);
+pub struct EncodingDifferences<'a>(HashMap<u8, &'a str>);
 
-impl EncodingDifferences {
-    pub fn replace(&self, ch: u8) -> Option<&str> {
-        self.0.get(&ch).map(|s| s.as_str())
+impl<'a> EncodingDifferences<'a> {
+    pub fn replace(&self, ch: u8) -> Option<&'a str> {
+        self.0.get(&ch).map(|s| *s)
     }
 }
 
 /// Parse Differences field in Encoding object, which is an array of
 /// character code and one or several glyph names. First name is mapped
 /// to character code, second name is mapped to character code + 1, and so on.
-impl<'a, 'b> TryFrom<&'b Object<'a>> for EncodingDifferences {
+impl<'a, 'b> TryFrom<&'b Object<'a>> for EncodingDifferences<'b> {
     type Error = ObjectValueError;
 
     fn try_from(obj: &'b Object<'a>) -> Result<Self, Self::Error> {
@@ -267,7 +267,7 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for EncodingDifferences {
         while let Some(o) = iter.next() {
             match o {
                 Object::Name(name) => {
-                    map.insert(code as u8, name.as_ref().to_owned());
+                    map.insert(code as u8, name.as_ref());
                     code += 1;
                 }
                 Object::Integer(num) => {
@@ -287,8 +287,12 @@ pub trait EncodingDictTrait {
     fn base_encoding(&self) -> Option<&str>;
 
     #[try_from]
-    fn differences(&self) -> Option<EncodingDifferences>;
+    fn differences(&self) -> Option<EncodingDifferences<'b>>;
 }
+
+/// Encoding for Type1
+/// map char code (u8) to glyph name
+pub struct Encoding<'a>([&'a str; 256]);
 
 #[cfg(test)]
 mod tests;

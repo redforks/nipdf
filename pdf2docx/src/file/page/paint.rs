@@ -1205,15 +1205,19 @@ trait Font {
 struct Type1FontOp<'a> {
     font_width: FirstLastFontWidth,
     font: &'a FontKitFont,
-    encoding: Option<EncodingDifferences>,
+    encoding: Option<EncodingDifferences<'a>>,
 }
 
-impl<'a> Type1FontOp<'a> {
-    fn new(font_dict: Type1FontDict, font: &'a FontKitFont) -> AnyResult<Self> {
+impl<'c> Type1FontOp<'c> {
+    fn new<'a: 'c, 'b: 'c>(
+        font_dict: Type1FontDict<'a, 'b>,
+        font: &'c FontKitFont,
+    ) -> AnyResult<Self> {
         let font_width = FirstLastFontWidth::from_type1_type(&font_dict)?.unwrap();
         let encoding = font_dict.encoding()?;
         let encoding = if let Some(NameOrDictByRef::Dict(d)) = encoding {
-            EncodingDict::new(None, d, font_dict.resolver())?.differences()?
+            let encoding_dict = EncodingDict::new(None, d, font_dict.resolver())?;
+            encoding_dict.differences()?
         } else {
             None
         };
