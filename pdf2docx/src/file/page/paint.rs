@@ -345,6 +345,8 @@ pub struct RenderOption {
     zoom: f32,
     width: u32,
     height: u32,
+    /// If crop is specified, the output canvas will be cropped to the specified rectangle.
+    crop: Option<Rectangle>,
 }
 
 #[derive(Educe)]
@@ -367,6 +369,11 @@ impl RenderOptionBuilder {
         self
     }
 
+    pub fn crop(mut self, rect: Option<Rectangle>) -> Self {
+        self.0.crop = rect;
+        self
+    }
+
     pub fn build(self) -> RenderOption {
         self.0
     }
@@ -383,6 +390,7 @@ pub struct Render<'a, 'b, 'c> {
     #[educe(Debug(ignore))]
     font_cache: FontCache<'c>,
     resources: &'c ResourceDict<'a, 'b>,
+    crop: Option<Rectangle>,
 }
 
 impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
@@ -405,6 +413,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             path: Path::default(),
             font_cache: FontCache::new(resources).unwrap(),
             resources,
+            crop: option.crop,
         }
     }
 
@@ -421,7 +430,34 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
     }
 
     pub fn into(self) -> Pixmap {
-        self.canvas
+        let r = self.canvas;
+        // crop the canvas if crop is specified
+        if let Some(rect) = self.crop {
+            let state = self.stack.last().unwrap();
+            let zoom = state.ctm.zoom;
+            let mapper = MatrixMapper::new(
+                self.width as f32,
+                self.height as f32,
+                zoom,
+                TransformMatrix::identity(),
+            );
+            let transform = mapper.path_transform();
+            let mut canvas =
+                Pixmap::new((rect.width() * zoom) as u32, (rect.height() * zoom) as u32).unwrap();
+            let mut p = SkiaPoint::from_xy(rect.left_x, rect.upper_y);
+            transform.map_point(&mut p);
+            canvas.draw_pixmap(
+                -p.x as i32,
+                -p.y as i32,
+                r.as_ref(),
+                &PixmapPaint::default(),
+                Transform::identity(),
+                None,
+            );
+            canvas
+        } else {
+            r
+        }
     }
 
     fn text_object(&self) -> &TextObject {

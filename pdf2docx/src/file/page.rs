@@ -254,6 +254,7 @@ impl<'a, 'b> Page<'a, 'b> {
         let option = option
             .width(media_box.width() as u32)
             .height(media_box.height() as u32)
+            .crop(self.crop_box())
             .build();
         let content = self.content()?;
         let ops = content.operations();
