@@ -16,7 +16,7 @@ use tiny_skia::Transform;
 
 use crate::{
     file::Rectangle,
-    object::{Dictionary, Name, Object, ObjectValueError, Stream, TextStringOrNumber},
+    object::{Dictionary, Name, Object, ObjectValueError, Stream, TextString, TextStringOrNumber},
     parser::{parse_object, ws_prefixed, ws_terminated, ParseError, ParseResult},
 };
 use pdf2docx_macro::{OperationParser, TryFromIntObject, TryFromNameObject};
@@ -377,7 +377,7 @@ pub enum Operation<'a> {
 
     // Text Showing Operations
     #[op_tag("Tj")]
-    ShowText(String),
+    ShowText(TextString<'a>),
     #[op_tag("TJ")]
     ShowTexts(Vec<TextStringOrNumber<'a>>),
     #[op_tag("'")]
@@ -471,10 +471,27 @@ impl<'a, 'b, T: for<'c> ConvertFromObject<'a, 'c>> ConvertFromObject<'a, 'b> for
     }
 }
 
+impl<'a, 'b> ConvertFromObject<'a, 'b> for TextString<'a> {
+    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+        let o = objects.pop().unwrap();
+        match o {
+            Object::LiteralString(s) => Ok(TextString::Text(s)),
+            Object::HexString(s) => Ok(TextString::HexText(s)),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
+    }
+}
+
 impl<'a, 'b> ConvertFromObject<'a, 'b> for TextStringOrNumber<'a> {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
-        o.as_text_string_or_number()
+        match o {
+            Object::LiteralString(s) => Ok(TextStringOrNumber::TextString(TextString::Text(s))),
+            Object::HexString(s) => Ok(TextStringOrNumber::TextString(TextString::HexText(s))),
+            Object::Number(n) => Ok(TextStringOrNumber::Number(n)),
+            Object::Integer(v) => Ok(TextStringOrNumber::Number(v as f32)),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
     }
 }
 

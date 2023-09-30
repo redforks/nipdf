@@ -560,7 +560,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             }
 
             // Text Showing Operations
-            Operation::ShowText(text) => self.show_text(text.as_bytes()),
+            Operation::ShowText(text) => self.show_text(text.as_ref()),
             Operation::ShowTexts(texts) => self.show_texts(texts),
 
             // Color Operations
@@ -885,11 +885,10 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
     fn show_texts(&mut self, texts: &[TextStringOrNumber]) {
         for t in texts {
             match t {
-                TextStringOrNumber::Text(s) => self.show_text(s.decode_to_bytes().unwrap()),
+                TextStringOrNumber::TextString(s) => self.show_text(s.as_ref()),
                 TextStringOrNumber::Number(n) => {
                     self.text_object_mut().move_right(*n);
                 }
-                TextStringOrNumber::HexText(s) => self.show_text(s.decoded().unwrap()),
             }
         }
     }
@@ -1523,7 +1522,9 @@ impl<'c> FontCache<'c> {
         'b: 'c,
     {
         let f = font.type1()?;
-        let font_name = f.base_font()?;
+        let desc = f.font_descriptor()?;
+        let font_name = desc.map(|v| v.font_name()).transpose()?;
+        let font_name = font_name.or_else(|| f.base_font().ok()).unwrap();
         let font_name = font_name.to_lowercase();
         let bytes = match standard_14_type1_font_data(font_name.as_str()) {
             Some(data) => data.to_owned(),

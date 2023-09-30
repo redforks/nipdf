@@ -783,16 +783,6 @@ impl<'a> Object<'a> {
         }
     }
 
-    pub fn as_text_string_or_number(self) -> Result<TextStringOrNumber<'a>, ObjectValueError> {
-        match self {
-            Object::LiteralString(s) => Ok(TextStringOrNumber::Text(s)),
-            Object::HexString(s) => Ok(TextStringOrNumber::HexText(s)),
-            Object::Number(n) => Ok(TextStringOrNumber::Number(n)),
-            Object::Integer(v) => Ok(TextStringOrNumber::Number(v as f32)),
-            _ => Err(ObjectValueError::UnexpectedType),
-        }
-    }
-
     /// iter values of current object recursively, for array recursively iter item values,
     /// for Dictionary iter values (key are ignored), other object types return itself.
     pub fn iter_values(&self) -> Box<dyn Iterator<Item = &'_ Self> + '_> {
@@ -1066,10 +1056,24 @@ impl<'a> From<LiteralString<'a>> for Object<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum TextStringOrNumber<'a> {
+pub enum TextString<'a> {
     Text(LiteralString<'a>),
     // maybe CID font
     HexText(HexString<'a>),
+}
+
+impl<'a> AsRef<[u8]> for TextString<'a> {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            TextString::Text(s) => s.decode_to_bytes().unwrap(),
+            TextString::HexText(s) => s.decoded().unwrap(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TextStringOrNumber<'a> {
+    TextString(TextString<'a>),
     Number(f32),
 }
 
