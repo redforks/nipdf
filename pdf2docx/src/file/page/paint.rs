@@ -317,6 +317,8 @@ impl Path {
             let pb = std::mem::replace(&mut self.path, temp).left().unwrap();
             if let Some(p) = pb.finish() {
                 self.path = Either::Right(p);
+            } else {
+                debug!("empty or invalid path");
             }
         }
 
