@@ -1,6 +1,5 @@
 use std::{
     borrow::Cow, collections::HashMap, convert::AsRef, fs::File, io::Read, ops::RangeInclusive,
-    slice,
 };
 
 use crate::{
@@ -21,7 +20,7 @@ use crate::{
 use anyhow::{anyhow, bail, Ok, Result as AnyResult};
 use educe::Educe;
 use font_kit::loaders::freetype::Font as FontKitFont;
-use fontdb::{Database, Family, Query, Source, Style, Weight};
+use fontdb::{Database, Family, Query, Source, Weight};
 use image::RgbaImage;
 use itertools::Either;
 use log::{debug, error, info, warn};
