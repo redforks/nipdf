@@ -240,12 +240,6 @@ bitflags! {
 /// to glyph names from BaseEncoding.
 pub struct EncodingDifferences<'a>(HashMap<u8, &'a str>);
 
-impl<'a> EncodingDifferences<'a> {
-    pub fn replace(&self, ch: u8) -> Option<&'a str> {
-        self.0.get(&ch).copied()
-    }
-}
-
 /// Parse Differences field in Encoding object, which is an array of
 /// character code and one or several glyph names. First name is mapped
 /// to character code, second name is mapped to character code + 1, and so on.
