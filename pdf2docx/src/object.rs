@@ -948,7 +948,7 @@ impl<'a> From<bool> for Object<'a> {
 
 #[derive(Clone, Educe, Eq, PartialEq)]
 #[educe(Debug)]
-pub struct LiteralString<'a>(&'a [u8], #[educe(Debug(ignore))] OnceCell<Cow<'a, str>>);
+pub struct LiteralString<'a>(&'a [u8], #[educe(Debug(ignore))] OnceCell<Cow<'a, [u8]>>);
 
 impl<'a> From<&'a [u8]> for LiteralString<'a> {
     fn from(s: &'a [u8]) -> Self {
@@ -967,7 +967,7 @@ impl<'a> LiteralString<'a> {
         Self(s, OnceCell::new())
     }
 
-    pub fn decoded(&self) -> Result<&str, ObjectValueError> {
+    pub fn decode_to_bytes(&self) -> Result<&[u8], ObjectValueError> {
         fn skip_cur_new_line<I: Iterator<Item = u8>>(cur: u8, s: &mut Peekable<I>) -> bool {
             if cur == b'\r' {
                 s.next_if_eq(&b'\n');
@@ -992,7 +992,7 @@ impl<'a> LiteralString<'a> {
             }
         }
 
-        fn next_oct_char<I: Iterator<Item = u8>>(s: &mut Peekable<I>) -> Option<u8> {
+        fn next_oct_byte<I: Iterator<Item = u8>>(s: &mut Peekable<I>) -> Option<u8> {
             let mut result = 0;
             let mut hit = false;
             for _ in 0..3 {
@@ -1009,8 +1009,9 @@ impl<'a> LiteralString<'a> {
             .get_or_init(|| {
                 let s = self.0;
                 let s = &s[1..s.len() - 1];
-                let mut result = String::with_capacity(s.len());
+                let mut result: Vec<u8> = Vec::with_capacity(s.len());
                 let mut iter = s.iter().copied().peekable();
+
                 // TODO: use exist buf if no escape, or newline to normalize
                 while let Some(next) = iter.next() {
                     match next {
@@ -1018,30 +1019,30 @@ impl<'a> LiteralString<'a> {
                             if skip_next_line(&mut iter) {
                                 continue;
                             }
-                            if let Some(ch) = next_oct_char(&mut iter) {
-                                result.push(ch as char);
+                            if let Some(b) = next_oct_byte(&mut iter) {
+                                result.push(b);
                                 continue;
                             }
 
-                            if let Some(c) = iter.next() {
-                                match c {
-                                    b'r' => result.push('\r'),
-                                    b'n' => result.push('\n'),
-                                    b't' => result.push('\t'),
-                                    b'f' => result.push('\x0c'),
-                                    b'b' => result.push('\x08'),
-                                    b'(' => result.push('('),
-                                    b')' => result.push(')'),
-                                    _ => result.push(c as char),
+                            if let Some(b) = iter.next() {
+                                match b {
+                                    b'r' => result.push(b'\r'),
+                                    b'n' => result.push(b'\n'),
+                                    b't' => result.push(b'\t'),
+                                    b'f' => result.push(b'\x0c'),
+                                    b'b' => result.push(b'\x08'),
+                                    b'(' => result.push(b'('),
+                                    b')' => result.push(b')'),
+                                    _ => result.push(b),
                                 }
                             }
                         }
                         _ => {
                             // TODO: test escape new line
                             if skip_cur_new_line(next, &mut iter) {
-                                result.push('\n');
+                                result.push(b'\n');
                             } else {
-                                result.push(next as char);
+                                result.push(next);
                             }
                         }
                     }
@@ -1050,6 +1051,11 @@ impl<'a> LiteralString<'a> {
                 result.into()
             })
             .borrow())
+    }
+
+    pub fn decoded(&self) -> Result<&str, ObjectValueError> {
+        let bytes = self.decode_to_bytes()?;
+        Ok(from_utf8(bytes).unwrap())
     }
 }
 

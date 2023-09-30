@@ -883,7 +883,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
     fn show_texts(&mut self, texts: &[TextStringOrNumber]) {
         for t in texts {
             match t {
-                TextStringOrNumber::Text(s) => self.show_text(s.decoded().unwrap().as_bytes()),
+                TextStringOrNumber::Text(s) => self.show_text(s.decode_to_bytes().unwrap()),
                 TextStringOrNumber::Number(n) => {
                     self.text_object_mut().move_right(*n);
                 }
