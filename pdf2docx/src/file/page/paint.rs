@@ -1359,7 +1359,9 @@ impl<'a, 'b> Font for SwashFont<'a, 'b> {
 
     fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
         Ok(match self.font_type() {
-            FontType::Type1 => Box::new(TrueTypeFontOp::new(&self.font_dict, self.as_ref())?),
+            FontType::TrueType | FontType::Type1 => {
+                Box::new(TrueTypeFontOp::new(&self.font_dict, self.as_ref())?)
+            }
             FontType::Type0 => Box::new(Type0FontOp::new(&self.font_dict.type0()?)?),
             _ => unreachable!("SwashFont not support font type: {:?}", self.font_type()),
         })
