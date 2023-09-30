@@ -311,17 +311,19 @@ impl Path {
         self.path_builder().push_rect(r.into());
     }
 
-    /// Build path and clear the path builder
-    fn finish(&mut self) -> &SkiaPath {
+    /// Build path and clear the path builder, return None if path is empty
+    fn finish(&mut self) -> Option<&SkiaPath> {
         if let Either::Left(_) = self.path {
             let temp = Either::Left(PathBuilder::new());
-            let p = std::mem::replace(&mut self.path, temp);
-            self.path = p.left_and_then(|p| Either::Right(p.finish().unwrap()));
+            let pb = std::mem::replace(&mut self.path, temp).left().unwrap();
+            if let Some(p) = pb.finish() {
+                self.path = Either::Right(p);
+            }
         }
 
         match &self.path {
-            Either::Left(_) => unreachable!(),
-            Either::Right(p) => p,
+            Either::Left(_) => None,
+            Either::Right(p) => Some(p),
         }
     }
 
@@ -518,11 +520,15 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             // Clipping Path Operations
             Operation::ClipNonZero => {
                 let state = self.stack.last_mut().unwrap();
-                state.clip_non_zero(self.path.finish());
+                if let Some(p) = self.path.finish() {
+                    state.clip_non_zero(p);
+                }
             }
             Operation::ClipEvenOdd => {
                 let state = self.stack.last_mut().unwrap();
-                state.clip_even_odd(self.path.finish());
+                if let Some(p) = self.path.finish() {
+                    state.clip_even_odd(p);
+                }
             }
 
             // Text Object Operations
@@ -592,13 +598,10 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let paint = state.get_stroke_paint();
         let stroke = state.get_stroke();
         log::debug!("stroke: {:?} {:?}", paint, stroke);
-        self.canvas.stroke_path(
-            self.path.finish(),
-            &paint,
-            stroke,
-            state.path_transform(),
-            state.get_mask(),
-        );
+        if let Some(p) = self.path.finish() {
+            self.canvas
+                .stroke_path(p, &paint, stroke, state.path_transform(), state.get_mask());
+        }
         self.path.reset();
     }
 
@@ -618,13 +621,15 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
     fn _fill(&mut self, fill_rule: FillRule) {
         let state = self.stack.last().unwrap();
         let paint = state.get_fill_paint();
-        self.canvas.fill_path(
-            self.path.finish(),
-            &paint,
-            fill_rule,
-            state.path_transform(),
-            state.get_mask(),
-        );
+        if let Some(p) = self.path.finish() {
+            self.canvas.fill_path(
+                p,
+                &paint,
+                fill_rule,
+                state.path_transform(),
+                state.get_mask(),
+            );
+        }
         self.path.reset();
     }
 
