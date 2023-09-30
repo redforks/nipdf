@@ -175,13 +175,13 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         })
     };
 
-    if rt == &(parse_quote! { &str }) {
+    if rt == &(parse_quote! { &str }) || rt == &(parse_quote!(&'b str)) {
         if get_type().is_some_and(|s| s == "Name") {
             Some("required_name")
         } else {
             Some("required_str")
         }
-    } else if rt == &(parse_quote!(Option<&str>)) {
+    } else if rt == &(parse_quote!(Option<&str>)) || rt == &(parse_quote!(Option<&'b str>)) {
         if get_type().is_some_and(|s| s == "Name") {
             Some("opt_name")
         } else {

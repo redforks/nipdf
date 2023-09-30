@@ -169,7 +169,7 @@ pub trait CIDFontDictTrait {
 #[pdf_object("FontDescriptor")]
 pub trait FontDescriptorDictTrait {
     #[typ("Name")]
-    fn font_name(&self) -> &str;
+    fn font_name(&self) -> &'b str;
 
     fn font_family(&self) -> &str;
 
