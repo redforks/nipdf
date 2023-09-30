@@ -242,7 +242,7 @@ pub struct EncodingDifferences<'a>(HashMap<u8, &'a str>);
 
 impl<'a> EncodingDifferences<'a> {
     pub fn replace(&self, ch: u8) -> Option<&'a str> {
-        self.0.get(&ch).map(|s| *s)
+        self.0.get(&ch).copied()
     }
 }
 
@@ -264,7 +264,7 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for EncodingDifferences<'b> {
         };
 
         let mut code = o.as_int()?;
-        while let Some(o) = iter.next() {
+        for o in iter {
             match o {
                 Object::Name(name) => {
                     map.insert(code as u8, name.as_ref());

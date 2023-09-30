@@ -14,8 +14,8 @@ use crate::{
     },
     object::{Array, FilterDecodedData, Object, PdfObject, Stream, TextStringOrNumber},
     text::{
-        CIDFontType, CIDFontWidths, Encoding, EncodingDict, EncodingDifferences,
-        FontDescriptorDict, FontDict, FontType, TrueTypeFontDict, Type0FontDict, Type1FontDict,
+        CIDFontType, CIDFontWidths, Encoding, EncodingDict, FontDescriptorDict, FontDict, FontType,
+        TrueTypeFontDict, Type0FontDict, Type1FontDict,
     },
 };
 use anyhow::{anyhow, bail, Ok, Result as AnyResult};
@@ -1208,11 +1208,6 @@ trait GlyphRender {
     fn render(&mut self, gid: u16, sink: &mut PathSink) -> AnyResult<()>;
 }
 
-struct FreeTypeGlyphRender<'a> {
-    font: &'a FontKitFont,
-    font_size: f32,
-}
-
 struct TrueTypeGlyphRender<'a> {
     font_ref: FontRef<'a>,
     context: ScaleContext,
@@ -1310,7 +1305,7 @@ impl<'a> FontOp for Type1FontOp<'a> {
     }
 
     fn glyph_width(&self, gid: u32) -> u32 {
-        self.font_width.char_width(gid as u32)
+        self.font_width.char_width(gid)
     }
 }
 
@@ -1401,33 +1396,6 @@ static SYSTEM_FONTS: Lazy<Database> = Lazy::new(|| {
     db.load_system_fonts();
     db
 });
-
-struct FontQueryBuilder<'a> {
-    font_name: Family<'a>,
-    weight: Weight,
-    style: Style,
-}
-
-impl<'a> FontQueryBuilder<'a> {
-    fn new(font_name: &'a str, weight: Weight, style: Style) -> Self {
-        Self {
-            font_name: Family::Name(font_name),
-            weight,
-            style,
-        }
-    }
-}
-
-impl<'a, 'b> From<&'b FontQueryBuilder<'a>> for Query<'b> {
-    fn from(builder: &'b FontQueryBuilder<'a>) -> Self {
-        Query {
-            families: slice::from_ref(&builder.font_name),
-            weight: builder.weight,
-            style: builder.style,
-            ..Default::default()
-        }
-    }
-}
 
 fn standard_14_type1_font_data(font_name: &str) -> Option<&'static [u8]> {
     match font_name {
@@ -1588,7 +1556,7 @@ impl<'c> FontCache<'c> {
             }
             _ => {
                 error!("Unsupported font type: {:?}", font.subtype()?);
-                return Ok(None);
+                Ok(None)
             }
         }
     }
