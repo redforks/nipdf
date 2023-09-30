@@ -819,6 +819,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         debug!("show text: {:?}", text);
 
         let text_object = self.text_object();
+        let char_spacing = text_object.char_spacing;
         let font = self
             .font_cache
             .get_font(text_object.font_name.as_ref().unwrap())
@@ -873,6 +874,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             };
             debug!("trans: {:?}, height: {}", trans, ctm.height);
             Self::render_glyph(&mut self.canvas, state, path, render_mode, trans);
+            let width = width + char_spacing;
             transform = transform.pre_translate(width, 0.0);
         }
         drop(op);
