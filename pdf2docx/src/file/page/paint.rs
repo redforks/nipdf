@@ -798,6 +798,15 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                     state.get_mask(),
                 );
             }
+            TextRenderingMode::Stroke => {
+                canvas.stroke_path(
+                    &path,
+                    &state.get_stroke_paint(),
+                    state.get_stroke(),
+                    trans,
+                    state.get_mask(),
+                );
+            }
             TextRenderingMode::FillAndStroke => {
                 canvas.fill_path(
                     &path,
