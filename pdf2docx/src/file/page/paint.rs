@@ -803,6 +803,10 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 );
             }
             TextRenderingMode::Stroke => {
+                let paint = state.get_stroke_paint();
+                let stroke = state.get_stroke();
+                debug!("text stroke: {:?} {:?}", &paint, stroke);
+                debug!("text stroke path: {:?}", &path);
                 canvas.stroke_path(
                     &path,
                     &state.get_stroke_paint(),
@@ -870,19 +874,22 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             if !path.is_empty() {
                 let trans = {
                     let ctm_transform: Transform = ctm.ctm.into();
-                    let trans = ctm_transform.pre_concat(transform);
-                    Transform {
-                        sx: trans.sx * ctm.zoom,
-                        kx: trans.kx,
-                        ky: trans.ky,
-                        sy: trans.sy * -ctm.zoom,
-                        tx: trans.tx * ctm.zoom,
-                        ty: ctm.height - trans.ty * ctm.zoom,
-                    }
+                    ctm_transform.pre_concat(transform)
                 };
 
                 let path = path.finish().unwrap();
-                Self::render_glyph(&mut self.canvas, state, path, render_mode, trans);
+                // pre transform path to unit space, render_glyph() will zoom line_width,
+                // pdf line_width state is in user space, but skia line_width is in device space
+                // so we need to transform path to unit space, and zoom line_width in device space
+                let path = path.transform(trans).unwrap();
+
+                Self::render_glyph(
+                    &mut self.canvas,
+                    state,
+                    path,
+                    render_mode,
+                    ctm.flip_y(Transform::identity()),
+                );
             }
             transform = transform.pre_translate(width, 0.0);
         }
