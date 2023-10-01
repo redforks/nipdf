@@ -622,7 +622,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         self.stroke();
     }
 
-    fn _fill(&mut self, fill_rule: FillRule) {
+    fn _fill(&mut self, fill_rule: FillRule, reset_path: bool) {
         let state = self.stack.last().unwrap();
         let paint = state.get_fill_paint();
         if let Some(p) = self.path.finish() {
@@ -634,24 +634,26 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 state.get_mask(),
             );
         }
-        self.path.reset();
+        if reset_path {
+            self.path.reset();
+        }
     }
 
     fn fill_path_non_zero(&mut self) {
-        self._fill(FillRule::Winding);
+        self._fill(FillRule::Winding, true);
     }
 
     fn fill_path_even_odd(&mut self) {
-        self._fill(FillRule::EvenOdd);
+        self._fill(FillRule::EvenOdd, true);
     }
 
     fn fill_and_stroke_non_zero(&mut self) {
-        self.fill_path_non_zero();
+        self._fill(FillRule::Winding, false);
         self.stroke();
     }
 
     fn fill_and_stroke_even_odd(&mut self) {
-        self.fill_path_even_odd();
+        self._fill(FillRule::EvenOdd, false);
         self.stroke();
     }
 
