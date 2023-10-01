@@ -863,29 +863,27 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let mut transform: Transform = text_object.matrix.into();
         let render_mode = text_object.render_mode;
         for ch in op.decode_chars(text) {
-            let width = op.glyph_width(ch) as f32 / 1000.0 * font_size;
+            let width = op.glyph_width(ch) as f32 / 1000.0 * font_size + char_spacing;
 
             let gid = op.char_to_gid(ch);
             let path = Self::gen_glyph_path(glyph_render.as_mut(), gid);
-            if path.is_empty() {
-                transform = transform.pre_translate(width, 0.0);
-                continue;
-            }
+            if !path.is_empty() {
+                let trans = {
+                    let ctm_transform: Transform = ctm.ctm.into();
+                    let trans = ctm_transform.pre_concat(transform);
+                    Transform {
+                        sx: trans.sx * ctm.zoom,
+                        kx: trans.kx,
+                        ky: trans.ky,
+                        sy: trans.sy * -ctm.zoom,
+                        tx: trans.tx * ctm.zoom,
+                        ty: ctm.height - trans.ty * ctm.zoom,
+                    }
+                };
 
-            let path = path.finish().unwrap();
-            let ctm_transform: Transform = ctm.ctm.into();
-            let trans = transform;
-            let trans = ctm_transform.pre_concat(trans);
-            let trans = Transform {
-                sx: trans.sx * ctm.zoom,
-                kx: trans.kx,
-                ky: trans.ky,
-                sy: trans.sy * -ctm.zoom,
-                tx: trans.tx * ctm.zoom,
-                ty: ctm.height - trans.ty * ctm.zoom,
-            };
-            Self::render_glyph(&mut self.canvas, state, path, render_mode, trans);
-            let width = width + char_spacing;
+                let path = path.finish().unwrap();
+                Self::render_glyph(&mut self.canvas, state, path, render_mode, trans);
+            }
             transform = transform.pre_translate(width, 0.0);
         }
         drop(op);
