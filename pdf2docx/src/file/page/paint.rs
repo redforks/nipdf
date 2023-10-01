@@ -297,7 +297,7 @@ impl Path {
 
     pub fn curve_to_cur_point_as_control(&mut self, p2: Point, p3: Point) {
         let p1 = self.path_builder().last_point().unwrap();
-        self.curve_to(Point { x: p1.x, y: p2.y }, p2, p3);
+        self.curve_to(Point { x: p1.x, y: p1.y }, p2, p3);
     }
 
     pub fn curve_to_dest_point_as_control(&mut self, p1: Point, p3: Point) {
