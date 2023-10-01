@@ -34,7 +34,7 @@ jpeg2k = "0.6.6"
 lazy_static = "1.4.0"
 pdf2docx-macro = { path = "../pdf2docx-macro" }
 arrayvec = "0.7.4"
-tiny-skia = "0.11.1"
+tiny-skia = "0.11.2"
 educe = "0.4.22"
 lzw = "0.10.0"
 pretty = { version = "0.12.1", optional = true }
