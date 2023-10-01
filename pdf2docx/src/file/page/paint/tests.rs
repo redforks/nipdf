@@ -26,18 +26,40 @@ fn map_point_asserter(m: Transform) -> impl Fn((f32, f32), (f32, f32)) {
 
 #[test]
 fn path_transform() {
-    let m = MatrixMapper::new(100., 600.0, 1.0, TransformMatrix::identity());
+    let mut m = MatrixMapper::new(100., 600.0, 1.0, TransformMatrix::identity());
     let assert_mp = map_point_asserter(m.path_transform());
     assert_mp((10.0, 20.0), (10.0, 600.0 - 20.0));
     assert_mp((10.0, 1.0), (10.0, 599.0));
+    // ctm translate position
+    m.set_ctm(TransformMatrix {
+        sx: 1.0,
+        kx: 0.0,
+        ky: 0.0,
+        sy: 1.0,
+        tx: 100.0,
+        ty: 200.0,
+    });
+    let assert_mp = map_point_asserter(m.path_transform());
+    assert_mp((0.0, 0.0), (100.0, 600.0 - 200.0));
 
     // zoom 1.5
-    let m = MatrixMapper::new(100., 600.0 * 1.5, 1.5, TransformMatrix::identity());
+    let mut m = MatrixMapper::new(100., 600.0 * 1.5, 1.5, TransformMatrix::identity());
     let assert_mp = map_point_asserter(m.path_transform());
     assert_mp((10.0, 20.0), (15.0, 600.0 * 1.5 - 20.0 * 1.5));
     assert_mp((10.0, 1.0), (15.0, 600.0 * 1.5 - 1.0 * 1.5));
     assert_mp((10.0, 0.0), (15.0, 600.0 * 1.5));
     assert_mp((10.0, 600.0), (15.0, 0.0));
+    // ctm translate position
+    m.set_ctm(TransformMatrix {
+        sx: 1.0,
+        kx: 0.0,
+        ky: 0.0,
+        sy: 1.0,
+        tx: 100.0,
+        ty: 200.0,
+    });
+    let assert_mp = map_point_asserter(m.path_transform());
+    assert_mp((0.0, 0.0), (100.0 * 1.5, 600.0 * 1.5 - 200.0 * 1.5));
 }
 
 #[test_case(1.0, (54.24, 510.96))]

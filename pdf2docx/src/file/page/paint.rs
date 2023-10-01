@@ -196,7 +196,6 @@ impl State {
     }
 
     fn set_ctm(&mut self, ctm: TransformMatrix) {
-        log::debug!("set ctm: {:?}", ctm);
         self.ctm.set_ctm(ctm);
     }
 
@@ -279,39 +278,39 @@ impl Path {
         self.path.as_mut().left().unwrap()
     }
 
-    fn close_path(&mut self) {
+    pub fn close_path(&mut self) {
         self.path_builder().close();
     }
 
-    fn move_to(&mut self, p: Point) {
+    pub fn move_to(&mut self, p: Point) {
         self.path_builder().move_to(p.x, p.y);
     }
 
-    fn line_to(&mut self, p: Point) {
+    pub fn line_to(&mut self, p: Point) {
         self.path_builder().line_to(p.x, p.y);
     }
 
-    fn curve_to(&mut self, p1: Point, p2: Point, p3: Point) {
+    pub fn curve_to(&mut self, p1: Point, p2: Point, p3: Point) {
         self.path_builder()
             .cubic_to(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
     }
 
-    fn curve_to_cur_point_as_control(&mut self, p2: Point, p3: Point) {
+    pub fn curve_to_cur_point_as_control(&mut self, p2: Point, p3: Point) {
         let p1 = self.path_builder().last_point().unwrap();
         self.curve_to(Point { x: p1.x, y: p2.y }, p2, p3);
     }
 
-    fn curve_to_dest_point_as_control(&mut self, p1: Point, p3: Point) {
+    pub fn curve_to_dest_point_as_control(&mut self, p1: Point, p3: Point) {
         self.curve_to(p1, p3, p3);
     }
 
-    fn append_rect(&mut self, p: Point, w: f32, h: f32) {
+    pub fn append_rect(&mut self, p: Point, w: f32, h: f32) {
         let r = Rectangle::from_xywh(p.x, p.y, w, h);
         self.path_builder().push_rect(r.into());
     }
 
     /// Build path and clear the path builder, return None if path is empty
-    fn finish(&mut self) -> Option<&SkiaPath> {
+    pub fn finish(&mut self) -> Option<&SkiaPath> {
         if let Either::Left(_) = self.path {
             let temp = Either::Left(PathBuilder::new());
             let pb = std::mem::replace(&mut self.path, temp).left().unwrap();
@@ -328,13 +327,13 @@ impl Path {
         }
     }
 
-    fn reset(&mut self) {
+    pub fn reset(&mut self) {
         let temp = Either::Left(PathBuilder::new());
         let p = std::mem::replace(&mut self.path, temp);
         self.path = p.right_and_then(|p| Either::Left(p.clear()));
     }
 
-    fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.reset();
     }
 }
@@ -472,6 +471,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
     }
 
     pub(crate) fn exec(&mut self, op: &Operation<'_>) {
+        debug!("handle operation: {:?}", op);
         match op {
             // General Graphics State Operations
             Operation::SetLineWidth(width) => self.current_mut().set_line_width(*width),
@@ -595,13 +595,16 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
     }
 
     fn stroke(&mut self) {
-        let state = self.stack.last().unwrap();
-        let paint = state.get_stroke_paint();
-        let stroke = state.get_stroke();
-        log::debug!("stroke: {:?} {:?}", paint, stroke);
         if let Some(p) = self.path.finish() {
+            let state = self.stack.last().unwrap();
+            let paint = state.get_stroke_paint();
+            let stroke = state.get_stroke();
+            debug!("stroke: {:?} {:?}", &paint, stroke);
+            debug!("stroke: {:?}", p);
             self.canvas
                 .stroke_path(p, &paint, stroke, state.path_transform(), state.get_mask());
+        } else {
+            debug!("stroke: empty or invalid path");
         }
         self.path.reset();
     }
@@ -831,8 +834,6 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
     }
 
     fn show_text(&mut self, text: &[u8]) {
-        debug!("show text: {:?}", text);
-
         let text_object = self.text_object();
         let char_spacing = text_object.char_spacing;
         let font = self
@@ -863,7 +864,6 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let render_mode = text_object.render_mode;
         for ch in op.decode_chars(text) {
             let width = op.glyph_width(ch) as f32 / 1000.0 * font_size;
-            debug!("width: {width}");
 
             let gid = op.char_to_gid(ch);
             let path = Self::gen_glyph_path(glyph_render.as_mut(), gid);
@@ -874,11 +874,8 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
 
             let path = path.finish().unwrap();
             let ctm_transform: Transform = ctm.ctm.into();
-            debug!("ctm: {:?}", ctm_transform);
-            debug!("transform: {:?}", transform);
             let trans = transform;
             let trans = ctm_transform.pre_concat(trans);
-            debug!("trans: {:?}", trans);
             let trans = Transform {
                 sx: trans.sx * ctm.zoom,
                 kx: trans.kx,
@@ -887,7 +884,6 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 tx: trans.tx * ctm.zoom,
                 ty: ctm.height - trans.ty * ctm.zoom,
             };
-            debug!("trans: {:?}, height: {}", trans, ctm.height);
             Self::render_glyph(&mut self.canvas, state, path, render_mode, trans);
             let width = width + char_spacing;
             transform = transform.pre_translate(width, 0.0);
@@ -943,8 +939,8 @@ impl MatrixMapper {
     }
 
     fn flip_y(&self, t: Transform) -> Transform {
-        t.pre_scale(self.zoom, -self.zoom)
-            .pre_translate(0.0, -self.height / self.zoom)
+        t.post_translate(0.0, -self.height / self.zoom)
+            .post_scale(self.zoom, -self.zoom)
     }
 
     pub fn image_transform(&self, img_w: u32, img_h: u32) -> Transform {
