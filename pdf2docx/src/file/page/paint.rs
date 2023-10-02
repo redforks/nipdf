@@ -1,5 +1,6 @@
 use std::{
     borrow::Cow, collections::HashMap, convert::AsRef, fs::File, io::Read, ops::RangeInclusive,
+    time::Instant,
 };
 
 use crate::{
@@ -129,6 +130,11 @@ pub struct State {
     text_object: TextObject,
 }
 
+fn start_instance() -> &'static Instant {
+    static START_INSTANCE: Lazy<Instant> = Lazy::new(Instant::now);
+    &START_INSTANCE
+}
+
 impl State {
     /// height: height in user space coordinate
     fn new(option: &RenderOption) -> Self {
@@ -237,30 +243,50 @@ impl State {
         }
     }
 
-    fn update_mask(&mut self, path: &SkiaPath, rule: FillRule) {
+    fn update_mask(&mut self, path: &SkiaPath, rule: FillRule, flip_y: bool) {
         let mut mask = self.mask.take().unwrap_or_else(|| self.ctm.new_mask());
-        mask.intersect_path(path, rule, true, self.ctm.flip_y(Transform::identity()));
+        let log_id = start_instance().elapsed().as_nanos();
+        mask.save_png(format!("/tmp/{}-mask-before.png", log_id))
+            .unwrap();
+        debug!("update_mask {log_id}, path: {:?}", path);
+        let mut transform = Transform::identity();
+        if flip_y {
+            transform = self.ctm.flip_y(transform);
+        }
+        mask.intersect_path(path, rule, true, transform);
+        mask.save_png(format!("/tmp/{}-mask-after.png", log_id))
+            .unwrap();
         self.mask = Some(mask);
     }
 
     /// Apply current path to mask. Create mask if None, otherwise intersect with current path,
     /// using Winding fill rule.
-    fn clip_non_zero(&mut self, path: &SkiaPath) {
-        self.update_mask(path, FillRule::Winding);
+    fn clip_non_zero(&mut self, path: &SkiaPath, flip_y: bool) {
+        self.update_mask(path, FillRule::Winding, flip_y);
     }
 
     /// Apply current path to mask. Create mask if None, otherwise intersect with current path,
     /// using Even-Odd fill rule.
-    fn clip_even_odd(&mut self, path: &SkiaPath) {
-        self.update_mask(path, FillRule::EvenOdd);
+    fn clip_even_odd(&mut self, path: &SkiaPath, flip_y: bool) {
+        self.update_mask(path, FillRule::EvenOdd, flip_y);
     }
 
     fn set_text_knockout_flag(&mut self, knockout: bool) {
         self.text_object.knockout = knockout;
     }
+
+    pub fn end_text_object(&mut self) {
+        // if exists text clipping path, intersection to current clipping path using Winding fill rule
+        let p = self.text_object.text_clipping_path.finish();
+        if let Some(p) = p {
+            let p = p.to_owned();
+            self.clip_non_zero(&p, false);
+            self.text_object.text_clipping_path.reset();
+        }
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Path {
     path: Either<PathBuilder, SkiaPath>,
 }
@@ -522,34 +548,32 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             Operation::ClipNonZero => {
                 let state = self.stack.last_mut().unwrap();
                 if let Some(p) = self.path.finish() {
-                    state.clip_non_zero(p);
+                    state.clip_non_zero(p, true);
                 }
             }
             Operation::ClipEvenOdd => {
                 let state = self.stack.last_mut().unwrap();
                 if let Some(p) = self.path.finish() {
-                    state.clip_even_odd(p);
+                    state.clip_even_odd(p, true);
                 }
             }
 
             // Text Object Operations
-            Operation::BeginText => {
-                self.text_object_mut().reset();
-            }
-            Operation::EndText => {}
+            Operation::BeginText => self.text_object_mut().reset(),
+            Operation::EndText => self.end_text(),
 
             // Text State Operations
             Operation::SetCharacterSpacing(spacing) => {
-                self.text_object_mut().set_character_spacing(*spacing)
+                self.text_object_mut().set_character_spacing(*spacing);
             }
             Operation::SetWordSpacing(spacing) => self.text_object_mut().set_word_spacing(*spacing),
             Operation::SetHorizontalScaling(scale) => {
-                self.text_object_mut().set_horizontal_scaling(*scale)
+                self.text_object_mut().set_horizontal_scaling(*scale);
             }
             Operation::SetLeading(leading) => self.text_object_mut().set_leading(*leading),
             Operation::SetFont(name, size) => self.text_object_mut().set_font(name, *size),
             Operation::SetTextRenderingMode(mode) => {
-                self.text_object_mut().set_text_rendering_mode(*mode)
+                self.text_object_mut().set_text_rendering_mode(*mode);
             }
             Operation::SetTextRise(rise) => self.text_object_mut().set_text_rise(*rise),
 
@@ -695,8 +719,14 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let img = load_image(xobject);
         let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
         let transform = state.image_transform(img.width(), img.height());
-        self.canvas
-            .draw_pixmap(0, 0, img, &paint, transform, smask.as_ref());
+        self.canvas.draw_pixmap(
+            0,
+            0,
+            img,
+            &paint,
+            transform,
+            smask.as_ref().or_else(|| state.get_mask()),
+        );
     }
 
     fn set_fill_color_or_pattern(
@@ -789,6 +819,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
 
     fn render_glyph(
         canvas: &mut Pixmap,
+        text_clip_path: &mut Path,
         state: &State,
         path: SkiaPath,
         render_mode: TextRenderingMode,
@@ -833,6 +864,10 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                     state.get_mask(),
                 );
             }
+            TextRenderingMode::Clip => {
+                let path = path.transform(trans).unwrap();
+                text_clip_path.path_builder().push_path(&path);
+            }
             _ => {
                 todo!("Unsupported text rendering mode: {:?}", render_mode);
             }
@@ -855,7 +890,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let text = text;
         let state = self.stack.last().unwrap();
 
-        let text_object = self.text_object();
+        let text_object = &state.text_object;
         let font_size = text_object.font_size;
         let font = self
             .font_cache
@@ -864,10 +899,10 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let mut glyph_render = font.create_glyph_render(font_size).unwrap();
 
         let ctm = &state.ctm;
-        let text_object = self.text_object();
         let font_size = text_object.font_size;
         let mut transform: Transform = text_object.matrix.into();
         let render_mode = text_object.render_mode;
+        let mut text_clip_path = Path::default();
         for ch in op.decode_chars(text) {
             let width = op.glyph_width(ch) as f32 / 1000.0 * font_size + char_spacing;
 
@@ -887,6 +922,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
 
                 Self::render_glyph(
                     &mut self.canvas,
+                    &mut text_clip_path,
                     state,
                     path,
                     render_mode,
@@ -898,6 +934,12 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         drop(op);
         drop(glyph_render);
         self.text_object_mut().matrix = transform.into();
+        if let Some(text_clip_path) = text_clip_path.finish() {
+            self.text_object_mut()
+                .text_clipping_path
+                .path_builder()
+                .push_path(&text_clip_path);
+        }
     }
 
     fn show_texts(&mut self, texts: &[TextStringOrNumber]) {
@@ -909,6 +951,10 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 }
             }
         }
+    }
+
+    fn end_text(&mut self) {
+        self.current_mut().end_text_object();
     }
 }
 
@@ -1674,6 +1720,7 @@ struct TextObject {
     line_matrix: TransformMatrix,
     font_size: f32,
     font_name: Option<String>,
+    text_clipping_path: Path,
 
     char_spacing: f32,              // Tc
     word_spacing: f32,              // Tw
@@ -1691,6 +1738,7 @@ impl TextObject {
             line_matrix: TransformMatrix::identity(),
             font_size: 0.0,
             font_name: None,
+            text_clipping_path: Path::default(),
 
             char_spacing: 0.0,
             word_spacing: 0.0,
