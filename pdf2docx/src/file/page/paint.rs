@@ -989,7 +989,7 @@ impl MatrixMapper {
     }
 
     pub fn tile_transform(&self) -> Transform {
-        self.path_transform()
+        self.ctm_to_transform().pre_concat(self.flip_y())
     }
 
     fn flip_y(&self) -> Transform {
