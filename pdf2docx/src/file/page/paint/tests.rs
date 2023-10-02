@@ -31,7 +31,7 @@ fn path_transform() {
     assert_mp((10.0, 20.0), (10.0, 600.0 - 20.0));
     assert_mp((10.0, 1.0), (10.0, 599.0));
     // ctm translate position
-    m.set_ctm(TransformMatrix {
+    m.concat_ctm(TransformMatrix {
         sx: 1.0,
         kx: 0.0,
         ky: 0.0,
@@ -50,7 +50,7 @@ fn path_transform() {
     assert_mp((10.0, 0.0), (15.0, 600.0 * 1.5));
     assert_mp((10.0, 600.0), (15.0, 0.0));
     // ctm translate position
-    m.set_ctm(TransformMatrix {
+    m.concat_ctm(TransformMatrix {
         sx: 1.0,
         kx: 0.0,
         ky: 0.0,
@@ -62,9 +62,19 @@ fn path_transform() {
     assert_mp((0.0, 0.0), (100.0 * 1.5, 600.0 * 1.5 - 200.0 * 1.5));
 }
 
-#[test_case(1.0, (54.24, 510.96))]
-#[test_case(1.5, (81.36, 792.0*1.5 - 279.12*1.5 - 1.92*1.5))]
-fn image_transform(zoom: f32, exp: (f32, f32)) {
+#[test]
+fn image_to_unit_square() {
+    let assert_mp = map_point_asserter(MatrixMapper::image_to_unit_square(10, 20));
+    assert_mp((0.0, 0.0), (0.0, 1.0));
+    assert_mp((10.0, 20.0), (1.0, 0.0));
+    assert_mp((10.0, 0.0), (1.0, 1.0));
+    assert_mp((0.0, 20.0), (0.0, 0.0));
+}
+
+#[test_case(1.0, (0.0, 0.0), (54.24, 510.96))]
+#[test_case(1.0, (1300.0, 4.0), (522.36, 512.496))]
+#[test_case(1.5, (0.0, 0.0), (81.36, 792.0*1.5 - 279.12*1.5 - 1.92*1.5))]
+fn image_transform(zoom: f32, p: (f32, f32), exp: (f32, f32)) {
     let m = MatrixMapper::new(
         10.,
         792.0 * zoom,
@@ -79,7 +89,7 @@ fn image_transform(zoom: f32, exp: (f32, f32)) {
         },
     );
     let assert_mp = map_point_asserter(m.image_transform(1301, 5));
-    assert_mp((0.0, 0.0), exp);
+    assert_mp(p, exp);
 }
 
 #[test]

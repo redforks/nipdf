@@ -201,8 +201,8 @@ impl State {
         self.fill_paint = PaintCreator::Color(color.into());
     }
 
-    fn set_ctm(&mut self, ctm: TransformMatrix) {
-        self.ctm.set_ctm(ctm);
+    fn concat_ctm(&mut self, ctm: TransformMatrix) {
+        self.ctm.concat_ctm(ctm);
     }
 
     fn get_fill_paint(&self) -> Cow<'_, Paint<'_>> {
@@ -251,7 +251,7 @@ impl State {
         debug!("update_mask {log_id}, path: {:?}", path);
         let mut transform = Transform::identity();
         if flip_y {
-            transform = self.ctm.flip_y(transform);
+            transform = transform.post_concat(self.ctm.flip_y());
         }
         mask.intersect_path(path, rule, true, transform);
         mask.save_png(format!("/tmp/{}-mask-after.png", log_id))
@@ -518,7 +518,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             // Special Graphics State Operations
             Operation::SaveGraphicsState => self.push(),
             Operation::RestoreGraphicsState => self.pop(),
-            Operation::ModifyCTM(ctm) => self.current_mut().set_ctm(*ctm),
+            Operation::ModifyCTM(ctm) => self.current_mut().concat_ctm(*ctm),
 
             // Path Construction Operations
             Operation::MoveToNext(p) => self.path.move_to(*p),
@@ -909,10 +909,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             let gid = op.char_to_gid(ch);
             let path = Self::gen_glyph_path(glyph_render.as_mut(), gid);
             if !path.is_empty() {
-                let trans = {
-                    let ctm_transform: Transform = ctm.ctm.into();
-                    ctm_transform.pre_concat(transform)
-                };
+                let trans = transform.post_concat(ctm.ctm.into());
 
                 let path = path.finish().unwrap();
                 // pre transform path to unit space, render_glyph() will zoom line_width,
@@ -926,7 +923,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                     state,
                     path,
                     render_mode,
-                    ctm.flip_y(Transform::identity()),
+                    ctm.flip_y(),
                 );
             }
             transform = transform.pre_translate(width, 0.0);
@@ -979,32 +976,34 @@ impl MatrixMapper {
         }
     }
 
-    pub fn set_ctm(&mut self, ctm: TransformMatrix) {
-        self.ctm = ctm;
+    fn ctm_to_transform(&self) -> Transform {
+        self.ctm.into()
+    }
+
+    pub fn concat_ctm(&mut self, ctm: TransformMatrix) {
+        self.ctm = self.ctm_to_transform().post_concat(ctm.into()).into();
     }
 
     pub fn path_transform(&self) -> Transform {
-        self.flip_y(self.ctm.into())
+        self.ctm_to_transform().post_concat(self.flip_y())
     }
 
     pub fn tile_transform(&self) -> Transform {
-        self.flip_y(self.ctm.into())
+        self.path_transform()
     }
 
-    fn flip_y(&self, t: Transform) -> Transform {
-        t.post_translate(0.0, -self.height / self.zoom)
-            .post_scale(self.zoom, -self.zoom)
+    fn flip_y(&self) -> Transform {
+        Transform::from_scale(self.zoom, -self.zoom).post_translate(0.0, self.height)
+    }
+
+    fn image_to_unit_square(img_w: u32, img_h: u32) -> Transform {
+        Transform::from_scale(1.0 / img_w as f32, -1.0 / img_h as f32).post_translate(0.0, 1.0)
     }
 
     pub fn image_transform(&self, img_w: u32, img_h: u32) -> Transform {
-        Transform::from_row(
-            self.ctm.sx / img_w as f32 * self.zoom,
-            0.0,
-            0.0,
-            self.ctm.sy / img_h as f32 * self.zoom,
-            self.ctm.tx * self.zoom,
-            self.height - self.ctm.ty * self.zoom - self.ctm.sy * self.zoom,
-        )
+        Self::image_to_unit_square(img_w, img_h)
+            .post_concat(self.ctm.into())
+            .post_concat(self.flip_y())
     }
 
     pub fn new_mask(&self) -> Mask {
