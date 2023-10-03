@@ -1775,12 +1775,7 @@ impl TextObject {
         let matrix: Transform = self.matrix.into();
         let tx = -n * 0.001 * self.font_size;
         let ty = 0.0;
-        let dx = matrix.sx * tx + matrix.kx * ty;
-        let dy = matrix.ky * tx + matrix.sy * ty;
-        debug!("move_right: {} {} {} {} {}", n, tx, ty, dx, dy);
-        debug!("matrix: {:?}", matrix);
-        self.matrix = matrix.post_translate(dx, dy).into();
-        debug!("matrix after move right: {:?}", self.matrix);
+        self.matrix = matrix.pre_translate(tx, ty).into();
     }
 
     fn set_character_spacing(&mut self, spacing: f32) {
