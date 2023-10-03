@@ -898,6 +898,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
     fn show_text(&mut self, text: &[u8]) {
         let text_object = self.text_object();
         let char_spacing = text_object.char_spacing;
+        let word_spacing = text_object.word_spacing;
         let font = self
             .font_cache
             .get_font(text_object.font_name.as_ref().unwrap())
@@ -925,7 +926,9 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let render_mode = text_object.render_mode;
         let mut text_clip_path = Path::default();
         for ch in op.decode_chars(text) {
-            let width = op.glyph_width(ch) as f32 / 1000.0 * font_size + char_spacing;
+            let width = op.glyph_width(ch) as f32 / 1000.0 * font_size
+                + char_spacing
+                + if ch == 32 { word_spacing } else { 0.0 };
 
             let gid = op.char_to_gid(ch);
             let path = Self::gen_glyph_path(glyph_render.as_mut(), gid);
