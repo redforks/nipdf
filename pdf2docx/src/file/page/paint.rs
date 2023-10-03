@@ -974,20 +974,20 @@ impl MatrixMapper {
         }
     }
 
-    fn ctm_to_transform(&self) -> Transform {
+    fn ctm(&self) -> Transform {
         self.ctm.into()
     }
 
     pub fn concat_ctm(&mut self, ctm: TransformMatrix) {
-        self.ctm = self.ctm_to_transform().pre_concat(ctm.into()).into();
+        self.ctm = self.ctm().pre_concat(ctm.into()).into();
     }
 
     pub fn path_transform(&self) -> Transform {
-        self.ctm_to_transform().post_concat(self.flip_y())
+        self.ctm().post_concat(self.flip_y())
     }
 
     pub fn tile_transform(&self) -> Transform {
-        self.ctm_to_transform().pre_concat(self.flip_y())
+        self.ctm().pre_concat(self.flip_y())
     }
 
     fn flip_y(&self) -> Transform {
