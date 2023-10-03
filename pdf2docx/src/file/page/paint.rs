@@ -249,10 +249,11 @@ impl State {
         mask.save_png(format!("/tmp/{}-mask-before.png", log_id))
             .unwrap();
         debug!("update_mask {log_id}, path: {:?}", path);
-        let mut transform = Transform::identity();
-        if flip_y {
-            transform = transform.post_concat(self.ctm.flip_y());
-        }
+        let transform = if flip_y {
+            self.ctm.flip_y()
+        } else {
+            Transform::identity()
+        };
         mask.intersect_path(path, rule, true, transform);
         mask.save_png(format!("/tmp/{}-mask-after.png", log_id))
             .unwrap();
