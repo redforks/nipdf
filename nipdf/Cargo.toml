@@ -9,7 +9,7 @@ edition = "2021"
 hex = { version = "0.4.3" }
 thiserror = "1.0.40"
 once_cell = "1.17.2"
-itertools = "0.10.5"
+itertools = "0.11.0"
 nom = "7.1.3"
 num = "0.4.0"
 memchr = "2.5.0"
@@ -38,7 +38,7 @@ lzw = "0.10.0"
 pretty = { version = "0.12.1", optional = true }
 bitflags = "2.4.0"
 swash = "0.1.8"
-fontdb = "0.14.1"
+fontdb = "0.15.0"
 font-kit = { version = "0.11.0", features = ["loader-freetype"] }
 pathfinder_geometry = "0.5.1"
 
