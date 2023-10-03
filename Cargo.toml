@@ -1,5 +1,5 @@
 [workspace]
-members = ["nipdf", "nipdf-macro", "nipdf-dump"]
+members = ["nipdf", "nipdf-macro", "nipdf-dump", "nipdf-reader"]
 resolver = "2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
