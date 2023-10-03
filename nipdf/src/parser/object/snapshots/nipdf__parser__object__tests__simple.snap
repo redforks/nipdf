@@ -1,0 +1,13 @@
+---
+source: nipdf/src/parser/object/tests.rs
+expression: parse_reference(buf.as_ref()).unwrap()
+---
+(
+    [],
+    Reference(
+        ObjectId {
+            id: 1,
+            generation: 0,
+        },
+    ),
+)

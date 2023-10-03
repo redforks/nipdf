@@ -1,0 +1,19 @@
+---
+source: nipdf/src/parser/object/tests.rs
+expression: parse_dict(buf.as_ref()).unwrap()
+---
+(
+    [],
+    Dictionary(
+        {
+            Name(
+                [
+                    105,
+                    100,
+                ],
+            ): Array(
+                [],
+            ),
+        },
+    ),
+)

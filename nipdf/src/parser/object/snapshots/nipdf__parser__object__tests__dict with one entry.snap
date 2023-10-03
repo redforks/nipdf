@@ -1,0 +1,31 @@
+---
+source: nipdf/src/parser/object/tests.rs
+expression: parse_dict(buf.as_ref()).unwrap()
+---
+(
+    [],
+    Dictionary(
+        {
+            Name(
+                [
+                    84,
+                    121,
+                    112,
+                    101,
+                ],
+            ): Name(
+                Name(
+                    [
+                        67,
+                        97,
+                        116,
+                        97,
+                        108,
+                        111,
+                        103,
+                    ],
+                ),
+            ),
+        },
+    ),
+)

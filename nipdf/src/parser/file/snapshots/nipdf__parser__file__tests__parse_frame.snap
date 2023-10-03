@@ -1,0 +1,57 @@
+---
+source: nipdf/src/parser/file/tests.rs
+expression: "parse_frame(b\"xref\n1 2\n0000000000 00000 n\n0000000010 00000 n\ntrailer\n<< /Size 1 >>\nstartxref\n1234\n%%EOF\n\").unwrap()"
+---
+(
+    [
+        115,
+        116,
+        97,
+        114,
+        116,
+        120,
+        114,
+        101,
+        102,
+        10,
+        49,
+        50,
+        51,
+        52,
+        10,
+        37,
+        37,
+        69,
+        79,
+        70,
+        10,
+    ],
+    (
+        Dictionary(
+            {
+                Name(
+                    [
+                        83,
+                        105,
+                        122,
+                        101,
+                    ],
+                ): Integer(
+                    1,
+                ),
+            },
+        ),
+        {
+            1: Entry(
+                0,
+                0,
+                true,
+            ),
+            2: Entry(
+                10,
+                0,
+                true,
+            ),
+        },
+    ),
+)

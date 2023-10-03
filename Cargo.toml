@@ -1,5 +1,5 @@
 [workspace]
-members = ["pdf2docx", "pdf2docx-macro"]
+members = ["nipdf", "nipdf-macro"]
 resolver = "2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -11,7 +11,6 @@ opt-level = 3
 split-debuginfo = "unpacked"
 lto = true
 codegen-units=1
-
 
 [profile.dev]
 split-debuginfo = "unpacked"
