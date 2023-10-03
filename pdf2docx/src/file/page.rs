@@ -139,6 +139,9 @@ pub trait XObjectDictTrait {
 
     #[or_default]
     fn interpolate(&self) -> bool;
+
+    #[or_default]
+    fn image_mask(&self) -> bool;
 }
 
 impl<'a, 'b> XObjectDict<'a, 'b> {

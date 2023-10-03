@@ -37,7 +37,7 @@ use swash::{
 use super::{GraphicsStateParameterDict, Operation, Rectangle, ResourceDict};
 use tiny_skia::{
     FillRule, FilterQuality, GradientStop, Mask, MaskType, Paint, Path as SkiaPath, PathBuilder,
-    Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Stroke, StrokeDash, Transform,
+    Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect, Stroke, StrokeDash, Transform,
 };
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -707,13 +707,33 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let xobject = xobjects.get(&name.0).unwrap();
 
         let state = self.stack.last().unwrap();
+
+        if xobject.image_mask().unwrap() {
+            let mask = state.ctm.load_image_as_mask(xobject).unwrap();
+            // fill canvas with current fill paint with mask
+            let paint = state.get_fill_paint();
+            self.canvas.fill_rect(
+                Rect::from_xywh(
+                    0.0,
+                    0.0,
+                    self.canvas.width() as f32,
+                    self.canvas.height() as f32,
+                )
+                .unwrap(),
+                &paint,
+                Transform::identity(),
+                Some(&mask),
+            );
+            return;
+        }
+
         let smask = state.ctm.img_mask(xobject).unwrap();
 
         let paint = PixmapPaint {
             quality: if xobject.interpolate().unwrap() {
-                FilterQuality::Nearest
-            } else {
                 FilterQuality::Bilinear
+            } else {
+                FilterQuality::Nearest
             },
             ..Default::default()
         };
@@ -1025,30 +1045,38 @@ impl MatrixMapper {
         } else {
             return Ok(None);
         };
+        self.load_image_as_mask(&s_mask).map(Some)
+    }
 
+    /// Load image as mask, the returned mask is as large as device width/height,
+    /// apply ctm transform to the image, and black out area out of image.
+    pub fn load_image_as_mask(&self, img_dict: &XObjectDict) -> AnyResult<Mask> {
         let paint = PixmapPaint {
-            quality: if img_dict.interpolate()? {
-                FilterQuality::Nearest
-            } else {
-                FilterQuality::Bilinear
-            },
+            quality: FilterQuality::Nearest,
             ..Default::default()
         };
 
         let mut canvas = Pixmap::new(self.width as u32, self.height as u32).unwrap();
-        let img = s_mask.as_image().unwrap();
+        let img = img_dict.as_image().unwrap();
         let img = img.decode(img_dict.resolver(), false).unwrap();
         let FilterDecodedData::Image(img) = img else {
             bail!("Stream should decoded to image");
         };
         let mut img = img.into_rgba8();
-        let transform = self.image_transform(img.width(), img.height());
         img.pixels_mut().for_each(|p| {
             p[3] = p[0];
         });
+
         let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
-        canvas.draw_pixmap(0, 0, img, &paint, transform, None);
-        Ok(Some(Mask::from_pixmap(canvas.as_ref(), MaskType::Alpha)))
+        canvas.draw_pixmap(
+            0,
+            0,
+            img,
+            &paint,
+            self.image_transform(img.width(), img.height()),
+            None,
+        );
+        Ok(Mask::from_pixmap(canvas.as_ref(), MaskType::Alpha))
     }
 }
 
