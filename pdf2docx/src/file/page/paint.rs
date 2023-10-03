@@ -995,13 +995,13 @@ impl MatrixMapper {
     }
 
     fn image_to_unit_square(img_w: u32, img_h: u32) -> Transform {
-        Transform::from_scale(1.0 / img_w as f32, -1.0 / img_h as f32).post_translate(0.0, 1.0)
+        Transform::from_translate(0.0, 1.0).pre_scale(1.0 / img_w as f32, -1.0 / img_h as f32)
     }
 
     pub fn image_transform(&self, img_w: u32, img_h: u32) -> Transform {
-        Self::image_to_unit_square(img_w, img_h)
-            .post_concat(self.ctm.into())
-            .post_concat(self.flip_y())
+        self.flip_y()
+            .pre_concat(self.ctm.into())
+            .pre_concat(Self::image_to_unit_square(img_w, img_h))
     }
 
     pub fn new_mask(&self) -> Mask {
