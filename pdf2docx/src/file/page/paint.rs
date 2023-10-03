@@ -979,7 +979,7 @@ impl MatrixMapper {
     }
 
     pub fn concat_ctm(&mut self, ctm: TransformMatrix) {
-        self.ctm = self.ctm_to_transform().post_concat(ctm.into()).into();
+        self.ctm = self.ctm_to_transform().pre_concat(ctm.into()).into();
     }
 
     pub fn path_transform(&self) -> Transform {
