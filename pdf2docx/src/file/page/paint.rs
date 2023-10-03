@@ -983,7 +983,7 @@ impl MatrixMapper {
     }
 
     pub fn path_transform(&self) -> Transform {
-        self.ctm().post_concat(self.flip_y())
+        self.flip_y().pre_concat(self.ctm())
     }
 
     pub fn tile_transform(&self) -> Transform {
@@ -991,7 +991,7 @@ impl MatrixMapper {
     }
 
     fn flip_y(&self) -> Transform {
-        Transform::from_scale(self.zoom, -self.zoom).post_translate(0.0, self.height)
+        Transform::from_translate(0.0, self.height).pre_scale(self.zoom, -self.zoom)
     }
 
     fn image_to_unit_square(img_w: u32, img_h: u32) -> Transform {

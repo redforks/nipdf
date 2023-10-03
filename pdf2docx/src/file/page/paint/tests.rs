@@ -28,17 +28,16 @@ fn map_point_asserter(m: Transform) -> impl Fn((f32, f32), (f32, f32)) {
 fn path_transform() {
     let mut m = MatrixMapper::new(100., 600.0, 1.0, TransformMatrix::identity());
     let assert_mp = map_point_asserter(m.path_transform());
+    assert_mp((0.0, 0.0), (0.0, 600.0));
     assert_mp((10.0, 20.0), (10.0, 600.0 - 20.0));
     assert_mp((10.0, 1.0), (10.0, 599.0));
+    assert_mp((-1.0, -2.0), (-1.0, 602.0));
     // ctm translate position
-    m.concat_ctm(TransformMatrix {
-        sx: 1.0,
-        kx: 0.0,
-        ky: 0.0,
-        sy: 1.0,
-        tx: 100.0,
-        ty: 200.0,
-    });
+    m.concat_ctm(Transform::from_translate(100.0, 200.0).into());
+    let assert_mp = map_point_asserter(m.ctm());
+    assert_mp((0.0, 0.0), (100.0, 200.0));
+    let assert_mp = map_point_asserter(m.flip_y());
+    assert_mp((100.0, 200.0), (100.0, 600.0 - 200.0));
     let assert_mp = map_point_asserter(m.path_transform());
     assert_mp((0.0, 0.0), (100.0, 600.0 - 200.0));
 
