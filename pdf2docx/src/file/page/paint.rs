@@ -909,13 +909,11 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             let gid = op.char_to_gid(ch);
             let path = Self::gen_glyph_path(glyph_render.as_mut(), gid);
             if !path.is_empty() {
-                let trans = transform.post_concat(ctm.ctm.into());
-
                 let path = path.finish().unwrap();
                 // pre transform path to unit space, render_glyph() will zoom line_width,
                 // pdf line_width state is in user space, but skia line_width is in device space
                 // so we need to transform path to unit space, and zoom line_width in device space
-                let path = path.transform(trans).unwrap();
+                let path = path.transform(transform).unwrap();
 
                 Self::render_glyph(
                     &mut self.canvas,
