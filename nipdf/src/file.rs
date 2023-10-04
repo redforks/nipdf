@@ -2,9 +2,9 @@
 
 use anyhow::{Context, Result as AnyResult};
 use itertools::Itertools;
+use nipdf_macro::pdf_object;
 use nom::Finish;
 use once_cell::unsync::OnceCell;
-use nipdf_macro::pdf_object;
 use std::{collections::HashMap, num::NonZeroU32};
 
 use crate::{
@@ -299,7 +299,7 @@ impl<'a> ObjectResolver<'a> {
         c: &'c C,
         id: &str,
     ) -> anyhow::Result<HashMap<String, T>> {
-        let dict = c.get_value(id);
+        let dict = self.opt_resolve_container_value(c, id)?;
         dict.map_or_else(
             || Ok(HashMap::default()),
             |dict| {
