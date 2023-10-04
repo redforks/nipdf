@@ -1,12 +1,17 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use iced::widget::{
-    button, column, horizontal_space,
-    image::{Handle, Image},
-    row, scrollable, Text,
+use iced::{
+    alignment::{Horizontal, Vertical},
+    widget::{
+        button, column, horizontal_space,
+        image::{Handle, Image},
+        row, scrollable, Button, Container, Row, Text, TextInput,
+    },
+    Alignment, Length,
 };
 use iced::{Element, Sandbox, Settings};
+use iced_aw::{modal, Card};
 use nipdf::file::{File as PdfFile, RenderOptionBuilder};
 use nipdf_macro::save_error;
 
@@ -66,14 +71,21 @@ struct App {
     err: Option<anyhow::Error>,
     navi: PageNavigator,
     zoom: f32,
+    selecting_file: bool,
+    file_path_selecting: String,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum Message {
     NextPage,
     PrevPage,
     ZoomIn,
     ZoomOut,
+
+    SelectFile,
+    SelectedFileChange(String),
+    CancelSelectFile,
+    FileSelected(String),
 }
 
 impl App {
@@ -100,6 +112,39 @@ impl App {
         };
         Ok(())
     }
+
+    fn file_modal_view(&self) -> Element<'_, Message> {
+        Card::new(
+            Text::new("nipdf"),
+            TextInput::new("pdf file path", &self.file_path_selecting)
+                .on_input(Message::SelectedFileChange),
+        )
+        .foot(
+            Row::new()
+                .spacing(10)
+                .padding(5)
+                .width(Length::Fill)
+                .push(
+                    Button::new(Text::new("Cancel").horizontal_alignment(Horizontal::Center))
+                        .width(Length::Fill)
+                        .on_press(Message::CancelSelectFile),
+                )
+                .push(
+                    Button::new(Text::new("Ok").horizontal_alignment(Horizontal::Center))
+                        .width(Length::Fill)
+                        .on_press(Message::FileSelected(self.file_path_selecting.clone())),
+                ),
+        )
+        .max_width(300.0)
+        //.width(Length::Shrink)
+        .on_close(Message::CancelSelectFile)
+        .into()
+    }
+
+    fn error(&mut self, e: anyhow::Error) {
+        self.err = Some(e);
+        self.selecting_file = false;
+    }
 }
 
 impl Sandbox for App {
@@ -115,6 +160,8 @@ impl Sandbox for App {
                 total_pages: 0,
             },
             zoom: 1.75,
+            selecting_file: false,
+            file_path_selecting: "".to_owned(),
         };
         r.load_page(0);
         r
@@ -142,32 +189,61 @@ impl Sandbox for App {
                 self.zoom /= 1.25;
                 self.load_page(self.navi.current_page);
             }
+            Message::SelectFile => {
+                self.selecting_file = true;
+                self.file_path_selecting = self.file_path.clone();
+            }
+            Message::SelectedFileChange(path) => {
+                self.file_path_selecting = path;
+            }
+            Message::CancelSelectFile => {
+                self.selecting_file = false;
+            }
+            Message::FileSelected(path) => {
+                self.file_path = path;
+                self.selecting_file = false;
+                self.load_page(0);
+            }
         }
     }
 
     fn view(&self) -> Element<Message> {
         // show self.err if it is Some
-        if let Some(err) = &self.err {
-            return Text::new(format!("{}", err)).into();
-        }
-
-        column![
+        let main = if let Some(err) = &self.err {
             row![
-                button("Prev").on_press_maybe(self.navi.can_prev().then_some(Message::PrevPage)),
-                button("Next").on_press_maybe(self.navi.can_next().then_some(Message::NextPage)),
-                horizontal_space(16),
-                button("Zoom In").on_press(Message::ZoomIn),
-                button("Zoom Out").on_press(Message::ZoomOut),
-            ],
-            match &self.page {
-                Some(page) => Element::from(scrollable(Image::new(Handle::from_pixels(
-                    page.width,
-                    page.height,
-                    page.data.clone(),
-                )))),
-                None => Text::new("No page").into(),
-            }
-        ]
-        .into()
+                Text::new(format!("{}", err)),
+                button("Open a new file...").on_press(Message::SelectFile),
+            ]
+            .into()
+        } else {
+            column![
+                row![
+                    button("Open...").on_press(Message::SelectFile),
+                    horizontal_space(16),
+                    button("Prev")
+                        .on_press_maybe(self.navi.can_prev().then_some(Message::PrevPage)),
+                    button("Next")
+                        .on_press_maybe(self.navi.can_next().then_some(Message::NextPage)),
+                    horizontal_space(16),
+                    button("Zoom In").on_press(Message::ZoomIn),
+                    button("Zoom Out").on_press(Message::ZoomOut),
+                ],
+                match &self.page {
+                    Some(page) => Element::from(scrollable(Image::new(Handle::from_pixels(
+                        page.width,
+                        page.height,
+                        page.data.clone(),
+                    )))),
+                    None => Text::new("No page").into(),
+                }
+            ]
+            .into()
+        };
+
+        if self.selecting_file {
+            modal(main, Some(self.file_modal_view())).into()
+        } else {
+            main
+        }
     }
 }
