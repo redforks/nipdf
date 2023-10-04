@@ -245,18 +245,18 @@ impl State {
 
     fn update_mask(&mut self, path: &SkiaPath, rule: FillRule, flip_y: bool) {
         let mut mask = self.mask.take().unwrap_or_else(|| self.ctm.new_mask());
-        let log_id = start_instance().elapsed().as_nanos();
-        mask.save_png(format!("/tmp/{}-mask-before.png", log_id))
-            .unwrap();
-        debug!("update_mask {log_id}, path: {:?}", path);
+        // let log_id = start_instance().elapsed().as_nanos();
+        // mask.save_png(format!("/tmp/{}-mask-before.png", log_id))
+        //     .unwrap();
+        // debug!("update_mask {log_id}, path: {:?}", path);
         let transform = if flip_y {
             self.ctm.flip_y()
         } else {
             Transform::identity()
         };
         mask.intersect_path(path, rule, true, transform);
-        mask.save_png(format!("/tmp/{}-mask-after.png", log_id))
-            .unwrap();
+        // mask.save_png(format!("/tmp/{}-mask-after.png", log_id))
+        //     .unwrap();
         self.mask = Some(mask);
     }
 
