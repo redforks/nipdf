@@ -2,13 +2,13 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use iced::{
-    alignment::{Horizontal, Vertical},
+    alignment::Horizontal,
     widget::{
         button, column, horizontal_space,
         image::{Handle, Image},
-        row, scrollable, Button, Container, Row, Text, TextInput,
+        row, scrollable, Button, Row, Text, TextInput,
     },
-    Alignment, Length,
+    Length,
 };
 use iced::{Element, Sandbox, Settings};
 use iced_aw::{modal, Card};
@@ -168,7 +168,7 @@ impl Sandbox for App {
     }
 
     fn title(&self) -> String {
-        String::from(format!("nipdf - {}", self.file_path))
+        format!("nipdf - {}", self.file_path)
     }
 
     fn update(&mut self, message: Message) {
