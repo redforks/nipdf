@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use iced::widget::image::Handle;
-use iced::widget::{Image, Text};
+use iced::widget::{
+    button, column,
+    image::{Handle, Image},
+    row, Text,
+};
 use iced::{Element, Sandbox, Settings};
-use nipdf::file::{File as PdfFile, ObjectResolver, RenderOptionBuilder};
+use nipdf::file::{File as PdfFile, RenderOptionBuilder};
 use nipdf_macro::save_error;
 
 fn main() -> iced::Result {
@@ -36,7 +39,9 @@ struct App {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum Message {}
+enum Message {
+    Stub,
+}
 
 impl App {
     /// load pdf file at `file_path` using `nipdf`, render page `no` to image and save to
@@ -84,14 +89,20 @@ impl Sandbox for App {
             return Text::new(format!("{}", err)).into();
         }
 
-        match &self.page {
-            Some(page) => Image::new(Handle::from_pixels(
-                page.width,
-                page.height,
-                page.data.clone(),
-            ))
-            .into(),
-            None => Text::new("No page").into(),
-        }
+        column![
+            row![
+                button("Prev").on_press(Message::Stub),
+                button("Next").on_press(Message::Stub),
+            ],
+            match &self.page {
+                Some(page) => Element::from(Image::new(Handle::from_pixels(
+                    page.width,
+                    page.height,
+                    page.data.clone(),
+                ))),
+                None => Text::new("No page").into(),
+            }
+        ]
+        .into()
     }
 }
