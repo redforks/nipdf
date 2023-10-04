@@ -6,7 +6,9 @@ use iced::{
     widget::{
         button, column, horizontal_space,
         image::{Handle, Image},
-        row, scrollable, Button, Row, Text, TextInput,
+        row, scrollable,
+        scrollable::{Direction, Properties},
+        Button, Row, Text, TextInput,
     },
     Length,
 };
@@ -229,11 +231,20 @@ impl Sandbox for App {
                     button("Zoom Out").on_press(Message::ZoomOut),
                 ],
                 match &self.page {
-                    Some(page) => Element::from(scrollable(Image::new(Handle::from_pixels(
-                        page.width,
-                        page.height,
-                        page.data.clone(),
-                    )))),
+                    Some(page) => Element::from(
+                        scrollable(
+                            Image::new(Handle::from_pixels(
+                                page.width,
+                                page.height,
+                                page.data.clone(),
+                            ))
+                            .content_fit(iced::ContentFit::None)
+                        )
+                        .direction(Direction::Both {
+                            vertical: Properties::default(),
+                            horizontal: Properties::default(),
+                        })
+                    ),
                     None => Text::new("No page").into(),
                 }
             ]
