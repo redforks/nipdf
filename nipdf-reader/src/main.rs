@@ -4,7 +4,7 @@ use anyhow::Result;
 use iced::widget::{
     button, column,
     image::{Handle, Image},
-    row, Text,
+    row, Text, horizontal_space,
 };
 use iced::{Element, Sandbox, Settings};
 use nipdf::file::{File as PdfFile, RenderOptionBuilder};
@@ -65,12 +65,15 @@ struct App {
     page: Option<Page>,
     err: Option<anyhow::Error>,
     navi: PageNavigator,
+    zoom: f32,
 }
 
 #[derive(Debug, Clone, Copy)]
 enum Message {
     NextPage,
     PrevPage,
+    ZoomIn,
+    ZoomOut,
 }
 
 impl App {
@@ -83,7 +86,7 @@ impl App {
         let catalog = f.catalog(&resolver)?;
         let pages = catalog.pages()?;
         let page = &pages[no as usize];
-        let option = RenderOptionBuilder::new().zoom(1.75);
+        let option = RenderOptionBuilder::new().zoom(self.zoom);
         let page = page.render(option)?;
         let page = Page {
             width: page.width(),
@@ -111,6 +114,7 @@ impl Sandbox for App {
                 current_page: 0,
                 total_pages: 0,
             },
+            zoom: 1.75,
         };
         r.load_page(0);
         r
@@ -130,6 +134,14 @@ impl Sandbox for App {
                 self.navi.prev();
                 self.load_page(self.navi.current_page);
             }
+            Message::ZoomIn => {
+                self.zoom *= 1.25;
+                self.load_page(self.navi.current_page);
+            }
+            Message::ZoomOut => {
+                self.zoom /= 1.25;
+                self.load_page(self.navi.current_page);
+            }
         }
     }
 
@@ -143,6 +155,9 @@ impl Sandbox for App {
             row![
                 button("Prev").on_press_maybe(self.navi.can_prev().then_some(Message::PrevPage)),
                 button("Next").on_press_maybe(self.navi.can_next().then_some(Message::NextPage)),
+                horizontal_space(16),
+                button("Zoom In").on_press(Message::ZoomIn),
+                button("Zoom Out").on_press(Message::ZoomOut),
             ],
             match &self.page {
                 Some(page) => Element::from(Image::new(Handle::from_pixels(
