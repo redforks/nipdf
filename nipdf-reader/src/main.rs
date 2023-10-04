@@ -1,50 +1,33 @@
-use iced::widget::{button, column, text};
+use iced::widget::{button, column, text, Image};
 use iced::{Alignment, Element, Sandbox, Settings};
 
 fn main() -> iced::Result {
-    Counter::run(Settings::default())
+    App::run(Settings::default())
 }
 
-struct Counter {
-    value: i32,
+struct App {
+    file_path: String,
 }
 
 #[derive(Debug, Clone, Copy)]
-enum Message {
-    IncrementPressed,
-    DecrementPressed,
-}
+enum Message {}
 
-impl Sandbox for Counter {
+impl Sandbox for App {
     type Message = Message;
 
     fn new() -> Self {
-        Self { value: 0 }
-    }
-
-    fn title(&self) -> String {
-        String::from("Counter - Iced")
-    }
-
-    fn update(&mut self, message: Message) {
-        match message {
-            Message::IncrementPressed => {
-                self.value += 1;
-            }
-            Message::DecrementPressed => {
-                self.value -= 1;
-            }
+        Self {
+            file_path: "/tmp/foo.png".to_owned(),
         }
     }
 
+    fn title(&self) -> String {
+        String::from(format!("nipdf - {}", self.file_path))
+    }
+
+    fn update(&mut self, message: Message) {}
+
     fn view(&self) -> Element<Message> {
-        column![
-            button("Increment").on_press(Message::IncrementPressed),
-            text(self.value).size(50),
-            button("Decrement").on_press(Message::DecrementPressed)
-        ]
-        .padding(20)
-        .align_items(Alignment::Center)
-        .into()
+        Image::new(&self.file_path).into()
     }
 }
