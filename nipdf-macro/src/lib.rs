@@ -204,3 +204,10 @@ mod pdf_object_impl;
 pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
     pdf_object_impl::pdf_object(attr, item)
 }
+
+mod save_error_impl;
+
+#[proc_macro_attribute]
+pub fn save_error(attr: TokenStream, item: TokenStream) -> TokenStream {
+    save_error_impl::save_error(attr, item)
+}
