@@ -26,6 +26,34 @@ impl AsRef<[u8]> for ShardedData {
     }
 }
 
+#[derive(Clone, Debug, Copy)]
+struct PageNavigator {
+    current_page: u32,
+    total_pages: u32,
+}
+
+impl PageNavigator {
+    pub fn next(&mut self) {
+        if (self.current_page + 1) < self.total_pages {
+            self.current_page += 1;
+        }
+    }
+
+    pub fn prev(&mut self) {
+        if self.current_page > 0 {
+            self.current_page -= 1;
+        }
+    }
+
+    pub fn can_next(&self) -> bool {
+        (self.current_page + 1) < self.total_pages
+    }
+
+    pub fn can_prev(&self) -> bool {
+        self.current_page > 0
+    }
+}
+
 struct Page {
     width: u32,
     height: u32,
@@ -36,22 +64,25 @@ struct App {
     file_path: String,
     page: Option<Page>,
     err: Option<anyhow::Error>,
+    navi: PageNavigator,
 }
 
 #[derive(Debug, Clone, Copy)]
 enum Message {
-    Stub,
+    NextPage,
+    PrevPage,
 }
 
 impl App {
     /// load pdf file at `file_path` using `nipdf`, render page `no` to image and save to
     /// `self.page`
     #[save_error]
-    fn load_page(&mut self, no: usize) -> Result<()> {
+    fn load_page(&mut self, no: u32) -> Result<()> {
         let buf: Vec<u8> = std::fs::read(&self.file_path)?;
         let (f, resolver) = PdfFile::parse(&buf[..])?;
         let catalog = f.catalog(&resolver)?;
-        let page = &catalog.pages()?[no];
+        let pages = catalog.pages()?;
+        let page = &pages[no as usize];
         let option = RenderOptionBuilder::new().zoom(1.75);
         let page = page.render(option)?;
         let page = Page {
@@ -60,6 +91,10 @@ impl App {
             data: ShardedData(Arc::new(page.take())),
         };
         self.page = Some(page);
+        self.navi = PageNavigator {
+            current_page: no,
+            total_pages: pages.len() as u32,
+        };
         Ok(())
     }
 }
@@ -72,6 +107,10 @@ impl Sandbox for App {
             file_path: "/tmp/pdfreference1.0.pdf".to_owned(),
             page: None,
             err: None,
+            navi: PageNavigator {
+                current_page: 0,
+                total_pages: 0,
+            },
         };
         r.load_page(0);
         r
@@ -81,7 +120,18 @@ impl Sandbox for App {
         String::from(format!("nipdf - {}", self.file_path))
     }
 
-    fn update(&mut self, message: Message) {}
+    fn update(&mut self, message: Message) {
+        match message {
+            Message::NextPage => {
+                self.navi.next();
+                self.load_page(self.navi.current_page);
+            }
+            Message::PrevPage => {
+                self.navi.prev();
+                self.load_page(self.navi.current_page);
+            }
+        }
+    }
 
     fn view(&self) -> Element<Message> {
         // show self.err if it is Some
@@ -91,8 +141,8 @@ impl Sandbox for App {
 
         column![
             row![
-                button("Prev").on_press(Message::Stub),
-                button("Next").on_press(Message::Stub),
+                button("Prev").on_press_maybe(self.navi.can_prev().then_some(Message::PrevPage)),
+                button("Next").on_press_maybe(self.navi.can_next().then_some(Message::NextPage)),
             ],
             match &self.page {
                 Some(page) => Element::from(Image::new(Handle::from_pixels(
