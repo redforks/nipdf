@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use iced::widget::{
-    button, column,
+    button, column, horizontal_space,
     image::{Handle, Image},
-    row, Text, horizontal_space,
+    row, scrollable, Text,
 };
 use iced::{Element, Sandbox, Settings};
 use nipdf::file::{File as PdfFile, RenderOptionBuilder};
@@ -160,11 +160,11 @@ impl Sandbox for App {
                 button("Zoom Out").on_press(Message::ZoomOut),
             ],
             match &self.page {
-                Some(page) => Element::from(Image::new(Handle::from_pixels(
+                Some(page) => Element::from(scrollable(Image::new(Handle::from_pixels(
                     page.width,
                     page.height,
                     page.data.clone(),
-                ))),
+                )))),
                 None => Text::new("No page").into(),
             }
         ]
