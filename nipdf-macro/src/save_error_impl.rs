@@ -44,7 +44,7 @@ pub fn save_error(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 self.err = None;
             },
             Err(e) => {
-                self.err = Some(e);
+                self.error(e);
             }
         }
     }
