@@ -1166,17 +1166,24 @@ impl FirstLastFontWidth {
         Ok(Self::_new(first_char, last_char, default_width, widths))
     }
 
-    pub fn from_type1_type(font: &Type1FontDict) -> AnyResult<Option<Self>> {
-        let desc = font
-            .font_descriptor()?
-            .ok_or_else(|| anyhow!("font descriptor failed to load"))?;
+    pub fn from_type1_type(font: &Type1FontDict, is_standard_14: bool) -> AnyResult<Option<Self>> {
         let widths = font.widths()?;
         let first_char = font.first_char()?;
         let last_char = font.last_char()?;
         if first_char.is_none() || last_char.is_none() {
             return Ok(None);
         }
-        let default_width = desc.missing_width()?;
+
+        let desc = font.font_descriptor()?;
+        let default_width = if let Some(desc) = desc {
+            desc.missing_width()?
+        } else if is_standard_14 {
+            info!("missing font descriptor in one of standard 14 font, use 0 as default width");
+            0
+        } else {
+            bail!("missing font descriptor");
+        };
+
         Ok(Some(Self::_new(
             first_char.unwrap(),
             last_char.unwrap(),
@@ -1342,8 +1349,9 @@ impl<'c> Type1FontOp<'c> {
     fn new<'a: 'c, 'b: 'c>(
         font_dict: Type1FontDict<'a, 'b>,
         font: &'c FontKitFont,
+        is_standard_14: bool,
     ) -> AnyResult<Self> {
-        let font_width = FirstLastFontWidth::from_type1_type(&font_dict)?.unwrap();
+        let font_width = FirstLastFontWidth::from_type1_type(&font_dict, is_standard_14)?.unwrap();
         let encoding = font_dict.encoding()?;
         let encoding = match encoding {
             Some(NameOrDictByRef::Dict(d)) => {
@@ -1392,12 +1400,17 @@ impl<'a> FontOp for Type1FontOp<'a> {
 struct Type1Font<'a, 'b> {
     font: FontKitFont,
     font_dict: FontDict<'a, 'b>,
+    is_standard_14: bool,
 }
 
 impl<'a, 'b> Type1Font<'a, 'b> {
-    fn new(data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> AnyResult<Self> {
+    fn new(data: Vec<u8>, font_dict: FontDict<'a, 'b>, is_standard_14: bool) -> AnyResult<Self> {
         let font = FontKitFont::from_bytes(data.into(), 0)?;
-        Ok(Self { font, font_dict })
+        Ok(Self {
+            font,
+            font_dict,
+            is_standard_14,
+        })
     }
 }
 
@@ -1410,6 +1423,7 @@ impl<'a, 'b> Font for Type1Font<'a, 'b> {
         Ok(Box::new(Type1FontOp::new(
             self.font_dict.type1()?,
             &self.font,
+            self.is_standard_14,
         )?))
     }
 
@@ -1587,7 +1601,9 @@ impl<'c> FontCache<'c> {
         let font_name = desc.map(|v| v.font_name()).transpose()?;
         let font_name = font_name.or_else(|| f.base_font().ok()).unwrap();
         let font_name = font_name.to_lowercase();
-        let bytes = match standard_14_type1_font_data(font_name.as_str()) {
+        let standard_14_font_data = standard_14_type1_font_data(font_name.as_str());
+        let is_standard_14 = standard_14_font_data.is_some();
+        let bytes = match standard_14_font_data {
             Some(data) => data.to_owned(),
             None => {
                 let desc = f.font_descriptor()?.unwrap();
@@ -1599,7 +1615,7 @@ impl<'c> FontCache<'c> {
                 )?
             }
         };
-        Type1Font::new(bytes, font)
+        Type1Font::new(bytes, font, is_standard_14)
     }
 
     fn scan_font<'a, 'b>(font: FontDict<'a, 'b>) -> AnyResult<Option<Box<dyn Font + 'c>>>
