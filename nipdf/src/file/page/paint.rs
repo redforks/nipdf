@@ -1166,7 +1166,7 @@ impl FirstLastFontWidth {
         Ok(Self::_new(first_char, last_char, default_width, widths))
     }
 
-    pub fn from_type1_type(font: &Type1FontDict, is_standard_14: bool) -> AnyResult<Option<Self>> {
+    pub fn from_type1_type(font: &Type1FontDict) -> AnyResult<Option<Self>> {
         let widths = font.widths()?;
         let first_char = font.first_char()?;
         let last_char = font.last_char()?;
@@ -1174,15 +1174,10 @@ impl FirstLastFontWidth {
             return Ok(None);
         }
 
-        let desc = font.font_descriptor()?;
-        let default_width = if let Some(desc) = desc {
-            desc.missing_width()?
-        } else if is_standard_14 {
-            info!("missing font descriptor in one of standard 14 font, use 0 as default width");
-            0
-        } else {
-            bail!("missing font descriptor");
-        };
+        let desc = font
+            .font_descriptor()?
+            .expect("missing font descriptor, if widths exist, descriptor must also exist");
+        let default_width = desc.missing_width()?;
 
         Ok(Some(Self::_new(
             first_char.unwrap(),
@@ -1349,9 +1344,8 @@ impl<'c> Type1FontOp<'c> {
     fn new<'a: 'c, 'b: 'c>(
         font_dict: Type1FontDict<'a, 'b>,
         font: &'c FontKitFont,
-        is_standard_14: bool,
     ) -> AnyResult<Self> {
-        let font_width = FirstLastFontWidth::from_type1_type(&font_dict, is_standard_14)?.unwrap();
+        let font_width = FirstLastFontWidth::from_type1_type(&font_dict)?.unwrap();
         let encoding = font_dict.encoding()?;
         let encoding = match encoding {
             Some(NameOrDictByRef::Dict(d)) => {
@@ -1423,7 +1417,6 @@ impl<'a, 'b> Font for Type1Font<'a, 'b> {
         Ok(Box::new(Type1FontOp::new(
             self.font_dict.type1()?,
             &self.font,
-            self.is_standard_14,
         )?))
     }
 
