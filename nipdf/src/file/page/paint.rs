@@ -130,10 +130,10 @@ pub struct State {
     text_object: TextObject,
 }
 
-fn start_instance() -> &'static Instant {
-    static START_INSTANCE: Lazy<Instant> = Lazy::new(Instant::now);
-    &START_INSTANCE
-}
+// fn start_instance() -> &'static Instant {
+//     static START_INSTANCE: Lazy<Instant> = Lazy::new(Instant::now);
+//     &START_INSTANCE
+// }
 
 impl State {
     /// height: height in user space coordinate
@@ -1412,17 +1412,12 @@ impl<'a> FontOp for Type1FontOp<'a> {
 struct Type1Font<'a, 'b> {
     font: FontKitFont,
     font_dict: FontDict<'a, 'b>,
-    is_standard_14: bool,
 }
 
 impl<'a, 'b> Type1Font<'a, 'b> {
-    fn new(data: Vec<u8>, font_dict: FontDict<'a, 'b>, is_standard_14: bool) -> AnyResult<Self> {
+    fn new(data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> AnyResult<Self> {
         let font = FontKitFont::from_bytes(data.into(), 0)?;
-        Ok(Self {
-            font,
-            font_dict,
-            is_standard_14,
-        })
+        Ok(Self { font, font_dict })
     }
 }
 
@@ -1610,9 +1605,7 @@ impl<'c> FontCache<'c> {
         let font_name = desc.map(|v| v.font_name()).transpose()?;
         let font_name = font_name.or_else(|| f.base_font().ok()).unwrap();
         let font_name = font_name.to_lowercase();
-        let standard_14_font_data = standard_14_type1_font_data(font_name.as_str());
-        let is_standard_14 = standard_14_font_data.is_some();
-        let bytes = match standard_14_font_data {
+        let bytes = match standard_14_type1_font_data(font_name.as_str()) {
             Some(data) => data.to_owned(),
             None => {
                 let desc = f.font_descriptor()?.unwrap();
@@ -1624,7 +1617,7 @@ impl<'c> FontCache<'c> {
                 )?
             }
         };
-        Type1Font::new(bytes, font, is_standard_14)
+        Type1Font::new(bytes, font)
     }
 
     fn scan_font<'a, 'b>(font: FontDict<'a, 'b>) -> AnyResult<Option<Box<dyn Font + 'c>>>

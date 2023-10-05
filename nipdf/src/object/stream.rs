@@ -8,7 +8,7 @@ use std::{
 use bitstream_io::{BigEndian, BitReader};
 use image::{DynamicImage, GrayImage, Luma, RgbImage};
 use lazy_static::__Deref;
-use log::{debug, error};
+use log::error;
 use nipdf_macro::pdf_object;
 use once_cell::unsync::Lazy;
 
