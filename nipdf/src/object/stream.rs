@@ -9,8 +9,8 @@ use bitstream_io::{BigEndian, BitReader};
 use image::{DynamicImage, GrayImage, Luma, RgbImage};
 use lazy_static::__Deref;
 use log::{debug, error};
-use once_cell::unsync::Lazy;
 use nipdf_macro::pdf_object;
+use once_cell::unsync::Lazy;
 
 use crate::{
     ccitt::Flags,
@@ -80,36 +80,28 @@ fn decode_lzw(buf: &[u8], params: LZWFlateDecodeDict) -> Result<Vec<u8>, ObjectV
         "TODO: handle predictor of LZWDecode"
     );
 
-    // use lzw crate instead of weezl, because weezl do not provide early change option
-    use lzw::{Decoder, DecoderEarlyChange, MsbReader};
-    let is_earch_change = params.early_change().unwrap() == 1;
-    for n in 8..=12 {
-        if is_earch_change {
-            let mut decoder = DecoderEarlyChange::new(MsbReader::new(), n);
-            debug!(
-                "Try to decode stream using LZWDecode EarlyChange with code size {}",
-                n
-            );
-            let rv = decoder
-                .decode_bytes(buf)
-                .map_err(|_| ObjectValueError::FilterDecodeError);
-            if rv.is_ok() {
-                return rv.map(|(_, v)| v.into());
-            }
-        } else {
-            let mut decoder = Decoder::new(MsbReader::new(), n);
-            debug!("Try to decode stream using LZWDecode with code size {}", n);
-            let rv = decoder
-                .decode_bytes(buf)
-                .map_err(|_| ObjectValueError::FilterDecodeError);
-            if rv.is_ok() {
-                return rv.map(|(_, v)| v.into());
-            }
-        }
+    use weezl::{decode::Decoder, BitOrder};
+    let is_early_change = params.early_change().unwrap() == 1;
+    let mut decoder = if is_early_change {
+        Decoder::with_tiff_size_switch(BitOrder::Msb, 8)
+    } else {
+        Decoder::new(BitOrder::Msb, 8)
+    };
+    let mut r = vec![];
+    let rv = decoder.into_stream(&mut r).decode_all(buf);
+    if let Err(e) = rv.status {
+        error!("IO error, {:?}", e);
+        return Err(ObjectValueError::FilterDecodeError);
     }
-
-    error!("Failed to decode stream using {}", FILTER_LZW_DECODE);
-    Err(ObjectValueError::FilterDecodeError)
+    if rv.bytes_read != buf.len() {
+        error!(
+            "LZWDecode: expected to read {} bytes, but read {} bytes",
+            buf.len(),
+            rv.bytes_read
+        );
+        return Err(ObjectValueError::FilterDecodeError);
+    }
+    Ok(r)
 }
 
 fn decode_flate(buf: &[u8], params: LZWFlateDecodeDict) -> Result<Vec<u8>, ObjectValueError> {

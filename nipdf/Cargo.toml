@@ -34,13 +34,13 @@ nipdf-macro = { path = "../nipdf-macro" }
 arrayvec = "0.7.4"
 tiny-skia = "0.11.2"
 educe = "0.4.22"
-lzw = "0.10.0"
 pretty = { version = "0.12.1", optional = true }
 bitflags = "2.4.0"
 swash = "0.1.8"
 fontdb = "0.15.0"
 font-kit = { version = "0.11.0", features = ["loader-freetype"] }
 pathfinder_geometry = "0.5.1"
+weezl = "0.1.7"
 
 [dev-dependencies]
 env_logger = "0.10.0"
