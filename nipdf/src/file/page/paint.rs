@@ -926,7 +926,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let render_mode = text_object.render_mode;
         let mut text_clip_path = Path::default();
         for ch in op.decode_chars(text) {
-            let width = op.glyph_width(ch) as f32 / 1000.0 * font_size
+            let width = op.char_width(ch) as f32 / 1000.0 * font_size
                 + char_spacing
                 + if ch == 32 { word_spacing } else { 0.0 };
 
@@ -1197,6 +1197,20 @@ impl FirstLastFontWidth {
     }
 }
 
+struct FreeTypeFontWidth<'a> {
+    font: &'a FontKitFont,
+}
+
+impl<'a> FreeTypeFontWidth<'a> {
+    fn new(font: &'a FontKitFont) -> Self {
+        Self { font }
+    }
+
+    pub fn glyph_width(&self, gid: u32) -> u32 {
+        self.font.advance(gid).unwrap().x() as u32
+    }
+}
+
 struct PathSink<'a>(pub &'a mut PathBuilder);
 
 struct FreeTypePathSink<'a> {
@@ -1335,7 +1349,7 @@ trait Font {
 }
 
 struct Type1FontOp<'a> {
-    font_width: FirstLastFontWidth,
+    font_width: Either<FirstLastFontWidth, FreeTypeFontWidth<'a>>,
     font: &'a FontKitFont,
     encoding: Encoding<'a>,
 }
@@ -1345,7 +1359,8 @@ impl<'c> Type1FontOp<'c> {
         font_dict: Type1FontDict<'a, 'b>,
         font: &'c FontKitFont,
     ) -> AnyResult<Self> {
-        let font_width = FirstLastFontWidth::from_type1_type(&font_dict)?.unwrap();
+        let font_width = FirstLastFontWidth::from_type1_type(&font_dict)?
+            .map_or_else(|| Either::Right(FreeTypeFontWidth::new(font)), Either::Left);
         let encoding = font_dict.encoding()?;
         let encoding = match encoding {
             Some(NameOrDictByRef::Dict(d)) => {
@@ -1385,8 +1400,11 @@ impl<'a> FontOp for Type1FontOp<'a> {
         }
     }
 
-    fn glyph_width(&self, gid: u32) -> u32 {
-        self.font_width.char_width(gid)
+    fn char_width(&self, gid: u32) -> u32 {
+        self.font_width.as_ref().either(
+            |x| x.char_width(gid),
+            |x| x.glyph_width(self.char_to_gid(gid) as u32),
+        )
     }
 }
 
@@ -1670,10 +1688,11 @@ impl<'c> FontCache<'c> {
 }
 
 trait FontOp {
-    /// Decode char codes to glyph ids, gid is an index to glyph shapes, not a char
+    /// Decode char codes to chars, possible using some encoding
     fn decode_chars(&self, s: &[u8]) -> Vec<u32>;
     fn char_to_gid(&self, ch: u32) -> u16;
-    fn glyph_width(&self, ch: u32) -> u32;
+    /// Return glyph width for specified char
+    fn char_width(&self, ch: u32) -> u32;
 }
 
 struct Type0FontOp {
@@ -1715,7 +1734,7 @@ impl FontOp for Type0FontOp {
         ch as u16
     }
 
-    fn glyph_width(&self, ch: u32) -> u32 {
+    fn char_width(&self, ch: u32) -> u32 {
         self.widths.char_width(ch).unwrap_or(self.default_width)
     }
 }
@@ -1744,7 +1763,7 @@ impl<'a> FontOp for TrueTypeFontOp<'a> {
         self.font.charmap().map(ch)
     }
 
-    fn glyph_width(&self, ch: u32) -> u32 {
+    fn char_width(&self, ch: u32) -> u32 {
         self.font_width.char_width(ch)
     }
 }
