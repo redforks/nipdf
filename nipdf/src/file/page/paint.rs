@@ -1402,7 +1402,8 @@ impl<'a> FontOp for Type1FontOp<'a> {
             .glyph_by_name(".notdef")
             .or_else(|| {
                 debug!("failed resolve gid for .notdef");
-                self.font.glyph_by_name("space")
+                // .notdef normally is the last glyph
+                Some(self.font.glyph_count() - 1)
             })
             .unwrap() as u16
     }
