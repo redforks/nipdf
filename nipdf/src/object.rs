@@ -789,6 +789,7 @@ impl<'a> Object<'a> {
         match self {
             Object::Array(a) => Box::new(a.iter().flat_map(|o| o.iter_values())),
             Object::Dictionary(d) => Box::new(d.values().flat_map(|o| o.iter_values())),
+            Object::Stream(s) => Box::new(s.as_dict().values().flat_map(|o| o.iter_values())),
             _ => Box::new(std::iter::once(self)),
         }
     }
