@@ -1642,21 +1642,24 @@ impl<'c> FontCache<'c> {
         'b: 'c,
     {
         let f = font.type1()?;
+        let font_name = f.font_name()?.to_lowercase();
         let desc = f.font_descriptor()?;
-        let font_name = desc.map(|v| v.font_name()).transpose()?;
-        let font_name = font_name.or_else(|| f.base_font().ok()).unwrap();
-        let font_name = font_name.to_lowercase();
-        let bytes = match standard_14_type1_font_data(font_name.as_str()) {
-            Some(data) => data.to_owned(),
-            None => {
-                let desc = f.font_descriptor()?.unwrap();
-                Self::load_embed_font_bytes(
-                    desc.resolver(),
-                    desc.font_file()? // maybe font_file3 if use CFF(Compact Font Format)
-                        .or_else(|| desc.font_file3().unwrap())
-                        .unwrap(),
-                )?
-            }
+        let font_data_stream = desc
+            .map(|v| -> AnyResult<_> {
+                v.font_file()
+                    .transpose()
+                    .or_else(
+                        || v.font_file().transpose(), /* if Compact Font Format*/
+                    )
+                    .transpose()
+            })
+            .transpose()?
+            .flatten();
+        let bytes = match font_data_stream {
+            Some(s) => Self::load_embed_font_bytes(f.resolver(), s)?,
+            None => standard_14_type1_font_data(font_name.as_str())
+                .expect("Failed to find font data")
+                .to_owned(),
         };
         Type1Font::new(bytes, font)
     }
