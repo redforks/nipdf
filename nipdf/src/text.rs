@@ -1,6 +1,7 @@
 use std::{collections::HashMap, convert::AsRef};
 
 use bitflags::bitflags;
+use log::debug;
 use nipdf_macro::{pdf_object, TryFromIntObjectForBitflags, TryFromNameObject};
 
 use crate::{
@@ -68,6 +69,28 @@ pub trait Type1FontDictTrait {
     #[try_from]
     fn encoding(&self) -> Option<NameOrDictByRef<'a, 'b>>;
     fn to_unicode(&self) -> Option<&'b Stream<'a>>;
+}
+
+impl<'a, 'b> Type1FontDict<'a, 'b> {
+    fn resolve_name(&self) -> anyhow::Result<&str> {
+        if let Some(desc) = self.font_descriptor()? {
+            return Ok(desc.font_name()?);
+        }
+
+        self.base_font().map(|s| s.as_ref())
+    }
+
+    pub fn font_name(&self) -> anyhow::Result<&str> {
+        let r = self.resolve_name()?;
+
+        // if font is subset, the name will prefixed with a tag,
+        // which is a string of 6 uppercase letters, followed by a plus sign (+).
+        if r.len() > 7 && r.as_bytes()[6] == b'+' {
+            Ok(&r[7..])
+        } else {
+            Ok(r)
+        }
+    }
 }
 
 #[pdf_object(("Font", "TrueType"))]

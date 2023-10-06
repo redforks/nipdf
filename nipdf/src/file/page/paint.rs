@@ -14,8 +14,8 @@ use crate::{
     },
     object::{Array, FilterDecodedData, Object, PdfObject, Stream, TextStringOrNumber},
     text::{
-        CIDFontType, CIDFontWidths, Encoding, EncodingDict, FontDescriptorDict, FontDict, FontType,
-        TrueTypeFontDict, Type0FontDict, Type1FontDict,
+        CIDFontType, CIDFontWidths, Encoding, EncodingDict, FontDescriptorDict,
+        FontDescriptorFlags, FontDict, FontType, TrueTypeFontDict, Type0FontDict, Type1FontDict,
     },
 };
 use anyhow::{anyhow, bail, Ok, Result as AnyResult};
@@ -1359,21 +1359,50 @@ impl<'c> Type1FontOp<'c> {
         font_dict: Type1FontDict<'a, 'b>,
         font: &'c FontKitFont,
     ) -> AnyResult<Self> {
+        let font_name = font_dict.font_name()?;
+        let resolve_by_name = |encoding_name: Option<&str>| -> AnyResult<Encoding> {
+            if let Some(encoding_name) = encoding_name {
+                return Encoding::predefined(encoding_name)
+                    .ok_or_else(|| anyhow!("Unknown encoding: {}", encoding_name));
+            }
+
+            info!("TODO: resolve encoding from font. ({})", font_name);
+
+            // if font not embed encoding, use known encoding for the two standard symbol fonts
+            match font_name.to_ascii_lowercase().as_str() {
+                "symbol" => {
+                    return Ok(Encoding::SYMBOL);
+                }
+                "zapfdingbats" => {
+                    return Ok(Encoding::ZAPFDINGBATS);
+                }
+                _ => (),
+            }
+
+            if let Some(desc) = font_dict.font_descriptor()? {
+                if desc.flags()?.contains(FontDescriptorFlags::SYMBOLIC) {
+                    panic!("Symbolic font must have encoding, but not found in font file");
+                }
+            }
+
+            Ok(Encoding::STANDARD)
+        };
+
         let font_width = FirstLastFontWidth::from_type1_type(&font_dict)?
             .map_or_else(|| Either::Right(FreeTypeFontWidth::new(font)), Either::Left);
         let encoding = font_dict.encoding()?;
         let encoding = match encoding {
             Some(NameOrDictByRef::Dict(d)) => {
                 let encoding_dict = EncodingDict::new(None, d, font_dict.resolver())?;
-                let r = Encoding::STANDARD;
+                let r = resolve_by_name(encoding_dict.base_encoding()?)?;
                 if let Some(diff) = encoding_dict.differences()? {
                     r.apply_differences(&diff)
                 } else {
                     r
                 }
             }
-            Some(NameOrDictByRef::Name(name)) => Encoding::predefined(name.as_ref()).unwrap(),
-            None => Encoding::STANDARD,
+            Some(NameOrDictByRef::Name(name)) => resolve_by_name(Some(name.as_ref()))?,
+            None => resolve_by_name(None)?,
         };
         Ok(Self {
             font_width,
@@ -1393,7 +1422,11 @@ impl<'a> FontOp for Type1FontOp<'a> {
         if let Some(gid_name) = self.encoding.decode(ch as u8) {
             if let Some(r) = self.font.glyph_by_name(gid_name) {
                 return r as u16;
+            } else {
+                info!("glyph id not found for char: {:?}/{}", ch, gid_name);
             }
+        } else {
+            info!("glyph name found for char: {:?}", ch);
         }
 
         info!("glyph not found for char: {:?}", ch);
