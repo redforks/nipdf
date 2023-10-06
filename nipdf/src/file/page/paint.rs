@@ -1649,7 +1649,7 @@ impl<'c> FontCache<'c> {
                 v.font_file()
                     .transpose()
                     .or_else(
-                        || v.font_file().transpose(), /* if Compact Font Format*/
+                        || v.font_file3().transpose(), /* if Compact Font Format*/
                     )
                     .transpose()
             })
