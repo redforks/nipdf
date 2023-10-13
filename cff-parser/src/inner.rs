@@ -633,8 +633,6 @@ impl<'a> IndexedData<'a> {
 /// 3 | data                  | Data
 /// ---+-----------------------+------------------------------------------
 fn parse_indexed_data(buf: &[u8]) -> ParseResult<IndexedData<'_>> {
-    use nom::number::complete::be_u16;
-
     let (buf, n) = be_u16(buf)?;
     let (buf, off_size) = parse_off_size(buf)?;
 
@@ -649,6 +647,10 @@ fn parse_indexed_data(buf: &[u8]) -> ParseResult<IndexedData<'_>> {
     let (buf, data) = take(data_len)(buf)?;
 
     Ok((buf, IndexedData { offsets, data }))
+}
+
+pub fn parse_name_index(buf: &[u8]) -> ParseResult<NameIndex<'_>> {
+    parse_indexed_data.map(NameIndex).parse(buf)
 }
 
 /// Header of CFF.
@@ -683,7 +685,7 @@ pub fn parse_header(buf: &[u8]) -> ParseResult<Header> {
 /// The name first byte maybe zero, which means the corresponding font
 /// is removed. The index is the index of other top font data index.
 #[derive(Debug, Clone, Copy)]
-struct NameIndex<'a>(IndexedData<'a>);
+pub struct NameIndex<'a>(IndexedData<'a>);
 
 impl<'a> NameIndex<'a> {
     pub fn len(&self) -> usize {
@@ -691,7 +693,7 @@ impl<'a> NameIndex<'a> {
     }
 
     /// Get font name by index. Return None if name is marked removed.
-    pub fn get(&self, idx: usize) -> Option<&str> {
+    pub fn get(&self, idx: usize) -> Option<&'a str> {
         let name = self.0.get_bin_str(idx);
         if name.is_empty() {
             None

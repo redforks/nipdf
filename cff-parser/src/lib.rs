@@ -15,22 +15,51 @@ pub use inner::{Error, Result};
 pub struct Font<'a> {
     file: &'a [u8],
     idx: u8,
+    name: &'a str,
 }
 
 impl<'a> Font<'a> {
-    pub fn name(&self) -> Result<&str> {
-        todo!()
+    pub fn new(file: &'a [u8], idx: u8, name: &'a str) -> Self {
+        Self { file, idx, name }
+    }
+
+    pub fn name(&self) -> &str {
+        self.name
     }
 }
 
 /// Iterator of Font.
-pub struct Fonts<'a>(&'a File);
+pub struct Fonts<'a> {
+    f: &'a File,
+    names: inner::NameIndex<'a>,
+    idx: usize,
+}
+
+impl<'a> Fonts<'a> {
+    pub fn new(f: &'a File) -> Result<Self> {
+        let names_offset = f.header.hdr_size as usize;
+        Ok(Self {
+            f,
+            names: inner::parse_name_index(&f.data[names_offset..])?.1,
+            idx: 0,
+        })
+    }
+}
 
 impl<'a> Iterator for Fonts<'a> {
     type Item = Font<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        todo!()
+        if self.idx < self.names.len() {
+            let name = self.names.get(self.idx);
+            self.idx += 1;
+            match name {
+                Some(name) => Some(Font::new(&self.f.data, self.idx as u8, name)),
+                None => self.next(),
+            }
+        } else {
+            None
+        }
     }
 }
 
@@ -47,8 +76,8 @@ impl File {
         Ok(File { data, header })
     }
 
-    pub fn iter(&self) -> Fonts<'_> {
-        Fonts(&self)
+    pub fn iter(&self) -> Result<Fonts<'_>> {
+        Fonts::new(&self)
     }
 
     pub fn major_version(&self) -> u8 {

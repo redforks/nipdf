@@ -1,9 +1,21 @@
 use super::*;
 
+fn sample_cff() -> Vec<u8> {
+    include_bytes!("sample.cff").to_vec()
+}
+
 #[test]
 fn open_file() {
-    let f = include_bytes!("sample.cff");
-    let file = File::open(f.to_vec()).unwrap();
+    let file = File::open(sample_cff()).unwrap();
     assert_eq!(1, file.major_version());
     assert_eq!(0, file.minor_version());
 }
+
+#[test]
+fn iter_fonts() {
+    let file = File::open(sample_cff()).unwrap();
+    let fonts: Vec<_> = file.iter().unwrap().collect();
+    assert_eq!(1, fonts.len());
+    assert_eq!("PAPHHO+MyriadPro-Regular", fonts[0].name());
+}
+
