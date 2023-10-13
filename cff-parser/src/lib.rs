@@ -13,19 +13,24 @@ mod inner;
 pub use inner::{Error, Result};
 
 pub struct Font<'a> {
-    file: &'a File,
+    font_data: &'a [u8],
     idx: u8,
     name: &'a str,
-    top_dict: inner::TopDict<'a>,
+    top_dict_data: inner::TopDictData<'a>,
 }
 
 impl<'a> Font<'a> {
-    pub fn new(file: &'a File, idx: u8, name: &'a str, top_dict: inner::TopDict<'a>) -> Self {
+    pub fn new(
+        font_data: &'a [u8],
+        idx: u8,
+        name: &'a str,
+        top_dict_data: inner::TopDictData<'a>,
+    ) -> Self {
         Self {
-            file,
+            font_data,
             idx,
             name,
-            top_dict,
+            top_dict_data,
         }
     }
 
@@ -70,10 +75,15 @@ impl<'a> Iterator for Fonts<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         if self.idx < self.names_index.len() {
             let name = self.names_index.get(self.idx);
-            let top_dict = self.top_dict_index.get(self.idx, self.string_index).ok()?;
+            let top_dict_data = self.top_dict_index.get(self.idx, self.string_index).ok()?;
             self.idx += 1;
             match name {
-                Some(name) => Some(Font::new(self.f, self.idx as u8, name, top_dict)),
+                Some(name) => Some(Font::new(
+                    &self.f.data[..],
+                    self.idx as u8,
+                    name,
+                    top_dict_data,
+                )),
                 None => return self.next(),
             }
         } else {

@@ -839,9 +839,9 @@ impl<'a> SIDDict<'a> {
 
 /// Top Dict for each font face.
 #[derive(Debug)]
-pub struct TopDict<'a>(SIDDict<'a>);
+pub struct TopDictData<'a>(SIDDict<'a>);
 
-impl<'a> TopDict<'a> {
+impl<'a> TopDictData<'a> {
     pub fn new(strings: StringIndex<'a>, dict: Dict) -> Self {
         Self(SIDDict { strings, dict })
     }
@@ -980,8 +980,8 @@ impl<'a> TopDictIndex<'a> {
         self.0.len()
     }
 
-    pub fn get(&self, idx: usize, strings: StringIndex<'a>) -> Result<TopDict<'a>> {
-        let parse = parse_dict.map(|v| TopDict::new(strings, v));
+    pub fn get(&self, idx: usize, strings: StringIndex<'a>) -> Result<TopDictData<'a>> {
+        let parse = parse_dict.map(|v| TopDictData::new(strings, v));
         self.0.get(idx, parse)
     }
 }
