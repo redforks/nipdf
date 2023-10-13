@@ -726,7 +726,7 @@ pub struct StringIndex<'a>(IndexedData<'a>);
 
 impl<'a> StringIndex<'a> {
     /// Panic if `idx` is out of range. Return None if str is marked removed
-    pub fn get(&self, idx: SID) -> &str {
+    pub fn get(&self, idx: SID) -> &'a str {
         if idx < 391 {
             STANDARD_STRINGS[idx as usize]
         } else {
@@ -844,6 +844,10 @@ pub struct TopDictData<'a>(SIDDict<'a>);
 impl<'a> TopDictData<'a> {
     pub fn new(strings: StringIndex<'a>, dict: Dict) -> Self {
         Self(SIDDict { strings, dict })
+    }
+
+    pub fn string_index(&self) -> StringIndex<'a> {
+        self.0.strings
     }
 
     pub fn version(&self) -> Result<&str> {
@@ -1079,6 +1083,10 @@ impl EncodingSupplement {
     fn new(code: u8, sid: SID) -> Self {
         Self { code, sid }
     }
+
+    pub fn apply<'a>(&self, string_index: StringIndex<'a>, encodings: &mut [&'a str; 256]) {
+        encodings[self.code as usize] = string_index.get(self.sid);
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -1099,6 +1107,12 @@ pub enum Encodings {
     Format1(Vec<EncodingRange>),
     PredefinedStandard,
     PredefinedExpert,
+}
+
+impl Encodings {
+    pub fn build<'a>(&self, charsets: &Charsets, string_index: StringIndex<'a>) -> [&'a str; 256] {
+        todo!()
+    }
 }
 
 /// Parses Encodings for Format0 and Format1, other predfined encodings are

@@ -38,8 +38,18 @@ impl<'a> Font<'a> {
         self.name
     }
 
-    pub fn encodings(&self) -> [&str; 256] {
-        todo!()
+    pub fn encodings(&self) -> Result<[&str; 256]> {
+        let charsets = self.top_dict_data.charsets(self.font_data)?;
+        let (encodings, supplements) = self.top_dict_data.encodings(self.font_data)?;
+        let mut r = encodings.build(&charsets, self.top_dict_data.string_index());
+        if let Some(supplements) = supplements {
+            for supp in supplements {
+                supp.apply(self.top_dict_data.string_index(), &mut r);
+            }
+        }
+
+        todo!("unit test")
+        // Ok(r)
     }
 }
 
