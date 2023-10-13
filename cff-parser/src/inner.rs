@@ -374,7 +374,7 @@ impl<E: std::fmt::Debug> From<nom::Err<E>> for Error {
     }
 }
 
-type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(PartialEq, Debug, Clone)]
 struct Dict(HashMap<Operator, Operand>);
@@ -492,7 +492,7 @@ fn parse_dict(buf: &[u8]) -> ParseResult<Dict> {
 /// Byte length of offset data type.
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 #[repr(u8)]
-enum OffSize {
+pub enum OffSize {
     One = 1u8,
     Two = 2u8,
     Three = 3u8,
@@ -653,14 +653,14 @@ fn parse_indexed_data(buf: &[u8]) -> ParseResult<IndexedData<'_>> {
 
 /// Header of CFF.
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
-struct Header {
-    major: u8,
-    minor: u8,
-    hdr_size: u8,
-    off_size: OffSize,
+pub struct Header {
+    pub major: u8,
+    pub minor: u8,
+    pub hdr_size: u8,
+    pub off_size: OffSize,
 }
 
-fn parse_header(buf: &[u8]) -> ParseResult<Header> {
+pub fn parse_header(buf: &[u8]) -> ParseResult<Header> {
     let (buf, major) = take(1usize)(buf)?;
     let major = major[0];
     let (buf, minor) = take(1usize)(buf)?;
