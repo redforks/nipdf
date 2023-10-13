@@ -277,7 +277,7 @@ fn parse_operand(buf: &[u8]) -> ParseResult<Operand> {
 /// value 0-21 or a byte value equal to 12 followed by a single byte
 /// value 0-21.
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
-struct Operator {
+pub struct Operator {
     tag: u8,
     /// First byte of Operator is 12 if true.
     escape: bool,
@@ -377,7 +377,7 @@ impl<E: std::fmt::Debug> From<nom::Err<E>> for Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(PartialEq, Debug, Clone)]
-struct Dict(HashMap<Operator, Operand>);
+pub struct Dict(HashMap<Operator, Operand>);
 
 impl Dict {
     /// If value not exist for `k`, return None,
@@ -577,7 +577,7 @@ impl<'a> Offsets<'a> {
 /// Data with an index(offset) for quick access memory
 /// by index.
 #[derive(Debug, Clone, Copy)]
-struct IndexedData<'a> {
+pub struct IndexedData<'a> {
     offsets: Offsets<'a>,
     data: &'a [u8],
 }
@@ -632,7 +632,7 @@ impl<'a> IndexedData<'a> {
 /// ---+-----------------------+------------------------------------------
 /// 3 | data                  | Data
 /// ---+-----------------------+------------------------------------------
-fn parse_indexed_data(buf: &[u8]) -> ParseResult<IndexedData<'_>> {
+pub fn parse_indexed_data(buf: &[u8]) -> ParseResult<IndexedData<'_>> {
     let (buf, n) = be_u16(buf)?;
     let (buf, off_size) = parse_off_size(buf)?;
 
@@ -651,6 +651,14 @@ fn parse_indexed_data(buf: &[u8]) -> ParseResult<IndexedData<'_>> {
 
 pub fn parse_name_index(buf: &[u8]) -> ParseResult<NameIndex<'_>> {
     parse_indexed_data.map(NameIndex).parse(buf)
+}
+
+pub fn parse_string_index(buf: &[u8]) -> ParseResult<StringIndex<'_>> {
+    parse_indexed_data.map(StringIndex).parse(buf)
+}
+
+pub fn parse_top_dict_index(buf: &[u8]) -> ParseResult<TopDictIndex<'_>> {
+    parse_indexed_data.map(TopDictIndex).parse(buf)
 }
 
 /// Header of CFF.
@@ -714,7 +722,7 @@ impl<'a> NameIndex<'a> {
 /// To resolve a SID, subtract 391 from the SID value and use the result as
 /// an index into the string INDEX.
 #[derive(Debug, Copy, Clone)]
-struct StringIndex<'a>(IndexedData<'a>);
+pub struct StringIndex<'a>(IndexedData<'a>);
 
 impl<'a> StringIndex<'a> {
     /// Panic if `idx` is out of range. Return None if str is marked removed
@@ -831,7 +839,7 @@ impl<'a> SIDDict<'a> {
 
 /// Top Dict for each font face.
 #[derive(Debug)]
-struct TopDict<'a>(SIDDict<'a>);
+pub struct TopDict<'a>(SIDDict<'a>);
 
 impl<'a> TopDict<'a> {
     pub fn new(strings: StringIndex<'a>, dict: Dict) -> Self {
@@ -965,24 +973,22 @@ impl<'a> TopDict<'a> {
 }
 
 /// IndexedData to store TopDicts. Each item is TopDict
-struct TopDictIndex<'a> {
-    dict: IndexedData<'a>,
-}
+pub struct TopDictIndex<'a>(IndexedData<'a>);
 
 impl<'a> TopDictIndex<'a> {
     pub fn len(&self) -> usize {
-        self.dict.len()
+        self.0.len()
     }
 
     pub fn get(&self, idx: usize, strings: StringIndex<'a>) -> Result<TopDict<'a>> {
         let parse = parse_dict.map(|v| TopDict::new(strings, v));
-        self.dict.get(idx, parse)
+        self.0.get(idx, parse)
     }
 }
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum PredefinedCharsets {
+pub enum PredefinedCharsets {
     ISOAdobe = 0,
     Expert = 1,
     ExpertSubset = 2,
@@ -990,7 +996,7 @@ enum PredefinedCharsets {
 
 /// Charsets map code index (u8) to SID
 #[derive(Debug, PartialEq)]
-enum Charsets {
+pub enum Charsets {
     Format0(Vec<SID>),
     Format1(Vec<RangeInclusive<SID>>), // (first, n_left: u8)
     Format2(Vec<RangeInclusive<SID>>), // (first, n_left: u16)
@@ -1064,7 +1070,7 @@ fn parse_charsets(buf: &[u8], n_glyphs: u16) -> ParseResult<Charsets> {
 /// `code` is char code to replace,
 /// `sid` is SID of glyph name.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-struct EncodingSupplement {
+pub struct EncodingSupplement {
     code: u8,
     sid: SID,
 }
@@ -1076,7 +1082,7 @@ impl EncodingSupplement {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-struct EncodingRange {
+pub struct EncodingRange {
     first: u8,
     n_left: u8,
 }
@@ -1088,7 +1094,7 @@ impl EncodingRange {
 }
 
 #[derive(Debug, PartialEq)]
-enum Encodings {
+pub enum Encodings {
     Format0(Vec<u8>),
     Format1(Vec<EncodingRange>),
     PredefinedStandard,

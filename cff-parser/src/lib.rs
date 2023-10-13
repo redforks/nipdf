@@ -13,34 +13,52 @@ mod inner;
 pub use inner::{Error, Result};
 
 pub struct Font<'a> {
-    file: &'a [u8],
+    file: &'a File,
     idx: u8,
     name: &'a str,
+    top_dict: inner::TopDict<'a>,
 }
 
 impl<'a> Font<'a> {
-    pub fn new(file: &'a [u8], idx: u8, name: &'a str) -> Self {
-        Self { file, idx, name }
+    pub fn new(file: &'a File, idx: u8, name: &'a str, top_dict: inner::TopDict<'a>) -> Self {
+        Self {
+            file,
+            idx,
+            name,
+            top_dict,
+        }
     }
 
     pub fn name(&self) -> &str {
         self.name
+    }
+
+    pub fn encodings(&self) -> [&str; 256] {
+        todo!()
     }
 }
 
 /// Iterator of Font.
 pub struct Fonts<'a> {
     f: &'a File,
-    names: inner::NameIndex<'a>,
+    names_index: inner::NameIndex<'a>,
+    top_dict_index: inner::TopDictIndex<'a>,
+    string_index: inner::StringIndex<'a>,
     idx: usize,
 }
 
 impl<'a> Fonts<'a> {
     pub fn new(f: &'a File) -> Result<Self> {
         let names_offset = f.header.hdr_size as usize;
+        let buf = &f.data[names_offset..];
+        let (buf, names_index) = inner::parse_name_index(buf)?;
+        let (buf, top_dict_index) = inner::parse_top_dict_index(buf)?;
+        let (_, string_index) = inner::parse_string_index(buf)?;
         Ok(Self {
             f,
-            names: inner::parse_name_index(&f.data[names_offset..])?.1,
+            names_index,
+            top_dict_index,
+            string_index,
             idx: 0,
         })
     }
@@ -50,12 +68,13 @@ impl<'a> Iterator for Fonts<'a> {
     type Item = Font<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.idx < self.names.len() {
-            let name = self.names.get(self.idx);
+        if self.idx < self.names_index.len() {
+            let name = self.names_index.get(self.idx);
+            let top_dict = self.top_dict_index.get(self.idx, self.string_index).ok()?;
             self.idx += 1;
             match name {
-                Some(name) => Some(Font::new(&self.f.data, self.idx as u8, name)),
-                None => self.next(),
+                Some(name) => Some(Font::new(self.f, self.idx as u8, name, top_dict)),
+                None => return self.next(),
             }
         } else {
             None
