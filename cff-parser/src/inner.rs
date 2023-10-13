@@ -966,7 +966,6 @@ impl<'a> TopDict<'a> {
 
 /// IndexedData to store TopDicts. Each item is TopDict
 struct TopDictIndex<'a> {
-    strings: StringIndex<'a>,
     dict: IndexedData<'a>,
 }
 
@@ -975,8 +974,8 @@ impl<'a> TopDictIndex<'a> {
         self.dict.len()
     }
 
-    pub fn get(&self, idx: usize) -> Result<TopDict<'a>> {
-        let parse = parse_dict.map(|v| TopDict::new(self.strings, v));
+    pub fn get(&self, idx: usize, strings: StringIndex<'a>) -> Result<TopDict<'a>> {
+        let parse = parse_dict.map(|v| TopDict::new(strings, v));
         self.dict.get(idx, parse)
     }
 }
