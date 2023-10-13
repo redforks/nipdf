@@ -1084,8 +1084,8 @@ impl EncodingSupplement {
         Self { code, sid }
     }
 
-    pub fn apply<'a>(&self, string_index: StringIndex<'a>, encodings: &mut [&'a str; 256]) {
-        encodings[self.code as usize] = string_index.get(self.sid);
+    pub fn apply<'a>(&self, string_index: StringIndex<'a>, encodings: &mut [Option<&'a str>; 256]) {
+        encodings[self.code as usize] = Some(string_index.get(self.sid));
     }
 }
 
@@ -1110,7 +1110,11 @@ pub enum Encodings {
 }
 
 impl Encodings {
-    pub fn build<'a>(&self, charsets: &Charsets, string_index: StringIndex<'a>) -> [&'a str; 256] {
+    pub fn build<'a>(
+        &self,
+        charsets: &Charsets,
+        string_index: StringIndex<'a>,
+    ) -> [Option<&'a str>; 256] {
         todo!()
     }
 }

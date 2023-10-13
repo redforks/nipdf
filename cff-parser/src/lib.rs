@@ -38,7 +38,7 @@ impl<'a> Font<'a> {
         self.name
     }
 
-    pub fn encodings(&self) -> Result<[&str; 256]> {
+    pub fn encodings(&self) -> Result<[Option<&str>; 256]> {
         let charsets = self.top_dict_data.charsets(self.font_data)?;
         let (encodings, supplements) = self.top_dict_data.encodings(self.font_data)?;
         let mut r = encodings.build(&charsets, self.top_dict_data.string_index());

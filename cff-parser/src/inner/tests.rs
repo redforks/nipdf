@@ -412,15 +412,15 @@ fn parse_encodings_format1() {
 
 #[test]
 fn encoding_supplement_apply() {
-    let mut encodings = [""; 256];
-    encodings[100] = "foo";
-    encodings[101] = "bar";
+    let mut encodings: [Option<&str>; 256] = [None; 256];
+    encodings[100] = Some("foo");
+    encodings[101] = Some("bar");
     let string_index = StringIndex(IndexedData {
         offsets: Offsets::new(OffSize::One, &[1_u8, 3, 6][..]).unwrap(),
         data: b"abcde",
     });
     let supp = EncodingSupplement::new(100, 10);
     supp.apply(string_index, &mut encodings);
-    assert_eq!(encodings[100],STANDARD_STRINGS[10]);
-    assert_eq!(encodings[101], "bar");
+    assert_eq!(encodings[100], Some(STANDARD_STRINGS[10]));
+    assert_eq!(encodings[101], Some("bar"));
 }
