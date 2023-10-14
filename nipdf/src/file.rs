@@ -1,11 +1,12 @@
 //! Contains types of PDF file structures.
 
+use ahash::{HashMap, HashMapExt};
 use anyhow::{Context, Result as AnyResult};
 use itertools::Itertools;
 use nipdf_macro::pdf_object;
 use nom::Finish;
 use once_cell::unsync::OnceCell;
-use std::{collections::HashMap, num::NonZeroU32};
+use std::num::NonZeroU32;
 
 use crate::{
     object::{Dictionary, FrameSet, Name, Object, ObjectValueError, PdfObject},
@@ -13,12 +14,10 @@ use crate::{
 };
 use log::error;
 
-use nohash_hasher::BuildNoHashHasher;
-
 mod page;
 pub use page::*;
 
-type IDOffsetMap = HashMap<NonZeroU32, u32, BuildNoHashHasher<u32>>;
+type IDOffsetMap = HashMap<u32, u32>;
 
 pub struct XRefTable<'a> {
     buf: &'a [u8],
@@ -39,12 +38,12 @@ impl<'a> XRefTable<'a> {
     }
 
     pub fn scan(frame_set: &FrameSet) -> IDOffsetMap {
-        let mut r = IDOffsetMap::with_capacity_and_hasher(5000, BuildNoHashHasher::default());
+        let mut r = IDOffsetMap::with_capacity(5000);
         for (id, entry) in frame_set.iter().rev().flat_map(|f| f.xref_section.iter()) {
             if entry.is_used() {
-                r.insert(NonZeroU32::new(*id).unwrap(), entry.offset());
+                r.insert(*id, entry.offset());
             } else if *id != 0 {
-                r.remove(&NonZeroU32::new(*id).unwrap());
+                r.remove(id);
             }
         }
         r
@@ -57,7 +56,7 @@ impl<'a> XRefTable<'a> {
     /// Return `buf` start from where `id` is
     pub fn resolve_object_buf(&self, id: NonZeroU32) -> Option<&'a [u8]> {
         self.id_offset
-            .get(&id)
+            .get(&id.into())
             .map(|offset| &self.buf[*offset as usize..])
     }
 
@@ -73,7 +72,7 @@ impl<'a> XRefTable<'a> {
     }
 
     pub fn iter_ids(&self) -> impl Iterator<Item = NonZeroU32> + '_ {
-        self.id_offset.keys().copied()
+        self.id_offset.keys().map(|v| NonZeroU32::new(*v).unwrap())
     }
 
     pub fn count(&self) -> usize {
@@ -107,13 +106,12 @@ impl<'a> DataContainer<'a> for Vec<&Dictionary<'a>> {
 
 pub struct ObjectResolver<'a> {
     xref_table: XRefTable<'a>,
-    objects: HashMap<NonZeroU32, OnceCell<Object<'a>>, BuildNoHashHasher<u32>>,
+    objects: HashMap<NonZeroU32, OnceCell<Object<'a>>>,
 }
 
 impl<'a> ObjectResolver<'a> {
     pub fn new(xref_table: XRefTable<'a>) -> Self {
-        let mut objects =
-            HashMap::with_capacity_and_hasher(xref_table.count(), BuildNoHashHasher::default());
+        let mut objects = HashMap::with_capacity(xref_table.count());
         xref_table.iter_ids().for_each(|id| {
             objects.insert(id, OnceCell::new());
         });

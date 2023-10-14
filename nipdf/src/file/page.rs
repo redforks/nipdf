@@ -1,5 +1,6 @@
-use nom::Finish;
+use ahash::HashMap;
 use nipdf_macro::{pdf_object, TryFromNameObject};
+use nom::Finish;
 use tiny_skia::Pixmap;
 
 use crate::{
@@ -14,7 +15,7 @@ use crate::{
 use self::paint::Render;
 pub use self::paint::{RenderOption, RenderOptionBuilder};
 
-use std::{collections::HashMap, iter::once};
+use std::iter::once;
 
 mod paint;
 

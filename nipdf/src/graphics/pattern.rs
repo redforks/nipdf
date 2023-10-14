@@ -1,5 +1,5 @@
+use ahash::HashMap;
 use nipdf_macro::{pdf_object, TryFromIntObject};
-use std::collections::HashMap;
 
 use super::{ColorSpace, Rectangle};
 use crate::{
