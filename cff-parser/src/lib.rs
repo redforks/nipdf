@@ -31,7 +31,7 @@ impl<'a> Font<'a> {
         self.name
     }
 
-    pub fn encodings(&self) -> Result<[Option<&str>; 256]> {
+    pub fn encodings(&self) -> Result<[Option<&'a str>; 256]> {
         let charsets = self.top_dict_data.charsets(self.font_data)?;
         let (encodings, supplements) = self.top_dict_data.encodings(self.font_data)?;
         let mut r = encodings.build(&charsets, self.top_dict_data.string_index());
@@ -55,7 +55,7 @@ pub struct Fonts<'a> {
 }
 
 impl<'a> Fonts<'a> {
-    pub fn new(f: &'a File) -> Result<Self> {
+    pub fn new(f: &File<'a>) -> Result<Self> {
         let names_offset = f.header.hdr_size as usize;
         let buf = &f.data[names_offset..];
         let (buf, names_index) = inner::parse_name_index(buf)?;
@@ -100,7 +100,7 @@ impl<'a> File<'a> {
         Ok(File { data, header })
     }
 
-    pub fn iter(&self) -> Result<Fonts<'_>> {
+    pub fn iter(&self) -> Result<Fonts<'a>> {
         Fonts::new(&self)
     }
 

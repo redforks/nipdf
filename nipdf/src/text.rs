@@ -313,6 +313,10 @@ pub trait EncodingDictTrait {
 pub struct Encoding<'a>([Option<&'a str>; 256]);
 
 impl<'a> Encoding<'a> {
+    pub fn new(encodings: [Option<&'a str>; 256]) -> Self {
+        Self(encodings)
+    }
+
     pub fn decode(&self, ch: u8) -> Option<&'a str> {
         self.0[ch as usize]
     }

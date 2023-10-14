@@ -1,6 +1,5 @@
 use std::{
     borrow::Cow, collections::HashMap, convert::AsRef, fs::File, io::Read, ops::RangeInclusive,
-    time::Instant,
 };
 
 use crate::{
@@ -19,6 +18,7 @@ use crate::{
     },
 };
 use anyhow::{anyhow, bail, Ok, Result as AnyResult};
+use cff_parser::{File as CffFile, Font as CffFont};
 use educe::Educe;
 use font_kit::loaders::freetype::Font as FontKitFont;
 use fontdb::{Database, Family, Query, Source, Weight};
@@ -1358,6 +1358,8 @@ impl<'c> Type1FontOp<'c> {
     fn new<'a: 'c, 'b: 'c>(
         font_dict: Type1FontDict<'a, 'b>,
         font: &'c FontKitFont,
+        is_cff: bool,
+        font_data: &'c [u8],
     ) -> AnyResult<Self> {
         let font_name = font_dict.font_name()?;
         let resolve_by_name = |encoding_name: Option<&str>| -> AnyResult<Encoding> {
@@ -1366,7 +1368,13 @@ impl<'c> Type1FontOp<'c> {
                     .ok_or_else(|| anyhow!("Unknown encoding: {}", encoding_name));
             }
 
-            info!("TODO: resolve encoding from font. ({})", font_name);
+            if is_cff {
+                info!("scan encoding from cff font. ({})", font_name);
+                let cff_file: CffFile<'c> = CffFile::open(font_data)?;
+                let font: CffFont<'c> = cff_file.iter()?.next().expect("no font in cff?");
+                return Ok(Encoding::new(font.encodings()?));
+            }
+            info!("TODO: resolve encoding from type1 font. ({})", font_name);
 
             // if font not embed encoding, use known encoding for the two standard symbol fonts
             match font_name.to_ascii_lowercase().as_str() {
@@ -1451,14 +1459,23 @@ impl<'a> FontOp for Type1FontOp<'a> {
 
 /// Font implementation using freetype/(font-kit), to handle Type1 fonts
 struct Type1Font<'a, 'b> {
+    font_data: Vec<u8>,
+    is_cff: bool,
     font: FontKitFont,
     font_dict: FontDict<'a, 'b>,
 }
 
 impl<'a, 'b> Type1Font<'a, 'b> {
-    fn new(data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> AnyResult<Self> {
-        let font = FontKitFont::from_bytes(data.into(), 0)?;
-        Ok(Self { font, font_dict })
+    fn new(is_cff: bool, data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> AnyResult<Self> {
+        debug_assert_eq!(data.capacity(), data.len());
+
+        let font = FontKitFont::from_bytes(data.clone().into(), 0)?;
+        Ok(Self {
+            font_data: data,
+            is_cff,
+            font,
+            font_dict,
+        })
     }
 }
 
@@ -1471,6 +1488,8 @@ impl<'a, 'b> Font for Type1Font<'a, 'b> {
         Ok(Box::new(Type1FontOp::new(
             self.font_dict.type1()?,
             &self.font,
+            self.is_cff,
+            self.font_data.as_slice(),
         )?))
     }
 
@@ -1644,24 +1663,31 @@ impl<'c> FontCache<'c> {
         let f = font.type1()?;
         let font_name = f.font_name()?.to_lowercase();
         let desc = f.font_descriptor()?;
-        let font_data_stream = desc
-            .map(|v| -> AnyResult<_> {
-                v.font_file()
+        let font_data = desc
+            .map(|desc| -> AnyResult<_> {
+                let r = desc
+                    .font_file()
+                    .map(|s| s.map(|s| (false, s)))
                     .transpose()
                     .or_else(
-                        || v.font_file3().transpose(), /* if Compact Font Format*/
+                        || desc.font_file3().map(|s| s.map(|s| (true, s))).transpose(), /* if Compact Font Format*/
                     )
-                    .transpose()
+                    .transpose();
+                r
             })
             .transpose()?
             .flatten();
-        let bytes = match font_data_stream {
-            Some(s) => Self::load_embed_font_bytes(f.resolver(), s)?,
-            None => standard_14_type1_font_data(font_name.as_str())
-                .expect("Failed to find font data")
-                .to_owned(),
+        let (is_cff, mut bytes) = match font_data {
+            Some(s) => (s.0, Self::load_embed_font_bytes(f.resolver(), s.1)?),
+            None => (
+                false,
+                standard_14_type1_font_data(font_name.as_str())
+                    .expect("Failed to find font data")
+                    .to_owned(),
+            ),
         };
-        Type1Font::new(bytes, font)
+        bytes.shrink_to_fit();
+        Type1Font::new(is_cff, bytes, font)
     }
 
     fn scan_font<'a, 'b>(font: FontDict<'a, 'b>) -> AnyResult<Option<Box<dyn Font + 'c>>>
