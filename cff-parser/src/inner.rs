@@ -1011,13 +1011,15 @@ pub enum Charsets {
 }
 
 impl Charsets {
-    /// Return SID by index. Panic if `idx` is out of range.
+    /// Return SID by index. Return None if `idx` is out of range.
     pub fn resolve_sid(&self, idx: usize) -> Option<SID> {
         match self {
             Self::Predefined(predefined) => match predefined {
-                PredefinedCharsets::ISOAdobe => Some(idx as SID),
-                PredefinedCharsets::Expert => Some(predefined_charsets::EXPERT[idx]),
-                PredefinedCharsets::ExpertSubset => Some(predefined_charsets::EXPERT_SUBSET[idx]),
+                PredefinedCharsets::ISOAdobe => (idx < 229).then_some(idx as SID),
+                PredefinedCharsets::Expert => predefined_charsets::EXPERT.get(idx).copied(),
+                PredefinedCharsets::ExpertSubset => {
+                    predefined_charsets::EXPERT_SUBSET.get(idx).copied()
+                }
             },
             _ => todo!(),
         }
