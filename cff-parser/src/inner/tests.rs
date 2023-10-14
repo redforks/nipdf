@@ -446,3 +446,10 @@ fn build_encodings_predefined() {
 fn build_encodings_format0() {
     todo!()
 }
+
+#[test]
+fn resolve_predefined_charsets_id() {
+    assert_eq!(Some(2), Charsets::Predefined(PredefinedCharsets::ISOAdobe).resolve_sid(2));
+    assert_eq!(Some(229), Charsets::Predefined(PredefinedCharsets::Expert).resolve_sid(2));
+    assert_eq!(Some(231), Charsets::Predefined(PredefinedCharsets::ExpertSubset).resolve_sid(2));
+}

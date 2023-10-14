@@ -14,11 +14,12 @@ use nom::{
     multi::{count, length_count, many1, many_till},
     number::complete::{be_u16, be_u8},
     sequence::pair,
-    IResult, InputIter, Parser,
+    IResult, Parser,
 };
 use paste::paste;
 use thiserror::Error as ThisError;
 
+mod predefined_charsets;
 mod predefined_encodings;
 
 pub type ParseResult<'a, O> = IResult<&'a [u8], O>;
@@ -1010,9 +1011,16 @@ pub enum Charsets {
 }
 
 impl Charsets {
-    /// Return SID by index (code id). Panic if `idx` is out of range.
+    /// Return SID by index. Panic if `idx` is out of range.
     pub fn resolve_sid(&self, idx: usize) -> Option<SID> {
-        todo!()
+        match self {
+            Self::Predefined(predefined) => match predefined {
+                PredefinedCharsets::ISOAdobe => Some(idx as SID),
+                PredefinedCharsets::Expert => Some(predefined_charsets::EXPERT[idx]),
+                PredefinedCharsets::ExpertSubset => Some(predefined_charsets::EXPERT_SUBSET[idx]),
+            },
+            _ => todo!(),
+        }
     }
 }
 
