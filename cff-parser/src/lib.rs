@@ -41,8 +41,7 @@ impl<'a> Font<'a> {
             }
         }
 
-        todo!("unit test")
-        // Ok(r)
+        Ok(r)
     }
 }
 

@@ -19,3 +19,12 @@ fn iter_fonts() {
     assert_eq!("PAPHHO+MyriadPro-Regular", fonts[0].name());
 }
 
+#[test]
+fn font_encodings() {
+    let file = File::open(sample_cff()).unwrap();
+    let fonts: Vec<_> = file.iter().unwrap().collect();
+    assert_eq!(1, fonts.len());
+    let encodings = fonts[0].encodings().unwrap();
+    assert_eq!(None, encodings[0]);
+    assert_eq!(Some("space"), encodings[32]);
+}
