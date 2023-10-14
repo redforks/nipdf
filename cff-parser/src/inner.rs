@@ -19,6 +19,8 @@ use nom::{
 use paste::paste;
 use thiserror::Error as ThisError;
 
+mod predefined_encodings;
+
 pub type ParseResult<'a, O> = IResult<&'a [u8], O>;
 
 /// String ID, resolve &str from `StringIndex`.
@@ -1007,6 +1009,13 @@ pub enum Charsets {
     Predefined(PredefinedCharsets),
 }
 
+impl Charsets {
+    /// Return SID by index (code id). Panic if `idx` is out of range.
+    pub fn resolve_sid(&self, idx: usize) -> Option<SID> {
+        todo!()
+    }
+}
+
 /// Charsets has four formats by first byte of buf:
 ///
 /// 0: format0, n_glyphs SID
@@ -1110,12 +1119,25 @@ pub enum Encodings {
 }
 
 impl Encodings {
+    /// build encodings.
     pub fn build<'a>(
         &self,
         charsets: &Charsets,
         string_index: StringIndex<'a>,
     ) -> [Option<&'a str>; 256] {
-        todo!()
+        match self {
+            Self::Format0(codes) => {
+                let mut encodings = [None; 256];
+                for (i, code) in codes.iter().enumerate() {
+                    encodings[*code as usize] =
+                        charsets.resolve_sid(i).map(|sid| string_index.get(sid));
+                }
+                encodings
+            }
+            Self::PredefinedStandard => predefined_encodings::STANDARD,
+            Self::PredefinedExpert => predefined_encodings::EXPERT,
+            _ => todo!(),
+        }
     }
 }
 

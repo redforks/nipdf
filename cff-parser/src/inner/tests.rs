@@ -424,3 +424,25 @@ fn encoding_supplement_apply() {
     assert_eq!(encodings[100], Some(STANDARD_STRINGS[10]));
     assert_eq!(encodings[101], Some("bar"));
 }
+
+#[test]
+fn build_encodings_predefined() {
+    let charsets = Charsets::Format0(vec![1, 0, 2]);
+    let string_index = StringIndex(IndexedData {
+        offsets: Offsets::new(OffSize::One, &[1_u8, 3, 6][..]).unwrap(),
+        data: b"abcde",
+    });
+    assert_eq!(
+        predefined_encodings::STANDARD,
+        Encodings::PredefinedStandard.build(&charsets, string_index)
+    );
+    assert_eq!(
+        predefined_encodings::EXPERT,
+        Encodings::PredefinedExpert.build(&charsets, string_index)
+    );
+}
+
+#[test]
+fn build_encodings_format0() {
+    todo!()
+}
