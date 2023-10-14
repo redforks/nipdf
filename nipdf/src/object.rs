@@ -943,13 +943,14 @@ pub struct LiteralString<'a>(&'a [u8], #[educe(Debug(ignore))] OnceCell<Cow<'a, 
 
 impl<'a> From<&'a [u8]> for LiteralString<'a> {
     fn from(s: &'a [u8]) -> Self {
+        debug_assert!(s.len() >= 2 && s[0] == b'(' && *s.last().unwrap() == b')');
         Self(s, OnceCell::new())
     }
 }
 
 impl<'a> From<&'a str> for LiteralString<'a> {
     fn from(value: &'a str) -> Self {
-        Self(value.as_bytes(), OnceCell::new())
+        value.as_bytes().into()
     }
 }
 
