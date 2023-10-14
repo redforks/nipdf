@@ -909,7 +909,6 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             font.font_type()
         );
         let op = font.create_op().unwrap();
-        let text = text;
         let state = self.stack.last().unwrap();
 
         let text_object = &state.text_object;
@@ -957,7 +956,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             self.text_object_mut()
                 .text_clipping_path
                 .path_builder()
-                .push_path(&text_clip_path);
+                .push_path(text_clip_path);
         }
     }
 

@@ -1,7 +1,7 @@
 use std::{collections::HashMap, convert::AsRef};
 
 use bitflags::bitflags;
-use log::debug;
+
 use nipdf_macro::{pdf_object, TryFromIntObjectForBitflags, TryFromNameObject};
 
 use crate::{
@@ -74,10 +74,10 @@ pub trait Type1FontDictTrait {
 impl<'a, 'b> Type1FontDict<'a, 'b> {
     fn resolve_name(&self) -> anyhow::Result<&str> {
         if let Some(desc) = self.font_descriptor()? {
-            return Ok(desc.font_name()?);
+            return desc.font_name();
         }
 
-        self.base_font().map(|s| s.as_ref())
+        self.base_font()
     }
 
     pub fn font_name(&self) -> anyhow::Result<&str> {
