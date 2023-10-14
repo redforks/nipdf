@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, str::from_utf8};
+use std::str::from_utf8;
 
 use log::info;
 use memchr::memmem::rfind;
@@ -102,17 +102,13 @@ fn parse_xref_table(buf: &[u8]) -> ParseResult<XRefSection> {
         ),
     );
     let group = tuple((record_count_parser, many0(record_parser)));
-    let parser = fold_many1(
-        group,
-        BTreeMap::new,
-        |mut table, ((start, count), entries)| {
-            assert_eq!(count, entries.len() as u32);
-            for (i, entry) in entries.into_iter().enumerate() {
-                table.insert(start + i as u32, entry);
-            }
-            table
-        },
-    );
+    let parser = fold_many1(group, Vec::new, |mut table, ((start, count), entries)| {
+        assert_eq!(count, entries.len() as u32);
+        for (i, entry) in entries.into_iter().enumerate() {
+            table.push((start + i as u32, entry));
+        }
+        table
+    });
 
     preceded(context("xref", ws_terminated(tag(b"xref"))), parser)(buf)
 }
@@ -122,7 +118,7 @@ fn parse_startxref(buf: &[u8]) -> ParseResult<u32> {
 }
 
 // Assumes buf start from xref
-fn parse_frame(buf: &[u8]) -> ParseResult<(Dictionary, BTreeMap<u32, Entry>)> {
+fn parse_frame(buf: &[u8]) -> ParseResult<(Dictionary, Vec<(u32, Entry)>)> {
     map(
         tuple((
             context("xref table", parse_xref_table),

@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub struct Entry(u32, u16, bool); // offset, generation, is_used
 
@@ -21,4 +19,4 @@ impl Entry {
     }
 }
 
-pub type Section = BTreeMap<u32, Entry>;
+pub type Section = Vec<(u32, Entry)>;
