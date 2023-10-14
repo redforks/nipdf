@@ -1,7 +1,7 @@
 use std::num::NonZeroU32;
 
 use glob::glob;
-use crate::{
+use nipdf::{
     file::File,
     object::{Object, ObjectValueError},
 };
