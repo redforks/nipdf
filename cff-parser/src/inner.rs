@@ -1014,24 +1014,36 @@ pub enum Charsets {
 
 impl Charsets {
     /// Return SID by index(gid). Return None if `idx` is out of range.
-    pub fn resolve_sid(&self, idx: usize) -> Option<SID> {
+    pub fn resolve_sid(&self, idx: GID) -> Option<SID> {
+        if idx == 0 {
+            return Some(0);
+        }
+
         match self {
             Self::Predefined(predefined) => match predefined {
                 PredefinedCharsets::ISOAdobe => (idx < 229).then_some(idx as SID),
-                PredefinedCharsets::Expert => predefined_charsets::EXPERT.get(idx).copied(),
-                PredefinedCharsets::ExpertSubset => {
-                    predefined_charsets::EXPERT_SUBSET.get(idx).copied()
+                PredefinedCharsets::Expert => {
+                    predefined_charsets::EXPERT.get(idx as usize).copied()
                 }
+                PredefinedCharsets::ExpertSubset => predefined_charsets::EXPERT_SUBSET
+                    .get(idx as usize)
+                    .copied(),
             },
-            Self::Format0(sids) => {
-                if idx == 0 {
-                    Some(0)
-                } else {
-                    // 0 not stored in sids vec.
-                    sids.get(idx - 1).copied()
+
+            // 0 not stored in sids vec.
+            Self::Format0(sids) => sids.get(idx as usize - 1).copied(),
+
+            Self::Format1(ranges) | Self::Format2(ranges) => {
+                let idx = idx as SID;
+                let mut i: SID = 1;
+                for range in ranges {
+                    i += range.len() as SID;
+                    if i > idx {
+                        return Some(*range.start() + idx - range.len() as SID);
+                    }
                 }
+                None
             }
-            _ => todo!(),
         }
     }
 }
@@ -1150,8 +1162,9 @@ impl Encodings {
             Self::Format0(codes) => {
                 let mut encodings = [None; 256];
                 for (i, code) in codes.iter().enumerate() {
-                    encodings[*code as usize] =
-                        charsets.resolve_sid(i).map(|sid| string_index.get(sid));
+                    encodings[*code as usize] = charsets
+                        .resolve_sid(i as GID)
+                        .map(|sid| string_index.get(sid));
                 }
                 encodings
             }

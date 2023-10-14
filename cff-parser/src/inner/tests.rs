@@ -486,3 +486,13 @@ fn resolve_format0_charset() {
     assert_eq!(Some(2), charsets.resolve_sid(3));
     assert_eq!(None, charsets.resolve_sid(4));
 }
+
+#[test]
+fn resolve_format1_n_2_charset() {
+    let charsets = Charsets::Format1(vec![0x102..=0x102, 8..=9]);
+    assert_eq!(Some(0), charsets.resolve_sid(0));
+    assert_eq!(Some(0x102), charsets.resolve_sid(1));
+    assert_eq!(Some(8), charsets.resolve_sid(2));
+    assert_eq!(Some(9), charsets.resolve_sid(3));
+    assert_eq!(None, charsets.resolve_sid(4));
+}
