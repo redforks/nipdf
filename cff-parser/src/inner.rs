@@ -1046,9 +1046,10 @@ impl Charsets {
                 let idx = idx as Sid;
                 let mut i: Sid = 1;
                 for range in ranges {
+                    let start = i;
                     i += range.len() as Sid;
                     if i > idx {
-                        return Some(*range.start() + idx - range.len() as Sid);
+                        return Some(*range.start() + idx - start as Sid);
                     }
                 }
                 None
