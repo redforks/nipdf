@@ -458,6 +458,26 @@ fn build_encodings_format0() {
 }
 
 #[test]
+fn build_encodings_format1() {
+    let charsets = Charsets::Predefined(PredefinedCharsets::Expert);
+    let string_index = StringIndex(IndexedData {
+        offsets: Offsets::new(OffSize::One, &[1_u8, 3, 6][..]).unwrap(),
+        data: b"abcde",
+    });
+    let encodings = Encodings::Format1(vec![EncodingRange::new(1, 2), EncodingRange::new(10, 2)]);
+    let r = encodings.build(&charsets, string_index);
+    assert_eq!(r[0], None);
+    assert_eq!(r[1], Some("space"));
+    assert_eq!(r[2], Some("exclamsmall"));
+    assert_eq!(r[3], Some("Hungarumlautsmall"));
+    assert_eq!(r[4], None);
+    assert_eq!(r[10], Some("twodotenleader"));
+    assert_eq!(r[11], Some("onedotenleader"));
+    assert_eq!(r[12], Some("comma"));
+    assert_eq!(r[13], None);
+}
+
+#[test]
 fn resolve_predefined_charsets_id() {
     assert_eq!(
         Some(2),

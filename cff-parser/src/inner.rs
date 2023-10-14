@@ -1168,9 +1168,19 @@ impl Encodings {
                 }
                 encodings
             }
+            Self::Format1(ranges) => {
+                let mut encodings = [None; 256];
+                for range in ranges {
+                    for i in range.first..=range.first + range.n_left {
+                        encodings[i as usize] = charsets
+                            .resolve_sid(i as GID)
+                            .map(|sid| string_index.get(sid));
+                    }
+                }
+                encodings
+            }
             Self::PredefinedStandard => predefined_encodings::STANDARD,
             Self::PredefinedExpert => predefined_encodings::EXPERT,
-            _ => todo!(),
         }
     }
 }
