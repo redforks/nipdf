@@ -444,7 +444,17 @@ fn build_encodings_predefined() {
 
 #[test]
 fn build_encodings_format0() {
-    todo!()
+    let charsets = Charsets::Predefined(PredefinedCharsets::Expert);
+    let string_index = StringIndex(IndexedData {
+        offsets: Offsets::new(OffSize::One, &[1_u8, 3, 6][..]).unwrap(),
+        data: b"abcde",
+    });
+    let encodings = Encodings::Format0(vec![1, 0, 2]);
+    let r = encodings.build(&charsets, string_index);
+    assert_eq!(r[0], Some("space"));
+    assert_eq!(r[1], Some(".notdef"));
+    assert_eq!(r[2], Some("exclamsmall"));
+    assert_eq!(r[3], None);
 }
 
 #[test]
