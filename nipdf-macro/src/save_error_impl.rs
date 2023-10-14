@@ -20,7 +20,7 @@ pub fn save_error(_attr: TokenStream, item: TokenStream) -> TokenStream {
     ensure_return_type(&method.sig.output);
 
     // check first argument is `&mut self`
-    if method.sig.inputs.len() == 0 {
+    if method.sig.inputs.is_empty() {
         panic!("method must have at least one argument")
     }
     let first_arg = &method.sig.inputs[0];
