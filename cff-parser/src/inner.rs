@@ -1001,9 +1001,11 @@ pub enum PredefinedCharsets {
     ExpertSubset = 2,
 }
 
-/// Charsets map code index (u8) to SID
+/// Charsets map code index(gid) (u8) to SID
 #[derive(Debug, PartialEq)]
 pub enum Charsets {
+    /// Format0, n_glyph - 1 codes stored in u8 array. because 0 are omitted because it
+    /// is always map to sid 0, which is .notdef.
     Format0(Vec<SID>),
     Format1(Vec<RangeInclusive<SID>>), // (first, n_left: u8)
     Format2(Vec<RangeInclusive<SID>>), // (first, n_left: u16)
@@ -1011,7 +1013,7 @@ pub enum Charsets {
 }
 
 impl Charsets {
-    /// Return SID by index. Return None if `idx` is out of range.
+    /// Return SID by index(gid). Return None if `idx` is out of range.
     pub fn resolve_sid(&self, idx: usize) -> Option<SID> {
         match self {
             Self::Predefined(predefined) => match predefined {
@@ -1021,6 +1023,14 @@ impl Charsets {
                     predefined_charsets::EXPERT_SUBSET.get(idx).copied()
                 }
             },
+            Self::Format0(sids) => {
+                if idx == 0 {
+                    Some(0)
+                } else {
+                    // 0 not stored in sids vec.
+                    sids.get(idx - 1).copied()
+                }
+            }
             _ => todo!(),
         }
     }
@@ -1120,6 +1130,7 @@ impl EncodingRange {
     }
 }
 
+/// Encodings map char code to gid, use Charset to map gid to SID.
 #[derive(Debug, PartialEq)]
 pub enum Encodings {
     Format0(Vec<u8>),

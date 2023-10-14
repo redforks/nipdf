@@ -471,5 +471,18 @@ fn resolve_predefined_charsets_id() {
         Some(231),
         Charsets::Predefined(PredefinedCharsets::ExpertSubset).resolve_sid(2)
     );
-    assert_eq!(None, Charsets::Predefined(PredefinedCharsets::ExpertSubset).resolve_sid(88));
+    assert_eq!(
+        None,
+        Charsets::Predefined(PredefinedCharsets::ExpertSubset).resolve_sid(88)
+    );
+}
+
+#[test]
+fn resolve_format0_charset() {
+    let charsets = Charsets::Format0(vec![1, 1000, 2]);
+    assert_eq!(Some(0), charsets.resolve_sid(0));
+    assert_eq!(Some(1), charsets.resolve_sid(1));
+    assert_eq!(Some(1000), charsets.resolve_sid(2));
+    assert_eq!(Some(2), charsets.resolve_sid(3));
+    assert_eq!(None, charsets.resolve_sid(4));
 }
