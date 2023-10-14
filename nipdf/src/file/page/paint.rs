@@ -1432,20 +1432,12 @@ impl<'a> FontOp for Type1FontOp<'a> {
             } else {
                 info!("glyph id not found for char: {:?}/{}", ch, gid_name);
             }
-        } else {
-            info!("glyph name found for char: {:?}", ch);
         }
 
         info!("glyph not found for char: {:?}", ch);
 
-        self.font
-            .glyph_by_name(".notdef")
-            .or_else(|| {
-                debug!("failed resolve gid for .notdef");
-                // .notdef normally is the last glyph
-                Some(self.font.glyph_count() - 1)
-            })
-            .unwrap() as u16
+        // .notdef gid is always be 0 for type1 font
+        0
     }
 
     fn char_width(&self, gid: u32) -> u32 {
