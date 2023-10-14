@@ -1,7 +1,7 @@
 use nom::{
     branch::alt,
     combinator::value,
-    error::{ErrorKind, ParseError as NomParseError, VerboseError},
+    error::{ErrorKind, ParseError as NomParseError},
     multi::many0_count,
     sequence::{delimited, preceded, terminated},
     AsChar, IResult, InputTakeAtPosition, Parser,
@@ -14,7 +14,10 @@ pub use file::*;
 pub use object::*;
 
 // Set `nom::error:VerboseError<&'a[u8]>` for detail error
-pub type ParseError<'a> = VerboseError<&'a [u8]>;
+#[cfg(not(debug_assertions))]
+pub type ParseError<'a> = nom::error::Error<&'a [u8]>;
+#[cfg(debug_assertions)]
+pub type ParseError<'a> = nom::error::VerboseError<&'a [u8]>;
 pub type ParseResult<'a, O, E = ParseError<'a>> = IResult<&'a [u8], O, E>;
 
 /// Error at file struct level.

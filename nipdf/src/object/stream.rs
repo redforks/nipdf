@@ -12,13 +12,9 @@ use log::error;
 use nipdf_macro::pdf_object;
 use once_cell::unsync::Lazy;
 
-use crate::{
-    ccitt::Flags,
-    file::ObjectResolver,
-    graphics::ColorSpace,
-    object::PdfObject,
-    parser::{ws_prefixed, ParseResult},
-};
+#[cfg(debug_assertions)]
+use crate::parser::{ws_prefixed, ParseResult};
+use crate::{ccitt::Flags, file::ObjectResolver, graphics::ColorSpace, object::PdfObject};
 
 use super::{Dictionary, Name, Object, ObjectValueError};
 
