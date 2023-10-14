@@ -1,7 +1,7 @@
 use super::*;
 
-fn sample_cff() -> Vec<u8> {
-    include_bytes!("sample.cff").to_vec()
+fn sample_cff() -> &'static [u8] {
+    include_bytes!("sample.cff")
 }
 
 #[test]

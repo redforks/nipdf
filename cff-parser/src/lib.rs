@@ -47,7 +47,7 @@ impl<'a> Font<'a> {
 
 /// Iterator of Font.
 pub struct Fonts<'a> {
-    f: &'a File,
+    data: &'a [u8],
     names_index: inner::NameIndex<'a>,
     top_dict_index: inner::TopDictIndex<'a>,
     string_index: inner::StringIndex<'a>,
@@ -62,7 +62,7 @@ impl<'a> Fonts<'a> {
         let (buf, top_dict_index) = inner::parse_top_dict_index(buf)?;
         let (_, string_index) = inner::parse_string_index(buf)?;
         Ok(Self {
-            f,
+            data: &f.data[..],
             names_index,
             top_dict_index,
             string_index,
@@ -80,7 +80,7 @@ impl<'a> Iterator for Fonts<'a> {
             let top_dict_data = self.top_dict_index.get(self.idx, self.string_index).ok()?;
             self.idx += 1;
             match name {
-                Some(name) => Some(Font::new(&self.f.data[..], name, top_dict_data)),
+                Some(name) => Some(Font::new(self.data, name, top_dict_data)),
                 None => return self.next(),
             }
         } else {
@@ -89,16 +89,14 @@ impl<'a> Iterator for Fonts<'a> {
     }
 }
 
-pub struct File {
+pub struct File<'a> {
     header: inner::Header,
-    data: Vec<u8>,
+    data: &'a [u8],
 }
 
-impl File {
-    pub fn open(data: Vec<u8>) -> Result<Self> {
-        debug_assert_eq!(data.len(), data.capacity());
-
-        let (_, header) = inner::parse_header(&data)?;
+impl<'a> File<'a> {
+    pub fn open(data: &'a [u8]) -> Result<Self> {
+        let (_, header) = inner::parse_header(data)?;
         Ok(File { data, header })
     }
 
