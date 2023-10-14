@@ -106,6 +106,7 @@ fn test_parse_header() {
 #[test_case(&[0x1e, 0xe2, 0xa2, 0x5f] => Operand::Real(-2.25))]
 #[test_case(&[0x8b, 0xef] => Operand::IntArray(vec![0, 100]))]
 #[test_case(&[0x1e, 0xe2, 0xa2, 0x5f, 0x1e, 0xe2, 0xa2, 0x5f] => Operand::RealArray(vec![-2.25, -2.25]))]
+#[test_case(&[0x8b, 0x1e, 0xe2, 0xa2, 0x5f, 0xef] => Operand::RealArray(vec![0.0, -2.25, 100.0]))]
 fn test_parse_operand(buf: &[u8]) -> Operand {
     let mut buf = buf.to_owned();
     buf.push(12);

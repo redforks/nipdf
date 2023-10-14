@@ -272,7 +272,16 @@ fn parse_operand(buf: &[u8]) -> ParseResult<Operand> {
             unreachable!()
         }
     } else {
-        unreachable!()
+        // mixed int/real to real array
+        let mut real_array = Vec::with_capacity(values.len());
+        for v in values {
+            match v {
+                Operand::Integer(i) => real_array.push(i as f32),
+                Operand::Real(r) => real_array.push(r),
+                _ => unreachable!(),
+            }
+        }
+        Ok((buf, Operand::RealArray(real_array)))
     }
 }
 
