@@ -25,10 +25,10 @@ mod predefined_encodings;
 pub type ParseResult<'a, O> = IResult<&'a [u8], O>;
 
 /// String ID, resolve &str from `StringIndex`.
-type SID = u16;
+type Sid = u16;
 
 /// Glyph ID
-type GID = u8;
+type Gid = u8;
 
 /// Operand, value of Dict
 #[derive(Clone, PartialEq, Debug)]
@@ -85,13 +85,13 @@ impl Operand {
 fn parse_integer(buf: &[u8]) -> ParseResult<i32> {
     let (buf, b0) = take(1usize)(buf)?;
     let b0 = b0[0];
-    if b0 >= 32 && b0 <= 246 {
+    if (32..=246).contains(&b0) {
         Ok((buf, (b0 as i32) - 139))
-    } else if b0 >= 247 && b0 <= 250 {
+    } else if (247..=250).contains(&b0) {
         let (buf, b1) = take(1usize)(buf)?;
         let b1 = b1[0];
         Ok((buf, ((b0 as i32) - 247) * 256 + (b1 as i32) + 108))
-    } else if b0 >= 251 && b0 <= 254 {
+    } else if (251..=254).contains(&b0) {
         let (buf, b1) = take(1usize)(buf)?;
         let b1 = b1[0];
         Ok((buf, -((b0 as i32) - 251) * 256 - (b1 as i32) - 108))
@@ -213,8 +213,8 @@ fn parse_real(buf: &[u8]) -> ParseResult<f32> {
 /// intArray/realArray.
 fn parse_operand(buf: &[u8]) -> ParseResult<Operand> {
     let (buf, mut values) = many1(alt((
-        parse_integer.map(|v| Operand::Integer(v)),
-        parse_real.map(|v| Operand::Real(v)),
+        parse_integer.map(Operand::Integer),
+        parse_real.map(Operand::Real),
     )))(buf)?;
 
     // If values has one item, return it directly.
@@ -399,7 +399,7 @@ impl Dict {
         f: F,
         k: Operator,
     ) -> Result<Option<T>> {
-        self.0.get(&k).map(|v| f(v)).transpose()
+        self.0.get(&k).map(f).transpose()
     }
 
     /// If value not exist for `k`, return default value `dv`,
@@ -410,7 +410,7 @@ impl Dict {
         k: Operator,
         dv: T,
     ) -> Result<T> {
-        self.0.get(&k).map(|v| f(v)).unwrap_or(Ok(dv))
+        self.0.get(&k).map(f).unwrap_or(Ok(dv))
     }
 
     /// If value not exist for `k`, return `Error::RequiredDictValueMissing` error,
@@ -422,7 +422,7 @@ impl Dict {
     ) -> Result<T> {
         self.0
             .get(&k)
-            .map_or(Err(Error::RequiredDictValueMissing), |v| f(&v))
+            .map_or(Err(Error::RequiredDictValueMissing), f)
     }
 
     /// Assume the operand value is delta-encoded, return decoded real number array.
@@ -433,7 +433,7 @@ impl Dict {
             let mut prev = 0.0;
             for &i in v {
                 r.push(i + prev);
-                prev = i + prev;
+                prev += i;
             }
             r
         }))
@@ -567,12 +567,12 @@ impl<'a> Offsets<'a> {
     }
 
     fn offset_parser<'b>(off_size: OffSize) -> impl Parser<&'b [u8], u32, NomError<&'b [u8]>> {
-        use nom::number::complete::{be_u16, be_u24, be_u32, be_u8};
+        use nom::number::complete::{be_u24, be_u32};
         move |buf| -> ParseResult<u32> {
             match off_size {
                 OffSize::One => be_u8.map(|v| v as u32).parse(buf),
                 OffSize::Two => be_u16.map(|v| v as u32).parse(buf),
-                OffSize::Three => be_u24.map(|v| v as u32).parse(buf),
+                OffSize::Three => be_u24.map(|v| v).parse(buf),
                 OffSize::Four => be_u32(buf),
             }
         }
@@ -621,13 +621,14 @@ impl<'a> IndexedData<'a> {
     /// `from_utf8()` returns error if str contains '\0'.
     pub fn get_bin_str(&self, idx: usize) -> &'a [u8] {
         fn parse_name(buf: &[u8]) -> ParseResult<'_, &'_ [u8]> {
-            Ok((&buf[0..0], &buf[..]))
+            Ok((&buf[0..0], buf))
         }
 
         self.get(idx, parse_name).unwrap()
     }
 
     /// Get Dict by index. Panic if `idx` is out of range.
+    #[allow(dead_code)]
     pub fn get_dict(&self, idx: usize) -> Dict {
         self.get(idx, parse_dict).unwrap()
     }
@@ -715,14 +716,10 @@ impl<'a> NameIndex<'a> {
     /// Get font name by index. Return None if name is marked removed.
     pub fn get(&self, idx: usize) -> Option<&'a str> {
         let name = self.0.get_bin_str(idx);
-        if name.is_empty() {
+        if name.is_empty() || name[0] == 0 {
             None
         } else {
-            if name[0] == 0 {
-                None
-            } else {
-                Some(from_utf8(name).unwrap())
-            }
+            Some(from_utf8(name).unwrap())
         }
     }
 }
@@ -738,7 +735,7 @@ pub struct StringIndex<'a>(IndexedData<'a>);
 
 impl<'a> StringIndex<'a> {
     /// Panic if `idx` is out of range. Return None if str is marked removed
-    pub fn get(&self, idx: SID) -> &'a str {
+    pub fn get(&self, idx: Sid) -> &'a str {
         if idx < 391 {
             STANDARD_STRINGS[idx as usize]
         } else {
@@ -749,7 +746,7 @@ impl<'a> StringIndex<'a> {
 
 /// Standard strings defined in CFF spec, used in Type 1 and some other strings.
 #[rustfmt::skip]
-const STANDARD_STRINGS: [&'static str; 391] = [
+const STANDARD_STRINGS: [&str; 391] = [
     ".notdef", "space", "exclam", "quotedbl", "numbersign", "dollar", "percent",
     "ampersand", "quoteright", "parenleft", "parenright", "asterisk", "plus", "comma",
     "hyphen", "period", "slash", "zero", "one", "two", "three", "four", "five", "six",
@@ -833,17 +830,19 @@ impl<'a> SIDDict<'a> {
     fn resolve_sid(&self, v: &Operand) -> Result<&str> {
         v.int()
             .ok_or(Error::ExpectInt)
-            .map(|v| self.strings.get(v as SID))
+            .map(|v| self.strings.get(v as Sid))
     }
 
     pub fn sid(&self, k: Operator) -> Result<&str> {
         self.required(|v| self.resolve_sid(v), k)
     }
 
+    #[allow(dead_code)]
     pub fn as_sid(&self, k: Operator) -> Result<Option<&str>> {
         self.opt(|v| self.resolve_sid(v), k)
     }
 
+    #[allow(dead_code)]
     pub fn as_sid_or(&self, k: Operator, default: &'static str) -> Result<&str> {
         self.opt_or(|v| self.resolve_sid(v), k, default)
     }
@@ -992,6 +991,7 @@ impl<'a> TopDictData<'a> {
 pub struct TopDictIndex<'a>(IndexedData<'a>);
 
 impl<'a> TopDictIndex<'a> {
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.0.len()
     }
@@ -1015,22 +1015,22 @@ pub enum PredefinedCharsets {
 pub enum Charsets {
     /// Format0, n_glyph - 1 codes stored in u8 array. because 0 are omitted because it
     /// is always map to sid 0, which is .notdef.
-    Format0(Vec<SID>),
-    Format1(Vec<RangeInclusive<SID>>), // (first, n_left: u8)
-    Format2(Vec<RangeInclusive<SID>>), // (first, n_left: u16)
+    Format0(Vec<Sid>),
+    Format1(Vec<RangeInclusive<Sid>>), // (first, n_left: u8)
+    Format2(Vec<RangeInclusive<Sid>>), // (first, n_left: u16)
     Predefined(PredefinedCharsets),
 }
 
 impl Charsets {
     /// Return SID by index(gid). Return None if `idx` is out of range.
-    pub fn resolve_sid(&self, idx: GID) -> Option<SID> {
+    pub fn resolve_sid(&self, idx: Gid) -> Option<Sid> {
         if idx == 0 {
             return Some(0);
         }
 
         match self {
             Self::Predefined(predefined) => match predefined {
-                PredefinedCharsets::ISOAdobe => (idx < 229).then_some(idx as SID),
+                PredefinedCharsets::ISOAdobe => (idx < 229).then_some(idx as Sid),
                 PredefinedCharsets::Expert => {
                     predefined_charsets::EXPERT.get(idx as usize).copied()
                 }
@@ -1043,12 +1043,12 @@ impl Charsets {
             Self::Format0(sids) => sids.get(idx as usize - 1).copied(),
 
             Self::Format1(ranges) | Self::Format2(ranges) => {
-                let idx = idx as SID;
-                let mut i: SID = 1;
+                let idx = idx as Sid;
+                let mut i: Sid = 1;
                 for range in ranges {
-                    i += range.len() as SID;
+                    i += range.len() as Sid;
                     if i > idx {
-                        return Some(*range.start() + idx - range.len() as SID);
+                        return Some(*range.start() + idx - range.len() as Sid);
                     }
                 }
                 None
@@ -1067,7 +1067,7 @@ impl Charsets {
 fn parse_charsets(buf: &[u8], n_glyphs: u16) -> ParseResult<Charsets> {
     let n_glyphs = n_glyphs - 1; // 0 is always .notdef, not exist in charsets
 
-    fn covers(r: &[RangeInclusive<SID>]) -> usize {
+    fn covers(r: &[RangeInclusive<Sid>]) -> usize {
         let mut covers = 0;
         for range in r {
             covers += range.len();
@@ -1083,7 +1083,7 @@ fn parse_charsets(buf: &[u8], n_glyphs: u16) -> ParseResult<Charsets> {
     >(
         n_glyphs: u16,
         n_left_parser: P,
-    ) -> impl Parser<&'a [u8], Vec<RangeInclusive<SID>>, E> {
+    ) -> impl Parser<&'a [u8], Vec<RangeInclusive<Sid>>, E> {
         let mut parse_item =
             pair(be_u16, n_left_parser).map(|(first, n_left)| first..=(first + n_left.into()));
         move |buf| {
@@ -1126,11 +1126,11 @@ fn parse_charsets(buf: &[u8], n_glyphs: u16) -> ParseResult<Charsets> {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct EncodingSupplement {
     code: u8,
-    sid: SID,
+    sid: Sid,
 }
 
 impl EncodingSupplement {
-    fn new(code: u8, sid: SID) -> Self {
+    fn new(code: u8, sid: Sid) -> Self {
         Self { code, sid }
     }
 
@@ -1172,7 +1172,7 @@ impl Encodings {
                 let mut encodings = [None; 256];
                 for (i, code) in codes.iter().enumerate() {
                     encodings[*code as usize] = charsets
-                        .resolve_sid(i as GID)
+                        .resolve_sid(i as Gid)
                         .map(|sid| string_index.get(sid));
                 }
                 encodings
@@ -1182,7 +1182,7 @@ impl Encodings {
                 for range in ranges {
                     for i in range.first..=range.first + range.n_left {
                         encodings[i as usize] = charsets
-                            .resolve_sid(i as GID)
+                            .resolve_sid(i as Gid)
                             .map(|sid| string_index.get(sid));
                     }
                 }
@@ -1213,15 +1213,16 @@ fn parse_encodings(buf: &[u8]) -> ParseResult<(Encodings, Option<Vec<EncodingSup
             .parse(buf)?,
         1 => {
             let range_parser =
-                pair(be_u8, be_u8).map(|(first, n_left)| EncodingRange { first, n_left });
+                pair(be_u8, be_u8).map(|(first, n_left)| EncodingRange::new(first, n_left));
             length_count(be_u8, range_parser)
                 .map(Encodings::Format1)
                 .parse(buf)?
         }
         _ => fail(buf)?,
     };
-    let supplement_parser = pair(be_u8, be_u16).map(|(code, sid)| EncodingSupplement { code, sid });
-    let mut supplements_parser = length_count(be_u8, supplement_parser);
+    let supplement_parser =
+        pair(be_u8, be_u16).map(|(code, sid)| EncodingSupplement::new(code, sid));
+    let supplements_parser = length_count(be_u8, supplement_parser);
     let (buf, supplements) = cond(format & 0x80 != 0, supplements_parser)(buf)?;
 
     Ok((buf, (encodings, supplements)))

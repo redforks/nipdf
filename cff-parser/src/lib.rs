@@ -62,7 +62,7 @@ impl<'a> Fonts<'a> {
         let (buf, top_dict_index) = inner::parse_top_dict_index(buf)?;
         let (_, string_index) = inner::parse_string_index(buf)?;
         Ok(Self {
-            data: &f.data[..],
+            data: f.data,
             names_index,
             top_dict_index,
             string_index,
@@ -81,7 +81,7 @@ impl<'a> Iterator for Fonts<'a> {
             self.idx += 1;
             match name {
                 Some(name) => Some(Font::new(self.data, name, top_dict_data)),
-                None => return self.next(),
+                None => self.next(),
             }
         } else {
             None
@@ -101,7 +101,7 @@ impl<'a> File<'a> {
     }
 
     pub fn iter(&self) -> Result<Fonts<'a>> {
-        Fonts::new(&self)
+        Fonts::new(self)
     }
 
     pub fn major_version(&self) -> u8 {

@@ -125,7 +125,7 @@ fn test_operator_hash() {
 
     assert_eq!(hash(1_u8), hash(Operator::new(1)));
     assert_eq!(hash(21_u8), hash(Operator::new(21)));
-    assert_eq!(hash(0x80_u8 | 0), hash(Operator::escaped(0)));
+    assert_eq!(hash(0x80_u8), hash(Operator::escaped(0)));
 }
 
 #[test]
