@@ -3,14 +3,17 @@ use std::sync::Arc;
 use anyhow::Result;
 use iced::{
     alignment::Horizontal,
-    widget::{button, row, text, text_input, Button, Row, Text},
+    widget::{text_input, Button, Row, Text},
     Length,
 };
 use iced::{Element, Sandbox, Settings};
 use iced_aw::{modal, Card};
 
 mod view;
-use view::viewer::{Viewer, ViewerMessage};
+use view::{
+    error::ErrorView,
+    viewer::{Viewer, ViewerMessage},
+};
 
 fn main() -> iced::Result {
     env_logger::init();
@@ -28,11 +31,9 @@ impl AsRef<[u8]> for ShardedData {
     }
 }
 
-struct App {
-    viewer: Option<Viewer>,
-    err: Option<anyhow::Error>,
-    selecting_file: bool,
-    file_path_selecting: String,
+enum View {
+    Error(ErrorView),
+    Viewer(Viewer),
 }
 
 /// Messages for application view.
@@ -46,13 +47,25 @@ enum AppMessage {
     FileSelected(String),
 }
 
+struct App {
+    current: View,
+    selecting_file: bool,
+    file_path_selecting: String,
+}
+
 impl App {
     fn viewer(&self) -> Option<&Viewer> {
-        self.viewer.as_ref()
+        match self.current {
+            View::Viewer(ref v) => Some(v),
+            _ => None,
+        }
     }
 
     fn mut_viewer(&mut self) -> Option<&mut Viewer> {
-        self.viewer.as_mut()
+        match self.current {
+            View::Viewer(ref mut v) => Some(v),
+            _ => None,
+        }
     }
 
     fn file_modal_view(&self) -> Element<'_, AppMessage> {
@@ -78,22 +91,24 @@ impl App {
                 ),
         )
         .max_width(300.0)
-        //.width(Length::Shrink)
         .on_close(AppMessage::CancelSelectFile)
         .into()
     }
 
     fn handle_result<T>(&mut self, rv: Result<T>) -> Option<T> {
         match rv {
-            Ok(v) => {
-                self.err = None;
-                Some(v)
-            }
+            Ok(v) => Some(v),
             Err(e) => {
-                self.err = Some(e);
+                self.current = View::Error(ErrorView::new(e));
                 self.selecting_file = false;
                 None
             }
+        }
+    }
+
+    fn open(&mut self, file_path: impl Into<String>) {
+        if let Some(viewer) = self.handle_result(Viewer::new(file_path)) {
+            self.current = View::Viewer(viewer);
         }
     }
 }
@@ -103,12 +118,11 @@ impl Sandbox for App {
 
     fn new() -> Self {
         let mut r = Self {
-            viewer: None,
-            err: None,
+            current: View::Error(ErrorView::new("".to_owned())),
             selecting_file: false,
             file_path_selecting: "".to_owned(),
         };
-        r.viewer = r.handle_result(Viewer::new("/tmp/pdfreference1.0.pdf"));
+        r.open("/tmp/pdfreference1.0.pdf");
         r
     }
 
@@ -123,6 +137,7 @@ impl Sandbox for App {
                 let rv = self.mut_viewer().unwrap().update(msg);
                 self.handle_result(rv);
             }
+
             AppMessage::SelectFile => {
                 self.selecting_file = true;
                 if let Some(viewer) = self.viewer() {
@@ -136,24 +151,17 @@ impl Sandbox for App {
                 self.selecting_file = false;
             }
             AppMessage::FileSelected(path) => {
-                self.viewer = self.handle_result(Viewer::new(path));
+                self.open(path);
                 self.selecting_file = false;
             }
         }
     }
 
     fn view(&self) -> Element<AppMessage> {
-        // show self.err if it is Some
-        let main = if let Some(err) = &self.err {
-            row![
-                Text::new(format!("{}", err)),
-                button("Open a new file...").on_press(AppMessage::SelectFile),
-            ]
-            .into()
-        } else if let Some(viewer) = &self.viewer {
-            viewer.view()
-        } else {
-            text("no file, create welcome page!!").into()
+        let main = match &self.current {
+            View::Viewer(v) => v.view(),
+            View::Error(v) => v.view(),
+            // _ => text("no file, create welcome page!!").into(),
         };
 
         if self.selecting_file {
