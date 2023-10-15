@@ -9,7 +9,9 @@ use iced::{
 use iced::{Element, Sandbox, Settings};
 use iced_aw::{modal, Card};
 
+mod app_state;
 mod view;
+use log::error;
 use view::{
     error::ErrorView,
     viewer::{Viewer, ViewerMessage},
@@ -108,9 +110,23 @@ impl App {
         }
     }
 
-    fn open(&mut self, file_path: impl Into<String>) {
-        if let Some(viewer) = self.handle_result(Viewer::new(file_path)) {
+    fn open_last_file(&mut self) {
+        if let Some(p) = app_state::load_last_file() {
+            match Viewer::new(p) {
+                Ok(v) => {
+                    self.current = View::Viewer(v);
+                }
+                Err(e) => {
+                    error!("open last file failed: {}", e);
+                }
+            }
+        }
+    }
+
+    fn open(&mut self, file_path: impl AsRef<str>) {
+        if let Some(viewer) = self.handle_result(Viewer::new(file_path.as_ref())) {
             self.current = View::Viewer(viewer);
+            app_state::save_last_file(file_path.as_ref());
         }
     }
 }
@@ -119,11 +135,13 @@ impl Sandbox for App {
     type Message = AppMessage;
 
     fn new() -> Self {
-        Self {
+        let mut r = Self {
             current: View::Welcome(Welcome),
             selecting_file: false,
             file_path_selecting: "".to_owned(),
-        }
+        };
+        r.open_last_file();
+        r
     }
 
     fn title(&self) -> String {
