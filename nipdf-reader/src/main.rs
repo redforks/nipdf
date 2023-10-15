@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use iced::{
     alignment::Horizontal,
-    executor,
+    executor, font,
     widget::{text_input, Button, Row, Text},
     Application, Command, Length, Theme,
 };
@@ -46,6 +46,7 @@ enum View {
 /// Messages for application view.
 #[derive(Debug, Clone)]
 enum AppMessage {
+    Inited,
     Viewer(ViewerMessage),
 
     SelectFile,
@@ -149,7 +150,11 @@ impl Application for App {
             file_path_selecting: "".to_owned(),
         };
         r.open_last_file();
-        (r, Command::none())
+        (
+            r,
+            // load icon font for iced_aw, without this modal close button icon will not show.
+            font::load(iced_aw::graphics::icons::ICON_FONT_BYTES).map(|_| AppMessage::Inited),
+        )
     }
 
     fn title(&self) -> String {
@@ -160,6 +165,7 @@ impl Application for App {
 
     fn update(&mut self, message: AppMessage) -> Command<Self::Message> {
         match message {
+            AppMessage::Inited => {}
             AppMessage::Viewer(msg) => {
                 let rv = self.mut_viewer().unwrap().update(msg);
                 self.handle_result(rv);
