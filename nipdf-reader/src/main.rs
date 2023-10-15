@@ -18,6 +18,8 @@ use view::{
     welcome::Welcome,
 };
 
+const APP_NAME: &str = "nipdf";
+
 fn main() -> iced::Result {
     env_logger::init();
 
@@ -74,7 +76,7 @@ impl App {
 
     fn file_modal_view(&self) -> Element<'_, AppMessage> {
         Card::new(
-            Text::new("nipdf"),
+            Text::new(APP_NAME),
             text_input("pdf file path", &self.file_path_selecting)
                 .on_input(AppMessage::SelectedFileChange),
         )
@@ -145,8 +147,9 @@ impl Sandbox for App {
     }
 
     fn title(&self) -> String {
-        self.viewer()
-            .map_or("nipdf".to_owned(), |v| format!("nipdf - {}", v.file_path()))
+        self.viewer().map_or(APP_NAME.to_owned(), |v| {
+            format!("{APP_NAME} - {}", v.file_path())
+        })
     }
 
     fn update(&mut self, message: AppMessage) {

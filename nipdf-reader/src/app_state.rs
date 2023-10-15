@@ -8,7 +8,7 @@ use log::error;
 
 /// Return the last opened file path. If directory not exists, create it.
 fn last_file_path() -> Result<PathBuf> {
-    let project_dirs = ProjectDirs::from("", "", "nipdf-reader")
+    let project_dirs = ProjectDirs::from("", "", crate::APP_NAME)
         .ok_or_else(|| anyhow::anyhow!("get project dirs failed"))?;
 
     let data_dir = project_dirs.data_dir();
