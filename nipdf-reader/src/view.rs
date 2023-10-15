@@ -2,3 +2,4 @@
 
 pub mod error;
 pub mod viewer;
+pub mod welcome;

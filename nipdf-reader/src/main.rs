@@ -13,6 +13,7 @@ mod view;
 use view::{
     error::ErrorView,
     viewer::{Viewer, ViewerMessage},
+    welcome::Welcome,
 };
 
 fn main() -> iced::Result {
@@ -34,6 +35,7 @@ impl AsRef<[u8]> for ShardedData {
 enum View {
     Error(ErrorView),
     Viewer(Viewer),
+    Welcome(Welcome),
 }
 
 /// Messages for application view.
@@ -117,13 +119,11 @@ impl Sandbox for App {
     type Message = AppMessage;
 
     fn new() -> Self {
-        let mut r = Self {
-            current: View::Error(ErrorView::new("".to_owned())),
+        Self {
+            current: View::Welcome(Welcome),
             selecting_file: false,
             file_path_selecting: "".to_owned(),
-        };
-        r.open("/tmp/pdfreference1.0.pdf");
-        r
+        }
     }
 
     fn title(&self) -> String {
@@ -161,7 +161,7 @@ impl Sandbox for App {
         let main = match &self.current {
             View::Viewer(v) => v.view(),
             View::Error(v) => v.view(),
-            // _ => text("no file, create welcome page!!").into(),
+            View::Welcome(v) => v.view(),
         };
 
         if self.selecting_file {
