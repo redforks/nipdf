@@ -137,6 +137,7 @@ impl Sandbox for App {
             }
             AppMessage::FileSelected(path) => {
                 self.viewer = self.handle_result(Viewer::new(path));
+                self.selecting_file = false;
             }
         }
     }
