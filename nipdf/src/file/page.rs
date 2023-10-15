@@ -265,13 +265,9 @@ impl<'a, 'b> Page<'a, 'b> {
         let resource = self.resources();
         let mut renderer = Render::new(option, &resource);
         if let Some(steps) = steps {
-            for op in ops.into_iter().take(steps) {
-                renderer.exec(&op);
-            }
+            ops.into_iter().take(steps).for_each(|op| renderer.exec(op));
         } else {
-            for op in ops.into_iter() {
-                renderer.exec(&op);
-            }
+            ops.into_iter().for_each(|op| renderer.exec(op));
         };
         Ok(renderer.into())
     }

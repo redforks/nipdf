@@ -497,19 +497,19 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         &mut self.current_mut().text_object
     }
 
-    pub(crate) fn exec(&mut self, op: &Operation<'_>) {
+    pub(crate) fn exec(&mut self, op: Operation<'_>) {
         debug!("handle operation: {:?}", op);
         match op {
             // General Graphics State Operations
-            Operation::SetLineWidth(width) => self.current_mut().set_line_width(*width),
-            Operation::SetLineCap(cap) => self.current_mut().set_line_cap(*cap),
-            Operation::SetLineJoin(join) => self.current_mut().set_line_join(*join),
-            Operation::SetMiterLimit(limit) => self.current_mut().set_miter_limit(*limit),
+            Operation::SetLineWidth(width) => self.current_mut().set_line_width(width),
+            Operation::SetLineCap(cap) => self.current_mut().set_line_cap(cap),
+            Operation::SetLineJoin(join) => self.current_mut().set_line_join(join),
+            Operation::SetMiterLimit(limit) => self.current_mut().set_miter_limit(limit),
             Operation::SetDashPattern(pattern, phase) => {
-                self.current_mut().set_dash_pattern(pattern, *phase)
+                self.current_mut().set_dash_pattern(&pattern, phase)
             }
-            Operation::SetRenderIntent(intent) => self.current_mut().set_render_intent(*intent),
-            Operation::SetFlatness(flatness) => self.current_mut().set_flatness(*flatness),
+            Operation::SetRenderIntent(intent) => self.current_mut().set_render_intent(intent),
+            Operation::SetFlatness(flatness) => self.current_mut().set_flatness(flatness),
             Operation::SetGraphicsStateParameters(nm) => {
                 let res = self.resources.ext_g_state().unwrap();
                 let res = res.get(&nm.0).expect("ExtGState not found");
@@ -519,20 +519,20 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             // Special Graphics State Operations
             Operation::SaveGraphicsState => self.push(),
             Operation::RestoreGraphicsState => self.pop(),
-            Operation::ModifyCTM(ctm) => self.current_mut().concat_ctm(*ctm),
+            Operation::ModifyCTM(ctm) => self.current_mut().concat_ctm(ctm),
 
             // Path Construction Operations
-            Operation::MoveToNext(p) => self.path.move_to(*p),
-            Operation::LineToNext(p) => self.path.line_to(*p),
-            Operation::AppendBezierCurve(p1, p2, p3) => self.path.curve_to(*p1, *p2, *p3),
+            Operation::MoveToNext(p) => self.path.move_to(p),
+            Operation::LineToNext(p) => self.path.line_to(p),
+            Operation::AppendBezierCurve(p1, p2, p3) => self.path.curve_to(p1, p2, p3),
             Operation::AppendBezierCurve2(p2, p3) => {
-                self.path.curve_to_cur_point_as_control(*p2, *p3);
+                self.path.curve_to_cur_point_as_control(p2, p3);
             }
             Operation::AppendBezierCurve1(p1, p3) => {
-                self.path.curve_to_dest_point_as_control(*p1, *p3);
+                self.path.curve_to_dest_point_as_control(p1, p3);
             }
             Operation::ClosePath => self.path.close_path(),
-            Operation::AppendRectangle(p, w, h) => self.path.append_rect(*p, *w, *h),
+            Operation::AppendRectangle(p, w, h) => self.path.append_rect(p, w, h),
 
             // Path Painting Operation
             Operation::Stroke => self.stroke(),
@@ -565,26 +565,26 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
 
             // Text State Operations
             Operation::SetCharacterSpacing(spacing) => {
-                self.text_object_mut().set_character_spacing(*spacing);
+                self.text_object_mut().set_character_spacing(spacing);
             }
-            Operation::SetWordSpacing(spacing) => self.text_object_mut().set_word_spacing(*spacing),
+            Operation::SetWordSpacing(spacing) => self.text_object_mut().set_word_spacing(spacing),
             Operation::SetHorizontalScaling(scale) => {
-                self.text_object_mut().set_horizontal_scaling(*scale);
+                self.text_object_mut().set_horizontal_scaling(scale);
             }
-            Operation::SetLeading(leading) => self.text_object_mut().set_leading(*leading),
-            Operation::SetFont(name, size) => self.text_object_mut().set_font(name, *size),
+            Operation::SetLeading(leading) => self.text_object_mut().set_leading(leading),
+            Operation::SetFont(name, size) => self.text_object_mut().set_font(&name, size),
             Operation::SetTextRenderingMode(mode) => {
-                self.text_object_mut().set_text_rendering_mode(*mode);
+                self.text_object_mut().set_text_rendering_mode(mode);
             }
-            Operation::SetTextRise(rise) => self.text_object_mut().set_text_rise(*rise),
+            Operation::SetTextRise(rise) => self.text_object_mut().set_text_rise(rise),
 
             // Text Positioning Operations
-            Operation::MoveTextPosition(p) => self.text_object_mut().move_text_position(*p),
+            Operation::MoveTextPosition(p) => self.text_object_mut().move_text_position(p),
             Operation::MoveTextPositionAndSetLeading(p) => {
                 self.text_object_mut().set_leading(-p.y);
-                self.text_object_mut().move_text_position(*p);
+                self.text_object_mut().move_text_position(p);
             }
-            Operation::SetTextMatrix(m) => self.text_object_mut().set_text_matrix(*m),
+            Operation::SetTextMatrix(m) => self.text_object_mut().set_text_matrix(m),
             Operation::MoveToStartOfNextLine => {
                 let leading = self.stack.last().unwrap().text_object.leading;
                 self.text_object_mut()
@@ -593,29 +593,25 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
 
             // Text Showing Operations
             Operation::ShowText(text) => self.show_text(text.as_ref()),
-            Operation::ShowTexts(texts) => self.show_texts(texts),
+            Operation::ShowTexts(texts) => self.show_texts(&texts),
 
             // Color Operations
-            Operation::SetStrokeColorSpace(space) => {
-                self.current_mut().stroke_color_space = space.clone()
-            }
-            Operation::SetFillColorSpace(space) => {
-                self.current_mut().fill_color_space = space.clone()
-            }
+            Operation::SetStrokeColorSpace(space) => self.current_mut().stroke_color_space = space,
+            Operation::SetFillColorSpace(space) => self.current_mut().fill_color_space = space,
             Operation::SetStrokeColor(color)
             | Operation::SetStrokeGray(color)
             | Operation::SetStrokeCMYK(color)
-            | Operation::SetStrokeRGB(color) => self.current_mut().set_stroke_color(*color),
+            | Operation::SetStrokeRGB(color) => self.current_mut().set_stroke_color(color),
             Operation::SetFillColor(color)
             | Operation::SetFillGray(color)
             | Operation::SetFillCMYK(color)
-            | Operation::SetFillRGB(color) => self.current_mut().set_fill_color(*color),
+            | Operation::SetFillRGB(color) => self.current_mut().set_fill_color(color),
             Operation::SetFillColorOrWithPattern(name) => {
-                self.set_fill_color_or_pattern(name).unwrap()
+                self.set_fill_color_or_pattern(&name).unwrap()
             }
 
             // XObject Operation
-            Operation::PaintXObject(name) => self.paint_x_object(name),
+            Operation::PaintXObject(name) => self.paint_x_object(&name),
 
             _ => {
                 eprintln!("unimplemented: {:?}", op);
@@ -827,9 +823,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 .build(),
             &resources,
         );
-        for op in ops {
-            render.exec(&op);
-        }
+        ops.into_iter().for_each(|op| render.exec(op));
         self.stack.last_mut().unwrap().fill_paint =
             PaintCreator::Tile((render.into(), tile.matrix()?));
         Ok(())
