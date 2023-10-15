@@ -165,11 +165,7 @@ impl Viewer {
                     .width(60)
                     .on_input(|s| AppMessage::Viewer(ViewerMessage::CurPageChange(s)))
                     .on_submit(AppMessage::Viewer(ViewerMessage::CurPageChanged)),
-                text(format!(
-                    "{}/{}",
-                    self.navi.current_page + 1,
-                    self.navi.total_pages
-                )),
+                text(format!("/{}", self.navi.total_pages)),
                 horizontal_space(16),
                 button("Prev").on_press_maybe(
                     self.navi
