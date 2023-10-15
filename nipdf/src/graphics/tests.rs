@@ -75,6 +75,7 @@ fn test_parse_operations(s: &str) -> Vec<Operation> {
 #[test_case("/tag /name DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict("tag".into()), NameOrDict::Name("name".into())); "DP with name")]
 #[test_case("/tag<<>>DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict("tag".into()), NameOrDict::Dict(Dictionary::new())); "DP with dict")]
 #[test_case("0 0 1 RG" => Operation::SetStrokeRGB(Color::Rgb(0f32, 0f32, 1f32)); "RG")]
+#[test_case("/CS0 CS" => Operation::SetStrokeRGB(Color::Rgb(0f32, 0f32, 1f32)); "extra whilespace")]
 fn test_parse_operation(s: &str) -> Operation {
     let (_, result) = parse_operation(s.as_bytes()).unwrap();
     result

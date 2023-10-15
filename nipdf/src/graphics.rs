@@ -131,13 +131,36 @@ pub enum TextRenderingMode {
     Clip = 7,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, TryFromNameObject)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ColorSpace {
     DeviceGray,
     DeviceRGB,
     DeviceCMYK,
     CalGray,
     Pattern,
+    /// User defined custom ColorSpace, resolve it from Resource Dictionary
+    Custom(String),
+}
+
+impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpace {
+    type Error = ObjectValueError;
+    fn try_from(object: &'b Object<'a>) -> Result<Self, Self::Error> {
+        match object.as_name()? {
+            "DeviceGray" => Ok(ColorSpace::DeviceGray),
+            "DeviceRGB" => Ok(ColorSpace::DeviceRGB),
+            "DeviceCMYK" => Ok(ColorSpace::DeviceCMYK),
+            "CalGray" => Ok(ColorSpace::CalGray),
+            "Pattern" => Ok(ColorSpace::Pattern),
+            name @ _ => Ok(ColorSpace::Custom(name.to_owned())),
+        }
+    }
+}
+
+impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorSpace {
+    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+        let o = objects.pop().unwrap();
+        ColorSpace::try_from(&o).map_err(|_| ObjectValueError::GraphicsOperationSchemaError)
+    }
 }
 
 /// Color for different color space

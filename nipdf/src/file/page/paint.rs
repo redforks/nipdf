@@ -596,8 +596,12 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             Operation::ShowTexts(texts) => self.show_texts(texts),
 
             // Color Operations
-            Operation::SetStrokeColorSpace(space) => self.current_mut().stroke_color_space = *space,
-            Operation::SetFillColorSpace(space) => self.current_mut().fill_color_space = *space,
+            Operation::SetStrokeColorSpace(space) => {
+                self.current_mut().stroke_color_space = space.clone()
+            }
+            Operation::SetFillColorSpace(space) => {
+                self.current_mut().fill_color_space = space.clone()
+            }
             Operation::SetStrokeColor(color)
             | Operation::SetStrokeGray(color)
             | Operation::SetStrokeCMYK(color)
