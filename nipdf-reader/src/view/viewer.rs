@@ -1,15 +1,21 @@
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use crate::{AppMessage, ShardedData};
 use anyhow::Result;
-use iced::widget::{
-    button, column, horizontal_space,
-    image::{Handle, Image},
-    row, scrollable,
-    scrollable::{Direction, Properties},
-    text, text_input,
-};
 use iced::Element;
+use iced::{
+    widget::{
+        button, column, horizontal_space,
+        image::{Handle, Image},
+        row, scrollable,
+        scrollable::{Direction, Properties},
+        text, text_input,
+    },
+    Length,
+};
 use nipdf::file::{File as PdfFile, RenderOptionBuilder};
 
 #[derive(Clone, Debug, Copy)]
@@ -66,6 +72,7 @@ pub struct Viewer {
     navi: PageNavigator,
     zoom: f32,
     cur_page_editing: String,
+    render_time: Duration,
 }
 
 impl Viewer {
@@ -83,6 +90,7 @@ impl Viewer {
             },
             zoom: 1.75,
             cur_page_editing: "".to_owned(),
+            render_time: Duration::default(),
         };
         r.load_page(0)?;
         Ok(r)
@@ -97,6 +105,7 @@ impl Viewer {
     }
 
     fn load_page(&mut self, no: u32) -> Result<()> {
+        let now = Instant::now();
         let buf: Vec<u8> = std::fs::read(&self.file_path)?;
         let (f, resolver) = PdfFile::parse(&buf[..])?;
         let catalog = f.catalog(&resolver)?;
@@ -114,6 +123,7 @@ impl Viewer {
             total_pages: pages.len() as u32,
         };
         self.update_cur_page_editing_from_navigation();
+        self.render_time = now.elapsed();
         Ok(())
     }
 
@@ -180,6 +190,8 @@ impl Viewer {
                 horizontal_space(16),
                 button("Zoom In").on_press(AppMessage::Viewer(ViewerMessage::ZoomIn)),
                 button("Zoom Out").on_press(AppMessage::Viewer(ViewerMessage::ZoomOut)),
+                horizontal_space(Length::Fill),
+                text(format!("{} ms", self.render_time.as_millis())),
             ]
             .align_items(iced::Alignment::Center),
             scrollable(
