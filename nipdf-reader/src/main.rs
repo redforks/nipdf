@@ -8,7 +8,7 @@ use iced::{
         image::{Handle, Image},
         row, scrollable,
         scrollable::{Direction, Properties},
-        text, Button, Row, Text, TextInput,
+        text, text_input, Button, Row, Text,
     },
     Length,
 };
@@ -75,6 +75,7 @@ struct App {
     zoom: f32,
     selecting_file: bool,
     file_path_selecting: String,
+    cur_page_editing: String,
 }
 
 #[derive(Debug, Clone)]
@@ -88,6 +89,9 @@ enum Message {
     SelectedFileChange(String),
     CancelSelectFile,
     FileSelected(String),
+
+    CurPageChange(String),
+    CurPageChanged,
 }
 
 impl App {
@@ -112,13 +116,14 @@ impl App {
             current_page: no,
             total_pages: pages.len() as u32,
         };
+        self.update_cur_page_editing_from_navigation();
         Ok(())
     }
 
     fn file_modal_view(&self) -> Element<'_, Message> {
         Card::new(
             Text::new("nipdf"),
-            TextInput::new("pdf file path", &self.file_path_selecting)
+            text_input("pdf file path", &self.file_path_selecting)
                 .on_input(Message::SelectedFileChange),
         )
         .foot(
@@ -147,6 +152,10 @@ impl App {
         self.err = Some(e);
         self.selecting_file = false;
     }
+
+    fn update_cur_page_editing_from_navigation(&mut self) {
+        self.cur_page_editing = format!("{}", self.navi.current_page + 1);
+    }
 }
 
 impl Sandbox for App {
@@ -164,6 +173,7 @@ impl Sandbox for App {
             zoom: 1.75,
             selecting_file: false,
             file_path_selecting: "".to_owned(),
+            cur_page_editing: "".to_owned(),
         };
         r.load_page(0);
         r
@@ -206,6 +216,21 @@ impl Sandbox for App {
                 self.selecting_file = false;
                 self.load_page(0);
             }
+            Message::CurPageChange(s) => {
+                self.cur_page_editing = s;
+            }
+            Message::CurPageChanged => {
+                if let Ok(page) = self.cur_page_editing.parse::<u32>() {
+                    if page > 0 && page <= self.navi.total_pages {
+                        self.navi.current_page = page - 1;
+                        self.load_page(self.navi.current_page);
+                    } else {
+                        self.update_cur_page_editing_from_navigation();
+                    }
+                } else {
+                    self.update_cur_page_editing_from_navigation();
+                }
+            }
         }
     }
 
@@ -222,6 +247,10 @@ impl Sandbox for App {
                 row![
                     button("Open...").on_press(Message::SelectFile),
                     horizontal_space(16),
+                    text_input("Page", &self.cur_page_editing)
+                        .width(60)
+                        .on_input(Message::CurPageChange)
+                        .on_submit(Message::CurPageChanged),
                     text(format!(
                         "{}/{}",
                         self.navi.current_page + 1,
