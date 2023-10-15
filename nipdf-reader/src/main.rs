@@ -3,10 +3,11 @@ use std::sync::Arc;
 use anyhow::Result;
 use iced::{
     alignment::Horizontal,
+    executor,
     widget::{text_input, Button, Row, Text},
-    Length,
+    Application, Command, Length, Theme,
 };
-use iced::{Element, Sandbox, Settings};
+use iced::{Element, Settings};
 use iced_aw::{modal, Card};
 
 mod app_state;
@@ -135,17 +136,20 @@ impl App {
     }
 }
 
-impl Sandbox for App {
+impl Application for App {
     type Message = AppMessage;
+    type Flags = ();
+    type Executor = executor::Default;
+    type Theme = Theme;
 
-    fn new() -> Self {
+    fn new(_: Self::Flags) -> (Self, Command<Self::Message>) {
         let mut r = Self {
             current: View::Welcome(Welcome),
             selecting_file: false,
             file_path_selecting: "".to_owned(),
         };
         r.open_last_file();
-        r
+        (r, Command::none())
     }
 
     fn title(&self) -> String {
@@ -154,7 +158,7 @@ impl Sandbox for App {
         })
     }
 
-    fn update(&mut self, message: AppMessage) {
+    fn update(&mut self, message: AppMessage) -> Command<Self::Message> {
         match message {
             AppMessage::Viewer(msg) => {
                 let rv = self.mut_viewer().unwrap().update(msg);
@@ -178,6 +182,8 @@ impl Sandbox for App {
                 self.selecting_file = false;
             }
         }
+
+        Command::none()
     }
 
     fn view(&self) -> Element<AppMessage> {
