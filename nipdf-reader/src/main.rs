@@ -78,20 +78,27 @@ struct App {
     cur_page_editing: String,
 }
 
+/// Messages for pdf file viewer view.
 #[derive(Debug, Clone)]
-enum AppMessage {
+enum ViewerMessage {
     NextPage,
     PrevPage,
     ZoomIn,
     ZoomOut,
 
+    CurPageChange(String),
+    CurPageChanged,
+}
+
+/// Messages for application view.
+#[derive(Debug, Clone)]
+enum AppMessage {
+    Viewer(ViewerMessage),
+
     SelectFile,
     SelectedFileChange(String),
     CancelSelectFile,
     FileSelected(String),
-
-    CurPageChange(String),
-    CurPageChanged,
 }
 
 impl App {
@@ -156,6 +163,42 @@ impl App {
     fn update_cur_page_editing_from_navigation(&mut self) {
         self.cur_page_editing = format!("{}", self.navi.current_page + 1);
     }
+
+    fn viewer_update(&mut self, message: ViewerMessage) {
+        match message {
+            ViewerMessage::NextPage => {
+                self.navi.next();
+                self.load_page(self.navi.current_page);
+            }
+            ViewerMessage::PrevPage => {
+                self.navi.prev();
+                self.load_page(self.navi.current_page);
+            }
+            ViewerMessage::ZoomIn => {
+                self.zoom *= 1.25;
+                self.load_page(self.navi.current_page);
+            }
+            ViewerMessage::ZoomOut => {
+                self.zoom /= 1.25;
+                self.load_page(self.navi.current_page);
+            }
+            ViewerMessage::CurPageChange(s) => {
+                self.cur_page_editing = s;
+            }
+            ViewerMessage::CurPageChanged => {
+                if let Ok(page) = self.cur_page_editing.parse::<u32>() {
+                    if page > 0 && page <= self.navi.total_pages {
+                        self.navi.current_page = page - 1;
+                        self.load_page(self.navi.current_page);
+                    } else {
+                        self.update_cur_page_editing_from_navigation();
+                    }
+                } else {
+                    self.update_cur_page_editing_from_navigation();
+                }
+            }
+        }
+    }
 }
 
 impl Sandbox for App {
@@ -185,22 +228,7 @@ impl Sandbox for App {
 
     fn update(&mut self, message: AppMessage) {
         match message {
-            AppMessage::NextPage => {
-                self.navi.next();
-                self.load_page(self.navi.current_page);
-            }
-            AppMessage::PrevPage => {
-                self.navi.prev();
-                self.load_page(self.navi.current_page);
-            }
-            AppMessage::ZoomIn => {
-                self.zoom *= 1.25;
-                self.load_page(self.navi.current_page);
-            }
-            AppMessage::ZoomOut => {
-                self.zoom /= 1.25;
-                self.load_page(self.navi.current_page);
-            }
+            AppMessage::Viewer(msg) => self.viewer_update(msg),
             AppMessage::SelectFile => {
                 self.selecting_file = true;
                 self.file_path_selecting = self.file_path.clone();
@@ -215,21 +243,6 @@ impl Sandbox for App {
                 self.file_path = path;
                 self.selecting_file = false;
                 self.load_page(0);
-            }
-            AppMessage::CurPageChange(s) => {
-                self.cur_page_editing = s;
-            }
-            AppMessage::CurPageChanged => {
-                if let Ok(page) = self.cur_page_editing.parse::<u32>() {
-                    if page > 0 && page <= self.navi.total_pages {
-                        self.navi.current_page = page - 1;
-                        self.load_page(self.navi.current_page);
-                    } else {
-                        self.update_cur_page_editing_from_navigation();
-                    }
-                } else {
-                    self.update_cur_page_editing_from_navigation();
-                }
             }
         }
     }
@@ -249,21 +262,27 @@ impl Sandbox for App {
                     horizontal_space(16),
                     text_input("Page", &self.cur_page_editing)
                         .width(60)
-                        .on_input(AppMessage::CurPageChange)
-                        .on_submit(AppMessage::CurPageChanged),
+                        .on_input(|s| AppMessage::Viewer(ViewerMessage::CurPageChange(s)))
+                        .on_submit(AppMessage::Viewer(ViewerMessage::CurPageChanged)),
                     text(format!(
                         "{}/{}",
                         self.navi.current_page + 1,
                         self.navi.total_pages
                     )),
                     horizontal_space(16),
-                    button("Prev")
-                        .on_press_maybe(self.navi.can_prev().then_some(AppMessage::PrevPage)),
-                    button("Next")
-                        .on_press_maybe(self.navi.can_next().then_some(AppMessage::NextPage)),
+                    button("Prev").on_press_maybe(
+                        self.navi
+                            .can_prev()
+                            .then_some(AppMessage::Viewer(ViewerMessage::PrevPage))
+                    ),
+                    button("Next").on_press_maybe(
+                        self.navi
+                            .can_next()
+                            .then_some(AppMessage::Viewer(ViewerMessage::NextPage))
+                    ),
                     horizontal_space(16),
-                    button("Zoom In").on_press(AppMessage::ZoomIn),
-                    button("Zoom Out").on_press(AppMessage::ZoomOut),
+                    button("Zoom In").on_press(AppMessage::Viewer(ViewerMessage::ZoomIn)),
+                    button("Zoom Out").on_press(AppMessage::Viewer(ViewerMessage::ZoomOut)),
                 ]
                 .align_items(iced::Alignment::Center),
                 match &self.page {
