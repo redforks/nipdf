@@ -73,12 +73,15 @@ pub struct Viewer {
     zoom: f32,
     cur_page_editing: String,
     render_time: Duration,
+    file_data: Vec<u8>,
 }
 
 impl Viewer {
     pub fn new(file_path: impl Into<String>) -> Result<Self> {
+        let file_path = file_path.into();
+        let file_data = std::fs::read(&file_path)?;
         let mut r = Self {
-            file_path: file_path.into(),
+            file_path,
             page: Page {
                 width: 0,
                 height: 0,
@@ -91,6 +94,7 @@ impl Viewer {
             zoom: 1.75,
             cur_page_editing: "".to_owned(),
             render_time: Duration::default(),
+            file_data,
         };
         r.load_page(0)?;
         Ok(r)
@@ -106,8 +110,7 @@ impl Viewer {
 
     fn load_page(&mut self, no: u32) -> Result<()> {
         let now = Instant::now();
-        let buf: Vec<u8> = std::fs::read(&self.file_path)?;
-        let (f, resolver) = PdfFile::parse(&buf[..])?;
+        let (f, resolver) = PdfFile::parse(&self.file_data[..])?;
         let catalog = f.catalog(&resolver)?;
         let pages = catalog.pages()?;
         let page = &pages[no as usize];
