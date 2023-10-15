@@ -18,3 +18,7 @@ iced_aw = { version = "0.7.0", default_features = false, features = [
 ] }
 directories-next = "2.0.0"
 log = "0.4.20"
+
+[features]
+# enable iced debug, hit F12 to toggle iced debug display 
+iced-debug = ["iced/debug"]
