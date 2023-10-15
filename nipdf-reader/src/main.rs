@@ -50,7 +50,7 @@ enum AppMessage {
     SelectFile,
     SelectedFileChange(String),
     CancelSelectFile,
-    FileSelected(String),
+    FileSelected,
 }
 
 struct App {
@@ -78,7 +78,8 @@ impl App {
         Card::new(
             Text::new(APP_NAME),
             text_input("pdf file path", &self.file_path_selecting)
-                .on_input(AppMessage::SelectedFileChange),
+                .on_input(AppMessage::SelectedFileChange)
+                .on_submit(AppMessage::FileSelected),
         )
         .foot(
             Row::new()
@@ -93,7 +94,7 @@ impl App {
                 .push(
                     Button::new(Text::new("Ok").horizontal_alignment(Horizontal::Center))
                         .width(Length::Fill)
-                        .on_press(AppMessage::FileSelected(self.file_path_selecting.clone())),
+                        .on_press(AppMessage::FileSelected),
                 ),
         )
         .max_width(300.0)
@@ -125,10 +126,11 @@ impl App {
         }
     }
 
-    fn open(&mut self, file_path: impl AsRef<str>) {
-        if let Some(viewer) = self.handle_result(Viewer::new(file_path.as_ref())) {
+    fn open(&mut self) {
+        let file_path = self.file_path_selecting.clone();
+        if let Some(viewer) = self.handle_result(Viewer::new(file_path)) {
             self.current = View::Viewer(viewer);
-            app_state::save_last_file(file_path.as_ref());
+            app_state::save_last_file(&self.file_path_selecting);
         }
     }
 }
@@ -171,8 +173,8 @@ impl Sandbox for App {
             AppMessage::CancelSelectFile => {
                 self.selecting_file = false;
             }
-            AppMessage::FileSelected(path) => {
-                self.open(path);
+            AppMessage::FileSelected => {
+                self.open();
                 self.selecting_file = false;
             }
         }
@@ -186,7 +188,10 @@ impl Sandbox for App {
         };
 
         if self.selecting_file {
-            modal(main, Some(self.file_modal_view())).into()
+            modal(main, Some(self.file_modal_view()))
+                .on_esc(AppMessage::CancelSelectFile)
+                .backdrop(AppMessage::CancelSelectFile)
+                .into()
         } else {
             main
         }
