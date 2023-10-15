@@ -11,7 +11,7 @@ fn last_file_path() -> Result<PathBuf> {
     let project_dirs = ProjectDirs::from("", "", crate::APP_NAME)
         .ok_or_else(|| anyhow::anyhow!("get project dirs failed"))?;
 
-    let data_dir = project_dirs.data_dir();
+    let data_dir = project_dirs.data_local_dir();
     if !data_dir.exists() {
         std::fs::create_dir_all(data_dir)?;
     }
