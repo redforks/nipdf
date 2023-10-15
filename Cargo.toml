@@ -16,3 +16,4 @@ codegen-units = 1
 
 [profile.dev]
 split-debuginfo = "unpacked"
+opt-level = 1
