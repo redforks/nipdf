@@ -79,7 +79,7 @@ struct App {
 }
 
 #[derive(Debug, Clone)]
-enum Message {
+enum AppMessage {
     NextPage,
     PrevPage,
     ZoomIn,
@@ -120,11 +120,11 @@ impl App {
         Ok(())
     }
 
-    fn file_modal_view(&self) -> Element<'_, Message> {
+    fn file_modal_view(&self) -> Element<'_, AppMessage> {
         Card::new(
             Text::new("nipdf"),
             text_input("pdf file path", &self.file_path_selecting)
-                .on_input(Message::SelectedFileChange),
+                .on_input(AppMessage::SelectedFileChange),
         )
         .foot(
             Row::new()
@@ -134,17 +134,17 @@ impl App {
                 .push(
                     Button::new(Text::new("Cancel").horizontal_alignment(Horizontal::Center))
                         .width(Length::Fill)
-                        .on_press(Message::CancelSelectFile),
+                        .on_press(AppMessage::CancelSelectFile),
                 )
                 .push(
                     Button::new(Text::new("Ok").horizontal_alignment(Horizontal::Center))
                         .width(Length::Fill)
-                        .on_press(Message::FileSelected(self.file_path_selecting.clone())),
+                        .on_press(AppMessage::FileSelected(self.file_path_selecting.clone())),
                 ),
         )
         .max_width(300.0)
         //.width(Length::Shrink)
-        .on_close(Message::CancelSelectFile)
+        .on_close(AppMessage::CancelSelectFile)
         .into()
     }
 
@@ -159,7 +159,7 @@ impl App {
 }
 
 impl Sandbox for App {
-    type Message = Message;
+    type Message = AppMessage;
 
     fn new() -> Self {
         let mut r = Self {
@@ -183,43 +183,43 @@ impl Sandbox for App {
         format!("nipdf - {}", self.file_path)
     }
 
-    fn update(&mut self, message: Message) {
+    fn update(&mut self, message: AppMessage) {
         match message {
-            Message::NextPage => {
+            AppMessage::NextPage => {
                 self.navi.next();
                 self.load_page(self.navi.current_page);
             }
-            Message::PrevPage => {
+            AppMessage::PrevPage => {
                 self.navi.prev();
                 self.load_page(self.navi.current_page);
             }
-            Message::ZoomIn => {
+            AppMessage::ZoomIn => {
                 self.zoom *= 1.25;
                 self.load_page(self.navi.current_page);
             }
-            Message::ZoomOut => {
+            AppMessage::ZoomOut => {
                 self.zoom /= 1.25;
                 self.load_page(self.navi.current_page);
             }
-            Message::SelectFile => {
+            AppMessage::SelectFile => {
                 self.selecting_file = true;
                 self.file_path_selecting = self.file_path.clone();
             }
-            Message::SelectedFileChange(path) => {
+            AppMessage::SelectedFileChange(path) => {
                 self.file_path_selecting = path;
             }
-            Message::CancelSelectFile => {
+            AppMessage::CancelSelectFile => {
                 self.selecting_file = false;
             }
-            Message::FileSelected(path) => {
+            AppMessage::FileSelected(path) => {
                 self.file_path = path;
                 self.selecting_file = false;
                 self.load_page(0);
             }
-            Message::CurPageChange(s) => {
+            AppMessage::CurPageChange(s) => {
                 self.cur_page_editing = s;
             }
-            Message::CurPageChanged => {
+            AppMessage::CurPageChanged => {
                 if let Ok(page) = self.cur_page_editing.parse::<u32>() {
                     if page > 0 && page <= self.navi.total_pages {
                         self.navi.current_page = page - 1;
@@ -234,23 +234,23 @@ impl Sandbox for App {
         }
     }
 
-    fn view(&self) -> Element<Message> {
+    fn view(&self) -> Element<AppMessage> {
         // show self.err if it is Some
         let main = if let Some(err) = &self.err {
             row![
                 Text::new(format!("{}", err)),
-                button("Open a new file...").on_press(Message::SelectFile),
+                button("Open a new file...").on_press(AppMessage::SelectFile),
             ]
             .into()
         } else {
             column![
                 row![
-                    button("Open...").on_press(Message::SelectFile),
+                    button("Open...").on_press(AppMessage::SelectFile),
                     horizontal_space(16),
                     text_input("Page", &self.cur_page_editing)
                         .width(60)
-                        .on_input(Message::CurPageChange)
-                        .on_submit(Message::CurPageChanged),
+                        .on_input(AppMessage::CurPageChange)
+                        .on_submit(AppMessage::CurPageChanged),
                     text(format!(
                         "{}/{}",
                         self.navi.current_page + 1,
@@ -258,12 +258,12 @@ impl Sandbox for App {
                     )),
                     horizontal_space(16),
                     button("Prev")
-                        .on_press_maybe(self.navi.can_prev().then_some(Message::PrevPage)),
+                        .on_press_maybe(self.navi.can_prev().then_some(AppMessage::PrevPage)),
                     button("Next")
-                        .on_press_maybe(self.navi.can_next().then_some(Message::NextPage)),
+                        .on_press_maybe(self.navi.can_next().then_some(AppMessage::NextPage)),
                     horizontal_space(16),
-                    button("Zoom In").on_press(Message::ZoomIn),
-                    button("Zoom Out").on_press(Message::ZoomOut),
+                    button("Zoom In").on_press(AppMessage::ZoomIn),
+                    button("Zoom Out").on_press(AppMessage::ZoomOut),
                 ]
                 .align_items(iced::Alignment::Center),
                 match &self.page {
