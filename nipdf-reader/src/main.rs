@@ -8,7 +8,7 @@ use iced::{
         image::{Handle, Image},
         row, scrollable,
         scrollable::{Direction, Properties},
-        Button, Row, Text, TextInput,
+        text, Button, Row, Text, TextInput,
     },
     Length,
 };
@@ -222,6 +222,12 @@ impl Sandbox for App {
                 row![
                     button("Open...").on_press(Message::SelectFile),
                     horizontal_space(16),
+                    text(format!(
+                        "{}/{}",
+                        self.navi.current_page + 1,
+                        self.navi.total_pages
+                    )),
+                    horizontal_space(16),
                     button("Prev")
                         .on_press_maybe(self.navi.can_prev().then_some(Message::PrevPage)),
                     button("Next")
@@ -229,7 +235,8 @@ impl Sandbox for App {
                     horizontal_space(16),
                     button("Zoom In").on_press(Message::ZoomIn),
                     button("Zoom Out").on_press(Message::ZoomOut),
-                ],
+                ]
+                .align_items(iced::Alignment::Center),
                 match &self.page {
                     Some(page) => Element::from(
                         scrollable(
