@@ -930,14 +930,9 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
 
         let text_object = &state.text_object;
         let font_size = text_object.font_size;
-        let font = self
-            .font_cache
-            .get_font(text_object.font_name.as_ref().unwrap())
-            .unwrap();
         let mut glyph_render = font.create_glyph_render(font_size).unwrap();
 
         let ctm = &state.ctm;
-        let font_size = text_object.font_size;
         let mut transform: Transform = text_object.matrix.into();
         let render_mode = text_object.render_mode;
         let mut text_clip_path = Path::default();
