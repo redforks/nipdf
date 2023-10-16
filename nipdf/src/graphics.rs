@@ -133,15 +133,6 @@ pub enum TextRenderingMode {
     Clip = 7,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, TryFromNameObject)]
-pub enum ColorSpace {
-    DeviceGray,
-    DeviceRGB,
-    DeviceCMYK,
-    CalGray,
-    Pattern,
-}
-
 /// ColorSpace use it to create RGB color.
 /// It depends on the color space, for DeviceGray, the args is one number,
 /// for DeviceRGB, the args is three number.
@@ -153,7 +144,7 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorArgs<'a> {
         let mut result = Vec::with_capacity(objects.len());
         while let Some(o) = objects.pop() {
             if let Ok(num) = o.as_number() {
-                result.push(num);
+                result.push(Object::Number(num));
             } else {
                 objects.push(o);
                 break;
@@ -161,6 +152,53 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorArgs<'a> {
         }
         result.reverse();
         Ok(Self(result))
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct RgbColor(pub f32, pub f32, pub f32);
+
+#[derive(Clone, PartialEq, Eq, Debug, TryFromNameObject)]
+pub enum ColorSpace {
+    DeviceGray,
+    DeviceRGB,
+    DeviceCMYK,
+    CalGray,
+    Pattern,
+}
+
+impl ColorSpace {
+    /// Convert color args to color based on current ColorSpace.
+    pub fn to_color(&self, args: &ColorArgs) -> Result<RgbColor, ObjectValueError> {
+        let args = &args.0;
+        match self {
+            Self::DeviceRGB => {
+                assert_eq!(3, args.len());
+                Ok(RgbColor(
+                    args[0].as_number()?,
+                    args[1].as_number()?,
+                    args[2].as_number()?,
+                ))
+            }
+            Self::DeviceGray => {
+                assert_eq!(1, args.len());
+                let v = args[0].as_number()?;
+                Ok(RgbColor(v, v, v))
+            }
+            Self::DeviceCMYK => {
+                assert_eq!(4, args.len());
+                let c = args[0].as_number()?;
+                let m = args[1].as_number()?;
+                let y = args[2].as_number()?;
+                let k = args[3].as_number()?;
+                Ok(RgbColor(
+                    (1.0 - c) * (1.0 - k),
+                    (1.0 - m) * (1.0 - k),
+                    (1.0 - y) * (1.0 - k),
+                ))
+            }
+            _ => todo!("Unsupported color space: {:?}", self),
+        }
     }
 }
 
