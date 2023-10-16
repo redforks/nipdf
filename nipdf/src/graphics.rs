@@ -1,9 +1,11 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, num::NonZeroU32};
 
 use ahash::RandomState;
+use anyhow::Result as AnyResult;
 use arrayvec::ArrayVec;
 use educe::Educe;
 use lazy_static::lazy_static;
+use log::error;
 use nom::{
     branch::alt,
     bytes::complete::is_not,
@@ -15,13 +17,14 @@ use nom::{
 use tiny_skia::Transform;
 
 use crate::{
-    file::Rectangle,
+    file::{Rectangle, ResourceDict},
     object::{
-        Array, Dictionary, Name, Object, ObjectValueError, Stream, TextString, TextStringOrNumber,
+        Array, Dictionary, Name, Object, ObjectValueError, PdfObject, Stream, TextString,
+        TextStringOrNumber,
     },
     parser::{parse_object, ws_prefixed, ws_terminated, ParseError, ParseResult},
 };
-use nipdf_macro::{OperationParser, TryFromIntObject, TryFromNameObject};
+use nipdf_macro::{pdf_object, OperationParser, TryFromIntObject, TryFromNameObject};
 
 mod pattern;
 pub(crate) use pattern::*;
@@ -158,13 +161,59 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorArgs<'a> {
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct RgbColor(pub f32, pub f32, pub f32);
 
-#[derive(Clone, PartialEq, Eq, Debug, TryFromNameObject)]
+impl From<RgbColor> for Color {
+    fn from(c: RgbColor) -> Self {
+        Color::Rgb(c.0, c.1, c.2)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ColorSpace {
     DeviceGray,
     DeviceRGB,
     DeviceCMYK,
     CalGray,
     Pattern,
+    ICCBased(NonZeroU32), // stream id
+    /// ref id point to the real ColorSpace Object, use ObjectResolver
+    /// to get the real ColorSpace Object, and then convert it to ColorSpace
+    RefId(NonZeroU32),
+}
+
+impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpace {
+    type Error = ObjectValueError;
+
+    fn try_from(object: &'b Object<'a>) -> Result<Self, Self::Error> {
+        match object {
+            Object::Name(name) => match name.as_ref() {
+                "DeviceGray" => Ok(ColorSpace::DeviceGray),
+                "DeviceRGB" => Ok(ColorSpace::DeviceRGB),
+                "DeviceCMYK" => Ok(ColorSpace::DeviceCMYK),
+                "CalGray" => Ok(ColorSpace::CalGray),
+                "Pattern" => Ok(ColorSpace::Pattern),
+                _ => Err(ObjectValueError::GraphicsOperationSchemaError),
+            },
+            Object::Array(arr) => {
+                assert_eq!(2, arr.len());
+                match arr[0].as_name()? {
+                    "ICCBased" => Ok(ColorSpace::ICCBased(arr[1].as_ref()?.id().id())),
+                    _ => Err(ObjectValueError::GraphicsOperationSchemaError),
+                }
+            }
+            Object::Reference(id) => Ok(ColorSpace::RefId(id.id().id())),
+            _ => {
+                error!("{:?}", object);
+                Err(ObjectValueError::GraphicsOperationSchemaError)
+            }
+        }
+    }
+}
+
+impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorSpace {
+    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+        let o = objects.pop().unwrap();
+        ColorSpace::try_from(&o).map_err(|_| ObjectValueError::GraphicsOperationSchemaError)
+    }
 }
 
 impl ColorSpace {
@@ -208,6 +257,39 @@ pub enum ColorSpaceArgs {
 
     /// User defined custom ColorSpace, resolve it from Resource Dictionary
     Custom(String),
+}
+
+#[pdf_object(())]
+trait ICCStreamDictTrait {
+    #[try_from]
+    fn alternate(&self) -> Option<ColorSpace>;
+}
+
+impl ColorSpaceArgs {
+    /// Convert args to ColorSpace, resolve from page resources if it is Custom.
+    pub fn map_to(&self, resources: &ResourceDict) -> AnyResult<ColorSpace> {
+        match self {
+            Self::Predefined(cs) => Ok(*cs),
+            Self::Custom(name) => {
+                let spaces = resources.color_space()?;
+                let mut cs = spaces.get(name).ok_or(ObjectValueError::DictNameMissing)?;
+                let cs_owner;
+                if let ColorSpace::RefId(id) = cs {
+                    cs_owner = resources.resolver().resolve(*id)?.try_into()?;
+                    cs = &cs_owner;
+                };
+                match cs {
+                    ColorSpace::ICCBased(id) => {
+                        let d = resources.resolver().resolve(*id)?.as_stream()?.as_dict();
+                        let d = ICCStreamDict::new(None, d, resources.resolver())?;
+                        Ok(d.alternate()?
+                            .expect("unsupported if ICCBased color no alternate color space"))
+                    }
+                    _ => todo!("Unsupported color space: {:?}", self),
+                }
+            }
+        }
+    }
 }
 
 impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceArgs {
@@ -307,8 +389,8 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for TransformMatrix {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ColorOrName {
-    Color(Color),
+pub enum ColorArgsOrName<'a> {
+    Color(ColorArgs<'a>),
     Name(String),
 }
 
@@ -480,17 +562,17 @@ pub enum Operation<'a> {
 
     // Color Operations
     #[op_tag("CS")]
-    SetStrokeColorSpace(ColorSpace),
+    SetStrokeColorSpace(ColorSpaceArgs),
     #[op_tag("cs")]
-    SetFillColorSpace(ColorSpace),
+    SetFillColorSpace(ColorSpaceArgs),
     #[op_tag("SC")]
     SetStrokeColor(Color),
     #[op_tag("SCN")]
-    SetStrokeColorOrWithPattern(ColorOrName),
+    SetStrokeColorOrWithPattern(ColorArgsOrName<'a>),
     #[op_tag("sc")]
     SetFillColor(Color),
     #[op_tag("scn")]
-    SetFillColorOrWithPattern(ColorOrName),
+    SetFillColorOrWithPattern(ColorArgsOrName<'a>),
     #[op_tag("G")]
     SetStrokeGray(Color), // Should be Color::Gray
     #[op_tag("g")]
@@ -582,14 +664,14 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for TextStringOrNumber<'a> {
     }
 }
 
-impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorOrName {
+impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorArgsOrName<'a> {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
         if let Ok(name) = o.as_name() {
-            Ok(ColorOrName::Name(name.to_owned()))
+            Ok(ColorArgsOrName::Name(name.to_owned()))
         } else {
             objects.push(o);
-            Color::convert_from_object(objects).map(ColorOrName::Color)
+            ColorArgs::convert_from_object(objects).map(ColorArgsOrName::Color)
         }
     }
 }

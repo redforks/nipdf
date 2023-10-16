@@ -6,7 +6,7 @@ use crate::{
     file::{ObjectResolver, XObjectDict},
     function::{Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
-        parse_operations, AxialExtend, AxialShadingDict, Color, ColorOrName, ColorSpace,
+        parse_operations, AxialExtend, AxialShadingDict, Color, ColorArgsOrName, ColorSpace,
         ConvertFromObject, LineCapStyle, LineJoinStyle, NameOfDict, NameOrDictByRef, NameOrStream,
         PatternType, Point, RenderingIntent, ShadingPatternDict, ShadingType, TextRenderingMode,
         TilingPaintType, TilingPatternDict, TransformMatrix,
@@ -596,8 +596,12 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             Operation::ShowTexts(texts) => self.show_texts(&texts),
 
             // Color Operations
-            Operation::SetStrokeColorSpace(space) => self.current_mut().stroke_color_space = space,
-            Operation::SetFillColorSpace(space) => self.current_mut().fill_color_space = space,
+            Operation::SetStrokeColorSpace(args) => {
+                self.current_mut().stroke_color_space = args.map_to(self.resources).unwrap()
+            }
+            Operation::SetFillColorSpace(args) => {
+                self.current_mut().fill_color_space = args.map_to(self.resources).unwrap()
+            }
             Operation::SetStrokeColor(color)
             | Operation::SetStrokeGray(color)
             | Operation::SetStrokeCMYK(color)
@@ -752,17 +756,22 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
 
     fn set_fill_color_or_pattern(
         &mut self,
-        color_or_name: &crate::graphics::ColorOrName,
+        color_or_name: &crate::graphics::ColorArgsOrName,
     ) -> AnyResult<()> {
-        let ColorOrName::Name(name) = color_or_name else {
-            panic!("Only Name supported");
-        };
-
-        let pattern = self.resources.pattern()?;
-        let pattern = pattern.get(name.as_str()).unwrap();
-        match pattern.pattern_type()? {
-            PatternType::Tiling => self.set_tiling_pattern(pattern.tiling_pattern()?),
-            PatternType::Shading => self.set_shading_pattern(pattern.shading_pattern()?),
+        match color_or_name {
+            ColorArgsOrName::Name(name) => {
+                let pattern = self.resources.pattern()?;
+                let pattern = pattern.get(name.as_str()).unwrap();
+                match pattern.pattern_type()? {
+                    PatternType::Tiling => self.set_tiling_pattern(pattern.tiling_pattern()?),
+                    PatternType::Shading => self.set_shading_pattern(pattern.shading_pattern()?),
+                }
+            }
+            ColorArgsOrName::Color(args) => {
+                let color = self.stack.last().unwrap().fill_color_space.to_color(args)?;
+                self.current_mut().set_fill_color(color.into());
+                Ok(())
+            }
         }
     }
 

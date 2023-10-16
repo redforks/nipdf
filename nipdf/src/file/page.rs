@@ -1,12 +1,13 @@
-use ahash::HashMap;
+use ahash::{HashMap, HashMapExt};
+use log::error;
 use nipdf_macro::{pdf_object, TryFromNameObject};
 use nom::Finish;
 use tiny_skia::Pixmap;
 
 use crate::{
     graphics::{
-        parse_operations, Color, LineCapStyle, LineJoinStyle, Operation, PatternDict, Point,
-        RenderingIntent,
+        parse_operations, Color, ColorSpace, LineCapStyle, LineJoinStyle, Operation, PatternDict,
+        Point, RenderingIntent,
     },
     object::{Dictionary, FilterDecodedData, Object, ObjectValueError, PdfObject, Stream},
     text::FontDict,
@@ -15,7 +16,7 @@ use crate::{
 use self::paint::Render;
 pub use self::paint::{RenderOption, RenderOptionBuilder};
 
-use std::iter::once;
+use std::{iter::once, ops::Deref};
 
 mod paint;
 
@@ -162,11 +163,43 @@ impl<'a, 'b> XObjectDict<'a, 'b> {
     }
 }
 
+/// Wrap type to impl TryFrom<> trait
+pub struct ColorSpaceResources(HashMap<String, ColorSpace>);
+
+impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceResources {
+    type Error = ObjectValueError;
+
+    fn try_from(object: &'b Object<'a>) -> Result<Self, Self::Error> {
+        let mut map = HashMap::new();
+        match object {
+            Object::Dictionary(dict) => {
+                for (k, v) in dict.iter() {
+                    let cs = ColorSpace::try_from(v)?;
+                    map.insert(k.as_ref().to_owned(), cs);
+                }
+                Ok(Self(map))
+            }
+            _ => {
+                error!("{:?}", object);
+                Err(ObjectValueError::GraphicsOperationSchemaError)
+            }
+        }
+    }
+}
+
+impl Deref for ColorSpaceResources {
+    type Target = HashMap<String, ColorSpace>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 #[pdf_object(())]
 pub trait ResourceDictTrait {
     #[nested]
-    fn ext_g_state() -> HashMap<String, GraphicsStateParameterDict<'a, 'b>>;
-    fn color_space(&self) -> Option<&'b Dictionary<'a>>;
+    fn ext_g_state(&self) -> HashMap<String, GraphicsStateParameterDict<'a, 'b>>;
+    #[try_from]
+    fn color_space(&self) -> ColorSpaceResources;
     #[nested]
     fn pattern(&self) -> HashMap<String, PatternDict<'a, 'b>>;
     fn shading(&self) -> Option<&'b Dictionary<'a>>;

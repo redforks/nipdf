@@ -123,10 +123,10 @@ fn color_convert_from_object_stop_on_non_number() {
     assert_eq!(v, vec![true.into()]);
 }
 
-#[test_case(vec![1.into()] => ColorOrName::Color(Color::Gray(1.0)); "Color")]
-#[test_case(vec!["/name".into()] => ColorOrName::Name("name".to_owned()); "name")]
-fn color_or_with_pattern_from_object(mut v: Vec<Object>) -> ColorOrName {
-    ColorOrName::convert_from_object(&mut v).unwrap()
+#[test_case(vec![1.into()] => ColorArgsOrName::Color(Color::Gray(1.0)); "Color")]
+#[test_case(vec!["/name".into()] => ColorArgsOrName::Name("name".to_owned()); "name")]
+fn color_or_with_pattern_from_object(mut v: Vec<Object>) -> ColorArgsOrName {
+    ColorArgsOrName::convert_from_object(&mut v).unwrap()
 }
 
 #[test]
