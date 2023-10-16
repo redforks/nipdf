@@ -16,7 +16,7 @@ use iced::{
     },
     Length,
 };
-use nipdf::file::{File as PdfFile, RenderOptionBuilder};
+use nipdf::file::{File as PdfFile, ObjectResolver, RenderOptionBuilder, XRefTable};
 
 #[derive(Clone, Debug, Copy)]
 struct PageNavigator {
@@ -74,12 +74,15 @@ pub struct Viewer {
     cur_page_editing: String,
     render_time: Duration,
     file_data: Vec<u8>,
+    xref: XRefTable,
+    file: PdfFile,
 }
 
 impl Viewer {
     pub fn new(file_path: impl Into<String>) -> Result<Self> {
         let file_path = file_path.into();
         let file_data = std::fs::read(&file_path)?;
+        let (file, xref) = PdfFile::parse(&file_data[..])?;
         let mut r = Self {
             file_path,
             page: Page {
@@ -94,6 +97,8 @@ impl Viewer {
             zoom: 1.75,
             cur_page_editing: "".to_owned(),
             render_time: Duration::default(),
+            xref,
+            file,
             file_data,
         };
         r.load_page(0)?;
@@ -110,8 +115,8 @@ impl Viewer {
 
     fn load_page(&mut self, no: u32) -> Result<()> {
         let now = Instant::now();
-        let (f, resolver) = PdfFile::parse(&self.file_data[..])?;
-        let catalog = f.catalog(&resolver)?;
+        let resolver = ObjectResolver::new(&self.file_data, &self.xref);
+        let catalog = self.file.catalog(&resolver)?;
         let pages = catalog.pages()?;
         let page = &pages[no as usize];
         let option = RenderOptionBuilder::new().zoom(self.zoom);

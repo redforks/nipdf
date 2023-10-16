@@ -5,7 +5,6 @@ use anyhow::{Context, Result as AnyResult};
 use itertools::Itertools;
 use nipdf_macro::pdf_object;
 use nom::Finish;
-use once_cell::sync::Lazy;
 use once_cell::unsync::OnceCell;
 use std::num::NonZeroU32;
 
@@ -116,6 +115,7 @@ pub struct ObjectResolver<'a> {
 #[cfg(test)]
 impl ObjectResolver<'static> {
     pub fn empty() -> Self {
+        use once_cell::sync::Lazy;
         static EMPTY_XREF: Lazy<XRefTable> = Lazy::new(XRefTable::empty);
         Self {
             buf: b"",

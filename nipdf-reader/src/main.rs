@@ -39,7 +39,7 @@ impl AsRef<[u8]> for ShardedData {
 
 enum View {
     Error(ErrorView),
-    Viewer(Viewer),
+    Viewer(Box<Viewer>),
     Welcome(Welcome),
 }
 
@@ -119,7 +119,7 @@ impl App {
         if let Some(p) = app_state::load_last_file() {
             match Viewer::new(p) {
                 Ok(v) => {
-                    self.current = View::Viewer(v);
+                    self.current = View::Viewer(Box::new(v));
                 }
                 Err(e) => {
                     error!("open last file failed: {}", e);
@@ -131,7 +131,7 @@ impl App {
     fn open(&mut self) {
         let file_path = self.file_path_selecting.clone();
         if let Some(viewer) = self.handle_result(Viewer::new(file_path)) {
-            self.current = View::Viewer(viewer);
+            self.current = View::Viewer(Box::new(viewer));
             app_state::save_last_file(&self.file_path_selecting);
         }
     }
