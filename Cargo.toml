@@ -9,7 +9,7 @@ opt-level = 3
 
 [profile.release]
 split-debuginfo = "unpacked"
-lto = true
+# lto = true
 codegen-units = 1
 # Uncomment next line to emb more symbols for profiling
 # debug = 1
