@@ -35,7 +35,7 @@ fn object_resolver() {
     id_offset.insert(2, 3);
     id_offset.insert(3, 40);
     let xref_table = XRefTable::new(id_offset);
-    let resolver = ObjectResolver::new(buf, xref_table);
+    let resolver = ObjectResolver::new(buf, &xref_table);
 
     assert_eq!(resolver.resolve(to_non_zero_u32(1)), Ok(&Object::Null));
     assert_eq!(
@@ -63,7 +63,8 @@ fn parse_file() {
     p.push("normal");
     p.push("SamplePdf1_12mb_6pages.pdf");
     let buf = std::fs::read(p).unwrap();
-    let (f, resolver) = File::parse(&buf).unwrap();
+    let (f, xref) = File::parse(&buf).unwrap();
+    let resolver = ObjectResolver::new(&buf, &xref);
     assert_eq!("1.5", f.version(&resolver).unwrap());
     assert_eq!(311, f.total_objects);
 }

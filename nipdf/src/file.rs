@@ -5,6 +5,7 @@ use anyhow::{Context, Result as AnyResult};
 use itertools::Itertools;
 use nipdf_macro::pdf_object;
 use nom::Finish;
+use once_cell::sync::Lazy;
 use once_cell::unsync::OnceCell;
 use std::num::NonZeroU32;
 
@@ -108,23 +109,24 @@ impl<'a> DataContainer<'a> for Vec<&Dictionary<'a>> {
 
 pub struct ObjectResolver<'a> {
     buf: &'a [u8],
-    xref_table: XRefTable,
+    xref_table: &'a XRefTable,
     objects: HashMap<NonZeroU32, OnceCell<Object<'a>>>,
 }
 
+#[cfg(test)]
 impl ObjectResolver<'static> {
-    #[cfg(test)]
     pub fn empty() -> Self {
+        static EMPTY_XREF: Lazy<XRefTable> = Lazy::new(XRefTable::empty);
         Self {
             buf: b"",
-            xref_table: XRefTable::empty(),
+            xref_table: &EMPTY_XREF,
             objects: HashMap::default(),
         }
     }
 }
 
 impl<'a> ObjectResolver<'a> {
-    pub fn new(buf: &'a [u8], xref_table: XRefTable) -> Self {
+    pub fn new(buf: &'a [u8], xref_table: &'a XRefTable) -> Self {
         let mut objects = HashMap::with_capacity(xref_table.count());
         xref_table.iter_ids().for_each(|id| {
             objects.insert(id, OnceCell::new());
@@ -377,11 +379,11 @@ pub enum FileError {
 }
 
 impl File {
-    pub fn parse(buf: &[u8]) -> AnyResult<(Self, ObjectResolver)> {
+    pub fn parse(buf: &[u8]) -> AnyResult<(Self, XRefTable)> {
         let (_, head_ver) = parse_header(buf).unwrap();
         let (_, frame_set) = parse_frame_set(buf).unwrap();
         let xref = XRefTable::from_frame_set(&frame_set);
-        let resolver = ObjectResolver::new(buf, xref);
+        let resolver = ObjectResolver::new(buf, &xref);
 
         let trailers = frame_set.iter().map(|f| &f.trailer).collect_vec();
         let root_id = trailers
@@ -400,7 +402,7 @@ impl File {
                 total_objects,
                 root_id,
             },
-            resolver,
+            xref,
         ))
     }
 
