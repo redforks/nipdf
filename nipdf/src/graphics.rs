@@ -209,13 +209,6 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpace {
     }
 }
 
-impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorSpace {
-    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
-        let o = objects.pop().unwrap();
-        ColorSpace::try_from(&o).map_err(|_| ObjectValueError::GraphicsOperationSchemaError)
-    }
-}
-
 impl ColorSpace {
     /// Convert color args to color based on current ColorSpace.
     pub fn to_color(&self, args: &ColorArgs) -> Result<RgbColor, ObjectValueError> {
