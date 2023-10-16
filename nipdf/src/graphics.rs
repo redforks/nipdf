@@ -566,11 +566,11 @@ pub enum Operation<'a> {
     #[op_tag("cs")]
     SetFillColorSpace(ColorSpaceArgs),
     #[op_tag("SC")]
-    SetStrokeColor(Color),
+    SetStrokeColor(ColorArgs<'a>),
     #[op_tag("SCN")]
     SetStrokeColorOrWithPattern(ColorArgsOrName<'a>),
     #[op_tag("sc")]
-    SetFillColor(Color),
+    SetFillColor(ColorArgs<'a>),
     #[op_tag("scn")]
     SetFillColorOrWithPattern(ColorArgsOrName<'a>),
     #[op_tag("G")]

@@ -6,10 +6,10 @@ use crate::{
     file::{ObjectResolver, XObjectDict},
     function::{Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
-        parse_operations, AxialExtend, AxialShadingDict, Color, ColorArgsOrName, ColorSpace,
-        ConvertFromObject, LineCapStyle, LineJoinStyle, NameOfDict, NameOrDictByRef, NameOrStream,
-        PatternType, Point, RenderingIntent, ShadingPatternDict, ShadingType, TextRenderingMode,
-        TilingPaintType, TilingPatternDict, TransformMatrix,
+        parse_operations, AxialExtend, AxialShadingDict, Color, ColorArgs, ColorArgsOrName,
+        ColorSpace, ConvertFromObject, LineCapStyle, LineJoinStyle, NameOfDict, NameOrDictByRef,
+        NameOrStream, PatternType, Point, RenderingIntent, ShadingPatternDict, ShadingType,
+        TextRenderingMode, TilingPaintType, TilingPatternDict, TransformMatrix,
     },
     object::{Array, FilterDecodedData, Object, PdfObject, Stream, TextStringOrNumber},
     text::{
@@ -196,9 +196,19 @@ impl State {
         self.stroke_paint = PaintCreator::Color(color.into());
     }
 
+    fn set_stroke_color_args(&mut self, args: ColorArgs<'_>) {
+        let color = self.stroke_color_space.to_color(&args).unwrap();
+        self.set_stroke_color(color.into());
+    }
+
     fn set_fill_color(&mut self, color: Color) {
         log::debug!("set fill color: {:?}", color);
         self.fill_paint = PaintCreator::Color(color.into());
+    }
+
+    fn set_fill_color_args(&mut self, args: ColorArgs<'_>) {
+        let color = self.fill_color_space.to_color(&args).unwrap();
+        self.set_fill_color(color.into());
     }
 
     fn concat_ctm(&mut self, ctm: TransformMatrix) {
@@ -602,12 +612,12 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             Operation::SetFillColorSpace(args) => {
                 self.current_mut().fill_color_space = args.map_to(self.resources).unwrap()
             }
-            Operation::SetStrokeColor(color)
-            | Operation::SetStrokeGray(color)
+            Operation::SetStrokeColor(args) => self.current_mut().set_stroke_color_args(args),
+            Operation::SetStrokeGray(color)
             | Operation::SetStrokeCMYK(color)
             | Operation::SetStrokeRGB(color) => self.current_mut().set_stroke_color(color),
-            Operation::SetFillColor(color)
-            | Operation::SetFillGray(color)
+            Operation::SetFillColor(args) => self.current_mut().set_fill_color_args(args),
+            Operation::SetFillGray(color)
             | Operation::SetFillCMYK(color)
             | Operation::SetFillRGB(color) => self.current_mut().set_fill_color(color),
             Operation::SetFillColorOrWithPattern(name) => {
