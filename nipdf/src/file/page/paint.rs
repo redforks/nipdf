@@ -1443,18 +1443,14 @@ impl<'a> FontOp for Type1FontOp<'a> {
 
     /// Use font.glyph_for_char() if encoding is None or encoding.replace() returns None
     fn char_to_gid(&self, ch: u32) -> u16 {
-        if let Some(gid_name) = self.encoding.decode(ch as u8) {
-            if let Some(r) = self.font.glyph_by_name(gid_name) {
-                return r as u16;
-            } else {
-                info!("glyph id not found for char: {:?}/{}", ch, gid_name);
-            }
+        let gid_name = self.encoding.decode(ch as u8);
+        if let Some(r) = self.font.glyph_by_name(gid_name) {
+            r as u16
+        } else {
+            info!("glyph id not found for char: {:?}/{}", ch, gid_name);
+            // .notdef gid is always be 0 for type1 font
+            0
         }
-
-        info!("glyph not found for char: {:?}", ch);
-
-        // .notdef gid is always be 0 for type1 font
-        0
     }
 
     fn char_width(&self, gid: u32) -> u32 {

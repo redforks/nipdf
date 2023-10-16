@@ -413,17 +413,17 @@ fn parse_encodings_format1() {
 
 #[test]
 fn encoding_supplement_apply() {
-    let mut encodings: [Option<&str>; 256] = [None; 256];
-    encodings[100] = Some("foo");
-    encodings[101] = Some("bar");
+    let mut encodings: [&str; 256] = [NOTDEF; 256];
+    encodings[100] = "foo";
+    encodings[101] = "bar";
     let string_index = StringIndex(IndexedData {
         offsets: Offsets::new(OffSize::One, &[1_u8, 3, 6][..]).unwrap(),
         data: b"abcde",
     });
     let supp = EncodingSupplement::new(100, 10);
     supp.apply(string_index, &mut encodings);
-    assert_eq!(encodings[100], Some(STANDARD_STRINGS[10]));
-    assert_eq!(encodings[101], Some("bar"));
+    assert_eq!(encodings[100], STANDARD_STRINGS[10]);
+    assert_eq!(encodings[101], "bar");
 }
 
 #[test]
@@ -452,10 +452,10 @@ fn build_encodings_format0() {
     });
     let encodings = Encodings::Format0(vec![1, 0, 2]);
     let r = encodings.build(&charsets, string_index);
-    assert_eq!(r[0], Some("space"));
-    assert_eq!(r[1], Some(".notdef"));
-    assert_eq!(r[2], Some("exclamsmall"));
-    assert_eq!(r[3], None);
+    assert_eq!(r[0], "space");
+    assert_eq!(r[1], ".notdef");
+    assert_eq!(r[2], "exclamsmall");
+    assert_eq!(r[3], NOTDEF);
 }
 
 #[test]
@@ -467,15 +467,15 @@ fn build_encodings_format1() {
     });
     let encodings = Encodings::Format1(vec![EncodingRange::new(1, 2), EncodingRange::new(10, 2)]);
     let r = encodings.build(&charsets, string_index);
-    assert_eq!(r[0], None);
-    assert_eq!(r[1], Some("space"));
-    assert_eq!(r[2], Some("exclamsmall"));
-    assert_eq!(r[3], Some("Hungarumlautsmall"));
-    assert_eq!(r[4], None);
-    assert_eq!(r[10], Some("twodotenleader"));
-    assert_eq!(r[11], Some("onedotenleader"));
-    assert_eq!(r[12], Some("comma"));
-    assert_eq!(r[13], None);
+    assert_eq!(r[0], NOTDEF);
+    assert_eq!(r[1], "space");
+    assert_eq!(r[2], "exclamsmall");
+    assert_eq!(r[3], "Hungarumlautsmall");
+    assert_eq!(r[4], NOTDEF);
+    assert_eq!(r[10], "twodotenleader");
+    assert_eq!(r[11], "onedotenleader");
+    assert_eq!(r[12], "comma");
+    assert_eq!(r[13], NOTDEF);
 }
 
 #[test]

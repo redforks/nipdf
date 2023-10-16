@@ -5,6 +5,7 @@ use std::{
     str::from_utf8,
 };
 
+use super::NOTDEF;
 use nom::{
     bits::{bits, complete::tag as bit_tag, complete::take as bit_take},
     branch::alt,
@@ -1135,8 +1136,8 @@ impl EncodingSupplement {
         Self { code, sid }
     }
 
-    pub fn apply<'a>(&self, string_index: StringIndex<'a>, encodings: &mut [Option<&'a str>; 256]) {
-        encodings[self.code as usize] = Some(string_index.get(self.sid));
+    pub fn apply<'a>(&self, string_index: StringIndex<'a>, encodings: &mut [&'a str; 256]) {
+        encodings[self.code as usize] = string_index.get(self.sid);
     }
 }
 
@@ -1163,28 +1164,30 @@ pub enum Encodings {
 
 impl Encodings {
     /// build encodings.
-    pub fn build<'a>(
-        &self,
-        charsets: &Charsets,
-        string_index: StringIndex<'a>,
-    ) -> [Option<&'a str>; 256] {
+    pub fn build<'a>(&self, charsets: &Charsets, string_index: StringIndex<'a>) -> [&'a str; 256] {
         match self {
             Self::Format0(codes) => {
-                let mut encodings = [None; 256];
+                let mut encodings = [NOTDEF; 256];
                 for (i, code) in codes.iter().enumerate() {
-                    encodings[*code as usize] = charsets
+                    if let Some(v) = charsets
                         .resolve_sid(i as Gid)
-                        .map(|sid| string_index.get(sid));
+                        .map(|sid| string_index.get(sid))
+                    {
+                        encodings[*code as usize] = v;
+                    }
                 }
                 encodings
             }
             Self::Format1(ranges) => {
-                let mut encodings = [None; 256];
+                let mut encodings = [NOTDEF; 256];
                 for range in ranges {
                     for i in range.first..=range.first + range.n_left {
-                        encodings[i as usize] = charsets
+                        if let Some(v) = charsets
                             .resolve_sid(i as Gid)
-                            .map(|sid| string_index.get(sid));
+                            .map(|sid| string_index.get(sid))
+                        {
+                            encodings[i as usize] = v;
+                        }
                     }
                 }
                 encodings
