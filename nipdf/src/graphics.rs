@@ -151,7 +151,7 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpace {
             "DeviceCMYK" => Ok(ColorSpace::DeviceCMYK),
             "CalGray" => Ok(ColorSpace::CalGray),
             "Pattern" => Ok(ColorSpace::Pattern),
-            name @ _ => Ok(ColorSpace::Custom(name.to_owned())),
+            name => Ok(ColorSpace::Custom(name.to_owned())),
         }
     }
 }

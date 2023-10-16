@@ -46,7 +46,7 @@ fn cli() -> Command {
         )
 }
 
-fn open<'a>(path: &str, buf: &'a mut Vec<u8>) -> AnyResult<(File, XRefTable)> {
+fn open(path: &str, buf: &mut Vec<u8>) -> AnyResult<(File, XRefTable)> {
     *buf = std::fs::read(path)?;
     File::parse(&buf[..])
 }
