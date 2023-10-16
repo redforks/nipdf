@@ -131,35 +131,37 @@ pub enum TextRenderingMode {
     Clip = 7,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, TryFromNameObject)]
 pub enum ColorSpace {
     DeviceGray,
     DeviceRGB,
     DeviceCMYK,
     CalGray,
     Pattern,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum ColorSpaceArgs {
+    Predefined(ColorSpace),
+
     /// User defined custom ColorSpace, resolve it from Resource Dictionary
     Custom(String),
 }
 
-impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpace {
+impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceArgs {
     type Error = ObjectValueError;
     fn try_from(object: &'b Object<'a>) -> Result<Self, Self::Error> {
-        match object.as_name()? {
-            "DeviceGray" => Ok(ColorSpace::DeviceGray),
-            "DeviceRGB" => Ok(ColorSpace::DeviceRGB),
-            "DeviceCMYK" => Ok(ColorSpace::DeviceCMYK),
-            "CalGray" => Ok(ColorSpace::CalGray),
-            "Pattern" => Ok(ColorSpace::Pattern),
-            name => Ok(ColorSpace::Custom(name.to_owned())),
-        }
+        ColorSpace::try_from(object).map_or_else(
+            |_| Ok(ColorSpaceArgs::Custom(object.as_name()?.to_owned())),
+            |c| Ok(ColorSpaceArgs::Predefined(c)),
+        )
     }
 }
 
-impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorSpace {
+impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorSpaceArgs {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
-        ColorSpace::try_from(&o).map_err(|_| ObjectValueError::GraphicsOperationSchemaError)
+        ColorSpaceArgs::try_from(&o).map_err(|_| ObjectValueError::GraphicsOperationSchemaError)
     }
 }
 
