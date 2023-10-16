@@ -336,7 +336,7 @@ impl Encoding<'static> {
     pub fn predefined(name: &str) -> Option<Self> {
         match name {
             "MacRomanEncoding" => Some(Self::MAC_ROMAN),
-            "MacExpertEncoding" => Some(Self::MAC_EXPORT),
+            "MacExpertEncoding" => Some(Self::MAC_EXPERT),
             "WinAnsiEncoding" => Some(Self::WIN_ANSI),
             "StandardEncoding" => Some(Self::STANDARD),
             _ => None,
@@ -861,7 +861,7 @@ impl Encoding<'static> {
         "caron",
     ]);
 
-    pub const MAC_EXPORT: Self = Self([
+    pub const MAC_EXPERT: Self = Self([
         NOTDEF,
         NOTDEF,
         NOTDEF,
