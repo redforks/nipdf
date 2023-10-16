@@ -10,17 +10,17 @@ fn xref_table_resolve_object_buf() {
     let mut id_offset = IDOffsetMap::default();
     id_offset.insert(1, 5);
     id_offset.insert(2, 3);
-    let xref_table = XRefTable::new(buf, id_offset);
+    let xref_table = XRefTable::new(id_offset);
 
     assert_eq!(
-        xref_table.resolve_object_buf(to_non_zero_u32(1)),
+        xref_table.resolve_object_buf(buf, to_non_zero_u32(1)),
         Some(&b"67890"[..])
     );
     assert_eq!(
-        xref_table.resolve_object_buf(to_non_zero_u32(2)),
+        xref_table.resolve_object_buf(buf, to_non_zero_u32(2)),
         Some(&b"4567890"[..])
     );
-    assert_eq!(xref_table.resolve_object_buf(to_non_zero_u32(3)), None);
+    assert_eq!(xref_table.resolve_object_buf(buf, to_non_zero_u32(3)), None);
 }
 
 fn to_non_zero_u32(v: u32) -> NonZeroU32 {
@@ -34,8 +34,8 @@ fn object_resolver() {
     id_offset.insert(1, 20);
     id_offset.insert(2, 3);
     id_offset.insert(3, 40);
-    let xref_table = XRefTable::new(buf, id_offset);
-    let resolver = ObjectResolver::new(xref_table);
+    let xref_table = XRefTable::new(id_offset);
+    let resolver = ObjectResolver::new(buf, xref_table);
 
     assert_eq!(resolver.resolve(to_non_zero_u32(1)), Ok(&Object::Null));
     assert_eq!(

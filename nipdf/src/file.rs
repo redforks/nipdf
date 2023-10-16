@@ -19,25 +19,23 @@ pub use page::*;
 
 type IDOffsetMap = HashMap<u32, u32>;
 
-pub struct XRefTable<'a> {
-    buf: &'a [u8],
+pub struct XRefTable {
     id_offset: IDOffsetMap, // object id -> offset
 }
 
-impl<'a> XRefTable<'a> {
-    fn new(buf: &'a [u8], id_offset: IDOffsetMap) -> Self {
-        Self { buf, id_offset }
+impl XRefTable {
+    fn new(id_offset: IDOffsetMap) -> Self {
+        Self { id_offset }
     }
 
     #[cfg(test)]
     pub fn empty() -> Self {
         Self {
-            buf: &[],
             id_offset: IDOffsetMap::default(),
         }
     }
 
-    pub fn scan(frame_set: &FrameSet) -> IDOffsetMap {
+    fn scan(frame_set: &FrameSet) -> IDOffsetMap {
         let mut r = IDOffsetMap::with_capacity(5000);
         for (id, entry) in frame_set.iter().rev().flat_map(|f| f.xref_section.iter()) {
             if entry.is_used() {
@@ -49,19 +47,23 @@ impl<'a> XRefTable<'a> {
         r
     }
 
-    pub fn from_frame_set(buf: &'a [u8], frame_set: &FrameSet) -> Self {
-        Self::new(buf, Self::scan(frame_set))
+    pub fn from_frame_set(frame_set: &FrameSet) -> Self {
+        Self::new(Self::scan(frame_set))
     }
 
     /// Return `buf` start from where `id` is
-    pub fn resolve_object_buf(&self, id: NonZeroU32) -> Option<&'a [u8]> {
+    pub fn resolve_object_buf<'a>(&self, buf: &'a [u8], id: NonZeroU32) -> Option<&'a [u8]> {
         self.id_offset
             .get(&id.into())
-            .map(|offset| &self.buf[*offset as usize..])
+            .map(|offset| &buf[*offset as usize..])
     }
 
-    pub fn parse_object(&self, id: NonZeroU32) -> Result<Object<'a>, ObjectValueError> {
-        self.resolve_object_buf(id)
+    pub fn parse_object<'a>(
+        &self,
+        buf: &'a [u8],
+        id: NonZeroU32,
+    ) -> Result<Object<'a>, ObjectValueError> {
+        self.resolve_object_buf(buf, id)
             .ok_or(ObjectValueError::ObjectIDNotFound)
             .and_then(|buf| {
                 parse_indirected_object(buf)
@@ -105,28 +107,33 @@ impl<'a> DataContainer<'a> for Vec<&Dictionary<'a>> {
 }
 
 pub struct ObjectResolver<'a> {
-    xref_table: XRefTable<'a>,
+    buf: &'a [u8],
+    xref_table: XRefTable,
     objects: HashMap<NonZeroU32, OnceCell<Object<'a>>>,
 }
 
+impl ObjectResolver<'static> {
+    #[cfg(test)]
+    pub fn empty() -> Self {
+        Self {
+            buf: b"",
+            xref_table: XRefTable::empty(),
+            objects: HashMap::default(),
+        }
+    }
+}
+
 impl<'a> ObjectResolver<'a> {
-    pub fn new(xref_table: XRefTable<'a>) -> Self {
+    pub fn new(buf: &'a [u8], xref_table: XRefTable) -> Self {
         let mut objects = HashMap::with_capacity(xref_table.count());
         xref_table.iter_ids().for_each(|id| {
             objects.insert(id, OnceCell::new());
         });
 
         Self {
+            buf,
             xref_table,
             objects,
-        }
-    }
-
-    #[cfg(test)]
-    pub fn empty() -> Self {
-        Self {
-            xref_table: XRefTable::empty(),
-            objects: HashMap::default(),
         }
     }
 
@@ -174,9 +181,9 @@ impl<'a> ObjectResolver<'a> {
             .get(&id)
             .ok_or(ObjectValueError::ObjectIDNotFound)?
             .get_or_try_init(|| {
-                let mut o = self.xref_table.parse_object(id)?;
+                let mut o = self.xref_table.parse_object(self.buf, id)?;
                 while let Object::Reference(id) = o {
-                    o = self.xref_table.parse_object(id.id().id())?;
+                    o = self.xref_table.parse_object(self.buf, id.id().id())?;
                 }
                 Ok(o)
             })
@@ -373,8 +380,8 @@ impl File {
     pub fn parse(buf: &[u8]) -> AnyResult<(Self, ObjectResolver)> {
         let (_, head_ver) = parse_header(buf).unwrap();
         let (_, frame_set) = parse_frame_set(buf).unwrap();
-        let xref = XRefTable::from_frame_set(buf, &frame_set);
-        let resolver = ObjectResolver::new(xref);
+        let xref = XRefTable::from_frame_set(&frame_set);
+        let resolver = ObjectResolver::new(buf, xref);
 
         let trailers = frame_set.iter().map(|f| &f.trailer).collect_vec();
         let root_id = trailers
