@@ -16,7 +16,9 @@ use tiny_skia::Transform;
 
 use crate::{
     file::Rectangle,
-    object::{Dictionary, Name, Object, ObjectValueError, Stream, TextString, TextStringOrNumber},
+    object::{
+        Array, Dictionary, Name, Object, ObjectValueError, Stream, TextString, TextStringOrNumber,
+    },
     parser::{parse_object, ws_prefixed, ws_terminated, ParseError, ParseResult},
 };
 use nipdf_macro::{OperationParser, TryFromIntObject, TryFromNameObject};
@@ -138,6 +140,28 @@ pub enum ColorSpace {
     DeviceCMYK,
     CalGray,
     Pattern,
+}
+
+/// ColorSpace use it to create RGB color.
+/// It depends on the color space, for DeviceGray, the args is one number,
+/// for DeviceRGB, the args is three number.
+#[derive(Clone, PartialEq, Debug)]
+pub struct ColorArgs<'a>(Array<'a>);
+
+impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorArgs<'a> {
+    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+        let mut result = Vec::with_capacity(objects.len());
+        while let Some(o) = objects.pop() {
+            if let Ok(num) = o.as_number() {
+                result.push(num);
+            } else {
+                objects.push(o);
+                break;
+            }
+        }
+        result.reverse();
+        Ok(Self(result))
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
