@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 
 use glob::glob;
 use nipdf::{
-    file::File,
+    file::{File, ObjectResolver},
     object::{Object, ObjectValueError},
 };
 
@@ -12,8 +12,9 @@ fn scan_objects() {
         let path = entry.unwrap();
         let buf = std::fs::read(&path).unwrap();
         println!("parsing {path:?}");
-        let (f, resolver) =
+        let (f, xref) =
             File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {path:?}"));
+        let resolver = ObjectResolver::new(&buf[..], &xref);
         for id in 1..f.total_objects() {
             print!("scan object: {id}");
             match resolver.resolve(NonZeroU32::new(id).unwrap()) {
