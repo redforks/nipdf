@@ -322,6 +322,23 @@ pub enum Color {
     Cmyk(f32, f32, f32, f32),
 }
 
+pub fn cymk_to_rgb8(c: f32, y: f32, m: f32, k: f32) -> (u8, u8, u8) {
+    (
+        ((1.0 - c) * (1.0 - k) * 255.0) as u8,
+        ((1.0 - m) * (1.0 - k) * 255.0) as u8,
+        ((1.0 - y) * (1.0 - k) * 255.0) as u8,
+    )
+}
+
+/// Convert cymk color to rgb
+pub fn cymk_to_rgb(c: f32, y: f32, m: f32, k: f32) -> (f32, f32, f32) {
+    (
+        (1.0 - c) * (1.0 - k),
+        (1.0 - m) * (1.0 - k),
+        (1.0 - y) * (1.0 - k),
+    )
+}
+
 impl<'a> TryFrom<&Object<'a>> for Color {
     type Error = ObjectValueError;
 

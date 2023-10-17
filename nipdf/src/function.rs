@@ -86,6 +86,9 @@ pub trait FunctionDictTrait {
     fn range(&self) -> Option<Domains>;
 
     #[self_as]
+    fn sampled(&self) -> SampledFunctionDict<'a, 'b>;
+
+    #[self_as]
     fn exponential_interpolation(&self) -> ExponentialInterpolationFunctionDict<'a, 'b>;
 
     #[self_as]
@@ -124,7 +127,7 @@ impl<'a, 'b> FunctionDict<'a, 'b> {
 impl<'a, 'b> Function for FunctionDict<'a, 'b> {
     fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>> {
         match self.function_type()? {
-            Type::Sampled => todo!(),
+            Type::Sampled => self.sampled()?.call(args),
             Type::ExponentialInterpolation => self.exponential_interpolation()?.call(args),
             Type::Stitching => self.stitch()?.call(args),
             Type::PostScriptCalculator => todo!(),
@@ -138,6 +141,18 @@ fn f32_zero_arr() -> Vec<f32> {
 
 fn f32_one_arr() -> Vec<f32> {
     vec![1.0]
+}
+
+#[pdf_object(0i32)]
+#[type_field("FunctionType")]
+pub trait SampledFunctionDictTrait {
+    //
+}
+
+impl<'a, 'b> Function for SampledFunctionDict<'a, 'b> {
+    fn call(&self, _args: &[f32]) -> AnyResult<Vec<f32>> {
+        todo!()
+    }
 }
 
 #[pdf_object(2i32)]

@@ -5,8 +5,9 @@ use std::{
     str::from_utf8,
 };
 
+use anyhow::Result as AnyResult;
 use bitstream_io::{BigEndian, BitReader};
-use image::{DynamicImage, GenericImage, GrayImage, Luma, Pixel, RgbImage};
+use image::{DynamicImage, GenericImage, GrayImage, Luma, Pixel, Rgb, RgbImage};
 use lazy_static::__Deref;
 use log::error;
 use nipdf_macro::pdf_object;
@@ -14,7 +15,13 @@ use once_cell::unsync::Lazy;
 
 #[cfg(debug_assertions)]
 use crate::parser::{ws_prefixed, ParseResult};
-use crate::{ccitt::Flags, file::ObjectResolver, graphics::ColorSpace, object::PdfObject};
+use crate::{
+    ccitt::Flags,
+    file::ObjectResolver,
+    function::{Function, FunctionDict, Type as FunctionType},
+    graphics::{cymk_to_rgb8, ColorSpace},
+    object::PdfObject,
+};
 
 use super::{Dictionary, Name, Object, ObjectValueError};
 
@@ -310,7 +317,11 @@ fn filter<'a: 'b, 'b>(
     }
 }
 
-fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> DynamicImage {
+fn image_transform_color_space(
+    resolver: &ObjectResolver,
+    img: DynamicImage,
+    to: &ColorSpace,
+) -> AnyResult<DynamicImage> {
     fn image_color_space(img: &DynamicImage) -> ColorSpace {
         match img {
             DynamicImage::ImageLuma8(_) => ColorSpace::DeviceGray,
@@ -319,20 +330,46 @@ fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> DynamicIma
         }
     }
 
-    fn transform<IMG, P>(img: IMG, from: &ColorSpace, to: &ColorSpace) -> IMG
-    where
-        IMG: GenericImage<Pixel = P>,
-        P: Pixel,
-    {
+    fn transform(
+        resolver: &ObjectResolver,
+        img: DynamicImage,
+        from: &ColorSpace,
+        to: &ColorSpace,
+    ) -> AnyResult<DynamicImage> {
+        fn gray_by_cymk(img: GrayImage, f: impl Function) -> AnyResult<RgbImage> {
+            let mut r = RgbImage::new(img.width(), img.height());
+            for (p, dest_p) in img.pixels().zip(r.pixels_mut()) {
+                let cymk = f.call(&[p[0] as f32 / 255.0])?;
+                let (r, g, b) = cymk_to_rgb8(cymk[0], cymk[1], cymk[2], cymk[3]);
+                *dest_p = Rgb([r, g, b]);
+            }
+            Ok(r)
+        }
+
+        match (from, to) {
+            (ColorSpace::DeviceGray, ColorSpace::Separation((alt, id))) => {
+                if alt.as_ref() == &ColorSpace::DeviceCMYK {
+                    let f: FunctionDict = resolver.resolve_pdf_object(*id)?;
+                    return Ok(DynamicImage::ImageRgb8(match f.function_type()? {
+                        FunctionType::ExponentialInterpolation => {
+                            // TODO: replace with f.sampled()
+                            gray_by_cymk(img.into_luma8(), f.exponential_interpolation()?)?
+                        }
+                        _ => todo!(),
+                    }));
+                }
+            }
+            _ => {}
+        }
         todo!("transform image color space from {:?} to {:?}", from, to);
     }
 
     let from = image_color_space(&img);
     if &from == to {
-        return img;
+        return Ok(img);
     }
 
-    transform(img, &from, to)
+    transform(resolver, img, &from, to)
 }
 
 impl<'a> Stream<'a> {
@@ -438,7 +475,7 @@ impl<'a> Stream<'a> {
         };
 
         if let Some(color_space) = color_space.as_ref() {
-            Ok(image_transform_color_space(r, color_space))
+            Ok(image_transform_color_space(resolver, r, color_space).unwrap())
         } else {
             Ok(r)
         }

@@ -6,10 +6,10 @@ use crate::{
     file::{ObjectResolver, XObjectDict},
     function::{Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
-        parse_operations, AxialExtend, AxialShadingDict, Color, ColorArgs, ColorArgsOrName,
-        ColorSpace, ConvertFromObject, LineCapStyle, LineJoinStyle, NameOfDict, NameOrDictByRef,
-        NameOrStream, PatternType, Point, RenderingIntent, ShadingPatternDict, ShadingType,
-        TextRenderingMode, TilingPaintType, TilingPatternDict, TransformMatrix,
+        cymk_to_rgb, parse_operations, AxialExtend, AxialShadingDict, Color, ColorArgs,
+        ColorArgsOrName, ColorSpace, ConvertFromObject, LineCapStyle, LineJoinStyle, NameOfDict,
+        NameOrDictByRef, NameOrStream, PatternType, Point, RenderingIntent, ShadingPatternDict,
+        ShadingType, TextRenderingMode, TilingPaintType, TilingPatternDict, TransformMatrix,
     },
     object::{Array, Object, PdfObject, Stream, TextStringOrNumber},
     text::{
@@ -64,13 +64,10 @@ impl From<Color> for tiny_skia::Color {
     fn from(color: Color) -> Self {
         match color {
             Color::Rgb(r, g, b) => tiny_skia::Color::from_rgba(r, g, b, 1.0).unwrap(),
-            Color::Cmyk(c, m, y, k) => tiny_skia::Color::from_rgba(
-                (1.0 - c) * (1.0 - k),
-                (1.0 - m) * (1.0 - k),
-                (1.0 - y) * (1.0 - k),
-                1.0,
-            )
-            .unwrap(),
+            Color::Cmyk(c, m, y, k) => {
+                let (r, g, b) = cymk_to_rgb(c, y, m, k);
+                tiny_skia::Color::from_rgba(r, g, b, 1.0).unwrap()
+            }
             Color::Gray(g) => tiny_skia::Color::from_rgba(g, g, g, 1.0).unwrap(),
         }
     }
