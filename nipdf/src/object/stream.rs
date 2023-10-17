@@ -353,64 +353,69 @@ impl<'a> Stream<'a> {
 
     /// Decode stream data using filter and parameters in stream dictionary.
     /// `image_to_raw` if the stream is image, convert to RawImage.
-    pub fn decode(
-        &self,
-        resolver: &ObjectResolver<'a>,
-    ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
+    pub fn decode(&self, resolver: &ObjectResolver<'a>) -> Result<Cow<'a, [u8]>, ObjectValueError> {
         let mut decoded = FilterDecodedData::Bytes(self.raw(resolver)?.into());
         for (filter_name, params) in self.iter_filter()? {
             decoded = filter(decoded.into_bytes()?, resolver, filter_name, params)?;
         }
+        decoded.into_bytes()
 
-        let img_dict = ImageDict::checked(None, &self.0, resolver)?;
-        let Some(img_dict) = img_dict else {
-            return Ok(decoded);
-        };
+        // let img_dict = ImageDict::checked(None, &self.0, resolver)?;
+        // let Some(img_dict) = img_dict else {
+        //     return decoded.into_bytes();
+        // };
 
-        let FilterDecodedData::Bytes(data) = decoded else {
-            return Ok(decoded);
-        };
+        // let FilterDecodedData::Bytes(data) = decoded else {
+        //     return decoded.into_bytes();
+        // };
 
-        match (
-            img_dict.color_space().unwrap(),
-            img_dict.bits_per_component().unwrap().unwrap(),
-        ) {
-            (_, 1) => {
-                use bitstream_io::read::BitRead;
+        // match (
+        //     img_dict.color_space().unwrap(),
+        //     img_dict.bits_per_component().unwrap().unwrap(),
+        // ) {
+        //     (_, 1) => {
+        //         use bitstream_io::read::BitRead;
 
-                let mut img = GrayImage::new(img_dict.width().unwrap(), img_dict.height().unwrap());
-                let mut r = BitReader::<_, BigEndian>::new(data.borrow() as &[u8]);
-                for y in 0..img_dict.height().unwrap() {
-                    for x in 0..img_dict.width().unwrap() {
-                        img.put_pixel(x, y, Luma([if r.read_bit().unwrap() { 255u8 } else { 0 }]));
-                    }
-                }
-                Ok(FilterDecodedData::Image(DynamicImage::ImageLuma8(img)))
-            }
-            (Some(ColorSpace::DeviceGray), 8) => {
-                let img = GrayImage::from_raw(
-                    img_dict.width().unwrap(),
-                    img_dict.height().unwrap(),
-                    data.into_owned(),
-                )
-                .unwrap();
-                Ok(FilterDecodedData::Image(DynamicImage::ImageLuma8(img)))
-            }
-            (Some(ColorSpace::DeviceRGB), 8) => {
-                let img = RgbImage::from_raw(
-                    img_dict.width().unwrap(),
-                    img_dict.height().unwrap(),
-                    data.into_owned(),
-                )
-                .unwrap();
-                Ok(FilterDecodedData::Image(DynamicImage::ImageRgb8(img)))
-            }
-            _ => todo!(
-                "unsupported interoperate decoded stream data as image: {:?} {}",
-                img_dict.color_space(),
-                img_dict.bits_per_component().unwrap().unwrap()
-            ),
-        }
+        //         let mut img = GrayImage::new(img_dict.width().unwrap(), img_dict.height().unwrap());
+        //         let mut r = BitReader::<_, BigEndian>::new(data.borrow() as &[u8]);
+        //         for y in 0..img_dict.height().unwrap() {
+        //             for x in 0..img_dict.width().unwrap() {
+        //                 img.put_pixel(x, y, Luma([if r.read_bit().unwrap() { 255u8 } else { 0 }]));
+        //             }
+        //         }
+        //         Ok(FilterDecodedData::Image(DynamicImage::ImageLuma8(img)))
+        //     }
+        //     (Some(ColorSpace::DeviceGray), 8) => {
+        //         let img = GrayImage::from_raw(
+        //             img_dict.width().unwrap(),
+        //             img_dict.height().unwrap(),
+        //             data.into_owned(),
+        //         )
+        //         .unwrap();
+        //         Ok(FilterDecodedData::Image(DynamicImage::ImageLuma8(img)))
+        //     }
+        //     (Some(ColorSpace::DeviceRGB), 8) => {
+        //         let img = RgbImage::from_raw(
+        //             img_dict.width().unwrap(),
+        //             img_dict.height().unwrap(),
+        //             data.into_owned(),
+        //         )
+        //         .unwrap();
+        //         Ok(FilterDecodedData::Image(DynamicImage::ImageRgb8(img)))
+        //     }
+        //     _ => todo!(
+        //         "unsupported interoperate decoded stream data as image: {:?} {}",
+        //         img_dict.color_space(),
+        //         img_dict.bits_per_component().unwrap().unwrap()
+        //     ),
+        // }
+    }
+
+    pub fn decode_image(
+        &self,
+        resolver: & ObjectResolver<'a>,
+    ) -> Result<DynamicImage, ObjectValueError> {
+        todo!()
     }
 
     fn iter_filter(

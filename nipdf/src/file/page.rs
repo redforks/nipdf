@@ -271,15 +271,7 @@ impl<'a, 'b> Page<'a, 'b> {
             .contents()
             .unwrap()
             .into_iter()
-            .map(|s| {
-                let decoded = s.decode(self.d.d.resolver())?;
-                match decoded {
-                    FilterDecodedData::Bytes(b) => Ok::<_, ObjectValueError>(b.into_owned()),
-                    _ => {
-                        panic!("expected page content is stream");
-                    }
-                }
-            })
+            .map(|s| s.decode(self.d.d.resolver()).map(|v| v.into_owned()))
             .collect::<Result<_, _>>()?;
         Ok(PageContent { bufs })
     }

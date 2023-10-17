@@ -54,26 +54,21 @@ fn dump_stream(path: &str, id: NonZeroU32, raw: bool, as_png: bool) -> AnyResult
     let (_f, xref) = open(path, &mut buf)?;
     let resolver = ObjectResolver::new(&buf, &xref);
     let obj = resolver.resolve(id)?;
-    let png_buffer;
     match obj {
         Object::Stream(s) => {
             let decoded;
+            let png_buffer;
             let mut buf = if raw {
                 s.raw(&resolver)?
+            } else if as_png {
+                let img = s.decode_image(&resolver)?;
+                let mut buf = Cursor::new(Vec::new());
+                img.write_to(&mut buf, ImageOutputFormat::Png)?;
+                png_buffer = buf.into_inner();
+                &png_buffer
             } else {
                 decoded = s.decode(&resolver)?;
-                if as_png {
-                    if let FilterDecodedData::Image(ref img) = decoded {
-                        let mut buf = Cursor::new(Vec::new());
-                        img.write_to(&mut buf, ImageOutputFormat::Png)?;
-                        png_buffer = buf.into_inner();
-                        &png_buffer
-                    } else {
-                        decoded.as_bytes()
-                    }
-                } else {
-                    decoded.as_bytes()
-                }
+                decoded.as_ref()
             };
             copy(&mut buf, &mut BufWriter::new(&mut stdout()))?;
         }
