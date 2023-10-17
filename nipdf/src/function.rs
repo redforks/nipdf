@@ -96,6 +96,17 @@ pub trait FunctionDictTrait {
 }
 
 impl<'a, 'b> FunctionDict<'a, 'b> {
+    fn signature(&self) -> AnyResult<Signature> {
+        Ok(Signature {
+            domain: self.domain()?,
+            range: self.range()?,
+        })
+    }
+
+    pub fn n_args(&self) -> usize {
+        self.domain().unwrap().n()
+    }
+
     pub fn n_returns(&self) -> Option<usize> {
         self.range().unwrap().map(|range| range.n())
     }
@@ -124,10 +135,48 @@ impl<'a, 'b> FunctionDict<'a, 'b> {
     }
 }
 
+/// Function signature, clip input args and returns.
+struct Signature {
+    domain: Domains,
+    range: Option<Domains>,
+}
+
+impl Signature {
+    pub fn n_args(&self) -> usize {
+        self.domain.n()
+    }
+
+    pub fn n_returns(&self) -> Option<usize> {
+        self.range.as_ref().map(|range| range.n())
+    }
+
+    fn clip_args(&self, args: &[f32]) -> Vec<f32> {
+        debug_assert_eq!(args.len(), self.n_args());
+
+        args.iter()
+            .zip(self.domain.0.iter())
+            .map(|(&arg, domain)| domain.clamp(arg))
+            .collect()
+    }
+
+    fn clip_returns(&self, returns: Vec<f32>) -> Vec<f32> {
+        let Some(range) = self.range.as_ref() else {
+            return returns;
+        };
+        assert_eq!(returns.len(), range.n());
+
+        returns
+            .iter()
+            .zip(range.0.iter())
+            .map(|(&ret, domain)| domain.clamp(ret))
+            .collect()
+    }
+}
+
 impl<'a, 'b> Function for FunctionDict<'a, 'b> {
     fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>> {
         match self.function_type()? {
-            Type::Sampled => self.sampled()?.call(args),
+            Type::Sampled => self.sampled()?.func()?.call(args),
             Type::ExponentialInterpolation => self.exponential_interpolation()?.call(args),
             Type::Stitching => self.stitch()?.call(args),
             Type::PostScriptCalculator => todo!(),
@@ -143,15 +192,103 @@ fn f32_one_arr() -> Vec<f32> {
     vec![1.0]
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, TryFromIntObject, Default)]
+pub enum InterpolationOrder {
+    #[default]
+    Linear = 1,
+    Cubic = 3,
+}
+
 #[pdf_object(0i32)]
 #[type_field("FunctionType")]
 pub trait SampledFunctionDictTrait {
-    //
+    #[self_as]
+    fn function_dict(&self) -> FunctionDict<'a, 'b>;
+
+    fn size(&self) -> Vec<u32>;
+    fn bits_per_sample(&self) -> u32;
+
+    #[try_from]
+    #[or_default]
+    fn order(&self) -> InterpolationOrder;
+
+    #[try_from]
+    fn encode(&self) -> Option<Domains>;
+
+    #[try_from]
+    fn decode(&self) -> Option<Domains>;
 }
 
-impl<'a, 'b> Function for SampledFunctionDict<'a, 'b> {
-    fn call(&self, _args: &[f32]) -> AnyResult<Vec<f32>> {
-        todo!()
+/// strut to implement Function trait for SampledFunctionDict,
+/// because sampled function need to load sample data from stream.
+pub struct SampledFunction {
+    signature: Signature,
+    encode: Domains,
+    decode: Domains,
+    size: Vec<u32>,
+    samples: Vec<u8>,
+}
+
+impl Function for SampledFunction {
+    fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>> {
+        let args = self.signature.clip_args(args);
+        let mut idx = 0;
+        for (i, arg) in args.iter().enumerate() {
+            let domain = &self.signature.domain.0[i];
+            let encode = &self.encode.0[i];
+            let arg = (arg - domain.start) / (domain.end - domain.start);
+            let arg = arg * (encode.end - encode.start) + encode.start;
+            idx += (arg as u32).min(self.size[i] - 1).max(0);
+        }
+
+        let n = self.signature.n_returns().unwrap();
+        let mut r = Vec::with_capacity(n);
+        let decode = &self.decode.0[0];
+        for i in 0..n {
+            let sample = self.samples[idx as usize * n + i];
+            let sample = sample as f32 / 255.0;
+            let sample = sample * (decode.end - decode.start) + decode.start;
+            r.push(sample);
+        }
+        Ok(self.signature.clip_returns(r))
+    }
+}
+
+impl<'a, 'b> SampledFunctionDict<'a, 'b> {
+    /// Return SampledFunction instance which implements Function trait.
+    pub fn func(&self) -> AnyResult<SampledFunction> {
+        let f = self.function_dict()?;
+        assert_eq!(1, f.n_args(), "todo: support multi args");
+
+        assert_eq!(
+            8,
+            self.bits_per_sample()?,
+            "todo: support bits_per_sample != 8"
+        );
+        assert_eq!(InterpolationOrder::Linear, self.order()?);
+        let size = self.size()?;
+        let resolver = self.d.resolver();
+        let stream = resolver.resolve(self.id.unwrap())?.as_stream()?;
+        let sample_data = stream.decode(resolver)?;
+        let signature = f.signature()?;
+        assert!(sample_data.len() >= size[0] as usize * signature.n_returns().unwrap() as usize);
+        Ok(SampledFunction {
+            signature,
+            encode: self.encode()?.unwrap_or_else(|| {
+                Domains(
+                    size.iter()
+                        .map(|v| Domain::new(0.0, (*v - 1) as f32))
+                        .collect(),
+                )
+            }),
+            decode: self.decode()?.unwrap_or_else(|| {
+                f.range()
+                    .unwrap()
+                    .expect("range should exist in sampled function")
+            }),
+            size: self.size()?,
+            samples: sample_data.into_owned(),
+        })
     }
 }
 
