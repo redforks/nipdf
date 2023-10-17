@@ -735,6 +735,7 @@ impl<'a> Object<'a> {
     pub fn as_dict(&self) -> Result<&Dictionary<'a>, ObjectValueError> {
         match self {
             Object::Dictionary(d) => Ok(d),
+            Object::Stream(s) => Ok(s.as_dict()),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }

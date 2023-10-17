@@ -351,10 +351,7 @@ fn image_transform_color_space(
                 if alt.as_ref() == &ColorSpace::DeviceCMYK {
                     let f: FunctionDict = resolver.resolve_pdf_object(*id)?;
                     return Ok(DynamicImage::ImageRgb8(match f.function_type()? {
-                        FunctionType::ExponentialInterpolation => {
-                            // TODO: replace with f.sampled()
-                            gray_by_cymk(img.into_luma8(), f.exponential_interpolation()?)?
-                        }
+                        FunctionType::Sampled => gray_by_cymk(img.into_luma8(), f.sampled()?)?,
                         _ => todo!(),
                     }));
                 }
