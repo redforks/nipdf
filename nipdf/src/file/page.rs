@@ -117,6 +117,8 @@ pub trait GraphicsStateParameterDictTrait {
     fn alpha_source_flag(&self) -> Option<bool>;
     #[key("TK")]
     fn text_knockout_flag(&self) -> Option<bool>;
+    #[key("FL")]
+    fn flatness(&self) -> Option<f32>;
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromNameObject)]

@@ -248,6 +248,15 @@ impl State {
                 "ML" => self.set_miter_limit(res.miter_limit().unwrap().unwrap()),
                 "RI" => self.set_render_intent(res.rendering_intent().unwrap().unwrap()),
                 "TK" => self.set_text_knockout_flag(res.text_knockout_flag().unwrap().unwrap()),
+                "FL" => self.set_flatness(res.flatness().unwrap().unwrap()),
+                "Type" => (),
+                "SM" => debug!("ExtGState key: SM (smoothness tolerance) not implemented"),
+                k @ ("OPM" | "op" | "OP") => {
+                    debug!("ExtGState key {k} is for Overprint, which is not supported")
+                }
+                "SA" => {
+                    debug!("Unknown or unsupported ExtGState key: SA (automatic stroke adjustment)")
+                }
                 _ => log::info!("Unknown or unsupported ExtGState key: {}", key.as_ref()),
             }
         }
