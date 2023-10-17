@@ -360,49 +360,55 @@ impl<'a> Stream<'a> {
         let decoded = self._decode(resolver)?;
         let img_dict = ImageDict::new(None, &self.0, resolver)?;
 
-        let FilterDecodedData::Bytes(data) = decoded else {
-            todo!();
-        };
+        match decoded {
+            FilterDecodedData::Image(img) => Ok(img),
+            FilterDecodedData::Bytes(data) => {
+                match (
+                    img_dict.color_space().unwrap(),
+                    img_dict.bits_per_component().unwrap().unwrap(),
+                ) {
+                    (_, 1) => {
+                        use bitstream_io::read::BitRead;
 
-        match (
-            img_dict.color_space().unwrap(),
-            img_dict.bits_per_component().unwrap().unwrap(),
-        ) {
-            (_, 1) => {
-                use bitstream_io::read::BitRead;
-
-                let mut img = GrayImage::new(img_dict.width().unwrap(), img_dict.height().unwrap());
-                let mut r = BitReader::<_, BigEndian>::new(data.borrow() as &[u8]);
-                for y in 0..img_dict.height().unwrap() {
-                    for x in 0..img_dict.width().unwrap() {
-                        img.put_pixel(x, y, Luma([if r.read_bit().unwrap() { 255u8 } else { 0 }]));
+                        let mut img =
+                            GrayImage::new(img_dict.width().unwrap(), img_dict.height().unwrap());
+                        let mut r = BitReader::<_, BigEndian>::new(data.borrow() as &[u8]);
+                        for y in 0..img_dict.height().unwrap() {
+                            for x in 0..img_dict.width().unwrap() {
+                                img.put_pixel(
+                                    x,
+                                    y,
+                                    Luma([if r.read_bit().unwrap() { 255u8 } else { 0 }]),
+                                );
+                            }
+                        }
+                        Ok(DynamicImage::ImageLuma8(img))
                     }
+                    (Some(ColorSpace::DeviceGray), 8) => {
+                        let img = GrayImage::from_raw(
+                            img_dict.width().unwrap(),
+                            img_dict.height().unwrap(),
+                            data.into_owned(),
+                        )
+                        .unwrap();
+                        Ok(DynamicImage::ImageLuma8(img))
+                    }
+                    (Some(ColorSpace::DeviceRGB), 8) => {
+                        let img = RgbImage::from_raw(
+                            img_dict.width().unwrap(),
+                            img_dict.height().unwrap(),
+                            data.into_owned(),
+                        )
+                        .unwrap();
+                        Ok(DynamicImage::ImageRgb8(img))
+                    }
+                    _ => todo!(
+                        "unsupported interoperate decoded stream data as image: {:?} {}",
+                        img_dict.color_space(),
+                        img_dict.bits_per_component().unwrap().unwrap()
+                    ),
                 }
-                Ok(DynamicImage::ImageLuma8(img))
             }
-            (Some(ColorSpace::DeviceGray), 8) => {
-                let img = GrayImage::from_raw(
-                    img_dict.width().unwrap(),
-                    img_dict.height().unwrap(),
-                    data.into_owned(),
-                )
-                .unwrap();
-                Ok(DynamicImage::ImageLuma8(img))
-            }
-            (Some(ColorSpace::DeviceRGB), 8) => {
-                let img = RgbImage::from_raw(
-                    img_dict.width().unwrap(),
-                    img_dict.height().unwrap(),
-                    data.into_owned(),
-                )
-                .unwrap();
-                Ok(DynamicImage::ImageRgb8(img))
-            }
-            _ => todo!(
-                "unsupported interoperate decoded stream data as image: {:?} {}",
-                img_dict.color_space(),
-                img_dict.bits_per_component().unwrap().unwrap()
-            ),
         }
     }
 
