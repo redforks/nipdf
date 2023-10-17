@@ -23,7 +23,7 @@ fn scan_objects() {
                 }
                 Err(e) => panic!("{}", e),
                 Ok(Object::Stream(s)) => {
-                    s.decode(&resolver, false).unwrap();
+                    s.decode(&resolver).unwrap();
                 }
                 _ => {}
             }
