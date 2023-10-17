@@ -10,7 +10,7 @@ use clap::{arg, Command};
 use image::ImageOutputFormat;
 use nipdf::{
     file::{File, ObjectResolver, RenderOptionBuilder, XRefTable},
-    object::{FilterDecodedData, Object},
+    object::Object,
 };
 
 fn cli() -> Command {

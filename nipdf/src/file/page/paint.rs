@@ -11,7 +11,7 @@ use crate::{
         NameOrStream, PatternType, Point, RenderingIntent, ShadingPatternDict, ShadingType,
         TextRenderingMode, TilingPaintType, TilingPatternDict, TransformMatrix,
     },
-    object::{Array, FilterDecodedData, Object, PdfObject, Stream, TextStringOrNumber},
+    object::{Array, Object, PdfObject, Stream, TextStringOrNumber},
     text::{
         CIDFontType, CIDFontWidths, Encoding, EncodingDict, FontDescriptorDict,
         FontDescriptorFlags, FontDict, FontType, TrueTypeFontDict, Type0FontDict, Type1FontDict,

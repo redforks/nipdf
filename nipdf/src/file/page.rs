@@ -9,7 +9,7 @@ use crate::{
         parse_operations, Color, ColorSpace, LineCapStyle, LineJoinStyle, Operation, PatternDict,
         Point, RenderingIntent,
     },
-    object::{Dictionary, FilterDecodedData, Object, ObjectValueError, PdfObject, Stream},
+    object::{Dictionary, Object, ObjectValueError, PdfObject, Stream},
     text::FontDict,
 };
 

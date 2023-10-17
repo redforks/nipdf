@@ -219,7 +219,7 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for CCITTFGroup {
     }
 }
 
-pub enum FilterDecodedData<'a> {
+enum FilterDecodedData<'a> {
     Bytes(Cow<'a, [u8]>),
     Image(DynamicImage),
 }
@@ -413,7 +413,7 @@ impl<'a> Stream<'a> {
 
     pub fn decode_image(
         &self,
-        resolver: & ObjectResolver<'a>,
+        resolver: &ObjectResolver<'a>,
     ) -> Result<DynamicImage, ObjectValueError> {
         todo!()
     }
