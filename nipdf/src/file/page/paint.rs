@@ -719,7 +719,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
     fn paint_x_object(&mut self, name: &crate::graphics::NameOfDict) {
         fn load_image(image_dict: &XObjectDict) -> RgbaImage {
             let image = image_dict.as_image().expect("Only Image XObject supported");
-            let image = image.decode(image_dict.resolver(), false).unwrap();
+            let image = image.decode(image_dict.resolver()).unwrap();
             let FilterDecodedData::Image(img) = image else {
                 panic!("Stream should decoded to image");
             };
@@ -836,7 +836,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
 
         let stream: &Object<'a> = tile.resolver().resolve(tile.id().unwrap())?;
         let stream = stream.as_stream()?;
-        let decoded = stream.decode(tile.resolver(), false)?;
+        let decoded = stream.decode(tile.resolver())?;
         let bytes = decoded.as_bytes();
         let (_, ops) = terminated(parse_operations, eof)(bytes).unwrap();
         let bbox = tile.b_box()?;
@@ -1081,7 +1081,7 @@ impl MatrixMapper {
 
         let mut canvas = Pixmap::new(self.width as u32, self.height as u32).unwrap();
         let img = img_dict.as_image().unwrap();
-        let img = img.decode(img_dict.resolver(), false).unwrap();
+        let img = img.decode(img_dict.resolver()).unwrap();
         let FilterDecodedData::Image(img) = img else {
             bail!("Stream should decoded to image");
         };
@@ -1626,7 +1626,7 @@ impl<'c> FontCache<'c> {
         resolver: &ObjectResolver<'a>,
         s: &Stream<'a>,
     ) -> AnyResult<Vec<u8>> {
-        let bytes = s.decode(resolver, false)?;
+        let bytes = s.decode(resolver)?;
         match bytes {
             FilterDecodedData::Bytes(_) => Ok(bytes.to_owned()),
             _ => panic!("Font not embedded"),

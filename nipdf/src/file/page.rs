@@ -272,7 +272,7 @@ impl<'a, 'b> Page<'a, 'b> {
             .unwrap()
             .into_iter()
             .map(|s| {
-                let decoded = s.decode(self.d.d.resolver(), false)?;
+                let decoded = s.decode(self.d.d.resolver())?;
                 match decoded {
                     FilterDecodedData::Bytes(b) => Ok::<_, ObjectValueError>(b.into_owned()),
                     _ => {

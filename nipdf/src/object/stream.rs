@@ -124,20 +124,12 @@ fn decode_flate(buf: &[u8], params: LZWFlateDecodeDict) -> Result<Vec<u8>, Objec
 fn decode_dct<'a>(
     buf: Cow<'a, [u8]>,
     params: Option<&Dictionary>,
-    image_to_raw: bool,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     assert!(
         params.is_none(),
         "TODO: handle params of {}",
         FILTER_DCT_DECODE
     );
-
-    if image_to_raw {
-        return Ok(FilterDecodedData::RawImage(RawImage {
-            format: ImageFormat::Jpeg,
-            data: buf,
-        }));
-    }
 
     use image::{load_from_memory_with_format, ImageFormat as ImgImageFormat};
     handle_filter_error(
@@ -150,20 +142,12 @@ fn decode_dct<'a>(
 fn decode_jpx<'a>(
     buf: Cow<'a, [u8]>,
     params: Option<&Dictionary>,
-    image_to_raw: bool,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     assert!(
         params.is_none(),
         "TODO: handle params of {}",
         FILTER_JPX_DECODE
     );
-
-    if image_to_raw {
-        return Ok(FilterDecodedData::RawImage(RawImage {
-            format: ImageFormat::Jpeg2k,
-            data: buf,
-        }));
-    }
 
     use jpeg2k::Image;
     let img = handle_filter_error(Image::from_bytes(buf.borrow()), FILTER_JPX_DECODE)?;
@@ -238,7 +222,6 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for CCITTFGroup {
 pub enum FilterDecodedData<'a> {
     Bytes(Cow<'a, [u8]>),
     Image(DynamicImage),
-    RawImage(RawImage<'a>),
 }
 
 impl<'a> FilterDecodedData<'a> {
@@ -259,7 +242,6 @@ impl<'a> FilterDecodedData<'a> {
         match self {
             Self::Bytes(bytes) => bytes,
             Self::Image(img) => img.as_bytes(),
-            Self::RawImage(img) => &img.data[..],
         }
     }
 
@@ -267,7 +249,6 @@ impl<'a> FilterDecodedData<'a> {
         match self {
             Self::Bytes(bytes) => bytes.into_owned(),
             Self::Image(img) => img.into_bytes(),
-            Self::RawImage(img) => img.data.into_owned(),
         }
     }
 }
@@ -311,7 +292,6 @@ fn filter<'a: 'b, 'b>(
     resolver: &ObjectResolver<'a>,
     filter_name: &str,
     params: Option<&'b Dictionary<'a>>,
-    image_to_raw: bool,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     let empty_dict = Lazy::new(Dictionary::new);
     match filter_name {
@@ -320,7 +300,7 @@ fn filter<'a: 'b, 'b>(
             LZWFlateDecodeDict::new(None, params.unwrap_or_else(|| empty_dict.deref()), resolver)?,
         )
         .map(FilterDecodedData::bytes),
-        FILTER_DCT_DECODE => decode_dct(buf, params, image_to_raw),
+        FILTER_DCT_DECODE => decode_dct(buf, params),
         FILTER_CCITT_FAX => decode_ccitt(
             &buf,
             CCITTFaxDecodeParamsDict::new(
@@ -332,7 +312,7 @@ fn filter<'a: 'b, 'b>(
         .map(FilterDecodedData::bytes),
         FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(FilterDecodedData::bytes),
         FILTER_RUN_LENGTH_DECODE => Ok(FilterDecodedData::bytes(decode_run_length(&buf, params))),
-        FILTER_JPX_DECODE => decode_jpx(buf, params, image_to_raw),
+        FILTER_JPX_DECODE => decode_jpx(buf, params),
         FILTER_LZW_DECODE => decode_lzw(
             &buf,
             LZWFlateDecodeDict::new(None, params.unwrap_or_else(|| empty_dict.deref()), resolver)?,
@@ -343,17 +323,6 @@ fn filter<'a: 'b, 'b>(
             Err(ObjectValueError::UnknownFilter)
         }
     }
-}
-
-pub enum ImageFormat {
-    Jpeg,
-    Jpeg2k,
-    Png,
-}
-
-pub struct RawImage<'a> {
-    pub format: ImageFormat,
-    pub data: Cow<'a, [u8]>,
 }
 
 impl<'a> Stream<'a> {
@@ -387,17 +356,10 @@ impl<'a> Stream<'a> {
     pub fn decode(
         &self,
         resolver: &ObjectResolver<'a>,
-        image_to_raw: bool,
     ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
         let mut decoded = FilterDecodedData::Bytes(self.raw(resolver)?.into());
         for (filter_name, params) in self.iter_filter()? {
-            decoded = filter(
-                decoded.into_bytes()?,
-                resolver,
-                filter_name,
-                params,
-                image_to_raw,
-            )?;
+            decoded = filter(decoded.into_bytes()?, resolver, filter_name, params)?;
         }
 
         let img_dict = ImageDict::checked(None, &self.0, resolver)?;
@@ -409,117 +371,45 @@ impl<'a> Stream<'a> {
             return Ok(decoded);
         };
 
-        if image_to_raw {
-            match (
-                img_dict.color_space().unwrap(),
-                img_dict.bits_per_component().unwrap().unwrap(),
-            ) {
-                (Some(ColorSpace::DeviceGray), 1) => {
-                    use png::{BitDepth, ColorType, Encoder};
-                    let mut bytes = Vec::new();
-                    let mut encoder = Encoder::new(
-                        &mut bytes,
-                        img_dict.width().unwrap(),
-                        img_dict.height().unwrap(),
-                    );
-                    encoder.set_color(ColorType::Grayscale);
-                    encoder.set_depth(BitDepth::One);
-                    let mut writer = encoder.write_header().unwrap();
-                    writer.write_image_data(data.borrow()).unwrap();
-                    drop(writer);
-                    Ok(FilterDecodedData::RawImage(RawImage {
-                        format: ImageFormat::Png,
-                        data: Cow::Owned(bytes),
-                    }))
-                }
-                (Some(ColorSpace::DeviceGray), 8) => {
-                    use png::{BitDepth, ColorType, Encoder};
-                    let mut bytes = Vec::new();
-                    let mut encoder = Encoder::new(
-                        &mut bytes,
-                        img_dict.width().unwrap(),
-                        img_dict.height().unwrap(),
-                    );
-                    encoder.set_color(ColorType::Grayscale);
-                    encoder.set_depth(BitDepth::Eight);
-                    let mut writer = encoder.write_header().unwrap();
-                    writer.write_image_data(data.borrow()).unwrap();
-                    drop(writer);
-                    Ok(FilterDecodedData::RawImage(RawImage {
-                        format: ImageFormat::Png,
-                        data: Cow::Owned(bytes),
-                    }))
-                }
-                (Some(ColorSpace::DeviceRGB), 8) => {
-                    use png::{BitDepth, ColorType, Encoder};
-                    let mut bytes = Vec::new();
-                    let mut encoder = Encoder::new(
-                        &mut bytes,
-                        img_dict.width().unwrap(),
-                        img_dict.height().unwrap(),
-                    );
-                    encoder.set_color(ColorType::Rgb);
-                    encoder.set_depth(BitDepth::Eight);
-                    let mut writer = encoder.write_header().unwrap();
-                    writer.write_image_data(data.borrow()).unwrap();
-                    drop(writer);
-                    Ok(FilterDecodedData::RawImage(RawImage {
-                        format: ImageFormat::Png,
-                        data: Cow::Owned(bytes),
-                    }))
-                }
-                _ => todo!(
-                    "unsupported interoperate decoded stream data as raw image: {:?} {}",
-                    img_dict.color_space(),
-                    img_dict.bits_per_component().unwrap().unwrap()
-                ),
-            }
-        } else {
-            match (
-                img_dict.color_space().unwrap(),
-                img_dict.bits_per_component().unwrap().unwrap(),
-            ) {
-                (_, 1) => {
-                    use bitstream_io::read::BitRead;
+        match (
+            img_dict.color_space().unwrap(),
+            img_dict.bits_per_component().unwrap().unwrap(),
+        ) {
+            (_, 1) => {
+                use bitstream_io::read::BitRead;
 
-                    let mut img =
-                        GrayImage::new(img_dict.width().unwrap(), img_dict.height().unwrap());
-                    let mut r = BitReader::<_, BigEndian>::new(data.borrow() as &[u8]);
-                    for y in 0..img_dict.height().unwrap() {
-                        for x in 0..img_dict.width().unwrap() {
-                            img.put_pixel(
-                                x,
-                                y,
-                                Luma([if r.read_bit().unwrap() { 255u8 } else { 0 }]),
-                            );
-                        }
+                let mut img = GrayImage::new(img_dict.width().unwrap(), img_dict.height().unwrap());
+                let mut r = BitReader::<_, BigEndian>::new(data.borrow() as &[u8]);
+                for y in 0..img_dict.height().unwrap() {
+                    for x in 0..img_dict.width().unwrap() {
+                        img.put_pixel(x, y, Luma([if r.read_bit().unwrap() { 255u8 } else { 0 }]));
                     }
-                    Ok(FilterDecodedData::Image(DynamicImage::ImageLuma8(img)))
                 }
-                (Some(ColorSpace::DeviceGray), 8) => {
-                    let img = GrayImage::from_raw(
-                        img_dict.width().unwrap(),
-                        img_dict.height().unwrap(),
-                        data.into_owned(),
-                    )
-                    .unwrap();
-                    Ok(FilterDecodedData::Image(DynamicImage::ImageLuma8(img)))
-                }
-                (Some(ColorSpace::DeviceRGB), 8) => {
-                    let img = RgbImage::from_raw(
-                        img_dict.width().unwrap(),
-                        img_dict.height().unwrap(),
-                        data.into_owned(),
-                    )
-                    .unwrap();
-                    Ok(FilterDecodedData::Image(DynamicImage::ImageRgb8(img)))
-                }
-                _ => todo!(
-                    "unsupported interoperate decoded stream data as image: {:?} {}",
-                    img_dict.color_space(),
-                    img_dict.bits_per_component().unwrap().unwrap()
-                ),
+                Ok(FilterDecodedData::Image(DynamicImage::ImageLuma8(img)))
             }
+            (Some(ColorSpace::DeviceGray), 8) => {
+                let img = GrayImage::from_raw(
+                    img_dict.width().unwrap(),
+                    img_dict.height().unwrap(),
+                    data.into_owned(),
+                )
+                .unwrap();
+                Ok(FilterDecodedData::Image(DynamicImage::ImageLuma8(img)))
+            }
+            (Some(ColorSpace::DeviceRGB), 8) => {
+                let img = RgbImage::from_raw(
+                    img_dict.width().unwrap(),
+                    img_dict.height().unwrap(),
+                    data.into_owned(),
+                )
+                .unwrap();
+                Ok(FilterDecodedData::Image(DynamicImage::ImageRgb8(img)))
+            }
+            _ => todo!(
+                "unsupported interoperate decoded stream data as image: {:?} {}",
+                img_dict.color_space(),
+                img_dict.bits_per_component().unwrap().unwrap()
+            ),
         }
     }
 

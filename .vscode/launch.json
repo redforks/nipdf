@@ -26,27 +26,23 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'dump-pdf'",
+            "name": "Debug executable 'nipdf-dump'",
             "cargo": {
                 "args": [
                     "build",
-                    "-F",
-                    "clr",
-                    "--bin=dump-pdf",
-                    "--package=pdf2docx"
-                ],
-                "filter": {
-                    "name": "dump-pdf",
-                    "kind": "bin"
-                }
+                    "-p",
+                    "nipdf-dump"
+                ]
             },
             "args": [
-                "stream",
+                "page",
                 "-f",
-                "sample_files/normal/lossless.pdf",
-                "2"
+                "../nipdf/sample_files/bizarre/pdfReferenceUpdated.pdf",
+                "488",
+                "--png"
             ],
-            "cwd": "${workspaceFolder}"
+            "stopOnEntry": false,
+            "cwd": "${workspaceFolder}/nipdf-dump"
         },
         {
             "type": "lldb",

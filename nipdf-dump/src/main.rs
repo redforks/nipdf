@@ -23,13 +23,11 @@ fn cli() -> Command {
                 .arg(arg!(-f <filename> "PDF file to dump"))
                 .arg(arg!(<object_id> "object ID to dump"))
                 .arg(arg!(--raw "Skip decoding stream content"))
-                .arg(arg!(--image "Assume stream is image, convert to JPEG or PNG based on stream type"))
-                .arg(arg!(--png "Assume stream is image, decode and convert to PNG"))
-                ,
+                .arg(arg!(--png "Assume stream is image, decode and convert to PNG")),
         )
         .subcommand(
             Command::new("page")
-            .about("dump page content to stdout")
+                .about("dump page content to stdout")
                 .arg(arg!(-f <filename> "PDF file to dump"))
                 .arg(arg!(--pages "display total page numbers"))
                 .arg(arg!(--id "display page object ID"))
@@ -40,7 +38,7 @@ fn cli() -> Command {
         )
         .subcommand(
             Command::new("object")
-            .about("dump pdf object by id")
+                .about("dump pdf object by id")
                 .arg(arg!(-f <filename> "PDF file to dump"))
                 .arg(arg!([object_id] "object ID to dump")),
         )
@@ -51,13 +49,7 @@ fn open(path: &str, buf: &mut Vec<u8>) -> AnyResult<(File, XRefTable)> {
     File::parse(&buf[..])
 }
 
-fn dump_stream(
-    path: &str,
-    id: NonZeroU32,
-    raw: bool,
-    as_image: bool,
-    as_png: bool,
-) -> AnyResult<()> {
+fn dump_stream(path: &str, id: NonZeroU32, raw: bool, as_png: bool) -> AnyResult<()> {
     let mut buf: Vec<u8> = vec![];
     let (_f, xref) = open(path, &mut buf)?;
     let resolver = ObjectResolver::new(&buf, &xref);
@@ -69,7 +61,7 @@ fn dump_stream(
             let mut buf = if raw {
                 s.raw(&resolver)?
             } else {
-                decoded = s.decode(&resolver, as_image)?;
+                decoded = s.decode(&resolver)?;
                 if as_png {
                     if let FilterDecodedData::Image(ref img) = decoded {
                         let mut buf = Cursor::new(Vec::new());
@@ -166,7 +158,6 @@ fn main() -> AnyResult<()> {
                 .and_then(|s| s.parse().ok())
                 .unwrap(),
             sub_m.get_one::<bool>("raw").copied().unwrap_or_default(),
-            sub_m.get_one::<bool>("image").copied().unwrap_or_default(),
             sub_m.get_one::<bool>("png").copied().unwrap_or_default(),
         ),
         Some(("page", sub_m)) => dump_page(
