@@ -17,7 +17,7 @@ use crate::{
         FontDescriptorFlags, FontDict, FontType, TrueTypeFontDict, Type0FontDict, Type1FontDict,
     },
 };
-use anyhow::{anyhow, bail, Ok, Result as AnyResult};
+use anyhow::{anyhow, Ok, Result as AnyResult};
 use cff_parser::{File as CffFile, Font as CffFont};
 use educe::Educe;
 use font_kit::loaders::freetype::Font as FontKitFont;

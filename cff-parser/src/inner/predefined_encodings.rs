@@ -1,6 +1,6 @@
 use super::NOTDEF;
 
-pub const STANDARD: [&'static str; 256] = [
+pub const STANDARD: [&str; 256] = [
     NOTDEF,
     NOTDEF,
     NOTDEF,
@@ -259,7 +259,7 @@ pub const STANDARD: [&'static str; 256] = [
     NOTDEF,
 ];
 
-pub const EXPERT: [&'static str; 256] = [
+pub const EXPERT: [&str; 256] = [
     NOTDEF,
     NOTDEF,
     NOTDEF,

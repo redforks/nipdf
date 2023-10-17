@@ -236,21 +236,6 @@ impl<'a> FilterDecodedData<'a> {
             _ => Err(ObjectValueError::StreamIsNotBytes),
         }
     }
-
-    /// Convert to bytes, for Image and RawImage returns image bytes.
-    pub fn as_bytes(&self) -> &[u8] {
-        match self {
-            Self::Bytes(bytes) => bytes,
-            Self::Image(img) => img.as_bytes(),
-        }
-    }
-
-    pub fn to_owned(self) -> Vec<u8> {
-        match self {
-            Self::Bytes(bytes) => bytes.into_owned(),
-            Self::Image(img) => img.into_bytes(),
-        }
-    }
 }
 
 fn decode_ascii85(
