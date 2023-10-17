@@ -310,7 +310,7 @@ fn filter<'a: 'b, 'b>(
     }
 }
 
-fn image_transform_color_space(img: DynamicImage, to: ColorSpace) -> DynamicImage {
+fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> DynamicImage {
     fn image_color_space(img: &DynamicImage) -> ColorSpace {
         match img {
             DynamicImage::ImageLuma8(_) => ColorSpace::DeviceGray,
@@ -319,20 +319,20 @@ fn image_transform_color_space(img: DynamicImage, to: ColorSpace) -> DynamicImag
         }
     }
 
-    fn transform<IMG, P>(img: IMG, from: ColorSpace, to: ColorSpace) -> IMG
+    fn transform<IMG, P>(img: IMG, from: &ColorSpace, to: &ColorSpace) -> IMG
     where
         IMG: GenericImage<Pixel = P>,
         P: Pixel,
     {
-        todo!();
+        todo!("transform image color space from {:?} to {:?}", from, to);
     }
 
     let from = image_color_space(&img);
-    if from == to {
+    if &from == to {
         return img;
     }
 
-    transform(img, from, to)
+    transform(img, &from, to)
 }
 
 impl<'a> Stream<'a> {
@@ -389,7 +389,10 @@ impl<'a> Stream<'a> {
         let r = match decoded {
             FilterDecodedData::Image(img) => img,
             FilterDecodedData::Bytes(data) => {
-                match (color_space, img_dict.bits_per_component().unwrap().unwrap()) {
+                match (
+                    &color_space,
+                    img_dict.bits_per_component().unwrap().unwrap(),
+                ) {
                     (_, 1) => {
                         use bitstream_io::read::BitRead;
 
@@ -434,7 +437,7 @@ impl<'a> Stream<'a> {
             }
         };
 
-        if let Some(color_space) = color_space {
+        if let Some(color_space) = color_space.as_ref() {
             Ok(image_transform_color_space(r, color_space))
         } else {
             Ok(r)

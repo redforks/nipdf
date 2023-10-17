@@ -167,7 +167,7 @@ impl From<RgbColor> for Color {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ColorSpace {
     DeviceGray,
     DeviceRGB,
@@ -178,6 +178,9 @@ pub enum ColorSpace {
     /// ref id point to the real ColorSpace Object, use ObjectResolver
     /// to get the real ColorSpace Object, and then convert it to ColorSpace
     RefId(NonZeroU32),
+    /// Separation color space, the first element is the alternate color space,
+    /// the second element is ref id of the tint transform function.
+    Separation((Box<Self>, NonZeroU32)),
 }
 
 impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpace {
@@ -193,13 +196,19 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpace {
                 "Pattern" => Ok(ColorSpace::Pattern),
                 _ => Err(ObjectValueError::GraphicsOperationSchemaError),
             },
-            Object::Array(arr) => {
-                assert_eq!(2, arr.len());
-                match arr[0].as_name()? {
-                    "ICCBased" => Ok(ColorSpace::ICCBased(arr[1].as_ref()?.id().id())),
-                    _ => Err(ObjectValueError::GraphicsOperationSchemaError),
+            Object::Array(arr) => match arr[0].as_name()? {
+                "ICCBased" => {
+                    assert_eq!(2, arr.len());
+                    Ok(ColorSpace::ICCBased(arr[1].as_ref()?.id().id()))
                 }
-            }
+                "Separation" => {
+                    assert_eq!(4, arr.len());
+                    let cs = Box::new(ColorSpace::try_from(&arr[2])?);
+                    let tint_transform = arr[3].as_ref()?.id().id();
+                    Ok(ColorSpace::Separation((cs, tint_transform)))
+                }
+                _ => todo!("Unsupported color space: {:?}", arr),
+            },
             Object::Reference(id) => Ok(ColorSpace::RefId(id.id().id())),
             _ => {
                 error!("{:?}", object);
@@ -260,12 +269,12 @@ trait ICCStreamDictTrait {
 
 impl ColorSpaceArgs {
     /// Convert args to ColorSpace, resolve from page resources if it is Custom.
-    pub fn map_to(&self, resources: &ResourceDict) -> AnyResult<ColorSpace> {
+    pub fn to_color_space(self, resources: &ResourceDict) -> AnyResult<ColorSpace> {
         match self {
-            Self::Predefined(cs) => Ok(*cs),
+            Self::Predefined(cs) => Ok(cs),
             Self::Custom(name) => {
                 let spaces = resources.color_space()?;
-                let mut cs = spaces.get(name).ok_or(ObjectValueError::DictNameMissing)?;
+                let mut cs = spaces.get(&name).ok_or(ObjectValueError::DictNameMissing)?;
                 let cs_owner;
                 if let ColorSpace::RefId(id) = cs {
                     cs_owner = resources.resolver().resolve(*id)?.try_into()?;
@@ -278,7 +287,7 @@ impl ColorSpaceArgs {
                         Ok(d.alternate()?
                             .expect("unsupported if ICCBased color no alternate color space"))
                     }
-                    _ => todo!("Unsupported color space: {:?}", self),
+                    _ => todo!("Unsupported color space: {:?}", cs),
                 }
             }
         }

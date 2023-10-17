@@ -616,10 +616,10 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
 
             // Color Operations
             Operation::SetStrokeColorSpace(args) => {
-                self.current_mut().stroke_color_space = args.map_to(self.resources).unwrap()
+                self.current_mut().stroke_color_space = args.to_color_space(self.resources).unwrap()
             }
             Operation::SetFillColorSpace(args) => {
-                self.current_mut().fill_color_space = args.map_to(self.resources).unwrap()
+                self.current_mut().fill_color_space = args.to_color_space(self.resources).unwrap()
             }
             Operation::SetStrokeColor(args) => self.current_mut().set_stroke_color_args(args),
             Operation::SetStrokeGray(color)
