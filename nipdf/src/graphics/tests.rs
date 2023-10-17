@@ -153,5 +153,5 @@ fn transform_matrix_try_from_array() {
 #[test_case(ColorSpace::DeviceCMYK, &[0.0, 0.0, 0.0, 1.] => RgbColor(0., 0., 0.))]
 fn color_space_to_color(color_space: ColorSpace, args: &[f32]) -> RgbColor {
     let args = args.iter().map(|v| Object::Number(*v)).collect::<Vec<_>>();
-    color_space.to_color(&ColorArgs(args)).unwrap()
+    color_space.convert_color(&ColorArgs(args)).unwrap()
 }

@@ -211,7 +211,7 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpace {
 
 impl ColorSpace {
     /// Convert color args to color based on current ColorSpace.
-    pub fn to_color(&self, args: &ColorArgs) -> Result<RgbColor, ObjectValueError> {
+    pub fn convert_color(&self, args: &ColorArgs) -> Result<RgbColor, ObjectValueError> {
         let args = &args.0;
         match self {
             Self::DeviceRGB => {
