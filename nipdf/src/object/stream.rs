@@ -6,7 +6,7 @@ use std::{
 };
 
 use bitstream_io::{BigEndian, BitReader};
-use image::{DynamicImage, GrayImage, Luma, RgbImage};
+use image::{DynamicImage, GenericImage, GrayImage, Luma, Pixel, RgbImage};
 use lazy_static::__Deref;
 use log::error;
 use nipdf_macro::pdf_object;
@@ -310,6 +310,31 @@ fn filter<'a: 'b, 'b>(
     }
 }
 
+fn image_transform_color_space(img: DynamicImage, to: ColorSpace) -> DynamicImage {
+    fn image_color_space(img: &DynamicImage) -> ColorSpace {
+        match img {
+            DynamicImage::ImageLuma8(_) => ColorSpace::DeviceGray,
+            DynamicImage::ImageRgb8(_) => ColorSpace::DeviceRGB,
+            _ => todo!("unsupported image color space: {:?}", img),
+        }
+    }
+
+    fn transform<IMG, P>(img: IMG, from: ColorSpace, to: ColorSpace) -> IMG
+    where
+        IMG: GenericImage<Pixel = P>,
+        P: Pixel,
+    {
+        todo!();
+    }
+
+    let from = image_color_space(&img);
+    if from == to {
+        return img;
+    }
+
+    transform(img, from, to)
+}
+
 impl<'a> Stream<'a> {
     pub fn new(dict: Dictionary<'a>, data: &'a [u8]) -> Self {
         Self(dict, data)
@@ -360,13 +385,11 @@ impl<'a> Stream<'a> {
         let decoded = self._decode(resolver)?;
         let img_dict = ImageDict::new(None, &self.0, resolver)?;
 
-        match decoded {
-            FilterDecodedData::Image(img) => Ok(img),
+        let color_space = img_dict.color_space().unwrap();
+        let r = match decoded {
+            FilterDecodedData::Image(img) => img,
             FilterDecodedData::Bytes(data) => {
-                match (
-                    img_dict.color_space().unwrap(),
-                    img_dict.bits_per_component().unwrap().unwrap(),
-                ) {
+                match (color_space, img_dict.bits_per_component().unwrap().unwrap()) {
                     (_, 1) => {
                         use bitstream_io::read::BitRead;
 
@@ -382,7 +405,7 @@ impl<'a> Stream<'a> {
                                 );
                             }
                         }
-                        Ok(DynamicImage::ImageLuma8(img))
+                        DynamicImage::ImageLuma8(img)
                     }
                     (Some(ColorSpace::DeviceGray), 8) => {
                         let img = GrayImage::from_raw(
@@ -391,7 +414,7 @@ impl<'a> Stream<'a> {
                             data.into_owned(),
                         )
                         .unwrap();
-                        Ok(DynamicImage::ImageLuma8(img))
+                        DynamicImage::ImageLuma8(img)
                     }
                     (Some(ColorSpace::DeviceRGB), 8) => {
                         let img = RgbImage::from_raw(
@@ -400,7 +423,7 @@ impl<'a> Stream<'a> {
                             data.into_owned(),
                         )
                         .unwrap();
-                        Ok(DynamicImage::ImageRgb8(img))
+                        DynamicImage::ImageRgb8(img)
                     }
                     _ => todo!(
                         "unsupported interoperate decoded stream data as image: {:?} {}",
@@ -409,6 +432,12 @@ impl<'a> Stream<'a> {
                     ),
                 }
             }
+        };
+
+        if let Some(color_space) = color_space {
+            Ok(image_transform_color_space(r, color_space))
+        } else {
+            Ok(r)
         }
     }
 
