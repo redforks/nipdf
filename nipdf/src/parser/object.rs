@@ -4,7 +4,7 @@ use nom::{
     branch::alt,
     bytes::complete::{escaped, is_not, tag, take_till, take_while},
     character::{
-        complete::{anychar, multispace1, u16, u32},
+        complete::{anychar, line_ending, multispace1, u16, u32},
         is_hex_digit,
     },
     combinator::{map, not, opt, peek, recognize, value},
@@ -13,7 +13,6 @@ use nom::{
     number::complete::float,
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
 };
-
 
 use crate::object::{
     Array, Dictionary, HexString, IndirectObject, LiteralString, Name, Object, ObjectValueError,
@@ -163,7 +162,11 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<Object> {
     let (input, o) = parse_object(input)?;
     match o {
         Object::Dictionary(d) => {
-            let (input, begin_stream) = opt(ws(tag(b"stream")))(input)?;
+            let (input, begin_stream) = opt(delimited(
+                whitespace_or_comment,
+                tag(b"stream"),
+                line_ending,
+            ))(input)?;
             if begin_stream.is_some() {
                 Ok((input, Object::Stream(Stream::new(d, input))))
             } else {

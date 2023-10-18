@@ -54,7 +54,7 @@ where
     )
 }
 
-fn whitespace_or_comment(input: &[u8]) -> ParseResult<'_, ()> {
+pub(crate) fn whitespace_or_comment(input: &[u8]) -> ParseResult<'_, ()> {
     value((), many0_count(alt((value((), whitespace1), comment))))(input)
 }
 
