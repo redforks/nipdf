@@ -45,7 +45,7 @@ weezl = "0.1.7"
 [dev-dependencies]
 env_logger = "0.10.0"
 glob = "0.3.1"
-insta = "1.29.0"
+insta = { version = "1.29.0", features = ["ron"] }
 static_assertions = "1.1.0"
 test-case = "3.1.0"
 test-log = "0.2.12"
