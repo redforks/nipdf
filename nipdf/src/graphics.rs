@@ -269,7 +269,7 @@ trait ICCStreamDictTrait {
 
 impl ColorSpaceArgs {
     /// Convert args to ColorSpace, resolve from page resources if it is Custom.
-    pub fn to_color_space(self, resources: &ResourceDict) -> AnyResult<ColorSpace> {
+    pub fn into_color_space(self, resources: &ResourceDict) -> AnyResult<ColorSpace> {
         match self {
             Self::Predefined(cs) => Ok(cs),
             Self::Custom(name) => {

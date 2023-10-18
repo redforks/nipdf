@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::Result as AnyResult;
 use bitstream_io::{BigEndian, BitReader};
-use image::{DynamicImage, GenericImage, GrayImage, Luma, Pixel, Rgb, RgbImage};
+use image::{DynamicImage, GrayImage, Luma, Rgb, RgbImage};
 use lazy_static::__Deref;
 use log::error;
 use nipdf_macro::pdf_object;
@@ -346,19 +346,14 @@ fn image_transform_color_space(
             Ok(r)
         }
 
-        match (from, to) {
-            (ColorSpace::DeviceGray, ColorSpace::Separation((alt, id))) => {
-                if alt.as_ref() == &ColorSpace::DeviceCMYK {
-                    let f: FunctionDict = resolver.resolve_pdf_object(*id)?;
-                    return Ok(DynamicImage::ImageRgb8(match f.function_type()? {
-                        FunctionType::Sampled => {
-                            gray_by_cymk(img.into_luma8(), f.sampled()?.func()?)?
-                        }
-                        _ => todo!(),
-                    }));
-                }
+        if let (ColorSpace::DeviceGray, ColorSpace::Separation((alt, id))) = (from, to) {
+            if alt.as_ref() == &ColorSpace::DeviceCMYK {
+                let f: FunctionDict = resolver.resolve_pdf_object(*id)?;
+                return Ok(DynamicImage::ImageRgb8(match f.function_type()? {
+                    FunctionType::Sampled => gray_by_cymk(img.into_luma8(), f.sampled()?.func()?)?,
+                    _ => todo!(),
+                }));
             }
-            _ => {}
         }
         todo!("transform image color space from {:?} to {:?}", from, to);
     }

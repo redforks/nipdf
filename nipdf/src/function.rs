@@ -271,7 +271,7 @@ impl<'a, 'b> SampledFunctionDict<'a, 'b> {
         let stream = resolver.resolve(self.id.unwrap())?.as_stream()?;
         let sample_data = stream.decode(resolver)?;
         let signature = f.signature()?;
-        assert!(sample_data.len() >= size[0] as usize * signature.n_returns().unwrap() as usize);
+        assert!(sample_data.len() >= size[0] as usize * signature.n_returns().unwrap());
         Ok(SampledFunction {
             signature,
             encode: self.encode()?.unwrap_or_else(|| {
