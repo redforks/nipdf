@@ -113,40 +113,17 @@ fn decode_flate(buf: &[u8], params: LZWFlateDecodeDict) -> Result<Vec<u8>, Objec
         "TODO: handle predictor of FlateDecode"
     );
 
-    enum Format {
-        Zlib,
-        Deflate,
-    }
-
-    /// Check if the buffer is zlib or deflate format by first two bytes,
-    /// if not sure, return `Format::Deflate` and the original buffer pre-pended with 0x78 0xDA
-    fn check_format(buf: &[u8]) -> (Format, Cow<'_, [u8]>) {
-        assert!(buf.len() > 2);
-
-        match (buf[0], buf[1]) {
-            (0x78, 0x9C) => (Format::Zlib, Cow::Borrowed(buf)),
-            (0x78, 0xDA) => (Format::Deflate, Cow::Borrowed(buf)),
-            _ => (
-                Format::Deflate,
-                Cow::Owned([0x78, 0xDA].iter().chain(buf.iter()).copied().collect()),
-            ),
-        }
-    }
-
     use flate2::bufread::{DeflateDecoder, ZlibDecoder};
     use std::io::Read;
 
     let mut output = Vec::with_capacity(buf.len() * 2);
-    match check_format(buf) {
-        (Format::Zlib, buf) => {
-            let mut decoder = ZlibDecoder::new(buf.as_ref());
-            handle_filter_error(decoder.read_to_end(&mut output), FILTER_FLATE_DECODE)?;
-        }
-        (Format::Deflate, buf) => {
-            let mut decoder = DeflateDecoder::new(buf.as_ref());
-            handle_filter_error(decoder.read_to_end(&mut output), FILTER_FLATE_DECODE)?;
-        }
-    }
+    let mut decoder = ZlibDecoder::new(buf);
+    handle_filter_error(
+        decoder
+            .read_to_end(&mut output)
+            .or_else(|_| DeflateDecoder::new(buf).read_to_end(&mut output)),
+        FILTER_FLATE_DECODE,
+    )?;
 
     Ok(output)
 }
