@@ -22,9 +22,11 @@ fn scan_objects() {
                     print!(" not found")
                 }
                 Err(e) => panic!("{}", e),
-                Ok(Object::Stream(s)) => {
-                    s.decode(&resolver).unwrap();
-                }
+                Ok(Object::Stream(s)) => s
+                    .decode(&resolver)
+                    .map(|_| ())
+                    .or_else(|_| s.decode_image(&resolver).map(|_| ()))
+                    .unwrap(),
                 _ => {}
             }
 
