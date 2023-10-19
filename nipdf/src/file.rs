@@ -97,12 +97,7 @@ impl<'a> DataContainer<'a> for Dictionary<'a> {
 impl<'a> DataContainer<'a> for Vec<&Dictionary<'a>> {
     fn get_value(&self, key: &str) -> Option<&Object<'a>> {
         debug_assert!(!key.starts_with('/'));
-        for dict in self {
-            if let Some(v) = dict.get(key.as_bytes()) {
-                return Some(v);
-            }
-        }
-        None
+        self.iter().find_map(|d| d.get(key.as_bytes()))
     }
 }
 
@@ -395,6 +390,12 @@ impl File {
             .resolve_container_value(&trailers, "Size")
             .map_err(|_| FileError::MissingRequiredTrailerValue)?
             .as_int()? as u32;
+        assert!(
+            resolver
+                .opt_resolve_container_value(&trailers, "Encrypt")?
+                .is_none(),
+            "Encrypted file is not supported"
+        );
 
         Ok((
             Self {
