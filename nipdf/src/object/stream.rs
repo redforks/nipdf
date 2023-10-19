@@ -1,7 +1,7 @@
 use std::{
     borrow::{Borrow, Cow},
     fmt::Display,
-    iter::repeat,
+    iter::{once, repeat},
     str::from_utf8,
 };
 
@@ -75,6 +75,89 @@ trait LZWFlateDecodeDictTrait {
     fn predictor(&self) -> i32;
     #[default(1i32)]
     fn early_change(&self) -> i32;
+    #[default(1i32)]
+    fn columns(&self) -> i32;
+}
+
+/// Paeth, returns a, b, or c, whichever is closet to a + b - c
+fn paeth(a: u8, b: u8, c: u8) -> u8 {
+    let aa = i16::from(a);
+    let bb = i16::from(b);
+    let cc = i16::from(c);
+
+    let p = aa + bb - cc;
+
+    let da = (p - aa).abs();
+    let db = (p - bb).abs();
+    let dc = (p - cc).abs();
+
+    if da <= db && da <= dc {
+        a
+    } else if db <= dc {
+        b
+    } else {
+        c
+    }
+}
+
+/// Restore data processed by png predictor.
+fn png_predictor(buf: &[u8], columns: i32) -> Result<Vec<u8>, ObjectValueError> {
+    let columns = columns as usize;
+    let first_row = vec![0u8; columns];
+    let mut upper_row = &first_row[..];
+    let mut r = vec![0u8; buf.len() / (columns + 1) * columns];
+    for (cur_row, dest_row) in buf
+        .chunks(columns + 1)
+        .into_iter()
+        .zip(r.chunks_mut(columns))
+    {
+        let flag = cur_row[0];
+        let cur_row = &cur_row[1..];
+        match flag {
+            0 => dest_row.copy_from_slice(cur_row),
+            1 => {
+                // left
+                dest_row[0] = cur_row[0];
+                for i in 1..dest_row.len() {
+                    dest_row[i] = cur_row[i].wrapping_add(cur_row[i - 1]);
+                }
+            }
+            2 => {
+                // up
+                for (dest, (prev, cur)) in dest_row.iter_mut().zip(upper_row.iter().zip(cur_row)) {
+                    *dest = cur.wrapping_add(*prev);
+                }
+            }
+            3 => {
+                // average of left and up
+                let left_row = once(0).chain(cur_row.iter().copied());
+                for (dest, (up, (left, cur))) in dest_row
+                    .iter_mut()
+                    .zip(upper_row.iter().zip(left_row.zip(cur_row.iter())))
+                {
+                    *dest = (*cur).wrapping_add(((left as i16 + *up as i16) / 2) as u8);
+                }
+            }
+            4 => {
+                // paeth
+                let left_row = once(0).chain(cur_row.iter().copied());
+                let left_upper_row = once(0).chain(upper_row.iter().copied());
+                for (dest, (up, (left, (left_up, cur)))) in dest_row.iter_mut().zip(
+                    upper_row
+                        .iter()
+                        .zip(left_row.zip(left_upper_row.zip(cur_row.iter()))),
+                ) {
+                    *dest = (*cur).wrapping_add(paeth(left, *up, left_up));
+                }
+            }
+            _ => {
+                error!("Unknown png predictor: {}", flag);
+                return Err(ObjectValueError::FilterDecodeError);
+            }
+        }
+        upper_row = cur_row;
+    }
+    Ok(r)
 }
 
 fn predictor_decode(
@@ -83,8 +166,8 @@ fn predictor_decode(
 ) -> Result<Vec<u8>, ObjectValueError> {
     match params.predictor().unwrap() {
         1 => Ok(buf),
-        2 => todo!("predictor 2/Tiff"),
-        10..=15 => todo!(),
+        10..=15 => png_predictor(&buf, params.columns().unwrap()),
+        2 => todo!(),
         _ => {
             error!("Unknown predictor: {}", params.predictor().unwrap());
             Err(ObjectValueError::FilterDecodeError)

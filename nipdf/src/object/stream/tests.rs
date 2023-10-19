@@ -72,3 +72,11 @@ fn test_iter_filter(
         .collect_vec();
     Ok(r)
 }
+
+#[test_case(228, 228, 227 => 228)]
+#[test_case(0, 0, 1 => 0; "close to a")]
+#[test_case(0, 0, 2 => 0; "close to b")]
+#[test_case(0, 0, 3 => 0; "close to c")]
+fn test_paeth(a: u8, b: u8, c: u8) -> u8 {
+    paeth(a, b, c)
+}
