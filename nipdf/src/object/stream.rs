@@ -77,12 +77,22 @@ trait LZWFlateDecodeDictTrait {
     fn early_change(&self) -> i32;
 }
 
-fn decode_lzw(buf: &[u8], params: LZWFlateDecodeDict) -> Result<Vec<u8>, ObjectValueError> {
-    assert!(
-        params.predictor().unwrap() == 1,
-        "TODO: handle predictor of LZWDecode"
-    );
+fn predictor_decode(
+    buf: Vec<u8>,
+    params: &LZWFlateDecodeDict,
+) -> Result<Vec<u8>, ObjectValueError> {
+    match params.predictor().unwrap() {
+        1 => Ok(buf),
+        2 => todo!("predictor 2/Tiff"),
+        10..=15 => todo!(),
+        _ => {
+            error!("Unknown predictor: {}", params.predictor().unwrap());
+            Err(ObjectValueError::FilterDecodeError)
+        }
+    }
+}
 
+fn decode_lzw(buf: &[u8], params: LZWFlateDecodeDict) -> Result<Vec<u8>, ObjectValueError> {
     use weezl::{decode::Decoder, BitOrder};
     let is_early_change = params.early_change().unwrap() == 1;
     let mut decoder = if is_early_change {
@@ -90,7 +100,7 @@ fn decode_lzw(buf: &[u8], params: LZWFlateDecodeDict) -> Result<Vec<u8>, ObjectV
     } else {
         Decoder::new(BitOrder::Msb, 8)
     };
-    let mut r = vec![];
+    let mut r = Vec::with_capacity(buf.len() * 2);
     let rv = decoder.into_stream(&mut r).decode_all(buf);
     if let Err(e) = rv.status {
         error!("IO error, {:?}", e);
@@ -104,28 +114,23 @@ fn decode_lzw(buf: &[u8], params: LZWFlateDecodeDict) -> Result<Vec<u8>, ObjectV
         );
         return Err(ObjectValueError::FilterDecodeError);
     }
-    Ok(r)
+    predictor_decode(r, &params)
 }
 
 fn decode_flate(buf: &[u8], params: LZWFlateDecodeDict) -> Result<Vec<u8>, ObjectValueError> {
-    assert!(
-        params.predictor().unwrap() == 1,
-        "TODO: handle predictor of FlateDecode"
-    );
-
     use flate2::bufread::{DeflateDecoder, ZlibDecoder};
     use std::io::Read;
 
-    let mut output = Vec::with_capacity(buf.len() * 2);
+    let mut r = Vec::with_capacity(buf.len() * 2);
     let mut decoder = ZlibDecoder::new(buf);
     handle_filter_error(
         decoder
-            .read_to_end(&mut output)
-            .or_else(|_| DeflateDecoder::new(buf).read_to_end(&mut output)),
+            .read_to_end(&mut r)
+            .or_else(|_| DeflateDecoder::new(buf).read_to_end(&mut r)),
         FILTER_FLATE_DECODE,
     )?;
 
-    Ok(output)
+    predictor_decode(r, &params)
 }
 
 fn decode_dct<'a>(
