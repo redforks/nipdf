@@ -99,3 +99,20 @@ fn predictor_8bit() {
         .unwrap()[127..255]
     );
 }
+
+#[test]
+fn predictor_24bit() {
+    insta::assert_debug_snapshot!(
+        &decode_stream("color-space/cal-rgb.pdf", 6u32, |d, resolver| {
+            let params = d.get(&b"DecodeParms"[..]).unwrap().as_dict()?;
+            assert_eq!(
+                15,
+                resolver
+                    .resolve_container_value(params, "Predictor")?
+                    .as_int()?
+            );
+            Ok(())
+        })
+        .unwrap()[..255]
+    );
+}

@@ -73,10 +73,18 @@ fn handle_filter_error<V, E: Display>(
 trait LZWFlateDecodeDictTrait {
     #[default(1i32)]
     fn predictor(&self) -> i32;
+
     #[default(1i32)]
-    fn early_change(&self) -> i32;
+    fn colors(&self) -> i32;
+
+    #[default(8i32)]
+    fn bits_per_component(&self) -> i32;
+
     #[default(1i32)]
     fn columns(&self) -> i32;
+
+    #[default(1i32)]
+    fn early_change(&self) -> i32;
 }
 
 /// Paeth, returns a, b, or c, whichever is closet to a + b - c
@@ -165,7 +173,11 @@ fn predictor_decode(
 ) -> Result<Vec<u8>, ObjectValueError> {
     match params.predictor().unwrap() {
         1 => Ok(buf),
-        10..=15 => png_predictor(&buf, params.columns().unwrap()),
+        10..=15 => png_predictor(
+            &buf,
+            params.columns().unwrap() * params.bits_per_component().unwrap() / 8
+                * params.colors().unwrap(),
+        ),
         2 => todo!("predictor 2/tiff"),
         _ => {
             error!("Unknown predictor: {}", params.predictor().unwrap());
