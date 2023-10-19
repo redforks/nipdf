@@ -111,8 +111,7 @@ fn png_predictor(buf: &[u8], columns: i32) -> Result<Vec<u8>, ObjectValueError> 
         .into_iter()
         .zip(r.chunks_mut(columns))
     {
-        let flag = cur_row[0];
-        let cur_row = &cur_row[1..];
+        let (flag, cur_row) = cur_row.split_first().unwrap();
         match flag {
             0 => dest_row.copy_from_slice(cur_row),
             1 => {
@@ -167,7 +166,7 @@ fn predictor_decode(
     match params.predictor().unwrap() {
         1 => Ok(buf),
         10..=15 => png_predictor(&buf, params.columns().unwrap()),
-        2 => todo!(),
+        2 => todo!("predictor 2/tiff"),
         _ => {
             error!("Unknown predictor: {}", params.predictor().unwrap());
             Err(ObjectValueError::FilterDecodeError)

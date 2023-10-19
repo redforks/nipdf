@@ -1,3 +1,5 @@
+use crate::file::decode_stream;
+
 use super::*;
 use itertools::Itertools;
 use test_case::test_case;
@@ -79,4 +81,21 @@ fn test_iter_filter(
 #[test_case(0, 0, 3 => 0; "close to c")]
 fn test_paeth(a: u8, b: u8, c: u8) -> u8 {
     paeth(a, b, c)
+}
+
+#[test]
+fn predictor_8bit() {
+    insta::assert_debug_snapshot!(
+        &decode_stream("filters/predictor.pdf", 7u32, |d, resolver| {
+            let params = d.get(&b"DecodeParms"[..]).unwrap().as_dict()?;
+            assert_eq!(
+                15,
+                resolver
+                    .resolve_container_value(params, "Predictor")?
+                    .as_int()?
+            );
+            Ok(())
+        })
+        .unwrap()[127..255]
+    );
 }

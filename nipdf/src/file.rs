@@ -427,5 +427,29 @@ impl File {
     }
 }
 
+/// Decode stream for testing. `file_path` relate to '~/sample_files/'.
+/// `f_assert` called with `Dictionary` of stream to do some test on it.
+#[cfg(test)]
+pub fn decode_stream<E: std::error::Error + Sync + Send + 'static, T: TryInto<NonZeroU32, Error = E>>(
+    file_path: impl AsRef<std::path::Path>,
+    id: T,
+    f_assert: impl for<'a> FnOnce(&'a Dictionary<'a>, &'a ObjectResolver<'a>) -> AnyResult<()>,
+) -> AnyResult<Vec<u8>> {
+    use std::fs::File as FS;
+    use std::io::Read;
+    use std::path::Path;
+
+    let file_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("sample_files")
+        .join(file_path);
+    let mut buf = Vec::new();
+    FS::open(file_path)?.read_to_end(&mut buf)?;
+    let (_, xref) = File::parse(&buf)?;
+    let resolver = ObjectResolver::new(&buf, &xref);
+    let stream = resolver.resolve(id.try_into()?)?.as_stream()?;
+    f_assert(stream.as_dict(), &resolver)?;
+    Ok(stream.decode(&resolver)?.into_owned())
+}
+
 #[cfg(test)]
 mod tests;
