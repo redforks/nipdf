@@ -5,17 +5,17 @@ use nipdf_macro::{pdf_object, TryFromIntObject};
 use crate::object::{Object, ObjectValueError};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Domain {
-    pub start: f32,
-    pub end: f32,
+pub struct Domain<T = f32> {
+    pub start: T,
+    pub end: T,
 }
 
-impl Domain {
-    pub fn new(start: f32, end: f32) -> Self {
+impl<T: PartialOrd + Copy> Domain<T> {
+    pub fn new(start: T, end: T) -> Self {
         Self { start, end }
     }
 
-    fn clamp(&self, x: f32) -> f32 {
+    fn clamp(&self, x: T) -> T {
         num::clamp(x, self.start, self.end)
     }
 }
@@ -25,10 +25,10 @@ pub fn default_domain() -> Domain {
     Domain::new(0.0, 1.0)
 }
 
-impl<'a> TryFrom<&Object<'a>> for Domain {
+impl<'a> TryFrom<&Object<'a>> for Domain<f32> {
     type Error = ObjectValueError;
 
-    fn try_from(obj: &Object) -> Result<Self, Self::Error> {
+    fn try_from(obj: &Object<'a>) -> Result<Self, Self::Error> {
         let arr = obj.as_arr()?;
         if arr.len() != 2 {
             return Err(ObjectValueError::UnexpectedType);
@@ -37,12 +37,27 @@ impl<'a> TryFrom<&Object<'a>> for Domain {
     }
 }
 
-pub struct Domains(pub Vec<Domain>);
-
-impl<'a> TryFrom<&Object<'a>> for Domains {
+impl<'a> TryFrom<&Object<'a>> for Domain<u32> {
     type Error = ObjectValueError;
 
-    fn try_from(obj: &Object) -> Result<Self, Self::Error> {
+    fn try_from(obj: &Object<'a>) -> Result<Self, Self::Error> {
+        let arr = obj.as_arr()?;
+        if arr.len() != 2 {
+            return Err(ObjectValueError::UnexpectedType);
+        }
+        Ok(Self::new(arr[0].as_int()? as u32, arr[1].as_int()? as u32))
+    }
+}
+
+pub struct Domains<T = f32>(pub Vec<Domain<T>>);
+
+impl<'a, T> TryFrom<&Object<'a>> for Domains<T>
+where
+    Domain<T>: for<'b> TryFrom<&'b Object<'a>, Error = ObjectValueError>,
+{
+    type Error = ObjectValueError;
+
+    fn try_from(obj: &Object<'a>) -> Result<Self, Self::Error> {
         let arr = obj.as_arr()?;
         let mut domains = Vec::with_capacity(arr.len() / 2);
         assert!(arr.len() % 2 == 0);
