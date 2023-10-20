@@ -1,4 +1,4 @@
-use crate::file::{read_sample_file, File};
+use crate::file::{read_sample_file, File, ObjectResolver};
 
 use super::*;
 use insta::assert_debug_snapshot;
@@ -82,6 +82,35 @@ startxref
 
 #[test]
 fn read_xref_stream() {
-    let (_, xref) = File::parse(&read_sample_file("file-structure/xref-stream.pdf")).unwrap();
-    insta::assert_debug_snapshot!(xref);
+    let buf = read_sample_file("file-structure/xref-stream.pdf");
+    let (_, xref) = File::parse(&buf).unwrap();
+    let resolver = ObjectResolver::new(&buf, &xref);
+
+    // assert object in file
+    assert_eq!(
+        "Catalog",
+        resolver
+            .resolve(NonZeroU32::new(1u32).unwrap())
+            .unwrap()
+            .as_dict()
+            .unwrap()
+            .get(&b"Type"[..])
+            .unwrap()
+            .as_name()
+            .unwrap()
+    );
+
+    // assert object in stream
+    assert_eq!(
+        1,
+        resolver
+            .resolve(NonZeroU32::new(2u32).unwrap())
+            .unwrap()
+            .as_dict()
+            .unwrap()
+            .get(&b"Count"[..])
+            .unwrap()
+            .as_int()
+            .unwrap()
+    );
 }

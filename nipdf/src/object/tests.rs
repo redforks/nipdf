@@ -1,3 +1,5 @@
+use crate::file::XRefTable;
+
 use super::*;
 use static_assertions::assert_impl_all;
 use test_case::test_case;
@@ -177,7 +179,8 @@ fn schema_ref_id_arr(ids: Option<&[u32]>) -> Vec<u32> {
         let ids: Array = ids.iter().map(|id| Object::new_ref(*id)).collect();
         d.insert("ids".into(), ids.into());
     }
-    let resolver = ObjectResolver::empty();
+    let xref = XRefTable::empty();
+    let resolver = ObjectResolver::empty(&xref);
     let d = SchemaDict::new(&d, &resolver, ()).unwrap();
     d.ref_id_arr("ids")
         .unwrap()

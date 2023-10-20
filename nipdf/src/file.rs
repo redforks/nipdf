@@ -2,37 +2,121 @@
 
 use ahash::{HashMap, HashMapExt};
 use anyhow::{Context, Result as AnyResult};
+use either::Either;
 use itertools::Itertools;
 use nipdf_macro::pdf_object;
 use nom::Finish;
 use once_cell::unsync::OnceCell;
-use std::num::NonZeroU32;
+use std::{iter::repeat_with, num::NonZeroU32};
 
 use crate::{
-    object::{Dictionary, FrameSet, Object, ObjectValueError, PdfObject},
-    parser::{parse_frame_set, parse_header, parse_indirected_object},
+    object::{Dictionary, Entry, FrameSet, Object, ObjectValueError, PdfObject, Stream},
+    parser::{
+        parse_frame_set, parse_header, parse_indirected_object, parse_indirected_stream,
+        parse_object, ParseResult,
+    },
 };
 use log::error;
 
 mod page;
 pub use page::*;
 
-type IDOffsetMap = HashMap<u32, u32>;
+#[derive(Debug, Copy, Clone)]
+pub enum ObjectPos {
+    Offset(u32),
+    InStream(NonZeroU32, u16),
+}
+
+impl<'a> From<&'a Entry> for ObjectPos {
+    fn from(e: &'a Entry) -> Self {
+        match e {
+            Entry::InFile(pos) => ObjectPos::Offset(pos.offset()),
+            Entry::InStream(id, idx) => ObjectPos::InStream(*id, *idx),
+        }
+    }
+}
+
+type IDOffsetMap = HashMap<u32, ObjectPos>;
+
+/// Object stream stores multiple objects in a stream. See section 7.5.7
+#[derive(Debug)]
+struct ObjectStream {
+    /// Data contains all objects in this stream, without index part.
+    buf: Vec<u8>,
+    /// offsets of objects in `buf`
+    offsets: Vec<u16>,
+}
+
+fn parse_object_stream(n: usize, buf: &[u8]) -> ParseResult<ObjectStream> {
+    use nom::character::complete::{space0, space1, u16, u32};
+    use nom::multi::count;
+    use nom::sequence::{separated_pair, terminated};
+
+    let (buf, nums) = count(terminated(separated_pair(u32, space1, u16), space0), n)(buf)?;
+    let offsets = nums.into_iter().map(|(_, n)| n).collect();
+    Ok((
+        buf,
+        ObjectStream {
+            buf: buf.to_owned(),
+            offsets,
+        },
+    ))
+}
+
+impl ObjectStream {
+    pub fn new(stream: Stream) -> Result<Self, ObjectValueError> {
+        let d = stream.as_dict();
+        assert_eq!("ObjStm", d.get_name("Type")?.unwrap());
+        let n = d.get_int("N", 0)? as usize;
+        assert!(!d.contains_key(&b"Extends"[..]), "Extends is not supported");
+        let buf = stream.decode_without_resolve_length()?;
+        parse_object_stream(n, buf.as_ref())
+            .map_err(|e| ObjectValueError::ParseError(e.to_string()))
+            .map(|(_, r)| r)
+    }
+
+    pub fn get_buf(&self, idx: usize) -> &[u8] {
+        let start = self.offsets[idx] as usize;
+        let end = if idx == self.offsets.len() - 1 {
+            self.buf.len()
+        } else {
+            self.offsets[idx + 1] as usize
+        };
+        &self.buf[start..end]
+    }
+}
 
 #[derive(Debug)]
 pub struct XRefTable {
     id_offset: IDOffsetMap, // object id -> offset
+    object_streams: HashMap<NonZeroU32, OnceCell<ObjectStream>>, // stream id -> ObjectStream
 }
 
 impl XRefTable {
     pub fn new(id_offset: IDOffsetMap) -> Self {
-        Self { id_offset }
+        let object_stream = id_offset
+            .values()
+            .filter_map(|e| {
+                if let ObjectPos::InStream(id, _) = e {
+                    Some(*id)
+                } else {
+                    None
+                }
+            })
+            .zip(repeat_with(|| OnceCell::new()))
+            .collect();
+
+        Self {
+            id_offset,
+            object_streams: object_stream,
+        }
     }
 
     #[cfg(test)]
     pub fn empty() -> Self {
         Self {
             id_offset: IDOffsetMap::default(),
+            object_streams: HashMap::new(),
         }
     }
 
@@ -40,7 +124,7 @@ impl XRefTable {
         let mut r = IDOffsetMap::with_capacity(5000);
         for (id, entry) in frame_set.iter().rev().flat_map(|f| f.xref_section.iter()) {
             if entry.is_used() {
-                r.insert(*id, entry.offset());
+                r.insert(*id, entry.into());
             } else if *id != 0 {
                 r.remove(id);
             }
@@ -53,24 +137,51 @@ impl XRefTable {
     }
 
     /// Return `buf` start from where `id` is
-    pub fn resolve_object_buf<'a>(&self, buf: &'a [u8], id: NonZeroU32) -> Option<&'a [u8]> {
-        self.id_offset
-            .get(&id.into())
-            .map(|offset| &buf[*offset as usize..])
-    }
-
-    pub fn parse_object<'a>(
-        &self,
+    fn resolve_object_buf<'a: 'c, 'b: 'c, 'c>(
+        &'b self,
         buf: &'a [u8],
         id: NonZeroU32,
-    ) -> Result<Object<'a>, ObjectValueError> {
+    ) -> Option<Either<&'c [u8], &'c [u8]>> {
+        self.id_offset.get(&id.into()).map(|entry| match entry {
+            ObjectPos::Offset(offset) => Either::Left(&buf[*offset as usize..]),
+            ObjectPos::InStream(id, idx) => {
+                let object_stream = self
+                    .object_streams
+                    .get(&id)
+                    .unwrap()
+                    .get_or_try_init(|| {
+                        let buf = self.resolve_object_buf(buf, *id).unwrap();
+                        let (_, (_, stream)) = parse_indirected_stream(&buf).unwrap();
+                        ObjectStream::new(stream)
+                    })
+                    .unwrap();
+                Either::Right(object_stream.get_buf(*idx as usize))
+            }
+        })
+    }
+
+    pub fn parse_object<'a: 'c, 'b: 'c, 'c>(
+        &'b self,
+        buf: &'a [u8],
+        id: NonZeroU32,
+    ) -> Result<Object<'c>, ObjectValueError> {
         self.resolve_object_buf(buf, id)
             .ok_or(ObjectValueError::ObjectIDNotFound)
             .and_then(|buf| {
-                parse_indirected_object(buf)
-                    .finish()
-                    .map(|(_, o)| o.take())
-                    .map_err(ObjectValueError::from)
+                buf.either(
+                    |buf| {
+                        parse_indirected_object(buf)
+                            .finish()
+                            .map(|(_, o)| o.take())
+                            .map_err(ObjectValueError::from)
+                    },
+                    |buf| {
+                        parse_object(buf)
+                            .finish()
+                            .map(|(_, o)| o)
+                            .map_err(ObjectValueError::from)
+                    },
+                )
             })
     }
 
@@ -108,19 +219,6 @@ pub struct ObjectResolver<'a> {
     objects: HashMap<NonZeroU32, OnceCell<Object<'a>>>,
 }
 
-#[cfg(test)]
-impl ObjectResolver<'static> {
-    pub fn empty() -> Self {
-        use once_cell::sync::Lazy;
-        static EMPTY_XREF: Lazy<XRefTable> = Lazy::new(XRefTable::empty);
-        Self {
-            buf: b"",
-            xref_table: &EMPTY_XREF,
-            objects: HashMap::default(),
-        }
-    }
-}
-
 impl<'a> ObjectResolver<'a> {
     pub fn new(buf: &'a [u8], xref_table: &'a XRefTable) -> Self {
         let mut objects = HashMap::with_capacity(xref_table.count());
@@ -132,6 +230,15 @@ impl<'a> ObjectResolver<'a> {
             buf,
             xref_table,
             objects,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn empty(xref_table: &'a XRefTable) -> Self {
+        Self {
+            buf: b"",
+            xref_table,
+            objects: HashMap::default(),
         }
     }
 

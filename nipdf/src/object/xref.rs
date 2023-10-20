@@ -1,7 +1,9 @@
-#[derive(Debug, Clone, PartialEq, Copy)]
-pub struct Entry(u32, u16, bool); // offset, generation, is_used
+use std::num::NonZeroU32;
 
-impl Entry {
+#[derive(Debug, Clone, PartialEq, Copy)]
+pub struct FilePos(u32, u16, bool); // offset, generation, is_used
+
+impl FilePos {
     pub fn new(offset: u32, generation: u16, is_used: bool) -> Self {
         Self(offset, generation, is_used)
     }
@@ -16,6 +18,31 @@ impl Entry {
 
     pub fn is_used(&self) -> bool {
         self.2
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Copy)]
+pub enum Entry {
+    /// The object stored directly in file as object
+    InFile(FilePos),
+    /// The object stored in a stream, (stream_object_id, idx_of_object_in_stream)
+    InStream(NonZeroU32, u16),
+}
+
+impl Entry {
+    pub fn in_file(offset: u32, generation: u16, is_used: bool) -> Self {
+        Self::InFile(FilePos::new(offset, generation, is_used))
+    }
+
+    pub fn in_stream(stream_object_id: NonZeroU32, idx_of_object_in_stream: u16) -> Self {
+        Self::InStream(stream_object_id, idx_of_object_in_stream)
+    }
+
+    pub fn is_used(self) -> bool {
+        match self {
+            Entry::InFile(pos) => pos.is_used(),
+            Entry::InStream(_, _) => true,
+        }
     }
 }
 

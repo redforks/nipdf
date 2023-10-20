@@ -1,11 +1,16 @@
 use super::*;
-use crate::{file::ObjectResolver, object::PdfObject, parser::parse_dict};
+use crate::{
+    file::{ObjectResolver, XRefTable},
+    object::PdfObject,
+    parser::parse_dict,
+};
 use test_case::test_case;
 
 #[test]
 fn test_clip_args() {
     let (_, d) = parse_dict(br#"<</FunctionType 2/Domain[0 1 -2 2]>>"#).unwrap();
-    let resolver = ObjectResolver::empty();
+    let xref = XRefTable::empty();
+    let resolver = ObjectResolver::empty(&xref);
     let f = FunctionDict::new(None, &d, &resolver).unwrap();
     assert_eq!(f.clip_args(&[0.5, 0.0]), vec![0.5, 0.0]);
     assert_eq!(f.clip_args(&[-1.0, 100.0]), vec![0.0, 2.0]);
@@ -14,7 +19,8 @@ fn test_clip_args() {
 #[test]
 fn test_clip_returns() {
     let (_, d) = parse_dict(br#"<</FunctionType 2>>"#).unwrap();
-    let resolver = ObjectResolver::empty();
+    let xref = XRefTable::empty();
+    let resolver = ObjectResolver::empty(&xref);
     let f = FunctionDict::new(None, &d, &resolver).unwrap();
     assert_eq!(f.clip_returns(vec![100.0, -100.0]), vec![100.0, -100.0]);
     assert_eq!(f.clip_returns(vec![]), vec![]);
@@ -33,7 +39,8 @@ fn test_exponential_function() {
     let (_, d) =
         parse_dict(br#"<</FunctionType 2/Domain[0 1]/C0[0.1 0.2]/C1[0.2 0.4]/N 1>>"#).unwrap();
 
-    let resolver = ObjectResolver::empty();
+    let xref = XRefTable::empty();
+    let resolver = ObjectResolver::empty(&xref);
     let f = ExponentialInterpolationFunctionDict::new(None, &d, &resolver).unwrap();
     assert_eq!(f.call(&[0.0]).unwrap(), vec![0.1, 0.2]);
     assert_eq!(f.call(&[1.0]).unwrap(), vec![0.2, 0.4]);
@@ -98,7 +105,8 @@ fn stitching_function() {
     )
     .unwrap();
 
-    let resolver = ObjectResolver::empty();
+    let xref = XRefTable::empty();
+    let resolver = ObjectResolver::empty(&xref);
     let f = StitchingFunctionDict::new(None, &d, &resolver).unwrap();
     assert_eq!(f.call(&[0f32]).unwrap(), vec![0.2, 0.4]);
 }

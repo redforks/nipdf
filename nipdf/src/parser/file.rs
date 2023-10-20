@@ -1,4 +1,4 @@
-use std::{fmt::Display, ops::RangeFrom, str::from_utf8};
+use std::{fmt::Display, num::NonZeroU32, ops::RangeFrom, str::from_utf8};
 
 use log::{error, info};
 use memchr::memmem::rfind;
@@ -180,9 +180,12 @@ fn parse_xref_stream(buf: &[u8]) -> ParseResult<(XRefSection, Dictionary<'_>)> {
     for Domain { start, end: size } in sections.0 {
         for (idx, (a, b, c)) in entries.by_ref().take(size as usize).enumerate() {
             match a {
-                0 => r.push((start + idx as u32, Entry::new(0, c as u16, false))),
-                1 => r.push((start + idx as u32, Entry::new(b, c as u16, true))),
-                2 => todo!("cross references stream type 2/compressed object"),
+                0 => r.push((start + idx as u32, Entry::in_file(0, c as u16, false))),
+                1 => r.push((start + idx as u32, Entry::in_file(b, c as u16, true))),
+                2 => r.push((
+                    start + idx as u32,
+                    Entry::in_stream(NonZeroU32::new(b).unwrap(), c as u16),
+                )),
                 _ => panic!("invalid cross references stream type"),
             }
         }
@@ -207,7 +210,7 @@ fn parse_xref_table(buf: &[u8]) -> ParseResult<XRefSection> {
                 tag(b" "),
                 alt((tag(b"n"), tag(b"f"))),
             ))),
-            |(offset, _, generation, _, ty)| Entry::new(offset, generation, ty == b"n"),
+            |(offset, _, generation, _, ty)| Entry::in_file(offset, generation, ty == b"n"),
         ),
     );
     let group = tuple((record_count_parser, many0(record_parser)));

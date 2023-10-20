@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 
-use crate::{object::{Object, Array}, file::ObjectResolver};
+use crate::{object::{Object, Array}, file::{ObjectResolver, XRefTable}};
 use test_case::test_case;
 
 use super::*;
@@ -38,7 +38,8 @@ fn rectangle_to_skia() {
     (9, vec![]),
 ]=> vec![2, 5, 6, 9, 8]; "complex tree")]
 fn parse_page_tree(root_id: u32, tree: Vec<(u32, Vec<u32>)>) -> Vec<u32> {
-    let mut resolver = ObjectResolver::empty();
+    let xref = XRefTable::empty();
+    let mut resolver = ObjectResolver::empty(&xref);
     for (id, kids) in tree {
         let mut dict = Dictionary::new();
         dict.insert(
