@@ -9,7 +9,7 @@ use once_cell::unsync::OnceCell;
 use std::num::NonZeroU32;
 
 use crate::{
-    object::{Dictionary, FrameSet, Name, Object, ObjectValueError, PdfObject},
+    object::{Dictionary, FrameSet, Object, ObjectValueError, PdfObject},
     parser::{parse_frame_set, parse_header, parse_indirected_object},
 };
 use log::error;
@@ -19,12 +19,13 @@ pub use page::*;
 
 type IDOffsetMap = HashMap<u32, u32>;
 
+#[derive(Debug)]
 pub struct XRefTable {
     id_offset: IDOffsetMap, // object id -> offset
 }
 
 impl XRefTable {
-    fn new(id_offset: IDOffsetMap) -> Self {
+    pub fn new(id_offset: IDOffsetMap) -> Self {
         Self { id_offset }
     }
 
@@ -381,10 +382,7 @@ impl File {
         let resolver = ObjectResolver::new(buf, &xref);
 
         let trailers = frame_set.iter().map(|f| &f.trailer).collect_vec();
-        let root_id = trailers
-            .iter()
-            .find_map(|t| t.get(&Name::borrowed(b"Root")))
-            .unwrap();
+        let root_id = trailers.iter().find_map(|t| t.get(&b"Root"[..])).unwrap();
         let root_id = root_id.as_ref().unwrap().id().id();
         let total_objects = resolver
             .resolve_container_value(&trailers, "Size")
@@ -427,15 +425,11 @@ impl File {
     }
 }
 
-/// Decode stream for testing. `file_path` relate to '~/sample_files/'.
-/// `f_assert` called with `Dictionary` of stream to do some test on it.
+/// Read sample file content, panic on any error.
+/// `file_path` relate to '~/sample_files/'.
 #[cfg(test)]
-pub fn decode_stream<E: std::error::Error + Sync + Send + 'static, T: TryInto<NonZeroU32, Error = E>>(
-    file_path: impl AsRef<std::path::Path>,
-    id: T,
-    f_assert: impl for<'a> FnOnce(&'a Dictionary<'a>, &'a ObjectResolver<'a>) -> AnyResult<()>,
-) -> AnyResult<Vec<u8>> {
-    use std::fs::File as FS;
+pub(crate) fn read_sample_file(file_path: impl AsRef<std::path::Path>) -> Vec<u8> {
+    use std::fs::File;
     use std::io::Read;
     use std::path::Path;
 
@@ -443,7 +437,25 @@ pub fn decode_stream<E: std::error::Error + Sync + Send + 'static, T: TryInto<No
         .join("sample_files")
         .join(file_path);
     let mut buf = Vec::new();
-    FS::open(file_path)?.read_to_end(&mut buf)?;
+    File::open(file_path)
+        .unwrap()
+        .read_to_end(&mut buf)
+        .unwrap();
+    buf
+}
+
+/// Decode stream for testing. `file_path` relate to '~/sample_files/'.
+/// `f_assert` called with `Dictionary` of stream to do some test on it.
+#[cfg(test)]
+pub(crate) fn decode_stream<
+    E: std::error::Error + Sync + Send + 'static,
+    T: TryInto<NonZeroU32, Error = E>,
+>(
+    file_path: impl AsRef<std::path::Path>,
+    id: T,
+    f_assert: impl for<'a> FnOnce(&'a Dictionary<'a>, &'a ObjectResolver<'a>) -> AnyResult<()>,
+) -> AnyResult<Vec<u8>> {
+    let buf = read_sample_file(file_path);
     let (_, xref) = File::parse(&buf)?;
     let resolver = ObjectResolver::new(&buf, &xref);
     let stream = resolver.resolve(id.try_into()?)?.as_stream()?;

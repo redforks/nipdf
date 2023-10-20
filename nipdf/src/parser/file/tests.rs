@@ -1,3 +1,5 @@
+use crate::file::{read_sample_file, File};
+
 use super::*;
 use insta::assert_debug_snapshot;
 use test_case::test_case;
@@ -76,4 +78,10 @@ startxref
 "
     )
     .unwrap());
+}
+
+#[test]
+fn read_xref_stream() {
+    let (_, xref) = File::parse(&read_sample_file("file-structure/xref-stream.pdf")).unwrap();
+    insta::assert_debug_snapshot!(xref);
 }

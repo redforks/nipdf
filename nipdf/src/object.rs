@@ -14,7 +14,6 @@ use std::{
 mod indirect_object;
 pub use indirect_object::IndirectObject;
 mod stream;
-use once_cell::unsync::OnceCell;
 pub use stream::*;
 
 pub type Array<'a> = Vec<Object<'a>>;
@@ -591,14 +590,15 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
             .map_or(Ok(None), |o| o.as_stream().map(Some))
     }
 
-    pub fn opt_str(&self, id: &'static str) -> Result<Option<&'b str>, ObjectValueError> {
-        self.opt_get(id)?.map_or(Ok(None), |o| o.as_str().map(Some))
+    pub fn opt_str(&self, id: &'static str) -> Result<Option<String>, ObjectValueError> {
+        self.opt_get(id)?
+            .map_or(Ok(None), |o| o.as_string().map(Some))
     }
 
-    pub fn required_str(&self, id: &'static str) -> Result<&'b str, ObjectValueError> {
+    pub fn required_str(&self, id: &'static str) -> Result<String, ObjectValueError> {
         self.opt_get(id)?
             .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
-            .as_str()
+            .as_string()
     }
 }
 
@@ -776,10 +776,10 @@ impl<'a> Object<'a> {
     }
 
     /// Return decoded string from LiteralString or HexString
-    pub fn as_str(&self) -> Result<&str, ObjectValueError> {
+    pub fn as_string(&self) -> Result<String, ObjectValueError> {
         match self {
             Object::LiteralString(s) => Ok(s.decoded()?),
-            Object::HexString(s) => Ok(from_utf8(s.decoded()?).unwrap()),
+            Object::HexString(s) => Ok(String::from_utf8(s.decoded()?).unwrap()),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
@@ -938,14 +938,13 @@ impl<'a> From<bool> for Object<'a> {
     }
 }
 
-#[derive(Clone, Educe, Eq, PartialEq)]
-#[educe(Debug)]
-pub struct LiteralString<'a>(&'a [u8], #[educe(Debug(ignore))] OnceCell<Cow<'a, [u8]>>);
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct LiteralString<'a>(&'a [u8]);
 
 impl<'a> From<&'a [u8]> for LiteralString<'a> {
     fn from(s: &'a [u8]) -> Self {
         debug_assert!(s.len() >= 2 && s[0] == b'(' && *s.last().unwrap() == b')');
-        Self(s, OnceCell::new())
+        Self(s)
     }
 }
 
@@ -957,10 +956,10 @@ impl<'a> From<&'a str> for LiteralString<'a> {
 
 impl<'a> LiteralString<'a> {
     pub fn new(s: &'a [u8]) -> Self {
-        Self(s, OnceCell::new())
+        Self(s)
     }
 
-    pub fn decode_to_bytes(&self) -> Result<&[u8], ObjectValueError> {
+    pub fn decode_to_bytes(&self) -> Result<Vec<u8>, ObjectValueError> {
         fn skip_cur_new_line<I: Iterator<Item = u8>>(cur: u8, s: &mut Peekable<I>) -> bool {
             if cur == b'\r' {
                 s.next_if_eq(&b'\n');
@@ -997,58 +996,58 @@ impl<'a> LiteralString<'a> {
             hit.then_some(result)
         }
 
-        Ok(self
-            .1
-            .get_or_init(|| {
-                let s = self.0;
-                let s = &s[1..s.len() - 1];
-                let mut result: Vec<u8> = Vec::with_capacity(s.len());
-                let mut iter = s.iter().copied().peekable();
+        let s = self.0;
+        let s = &s[1..s.len() - 1];
+        let mut result: Vec<u8> = Vec::with_capacity(s.len());
+        let mut iter = s.iter().copied().peekable();
 
-                // TODO: use exist buf if no escape, or newline to normalize
-                while let Some(next) = iter.next() {
-                    match next {
-                        b'\\' => {
-                            if skip_next_line(&mut iter) {
-                                continue;
-                            }
-                            if let Some(b) = next_oct_byte(&mut iter) {
-                                result.push(b);
-                                continue;
-                            }
+        // TODO: use exist buf if no escape, or newline to normalize
+        while let Some(next) = iter.next() {
+            match next {
+                b'\\' => {
+                    if skip_next_line(&mut iter) {
+                        continue;
+                    }
+                    if let Some(b) = next_oct_byte(&mut iter) {
+                        result.push(b);
+                        continue;
+                    }
 
-                            if let Some(b) = iter.next() {
-                                match b {
-                                    b'r' => result.push(b'\r'),
-                                    b'n' => result.push(b'\n'),
-                                    b't' => result.push(b'\t'),
-                                    b'f' => result.push(b'\x0c'),
-                                    b'b' => result.push(b'\x08'),
-                                    b'(' => result.push(b'('),
-                                    b')' => result.push(b')'),
-                                    _ => result.push(b),
-                                }
-                            }
-                        }
-                        _ => {
-                            // TODO: test escape new line
-                            if skip_cur_new_line(next, &mut iter) {
-                                result.push(b'\n');
-                            } else {
-                                result.push(next);
-                            }
+                    if let Some(b) = iter.next() {
+                        match b {
+                            b'r' => result.push(b'\r'),
+                            b'n' => result.push(b'\n'),
+                            b't' => result.push(b'\t'),
+                            b'f' => result.push(b'\x0c'),
+                            b'b' => result.push(b'\x08'),
+                            b'(' => result.push(b'('),
+                            b')' => result.push(b')'),
+                            _ => result.push(b),
                         }
                     }
                 }
+                _ => {
+                    // TODO: test escape new line
+                    if skip_cur_new_line(next, &mut iter) {
+                        result.push(b'\n');
+                    } else {
+                        result.push(next);
+                    }
+                }
+            }
+        }
 
-                result.into()
-            })
-            .borrow())
+        Ok(result)
     }
 
-    pub fn decoded(&self) -> Result<&str, ObjectValueError> {
+    pub fn decoded(&self) -> Result<String, ObjectValueError> {
         let bytes = self.decode_to_bytes()?;
-        Ok(from_utf8(bytes).unwrap())
+        from_utf8(&bytes)
+            .map_err(|_| {
+                error!("invalid literal string: {:?}/{:?}", bytes, self.0);
+                ObjectValueError::InvalidHexString
+            })
+            .map(|v| v.to_owned())
     }
 }
 
@@ -1065,11 +1064,11 @@ pub enum TextString<'a> {
     HexText(HexString<'a>),
 }
 
-impl<'a> AsRef<[u8]> for TextString<'a> {
-    fn as_ref(&self) -> &[u8] {
+impl<'a> TextString<'a> {
+    pub fn to_bytes(&self) -> Result<Vec<u8>, ObjectValueError> {
         match self {
-            TextString::Text(s) => s.decode_to_bytes().unwrap(),
-            TextString::HexText(s) => s.decoded().unwrap(),
+            TextString::Text(s) => s.decode_to_bytes(),
+            TextString::HexText(s) => s.decoded(),
         }
     }
 }
@@ -1082,7 +1081,7 @@ pub enum TextStringOrNumber<'a> {
 
 /// Decoded PDF literal string object, enclosing '(' and ')' not included.
 #[derive(Eq, PartialEq, Debug, Clone)]
-pub struct HexString<'a>(&'a [u8], OnceCell<Vec<u8>>);
+pub struct HexString<'a>(&'a [u8]);
 
 impl<'a> From<&'a [u8]> for HexString<'a> {
     fn from(s: &'a [u8]) -> Self {
@@ -1098,52 +1097,47 @@ impl<'a> From<&'a str> for HexString<'a> {
 
 impl<'a> HexString<'a> {
     pub fn new(s: &'a [u8]) -> Self {
-        Self(s, OnceCell::new())
+        Self(s)
     }
 
-    pub fn as_str(&self) -> Result<&str, ObjectValueError> {
+    pub fn as_string(&self) -> Result<String, ObjectValueError> {
         let buf = self.decoded()?;
-        from_utf8(buf).map_err(|_| {
-            error!("invalid hex string: {:?}/{:?}", buf, self.0);
+        String::from_utf8(buf).map_err(|_| {
+            error!("invalid hex string: {:?}", self.0);
             ObjectValueError::InvalidHexString
         })
     }
 
     /// Get decoded binary string.
-    pub fn decoded(&self) -> Result<&[u8], ObjectValueError> {
-        self.1
-            .get_or_try_init(|| {
-                fn filter_whitespace(s: &[u8]) -> Cow<[u8]> {
-                    if s.iter().copied().any(|b| b.is_ascii_whitespace()) {
-                        Cow::Owned(
-                            s.iter()
-                                .copied()
-                                .filter(|b| !b.is_ascii_whitespace())
-                                .collect::<Vec<_>>(),
-                        )
-                    } else {
-                        Cow::Borrowed(s)
-                    }
-                }
-                fn append_zero_if_odd(s: &[u8]) -> Cow<[u8]> {
-                    if s.len() % 2 == 0 {
-                        Cow::Borrowed(s)
-                    } else {
-                        let mut v = Vec::with_capacity(s.len() + 1);
-                        v.extend_from_slice(s);
-                        v.push(b'0');
-                        Cow::Owned(v)
-                    }
-                }
-                let s = self.0;
-                debug_assert!(s.starts_with(b"<") && s.ends_with(b">"));
-                let s = &s[1..s.len() - 1];
-                let s = filter_whitespace(s);
-                let s = append_zero_if_odd(&s);
-
-                hex::decode(s).map_err(|_| ObjectValueError::InvalidHexString)
-            })
-            .map(|s| &s[..])
+    pub fn decoded(&self) -> Result<Vec<u8>, ObjectValueError> {
+        fn filter_whitespace(s: &[u8]) -> Cow<[u8]> {
+            if s.iter().copied().any(|b| b.is_ascii_whitespace()) {
+                Cow::Owned(
+                    s.iter()
+                        .copied()
+                        .filter(|b| !b.is_ascii_whitespace())
+                        .collect::<Vec<_>>(),
+                )
+            } else {
+                Cow::Borrowed(s)
+            }
+        }
+        fn append_zero_if_odd(s: &[u8]) -> Cow<[u8]> {
+            if s.len() % 2 == 0 {
+                Cow::Borrowed(s)
+            } else {
+                let mut v = Vec::with_capacity(s.len() + 1);
+                v.extend_from_slice(s);
+                v.push(b'0');
+                Cow::Owned(v)
+            }
+        }
+        let s = self.0;
+        debug_assert!(s.starts_with(b"<") && s.ends_with(b">"));
+        let s = &s[1..s.len() - 1];
+        let s = filter_whitespace(s);
+        let s = append_zero_if_odd(&s);
+        hex::decode(s).map_err(|_| ObjectValueError::InvalidHexString)
     }
 }
 

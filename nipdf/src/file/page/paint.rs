@@ -1,5 +1,10 @@
 use std::{
-    borrow::Cow, collections::HashMap, convert::AsRef, fs::File, io::Read, ops::RangeInclusive,
+    borrow::Cow,
+    collections::HashMap,
+    convert::{AsRef, TryFrom},
+    fs::File,
+    io::Read,
+    ops::RangeInclusive,
 };
 
 use crate::{
@@ -608,7 +613,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             }
 
             // Text Showing Operations
-            Operation::ShowText(text) => self.show_text(text.as_ref()),
+            Operation::ShowText(text) => self.show_text(&text.to_bytes().unwrap()),
             Operation::ShowTexts(texts) => self.show_texts(&texts),
 
             // Color Operations
@@ -985,7 +990,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
     fn show_texts(&mut self, texts: &[TextStringOrNumber]) {
         for t in texts {
             match t {
-                TextStringOrNumber::TextString(s) => self.show_text(s.as_ref()),
+                TextStringOrNumber::TextString(s) => self.show_text(&s.to_bytes().unwrap()),
                 TextStringOrNumber::Number(n) => {
                     self.text_object_mut().move_right(*n);
                 }

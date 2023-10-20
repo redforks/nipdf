@@ -1,24 +1,30 @@
-use std::str::from_utf8;
+use std::{fmt::Display, ops::RangeFrom, str::from_utf8};
 
-use log::info;
+use ahash::{HashMap, HashMapExt};
+use log::{error, info};
 use memchr::memmem::rfind;
 use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::{char, satisfy},
     character::complete::{u16, u32},
-    combinator::{map, map_res, recognize},
+    combinator::{complete, map, map_res, recognize},
     error::{context, ErrorKind, ParseError as NomParseError},
-    multi::{fold_many1, many0},
+    multi::{count, fill, fold_many1, many0},
+    number::complete::{be_u16, be_u24, be_u32, be_u8},
     sequence::{preceded, separated_pair, tuple},
+    InputIter, InputLength, InputTake, Parser, Slice,
 };
 
 use crate::{
-    object::{Dictionary, Entry, Frame, FrameSet, Name, XRefSection},
-    parser::parse_dict,
+    file::{ObjectResolver, XRefTable},
+    function::{Domain, Domains},
+    object::{Dictionary, Entry, Frame, FrameSet, Name, Object, PdfObject, XRefSection},
+    parser::{parse_dict, parse_indirected_stream},
 };
+use nipdf_macro::pdf_object;
 
-use super::{ws_terminated, FileError, ParseError, ParseResult};
+use super::{parse_indirected_object, ws_terminated, FileError, ParseError, ParseResult};
 
 pub fn parse_header(buf: &[u8]) -> ParseResult<&str> {
     let one_digit = || satisfy(|c| c.is_ascii_digit());
@@ -82,6 +88,89 @@ fn parse_trailer(buf: &[u8]) -> ParseResult<Dictionary> {
     preceded(ws_terminated(tag(b"trailer")), ws_terminated(parse_dict))(buf)
 }
 
+#[pdf_object("XRef")]
+trait CrossReferenceStreamDictTrait {
+    fn size(&self) -> u32;
+
+    #[try_from]
+    fn index(&self) -> Option<Domains<u32>>;
+
+    fn prev(&self) -> Option<u32>;
+
+    fn w(&self) -> Vec<u32>;
+}
+
+/// Return nom parser to parse u32 value by byte length (0, 1, 2, 3, 4),
+/// if n is 0, return parser takes 0 bytes and returns 0.
+/// if n > 1, n32 stored in big endian n bytes.
+fn segment_parser<'a, I: 'a>(n: u32) -> Box<dyn Parser<I, u32, nom::error::VerboseError<I>> + 'a>
+where
+    I: InputIter<Item = u8> + InputLength + InputTake + Slice<RangeFrom<usize>>,
+{
+    match n {
+        0 => Box::new(|v| Ok((v, 0_u32))),
+        1 => Box::new(map(be_u8, |v| v as u32)),
+        2 => Box::new(map(be_u16, |v| v as u32)),
+        3 => Box::new(be_u24),
+        4 => Box::new(be_u32),
+        _ => unreachable!(),
+    }
+}
+
+/// Parse xref from cross-reference streams
+fn parse_xref_stream<'a>(buf: &'a [u8]) -> ParseResult<(XRefSection, Dictionary<'a>)> {
+    fn to_parse_error<E: Display>(e: E) -> nom::Err<ParseError<'static>> {
+        error!("should be xref table stream: {}", e);
+        nom::Err::Error(ParseError::from_error_kind(b"", ErrorKind::Fail))
+    }
+
+    let (buf, (_, stream)) = parse_indirected_stream(buf)?;
+    let d = stream.as_dict();
+    let fake_xref = XRefTable::new(HashMap::new());
+    let resolver = ObjectResolver::new(buf, &fake_xref);
+    let d = CrossReferenceStreamDict::new(None, d, &resolver).map_err(to_parse_error)?;
+    assert!(
+        d.prev().map_err(to_parse_error)?.is_none(),
+        "cross-reference streams with multi frame not supported"
+    );
+
+    let data = stream.decode(&resolver).map_err(to_parse_error)?;
+    let w = d.w().map_err(to_parse_error)?;
+    assert_eq!(3, w.len());
+    let (a, b, c) = (w[0], w[1], w[2]);
+    debug_assert_eq!(
+        data.len() % (a + b + c) as usize,
+        0,
+        "stream data length should multiple of w0 + w1 + w2"
+    );
+    let (_, entries) = complete(count(
+        move |i| tuple((segment_parser(a), segment_parser(b), segment_parser(c)))(i),
+        data.len() / (a + b + c) as usize,
+    ))(data.as_ref())
+    .map_err(to_parse_error)?;
+
+    let size = d.size().map_err(to_parse_error)?;
+    let sections = d
+        .index()
+        .map_err(to_parse_error)?
+        .unwrap_or_else(|| Domains(vec![Domain::new(0, size)]));
+
+    let mut r = Vec::with_capacity(sections.0.iter().map(|x| x.end as usize).sum());
+    let mut entries = entries.into_iter();
+    for Domain { start, end: size } in sections.0 {
+        for (idx, (a, b, c)) in entries.by_ref().take(size as usize).enumerate() {
+            match a {
+                0 => r.push((start + idx as u32, Entry::new(0, c as u16, false))),
+                1 => r.push((start + idx as u32, Entry::new(b, c as u16, true))),
+                2 => todo!("cross references stream type 2/compressed object"),
+                _ => panic!("invalid cross references stream type"),
+            }
+        }
+    }
+
+    Ok((buf, (r, stream.take_dict())))
+}
+
 // Assumes buf start from xref
 fn parse_xref_table(buf: &[u8]) -> ParseResult<XRefSection> {
     let record_count_parser = context(
@@ -118,11 +207,14 @@ fn parse_startxref(buf: &[u8]) -> ParseResult<u32> {
 }
 
 // Assumes buf start from xref
-fn parse_frame(buf: &[u8]) -> ParseResult<(Dictionary, Vec<(u32, Entry)>)> {
+fn parse_frame(buf: &[u8]) -> ParseResult<(Dictionary, XRefSection)> {
     map(
-        tuple((
-            context("xref table", parse_xref_table),
-            context("trailer", parse_trailer),
+        alt((
+            tuple((
+                context("xref table", parse_xref_table),
+                context("trailer", parse_trailer),
+            )),
+            parse_xref_stream,
         )),
         |(xref_table, trailer)| (trailer, xref_table),
     )(buf)

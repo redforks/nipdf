@@ -179,14 +179,18 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         if get_type().is_some_and(|s| s == "Name") {
             Some("required_name")
         } else {
-            Some("required_str")
+            panic!("unsupported type: &str, use String instead")
         }
+    } else if rt == &(parse_quote!(String)) {
+        Some("required_str")
     } else if rt == &(parse_quote!(Option<&str>)) || rt == &(parse_quote!(Option<&'b str>)) {
         if get_type().is_some_and(|s| s == "Name") {
             Some("opt_name")
         } else {
-            Some("opt_str")
+            panic!("unsupported type: Option<&str>, use Option<String> instead")
         }
+    } else if rt == &(parse_quote!(Option<String>)) {
+        Some("opt_str")
     } else if rt == &(parse_quote!(u32)) {
         Some("required_u32")
     } else if rt == &(parse_quote!(Option<u32>)) {

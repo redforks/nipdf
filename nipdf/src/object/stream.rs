@@ -474,20 +474,15 @@ impl<'a> Stream<'a> {
         &self.0
     }
 
+    pub fn take_dict(self) -> Dictionary<'a> {
+        self.0
+    }
+
     /// Get stream un-decoded raw data.
     pub fn raw(&self, resolver: &ObjectResolver<'a>) -> Result<&'a [u8], ObjectValueError> {
         let len = resolver
             .resolve_container_value(&self.0, "Length")?
             .as_int()?;
-        #[cfg(debug_assertions)]
-        {
-            let end_stream = &self.1[len as usize..];
-            let rv: ParseResult<_> =
-                ws_prefixed(nom::bytes::complete::tag(b"endstream"))(end_stream);
-            if rv.is_err() {
-                panic!("{:#?}", self.1);
-            }
-        }
         Ok(&self.1[0..len as usize])
     }
 

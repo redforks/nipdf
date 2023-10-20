@@ -1,8 +1,13 @@
-use std::{borrow::Cow, num::NonZeroU32, str::from_utf8, str::FromStr};
+use std::{
+    borrow::Cow,
+    num::{NonZeroI16, NonZeroU32},
+    str::from_utf8,
+    str::FromStr,
+};
 
 use nom::{
     branch::alt,
-    bytes::complete::{escaped, is_not, tag, take_till, take_while},
+    bytes::complete::{escaped, is_not, tag, take, take_till, take_while},
     character::{
         complete::{anychar, line_ending, multispace1, u16, u32},
         is_hex_digit,
@@ -177,13 +182,34 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<Object> {
     }
 }
 
-pub fn parse_indirected_object(input: &[u8]) -> ParseResult<IndirectObject> {
+/// Parse Stream that its length not ref_id(no need to resolve), return
+/// &[u8] that just after endstream
+fn parse_stream_that_length_not_ref_id(input: &[u8]) -> ParseResult<Stream> {
+    let (input, (dict, _)) = tuple((
+        parse_dict,
+        delimited(whitespace_or_comment, tag(b"stream"), line_ending),
+    ))(input)?;
+    let (input, data) = take(dict.get(&b"Length"[..]).unwrap().as_int().unwrap() as usize)(input)?;
+    let (input, _) = preceded(line_ending, tag(b"endstream"))(input)?;
+    Ok((input, Stream::new(dict, data)))
+}
+
+pub fn parse_indirected_object<'a>(input: &'a [u8]) -> ParseResult<'a, IndirectObject<'a>> {
     let (input, (id, gen)) = separated_pair(u32, multispace1, u16)(input)?;
     let (input, obj) = preceded(ws(tag(b"obj")), parse_object_and_stream)(input)?;
     Ok((
         input,
         IndirectObject::new(NonZeroU32::new(id).unwrap(), gen, obj),
     ))
+}
+
+/// Parse stream wrapped in indirect object tag,
+/// different from `parse_indirected_object()`, buf will after the end of `endobj`
+pub fn parse_indirected_stream(input: &[u8]) -> ParseResult<(NonZeroU32, Stream)> {
+    let (input, (id, _)) = separated_pair(u32, multispace1, u16)(input)?;
+    let (input, stream) = preceded(ws(tag(b"obj")), parse_stream_that_length_not_ref_id)(input)?;
+    let (input, _) = ws(tag(b"endobj"))(input)?;
+    Ok((input, (NonZeroU32::new(id).unwrap(), stream)))
 }
 
 fn parse_reference(input: &[u8]) -> ParseResult<Reference> {
