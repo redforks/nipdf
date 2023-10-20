@@ -1,6 +1,5 @@
 use std::{fmt::Display, ops::RangeFrom, str::from_utf8};
 
-use ahash::{HashMap, HashMapExt};
 use log::{error, info};
 use memchr::memmem::rfind;
 use nom::{
@@ -10,23 +9,19 @@ use nom::{
     character::complete::{u16, u32},
     combinator::{complete, map, map_res, recognize},
     error::{context, ErrorKind, ParseError as NomParseError},
-    multi::{count, fill, fold_many1, many0},
+    multi::{count, fold_many1, many0},
     number::complete::{be_u16, be_u24, be_u32, be_u8},
     sequence::{preceded, separated_pair, tuple},
     InputIter, InputLength, InputTake, Parser, Slice,
 };
 
 use crate::{
-    file::{ObjectResolver, XRefTable},
     function::{Domain, Domains},
-    object::{
-        Dictionary, Entry, Frame, FrameSet, Name, Object, ObjectValueError, PdfObject, XRefSection,
-    },
+    object::{Dictionary, Entry, Frame, FrameSet, Name, ObjectValueError, XRefSection},
     parser::{parse_dict, parse_indirected_stream},
 };
-use nipdf_macro::pdf_object;
 
-use super::{parse_indirected_object, ws_terminated, FileError, ParseError, ParseResult};
+use super::{ws_terminated, FileError, ParseError, ParseResult};
 
 pub fn parse_header(buf: &[u8]) -> ParseResult<&str> {
     let one_digit = || satisfy(|c| c.is_ascii_digit());
@@ -114,7 +109,7 @@ impl CrossReferenceStreamDict {
             .get(&Name::borrowed(b"W"))
             .ok_or(ObjectValueError::DictKeyNotFound)?
             .as_arr()?
-            .into_iter()
+            .iter()
             .map(|o| o.as_int().map(|v| v as u32))
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -145,7 +140,7 @@ where
 }
 
 /// Parse xref from cross-reference streams
-fn parse_xref_stream<'a>(buf: &'a [u8]) -> ParseResult<(XRefSection, Dictionary<'a>)> {
+fn parse_xref_stream(buf: &[u8]) -> ParseResult<(XRefSection, Dictionary<'_>)> {
     fn to_parse_error<E: Display>(e: E) -> nom::Err<ParseError<'static>> {
         error!("should be xref table stream: {}", e);
         nom::Err::Error(ParseError::from_error_kind(b"", ErrorKind::Fail))

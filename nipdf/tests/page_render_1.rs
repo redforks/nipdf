@@ -9,7 +9,7 @@ use std::num::NonZeroU32;
 /// The image is specified by ref id.
 fn decode_image(id: u32) -> AnyResult<Vec<u8>> {
     let path = "sample_files/bizarre/pdfReferenceUpdated.pdf";
-    let buf = std::fs::read(&path)?;
+    let buf = std::fs::read(path)?;
     let (_, xref) = File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {path:?}"));
     let resolver = ObjectResolver::new(&buf[..], &xref);
     let obj = resolver.resolve(NonZeroU32::new(id).unwrap())?;

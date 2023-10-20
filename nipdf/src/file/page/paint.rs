@@ -1,10 +1,5 @@
 use std::{
-    borrow::Cow,
-    collections::HashMap,
-    convert::{AsRef, TryFrom},
-    fs::File,
-    io::Read,
-    ops::RangeInclusive,
+    borrow::Cow, collections::HashMap, convert::AsRef, fs::File, io::Read, ops::RangeInclusive,
 };
 
 use crate::{

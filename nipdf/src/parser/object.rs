@@ -1,9 +1,4 @@
-use std::{
-    borrow::Cow,
-    num::{NonZeroI16, NonZeroU32},
-    str::from_utf8,
-    str::FromStr,
-};
+use std::{borrow::Cow, num::NonZeroU32, str::from_utf8, str::FromStr};
 
 use nom::{
     branch::alt,
@@ -194,7 +189,7 @@ fn parse_stream_that_length_not_ref_id(input: &[u8]) -> ParseResult<Stream> {
     Ok((input, Stream::new(dict, data)))
 }
 
-pub fn parse_indirected_object<'a>(input: &'a [u8]) -> ParseResult<'a, IndirectObject<'a>> {
+pub fn parse_indirected_object(input: &[u8]) -> ParseResult<'_, IndirectObject<'_>> {
     let (input, (id, gen)) = separated_pair(u32, multispace1, u16)(input)?;
     let (input, obj) = preceded(ws(tag(b"obj")), parse_object_and_stream)(input)?;
     Ok((

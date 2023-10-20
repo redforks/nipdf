@@ -13,8 +13,7 @@ use log::error;
 use nipdf_macro::pdf_object;
 use once_cell::unsync::Lazy;
 
-#[cfg(debug_assertions)]
-use crate::parser::{ws_prefixed, ParseResult};
+
 use crate::{
     ccitt::Flags,
     file::ObjectResolver,
@@ -163,7 +162,6 @@ fn png_predictor(buf: &[u8], columns: i32) -> Result<Vec<u8>, ObjectValueError> 
     let mut r = vec![0u8; buf.len() / (columns + 1) * columns];
     for (cur_row, dest_row) in buf
         .chunks(columns + 1)
-        .into_iter()
         .zip(r.chunks_mut(columns))
     {
         let (flag, cur_row) = cur_row.split_first().unwrap();
