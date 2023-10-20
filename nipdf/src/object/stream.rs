@@ -69,6 +69,53 @@ fn handle_filter_error<V, E: Display>(
     })
 }
 
+struct LZWDeflateDecodeParams {
+    predictor: i32,
+    colors: i32,
+    bits_per_comonent: i32,
+    columns: i32,
+    early_change: i32,
+}
+
+impl LZWDeflateDecodeParams {
+    pub fn new<'a>(
+        d: &Dictionary<'a>,
+        r: Option<&ObjectResolver<'a>>,
+    ) -> Result<Self, ObjectValueError> {
+        Ok(if let Some(r) = r {
+            Self {
+                predictor: r
+                    .opt_resolve_container_value(d, "Predictor")?
+                    .map_or(1, |o| o.as_int().unwrap()),
+                colors: r
+                    .opt_resolve_container_value(d, "Colors")?
+                    .map_or(1, |o| o.as_int().unwrap()),
+                bits_per_comonent: r
+                    .opt_resolve_container_value(d, "BitsPerComponent")?
+                    .map_or(8, |o| o.as_int().unwrap()),
+                columns: r
+                    .opt_resolve_container_value(d, "Columns")?
+                    .map_or(1, |o| o.as_int().unwrap()),
+                early_change: r
+                    .opt_resolve_container_value(d, "EarlyChange")?
+                    .map_or(1, |o| o.as_int().unwrap()),
+            }
+        } else {
+            Self {
+                predictor: d.get(&b"Predictor"[..]).map_or(1, |o| o.as_int().unwrap()),
+                colors: d.get(&b"Colors"[..]).map_or(1, |o| o.as_int().unwrap()),
+                bits_per_comonent: d
+                    .get(&b"BitsPerComponent"[..])
+                    .map_or(8, |o| o.as_int().unwrap()),
+                columns: d.get(&b"Columns"[..]).map_or(1, |o| o.as_int().unwrap()),
+                early_change: d
+                    .get(&b"EarlyChange"[..])
+                    .map_or(1, |o| o.as_int().unwrap()),
+            }
+        })
+    }
+}
+
 #[pdf_object(())]
 trait LZWFlateDecodeDictTrait {
     #[default(1i32)]
@@ -169,26 +216,25 @@ fn png_predictor(buf: &[u8], columns: i32) -> Result<Vec<u8>, ObjectValueError> 
 
 fn predictor_decode(
     buf: Vec<u8>,
-    params: &LZWFlateDecodeDict,
+    params: &LZWDeflateDecodeParams,
 ) -> Result<Vec<u8>, ObjectValueError> {
-    match params.predictor().unwrap() {
+    match params.predictor {
         1 => Ok(buf),
         10..=15 => png_predictor(
             &buf,
-            params.columns().unwrap() * params.bits_per_component().unwrap() / 8
-                * params.colors().unwrap(),
+            params.columns * params.bits_per_comonent / 8 * params.colors,
         ),
         2 => todo!("predictor 2/tiff"),
         _ => {
-            error!("Unknown predictor: {}", params.predictor().unwrap());
+            error!("Unknown predictor: {}", params.predictor);
             Err(ObjectValueError::FilterDecodeError)
         }
     }
 }
 
-fn decode_lzw(buf: &[u8], params: LZWFlateDecodeDict) -> Result<Vec<u8>, ObjectValueError> {
+fn decode_lzw(buf: &[u8], params: LZWDeflateDecodeParams) -> Result<Vec<u8>, ObjectValueError> {
     use weezl::{decode::Decoder, BitOrder};
-    let is_early_change = params.early_change().unwrap() == 1;
+    let is_early_change = params.early_change == 1;
     let mut decoder = if is_early_change {
         Decoder::with_tiff_size_switch(BitOrder::Msb, 8)
     } else {
@@ -211,7 +257,7 @@ fn decode_lzw(buf: &[u8], params: LZWFlateDecodeDict) -> Result<Vec<u8>, ObjectV
     predictor_decode(r, &params)
 }
 
-fn decode_flate(buf: &[u8], params: LZWFlateDecodeDict) -> Result<Vec<u8>, ObjectValueError> {
+fn decode_flate(buf: &[u8], params: LZWDeflateDecodeParams) -> Result<Vec<u8>, ObjectValueError> {
     use flate2::bufread::{DeflateDecoder, ZlibDecoder};
     use std::io::Read;
 
@@ -380,7 +426,7 @@ fn decode_ccitt<'a: 'b, 'b>(
 
 fn filter<'a: 'b, 'b>(
     buf: Cow<'a, [u8]>,
-    resolver: &ObjectResolver<'a>,
+    resolver: Option<&ObjectResolver<'a>>,
     filter_name: &str,
     params: Option<&'b Dictionary<'a>>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
@@ -388,7 +434,7 @@ fn filter<'a: 'b, 'b>(
     match filter_name {
         FILTER_FLATE_DECODE => decode_flate(
             &buf,
-            LZWFlateDecodeDict::new(None, params.unwrap_or_else(|| empty_dict.deref()), resolver)?,
+            LZWDeflateDecodeParams::new(params.unwrap_or_else(|| empty_dict.deref()), resolver)?,
         )
         .map(FilterDecodedData::bytes),
         FILTER_DCT_DECODE => decode_dct(buf, params),
@@ -397,7 +443,7 @@ fn filter<'a: 'b, 'b>(
             CCITTFaxDecodeParamsDict::new(
                 None,
                 params.unwrap_or_else(|| empty_dict.deref()),
-                resolver,
+                resolver.unwrap(),
             )?,
         )
         .map(FilterDecodedData::bytes),
@@ -406,7 +452,7 @@ fn filter<'a: 'b, 'b>(
         FILTER_JPX_DECODE => decode_jpx(buf, params),
         FILTER_LZW_DECODE => decode_lzw(
             &buf,
-            LZWFlateDecodeDict::new(None, params.unwrap_or_else(|| empty_dict.deref()), resolver)?,
+            LZWDeflateDecodeParams::new(params.unwrap_or_else(|| empty_dict.deref()), resolver)?,
         )
         .map(FilterDecodedData::bytes),
         _ => {
@@ -492,7 +538,7 @@ impl<'a> Stream<'a> {
     ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
         let mut decoded = FilterDecodedData::Bytes(self.raw(resolver)?.into());
         for (filter_name, params) in self.iter_filter()? {
-            decoded = filter(decoded.into_bytes()?, resolver, filter_name, params)?;
+            decoded = filter(decoded.into_bytes()?, Some(resolver), filter_name, params)?;
         }
         Ok(decoded)
     }
@@ -501,6 +547,17 @@ impl<'a> Stream<'a> {
     /// `image_to_raw` if the stream is image, convert to RawImage.
     pub fn decode(&self, resolver: &ObjectResolver<'a>) -> Result<Cow<'a, [u8]>, ObjectValueError> {
         self._decode(resolver).and_then(|v| v.into_bytes())
+    }
+
+    /// Decode stream but requires that `Length` field is no ref-id, so no need to use `ObjectResolver`
+    pub fn decode_without_resolve_length(&self) -> Result<Cow<'a, [u8]>, ObjectValueError> {
+        let mut decoded = FilterDecodedData::Bytes(
+            self.1[0..self.0.get(&b"Length"[..]).unwrap().as_int().unwrap() as usize].into(),
+        );
+        for (filter_name, params) in self.iter_filter()? {
+            decoded = filter(decoded.into_bytes()?, None, filter_name, params)?;
+        }
+        decoded.into_bytes()
     }
 
     pub fn decode_image(

@@ -19,7 +19,9 @@ use nom::{
 use crate::{
     file::{ObjectResolver, XRefTable},
     function::{Domain, Domains},
-    object::{Dictionary, Entry, Frame, FrameSet, Name, Object, PdfObject, XRefSection},
+    object::{
+        Dictionary, Entry, Frame, FrameSet, Name, Object, ObjectValueError, PdfObject, XRefSection,
+    },
     parser::{parse_dict, parse_indirected_stream},
 };
 use nipdf_macro::pdf_object;
@@ -88,16 +90,41 @@ fn parse_trailer(buf: &[u8]) -> ParseResult<Dictionary> {
     preceded(ws_terminated(tag(b"trailer")), ws_terminated(parse_dict))(buf)
 }
 
-#[pdf_object("XRef")]
-trait CrossReferenceStreamDictTrait {
-    fn size(&self) -> u32;
+struct CrossReferenceStreamDict {
+    size: u32,
+    index: Option<Domains<u32>>,
+    prev: Option<u32>,
+    w: Vec<u32>,
+}
 
-    #[try_from]
-    fn index(&self) -> Option<Domains<u32>>;
+impl CrossReferenceStreamDict {
+    pub fn new(d: &Dictionary) -> Result<Self, ObjectValueError> {
+        let size = d
+            .get(&Name::borrowed(b"Size"))
+            .ok_or(ObjectValueError::DictKeyNotFound)?
+            .as_int()? as u32;
+        let index = d
+            .get(&Name::borrowed(b"Index"))
+            .map(|o| Domains::<u32>::try_from(o).unwrap());
+        let prev = d
+            .get(&Name::borrowed(b"Prev"))
+            .map(|o| o.as_int().map(|v| v as u32))
+            .transpose()?;
+        let w = d
+            .get(&Name::borrowed(b"W"))
+            .ok_or(ObjectValueError::DictKeyNotFound)?
+            .as_arr()?
+            .into_iter()
+            .map(|o| o.as_int().map(|v| v as u32))
+            .collect::<Result<Vec<_>, _>>()?;
 
-    fn prev(&self) -> Option<u32>;
-
-    fn w(&self) -> Vec<u32>;
+        Ok(Self {
+            size,
+            index,
+            prev,
+            w,
+        })
+    }
 }
 
 /// Return nom parser to parse u32 value by byte length (0, 1, 2, 3, 4),
@@ -126,18 +153,17 @@ fn parse_xref_stream<'a>(buf: &'a [u8]) -> ParseResult<(XRefSection, Dictionary<
 
     let (buf, (_, stream)) = parse_indirected_stream(buf)?;
     let d = stream.as_dict();
-    let fake_xref = XRefTable::new(HashMap::new());
-    let resolver = ObjectResolver::new(buf, &fake_xref);
-    let d = CrossReferenceStreamDict::new(None, d, &resolver).map_err(to_parse_error)?;
+    let d = CrossReferenceStreamDict::new(d).map_err(to_parse_error)?;
     assert!(
-        d.prev().map_err(to_parse_error)?.is_none(),
+        d.prev.is_none(),
         "cross-reference streams with multi frame not supported"
     );
 
-    let data = stream.decode(&resolver).map_err(to_parse_error)?;
-    let w = d.w().map_err(to_parse_error)?;
-    assert_eq!(3, w.len());
-    let (a, b, c) = (w[0], w[1], w[2]);
+    let data = stream
+        .decode_without_resolve_length()
+        .map_err(to_parse_error)?;
+    assert_eq!(3, d.w.len());
+    let (a, b, c) = (d.w[0], d.w[1], d.w[2]);
     debug_assert_eq!(
         data.len() % (a + b + c) as usize,
         0,
@@ -149,10 +175,9 @@ fn parse_xref_stream<'a>(buf: &'a [u8]) -> ParseResult<(XRefSection, Dictionary<
     ))(data.as_ref())
     .map_err(to_parse_error)?;
 
-    let size = d.size().map_err(to_parse_error)?;
+    let size = d.size;
     let sections = d
-        .index()
-        .map_err(to_parse_error)?
+        .index
         .unwrap_or_else(|| Domains(vec![Domain::new(0, size)]));
 
     let mut r = Vec::with_capacity(sections.0.iter().map(|x| x.end as usize).sum());
