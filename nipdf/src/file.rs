@@ -166,7 +166,7 @@ impl XRefTable {
         id: NonZeroU32,
     ) -> Result<Object<'c>, ObjectValueError> {
         self.resolve_object_buf(buf, id)
-            .ok_or(ObjectValueError::ObjectIDNotFound)
+            .ok_or_else(|| ObjectValueError::ObjectIDNotFound(id))
             .and_then(|buf| {
                 buf.either(
                     |buf| {
@@ -284,7 +284,7 @@ impl<'a> ObjectResolver<'a> {
     pub fn resolve(&self, id: NonZeroU32) -> Result<&Object<'a>, ObjectValueError> {
         self.objects
             .get(&id)
-            .ok_or(ObjectValueError::ObjectIDNotFound)?
+            .ok_or_else(|| ObjectValueError::ObjectIDNotFound(id))?
             .get_or_try_init(|| {
                 let mut o = self.xref_table.parse_object(self.buf, id)?;
                 while let Object::Reference(id) = o {
@@ -353,7 +353,10 @@ impl<'a> ObjectResolver<'a> {
         c: &'c C,
         id: &str,
     ) -> Result<(Option<NonZeroU32>, &'c Object<'a>), ObjectValueError> {
-        let obj = c.get_value(id).ok_or(ObjectValueError::ObjectIDNotFound)?;
+        let obj = c.get_value(id).ok_or_else(|| {
+            error!("Key not found: {}", id);
+            ObjectValueError::DictKeyNotFound
+        })?;
 
         if let Object::Reference(id) = obj {
             self.resolve(id.id().id()).map(|o| (Some(id.id().id()), o))
@@ -427,12 +430,9 @@ impl<'a> ObjectResolver<'a> {
     }
 
     fn to_opt<T>(o: Result<T, ObjectValueError>) -> Result<Option<T>, ObjectValueError> {
-        o.map(Some).or_else(|e| {
-            if let ObjectValueError::ObjectIDNotFound = e {
-                Ok(None)
-            } else {
-                Err(e)
-            }
+        o.map(Some).or_else(|e| match e {
+            ObjectValueError::ObjectIDNotFound(_) | ObjectValueError::DictKeyNotFound => Ok(None),
+            _ => Err(e),
         })
     }
 }

@@ -652,8 +652,8 @@ pub enum ObjectValueError {
     StreamNotImage,
     #[error("Stream is not bytes")]
     StreamIsNotBytes,
-    #[error("Object not found by id")]
-    ObjectIDNotFound,
+    #[error("Object not found by id {0}")]
+    ObjectIDNotFound(NonZeroU32),
     #[error("Parse error: {0}")]
     ParseError(String),
     #[error("Unexpected dict schema type, schema: {0}")]
