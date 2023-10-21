@@ -203,7 +203,7 @@ fn png_predictor(buf: &[u8], columns: i32) -> Result<Vec<u8>, ObjectValueError> 
                 return Err(ObjectValueError::FilterDecodeError);
             }
         }
-        upper_row = cur_row;
+        upper_row = dest_row;
     }
     Ok(r)
 }
