@@ -186,7 +186,7 @@ fn parse_xref_stream(buf: &[u8]) -> ParseResult<(XRefSection, Dictionary<'_>)> {
                     start + idx as u32,
                     Entry::in_stream(NonZeroU32::new(b).unwrap(), c as u16),
                 )),
-                _ => panic!("invalid cross references stream type"),
+                _ => info!("unknown xref stream entry type: {a}, idx: {idx}, ignored",),
             }
         }
     }

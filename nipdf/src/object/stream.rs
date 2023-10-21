@@ -13,7 +13,6 @@ use log::error;
 use nipdf_macro::pdf_object;
 use once_cell::unsync::Lazy;
 
-
 use crate::{
     ccitt::Flags,
     file::ObjectResolver,
@@ -160,10 +159,7 @@ fn png_predictor(buf: &[u8], columns: i32) -> Result<Vec<u8>, ObjectValueError> 
     let first_row = vec![0u8; columns];
     let mut upper_row = &first_row[..];
     let mut r = vec![0u8; buf.len() / (columns + 1) * columns];
-    for (cur_row, dest_row) in buf
-        .chunks(columns + 1)
-        .zip(r.chunks_mut(columns))
-    {
+    for (cur_row, dest_row) in buf.chunks(columns + 1).zip(r.chunks_mut(columns)) {
         let (flag, cur_row) = cur_row.split_first().unwrap();
         match flag {
             0 => dest_row.copy_from_slice(cur_row),
@@ -176,8 +172,8 @@ fn png_predictor(buf: &[u8], columns: i32) -> Result<Vec<u8>, ObjectValueError> 
             }
             2 => {
                 // up
-                for (dest, (prev, cur)) in dest_row.iter_mut().zip(upper_row.iter().zip(cur_row)) {
-                    *dest = cur.wrapping_add(*prev);
+                for (dest, (up, cur)) in dest_row.iter_mut().zip(upper_row.iter().zip(cur_row)) {
+                    *dest = cur.wrapping_add(*up);
                 }
             }
             3 => {
