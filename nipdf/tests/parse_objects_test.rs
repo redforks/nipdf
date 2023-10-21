@@ -18,7 +18,7 @@ fn scan_objects() {
         for id in 1..f.total_objects() {
             print!("scan object: {id}");
             match resolver.resolve(NonZeroU32::new(id).unwrap()) {
-                Err(ObjectValueError::ObjectIDNotFound) => {
+                Err(ObjectValueError::ObjectIDNotFound(_)) => {
                     print!(" not found")
                 }
                 Err(e) => panic!("{}", e),
