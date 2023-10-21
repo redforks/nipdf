@@ -19,6 +19,7 @@ use crate::{
 use log::error;
 
 mod page;
+
 pub use page::*;
 
 #[derive(Debug, Copy, Clone)]
@@ -88,7 +89,8 @@ impl ObjectStream {
 
 #[derive(Debug)]
 pub struct XRefTable {
-    id_offset: IDOffsetMap, // object id -> offset
+    id_offset: IDOffsetMap,
+    // object id -> offset
     object_streams: HashMap<NonZeroU32, OnceCell<ObjectStream>>, // stream id -> ObjectStream
 }
 
@@ -260,13 +262,13 @@ impl<'a> ObjectResolver<'a> {
         &'b self,
         id: NonZeroU32,
     ) -> Result<Option<T>, ObjectValueError> {
-        Self::to_opt(self.resolve_pdf_object(id))
+        Self::not_found_error_to_opt(self.resolve_pdf_object(id))
     }
 
     /// Resolve object with id `id`, if object is reference, resolve it recursively.
     /// Return `None` if object is not found.
     pub fn opt_resolve(&self, id: NonZeroU32) -> Result<Option<&Object<'a>>, ObjectValueError> {
-        Self::to_opt(self.resolve(id))
+        Self::not_found_error_to_opt(self.resolve(id))
     }
 
     pub fn resolve_reference<'b>(
@@ -301,7 +303,7 @@ impl<'a> ObjectResolver<'a> {
         c: &'c C,
         id: &str,
     ) -> Result<Option<&'c Object<'a>>, ObjectValueError> {
-        Self::to_opt(self.resolve_container_value(c, id))
+        Self::not_found_error_to_opt(self._resolve_container_value(c, id).map(|(_, o)| o))
     }
 
     /// Resolve value from data container `c` with key `k`, if value is reference,
@@ -311,7 +313,7 @@ impl<'a> ObjectResolver<'a> {
         c: &'c C,
         id: &str,
     ) -> Result<&'c Object<'a>, ObjectValueError> {
-        self._resolve_container_value(c, id).map(|(_, o)| o)
+        self.resolve_required_value(c, id).map(|(_, o)| o)
     }
 
     pub fn opt_resolve_container_pdf_object<
@@ -325,7 +327,7 @@ impl<'a> ObjectResolver<'a> {
         c: &'c C,
         id: &str,
     ) -> Result<Option<T>, ObjectValueError> {
-        Self::to_opt(self.resolve_container_pdf_object(c, id))
+        Self::not_found_error_to_opt(self.resolve_container_pdf_object(c, id))
     }
 
     pub fn resolve_container_pdf_object<
@@ -339,7 +341,7 @@ impl<'a> ObjectResolver<'a> {
         c: &'c C,
         id: &str,
     ) -> Result<T, ObjectValueError> {
-        let (id, obj) = self._resolve_container_value(c, id)?;
+        let (id, obj) = self.resolve_required_value(c, id)?;
         let obj = match obj {
             Object::Dictionary(d) => d,
             Object::Stream(s) => s.as_dict(),
@@ -348,15 +350,24 @@ impl<'a> ObjectResolver<'a> {
         T::new(id, obj, self)
     }
 
+    /// Like _resolve_container_value(), but error logs if value not exist
+    fn resolve_required_value<'b: 'a, 'd: 'c, 'c, C: DataContainer<'a>>(
+        &'d self,
+        c: &'c C,
+        id: &str,
+    ) -> Result<(Option<NonZeroU32>, &'c Object<'a>), ObjectValueError> {
+        self._resolve_container_value(c, id).or_else(|e| {
+            error!("{}: {}", e, id);
+            Err(e)
+        })
+    }
+
     fn _resolve_container_value<'b: 'a, 'd: 'c, 'c, C: DataContainer<'a>>(
         &'d self,
         c: &'c C,
         id: &str,
     ) -> Result<(Option<NonZeroU32>, &'c Object<'a>), ObjectValueError> {
-        let obj = c.get_value(id).ok_or_else(|| {
-            error!("Key not found: {}", id);
-            ObjectValueError::DictKeyNotFound
-        })?;
+        let obj = c.get_value(id).ok_or(ObjectValueError::DictKeyNotFound)?;
 
         if let Object::Reference(id) = obj {
             self.resolve(id.id().id()).map(|o| (Some(id.id().id()), o))
@@ -429,7 +440,9 @@ impl<'a> ObjectResolver<'a> {
         )
     }
 
-    fn to_opt<T>(o: Result<T, ObjectValueError>) -> Result<Option<T>, ObjectValueError> {
+    fn not_found_error_to_opt<T>(
+        o: Result<T, ObjectValueError>,
+    ) -> Result<Option<T>, ObjectValueError> {
         o.map(Some).or_else(|e| match e {
             ObjectValueError::ObjectIDNotFound(_) | ObjectValueError::DictKeyNotFound => Ok(None),
             _ => Err(e),
@@ -555,7 +568,7 @@ pub(crate) fn read_sample_file(file_path: impl AsRef<std::path::Path>) -> Vec<u8
 /// `f_assert` called with `Dictionary` of stream to do some test on it.
 #[cfg(test)]
 pub(crate) fn decode_stream<
-    E: std::error::Error + Sync + Send + 'static,
+    E: error::Error + Sync + Send + 'static,
     T: TryInto<NonZeroU32, Error = E>,
 >(
     file_path: impl AsRef<std::path::Path>,
