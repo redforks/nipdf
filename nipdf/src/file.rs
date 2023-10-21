@@ -103,7 +103,7 @@ impl XRefTable {
                     None
                 }
             })
-            .zip(repeat_with(|| OnceCell::new()))
+            .zip(repeat_with(OnceCell::new))
             .collect();
 
         Self {
@@ -147,7 +147,7 @@ impl XRefTable {
             ObjectPos::InStream(id, idx) => {
                 let object_stream = self
                     .object_streams
-                    .get(&id)
+                    .get(id)
                     .unwrap()
                     .get_or_try_init(|| {
                         let buf = self.resolve_object_buf(buf, *id).unwrap();
@@ -166,7 +166,7 @@ impl XRefTable {
         id: NonZeroU32,
     ) -> Result<Object<'c>, ObjectValueError> {
         self.resolve_object_buf(buf, id)
-            .ok_or_else(|| ObjectValueError::ObjectIDNotFound(id))
+            .ok_or(ObjectValueError::ObjectIDNotFound(id))
             .and_then(|buf| {
                 buf.either(
                     |buf| {
@@ -284,7 +284,7 @@ impl<'a> ObjectResolver<'a> {
     pub fn resolve(&self, id: NonZeroU32) -> Result<&Object<'a>, ObjectValueError> {
         self.objects
             .get(&id)
-            .ok_or_else(|| ObjectValueError::ObjectIDNotFound(id))?
+            .ok_or(ObjectValueError::ObjectIDNotFound(id))?
             .get_or_try_init(|| {
                 let mut o = self.xref_table.parse_object(self.buf, id)?;
                 while let Object::Reference(id) = o {
