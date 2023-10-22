@@ -165,66 +165,6 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorArgs {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub enum ColorSpace {
-    DeviceGray,
-    DeviceRGB,
-    DeviceCMYK,
-    CalGray,
-    Pattern,
-    ICCBased(NonZeroU32), // stream id
-    /// Separation color space, the first element is the alternate color space,
-    /// the second element is ref id of the tint transform function.
-    Separation((Box<Self>, NonZeroU32)),
-}
-
-impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpace {
-    type Error = ObjectValueError;
-
-    fn try_from(object: &'b Object<'a>) -> Result<Self, Self::Error> {
-        match object {
-            Object::Name(name) => match name.as_ref() {
-                "DeviceGray" => Ok(ColorSpace::DeviceGray),
-                "DeviceRGB" => Ok(ColorSpace::DeviceRGB),
-                "DeviceCMYK" => Ok(ColorSpace::DeviceCMYK),
-                "CalGray" => Ok(ColorSpace::CalGray),
-                "Pattern" => Ok(ColorSpace::Pattern),
-                _ => Err(ObjectValueError::GraphicsOperationSchemaError),
-            },
-            Object::Array(arr) => match arr[0].as_name()? {
-                "ICCBased" => {
-                    assert_eq!(2, arr.len());
-                    Ok(ColorSpace::ICCBased(arr[1].as_ref()?.id().id()))
-                }
-                "Separation" => {
-                    assert_eq!(4, arr.len());
-                    let cs = Box::new(ColorSpace::try_from(&arr[2])?);
-                    let tint_transform = arr[3].as_ref()?.id().id();
-                    Ok(ColorSpace::Separation((cs, tint_transform)))
-                }
-                _ => todo!("Unsupported color space: {:?}", arr),
-            },
-            _ => {
-                error!("{:?}", object);
-                Err(ObjectValueError::GraphicsOperationSchemaError)
-            }
-        }
-    }
-}
-
-impl ColorSpace {
-    /// Convert color args to color based on current ColorSpace.
-    pub fn convert_color(&self, args: &ColorArgs) -> tiny_skia::Color {
-        let args = &args.0;
-        match self {
-            Self::DeviceRGB => color_space::DeviceRGB().to_skia_color(args),
-            Self::DeviceGray => color_space::DeviceGray().to_skia_color(args),
-            Self::DeviceCMYK => color_space::DeviceCMYK().to_skia_color(args),
-            _ => todo!("Unsupported color space: {:?}", self),
-        }
-    }
-}
-
 /// Predefined simple color space
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum PredefinedColorSpace {
@@ -269,12 +209,11 @@ impl ColorSpaceArgs {
                 PredefinedColorSpace::DeviceGray => Box::new(color_space::DeviceGray()),
                 PredefinedColorSpace::DeviceRGB => Box::new(color_space::DeviceRGB()),
                 PredefinedColorSpace::DeviceCMYK => Box::new(color_space::DeviceCMYK()),
-                _ => todo!("Convert {:?} to Color space", cs),
             }),
             Self::LaterResolve(id) => {
-                let cs_owner = resources.resolver().resolve(*id)?.try_into()?;
+                let cs_owner: Self = resources.resolver().resolve(*id)?.try_into()?;
                 match &cs_owner {
-                    ColorSpace::ICCBased(id) => {
+                    ColorSpaceArgs::ICCBased(id) => {
                         let d = resources.resolver().resolve(*id)?.as_stream()?.as_dict();
                         let d = ICCStreamDict::new(None, d, resources.resolver())?;
                         let space_args = d
