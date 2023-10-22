@@ -603,12 +603,14 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
 
             // Color Operations
             Operation::SetStrokeColorSpace(args) => {
-                self.current_mut().stroke_color_space1 =
-                    args.into_color_space(self.resources).unwrap()
+                self.current_mut().stroke_color_space1 = args
+                    .create_color_space(self.resources.resolver(), Some(self.resources))
+                    .unwrap()
             }
             Operation::SetFillColorSpace(args) => {
-                self.current_mut().fill_color_space1 =
-                    args.into_color_space(self.resources).unwrap()
+                self.current_mut().fill_color_space1 = args
+                    .create_color_space(self.resources.resolver(), Some(self.resources))
+                    .unwrap()
             }
             Operation::SetStrokeColor(args) => self.current_mut().set_stroke_color_args(args),
             Operation::SetStrokeGray(color) => self
@@ -723,7 +725,10 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             resources: &ResourceDict<'a, 'b>,
         ) -> RgbaImage {
             let image = image_dict.as_image().expect("Only Image XObject supported");
-            image.decode_image(resources).unwrap().into_rgba8()
+            image
+                .decode_image(resources.resolver(), Some(resources))
+                .unwrap()
+                .into_rgba8()
         }
 
         let xobjects = self.resources.x_object().unwrap();
@@ -1093,7 +1098,7 @@ impl MatrixMapper {
 
         let mut canvas = Pixmap::new(self.width as u32, self.height as u32).unwrap();
         let img = img_dict.as_image().unwrap();
-        let img = img.decode_image(resources)?;
+        let img = img.decode_image(resources.resolver(), Some(resources))?;
         let mut img = img.into_rgba8();
         img.pixels_mut().for_each(|p| {
             p[3] = p[0];

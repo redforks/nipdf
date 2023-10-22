@@ -28,6 +28,7 @@ use nipdf_macro::{pdf_object, OperationParser, TryFromIntObject, TryFromNameObje
 
 pub(crate) mod color_space;
 mod pattern;
+use crate::file::ObjectResolver;
 use crate::graphics::color_space::ColorSpace as ColorSpaceTrait;
 pub(crate) use pattern::*;
 
@@ -200,9 +201,12 @@ trait ICCStreamDictTrait {
 
 impl ColorSpaceArgs {
     /// Convert args to ColorSpace, resolve from page resources if it is Custom.
-    pub fn into_color_space(
+    /// Panic if self is ColorSpaceArgs::Custom(), and resources is None,
+    /// because in this case color space is defined in page resources.
+    pub fn create_color_space<'a, 'b>(
         &self,
-        resources: &ResourceDict,
+        resolver: &ObjectResolver<'a>,
+        resources: Option<&ResourceDict<'a, 'b>>,
     ) -> AnyResult<Box<dyn ColorSpaceTrait<f32>>> {
         match self {
             Self::Predefined(cs) => Ok(match cs {
@@ -211,23 +215,25 @@ impl ColorSpaceArgs {
                 PredefinedColorSpace::DeviceCMYK => Box::new(color_space::DeviceCMYK()),
             }),
             Self::LaterResolve(id) => {
-                let cs_owner: Self = resources.resolver().resolve(*id)?.try_into()?;
+                let cs_owner: Self = resolver.resolve(*id)?.try_into()?;
                 match &cs_owner {
                     ColorSpaceArgs::ICCBased(id) => {
-                        let d = resources.resolver().resolve(*id)?.as_stream()?.as_dict();
-                        let d = ICCStreamDict::new(None, d, resources.resolver())?;
+                        let d = resolver.resolve(*id)?.as_stream()?.as_dict();
+                        let d = ICCStreamDict::new(None, d, resolver)?;
                         let space_args = d
                             .alternate()?
                             .expect("unsupported if ICCBased color no alternate color space");
-                        space_args.into_color_space(resources)
+                        space_args.create_color_space(resolver, resources)
                     }
                     _ => todo!("Unsupported color space: {:?}", &cs_owner),
                 }
             }
             Self::Custom(name) => {
-                let spaces = resources.color_space()?;
+                let spaces = resources
+                    .expect("Page resources needed to handle Custom ColorSpaceArgs")
+                    .color_space()?;
                 let args = spaces.get(name).ok_or(ObjectValueError::DictNameMissing)?;
-                args.into_color_space(resources)
+                args.create_color_space(resolver, resources)
             }
             _ => todo!("Convert {:?} to Color space", self),
         }

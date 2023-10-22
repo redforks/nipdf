@@ -596,9 +596,9 @@ impl<'a> Stream<'a> {
 
     pub fn decode_image<'b>(
         &self,
-        resources: &ResourceDict<'a, 'b>,
+        resolver: &ObjectResolver<'a>,
+        resources: Option<&ResourceDict<'a, 'b>>,
     ) -> Result<DynamicImage, ObjectValueError> {
-        let resolver = resources.resolver();
         let decoded = self._decode(resolver)?;
         let img_dict = ImageDict::new(None, &self.0, resolver)?;
 
