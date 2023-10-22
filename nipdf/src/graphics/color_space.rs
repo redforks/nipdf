@@ -170,13 +170,15 @@ impl<T: ColorComp> ColorSpace<T> for DeviceCMYK {
         let y1 = 1.0 - y;
         let k1 = 1.0 - k;
 
-        let x = c1 * m1 * y1 * k1;
+        let x = c1 * m1 * y1 * k1; // 0 0 0 0
         let (mut r, mut g, mut b) = (x, x, x);
+
+        let x = c1 * m1 * y1 * k; // 0 0 0 1
         r += 0.1373 * x;
         g += 0.1216 * x;
         b += 0.1255 * x;
 
-        let x = c * m1 * y * k1;
+        let x = c1 * m1 * y * k1; // 0 0 1 0
         r += x;
         g += 0.9490 * x;
 
