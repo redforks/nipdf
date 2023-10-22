@@ -717,13 +717,13 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
     }
 
     /// Paints the specified XObject. Only XObjectType::Image supported
-    fn paint_x_object(&mut self, name: &crate::graphics::NameOfDict) {
-        fn load_image(image_dict: &XObjectDict) -> RgbaImage {
+    fn paint_x_object(&mut self, name: &NameOfDict) {
+        fn load_image<'a, 'b>(
+            image_dict: &XObjectDict<'a, 'b>,
+            resources: &ResourceDict<'a, 'b>,
+        ) -> RgbaImage {
             let image = image_dict.as_image().expect("Only Image XObject supported");
-            image
-                .decode_image(image_dict.resolver())
-                .unwrap()
-                .into_rgba8()
+            image.decode_image(resources).unwrap().into_rgba8()
         }
 
         let xobjects = self.resources.x_object().unwrap();
@@ -732,7 +732,10 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let state = self.stack.last().unwrap();
 
         if xobject.image_mask().unwrap() {
-            let mask = state.ctm.load_image_as_mask(xobject).unwrap();
+            let mask = state
+                .ctm
+                .load_image_as_mask(xobject, self.resources)
+                .unwrap();
             // fill canvas with current fill paint with mask
             let paint = state.get_fill_paint();
             self.canvas.fill_rect(
@@ -750,7 +753,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             return;
         }
 
-        let smask = state.ctm.img_mask(xobject).unwrap();
+        let smask = state.ctm.img_mask(xobject, self.resources).unwrap();
 
         let paint = PixmapPaint {
             quality: if xobject.interpolate().unwrap() {
@@ -760,7 +763,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             },
             ..Default::default()
         };
-        let img = load_image(xobject);
+        let img = load_image(xobject, self.resources);
         let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
         let transform = state.image_transform(img.width(), img.height());
         self.canvas.draw_pixmap(
@@ -773,10 +776,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         );
     }
 
-    fn set_fill_color_or_pattern(
-        &mut self,
-        color_or_name: &crate::graphics::ColorArgsOrName,
-    ) -> AnyResult<()> {
+    fn set_fill_color_or_pattern(&mut self, color_or_name: &ColorArgsOrName) -> AnyResult<()> {
         match color_or_name {
             ColorArgsOrName::Name(name) => {
                 let pattern = self.resources.pattern()?;
@@ -1065,19 +1065,27 @@ impl MatrixMapper {
     /// the mask size identical to device width/height,
     /// s_mask zoomed and transformed by image_transform,
     /// area out of image are blacked out.
-    pub fn img_mask(&self, img_dict: &XObjectDict) -> AnyResult<Option<Mask>> {
+    pub fn img_mask<'a, 'b>(
+        &self,
+        img_dict: &XObjectDict<'a, 'b>,
+        resources: &ResourceDict<'a, 'b>,
+    ) -> AnyResult<Option<Mask>> {
         let s_mask = img_dict.s_mask()?;
         let s_mask = if let Some(s_mask) = s_mask {
             s_mask
         } else {
             return Ok(None);
         };
-        self.load_image_as_mask(&s_mask).map(Some)
+        self.load_image_as_mask(&s_mask, resources).map(Some)
     }
 
     /// Load image as mask, the returned mask is as large as device width/height,
     /// apply ctm transform to the image, and black out area out of image.
-    pub fn load_image_as_mask(&self, img_dict: &XObjectDict) -> AnyResult<Mask> {
+    pub fn load_image_as_mask<'a, 'b>(
+        &self,
+        img_dict: &XObjectDict<'a, 'b>,
+        resources: &ResourceDict<'a, 'b>,
+    ) -> AnyResult<Mask> {
         let paint = PixmapPaint {
             quality: FilterQuality::Nearest,
             ..Default::default()
@@ -1085,7 +1093,7 @@ impl MatrixMapper {
 
         let mut canvas = Pixmap::new(self.width as u32, self.height as u32).unwrap();
         let img = img_dict.as_image().unwrap();
-        let img = img.decode_image(img_dict.resolver())?;
+        let img = img.decode_image(resources)?;
         let mut img = img.into_rgba8();
         img.pixels_mut().for_each(|p| {
             p[3] = p[0];

@@ -13,12 +13,13 @@ use log::error;
 use nipdf_macro::pdf_object;
 use once_cell::unsync::Lazy;
 
+use crate::file::ResourceDict;
 use crate::graphics::{ColorSpaceArgs, PredefinedColorSpace};
 use crate::{
     ccitt::Flags,
     file::ObjectResolver,
     function::{Function, FunctionDict, Type as FunctionType},
-    graphics::{cmyk_to_rgb8},
+    graphics::cmyk_to_rgb8,
     object::PdfObject,
 };
 
@@ -563,10 +564,11 @@ impl<'a> Stream<'a> {
         decoded.into_bytes()
     }
 
-    pub fn decode_image(
+    pub fn decode_image<'b>(
         &self,
-        resolver: &ObjectResolver<'a>,
+        resources: &ResourceDict<'a, 'b>,
     ) -> Result<DynamicImage, ObjectValueError> {
+        let resolver = resources.resolver();
         let decoded = self._decode(resolver)?;
         let img_dict = ImageDict::new(None, &self.0, resolver)?;
 

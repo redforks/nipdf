@@ -57,15 +57,16 @@ fn dump_stream(path: &str, id: NonZeroU32, raw: bool, as_png: bool) -> AnyResult
     match obj {
         Object::Stream(s) => {
             let decoded;
-            let png_buffer;
+            // let png_buffer;
             let mut buf = if raw {
                 s.raw(&resolver)?
             } else if as_png {
-                let img = s.decode_image(&resolver)?;
-                let mut buf = Cursor::new(Vec::new());
-                img.write_to(&mut buf, ImageOutputFormat::Png)?;
-                png_buffer = buf.into_inner();
-                &png_buffer
+                todo!("decode image need page resources, because image may defines named ColorSpace defined in resources")
+            /*                let img = s.decode_image(&resolver)?;
+            let mut buf = Cursor::new(Vec::new());
+            img.write_to(&mut buf, ImageOutputFormat::Png)?;
+            png_buffer = buf.into_inner();
+            &png_buffer*/
             } else {
                 decoded = s.decode(&resolver)?;
                 decoded.as_ref()
