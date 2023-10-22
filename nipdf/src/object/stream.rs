@@ -13,6 +13,7 @@ use log::error;
 use nipdf_macro::pdf_object;
 use once_cell::unsync::Lazy;
 
+use crate::graphics::{ColorSpaceArgs, PredefinedColorSpace};
 use crate::{
     ccitt::Flags,
     file::ObjectResolver,
@@ -307,7 +308,7 @@ pub(crate) trait ImageDictTrait {
     fn height(&self) -> u32;
     fn bits_per_component(&self) -> Option<u8>;
     #[try_from]
-    fn color_space(&self) -> Option<ColorSpace>;
+    fn color_space(&self) -> Option<ColorSpaceArgs>;
 }
 
 #[pdf_object(())]
@@ -459,12 +460,16 @@ fn filter<'a: 'b, 'b>(
 fn image_transform_color_space(
     resolver: &ObjectResolver,
     img: DynamicImage,
-    to: &ColorSpace,
+    to: &ColorSpaceArgs,
 ) -> AnyResult<DynamicImage> {
-    fn image_color_space(img: &DynamicImage) -> ColorSpace {
+    fn image_color_space(img: &DynamicImage) -> ColorSpaceArgs {
         match img {
-            DynamicImage::ImageLuma8(_) => ColorSpace::DeviceGray,
-            DynamicImage::ImageRgb8(_) => ColorSpace::DeviceRGB,
+            DynamicImage::ImageLuma8(_) => {
+                ColorSpaceArgs::Predefined(PredefinedColorSpace::DeviceGray)
+            }
+            DynamicImage::ImageRgb8(_) => {
+                ColorSpaceArgs::Predefined(PredefinedColorSpace::DeviceRGB)
+            }
             _ => todo!("unsupported image color space: {:?}", img),
         }
     }
@@ -472,8 +477,8 @@ fn image_transform_color_space(
     fn transform(
         resolver: &ObjectResolver,
         img: DynamicImage,
-        from: &ColorSpace,
-        to: &ColorSpace,
+        from: &ColorSpaceArgs,
+        to: &ColorSpaceArgs,
     ) -> AnyResult<DynamicImage> {
         fn gray_by_cymk(img: GrayImage, f: impl Function) -> AnyResult<RgbImage> {
             let mut r = RgbImage::new(img.width(), img.height());
@@ -485,8 +490,12 @@ fn image_transform_color_space(
             Ok(r)
         }
 
-        if let (ColorSpace::DeviceGray, ColorSpace::Separation((alt, id))) = (from, to) {
-            if alt.as_ref() == &ColorSpace::DeviceCMYK {
+        if let (
+            ColorSpaceArgs::Predefined(PredefinedColorSpace::DeviceGray),
+            ColorSpaceArgs::Separation((alt, id)),
+        ) = (from, to)
+        {
+            if alt.as_ref() == &ColorSpaceArgs::Predefined(PredefinedColorSpace::DeviceCMYK) {
                 let f: FunctionDict = resolver.resolve_pdf_object(*id)?;
                 return Ok(DynamicImage::ImageRgb8(match f.function_type()? {
                     FunctionType::Sampled => gray_by_cymk(img.into_luma8(), f.sampled()?.func()?)?,
@@ -586,7 +595,7 @@ impl<'a> Stream<'a> {
                         }
                         DynamicImage::ImageLuma8(img)
                     }
-                    (Some(ColorSpace::DeviceGray), 8) => {
+                    (Some(ColorSpaceArgs::Predefined(PredefinedColorSpace::DeviceGray)), 8) => {
                         let img = GrayImage::from_raw(
                             img_dict.width().unwrap(),
                             img_dict.height().unwrap(),
@@ -595,7 +604,7 @@ impl<'a> Stream<'a> {
                         .unwrap();
                         DynamicImage::ImageLuma8(img)
                     }
-                    (Some(ColorSpace::DeviceRGB), 8) => {
+                    (Some(ColorSpaceArgs::Predefined(PredefinedColorSpace::DeviceRGB)), 8) => {
                         let img = RgbImage::from_raw(
                             img_dict.width().unwrap(),
                             img_dict.height().unwrap(),
@@ -613,8 +622,8 @@ impl<'a> Stream<'a> {
             }
         };
 
-        if let Some(color_space) = color_space.as_ref() {
-            Ok(image_transform_color_space(resolver, r, color_space).unwrap())
+        if let Some(args) = color_space.as_ref() {
+            Ok(image_transform_color_space(resolver, r, args).unwrap())
         } else {
             Ok(r)
         }

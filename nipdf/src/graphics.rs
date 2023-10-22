@@ -173,9 +173,6 @@ pub enum ColorSpace {
     CalGray,
     Pattern,
     ICCBased(NonZeroU32), // stream id
-    /// ref id point to the real ColorSpace Object, use ObjectResolver
-    /// to get the real ColorSpace Object, and then convert it to ColorSpace
-    RefId(NonZeroU32),
     /// Separation color space, the first element is the alternate color space,
     /// the second element is ref id of the tint transform function.
     Separation((Box<Self>, NonZeroU32)),
@@ -218,7 +215,6 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpace {
                 }
                 _ => todo!("Unsupported color space: {:?}", arr),
             },
-            Object::Reference(id) => Ok(ColorSpace::RefId(id.id().id())),
             _ => {
                 error!("{:?}", object);
                 Err(ObjectValueError::GraphicsOperationSchemaError)
@@ -240,9 +236,28 @@ impl ColorSpace {
     }
 }
 
+/// Predefined simple color space
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum PredefinedColorSpace {
+    DeviceGray,
+    DeviceRGB,
+    DeviceCMYK,
+}
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ColorSpaceArgs {
-    Predefined(ColorSpace),
+    Predefined(PredefinedColorSpace),
+
+    CalGray,
+
+    Pattern,
+    ICCBased(NonZeroU32), // stream id
+    /// Separation color space, the first element is the alternate color space,
+    /// the second element is ref id of the tint transform function.
+    Separation((Box<Self>, NonZeroU32)),
+
+    /// Reference id to the ColorSpace object, need later resolve
+    LaterResolve(NonZeroU32),
 
     /// User defined custom ColorSpace, resolve it from Resource Dictionary
     Custom(String),
@@ -251,36 +266,42 @@ pub enum ColorSpaceArgs {
 #[pdf_object(())]
 trait ICCStreamDictTrait {
     #[try_from]
-    fn alternate(&self) -> Option<ColorSpace>;
+    fn alternate(&self) -> Option<ColorSpaceArgs>;
 }
 
 impl ColorSpaceArgs {
     /// Convert args to ColorSpace, resolve from page resources if it is Custom.
     pub fn into_color_space(
-        self,
+        &self,
         resources: &ResourceDict,
     ) -> AnyResult<Box<dyn ColorSpaceTrait<f32>>> {
         match self {
-            Self::Predefined(cs) => Ok(cs.into()),
-            Self::Custom(name) => {
-                let spaces = resources.color_space()?;
-                let mut cs = spaces.get(&name).ok_or(ObjectValueError::DictNameMissing)?;
-                let cs_owner;
-                if let ColorSpace::RefId(id) = cs {
-                    cs_owner = resources.resolver().resolve(*id)?.try_into()?;
-                    cs = &cs_owner;
-                };
-                match cs {
+            Self::Predefined(cs) => Ok(match cs {
+                PredefinedColorSpace::DeviceGray => Box::new(color_space::DeviceGray()),
+                PredefinedColorSpace::DeviceRGB => Box::new(color_space::DeviceRGB()),
+                PredefinedColorSpace::DeviceCMYK => Box::new(color_space::DeviceCMYK()),
+                _ => todo!("Convert {:?} to Color space", cs),
+            }),
+            Self::LaterResolve(id) => {
+                let cs_owner = resources.resolver().resolve(*id)?.try_into()?;
+                match &cs_owner {
                     ColorSpace::ICCBased(id) => {
                         let d = resources.resolver().resolve(*id)?.as_stream()?.as_dict();
                         let d = ICCStreamDict::new(None, d, resources.resolver())?;
-                        Ok(d.alternate()?
-                            .expect("unsupported if ICCBased color no alternate color space")
-                            .into())
+                        let space_args = d
+                            .alternate()?
+                            .expect("unsupported if ICCBased color no alternate color space");
+                        space_args.into_color_space(resources)
                     }
-                    _ => todo!("Unsupported color space: {:?}", cs),
+                    _ => todo!("Unsupported color space: {:?}", &cs_owner),
                 }
             }
+            Self::Custom(name) => {
+                let spaces = resources.color_space()?;
+                let args = spaces.get(name).ok_or(ObjectValueError::DictNameMissing)?;
+                args.into_color_space(resources)
+            }
+            _ => todo!("Convert {:?} to Color space", self),
         }
     }
 }
@@ -288,10 +309,33 @@ impl ColorSpaceArgs {
 impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceArgs {
     type Error = ObjectValueError;
     fn try_from(object: &'b Object<'a>) -> Result<Self, Self::Error> {
-        ColorSpace::try_from(object).map_or_else(
-            |_| Ok(ColorSpaceArgs::Custom(object.as_name()?.to_owned())),
-            |c| Ok(ColorSpaceArgs::Predefined(c)),
-        )
+        match object {
+            Object::Name(name) => match name.as_ref() {
+                "DeviceGray" => Ok(ColorSpaceArgs::Predefined(PredefinedColorSpace::DeviceGray)),
+                "DeviceRGB" => Ok(ColorSpaceArgs::Predefined(PredefinedColorSpace::DeviceRGB)),
+                "DeviceCMYK" => Ok(ColorSpaceArgs::Predefined(PredefinedColorSpace::DeviceCMYK)),
+                "CalGray" => Ok(ColorSpaceArgs::CalGray),
+                "Pattern" => Ok(ColorSpaceArgs::Pattern),
+                _ => Err(ObjectValueError::GraphicsOperationSchemaError),
+            },
+            Object::Array(arr) => match arr[0].as_name()? {
+                "ICCBased" => {
+                    assert_eq!(2, arr.len());
+                    Ok(ColorSpaceArgs::ICCBased(arr[1].as_ref()?.id().id()))
+                }
+                "Separation" => {
+                    assert_eq!(4, arr.len());
+                    let cs = Box::new(ColorSpaceArgs::try_from(&arr[2])?);
+                    let tint_transform = arr[3].as_ref()?.id().id();
+                    Ok(ColorSpaceArgs::Separation((cs, tint_transform)))
+                }
+                _ => todo!("Unsupported color space: {:?}", arr),
+            },
+            _ => {
+                error!("{:?}", object);
+                Err(ObjectValueError::GraphicsOperationSchemaError)
+            }
+        }
     }
 }
 

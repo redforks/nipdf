@@ -6,7 +6,7 @@ use tiny_skia::Pixmap;
 
 use crate::{
     graphics::{
-        parse_operations, ColorSpace, LineCapStyle, LineJoinStyle, Operation, PatternDict, Point,
+        parse_operations, LineCapStyle, LineJoinStyle, Operation, PatternDict, Point,
         RenderingIntent,
     },
     object::{Dictionary, Object, ObjectValueError, PdfObject, Stream},
@@ -16,7 +16,7 @@ use crate::{
 use self::paint::Render;
 pub use self::paint::{RenderOption, RenderOptionBuilder};
 
-use crate::graphics::ColorArgs;
+use crate::graphics::{ColorArgs, ColorSpaceArgs};
 use std::{iter::once, ops::Deref};
 
 mod paint;
@@ -167,7 +167,7 @@ impl<'a, 'b> XObjectDict<'a, 'b> {
 }
 
 /// Wrap type to impl TryFrom<> trait
-pub struct ColorSpaceResources(HashMap<String, ColorSpace>);
+pub struct ColorSpaceResources(HashMap<String, ColorSpaceArgs>);
 
 impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceResources {
     type Error = ObjectValueError;
@@ -177,7 +177,7 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceResources {
         match object {
             Object::Dictionary(dict) => {
                 for (k, v) in dict.iter() {
-                    let cs = ColorSpace::try_from(v)?;
+                    let cs = ColorSpaceArgs::try_from(v)?;
                     map.insert(k.as_ref().to_owned(), cs);
                 }
                 Ok(Self(map))
@@ -191,7 +191,7 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceResources {
 }
 
 impl Deref for ColorSpaceResources {
-    type Target = HashMap<String, ColorSpace>;
+    type Target = HashMap<String, ColorSpaceArgs>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
