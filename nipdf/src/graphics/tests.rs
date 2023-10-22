@@ -99,7 +99,7 @@ fn test_arr_convert_from_object(v: Vec<Object>) -> Vec<f32> {
     act
 }
 
-#[test_case(vec![1.into()] => ColorArgsOrName::Color(ColorArgs(vec![1.0.into()])); "Color")]
+#[test_case(vec![1.into()] => ColorArgsOrName::Color(ColorArgs(vec![1.0])); "Color")]
 #[test_case(vec!["/name".into()] => ColorArgsOrName::Name("name".to_owned()); "name")]
 fn color_or_with_pattern_from_object(mut v: Vec<Object>) -> ColorArgsOrName {
     ColorArgsOrName::convert_from_object(&mut v).unwrap()

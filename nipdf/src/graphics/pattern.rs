@@ -1,7 +1,7 @@
 use ahash::HashMap;
 use nipdf_macro::{pdf_object, TryFromIntObject};
 
-use super::{ColorArgs, ColorSpace, ColorSpaceArgs, Rectangle};
+use super::{ColorArgs, ColorSpaceArgs, Rectangle};
 use crate::{
     file::{GraphicsStateParameterDict, ResourceDict},
     function::{default_domain, Domain, FunctionDict},

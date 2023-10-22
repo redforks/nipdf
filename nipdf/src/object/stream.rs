@@ -18,7 +18,7 @@ use crate::{
     ccitt::Flags,
     file::ObjectResolver,
     function::{Function, FunctionDict, Type as FunctionType},
-    graphics::{cmyk_to_rgb8, ColorSpace},
+    graphics::{cmyk_to_rgb8},
     object::PdfObject,
 };
 

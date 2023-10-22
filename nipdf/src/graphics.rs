@@ -217,9 +217,9 @@ impl ColorSpace {
     pub fn convert_color(&self, args: &ColorArgs) -> tiny_skia::Color {
         let args = &args.0;
         match self {
-            Self::DeviceRGB => color_space::DeviceRGB().to_skia_color(&args),
-            Self::DeviceGray => color_space::DeviceGray().to_skia_color(&args),
-            Self::DeviceCMYK => color_space::DeviceCMYK().to_skia_color(&args),
+            Self::DeviceRGB => color_space::DeviceRGB().to_skia_color(args),
+            Self::DeviceGray => color_space::DeviceGray().to_skia_color(args),
+            Self::DeviceCMYK => color_space::DeviceCMYK().to_skia_color(args),
             _ => todo!("Unsupported color space: {:?}", self),
         }
     }
