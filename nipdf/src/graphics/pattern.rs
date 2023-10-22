@@ -1,11 +1,11 @@
 use ahash::HashMap;
 use nipdf_macro::{pdf_object, TryFromIntObject};
 
-use super::{ColorSpace, Rectangle};
+use super::{ColorArgs, ColorSpace, Rectangle};
 use crate::{
     file::{GraphicsStateParameterDict, ResourceDict},
     function::{default_domain, Domain, FunctionDict},
-    graphics::{Color, TransformMatrix},
+    graphics::TransformMatrix,
     object::{Object, ObjectValueError},
 };
 
@@ -98,7 +98,7 @@ pub trait ShadingDictTrait {
     fn color_space(&self) -> ColorSpace;
 
     #[try_from]
-    fn background(&self) -> Option<Color>;
+    fn background(&self) -> Option<ColorArgs>;
 
     #[try_from]
     fn b_box(&self) -> Option<Rectangle>;

@@ -6,8 +6,8 @@ use tiny_skia::Pixmap;
 
 use crate::{
     graphics::{
-        parse_operations, Color, ColorSpace, LineCapStyle, LineJoinStyle, Operation, PatternDict,
-        Point, RenderingIntent,
+        parse_operations, ColorSpace, LineCapStyle, LineJoinStyle, Operation, PatternDict, Point,
+        RenderingIntent,
     },
     object::{Dictionary, Object, ObjectValueError, PdfObject, Stream},
     text::FontDict,
@@ -16,6 +16,7 @@ use crate::{
 use self::paint::Render;
 pub use self::paint::{RenderOption, RenderOptionBuilder};
 
+use crate::graphics::ColorArgs;
 use std::{iter::once, ops::Deref};
 
 mod paint;
@@ -136,7 +137,7 @@ pub trait XObjectDictTrait {
 
     // available if it is soft-mask image, see Table 146
     #[try_from]
-    fn matte(&self) -> Option<Color>;
+    fn matte(&self) -> Option<ColorArgs>;
 
     #[nested]
     fn s_mask(&self) -> Option<XObjectDict<'a, 'b>>;

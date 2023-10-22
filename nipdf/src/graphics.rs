@@ -308,17 +308,6 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorSpaceArgs {
     }
 }
 
-/// Color for different color space
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Color {
-    /// DeviceGray, CalGray, Indexed
-    Gray(f32),
-    /// DeviceRGB, CalRGB, Lab
-    Rgb(f32, f32, f32),
-    /// DeviceCMYK
-    Cmyk(f32, f32, f32, f32),
-}
-
 impl<'a, 'b, const N: usize> ConvertFromObject<'a, 'b> for [f32; N] {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let mut result = [0.0; N];
@@ -337,28 +326,28 @@ pub fn cmyk_to_rgb8(c: f32, y: f32, m: f32, k: f32) -> (u8, u8, u8) {
     )
 }
 
-impl<'a> TryFrom<&Object<'a>> for Color {
+impl<'a> TryFrom<&Object<'a>> for ColorArgs {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        match obj {
+        Ok(Self(match obj {
             Object::Array(arr) => match arr.len() {
-                1 => Ok(Color::Gray(arr[0].as_number()?)),
-                3 => Ok(Color::Rgb(
+                1 => vec![arr[0].as_number()?],
+                3 => vec![
                     arr[0].as_number()?,
                     arr[1].as_number()?,
                     arr[2].as_number()?,
-                )),
-                4 => Ok(Color::Cmyk(
+                ],
+                4 => vec![
                     arr[0].as_number()?,
                     arr[1].as_number()?,
                     arr[2].as_number()?,
                     arr[3].as_number()?,
-                )),
-                _ => Err(ObjectValueError::GraphicsOperationSchemaError),
+                ],
+                _ => return Err(ObjectValueError::GraphicsOperationSchemaError),
             },
-            _ => Err(ObjectValueError::GraphicsOperationSchemaError),
-        }
+            _ => return Err(ObjectValueError::GraphicsOperationSchemaError),
+        }))
     }
 }
 
