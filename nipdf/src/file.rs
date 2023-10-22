@@ -327,7 +327,15 @@ impl<'a> ObjectResolver<'a> {
         c: &'c C,
         id: &str,
     ) -> Result<Option<T>, ObjectValueError> {
-        Self::not_found_error_to_opt(self.resolve_container_pdf_object(c, id))
+        if let Some(obj) = self.opt_resolve_container_value(c, id)? {
+            match obj {
+                Object::Dictionary(d) => Ok(Some(T::new(None, d, self)?)),
+                Object::Stream(s) => Ok(Some(T::new(None, s.as_dict(), self)?)),
+                _ => Err(ObjectValueError::UnexpectedType),
+            }
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn resolve_container_pdf_object<
