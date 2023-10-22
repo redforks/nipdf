@@ -1350,7 +1350,9 @@ impl<'a> GlyphRender for TrueTypeGlyphRender<'a> {
             .size(self.font_size)
             .hint(true);
         let mut scaler = builder.build();
-        let outline = scaler.scale_outline(gid).unwrap();
+        let outline = scaler
+            .scale_outline(gid)
+            .unwrap_or_else(|| panic!("Failed get outline for gid: {}", gid));
         (0..outline.len()).for_each(|idx| {
             let layer = outline.get(idx).unwrap();
             layer.path().commands().for_each(|v| match v {
