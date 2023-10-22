@@ -132,7 +132,7 @@ impl State {
                 option.zoom,
                 TransformMatrix::identity(),
             ),
-            fill_paint: PaintCreator::Color(tiny_skia::Color::TRANSPARENT),
+            fill_paint: PaintCreator::Color(tiny_skia::Color::BLACK),
             stroke_paint: PaintCreator::Color(tiny_skia::Color::BLACK),
             stroke: Stroke::default(),
             mask: None,
