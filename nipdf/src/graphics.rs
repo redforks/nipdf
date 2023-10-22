@@ -168,12 +168,6 @@ impl From<RgbColor> for tiny_skia::Color {
     }
 }
 
-impl From<RgbColor> for Color {
-    fn from(c: RgbColor) -> Self {
-        Color::Rgb(c.0, c.1, c.2)
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ColorSpace {
     DeviceGray,
