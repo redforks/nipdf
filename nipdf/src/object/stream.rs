@@ -286,35 +286,24 @@ fn decode_dct<'a>(
     let pixels = handle_filter_error(decoder.decode(), FILTER_DCT_DECODE)?;
     let info = decoder.info().unwrap();
 
-    Ok(FilterDecodedData::Image(match info.pixel_format {
-        PixelFormat::L8 => DynamicImage::ImageLuma8(
+    match info.pixel_format {
+        PixelFormat::L8 => Ok(FilterDecodedData::Image(DynamicImage::ImageLuma8(
             GrayImage::from_vec(info.width as u32, info.height as u32, pixels).unwrap(),
-        ),
+        ))),
         PixelFormat::L16 => {
             todo!("Convert to DynamicImage::ImageLuma16")
             // Problem is jpeg-decoder returns pixels in Vec<u8>, but DynamicImage::ImageLuma16 expect Vec<u16>
             // I don't known is {little,big}-endian, or native-endian in pixels
         }
-        PixelFormat::RGB24 => DynamicImage::ImageRgb8(
+        PixelFormat::RGB24 => Ok(FilterDecodedData::Image(DynamicImage::ImageRgb8(
             RgbImage::from_vec(info.width as u32, info.height as u32, pixels).unwrap(),
-        ),
-        PixelFormat::CMYK32 => {
-            let cs = color_space::DeviceCMYK();
-            DynamicImage::ImageRgba8(RgbaImage::from_fn(
-                info.width as u32,
-                info.height as u32,
-                |x, y| {
-                    let i = (y * info.width as u32 + x) as usize * 4;
-                    Rgba(cs.to_rgba(&[
-                        255 - pixels[i],
-                        255 - pixels[i + 1],
-                        255 - pixels[i + 2],
-                        255 - pixels[i + 3],
-                    ]))
-                },
-            ))
-        }
-    }))
+        ))),
+        PixelFormat::CMYK32 => Ok(FilterDecodedData::CmykImage((
+            info.width as u32,
+            info.height as u32,
+            pixels,
+        ))),
+    }
 }
 
 fn decode_jpx<'a>(
@@ -400,6 +389,7 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for CCITTFGroup {
 enum FilterDecodedData<'a> {
     Bytes(Cow<'a, [u8]>),
     Image(DynamicImage),
+    CmykImage((u32, u32, Vec<u8>)), // width, height, data
 }
 
 impl<'a> FilterDecodedData<'a> {
@@ -605,11 +595,23 @@ impl<'a> Stream<'a> {
         let color_space = img_dict.color_space().unwrap();
         Ok(match decoded {
             FilterDecodedData::Image(img) => {
-                // if let Some(args) = color_space.as_ref() {
-                //     image_transform_color_space(resolver, img, args).unwrap()
-                // } else {
-                img
-                // }
+                if let Some(args) = color_space.as_ref() {
+                    image_transform_color_space(resolver, img, args).unwrap()
+                } else {
+                    img
+                }
+            }
+            FilterDecodedData::CmykImage((width, height, pixels)) => {
+                let cs = color_space::DeviceCMYK();
+                DynamicImage::ImageRgba8(RgbaImage::from_fn(width, height, |x, y| {
+                    let i = (y * width + x) as usize * 4;
+                    Rgba(cs.to_rgba(&[
+                        255 - pixels[i],
+                        255 - pixels[i + 1],
+                        255 - pixels[i + 2],
+                        255 - pixels[i + 3],
+                    ]))
+                }))
             }
             FilterDecodedData::Bytes(data) => {
                 match (
