@@ -6,7 +6,7 @@ use crate::{
     file::{ObjectResolver, XObjectDict},
     function::{Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
-        cymk_to_rgb, parse_operations, AxialExtend, AxialShadingDict, Color, ColorArgs,
+        cmyk_to_rgb, parse_operations, AxialExtend, AxialShadingDict, Color, ColorArgs,
         ColorArgsOrName, ColorSpace, ConvertFromObject, LineCapStyle, LineJoinStyle, NameOfDict,
         NameOrDictByRef, NameOrStream, PatternType, Point, RenderingIntent, ShadingPatternDict,
         ShadingType, TextRenderingMode, TilingPaintType, TilingPatternDict, TransformMatrix,
@@ -35,6 +35,8 @@ use swash::{
 };
 
 use super::{GraphicsStateParameterDict, Operation, Rectangle, ResourceDict};
+use crate::graphics::color_space;
+use crate::graphics::color_space::ColorSpace as ColorSpaceTrait;
 use tiny_skia::{
     FillRule, FilterQuality, GradientStop, Mask, MaskType, Paint, Path as SkiaPath, PathBuilder,
     Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect, Stroke, StrokeDash, Transform,
@@ -65,7 +67,7 @@ impl From<Color> for tiny_skia::Color {
         match color {
             Color::Rgb(r, g, b) => tiny_skia::Color::from_rgba(r, g, b, 1.0).unwrap(),
             Color::Cmyk(c, m, y, k) => {
-                let (r, g, b) = cymk_to_rgb(c, y, m, k);
+                let (r, g, b) = cmyk_to_rgb(c, y, m, k);
                 tiny_skia::Color::from_rgba(r, g, b, 1.0).unwrap()
             }
             Color::Gray(g) => tiny_skia::Color::from_rgba(g, g, g, 1.0).unwrap(),
@@ -188,9 +190,9 @@ impl State {
         log::info!("not implemented: render intent: {}", intent);
     }
 
-    fn set_stroke_color(&mut self, color: Color) {
+    fn set_stroke_color(&mut self, color: tiny_skia::Color) {
         log::debug!("set stroke color: {:?}", color);
-        self.stroke_paint = PaintCreator::Color(color.into());
+        self.stroke_paint = PaintCreator::Color(color);
     }
 
     fn set_stroke_color_args(&mut self, args: ColorArgs<'_>) {
@@ -198,14 +200,14 @@ impl State {
         self.set_stroke_color(color.into());
     }
 
-    fn set_fill_color(&mut self, color: Color) {
+    fn set_fill_color(&mut self, color: tiny_skia::Color) {
         log::debug!("set fill color: {:?}", color);
-        self.fill_paint = PaintCreator::Color(color.into());
+        self.fill_paint = PaintCreator::Color(color);
     }
 
     fn set_fill_color_args(&mut self, args: ColorArgs<'_>) {
         let color = self.fill_color_space.convert_color(&args).unwrap();
-        self.set_fill_color(color.into());
+        self.set_fill_color(color);
     }
 
     fn concat_ctm(&mut self, ctm: TransformMatrix) {
@@ -620,13 +622,25 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 self.current_mut().fill_color_space = args.into_color_space(self.resources).unwrap()
             }
             Operation::SetStrokeColor(args) => self.current_mut().set_stroke_color_args(args),
-            Operation::SetStrokeGray(color)
-            | Operation::SetStrokeCMYK(color)
-            | Operation::SetStrokeRGB(color) => self.current_mut().set_stroke_color(color),
+            Operation::SetStrokeGray(color) => self
+                .current_mut()
+                .set_stroke_color(color_space::DeviceGray().to_skia_color(&color)),
+            Operation::SetStrokeCMYK(color) => self
+                .current_mut()
+                .set_stroke_color(color_space::DeviceCMYK().to_skia_color(&color)),
+            Operation::SetStrokeRGB(color) => self
+                .current_mut()
+                .set_stroke_color(color_space::DeviceRGB().to_skia_color(&color)),
             Operation::SetFillColor(args) => self.current_mut().set_fill_color_args(args),
-            Operation::SetFillGray(color)
-            | Operation::SetFillCMYK(color)
-            | Operation::SetFillRGB(color) => self.current_mut().set_fill_color(color),
+            Operation::SetFillGray(color) => self
+                .current_mut()
+                .set_fill_color(color_space::DeviceGray().to_skia_color(&color)),
+            Operation::SetFillCMYK(color) => self
+                .current_mut()
+                .set_fill_color(color_space::DeviceCMYK().to_skia_color(&color)),
+            Operation::SetFillRGB(color) => self
+                .current_mut()
+                .set_fill_color(color_space::DeviceRGB().to_skia_color(&color)),
             Operation::SetFillColorOrWithPattern(name) => {
                 self.set_fill_color_or_pattern(&name).unwrap()
             }
@@ -790,7 +804,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                     .unwrap()
                     .fill_color_space
                     .convert_color(args)?;
-                self.current_mut().set_fill_color(color.into());
+                self.current_mut().set_fill_color(color);
                 Ok(())
             }
         }

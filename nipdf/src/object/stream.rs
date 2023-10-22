@@ -17,7 +17,7 @@ use crate::{
     ccitt::Flags,
     file::ObjectResolver,
     function::{Function, FunctionDict, Type as FunctionType},
-    graphics::{cymk_to_rgb8, ColorSpace},
+    graphics::{cmyk_to_rgb8, ColorSpace},
     object::PdfObject,
 };
 
@@ -479,7 +479,7 @@ fn image_transform_color_space(
             let mut r = RgbImage::new(img.width(), img.height());
             for (p, dest_p) in img.pixels().zip(r.pixels_mut()) {
                 let cymk = f.call(&[p[0] as f32 / 255.0])?;
-                let (r, g, b) = cymk_to_rgb8(cymk[0], cymk[1], cymk[2], cymk[3]);
+                let (r, g, b) = cmyk_to_rgb8(cymk[0], cymk[1], cymk[2], cymk[3]);
                 *dest_p = Rgb([r, g, b]);
             }
             Ok(r)

@@ -26,7 +26,7 @@ use crate::{
 };
 use nipdf_macro::{pdf_object, OperationParser, TryFromIntObject, TryFromNameObject};
 
-mod color_space;
+pub(crate) mod color_space;
 mod pattern;
 pub(crate) use pattern::*;
 
@@ -162,6 +162,12 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorArgs<'a> {
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct RgbColor(pub f32, pub f32, pub f32);
 
+impl From<RgbColor> for tiny_skia::Color {
+    fn from(value: RgbColor) -> Self {
+        Self::from_rgba(value.0, value.1, value.2, 0.0).unwrap()
+    }
+}
+
 impl From<RgbColor> for Color {
     fn from(c: RgbColor) -> Self {
         Color::Rgb(c.0, c.1, c.2)
@@ -221,7 +227,7 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpace {
 
 impl ColorSpace {
     /// Convert color args to color based on current ColorSpace.
-    pub fn convert_color(&self, args: &ColorArgs) -> Result<RgbColor, ObjectValueError> {
+    pub fn convert_color(&self, args: &ColorArgs) -> Result<tiny_skia::Color, ObjectValueError> {
         let args = &args.0;
         match self {
             Self::DeviceRGB => {
@@ -230,12 +236,13 @@ impl ColorSpace {
                     args[0].as_number()?,
                     args[1].as_number()?,
                     args[2].as_number()?,
-                ))
+                )
+                .into())
             }
             Self::DeviceGray => {
                 assert_eq!(1, args.len());
                 let v = args[0].as_number()?;
-                Ok(RgbColor(v, v, v))
+                Ok(RgbColor(v, v, v).into())
             }
             Self::DeviceCMYK => {
                 assert_eq!(4, args.len());
@@ -247,7 +254,8 @@ impl ColorSpace {
                     (1.0 - c) * (1.0 - k),
                     (1.0 - m) * (1.0 - k),
                     (1.0 - y) * (1.0 - k),
-                ))
+                )
+                .into())
             }
             _ => todo!("Unsupported color space: {:?}", self),
         }
@@ -323,7 +331,17 @@ pub enum Color {
     Cmyk(f32, f32, f32, f32),
 }
 
-pub fn cymk_to_rgb8(c: f32, y: f32, m: f32, k: f32) -> (u8, u8, u8) {
+impl<'a, 'b, const N: usize> ConvertFromObject<'a, 'b> for [f32; N] {
+    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+        let mut result = [0.0; N];
+        for i in 0..N {
+            result[N - 1 - i] = objects.pop().unwrap().as_number()?;
+        }
+        Ok(result)
+    }
+}
+
+pub fn cmyk_to_rgb8(c: f32, y: f32, m: f32, k: f32) -> (u8, u8, u8) {
     (
         ((1.0 - c) * (1.0 - k) * 255.0) as u8,
         ((1.0 - m) * (1.0 - k) * 255.0) as u8,
@@ -331,8 +349,8 @@ pub fn cymk_to_rgb8(c: f32, y: f32, m: f32, k: f32) -> (u8, u8, u8) {
     )
 }
 
-/// Convert cymk color to rgb
-pub fn cymk_to_rgb(c: f32, y: f32, m: f32, k: f32) -> (f32, f32, f32) {
+/// Convert cmyk color to rgb
+pub fn cmyk_to_rgb(c: f32, y: f32, m: f32, k: f32) -> (f32, f32, f32) {
     (
         (1.0 - c) * (1.0 - k),
         (1.0 - m) * (1.0 - k),
@@ -594,17 +612,17 @@ pub enum Operation<'a> {
     #[op_tag("scn")]
     SetFillColorOrWithPattern(ColorArgsOrName<'a>),
     #[op_tag("G")]
-    SetStrokeGray(Color), // Should be Color::Gray
+    SetStrokeGray([f32; 1]), // Should be Color::Gray
     #[op_tag("g")]
-    SetFillGray(Color),   // Should be Color::Gray
+    SetFillGray([f32; 1]),   // Should be Color::Gray
     #[op_tag("RG")]
-    SetStrokeRGB(Color), // Should be Color::Rgb
+    SetStrokeRGB([f32; 3]), // Should be Color::Rgb
     #[op_tag("rg")]
-    SetFillRGB(Color),   // Should be Color::Rgb
+    SetFillRGB([f32; 3]),   // Should be Color::Rgb
     #[op_tag("K")]
-    SetStrokeCMYK(Color), // Should be Color::Cmyk
+    SetStrokeCMYK([f32; 4]), // Should be Color::Cmyk
     #[op_tag("k")]
-    SetFillCMYK(Color),   // Should be Color::Cmyk
+    SetFillCMYK([f32; 4]),   // Should be Color::Cmyk
 
     // Shading Operation
     #[op_tag("sh")]
