@@ -5,6 +5,12 @@ pub trait ColorSpace<T, const N: usize> {
     const COMPONENTS: usize = N;
     /// Convert color from current space to RGB.
     fn to_rgb(&self, color: [T; N]) -> RGB;
+
+    /// Convert color from current space to RGBA tiny_skia color
+    fn to_skia_color(&self, color: [T; N]) -> tiny_skia::Color {
+        let rgb = self.to_rgb(color);
+        tiny_skia::Color::from_rgba8(rgb[0], rgb[1], rgb[2], 255)
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
