@@ -74,7 +74,6 @@ fn test_parse_operations(s: &str) -> Vec<Operation> {
 #[test_case("[(foo) 1]TJ" => Operation::ShowTexts(vec![TextStringOrNumber::TextString(TextString::Text("(foo)".into())), TextStringOrNumber::Number(1f32)]); "show texts")]
 #[test_case("/tag /name DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict("tag".into()), NameOrDict::Name("name".into())); "DP with name")]
 #[test_case("/tag<<>>DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict("tag".into()), NameOrDict::Dict(Dictionary::new())); "DP with dict")]
-#[test_case("0 0 1 RG" => Operation::SetStrokeRGB(Color::Rgb(0f32, 0f32, 1f32)); "RG")]
 fn test_parse_operation(s: &str) -> Operation {
     let (_, result) = parse_operation(s.as_bytes()).unwrap();
     result
@@ -100,29 +99,6 @@ fn test_arr_convert_from_object(v: Vec<Object>) -> Vec<f32> {
     act
 }
 
-#[test_case(vec![1.into()] => Color::Gray(1.0); "Gray")]
-#[test_case(vec![1.into(), 2.0.into(), 3.into()] => Color::Rgb(1.0, 2.0, 3.0); "RGB")]
-#[test_case(vec![1.into(), 2.0.into(), 3.into(), 4.0.into()] => Color::Cmyk(1.0, 2.0, 3.0, 4.0); "CMYK")]
-#[test_case(vec![1.into(), 2.into(), 3.into(), 4.into(), 5.into()] => Color::Cmyk(2.0, 3.0, 4.0, 5.0); "Max 4 numbers")]
-fn color_convert_from_object(mut v: Vec<Object>) -> Color {
-    Color::convert_from_object(&mut v).unwrap()
-}
-
-#[test_case(vec![1.into()] => Color::Gray(1.0); "Gray")]
-#[test_case(vec![1.into(), 2.0.into(), 3.into()] => Color::Rgb(1.0, 2.0, 3.0); "RGB")]
-#[test_case(vec![1.into(), 2.0.into(), 3.into(), 4.0.into()] => Color::Cmyk(1.0, 2.0, 3.0, 4.0); "CMYK")]
-fn color_try_from_object(v: Vec<Object>) -> Color {
-    Color::try_from(&Object::Array(v)).unwrap()
-}
-
-#[test]
-fn color_convert_from_object_stop_on_non_number() {
-    let mut v = vec![true.into(), 1.into()];
-    let act = Color::convert_from_object(&mut v).unwrap();
-    assert_eq!(act, Color::Gray(1.0));
-    assert_eq!(v, vec![true.into()]);
-}
-
 #[test_case(vec![1.into()] => ColorArgsOrName::Color(ColorArgs(vec![1.0.into()])); "Color")]
 #[test_case(vec!["/name".into()] => ColorArgsOrName::Name("name".to_owned()); "name")]
 fn color_or_with_pattern_from_object(mut v: Vec<Object>) -> ColorArgsOrName {
@@ -145,13 +121,4 @@ fn transform_matrix_try_from_array() {
             ty: 6f32
         }
     );
-}
-
-#[test_case(ColorSpace::DeviceGray, &[0.5] => RgbColor(0.5, 0.5,0.5))]
-#[test_case(ColorSpace::DeviceRGB, &[0.1, 0.2, 0.3] => RgbColor(0.1, 0.2, 0.3))]
-#[test_case(ColorSpace::DeviceCMYK, &[0.1, 0.2, 0.3, 0.4] => RgbColor(0.54, 0.48000002, 0.42000001))]
-#[test_case(ColorSpace::DeviceCMYK, &[0.0, 0.0, 0.0, 1.] => RgbColor(0., 0., 0.))]
-fn color_space_to_color(color_space: ColorSpace, args: &[f32]) -> RgbColor {
-    let args = args.iter().map(|v| Object::Number(*v)).collect::<Vec<_>>();
-    color_space.convert_color(&ColorArgs(args)).unwrap()
 }
