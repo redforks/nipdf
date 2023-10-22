@@ -1,45 +1,154 @@
-pub type RGB = [u8; 3];
+/// Color component composes a color.
+/// Two kinds of color component: float or integer.
+/// For float color component must in range [0, 1].
+pub trait ColorComp: Copy {
+    fn to_f32_color_comp(self) -> f32;
+    fn to_u8_color_comp(self) -> u8;
 
-pub trait ColorSpace<T, const N: usize> {
-    /// Number of color components in this color space.
-    const COMPONENTS: usize = N;
-    /// Convert color from current space to RGB.
-    fn to_rgb(&self, color: [T; N]) -> RGB;
+    fn from_f32_color(v: f32) -> Self;
 
-    /// Convert color from current space to RGBA tiny_skia color
-    fn to_skia_color(&self, color: [T; N]) -> tiny_skia::Color {
-        let rgb = self.to_rgb(color);
-        tiny_skia::Color::from_rgba8(rgb[0], rgb[1], rgb[2], 255)
+    fn min_color() -> Self;
+    /// Max value of color component, for float color component must be 1.0
+    fn max_color() -> Self;
+
+    fn range() -> std::ops::RangeInclusive<Self> {
+        Self::min_color()..=Self::max_color()
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct DeviceGray();
+impl ColorComp for u8 {
+    fn to_f32_color_comp(self) -> f32 {
+        self as f32 / 255.0
+    }
 
-impl ColorSpace<u8, 1> for DeviceGray {
-    fn to_rgb(&self, color: [u8; Self::COMPONENTS]) -> RGB {
-        [color[0], color[0], color[0]]
+    fn to_u8_color_comp(self) -> u8 {
+        self
+    }
+
+    fn from_f32_color(v: f32) -> Self {
+        (v * 255.0).clamp(0., 255.) as u8
+    }
+
+    fn min_color() -> Self {
+        0
+    }
+
+    fn max_color() -> Self {
+        255
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct DeviceRGB();
+impl ColorComp for f32 {
+    fn to_f32_color_comp(self) -> f32 {
+        self
+    }
 
-impl ColorSpace<u8, 3> for DeviceRGB {
-    fn to_rgb(&self, color: [u8; Self::COMPONENTS]) -> RGB {
+    fn to_u8_color_comp(self) -> u8 {
+        (self * 255.0).clamp(0., 255.) as u8
+    }
+
+    fn from_f32_color(v: f32) -> Self {
+        debug_assert!((0.0f32..1.0f32).contains(&v));
+        v
+    }
+
+    fn min_color() -> Self {
+        0.0
+    }
+
+    fn max_color() -> Self {
+        1.0
+    }
+}
+
+pub trait ToF32Color<T, const N: usize> {
+    fn to_f32_color(self) -> [f32; N];
+}
+
+impl<T: ColorComp, const N: usize> ToF32Color<T, N> for [T; N] {
+    fn to_f32_color(self) -> [f32; N] {
+        let mut color = [0.; N];
+        for i in 0..N {
+            color[i] = self[i].to_f32_color_comp();
+        }
         color
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+pub trait ToU8Color<T, const N: usize> {
+    fn to_u8_color(self) -> [u8; N];
+}
+
+impl<T: ColorComp, const N: usize> ToU8Color<T, N> for [T; N] {
+    fn to_u8_color(self) -> [u8; N] {
+        let mut color = [0; N];
+        for i in 0..N {
+            color[i] = self[i].to_u8_color_comp();
+        }
+        color
+    }
+}
+
+pub trait ColorSpace<T> {
+    /// Convert color from current space to RGBA.
+    /// `color` len should at least be `components()`
+    fn to_rgba(&self, color: &[T]) -> [T; 4];
+
+    /// Number of color components in this color space.
+    fn components(&self) -> usize;
+
+    /// Convert color from current space to RGBA tiny_skia color
+    /// `color` len should at least be `components()`
+    fn to_skia_color(&self, color: &[T]) -> tiny_skia::Color
+    where
+        T: ColorComp,
+    {
+        let rgba = self.to_rgba(color);
+        tiny_skia::Color::from_rgba(
+            rgba[0].to_f32_color_comp(),
+            rgba[1].to_f32_color_comp(),
+            rgba[2].to_f32_color_comp(),
+            rgba[3].to_f32_color_comp(),
+        )
+        .unwrap()
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DeviceGray();
+
+impl<T: ColorComp> ColorSpace<T> for DeviceGray {
+    fn to_rgba(&self, color: &[T]) -> [T; 4] {
+        [color[0], color[0], color[0], T::max_color()]
+    }
+
+    fn components(&self) -> usize {
+        1
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DeviceRGB();
+
+impl<T: ColorComp> ColorSpace<T> for DeviceRGB {
+    fn to_rgba(&self, color: &[T]) -> [T; 4] {
+        [color[0], color[1], color[2], T::max_color()]
+    }
+
+    fn components(&self) -> usize {
+        3
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
 pub struct DeviceCMYK();
 
-impl ColorSpace<u8, 4> for DeviceCMYK {
-    fn to_rgb(&self, color: [u8; Self::COMPONENTS]) -> RGB {
-        let c = to_double(color[0]);
-        let m = to_double(color[1]);
-        let y = to_double(color[2]);
-        let k = to_double(color[3]);
+impl<T: ColorComp> ColorSpace<T> for DeviceCMYK {
+    fn to_rgba(&self, color: &[T]) -> [T; 4] {
+        let c = color[0].to_f32_color_comp();
+        let m = color[1].to_f32_color_comp();
+        let y = color[2].to_f32_color_comp();
+        let k = color[3].to_f32_color_comp();
         let c1 = 1.0 - c;
         let m1 = 1.0 - m;
         let y1 = 1.0 - y;
@@ -91,16 +200,17 @@ impl ColorSpace<u8, 4> for DeviceCMYK {
         g += 0.2119 * x;
         b += 0.2235 * x;
 
-        [double_to_u8(r), double_to_u8(g), double_to_u8(b)]
+        [
+            T::from_f32_color(r),
+            T::from_f32_color(g),
+            T::from_f32_color(b),
+            T::max_color(),
+        ]
     }
-}
 
-fn to_double(v: u8) -> f64 {
-    v as f64 / 255.0
-}
-
-fn double_to_u8(v: f64) -> u8 {
-    (v * 255.0).clamp(0., 255.) as u8
+    fn components(&self) -> usize {
+        4
+    }
 }
 
 #[cfg(test)]
