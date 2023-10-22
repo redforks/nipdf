@@ -7,14 +7,16 @@ use std::{
 
 use anyhow::Result as AnyResult;
 use bitstream_io::{BigEndian, BitReader};
-use image::{DynamicImage, GrayImage, Luma, Rgb, RgbImage};
+use image::{DynamicImage, GrayImage, Luma, Rgb, RgbImage, Rgba, RgbaImage};
+use jpeg_decoder::{Decoder, PixelFormat};
 use lazy_static::__Deref;
-use log::error;
+use log::{error, info};
 use nipdf_macro::pdf_object;
 use once_cell::unsync::Lazy;
 
 use crate::file::ResourceDict;
-use crate::graphics::{ColorSpaceArgs, PredefinedColorSpace};
+use crate::graphics::color_space::ColorSpace;
+use crate::graphics::{color_space, ColorSpaceArgs, PredefinedColorSpace};
 use crate::{
     ccitt::Flags,
     file::ObjectResolver,
@@ -279,12 +281,40 @@ fn decode_dct<'a>(
         FILTER_DCT_DECODE
     );
 
-    use image::{load_from_memory_with_format, ImageFormat as ImgImageFormat};
-    handle_filter_error(
-        load_from_memory_with_format(buf.borrow(), ImgImageFormat::Jpeg),
-        FILTER_DCT_DECODE,
-    )
-    .map(FilterDecodedData::Image)
+    use jpeg_decoder::Decoder;
+    let mut decoder = Decoder::new(buf.as_ref());
+    let pixels = handle_filter_error(decoder.decode(), FILTER_DCT_DECODE)?;
+    let info = decoder.info().unwrap();
+
+    Ok(FilterDecodedData::Image(match info.pixel_format {
+        PixelFormat::L8 => DynamicImage::ImageLuma8(
+            GrayImage::from_vec(info.width as u32, info.height as u32, pixels).unwrap(),
+        ),
+        PixelFormat::L16 => {
+            todo!("Convert to DynamicImage::ImageLuma16")
+            // Problem is jpeg-decoder returns pixels in Vec<u8>, but DynamicImage::ImageLuma16 expect Vec<u16>
+            // I don't known is {little,big}-endian, or native-endian in pixels
+        }
+        PixelFormat::RGB24 => DynamicImage::ImageRgb8(
+            RgbImage::from_vec(info.width as u32, info.height as u32, pixels).unwrap(),
+        ),
+        PixelFormat::CMYK32 => {
+            let cs = color_space::DeviceCMYK();
+            DynamicImage::ImageRgba8(RgbaImage::from_fn(
+                info.width as u32,
+                info.height as u32,
+                |x, y| {
+                    let i = (y * info.width as u32 + x) as usize * 4;
+                    Rgba(cs.to_rgba(&[
+                        255 - pixels[i],
+                        255 - pixels[i + 1],
+                        255 - pixels[i + 2],
+                        255 - pixels[i + 3],
+                    ]))
+                },
+            ))
+        }
+    }))
 }
 
 fn decode_jpx<'a>(
@@ -573,8 +603,14 @@ impl<'a> Stream<'a> {
         let img_dict = ImageDict::new(None, &self.0, resolver)?;
 
         let color_space = img_dict.color_space().unwrap();
-        let r = match decoded {
-            FilterDecodedData::Image(img) => img,
+        Ok(match decoded {
+            FilterDecodedData::Image(img) => {
+                // if let Some(args) = color_space.as_ref() {
+                //     image_transform_color_space(resolver, img, args).unwrap()
+                // } else {
+                img
+                // }
+            }
             FilterDecodedData::Bytes(data) => {
                 match (
                     &color_space,
@@ -622,13 +658,7 @@ impl<'a> Stream<'a> {
                     ),
                 }
             }
-        };
-
-        if let Some(args) = color_space.as_ref() {
-            Ok(image_transform_color_space(resolver, r, args).unwrap())
-        } else {
-            Ok(r)
-        }
+        })
     }
 
     fn iter_filter(

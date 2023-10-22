@@ -17,7 +17,7 @@ anyhow = "1.0.71"
 ahash = "0.8.3"
 flate2 = "1.0.26"
 log = { version = "0.4.19", features = ["release_max_level_warn"] }
-jpeg-decoder = "0.3.0"
+jpeg-decoder = { version = "0.3.0", default-features = false }
 image = { version = "0.24.6", default-features = false, features = [
     "png",
     "jpeg",
