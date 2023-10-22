@@ -144,6 +144,12 @@ pub enum TextRenderingMode {
 #[derive(Clone, PartialEq, Debug)]
 pub struct ColorArgs(Vec<f32>);
 
+impl AsRef<[f32]> for ColorArgs {
+    fn as_ref(&self) -> &[f32] {
+        self.0.as_ref()
+    }
+}
+
 impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorArgs {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let mut result = Vec::with_capacity(objects.len());
@@ -173,6 +179,17 @@ pub enum ColorSpace {
     /// Separation color space, the first element is the alternate color space,
     /// the second element is ref id of the tint transform function.
     Separation((Box<Self>, NonZeroU32)),
+}
+
+impl From<ColorSpace> for Box<dyn ColorSpaceTrait<f32>> {
+    fn from(cs: ColorSpace) -> Self {
+        match cs {
+            ColorSpace::DeviceGray => Box::new(color_space::DeviceGray()),
+            ColorSpace::DeviceRGB => Box::new(color_space::DeviceRGB()),
+            ColorSpace::DeviceCMYK => Box::new(color_space::DeviceCMYK()),
+            _ => todo!("Unsupported color space: {:?}", cs),
+        }
+    }
 }
 
 impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpace {
@@ -239,9 +256,12 @@ trait ICCStreamDictTrait {
 
 impl ColorSpaceArgs {
     /// Convert args to ColorSpace, resolve from page resources if it is Custom.
-    pub fn into_color_space(self, resources: &ResourceDict) -> AnyResult<ColorSpace> {
+    pub fn into_color_space(
+        self,
+        resources: &ResourceDict,
+    ) -> AnyResult<Box<dyn ColorSpaceTrait<f32>>> {
         match self {
-            Self::Predefined(cs) => Ok(cs),
+            Self::Predefined(cs) => Ok(cs.into()),
             Self::Custom(name) => {
                 let spaces = resources.color_space()?;
                 let mut cs = spaces.get(&name).ok_or(ObjectValueError::DictNameMissing)?;
@@ -255,7 +275,8 @@ impl ColorSpaceArgs {
                         let d = resources.resolver().resolve(*id)?.as_stream()?.as_dict();
                         let d = ICCStreamDict::new(None, d, resources.resolver())?;
                         Ok(d.alternate()?
-                            .expect("unsupported if ICCBased color no alternate color space"))
+                            .expect("unsupported if ICCBased color no alternate color space")
+                            .into())
                     }
                     _ => todo!("Unsupported color space: {:?}", cs),
                 }

@@ -6,8 +6,8 @@ use crate::{
     file::{ObjectResolver, XObjectDict},
     function::{Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
-        parse_operations, AxialExtend, AxialShadingDict, ColorArgs, ColorArgsOrName, ColorSpace,
-        LineCapStyle, LineJoinStyle, NameOfDict, NameOrDictByRef, NameOrStream, PatternType, Point,
+        parse_operations, AxialExtend, AxialShadingDict, ColorArgs, ColorArgsOrName, LineCapStyle,
+        LineJoinStyle, NameOfDict, NameOrDictByRef, NameOrStream, PatternType, Point,
         RenderingIntent, ShadingPatternDict, ShadingType, TextRenderingMode, TilingPaintType,
         TilingPatternDict, TransformMatrix,
     },
@@ -112,8 +112,8 @@ pub struct State {
     stroke_paint: PaintCreator,
     stroke: Stroke,
     mask: Option<Mask>,
-    fill_color_space: ColorSpace,
-    stroke_color_space: ColorSpace,
+    fill_color_space1: Box<dyn ColorSpaceTrait<f32>>,
+    stroke_color_space1: Box<dyn ColorSpaceTrait<f32>>,
     text_object: TextObject,
 }
 
@@ -136,8 +136,8 @@ impl State {
             stroke_paint: PaintCreator::Color(tiny_skia::Color::BLACK),
             stroke: Stroke::default(),
             mask: None,
-            fill_color_space: ColorSpace::DeviceRGB,
-            stroke_color_space: ColorSpace::DeviceRGB,
+            fill_color_space1: Box::new(color_space::DeviceRGB()),
+            stroke_color_space1: Box::new(color_space::DeviceRGB()),
             text_object: TextObject::new(),
         };
 
@@ -184,7 +184,7 @@ impl State {
     }
 
     fn set_stroke_color_args(&mut self, args: ColorArgs) {
-        let color = self.stroke_color_space.convert_color(&args);
+        let color = self.stroke_color_space1.to_skia_color(args.as_ref());
         self.set_stroke_color(color);
     }
 
@@ -194,7 +194,7 @@ impl State {
     }
 
     fn set_fill_color_args(&mut self, args: ColorArgs) {
-        let color = self.fill_color_space.convert_color(&args);
+        let color = self.fill_color_space1.to_skia_color(args.as_ref());
         self.set_fill_color(color);
     }
 
@@ -603,11 +603,12 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
 
             // Color Operations
             Operation::SetStrokeColorSpace(args) => {
-                self.current_mut().stroke_color_space =
+                self.current_mut().stroke_color_space1 =
                     args.into_color_space(self.resources).unwrap()
             }
             Operation::SetFillColorSpace(args) => {
-                self.current_mut().fill_color_space = args.into_color_space(self.resources).unwrap()
+                self.current_mut().fill_color_space1 =
+                    args.into_color_space(self.resources).unwrap()
             }
             Operation::SetStrokeColor(args) => self.current_mut().set_stroke_color_args(args),
             Operation::SetStrokeGray(color) => self
@@ -790,8 +791,8 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                     .stack
                     .last()
                     .unwrap()
-                    .fill_color_space
-                    .convert_color(args);
+                    .fill_color_space1
+                    .to_skia_color(args.as_ref());
                 self.current_mut().set_fill_color(color);
                 Ok(())
             }

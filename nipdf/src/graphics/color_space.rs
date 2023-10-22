@@ -89,7 +89,17 @@ impl<T: ColorComp, const N: usize> ToU8Color<T, N> for [T; N] {
     }
 }
 
-pub trait ColorSpace<T> {
+pub trait ColorSpaceBoxClone<T> {
+    fn clone_box(&self) -> Box<dyn ColorSpace<T>>;
+}
+
+impl<T, O: Clone + ColorSpace<T> + 'static> ColorSpaceBoxClone<T> for O {
+    fn clone_box(&self) -> Box<dyn ColorSpace<T>> {
+        Box::new(self.clone())
+    }
+}
+
+pub trait ColorSpace<T>: std::fmt::Debug + ColorSpaceBoxClone<T> {
     /// Convert color from current space to RGBA.
     /// `color` len should at least be `components()`
     fn to_rgba(&self, color: &[T]) -> [T; 4];
@@ -111,6 +121,12 @@ pub trait ColorSpace<T> {
             rgba[3].to_f32_color_comp(),
         )
         .unwrap()
+    }
+}
+
+impl<T> Clone for Box<dyn ColorSpace<T>> {
+    fn clone(&self) -> Self {
+        self.clone_box()
     }
 }
 
