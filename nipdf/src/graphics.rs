@@ -26,6 +26,7 @@ use crate::{
 };
 use nipdf_macro::{pdf_object, OperationParser, TryFromIntObject, TryFromNameObject};
 
+mod color_space;
 mod pattern;
 pub(crate) use pattern::*;
 

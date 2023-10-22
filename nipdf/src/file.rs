@@ -568,7 +568,7 @@ pub(crate) fn read_sample_file(file_path: impl AsRef<std::path::Path>) -> Vec<u8
 /// `f_assert` called with `Dictionary` of stream to do some test on it.
 #[cfg(test)]
 pub(crate) fn decode_stream<
-    E: error::Error + Sync + Send + 'static,
+    E: std::error::Error + Sync + Send + 'static,
     T: TryInto<NonZeroU32, Error = E>,
 >(
     file_path: impl AsRef<std::path::Path>,
