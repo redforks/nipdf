@@ -356,9 +356,9 @@ impl<'a> ObjectResolver<'a> {
         c: &'c C,
         id: &str,
     ) -> Result<(Option<NonZeroU32>, &'c Object<'a>), ObjectValueError> {
-        self._resolve_container_value(c, id).or_else(|e| {
+        self._resolve_container_value(c, id).map_err(|e| {
             error!("{}: {}", e, id);
-            Err(e)
+            e
         })
     }
 

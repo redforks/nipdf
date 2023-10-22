@@ -6,12 +6,12 @@ use crate::{
     file::{ObjectResolver, XObjectDict},
     function::{Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
-        cmyk_to_rgb, parse_operations, AxialExtend, AxialShadingDict, Color, ColorArgs,
-        ColorArgsOrName, ColorSpace, ConvertFromObject, LineCapStyle, LineJoinStyle, NameOfDict,
+        parse_operations, AxialExtend, AxialShadingDict, ColorArgs,
+        ColorArgsOrName, ColorSpace, LineCapStyle, LineJoinStyle, NameOfDict,
         NameOrDictByRef, NameOrStream, PatternType, Point, RenderingIntent, ShadingPatternDict,
         ShadingType, TextRenderingMode, TilingPaintType, TilingPatternDict, TransformMatrix,
     },
-    object::{Array, Object, PdfObject, Stream, TextStringOrNumber},
+    object::{Object, PdfObject, Stream, TextStringOrNumber},
     text::{
         CIDFontType, CIDFontWidths, Encoding, EncodingDict, FontDescriptorDict,
         FontDescriptorFlags, FontDict, FontType, TrueTypeFontDict, Type0FontDict, Type1FontDict,
@@ -37,7 +37,7 @@ use swash::{
 use super::{GraphicsStateParameterDict, Operation, Rectangle, ResourceDict};
 use crate::graphics::color_space;
 use crate::graphics::color_space::ColorSpace as ColorSpaceTrait;
-use crate::graphics::ColorSpace::DeviceGray;
+
 use tiny_skia::{
     FillRule, FilterQuality, GradientStop, Mask, MaskType, Paint, Path as SkiaPath, PathBuilder,
     Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect, Stroke, StrokeDash, Transform,
@@ -185,7 +185,7 @@ impl State {
 
     fn set_stroke_color_args(&mut self, args: ColorArgs<'_>) {
         let color = self.stroke_color_space.convert_color(&args).unwrap();
-        self.set_stroke_color(color.into());
+        self.set_stroke_color(color);
     }
 
     fn set_fill_color(&mut self, color: tiny_skia::Color) {

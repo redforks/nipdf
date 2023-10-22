@@ -2,7 +2,7 @@ use std::{collections::HashSet, num::NonZeroU32};
 
 use ahash::RandomState;
 use anyhow::Result as AnyResult;
-use arrayvec::ArrayVec;
+
 use educe::Educe;
 use lazy_static::lazy_static;
 use log::error;
@@ -340,15 +340,6 @@ pub fn cmyk_to_rgb8(c: f32, y: f32, m: f32, k: f32) -> (u8, u8, u8) {
         ((1.0 - c) * (1.0 - k) * 255.0) as u8,
         ((1.0 - m) * (1.0 - k) * 255.0) as u8,
         ((1.0 - y) * (1.0 - k) * 255.0) as u8,
-    )
-}
-
-/// Convert cmyk color to rgb
-pub fn cmyk_to_rgb(c: f32, y: f32, m: f32, k: f32) -> (f32, f32, f32) {
-    (
-        (1.0 - c) * (1.0 - k),
-        (1.0 - m) * (1.0 - k),
-        (1.0 - y) * (1.0 - k),
     )
 }
 
