@@ -28,6 +28,7 @@ use nipdf_macro::{pdf_object, OperationParser, TryFromIntObject, TryFromNameObje
 
 pub(crate) mod color_space;
 mod pattern;
+use crate::graphics::color_space::ColorSpace as ColorSpaceTrait;
 pub(crate) use pattern::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Educe)]
@@ -158,15 +159,6 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorArgs {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub struct RgbColor(pub f32, pub f32, pub f32);
-
-impl From<RgbColor> for tiny_skia::Color {
-    fn from(value: RgbColor) -> Self {
-        Self::from_rgba(value.0, value.1, value.2, 0.0).unwrap()
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ColorSpace {
     DeviceGray,
@@ -220,31 +212,12 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpace {
 
 impl ColorSpace {
     /// Convert color args to color based on current ColorSpace.
-    pub fn convert_color(&self, args: &ColorArgs) -> Result<tiny_skia::Color, ObjectValueError> {
+    pub fn convert_color(&self, args: &ColorArgs) -> tiny_skia::Color {
         let args = &args.0;
         match self {
-            Self::DeviceRGB => {
-                assert_eq!(3, args.len());
-                Ok(RgbColor(args[0], args[1], args[2]).into())
-            }
-            Self::DeviceGray => {
-                assert_eq!(1, args.len());
-                let v = args[0];
-                Ok(RgbColor(v, v, v).into())
-            }
-            Self::DeviceCMYK => {
-                assert_eq!(4, args.len());
-                let c = args[0];
-                let m = args[1];
-                let y = args[2];
-                let k = args[3];
-                Ok(RgbColor(
-                    (1.0 - c) * (1.0 - k),
-                    (1.0 - m) * (1.0 - k),
-                    (1.0 - y) * (1.0 - k),
-                )
-                .into())
-            }
+            Self::DeviceRGB => color_space::DeviceRGB().to_skia_color(&args),
+            Self::DeviceGray => color_space::DeviceGray().to_skia_color(&args),
+            Self::DeviceCMYK => color_space::DeviceCMYK().to_skia_color(&args),
             _ => todo!("Unsupported color space: {:?}", self),
         }
     }

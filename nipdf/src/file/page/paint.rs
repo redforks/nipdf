@@ -184,7 +184,7 @@ impl State {
     }
 
     fn set_stroke_color_args(&mut self, args: ColorArgs) {
-        let color = self.stroke_color_space.convert_color(&args).unwrap();
+        let color = self.stroke_color_space.convert_color(&args);
         self.set_stroke_color(color);
     }
 
@@ -194,7 +194,7 @@ impl State {
     }
 
     fn set_fill_color_args(&mut self, args: ColorArgs) {
-        let color = self.fill_color_space.convert_color(&args).unwrap();
+        let color = self.fill_color_space.convert_color(&args);
         self.set_fill_color(color);
     }
 
@@ -791,7 +791,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                     .last()
                     .unwrap()
                     .fill_color_space
-                    .convert_color(args)?;
+                    .convert_color(args);
                 self.current_mut().set_fill_color(color);
                 Ok(())
             }
