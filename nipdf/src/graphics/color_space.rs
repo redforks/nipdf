@@ -48,7 +48,7 @@ impl ColorComp for f32 {
     }
 
     fn from_f32_color(v: f32) -> Self {
-        debug_assert!((0.0f32..1.0f32).contains(&v));
+        debug_assert!((0.0f32..=1.0f32).contains(&v));
         v
     }
 
