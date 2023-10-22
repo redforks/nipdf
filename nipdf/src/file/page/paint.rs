@@ -36,7 +36,7 @@ use swash::{
 
 use super::{GraphicsStateParameterDict, Operation, Rectangle, ResourceDict};
 use crate::graphics::color_space;
-use crate::graphics::color_space::{ColorSpace as ColorSpaceTrait, ColorSpace};
+use crate::graphics::color_space::ColorSpace;
 
 use tiny_skia::{
     FillRule, FilterQuality, GradientStop, Mask, MaskType, Paint, Path as SkiaPath, PathBuilder,
@@ -112,8 +112,8 @@ pub struct State {
     stroke_paint: PaintCreator,
     stroke: Stroke,
     mask: Option<Mask>,
-    fill_color_space: Box<dyn ColorSpaceTrait<f32>>,
-    stroke_color_space: Box<dyn ColorSpaceTrait<f32>>,
+    fill_color_space: Box<dyn ColorSpace<f32>>,
+    stroke_color_space: Box<dyn ColorSpace<f32>>,
     text_object: TextObject,
 }
 
@@ -178,7 +178,7 @@ impl State {
         log::info!("not implemented: render intent: {}", intent);
     }
 
-    fn set_stroke_color_and_space(&mut self, cs: Box<dyn ColorSpaceTrait<f32>>, color: &[f32]) {
+    fn set_stroke_color_and_space(&mut self, cs: Box<dyn ColorSpace<f32>>, color: &[f32]) {
         self.set_stroke_color(cs.to_skia_color(color));
         self.stroke_color_space = cs;
     }
@@ -193,7 +193,7 @@ impl State {
         self.set_stroke_color(color);
     }
 
-    fn set_fill_color_and_space(&mut self, cs: Box<dyn ColorSpaceTrait<f32>>, color: &[f32]) {
+    fn set_fill_color_and_space(&mut self, cs: Box<dyn ColorSpace<f32>>, color: &[f32]) {
         self.set_fill_color(cs.to_skia_color(color));
         self.fill_color_space = cs;
     }

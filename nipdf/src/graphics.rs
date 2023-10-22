@@ -203,10 +203,10 @@ impl ColorSpaceArgs {
     /// Convert args to ColorSpace, resolve from page resources if it is Custom.
     /// Panic if self is ColorSpaceArgs::Custom(), and resources is None,
     /// because in this case color space is defined in page resources.
-    pub fn create_color_space<'a, 'b>(
+    pub fn create_color_space<'a>(
         &self,
         resolver: &ObjectResolver<'a>,
-        resources: Option<&ResourceDict<'a, 'b>>,
+        resources: Option<&ResourceDict<'a, '_>>,
     ) -> AnyResult<Box<dyn ColorSpaceTrait<f32>>> {
         match self {
             Self::Predefined(cs) => Ok(match cs {

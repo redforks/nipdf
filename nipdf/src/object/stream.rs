@@ -8,9 +8,9 @@ use std::{
 use anyhow::Result as AnyResult;
 use bitstream_io::{BigEndian, BitReader};
 use image::{DynamicImage, GrayImage, Luma, Rgb, RgbImage, Rgba, RgbaImage};
-use jpeg_decoder::{Decoder, PixelFormat};
+use jpeg_decoder::PixelFormat;
 use lazy_static::__Deref;
-use log::{error, info};
+use log::error;
 use nipdf_macro::pdf_object;
 use once_cell::unsync::Lazy;
 
@@ -587,7 +587,7 @@ impl<'a> Stream<'a> {
     pub fn decode_image<'b>(
         &self,
         resolver: &ObjectResolver<'a>,
-        resources: Option<&ResourceDict<'a, 'b>>,
+        _resources: Option<&ResourceDict<'a, 'b>>,
     ) -> Result<DynamicImage, ObjectValueError> {
         let decoded = self._decode(resolver)?;
         let img_dict = ImageDict::new(None, &self.0, resolver)?;
