@@ -25,7 +25,7 @@ fn scan_objects() {
                 Ok(Object::Stream(s)) => s
                     .decode(&resolver)
                     .map(|_| ())
-                    .or_else(|_| s.decode_image(&resolver).map(|_| ()))
+                    .or_else(|_| s.decode_image(&resolver, None).map(|_| ()))
                     .unwrap(),
                 _ => {}
             }

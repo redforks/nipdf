@@ -13,7 +13,7 @@ fn decode_image(id: u32) -> AnyResult<Vec<u8>> {
     let (_, xref) = File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {path:?}"));
     let resolver = ObjectResolver::new(&buf[..], &xref);
     let obj = resolver.resolve(NonZeroU32::new(id).unwrap())?;
-    let image = obj.as_stream()?.decode_image(&resolver)?;
+    let image = obj.as_stream()?.decode_image(&resolver, None)?;
     Ok(image.into_bytes())
 }
 
