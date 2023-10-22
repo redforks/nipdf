@@ -383,30 +383,6 @@ impl<'a> TryFrom<&Object<'a>> for Color {
     }
 }
 
-impl<'a, 'b> ConvertFromObject<'a, 'b> for Color {
-    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
-        let mut colors = ArrayVec::<f32, 4>::new();
-        while let Some(o) = objects.pop() {
-            if let Ok(num) = o.as_number() {
-                colors.push(num);
-                if colors.len() == 4 {
-                    break;
-                }
-            } else {
-                objects.push(o);
-                break;
-            }
-        }
-
-        match colors.len() {
-            1 => Ok(Color::Gray(colors[0])),
-            3 => Ok(Color::Rgb(colors[2], colors[1], colors[0])),
-            4 => Ok(Color::Cmyk(colors[3], colors[2], colors[1], colors[0])),
-            _ => Err(ObjectValueError::GraphicsOperationSchemaError),
-        }
-    }
-}
-
 impl<'a, 'b> ConvertFromObject<'a, 'b> for TransformMatrix {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let f = objects.pop().unwrap().as_number()?;

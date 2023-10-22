@@ -37,6 +37,7 @@ use swash::{
 use super::{GraphicsStateParameterDict, Operation, Rectangle, ResourceDict};
 use crate::graphics::color_space;
 use crate::graphics::color_space::ColorSpace as ColorSpaceTrait;
+use crate::graphics::ColorSpace::DeviceGray;
 use tiny_skia::{
     FillRule, FilterQuality, GradientStop, Mask, MaskType, Paint, Path as SkiaPath, PathBuilder,
     Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect, Stroke, StrokeDash, Transform,
@@ -1118,10 +1119,14 @@ impl MatrixMapper {
 fn build_linear_gradient_stops(domain: Domain, f: FunctionDict) -> AnyResult<Vec<GradientStop>> {
     fn create_stop<F: Function>(f: &F, x: f32) -> AnyResult<GradientStop> {
         let rv = f.call(&[x])?;
-        let mut arr = rv.into_iter().map(Object::Number).collect::<Array>();
-        // TODO: Optimize speed of convert Vec<f32> to Color instead of using Object array
-        let color = Color::convert_from_object(&mut arr)?;
-        Ok(GradientStop::new(x, color.into()))
+        // TODO: use current color space to check array length, and convert to skia color
+        let color = match rv.len() {
+            1 => color_space::DeviceGray().to_skia_color(&rv),
+            3 => color_space::DeviceRGB().to_skia_color(&rv),
+            4 => color_space::DeviceCMYK().to_skia_color(&rv),
+            _ => unreachable!(),
+        };
+        Ok(GradientStop::new(x, color))
     }
 
     match f.function_type()? {
