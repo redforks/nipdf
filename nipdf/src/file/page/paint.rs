@@ -63,19 +63,6 @@ impl From<LineJoinStyle> for tiny_skia::LineJoin {
     }
 }
 
-impl From<Color> for tiny_skia::Color {
-    fn from(color: Color) -> Self {
-        match color {
-            Color::Rgb(r, g, b) => tiny_skia::Color::from_rgba(r, g, b, 1.0).unwrap(),
-            Color::Cmyk(c, m, y, k) => {
-                let (r, g, b) = cmyk_to_rgb(c, y, m, k);
-                tiny_skia::Color::from_rgba(r, g, b, 1.0).unwrap()
-            }
-            Color::Gray(g) => tiny_skia::Color::from_rgba(g, g, g, 1.0).unwrap(),
-        }
-    }
-}
-
 impl From<Point> for SkiaPoint {
     fn from(p: Point) -> Self {
         Self::from_xy(p.x, p.y)
