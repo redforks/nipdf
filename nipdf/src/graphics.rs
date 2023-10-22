@@ -178,17 +178,6 @@ pub enum ColorSpace {
     Separation((Box<Self>, NonZeroU32)),
 }
 
-impl From<ColorSpace> for Box<dyn ColorSpaceTrait<f32>> {
-    fn from(cs: ColorSpace) -> Self {
-        match cs {
-            ColorSpace::DeviceGray => Box::new(color_space::DeviceGray()),
-            ColorSpace::DeviceRGB => Box::new(color_space::DeviceRGB()),
-            ColorSpace::DeviceCMYK => Box::new(color_space::DeviceCMYK()),
-            _ => todo!("Unsupported color space: {:?}", cs),
-        }
-    }
-}
-
 impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpace {
     type Error = ObjectValueError;
 
