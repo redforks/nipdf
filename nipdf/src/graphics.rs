@@ -19,7 +19,7 @@ use tiny_skia::Transform;
 use crate::{
     file::{Rectangle, ResourceDict},
     object::{
-        Array, Dictionary, Name, Object, ObjectValueError, PdfObject, Stream, TextString,
+        Dictionary, Name, Object, ObjectValueError, PdfObject, Stream, TextString,
         TextStringOrNumber,
     },
     parser::{parse_object, ws_prefixed, ws_terminated, ParseError, ParseResult},
@@ -141,17 +141,16 @@ pub enum TextRenderingMode {
 /// It depends on the color space, for DeviceGray, the args is one number,
 /// for DeviceRGB, the args is three number.
 #[derive(Clone, PartialEq, Debug)]
-pub struct ColorArgs<'a>(Array<'a>);
+pub struct ColorArgs(Vec<f32>);
 
-impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorArgs<'a> {
+impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorArgs {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let mut result = Vec::with_capacity(objects.len());
         while let Some(o) = objects.pop() {
             if let Ok(num) = o.as_number() {
-                result.push(Object::Number(num));
+                result.push(num);
             } else {
-                objects.push(o);
-                break;
+                todo!("color args: {:?}", o);
             }
         }
         result.reverse();
@@ -226,24 +225,19 @@ impl ColorSpace {
         match self {
             Self::DeviceRGB => {
                 assert_eq!(3, args.len());
-                Ok(RgbColor(
-                    args[0].as_number()?,
-                    args[1].as_number()?,
-                    args[2].as_number()?,
-                )
-                .into())
+                Ok(RgbColor(args[0], args[1], args[2]).into())
             }
             Self::DeviceGray => {
                 assert_eq!(1, args.len());
-                let v = args[0].as_number()?;
+                let v = args[0];
                 Ok(RgbColor(v, v, v).into())
             }
             Self::DeviceCMYK => {
                 assert_eq!(4, args.len());
-                let c = args[0].as_number()?;
-                let m = args[1].as_number()?;
-                let y = args[2].as_number()?;
-                let k = args[3].as_number()?;
+                let c = args[0];
+                let m = args[1];
+                let y = args[2];
+                let k = args[3];
                 Ok(RgbColor(
                     (1.0 - c) * (1.0 - k),
                     (1.0 - m) * (1.0 - k),
@@ -388,8 +382,8 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for TransformMatrix {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ColorArgsOrName<'a> {
-    Color(ColorArgs<'a>),
+pub enum ColorArgsOrName {
+    Color(ColorArgs),
     Name(String),
 }
 
@@ -565,13 +559,13 @@ pub enum Operation<'a> {
     #[op_tag("cs")]
     SetFillColorSpace(ColorSpaceArgs),
     #[op_tag("SC")]
-    SetStrokeColor(ColorArgs<'a>),
+    SetStrokeColor(ColorArgs),
     #[op_tag("SCN")]
-    SetStrokeColorOrWithPattern(ColorArgsOrName<'a>),
+    SetStrokeColorOrWithPattern(ColorArgsOrName),
     #[op_tag("sc")]
-    SetFillColor(ColorArgs<'a>),
+    SetFillColor(ColorArgs),
     #[op_tag("scn")]
-    SetFillColorOrWithPattern(ColorArgsOrName<'a>),
+    SetFillColorOrWithPattern(ColorArgsOrName),
     #[op_tag("G")]
     SetStrokeGray([f32; 1]), // Should be Color::Gray
     #[op_tag("g")]
@@ -663,7 +657,7 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for TextStringOrNumber<'a> {
     }
 }
 
-impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorArgsOrName<'a> {
+impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorArgsOrName {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
         if let Ok(name) = o.as_name() {

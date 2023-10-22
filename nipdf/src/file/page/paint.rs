@@ -6,10 +6,10 @@ use crate::{
     file::{ObjectResolver, XObjectDict},
     function::{Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
-        parse_operations, AxialExtend, AxialShadingDict, ColorArgs,
-        ColorArgsOrName, ColorSpace, LineCapStyle, LineJoinStyle, NameOfDict,
-        NameOrDictByRef, NameOrStream, PatternType, Point, RenderingIntent, ShadingPatternDict,
-        ShadingType, TextRenderingMode, TilingPaintType, TilingPatternDict, TransformMatrix,
+        parse_operations, AxialExtend, AxialShadingDict, ColorArgs, ColorArgsOrName, ColorSpace,
+        LineCapStyle, LineJoinStyle, NameOfDict, NameOrDictByRef, NameOrStream, PatternType, Point,
+        RenderingIntent, ShadingPatternDict, ShadingType, TextRenderingMode, TilingPaintType,
+        TilingPatternDict, TransformMatrix,
     },
     object::{Object, PdfObject, Stream, TextStringOrNumber},
     text::{
@@ -183,7 +183,7 @@ impl State {
         self.stroke_paint = PaintCreator::Color(color);
     }
 
-    fn set_stroke_color_args(&mut self, args: ColorArgs<'_>) {
+    fn set_stroke_color_args(&mut self, args: ColorArgs) {
         let color = self.stroke_color_space.convert_color(&args).unwrap();
         self.set_stroke_color(color);
     }
@@ -193,7 +193,7 @@ impl State {
         self.fill_paint = PaintCreator::Color(color);
     }
 
-    fn set_fill_color_args(&mut self, args: ColorArgs<'_>) {
+    fn set_fill_color_args(&mut self, args: ColorArgs) {
         let color = self.fill_color_space.convert_color(&args).unwrap();
         self.set_fill_color(color);
     }
