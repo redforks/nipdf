@@ -245,23 +245,23 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceArgs {
     fn try_from(object: &'b Object<'a>) -> Result<Self, Self::Error> {
         match object {
             Object::Name(name) => match name.as_ref() {
-                "DeviceGray" => Ok(ColorSpaceArgs::Predefined(PredefinedColorSpace::DeviceGray)),
-                "DeviceRGB" => Ok(ColorSpaceArgs::Predefined(PredefinedColorSpace::DeviceRGB)),
-                "DeviceCMYK" => Ok(ColorSpaceArgs::Predefined(PredefinedColorSpace::DeviceCMYK)),
-                "CalGray" => Ok(ColorSpaceArgs::CalGray),
-                "Pattern" => Ok(ColorSpaceArgs::Pattern),
-                _ => Err(ObjectValueError::GraphicsOperationSchemaError),
+                "DeviceGray" => Ok(Self::Predefined(PredefinedColorSpace::DeviceGray)),
+                "DeviceRGB" => Ok(Self::Predefined(PredefinedColorSpace::DeviceRGB)),
+                "DeviceCMYK" => Ok(Self::Predefined(PredefinedColorSpace::DeviceCMYK)),
+                "CalGray" => Ok(Self::CalGray),
+                "Pattern" => Ok(Self::Pattern),
+                _ => Ok(Self::Custom(name.as_ref().to_owned())),
             },
             Object::Array(arr) => match arr[0].as_name()? {
                 "ICCBased" => {
                     assert_eq!(2, arr.len());
-                    Ok(ColorSpaceArgs::ICCBased(arr[1].as_ref()?.id().id()))
+                    Ok(Self::ICCBased(arr[1].as_ref()?.id().id()))
                 }
                 "Separation" => {
                     assert_eq!(4, arr.len());
-                    let cs = Box::new(ColorSpaceArgs::try_from(&arr[2])?);
+                    let cs = Box::new(Self::try_from(&arr[2])?);
                     let tint_transform = arr[3].as_ref()?.id().id();
-                    Ok(ColorSpaceArgs::Separation((cs, tint_transform)))
+                    Ok(Self::Separation((cs, tint_transform)))
                 }
                 _ => todo!("Unsupported color space: {:?}", arr),
             },
