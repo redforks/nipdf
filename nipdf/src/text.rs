@@ -189,6 +189,35 @@ pub trait CIDFontDictTrait {
     fn cid_to_gid_map(&self) -> Option<NameOrStream<'a, 'b>>;
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, TryFromNameObject)]
+pub enum FontStretch {
+    UltraCondensed,
+    ExtraCondensed,
+    Condensed,
+    SemiCondensed,
+    Normal,
+    SemiExpanded,
+    Expended,
+    ExtraExpanded,
+    UltraExpanded,
+}
+
+impl From<FontStretch> for fontdb::Stretch {
+    fn from(stretch: FontStretch) -> Self {
+        match stretch {
+            FontStretch::UltraCondensed => Self::UltraCondensed,
+            FontStretch::ExtraCondensed => Self::ExtraCondensed,
+            FontStretch::Condensed => Self::Condensed,
+            FontStretch::SemiCondensed => Self::SemiCondensed,
+            FontStretch::Normal => Self::Normal,
+            FontStretch::SemiExpanded => Self::SemiExpanded,
+            FontStretch::Expended => Self::Expanded,
+            FontStretch::ExtraExpanded => Self::ExtraExpanded,
+            FontStretch::UltraExpanded => Self::UltraExpanded,
+        }
+    }
+}
+
 #[pdf_object("FontDescriptor")]
 pub trait FontDescriptorDictTrait {
     #[typ("Name")]
@@ -196,8 +225,8 @@ pub trait FontDescriptorDictTrait {
 
     fn font_family(&self) -> String;
 
-    #[typ("Name")]
-    fn font_stretch(&self) -> Option<&str>;
+    #[try_from]
+    fn font_stretch(&self) -> Option<FontStretch>;
 
     fn font_weight(&self) -> Option<u32>;
 
@@ -245,7 +274,7 @@ pub trait FontDescriptorDictTrait {
 }
 
 bitflags! {
-    #[derive(TryFromIntObjectForBitflags)]
+    #[derive(TryFromIntObjectForBitflags, PartialEq, Copy, Clone)]
     pub struct FontDescriptorFlags: u32 {
         const FIXED_PITCH = 1;
         const SERIF = 1 << 1;

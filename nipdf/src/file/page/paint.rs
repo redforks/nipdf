@@ -1635,8 +1635,39 @@ impl<'c> FontCache<'c> {
         })
     }
 
-    fn load_true_type_from_os<'a>(q: impl Into<Query<'a>>) -> AnyResult<Vec<u8>> {
-        let q = q.into();
+    fn load_true_type_from_os(desc: &FontDescriptorDict) -> AnyResult<Vec<u8>> {
+        let font_name = desc.font_name()?;
+        let mut families = vec![Family::Name(font_name)];
+        let family = desc.font_family()?;
+        if !family.is_empty() {
+            families.push(Family::Name(&family));
+        }
+        let flags = desc.flags()?;
+        if flags & FontDescriptorFlags::SERIF == FontDescriptorFlags::SERIF {
+            families.push(Family::Serif);
+        }
+        if flags & FontDescriptorFlags::FIXED_PITCH == FontDescriptorFlags::FIXED_PITCH {
+            families.push(Family::Monospace);
+        }
+        let style = if flags & FontDescriptorFlags::ITALIC == FontDescriptorFlags::ITALIC {
+            fontdb::Style::Italic
+        } else {
+            fontdb::Style::Normal
+        };
+
+        let mut q = Query {
+            families: &families,
+            weight: desc
+                .font_weight()?
+                .map(|v| Weight(v as u16))
+                .unwrap_or(Weight::NORMAL),
+            style,
+            ..Default::default()
+        };
+        if let Some(stretch) = desc.font_stretch()? {
+            q.stretch = stretch.into();
+        }
+
         let id = SYSTEM_FONTS.query(&q).expect("font not found in system");
         let face = SYSTEM_FONTS.face(id).unwrap();
         assert_eq!(face.index, 0, "Only one face supported");
@@ -1672,14 +1703,7 @@ impl<'c> FontCache<'c> {
                     "font {} not found in file, try to load from system",
                     font_name,
                 );
-                Self::load_true_type_from_os(Query {
-                    families: &[Family::Name(font_name)][..],
-                    weight: desc
-                        .font_weight()?
-                        .map(|v| Weight(v as u16))
-                        .unwrap_or(Weight::NORMAL),
-                    ..Default::default()
-                })?
+                Self::load_true_type_from_os(&desc)?
             }
         };
         Self::load_true_type_font_from_bytes(font, bytes)
