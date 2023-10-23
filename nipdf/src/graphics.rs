@@ -265,6 +265,7 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceArgs {
                 }
                 _ => todo!("Unsupported color space: {:?}", arr),
             },
+            Object::Reference(id) => Ok(Self::LaterResolve(id.id().id())),
             _ => {
                 error!("{:?}", object);
                 Err(ObjectValueError::GraphicsOperationSchemaError)
