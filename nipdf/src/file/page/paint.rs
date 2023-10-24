@@ -282,8 +282,17 @@ impl State {
         }
     }
 
+    fn new_mask(&self) -> Mask {
+        let w = self.ctm.width;
+        let h = self.height;
+        let mut r = Mask::new(w as u32, h as u32).unwrap();
+        let p = PathBuilder::from_rect(Rect::from_xywh(0.0, 0.0, w, h).unwrap());
+        r.fill_path(&p, FillRule::Winding, true, Transform::identity());
+        r
+    }
+
     fn update_mask(&mut self, path: &SkiaPath, rule: FillRule, flip_y: bool) {
-        let mut mask = self.mask.take().unwrap_or_else(|| self.ctm.new_mask());
+        let mut mask = self.mask.take().unwrap_or_else(|| self.new_mask());
         // let log_id = start_instance().elapsed().as_nanos();
         // mask.save_png(format!("/tmp/{}-mask-before.png", log_id))
         //     .unwrap();
@@ -1109,15 +1118,6 @@ impl MatrixMapper {
 
     fn flip_y(&self) -> Transform {
         Transform::from_translate(0.0, self.height).pre_scale(self.zoom, -self.zoom)
-    }
-
-    pub fn new_mask(&self) -> Mask {
-        let w = self.width;
-        let h = self.height;
-        let mut r = Mask::new(w as u32, h as u32).unwrap();
-        let p = PathBuilder::from_rect(Rect::from_xywh(0.0, 0.0, w, h).unwrap());
-        r.fill_path(&p, FillRule::Winding, true, Transform::identity());
-        r
     }
 }
 
