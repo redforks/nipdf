@@ -31,6 +31,7 @@ mod pattern;
 use crate::file::ObjectResolver;
 use crate::graphics::color_space::ColorSpace as ColorSpaceTrait;
 pub(crate) use pattern::*;
+pub(crate) mod trans;
 
 #[derive(Debug, Clone, Copy, PartialEq, Educe)]
 #[educe(Default)]
