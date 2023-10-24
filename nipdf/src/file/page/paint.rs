@@ -297,7 +297,7 @@ impl State {
         //     .unwrap();
         // debug!("update_mask {log_id}, path: {:?}", path);
         let transform = if flip_y {
-            self.ctm.flip_y()
+            to_device_space(self.height, self.zoom, self.ctm2).into_skia()
         } else {
             Transform::identity()
         };
@@ -1026,10 +1026,10 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let font_size = text_object.font_size;
         let mut glyph_render = font.create_glyph_render(font_size).unwrap();
 
-        let ctm = &state.ctm;
         let mut transform: Transform = text_object.matrix.into();
         let render_mode = text_object.render_mode;
         let mut text_clip_path = Path::default();
+        let flip_y = to_device_space(state.height, state.zoom, state.ctm2).into_skia();
         for ch in op.decode_chars(text) {
             let width = op.char_width(ch) as f32 / 1000.0 * font_size
                 + char_spacing
@@ -1050,7 +1050,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                     state,
                     path,
                     render_mode,
-                    ctm.flip_y(),
+                    flip_y,
                 );
             }
             transform = transform.pre_translate(width, 0.0);
@@ -1109,10 +1109,6 @@ impl MatrixMapper {
 
     pub fn concat_ctm(&mut self, ctm: TransformMatrix) {
         self.ctm = self.ctm().pre_concat(ctm.into()).into();
-    }
-
-    fn flip_y(&self) -> Transform {
-        Transform::from_translate(0.0, self.height).pre_scale(self.zoom, -self.zoom)
     }
 }
 
