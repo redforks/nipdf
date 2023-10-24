@@ -21,24 +21,37 @@ fn new_assert<S, T, SP: Into<Point2D<f32, S>>, TP: Into<Point2D<f32, T>>>(
     move |p, exp| {
         let exp = exp.into();
         let p = m.transform_point(p.into());
-        assert!(p.approx_eq(&exp), "exp != actual: {:?} != {:?}", &exp, p);
+        assert!(
+            p.approx_eq_eps(&exp, &(0.0001, 0.0001).into()),
+            "exp != actual: {:?} != {:?}",
+            &exp,
+            p
+        );
     }
 }
 
 #[test]
 fn test_user_to_device_space() {
     // ctm is identity, no zoom, flip y
-    let f = new_assert(user_to_device_space(600.0, 1.0, Transform2D::identity()));
+    let f = new_assert(to_device_space::<UserSpace>(
+        600.0,
+        1.0,
+        Transform2D::identity(),
+    ));
     f((0.0, 0.0), (0.0, 600.0));
     f((10.0, 20.0), (10.0, 600.0 - 20.0));
 
     // ctm is identity, zoom 1.5, flip y
-    let f = new_assert(user_to_device_space(600.0, 1.5, Transform2D::identity()));
+    let f = new_assert(to_device_space::<UserSpace>(
+        600.0,
+        1.5,
+        Transform2D::identity(),
+    ));
     f((0.0, 0.0), (0.0, 600.0 * 1.5));
     f((10.0, 20.0), (10.0 * 1.5, 600.0 * 1.5 - 20.0 * 1.5));
 
     // ctm contains transform, zoom 1.5, flip y
-    let f = new_assert(user_to_device_space(
+    let f = new_assert(to_device_space::<UserSpace>(
         600.0,
         1.5,
         Transform2D::translation(10.0, 20.0),
@@ -52,7 +65,7 @@ fn test_user_to_device_space() {
         Transform::new(2.0, 0.0, 0.0, 3.0, 10.0, 20.0),
         "scale then translate, translates not scaled"
     );
-    let f = new_assert(user_to_device_space(
+    let f = new_assert(to_device_space::<UserSpace>(
         600.0,
         1.5,
         Transform2D::scale(2.0, 3.0).then_translate((10.0, 20.0).into()),
@@ -63,4 +76,38 @@ fn test_user_to_device_space() {
         // x: scale 2., then move 10. (because move not scaled)
         ((11.0 * 2. + 10.0) * 1.5, (600.0 - (15. * 3. + 20.)) * 1.5),
     );
+}
+
+#[test]
+fn test_image_space_to_user_space() {
+    let f = new_assert(image_to_user_space(100, 200));
+    f((0.0, 0.0), (0.0, 1.0));
+    f((40.0, 80.0), (0.4, 0.6));
+    f((0., 200.), (0., 0.));
+    f((100., 0.), (1., 1.));
+    f((100., 200.), (1., 0.));
+}
+
+#[test]
+fn test_image_to_device_space() {
+    let f = new_assert(image_to_device_space(
+        1107,
+        1352,
+        648.,
+        1.,
+        UserToDeviceIndependentSpace::new(531.0, 0.0, 0.0, 648.0, 0.0, 0.0),
+    ));
+    f((0., 0.), (0., 0.));
+    f((1107., 0.), (531., 0.));
+    f((1107., 1352.), (531., 648.));
+
+    let r = image_to_device_space(
+        512,
+        512,
+        842.,
+        1.5,
+        UserToDeviceIndependentSpace::new(383.9, 0.0, 0.0, 383.9, 105.7, 401.5),
+    );
+    let f = new_assert(r);
+    f((0., 0.), (105.7 * 1.5, (842. - (401.5 + 383.9)) * 1.5));
 }

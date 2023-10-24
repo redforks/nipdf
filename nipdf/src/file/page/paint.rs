@@ -38,7 +38,10 @@ use super::{GraphicsStateParameterDict, Operation, Rectangle, ResourceDict};
 use crate::graphics::color_space;
 use crate::graphics::color_space::ColorSpace;
 
-use crate::graphics::trans::{user_to_device_space, IntoSkiaTransform, UserToDeviceSpace};
+use crate::graphics::trans::{
+    image_to_device_space, to_device_space, ImageToDeviceSpace, IntoSkiaTransform,
+    UserToDeviceIndependentSpace, UserToDeviceSpace,
+};
 use tiny_skia::{
     FillRule, FilterQuality, GradientStop, Mask, MaskType, Paint, Path as SkiaPath, PathBuilder,
     Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect, Stroke, StrokeDash, Transform,
@@ -112,7 +115,7 @@ pub struct State {
     zoom: f32,
     ctm: MatrixMapper,
     /// ctm get from pdf file
-    ctm2: UserToDeviceSpace,
+    ctm2: UserToDeviceIndependentSpace,
     /// ctm with flip_y and zoom
     user_to_device: UserToDeviceSpace,
     fill_paint: PaintCreator,
@@ -135,12 +138,12 @@ impl State {
         let mut r = Self {
             zoom: option.zoom,
             height: option.height as f32,
-            user_to_device: user_to_device_space(
+            user_to_device: to_device_space(
                 option.height as f32,
                 option.zoom,
-                UserToDeviceSpace::identity(),
+                UserToDeviceIndependentSpace::identity(),
             ),
-            ctm2: UserToDeviceSpace::identity(),
+            ctm2: UserToDeviceIndependentSpace::identity(),
             ctm: MatrixMapper::new(
                 option.width as f32 * option.zoom,
                 option.height as f32 * option.zoom,
@@ -223,7 +226,7 @@ impl State {
         self.set_fill_color(color);
     }
 
-    fn concat_ctm(&mut self, ctm: UserToDeviceSpace) {
+    fn concat_ctm(&mut self, ctm: UserToDeviceIndependentSpace) {
         self.ctm.concat_ctm(TransformMatrix {
             sx: ctm.m11,
             ky: ctm.m12,
@@ -233,7 +236,7 @@ impl State {
             ty: ctm.m32,
         });
         self.ctm2 = self.ctm2.then(&ctm.with_source());
-        self.user_to_device = user_to_device_space(self.height, self.zoom, self.ctm2);
+        self.user_to_device = to_device_space(self.height, self.zoom, self.ctm2);
     }
 
     fn get_fill_paint(&self) -> Cow<'_, Paint<'_>> {
@@ -248,8 +251,8 @@ impl State {
         &self.stroke
     }
 
-    fn image_transform(&self, img_w: u32, img_h: u32) -> Transform {
-        self.ctm.image_transform(img_w, img_h)
+    fn image_transform(&self, img_w: u32, img_h: u32) -> ImageToDeviceSpace {
+        image_to_device_space(img_w, img_h, self.height, self.zoom, self.ctm2)
     }
 
     fn get_mask(&self) -> Option<&Mask> {
@@ -499,8 +502,11 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         // crop the canvas if crop is specified
         if let Some(rect) = self.crop {
             let state = self.stack.last().unwrap();
-            let transform =
-                user_to_device_space(state.height, state.zoom, UserToDeviceSpace::identity());
+            let transform = to_device_space(
+                state.height,
+                state.zoom,
+                UserToDeviceIndependentSpace::identity(),
+            );
             let p = transform.transform_point((rect.left_x, rect.upper_y).into());
             let mut canvas = Pixmap::new(
                 (rect.width() * state.zoom) as u32,
@@ -801,13 +807,12 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         };
         let img = load_image(xobject, self.resources);
         let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
-        let transform = state.image_transform(img.width(), img.height());
         self.canvas.draw_pixmap(
             0,
             0,
             img,
             &paint,
-            transform,
+            state.image_transform(img.width(), img.height()).into_skia(),
             smask.as_ref().or_else(|| state.get_mask()),
         );
     }

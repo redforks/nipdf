@@ -4,6 +4,7 @@ use ahash::RandomState;
 use anyhow::Result as AnyResult;
 
 use educe::Educe;
+use euclid::Transform2D;
 use lazy_static::lazy_static;
 use log::error;
 use nom::{
@@ -30,7 +31,7 @@ pub(crate) mod color_space;
 mod pattern;
 use crate::file::ObjectResolver;
 use crate::graphics::color_space::ColorSpace as ColorSpaceTrait;
-use crate::graphics::trans::UserToDeviceSpace;
+use crate::graphics::trans::UserToDeviceIndependentSpace;
 pub(crate) use pattern::*;
 
 pub(crate) mod trans;
@@ -327,7 +328,7 @@ impl<'a> TryFrom<&Object<'a>> for ColorArgs {
     }
 }
 
-impl<'a, 'b> ConvertFromObject<'a, 'b> for UserToDeviceSpace {
+impl<'a, 'b, S, T> ConvertFromObject<'a, 'b> for Transform2D<f32, S, T> {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let f = objects.pop().unwrap().as_number()?;
         let e = objects.pop().unwrap().as_number()?;
@@ -436,7 +437,7 @@ pub enum Operation<'a> {
     #[op_tag("Q")]
     RestoreGraphicsState,
     #[op_tag("cm")]
-    ModifyCTM(UserToDeviceSpace),
+    ModifyCTM(UserToDeviceIndependentSpace),
 
     // Path Construction Operations
     #[op_tag("m")]

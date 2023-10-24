@@ -17,15 +17,6 @@ fn map_point_asserter(m: Transform) -> impl Fn((f32, f32), (f32, f32)) {
     }
 }
 
-#[test]
-fn image_to_unit_square() {
-    let assert_mp = map_point_asserter(MatrixMapper::image_to_unit_square(10, 20));
-    assert_mp((0.0, 0.0), (0.0, 1.0));
-    assert_mp((10.0, 20.0), (1.0, 0.0));
-    assert_mp((10.0, 0.0), (1.0, 1.0));
-    assert_mp((0.0, 20.0), (0.0, 0.0));
-}
-
 #[test_case(1.0, (0.0, 0.0), (54.24, 510.96))]
 #[test_case(1.0, (1300.0, 4.0), (522.36, 512.496))]
 #[test_case(1.5, (0.0, 0.0), (81.36, 792.0*1.5 - 279.12*1.5 - 1.92*1.5))]

@@ -37,7 +37,7 @@ fn parse_operator_failed(s: &str) {
 )]
 #[test_case("q 296.000000 0 0 295.000000 0 0 cm/Image80 Do Q " => vec![
         Operation::SaveGraphicsState,
-        Operation::ModifyCTM(UserToDeviceSpace::new(
+        Operation::ModifyCTM(UserToDeviceIndependentSpace::new(
             296f32, 0f32, 0f32, 295f32, 0f32, 0f32
         )),
         Operation::PaintXObject(NameOfDict("Image80".into())),
@@ -55,7 +55,7 @@ fn test_parse_operations(s: &str) -> Vec<Operation> {
 #[test_case("1 w" => Operation::SetLineWidth(1f32))]
 #[test_case("1.5 w" => Operation::SetLineWidth(1.5f32))]
 #[test_case("296.000000 0 0 295.000000 0 0 cm" => Operation::ModifyCTM(
-    UserToDeviceSpace::new(296f32, 0f32, 0f32, 295f32, 0f32, 0f32)
+    UserToDeviceIndependentSpace::new(296f32, 0f32, 0f32, 295f32, 0f32, 0f32)
 ); "cm")]
 #[test_case("[1 2] 0.5 d" => Operation::SetDashPattern(vec![1f32, 2f32], 0.5f32); "dash-pattern")]
 #[test_case("/stateName gs" => Operation::SetGraphicsStateParameters(NameOfDict("stateName".into())); "gs")]
