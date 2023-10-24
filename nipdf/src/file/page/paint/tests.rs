@@ -1,21 +1,4 @@
 use super::*;
-use test_case::test_case;
-use tiny_skia::Point;
-
-fn map_point_asserter(m: Transform) -> impl Fn((f32, f32), (f32, f32)) {
-    move |p, exp| {
-        let mut p = Point::from_xy(p.0, p.1);
-        m.map_point(&mut p);
-        assert!(
-            (exp.0 - p.x).abs() < 0.0001 && (exp.1 - p.y).abs() < 0.0001,
-            "({}, {}) != ({}, {})",
-            exp.0,
-            exp.1,
-            p.x,
-            p.y
-        );
-    }
-}
 
 #[test]
 fn first_last_font_width() {
