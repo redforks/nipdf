@@ -17,27 +17,6 @@ fn map_point_asserter(m: Transform) -> impl Fn((f32, f32), (f32, f32)) {
     }
 }
 
-#[test_case(1.0, (0.0, 0.0), (54.24, 510.96))]
-#[test_case(1.0, (1300.0, 4.0), (522.36, 512.496))]
-#[test_case(1.5, (0.0, 0.0), (81.36, 792.0*1.5 - 279.12*1.5 - 1.92*1.5))]
-fn image_transform(zoom: f32, p: (f32, f32), exp: (f32, f32)) {
-    let m = MatrixMapper::new(
-        10.,
-        792.0 * zoom,
-        zoom,
-        TransformMatrix {
-            sx: 468.48,
-            kx: 0.0,
-            ky: 0.0,
-            sy: 1.92,
-            tx: 54.24,
-            ty: 279.12,
-        },
-    );
-    let assert_mp = map_point_asserter(m.image_transform(1301, 5));
-    assert_mp(p, exp);
-}
-
 #[test]
 fn first_last_font_width() {
     let font_width = FirstLastFontWidth {

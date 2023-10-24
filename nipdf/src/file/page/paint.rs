@@ -476,8 +476,8 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         Self {
             canvas,
             stack: vec![State::new(&option)],
-            width: w,
-            height: h,
+            width: option.width,
+            height: option.height,
             path: Path::default(),
             font_cache: FontCache::new(resources).unwrap(),
             resources,
@@ -768,15 +768,45 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 .into_rgba8()
         }
 
+        fn load_image_as_mask<'a, 'b>(
+            page_width: u32,
+            page_height: u32,
+            img_dict: &XObjectDict<'a, 'b>,
+            resources: &ResourceDict<'a, 'b>,
+            state: &State,
+        ) -> AnyResult<Mask> {
+            let paint = PixmapPaint {
+                quality: FilterQuality::Nearest,
+                ..Default::default()
+            };
+
+            let mut canvas = Pixmap::new(page_width, page_height).unwrap();
+            let img = img_dict.as_image().unwrap();
+            let img = img.decode_image(resources.resolver(), Some(resources))?;
+            let mut img = img.into_rgba8();
+            img.pixels_mut().for_each(|p| {
+                p[3] = p[0];
+            });
+
+            let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
+            canvas.draw_pixmap(
+                0,
+                0,
+                img,
+                &paint,
+                state.image_transform(img.width(), img.height()).into_skia(),
+                None,
+            );
+            Ok(Mask::from_pixmap(canvas.as_ref(), MaskType::Alpha))
+        }
+
         let xobjects = self.resources.x_object().unwrap();
         let xobject = xobjects.get(&name.0).unwrap();
 
         let state = self.stack.last().unwrap();
 
         if xobject.image_mask().unwrap() {
-            let mask = state
-                .ctm
-                .load_image_as_mask(xobject, self.resources)
+            let mask = load_image_as_mask(self.width, self.height, xobject, self.resources, state)
                 .unwrap();
             // fill canvas with current fill paint with mask
             let paint = state.get_fill_paint();
@@ -795,7 +825,9 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             return;
         }
 
-        let smask = state.ctm.img_mask(xobject, self.resources).unwrap();
+        let s_mask = xobject.s_mask().unwrap().map(|s_mask| {
+            load_image_as_mask(self.width, self.height, &s_mask, self.resources, state).unwrap()
+        });
 
         let paint = PixmapPaint {
             quality: if xobject.interpolate().unwrap() {
@@ -813,7 +845,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             img,
             &paint,
             state.image_transform(img.width(), img.height()).into_skia(),
-            smask.as_ref().or_else(|| state.get_mask()),
+            s_mask.as_ref().or_else(|| state.get_mask()),
         );
     }
 
@@ -1079,16 +1111,6 @@ impl MatrixMapper {
         Transform::from_translate(0.0, self.height).pre_scale(self.zoom, -self.zoom)
     }
 
-    fn image_to_unit_square(img_w: u32, img_h: u32) -> Transform {
-        Transform::from_translate(0.0, 1.0).pre_scale(1.0 / img_w as f32, -1.0 / img_h as f32)
-    }
-
-    pub fn image_transform(&self, img_w: u32, img_h: u32) -> Transform {
-        self.flip_y()
-            .pre_concat(self.ctm.into())
-            .pre_concat(Self::image_to_unit_square(img_w, img_h))
-    }
-
     pub fn new_mask(&self) -> Mask {
         let w = self.width;
         let h = self.height;
@@ -1096,56 +1118,6 @@ impl MatrixMapper {
         let p = PathBuilder::from_rect(Rect::from_xywh(0.0, 0.0, w, h).unwrap());
         r.fill_path(&p, FillRule::Winding, true, Transform::identity());
         r
-    }
-
-    /// if s_mask exist in `img`, load it as mask
-    /// the mask size identical to device width/height,
-    /// s_mask zoomed and transformed by image_transform,
-    /// area out of image are blacked out.
-    pub fn img_mask<'a, 'b>(
-        &self,
-        img_dict: &XObjectDict<'a, 'b>,
-        resources: &ResourceDict<'a, 'b>,
-    ) -> AnyResult<Option<Mask>> {
-        let s_mask = img_dict.s_mask()?;
-        let s_mask = if let Some(s_mask) = s_mask {
-            s_mask
-        } else {
-            return Ok(None);
-        };
-        self.load_image_as_mask(&s_mask, resources).map(Some)
-    }
-
-    /// Load image as mask, the returned mask is as large as device width/height,
-    /// apply ctm transform to the image, and black out area out of image.
-    pub fn load_image_as_mask<'a, 'b>(
-        &self,
-        img_dict: &XObjectDict<'a, 'b>,
-        resources: &ResourceDict<'a, 'b>,
-    ) -> AnyResult<Mask> {
-        let paint = PixmapPaint {
-            quality: FilterQuality::Nearest,
-            ..Default::default()
-        };
-
-        let mut canvas = Pixmap::new(self.width as u32, self.height as u32).unwrap();
-        let img = img_dict.as_image().unwrap();
-        let img = img.decode_image(resources.resolver(), Some(resources))?;
-        let mut img = img.into_rgba8();
-        img.pixels_mut().for_each(|p| {
-            p[3] = p[0];
-        });
-
-        let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
-        canvas.draw_pixmap(
-            0,
-            0,
-            img,
-            &paint,
-            self.image_transform(img.width(), img.height()),
-            None,
-        );
-        Ok(Mask::from_pixmap(canvas.as_ref(), MaskType::Alpha))
     }
 }
 
