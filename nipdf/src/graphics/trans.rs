@@ -8,6 +8,7 @@ pub enum DeviceSpace {}
 // pub enum TextSpace;
 // pub enum ImageSpace;
 // pub enum PatternSpace;
+pub type UserToDeviceSpace = Transform2D<f32, UserSpace, DeviceSpace>;
 
 /// Convert current object into tiny_skia `Transform`.
 pub trait IntoSkiaTransform {
@@ -22,11 +23,7 @@ impl<S, D> IntoSkiaTransform for Transform2D<f32, S, D> {
 
 /// Return a transform from user space to device space.
 /// Modify ctm to flip y-axis, because pdf use left-bottom as origin.
-pub fn user_to_device_space(
-    height: f32,
-    zoom: f32,
-    ctm: Transform2D<f32, UserSpace, DeviceSpace>,
-) -> Transform2D<f32, UserSpace, DeviceSpace> {
+pub fn user_to_device_space(height: f32, zoom: f32, ctm: UserToDeviceSpace) -> UserToDeviceSpace {
     ctm.then_scale(zoom, -zoom)
         .then_translate((0.0, height * zoom).into())
 }

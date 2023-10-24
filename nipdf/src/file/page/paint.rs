@@ -38,6 +38,7 @@ use super::{GraphicsStateParameterDict, Operation, Rectangle, ResourceDict};
 use crate::graphics::color_space;
 use crate::graphics::color_space::ColorSpace;
 
+use crate::graphics::trans::{user_to_device_space, IntoSkiaTransform, UserToDeviceSpace};
 use tiny_skia::{
     FillRule, FilterQuality, GradientStop, Mask, MaskType, Paint, Path as SkiaPath, PathBuilder,
     Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect, Stroke, StrokeDash, Transform,
@@ -107,7 +108,13 @@ impl PaintCreator {
 
 #[derive(Debug, Clone)]
 pub struct State {
+    height: f32,
+    zoom: f32,
     ctm: MatrixMapper,
+    /// ctm get from pdf file
+    ctm2: UserToDeviceSpace,
+    /// ctm with flip_y and zoom
+    user_to_device: UserToDeviceSpace,
     fill_paint: PaintCreator,
     stroke_paint: PaintCreator,
     stroke: Stroke,
@@ -126,6 +133,14 @@ impl State {
     /// height: height in user space coordinate
     fn new(option: &RenderOption) -> Self {
         let mut r = Self {
+            zoom: option.zoom,
+            height: option.height as f32,
+            user_to_device: user_to_device_space(
+                option.height as f32,
+                option.zoom,
+                UserToDeviceSpace::identity(),
+            ),
+            ctm2: UserToDeviceSpace::identity(),
             ctm: MatrixMapper::new(
                 option.width as f32 * option.zoom,
                 option.height as f32 * option.zoom,
@@ -171,11 +186,11 @@ impl State {
     }
 
     fn set_flatness(&mut self, flatness: f32) {
-        log::info!("not implemented: flatness: {}", flatness);
+        info!("not implemented: flatness: {}", flatness);
     }
 
     fn set_render_intent(&mut self, intent: RenderingIntent) {
-        log::info!("not implemented: render intent: {}", intent);
+        info!("not implemented: render intent: {}", intent);
     }
 
     fn set_stroke_color_and_space(&mut self, cs: Box<dyn ColorSpace<f32>>, color: &[f32]) {
@@ -184,7 +199,7 @@ impl State {
     }
 
     fn set_stroke_color(&mut self, color: tiny_skia::Color) {
-        log::debug!("set stroke color: {:?}", color);
+        debug!("set stroke color: {:?}", color);
         self.stroke_paint = PaintCreator::Color(color);
     }
 
@@ -199,7 +214,7 @@ impl State {
     }
 
     fn set_fill_color(&mut self, color: tiny_skia::Color) {
-        log::debug!("set fill color: {:?}", color);
+        debug!("set fill color: {:?}", color);
         self.fill_paint = PaintCreator::Color(color);
     }
 
@@ -208,8 +223,17 @@ impl State {
         self.set_fill_color(color);
     }
 
-    fn concat_ctm(&mut self, ctm: TransformMatrix) {
-        self.ctm.concat_ctm(ctm);
+    fn concat_ctm(&mut self, ctm: UserToDeviceSpace) {
+        self.ctm.concat_ctm(TransformMatrix {
+            sx: ctm.m11,
+            ky: ctm.m12,
+            kx: ctm.m21,
+            sy: ctm.m22,
+            tx: ctm.m31,
+            ty: ctm.m32,
+        });
+        self.ctm2 = self.ctm2.then(&ctm.with_source());
+        self.user_to_device = user_to_device_space(self.height, self.zoom, self.ctm2);
     }
 
     fn get_fill_paint(&self) -> Cow<'_, Paint<'_>> {
@@ -222,10 +246,6 @@ impl State {
 
     fn get_stroke(&self) -> &Stroke {
         &self.stroke
-    }
-
-    fn path_transform(&self) -> Transform {
-        self.ctm.path_transform()
     }
 
     fn image_transform(&self, img_w: u32, img_h: u32) -> Transform {
@@ -254,7 +274,7 @@ impl State {
                 "SA" => {
                     debug!("Unknown or unsupported ExtGState key: SA (automatic stroke adjustment)")
                 }
-                _ => log::info!("Unknown or unsupported ExtGState key: {}", key.as_ref()),
+                _ => info!("Unknown or unsupported ExtGState key: {}", key.as_ref()),
             }
         }
     }
@@ -479,18 +499,14 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         // crop the canvas if crop is specified
         if let Some(rect) = self.crop {
             let state = self.stack.last().unwrap();
-            let zoom = state.ctm.zoom;
-            let mapper = MatrixMapper::new(
-                self.width as f32,
-                self.height as f32,
-                zoom,
-                TransformMatrix::identity(),
-            );
-            let transform = mapper.path_transform();
-            let mut canvas =
-                Pixmap::new((rect.width() * zoom) as u32, (rect.height() * zoom) as u32).unwrap();
-            let mut p = SkiaPoint::from_xy(rect.left_x, rect.upper_y);
-            transform.map_point(&mut p);
+            let transform =
+                user_to_device_space(state.height, state.zoom, UserToDeviceSpace::identity());
+            let p = transform.transform_point((rect.left_x, rect.upper_y).into());
+            let mut canvas = Pixmap::new(
+                (rect.width() * state.zoom) as u32,
+                (rect.height() * state.zoom) as u32,
+            )
+            .unwrap();
             canvas.draw_pixmap(
                 -p.x as i32,
                 -p.y as i32,
@@ -662,8 +678,13 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             let stroke = state.get_stroke();
             debug!("stroke: {:?} {:?}", &paint, stroke);
             debug!("stroke: {:?}", p);
-            self.canvas
-                .stroke_path(p, &paint, stroke, state.path_transform(), state.get_mask());
+            self.canvas.stroke_path(
+                p,
+                &paint,
+                stroke,
+                state.user_to_device.into_skia(),
+                state.get_mask(),
+            );
         } else {
             debug!("stroke: empty or invalid path");
         }
@@ -691,7 +712,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 p,
                 &paint,
                 fill_rule,
-                state.path_transform(),
+                state.user_to_device.into_skia(),
                 state.get_mask(),
             );
         }
@@ -1045,10 +1066,6 @@ impl MatrixMapper {
         self.ctm = self.ctm().pre_concat(ctm.into()).into();
     }
 
-    pub fn path_transform(&self) -> Transform {
-        self.flip_y().pre_concat(self.ctm())
-    }
-
     pub fn tile_transform(&self) -> Transform {
         self.ctm().pre_concat(self.flip_y())
     }
@@ -1071,7 +1088,7 @@ impl MatrixMapper {
         let w = self.width;
         let h = self.height;
         let mut r = Mask::new(w as u32, h as u32).unwrap();
-        let p = PathBuilder::from_rect(tiny_skia::Rect::from_xywh(0.0, 0.0, w, h).unwrap());
+        let p = PathBuilder::from_rect(Rect::from_xywh(0.0, 0.0, w, h).unwrap());
         r.fill_path(&p, FillRule::Winding, true, Transform::identity());
         r
     }

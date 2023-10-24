@@ -37,14 +37,9 @@ fn parse_operator_failed(s: &str) {
 )]
 #[test_case("q 296.000000 0 0 295.000000 0 0 cm/Image80 Do Q " => vec![
         Operation::SaveGraphicsState,
-        Operation::ModifyCTM(TransformMatrix {
-            sx: 296f32,
-            kx: 0f32,
-            ky: 0f32,
-            sy: 295f32,
-            tx: 0f32,
-            ty: 0f32
-        }),
+        Operation::ModifyCTM(UserToDeviceSpace::new(
+            296f32, 0f32, 0f32, 295f32, 0f32, 0f32
+        )),
         Operation::PaintXObject(NameOfDict("Image80".into())),
         Operation::RestoreGraphicsState
     ];
@@ -59,14 +54,9 @@ fn test_parse_operations(s: &str) -> Vec<Operation> {
 #[test_case("Q" => Operation::RestoreGraphicsState; "restore")]
 #[test_case("1 w" => Operation::SetLineWidth(1f32))]
 #[test_case("1.5 w" => Operation::SetLineWidth(1.5f32))]
-#[test_case("296.000000 0 0 295.000000 0 0 cm" => Operation::ModifyCTM(TransformMatrix {
-    sx: 296f32,
-    kx: 0f32,
-    ky: 0f32,
-    sy: 295f32,
-    tx: 0f32,
-    ty: 0f32,
-}); "cm")]
+#[test_case("296.000000 0 0 295.000000 0 0 cm" => Operation::ModifyCTM(
+    UserToDeviceSpace::new(296f32, 0f32, 0f32, 295f32, 0f32, 0f32)
+); "cm")]
 #[test_case("[1 2] 0.5 d" => Operation::SetDashPattern(vec![1f32, 2f32], 0.5f32); "dash-pattern")]
 #[test_case("/stateName gs" => Operation::SetGraphicsStateParameters(NameOfDict("stateName".into())); "gs")]
 #[test_case("1 2 3 4 5 6 c" => Operation::AppendBezierCurve(Point::new(1f32, 2f32), Point::new(3f32, 4f32), Point::new(5f32, 6f32)); "c")]

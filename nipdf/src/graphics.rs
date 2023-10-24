@@ -30,7 +30,9 @@ pub(crate) mod color_space;
 mod pattern;
 use crate::file::ObjectResolver;
 use crate::graphics::color_space::ColorSpace as ColorSpaceTrait;
+use crate::graphics::trans::UserToDeviceSpace;
 pub(crate) use pattern::*;
+
 pub(crate) mod trans;
 
 #[derive(Debug, Clone, Copy, PartialEq, Educe)]
@@ -325,6 +327,18 @@ impl<'a> TryFrom<&Object<'a>> for ColorArgs {
     }
 }
 
+impl<'a, 'b> ConvertFromObject<'a, 'b> for UserToDeviceSpace {
+    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+        let f = objects.pop().unwrap().as_number()?;
+        let e = objects.pop().unwrap().as_number()?;
+        let d = objects.pop().unwrap().as_number()?;
+        let c = objects.pop().unwrap().as_number()?;
+        let b = objects.pop().unwrap().as_number()?;
+        let a = objects.pop().unwrap().as_number()?;
+        Ok(Self::new(a, b, c, d, e, f))
+    }
+}
+
 impl<'a, 'b> ConvertFromObject<'a, 'b> for TransformMatrix {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let f = objects.pop().unwrap().as_number()?;
@@ -335,8 +349,8 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for TransformMatrix {
         let a = objects.pop().unwrap().as_number()?;
         Ok(Self {
             sx: a,
-            kx: b,
-            ky: c,
+            ky: b,
+            kx: c,
             sy: d,
             tx: e,
             ty: f,
@@ -422,7 +436,7 @@ pub enum Operation<'a> {
     #[op_tag("Q")]
     RestoreGraphicsState,
     #[op_tag("cm")]
-    ModifyCTM(TransformMatrix),
+    ModifyCTM(UserToDeviceSpace),
 
     // Path Construction Operations
     #[op_tag("m")]
