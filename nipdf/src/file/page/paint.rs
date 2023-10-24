@@ -1,4 +1,3 @@
-
 use std::{
     borrow::Cow, collections::HashMap, convert::AsRef, fs::File, io::Read, ops::RangeInclusive,
 };
@@ -115,7 +114,7 @@ pub struct State {
     height: f32,
     zoom: f32,
     /// ctm get from pdf file
-    ctm2: UserToDeviceIndependentSpace,
+    ctm: UserToDeviceIndependentSpace,
     /// ctm with flip_y and zoom
     user_to_device: UserToDeviceSpace,
     fill_paint: PaintCreator,
@@ -144,7 +143,7 @@ impl State {
                 option.zoom,
                 UserToDeviceIndependentSpace::identity(),
             ),
-            ctm2: UserToDeviceIndependentSpace::identity(),
+            ctm: UserToDeviceIndependentSpace::identity(),
             fill_paint: PaintCreator::Color(tiny_skia::Color::BLACK),
             stroke_paint: PaintCreator::Color(tiny_skia::Color::BLACK),
             stroke: Stroke::default(),
@@ -222,8 +221,8 @@ impl State {
     }
 
     fn concat_ctm(&mut self, ctm: UserToDeviceIndependentSpace) {
-        self.ctm2 = self.ctm2.then(&ctm.with_source());
-        self.user_to_device = to_device_space(self.height, self.zoom, self.ctm2);
+        self.ctm = self.ctm.then(&ctm.with_source());
+        self.user_to_device = to_device_space(self.height, self.zoom, self.ctm);
     }
 
     fn get_fill_paint(&self) -> Cow<'_, Paint<'_>> {
@@ -239,7 +238,7 @@ impl State {
     }
 
     fn image_transform(&self, img_w: u32, img_h: u32) -> ImageToDeviceSpace {
-        image_to_device_space(img_w, img_h, self.height, self.zoom, self.ctm2)
+        image_to_device_space(img_w, img_h, self.height, self.zoom, self.ctm)
     }
 
     fn get_mask(&self) -> Option<&Mask> {
@@ -285,7 +284,7 @@ impl State {
         //     .unwrap();
         // debug!("update_mask {log_id}, path: {:?}", path);
         let transform = if flip_y {
-            to_device_space(self.height, self.zoom, self.ctm2).into_skia()
+            to_device_space(self.height, self.zoom, self.ctm).into_skia()
         } else {
             Transform::identity()
         };
@@ -1017,7 +1016,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let mut transform: Transform = text_object.matrix.into();
         let render_mode = text_object.render_mode;
         let mut text_clip_path = Path::default();
-        let flip_y = to_device_space(state.height, state.zoom, state.ctm2).into_skia();
+        let flip_y = to_device_space(state.height, state.zoom, state.ctm).into_skia();
         for ch in op.decode_chars(text) {
             let width = op.char_width(ch) as f32 / 1000.0 * font_size
                 + char_spacing
