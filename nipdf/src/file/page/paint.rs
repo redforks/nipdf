@@ -77,7 +77,7 @@ impl From<Point> for SkiaPoint {
 enum PaintCreator {
     Color(tiny_skia::Color),
     Gradient(Paint<'static>),
-    Tile((Pixmap, TransformMatrix)),
+    Tile((Pixmap, UserToDeviceIndependentSpace)),
 }
 
 impl PaintCreator {
@@ -93,15 +93,14 @@ impl PaintCreator {
 
             PaintCreator::Tile((p, matrix)) => {
                 let mut r = Paint::default();
-                let width = p.width() as f32;
                 let height = p.height() as f32;
-                let matrix_mapper = MatrixMapper::new(width, height, 1.0, *matrix);
+                let transform = to_device_space(height, 1.0, *matrix);
                 r.shader = tiny_skia::Pattern::new(
                     p.as_ref(),
                     tiny_skia::SpreadMode::Repeat,
                     FilterQuality::Bicubic,
                     1.0f32,
-                    matrix_mapper.tile_transform(),
+                    transform.into_skia(),
                 );
                 Cow::Owned(r)
             }
@@ -939,7 +938,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         );
         ops.into_iter().for_each(|op| render.exec(op));
         self.stack.last_mut().unwrap().fill_paint =
-            PaintCreator::Tile((render.into(), tile.matrix()?));
+            PaintCreator::Tile((render.into(), tile.matrix()?.into()));
         Ok(())
     }
 
@@ -1110,10 +1109,6 @@ impl MatrixMapper {
 
     pub fn concat_ctm(&mut self, ctm: TransformMatrix) {
         self.ctm = self.ctm().pre_concat(ctm.into()).into();
-    }
-
-    pub fn tile_transform(&self) -> Transform {
-        self.ctm().pre_concat(self.flip_y())
     }
 
     fn flip_y(&self) -> Transform {

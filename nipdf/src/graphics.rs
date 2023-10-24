@@ -61,6 +61,12 @@ impl From<TransformMatrix> for Transform {
     }
 }
 
+impl From<TransformMatrix> for UserToDeviceIndependentSpace {
+    fn from(m: TransformMatrix) -> Self {
+        Self::new(m.sx, m.ky, m.kx, m.sy, m.tx, m.ty)
+    }
+}
+
 impl From<Transform> for TransformMatrix {
     fn from(m: Transform) -> Self {
         Self {
