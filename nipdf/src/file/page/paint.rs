@@ -1,3 +1,4 @@
+use std::os::unix::raw::off_t;
 use std::{
     borrow::Cow, collections::HashMap, convert::AsRef, fs::File, io::Read, ops::RangeInclusive,
 };
@@ -110,9 +111,9 @@ impl PaintCreator {
 
 #[derive(Debug, Clone)]
 pub struct State {
+    width: f32,
     height: f32,
     zoom: f32,
-    ctm: MatrixMapper,
     /// ctm get from pdf file
     ctm2: UserToDeviceIndependentSpace,
     /// ctm with flip_y and zoom
@@ -136,6 +137,7 @@ impl State {
     fn new(option: &RenderOption) -> Self {
         let mut r = Self {
             zoom: option.zoom,
+            width: option.width as f32,
             height: option.height as f32,
             user_to_device: to_device_space(
                 option.height as f32,
@@ -143,12 +145,6 @@ impl State {
                 UserToDeviceIndependentSpace::identity(),
             ),
             ctm2: UserToDeviceIndependentSpace::identity(),
-            ctm: MatrixMapper::new(
-                option.width as f32 * option.zoom,
-                option.height as f32 * option.zoom,
-                option.zoom,
-                TransformMatrix::identity(),
-            ),
             fill_paint: PaintCreator::Color(tiny_skia::Color::BLACK),
             stroke_paint: PaintCreator::Color(tiny_skia::Color::BLACK),
             stroke: Stroke::default(),
@@ -226,14 +222,6 @@ impl State {
     }
 
     fn concat_ctm(&mut self, ctm: UserToDeviceIndependentSpace) {
-        self.ctm.concat_ctm(TransformMatrix {
-            sx: ctm.m11,
-            ky: ctm.m12,
-            kx: ctm.m21,
-            sy: ctm.m22,
-            tx: ctm.m31,
-            ty: ctm.m32,
-        });
         self.ctm2 = self.ctm2.then(&ctm.with_source());
         self.user_to_device = to_device_space(self.height, self.zoom, self.ctm2);
     }
@@ -282,7 +270,7 @@ impl State {
     }
 
     fn new_mask(&self) -> Mask {
-        let w = self.ctm.width;
+        let w = self.width;
         let h = self.height;
         let mut r = Mask::new(w as u32, h as u32).unwrap();
         let p = PathBuilder::from_rect(Rect::from_xywh(0.0, 0.0, w, h).unwrap());
@@ -1079,36 +1067,6 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
 
     fn end_text(&mut self) {
         self.current_mut().end_text_object();
-    }
-}
-
-#[derive(Debug, Clone)]
-struct MatrixMapper {
-    // height of device space coordinate
-    height: f32,
-    // width of device space coordinate
-    width: f32,
-    zoom: f32,
-    ctm: TransformMatrix,
-}
-
-impl MatrixMapper {
-    /// width/height: height of device space coordinate
-    pub fn new(width: f32, height: f32, zoom: f32, ctm: TransformMatrix) -> Self {
-        Self {
-            width,
-            height,
-            zoom,
-            ctm,
-        }
-    }
-
-    fn ctm(&self) -> Transform {
-        self.ctm.into()
-    }
-
-    pub fn concat_ctm(&mut self, ctm: TransformMatrix) {
-        self.ctm = self.ctm().pre_concat(ctm.into()).into();
     }
 }
 
