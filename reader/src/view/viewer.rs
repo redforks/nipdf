@@ -83,6 +83,8 @@ pub enum ViewerMessage {
     DumpPageRenderLog,
     #[cfg(feature = "debug")]
     DumpPageThree,
+    #[cfg(feature = "debug")]
+    DumpPageThreeWithoutGvim,
 }
 
 /// Pdf file viewer
@@ -243,20 +245,22 @@ impl Viewer {
     /// Dump current page content/object/stream, and then open them
     /// in `gvim`
     #[cfg(feature = "debug")]
-    fn dump_page_three(&self) -> Result<()> {
+    fn dump_page_three(&self, open_in_gvim: bool) -> Result<()> {
         self.dump_page_object()?;
         self.dump_page_content()?;
         self.dump_page_stream()?;
 
-        use std::process::Command;
-        Command::new("gvim")
-            .arg("-O")
-            .arg("/tmp/page-object")
-            .arg("/tmp/page-content")
-            .arg("/tmp/page-stream")
-            .arg("-c")
-            .arg("tabe /tmp/log")
-            .spawn()?;
+        if open_in_gvim {
+            use std::process::Command;
+            Command::new("gvim")
+                .arg("-O")
+                .arg("/tmp/page-object")
+                .arg("/tmp/page-content")
+                .arg("/tmp/page-stream")
+                .arg("-c")
+                .arg("tabe /tmp/log")
+                .spawn()?;
+        }
         Ok(())
     }
 
@@ -363,7 +367,9 @@ impl Viewer {
                 notify("Page stream dumped to /tmp/page-stream")
             }
             #[cfg(feature = "debug")]
-            ViewerMessage::DumpPageThree => self.dump_page_three(),
+            ViewerMessage::DumpPageThree => self.dump_page_three(true),
+            #[cfg(feature = "debug")]
+            ViewerMessage::DumpPageThreeWithoutGvim => self.dump_page_three(false),
             #[cfg(feature = "debug")]
             ViewerMessage::DumpPageRenderLog => {
                 let err = self.dump_page_render_log()?;
@@ -426,7 +432,8 @@ impl Viewer {
                         new_menu_item("Page Stream", ViewerMessage::DumpPageStream),
                         new_menu_item("Page Render Log", ViewerMessage::DumpPageRenderLog),
                         MenuTree::new(horizontal_rule(4)),
-                        new_menu_item("Dump Page", ViewerMessage::DumpPageThree),
+                        new_menu_item("Dump Page and open", ViewerMessage::DumpPageThree),
+                        new_menu_item("Dump Page", ViewerMessage::DumpPageThreeWithoutGvim),
                     ]
                 ))
                 .item_height(ItemHeight::Dynamic(24))
