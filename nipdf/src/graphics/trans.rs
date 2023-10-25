@@ -60,8 +60,17 @@ pub fn image_to_device_space(
 }
 
 /// Adjust transform moves text space to right.
-pub fn move_text_space_right(transform: TextToUserSpace, text_space_unit: f32) -> TextToUserSpace {
-    transform.pre_translate((text_space_unit, 0.0).into())
+pub fn move_text_space_right(transform: TextToUserSpace, x_text_space: f32) -> TextToUserSpace {
+    move_text_space_pos(transform, x_text_space, 0.)
+}
+
+/// Adjust transform to moves position in text space.
+pub fn move_text_space_pos(
+    transform: TextToUserSpace,
+    x_text_space: f32,
+    y_text_space: f32,
+) -> TextToUserSpace {
+    transform.pre_translate((x_text_space, y_text_space).into())
 }
 
 #[cfg(test)]

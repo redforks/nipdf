@@ -39,8 +39,9 @@ use crate::graphics::color_space;
 use crate::graphics::color_space::ColorSpace;
 
 use crate::graphics::trans::{
-    image_to_device_space, move_text_space_right, to_device_space, ImageToDeviceSpace,
-    IntoSkiaTransform, TextToUserSpace, UserToDeviceIndependentSpace, UserToDeviceSpace,
+    image_to_device_space, move_text_space_pos, move_text_space_right, to_device_space,
+    ImageToDeviceSpace, IntoSkiaTransform, TextToUserSpace, UserToDeviceIndependentSpace,
+    UserToDeviceSpace,
 };
 use tiny_skia::{
     FillRule, FilterQuality, GradientStop, Mask, MaskType, Paint, Path as SkiaPath, PathBuilder,
@@ -1891,7 +1892,7 @@ impl TextObject {
     }
 
     fn move_text_position(&mut self, p: Point) {
-        let matrix = self.line_matrix.pre_translate((p.x, p.y).into());
+        let matrix = move_text_space_pos(self.line_matrix, p.x, p.y);
         self.matrix = matrix;
         self.line_matrix = matrix;
     }
@@ -1903,8 +1904,7 @@ impl TextObject {
 
     fn move_right(&mut self, n: f32) {
         let tx = -n * 0.001 * self.font_size;
-        let ty = 0.0;
-        self.matrix = self.matrix.pre_translate((tx, ty).into());
+        self.matrix = move_text_space_right(self.matrix, tx);
     }
 
     fn set_character_spacing(&mut self, spacing: f32) {
