@@ -1,13 +1,13 @@
 use std::sync::Arc;
-#[cfg(debug_assertions)]
+#[cfg(feature = "debug")]
 use std::time::{Duration, Instant};
 
 use crate::{AppMessage, ShardedData};
 use anyhow::Result;
-use iced::Element;
 use iced::{
+    alignment,
     widget::{
-        button, column, horizontal_space,
+        button, column, horizontal_rule, horizontal_space,
         image::{Handle, Image},
         row, scrollable,
         scrollable::{Direction, Properties},
@@ -15,6 +15,8 @@ use iced::{
     },
     Length,
 };
+use iced::{Color, Element};
+use iced_aw::{menu_bar, native::helpers::menu_tree, native::menu::MenuTree};
 use nipdf::file::{File as PdfFile, ObjectResolver, RenderOptionBuilder, XRefTable};
 
 #[derive(Clone, Debug, Copy)]
@@ -62,6 +64,11 @@ pub enum ViewerMessage {
 
     CurPageChange(String),
     CurPageChanged,
+
+    #[cfg(feature = "debug")]
+    ShowPageId,
+    #[cfg(feature = "debug")]
+    Todo,
 }
 
 /// Pdf file viewer
@@ -71,7 +78,7 @@ pub struct Viewer {
     navi: PageNavigator,
     zoom: f32,
     cur_page_editing: String,
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "debug")]
     render_time: Duration,
     file_data: Vec<u8>,
     xref: XRefTable,
@@ -96,7 +103,7 @@ impl Viewer {
             },
             zoom: 1.75,
             cur_page_editing: "".to_owned(),
-            #[cfg(debug_assertions)]
+            #[cfg(feature = "debug")]
             render_time: Duration::default(),
             xref,
             file,
@@ -115,7 +122,7 @@ impl Viewer {
     }
 
     fn load_page(&mut self, no: u32) -> Result<()> {
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "debug")]
         let now = Instant::now();
         let resolver = ObjectResolver::new(&self.file_data, &self.xref);
         let catalog = self.file.catalog(&resolver)?;
@@ -133,7 +140,7 @@ impl Viewer {
             total_pages: pages.len() as u32,
         };
         self.update_cur_page_editing_from_navigation();
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "debug")]
         {
             self.render_time = now.elapsed();
         }
@@ -176,6 +183,22 @@ impl Viewer {
                     Ok(())
                 }
             }
+            #[cfg(feature = "debug")]
+            ViewerMessage::ShowPageId => {
+                use notify_rust::Notification;
+                Notification::new()
+                    .summary("Firefox News")
+                    .body("This will almost look like a real firefox notification.")
+                    .icon("firefox")
+                    .show()?;
+                Ok(())
+            }
+            #[cfg(feature = "debug")]
+            ViewerMessage::Todo => {
+                use notify_rust::Notification;
+                Notification::new().summary("TODO").icon("pdf").show()?;
+                Ok(())
+            }
         }
     }
 
@@ -214,8 +237,24 @@ impl Viewer {
                     .on_press(AppMessage::Viewer(ViewerMessage::ZoomOut))
                     .into(),
                 horizontal_space(Length::Fill).into(),
-                #[cfg(debug_assertions)]
-                text(format!("{} ms", self.render_time.as_millis())).into()
+                #[cfg(feature = "debug")]
+                text(format!("{} ms", self.render_time.as_millis())).into(),
+                #[cfg(feature = "debug")]
+                horizontal_space(8).into(),
+                #[cfg(feature = "debug")]
+                menu_bar!(menu_tree(
+                    text("Debug"),
+                    vec![
+                        new_menu_item("Page Object id", ViewerMessage::ShowPageId),
+                        MenuTree::new(horizontal_rule(8)),
+                        new_menu_item("Page Object", ViewerMessage::Todo),
+                        new_menu_item("Page Content", ViewerMessage::Todo),
+                        new_menu_item("Page Stream", ViewerMessage::Todo),
+                        MenuTree::new(horizontal_rule(8)),
+                        new_menu_item("Dump Page", ViewerMessage::Todo),
+                    ]
+                ))
+                .into()
             ])
             .align_items(iced::Alignment::Center),
             scrollable(
@@ -232,5 +271,43 @@ impl Viewer {
             })
         ]
         .into()
+    }
+}
+
+fn new_menu_item(label: &str, message: ViewerMessage) -> MenuTree<AppMessage, iced::Renderer> {
+    MenuTree::new(
+        button(
+            text(label)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .vertical_alignment(alignment::Vertical::Center),
+        )
+        .padding([4, 8])
+        .style(iced::theme::Button::Custom(Box::new(ButtonStyle {})))
+        .on_press(AppMessage::Viewer(message)),
+    )
+}
+
+struct ButtonStyle;
+impl button::StyleSheet for ButtonStyle {
+    type Style = iced::Theme;
+
+    fn active(&self, style: &Self::Style) -> button::Appearance {
+        button::Appearance {
+            text_color: style.extended_palette().background.base.text,
+            border_radius: [4.0; 4].into(),
+            background: Some(Color::TRANSPARENT.into()),
+            ..Default::default()
+        }
+    }
+
+    fn hovered(&self, style: &Self::Style) -> button::Appearance {
+        let plt = style.extended_palette();
+
+        button::Appearance {
+            background: Some(plt.primary.weak.color.into()),
+            text_color: plt.primary.weak.text,
+            ..self.active(style)
+        }
     }
 }
