@@ -480,6 +480,14 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         }
     }
 
+    fn device_width(&self) -> u32 {
+        self.canvas.width()
+    }
+
+    fn device_height(&self) -> u32 {
+        self.canvas.height()
+    }
+
     fn push(&mut self) {
         self.stack.push(self.stack.last().unwrap().clone());
     }
@@ -802,8 +810,8 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
 
         if xobject.image_mask().unwrap() {
             let mask = load_image_as_mask(
-                (self.width as f32 * state.zoom) as u32,
-                (self.height as f32 * state.zoom) as u32,
+                self.device_width(),
+                self.device_height(),
                 xobject,
                 self.resources,
                 state,
@@ -815,8 +823,8 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 Rect::from_xywh(
                     0.0,
                     0.0,
-                    self.canvas.width() as f32,
-                    self.canvas.height() as f32,
+                    self.device_width() as f32,
+                    self.device_height() as f32,
                 )
                 .unwrap(),
                 &paint,
@@ -827,7 +835,14 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         }
 
         let s_mask = xobject.s_mask().unwrap().map(|s_mask| {
-            load_image_as_mask(self.width, self.height, &s_mask, self.resources, state).unwrap()
+            load_image_as_mask(
+                self.device_width(),
+                self.device_height(),
+                &s_mask,
+                self.resources,
+                state,
+            )
+            .unwrap()
         });
 
         let paint = PixmapPaint {
