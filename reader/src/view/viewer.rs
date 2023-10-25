@@ -281,7 +281,7 @@ impl Viewer {
             .arg("--png")
             .arg(format!("{}", self.navi.current_page))
             .stderr(std::fs::File::create("/tmp/log")?)
-            .stdout(std::fs::File::open("/dev/null")?)
+            .stdout(std::fs::File::create("/tmp/foo.png")?)
             .env("RUST_LOG", "debug")
             .env("RUST_BACKTRACE", "1")
             .spawn();
