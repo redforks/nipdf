@@ -9,7 +9,7 @@ use crate::{
         parse_operations, AxialExtend, AxialShadingDict, ColorArgs, ColorArgsOrName, LineCapStyle,
         LineJoinStyle, NameOfDict, NameOrDictByRef, NameOrStream, PatternType, Point,
         RenderingIntent, ShadingPatternDict, ShadingType, TextRenderingMode, TilingPaintType,
-        TilingPatternDict, TransformMatrix,
+        TilingPatternDict,
     },
     object::{Object, PdfObject, Stream, TextStringOrNumber},
     text::{
@@ -881,7 +881,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
     fn set_shading_pattern(&mut self, pattern: ShadingPatternDict) -> AnyResult<()> {
         assert_eq!(
             pattern.matrix()?,
-            TransformMatrix::default(),
+            UserToDeviceIndependentSpace::default(),
             "matrix not supported"
         );
         assert!(pattern.ext_g_state()?.is_empty(), "ExtGState not supported");
@@ -936,7 +936,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         );
         ops.into_iter().for_each(|op| render.exec(op));
         self.stack.last_mut().unwrap().fill_paint =
-            PaintCreator::Tile((render.into(), tile.matrix()?.0));
+            PaintCreator::Tile((render.into(), tile.matrix()?));
         Ok(())
     }
 

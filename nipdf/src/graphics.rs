@@ -3,8 +3,7 @@ use std::{collections::HashSet, num::NonZeroU32};
 use ahash::RandomState;
 use anyhow::Result as AnyResult;
 
-use educe::Educe;
-use euclid::{default::Transform2D as TransformUnknownUnit, Transform2D};
+use euclid::Transform2D;
 use lazy_static::lazy_static;
 use log::error;
 use nom::{
@@ -35,20 +34,7 @@ pub(crate) use pattern::*;
 
 pub(crate) mod trans;
 
-#[derive(Clone, Copy, Educe)]
-#[educe(Default, Debug, PartialEq)]
-pub struct TransformMatrix<S, T>(pub Transform2D<f32, S, T>);
-
-impl<S, T> std::ops::Deref for TransformMatrix<S, T> {
-    type Target = Transform2D<f32, S, T>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-/// Create TransformMatrix from Object::Array
-impl<'a, S, T> TryFrom<&Object<'a>> for TransformMatrix<S, T> {
+impl<'a, S, T> TryFrom<&Object<'a>> for Transform2D<f32, S, T> {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
@@ -56,14 +42,14 @@ impl<'a, S, T> TryFrom<&Object<'a>> for TransformMatrix<S, T> {
         if arr.len() != 6 {
             return Err(ObjectValueError::UnexpectedType);
         }
-        Ok(TransformMatrix(Transform2D::<f32, S, T>::new(
+        Ok(Self::new(
             arr[0].as_number()?,
             arr[1].as_number()?,
             arr[2].as_number()?,
             arr[3].as_number()?,
             arr[4].as_number()?,
             arr[5].as_number()?,
-        )))
+        ))
     }
 }
 

@@ -96,14 +96,10 @@ fn color_or_with_pattern_from_object(mut v: Vec<Object>) -> ColorArgsOrName {
 }
 
 #[test]
-fn transform_matrix_try_from_array() {
+fn transform_try_from_array() {
+    use euclid::default::Transform2D;
     let arr = vec![1.into(), 2.into(), 3.into(), 4.into(), 5.into(), 6.into()];
     let o = Object::Array(arr);
-    let act = TransformMatrix::try_from(&o).unwrap();
-    assert_eq!(
-        act,
-        TransformMatrix(TransformUnknownUnit::new(
-            1f32, 2f32, 3f32, 4f32, 5f32, 6f32
-        ))
-    );
+    let act = Transform2D::try_from(&o).unwrap();
+    assert_eq!(act, Transform2D::new(1f32, 2f32, 3f32, 4f32, 5f32, 6f32));
 }
