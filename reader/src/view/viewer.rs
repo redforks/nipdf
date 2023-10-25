@@ -72,13 +72,13 @@ pub enum ViewerMessage {
     #[cfg(feature = "debug")]
     ShowPageId,
     #[cfg(feature = "debug")]
-    Todo,
-    #[cfg(feature = "debug")]
     DumpPageObject,
     #[cfg(feature = "debug")]
     DumpPageContent,
     #[cfg(feature = "debug")]
     DumpPageStream,
+    #[cfg(feature = "debug")]
+    DumpPageThree,
 }
 
 /// Pdf file viewer
@@ -236,6 +236,26 @@ impl Viewer {
         Ok(())
     }
 
+    /// Dump current page content/object/stream, and then open them
+    /// in `gvim`
+    #[cfg(feature = "debug")]
+    fn dump_page_three(&self) -> Result<()> {
+        self.dump_page_object()?;
+        self.dump_page_content()?;
+        self.dump_page_stream()?;
+
+        use std::process::Command;
+        Command::new("gvim")
+            .arg("-O")
+            .arg("/tmp/page-object")
+            .arg("/tmp/page-content")
+            .arg("/tmp/page-stream")
+            .arg("-c")
+            .arg("tabe /tmp/log")
+            .spawn()?;
+        Ok(())
+    }
+
     pub fn update(&mut self, message: ViewerMessage) -> Result<()> {
         fn notify(msg: &str) -> Result<()> {
             use notify_rust::Notification;
@@ -287,8 +307,6 @@ impl Viewer {
                 notify(&id.to_string())
             }
             #[cfg(feature = "debug")]
-            ViewerMessage::Todo => notify("TODO"),
-            #[cfg(feature = "debug")]
             ViewerMessage::DumpPageContent => {
                 self.dump_page_content()?;
                 notify("Page content dumped to /tmp/page-content")
@@ -303,6 +321,8 @@ impl Viewer {
                 self.dump_page_stream()?;
                 notify("Page stream dumped to /tmp/page-stream")
             }
+            #[cfg(feature = "debug")]
+            ViewerMessage::DumpPageThree => self.dump_page_three(),
         }
     }
 
@@ -355,7 +375,7 @@ impl Viewer {
                         new_menu_item("Page Content", ViewerMessage::DumpPageContent),
                         new_menu_item("Page Stream", ViewerMessage::DumpPageStream),
                         MenuTree::new(horizontal_rule(4)),
-                        new_menu_item("Dump Page", ViewerMessage::Todo),
+                        new_menu_item("Dump Page", ViewerMessage::DumpPageThree),
                     ]
                 ))
                 .item_height(ItemHeight::Dynamic(24))
