@@ -1,7 +1,6 @@
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::sync::Arc;
+#[cfg(debug_assertions)]
+use std::time::{Duration, Instant};
 
 use crate::{AppMessage, ShardedData};
 use anyhow::Result;
@@ -72,6 +71,7 @@ pub struct Viewer {
     navi: PageNavigator,
     zoom: f32,
     cur_page_editing: String,
+    #[cfg(debug_assertions)]
     render_time: Duration,
     file_data: Vec<u8>,
     xref: XRefTable,
@@ -96,6 +96,7 @@ impl Viewer {
             },
             zoom: 1.75,
             cur_page_editing: "".to_owned(),
+            #[cfg(debug_assertions)]
             render_time: Duration::default(),
             xref,
             file,
@@ -114,6 +115,7 @@ impl Viewer {
     }
 
     fn load_page(&mut self, no: u32) -> Result<()> {
+        #[cfg(debug_assertions)]
         let now = Instant::now();
         let resolver = ObjectResolver::new(&self.file_data, &self.xref);
         let catalog = self.file.catalog(&resolver)?;
@@ -131,7 +133,10 @@ impl Viewer {
             total_pages: pages.len() as u32,
         };
         self.update_cur_page_editing_from_navigation();
-        self.render_time = now.elapsed();
+        #[cfg(debug_assertions)]
+        {
+            self.render_time = now.elapsed();
+        }
         Ok(())
     }
 
@@ -176,31 +181,42 @@ impl Viewer {
 
     pub(crate) fn view(&self) -> Element<AppMessage> {
         column![
-            row![
-                button("Open...").on_press(AppMessage::SelectFile),
-                horizontal_space(16),
+            row(vec![
+                // can not use row! macro, it has compile problems because of #[cfg] attribute on some of items
+                button("Open...").on_press(AppMessage::SelectFile).into(),
+                horizontal_space(16).into(),
                 text_input("Page", &self.cur_page_editing)
                     .width(60)
                     .on_input(|s| AppMessage::Viewer(ViewerMessage::CurPageChange(s)))
-                    .on_submit(AppMessage::Viewer(ViewerMessage::CurPageChanged)),
-                text(format!("/{}", self.navi.total_pages)),
-                horizontal_space(16),
-                button("Prev").on_press_maybe(
-                    self.navi
-                        .can_prev()
-                        .then_some(AppMessage::Viewer(ViewerMessage::PrevPage))
-                ),
-                button("Next").on_press_maybe(
-                    self.navi
-                        .can_next()
-                        .then_some(AppMessage::Viewer(ViewerMessage::NextPage))
-                ),
-                horizontal_space(16),
-                button("Zoom In").on_press(AppMessage::Viewer(ViewerMessage::ZoomIn)),
-                button("Zoom Out").on_press(AppMessage::Viewer(ViewerMessage::ZoomOut)),
-                horizontal_space(Length::Fill),
-                text(format!("{} ms", self.render_time.as_millis())),
-            ]
+                    .on_submit(AppMessage::Viewer(ViewerMessage::CurPageChanged))
+                    .into(),
+                text(format!("/{}", self.navi.total_pages)).into(),
+                horizontal_space(16).into(),
+                button("Prev")
+                    .on_press_maybe(
+                        self.navi
+                            .can_prev()
+                            .then_some(AppMessage::Viewer(ViewerMessage::PrevPage))
+                    )
+                    .into(),
+                button("Next")
+                    .on_press_maybe(
+                        self.navi
+                            .can_next()
+                            .then_some(AppMessage::Viewer(ViewerMessage::NextPage))
+                    )
+                    .into(),
+                horizontal_space(16).into(),
+                button("Zoom In")
+                    .on_press(AppMessage::Viewer(ViewerMessage::ZoomIn))
+                    .into(),
+                button("Zoom Out")
+                    .on_press(AppMessage::Viewer(ViewerMessage::ZoomOut))
+                    .into(),
+                horizontal_space(Length::Fill).into(),
+                #[cfg(debug_assertions)]
+                text(format!("{} ms", self.render_time.as_millis())).into()
+            ])
             .align_items(iced::Alignment::Center),
             scrollable(
                 Image::new(Handle::from_pixels(
