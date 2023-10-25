@@ -74,6 +74,8 @@ pub enum ViewerMessage {
     #[cfg(feature = "debug")]
     Todo,
     #[cfg(feature = "debug")]
+    DumpPageObject,
+    #[cfg(feature = "debug")]
     DumpPageContent,
 }
 
@@ -178,6 +180,44 @@ impl Viewer {
         Ok(())
     }
 
+    /// Save page and related object using Debug trait and save to `/tmp/page-object` file.
+    #[cfg(feature = "debug")]
+    fn dump_page_object(&self) -> Result<()> {
+        use nipdf::object::Object;
+        use std::collections::HashSet;
+        use std::io::Write;
+        use std::num::NonZeroU32;
+
+        let resolver = ObjectResolver::new(&self.file_data, &self.xref);
+        let catalog = self.file.catalog(&resolver)?;
+        let pages = catalog.pages()?;
+        let page = &pages[self.navi.current_page as usize];
+
+        let id = NonZeroU32::new(page.id()).unwrap();
+        let mut id_wait_scanned = vec![id];
+        let mut ids = HashSet::new();
+
+        let mut f = std::fs::File::create("/tmp/page-object")?;
+        while let Some(id) = id_wait_scanned.pop() {
+            if ids.insert(id) {
+                writeln!(&mut f, "OBJ {}:", id)?;
+                let obj = resolver.resolve(id)?;
+                obj.to_doc().render(80, &mut f)?;
+                writeln!(&mut f, "\n\n\n")?;
+
+                id_wait_scanned.extend(obj.iter_values().filter_map(|o| {
+                    if let Object::Reference(r) = o {
+                        Some(r.id().id())
+                    } else {
+                        None
+                    }
+                }));
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn update(&mut self, message: ViewerMessage) -> Result<()> {
         fn notify(msg: &str) -> Result<()> {
             use notify_rust::Notification;
@@ -235,6 +275,11 @@ impl Viewer {
                 self.dump_page_content()?;
                 notify("Page content dumped to /tmp/page-content")
             }
+            #[cfg(feature = "debug")]
+            ViewerMessage::DumpPageObject => {
+                self.dump_page_object()?;
+                notify("Page object dumped to /tmp/page-object")
+            }
         }
     }
 
@@ -283,7 +328,7 @@ impl Viewer {
                     vec![
                         new_menu_item("Page Object id", ViewerMessage::ShowPageId),
                         MenuTree::new(horizontal_rule(4)),
-                        new_menu_item("Page Object", ViewerMessage::Todo),
+                        new_menu_item("Page Object", ViewerMessage::DumpPageObject),
                         new_menu_item("Page Content", ViewerMessage::DumpPageContent),
                         new_menu_item("Page Stream", ViewerMessage::Todo),
                         MenuTree::new(horizontal_rule(4)),
