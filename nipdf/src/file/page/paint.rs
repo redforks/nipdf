@@ -126,11 +126,6 @@ pub struct State {
     text_object: TextObject,
 }
 
-// fn start_instance() -> &'static Instant {
-//     static START_INSTANCE: Lazy<Instant> = Lazy::new(Instant::now);
-//     &START_INSTANCE
-// }
-
 impl State {
     /// height: height in user space coordinate
     fn new(option: &RenderOption) -> Self {
@@ -279,18 +274,12 @@ impl State {
 
     fn update_mask(&mut self, path: &SkiaPath, rule: FillRule, flip_y: bool) {
         let mut mask = self.mask.take().unwrap_or_else(|| self.new_mask());
-        // let log_id = start_instance().elapsed().as_nanos();
-        // mask.save_png(format!("/tmp/{}-mask-before.png", log_id))
-        //     .unwrap();
-        // debug!("update_mask {log_id}, path: {:?}", path);
         let transform = if flip_y {
             to_device_space(self.height, self.zoom, self.ctm).into_skia()
         } else {
             Transform::identity()
         };
         mask.intersect_path(path, rule, true, transform);
-        // mask.save_png(format!("/tmp/{}-mask-after.png", log_id))
-        //     .unwrap();
         self.mask = Some(mask);
     }
 
