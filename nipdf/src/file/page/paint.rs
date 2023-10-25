@@ -1594,8 +1594,10 @@ impl<'c> FontCache<'c> {
         let font_name = desc.font_name()?;
         let mut families = vec![Family::Name(font_name)];
         let family = desc.font_family()?;
-        if !family.is_empty() {
-            families.push(Family::Name(&family));
+        if let Some(family) = &family {
+            if !family.is_empty() {
+                families.push(Family::Name(&family));
+            }
         }
         let flags = desc.flags()?;
         if flags & FontDescriptorFlags::SERIF == FontDescriptorFlags::SERIF {
