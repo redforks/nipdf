@@ -356,6 +356,10 @@ impl PageContent {
         }
         r
     }
+
+    pub fn as_ref(&self) -> impl Iterator<Item = &[u8]> {
+        self.bufs.iter().map(|v| v.as_ref())
+    }
 }
 
 #[cfg(test)]

@@ -77,6 +77,8 @@ pub enum ViewerMessage {
     DumpPageObject,
     #[cfg(feature = "debug")]
     DumpPageContent,
+    #[cfg(feature = "debug")]
+    DumpPageStream,
 }
 
 /// Pdf file viewer
@@ -218,6 +220,22 @@ impl Viewer {
         Ok(())
     }
 
+    /// Decode current page content stream and save to `/tmp/page-stream` file.
+    #[cfg(feature = "debug")]
+    fn dump_page_stream(&self) -> Result<()> {
+        use std::io::Write;
+        let resolver = ObjectResolver::new(&self.file_data, &self.xref);
+        let catalog = self.file.catalog(&resolver)?;
+        let pages = catalog.pages()?;
+        let page = &pages[self.navi.current_page as usize];
+        let contents = page.content()?;
+        let mut f = std::fs::File::create("/tmp/page-stream")?;
+        for buf in contents.as_ref() {
+            f.write_all(buf)?;
+        }
+        Ok(())
+    }
+
     pub fn update(&mut self, message: ViewerMessage) -> Result<()> {
         fn notify(msg: &str) -> Result<()> {
             use notify_rust::Notification;
@@ -280,6 +298,11 @@ impl Viewer {
                 self.dump_page_object()?;
                 notify("Page object dumped to /tmp/page-object")
             }
+            #[cfg(feature = "debug")]
+            ViewerMessage::DumpPageStream => {
+                self.dump_page_stream()?;
+                notify("Page stream dumped to /tmp/page-stream")
+            }
         }
     }
 
@@ -330,7 +353,7 @@ impl Viewer {
                         MenuTree::new(horizontal_rule(4)),
                         new_menu_item("Page Object", ViewerMessage::DumpPageObject),
                         new_menu_item("Page Content", ViewerMessage::DumpPageContent),
-                        new_menu_item("Page Stream", ViewerMessage::Todo),
+                        new_menu_item("Page Stream", ViewerMessage::DumpPageStream),
                         MenuTree::new(horizontal_rule(4)),
                         new_menu_item("Dump Page", ViewerMessage::Todo),
                     ]
