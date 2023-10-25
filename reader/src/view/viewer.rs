@@ -73,6 +73,8 @@ pub enum ViewerMessage {
     ShowPageId,
     #[cfg(feature = "debug")]
     Todo,
+    #[cfg(feature = "debug")]
+    DumpPageContent,
 }
 
 /// Pdf file viewer
@@ -160,7 +162,32 @@ impl Viewer {
         Ok(page.id())
     }
 
+    /// Decode page content stream, dump using Debug trait and save to `/tmp/page-content` file.
+    #[cfg(feature = "debug")]
+    fn dump_page_content(&self) -> Result<()> {
+        use std::io::Write;
+        let resolver = ObjectResolver::new(&self.file_data, &self.xref);
+        let catalog = self.file.catalog(&resolver)?;
+        let pages = catalog.pages()?;
+        let page = &pages[self.navi.current_page as usize];
+        let contents = page.content()?;
+        let mut f = std::fs::File::create("/tmp/page-content")?;
+        for op in contents.operations() {
+            writeln!(f, "{:?}", op)?;
+        }
+        Ok(())
+    }
+
     pub fn update(&mut self, message: ViewerMessage) -> Result<()> {
+        fn notify(msg: &str) -> Result<()> {
+            use notify_rust::Notification;
+            Notification::new()
+                .appname(crate::APP_NAME)
+                .summary(msg)
+                .show()?;
+            Ok(())
+        }
+
         match message {
             ViewerMessage::NextPage => {
                 self.navi.next();
@@ -198,22 +225,15 @@ impl Viewer {
             }
             #[cfg(feature = "debug")]
             ViewerMessage::ShowPageId => {
-                use notify_rust::Notification;
                 let id = self.page_object_number()?;
-                Notification::new()
-                    .appname(crate::APP_NAME)
-                    .summary(&id.to_string())
-                    .show()?;
-                Ok(())
+                notify(&id.to_string())
             }
             #[cfg(feature = "debug")]
-            ViewerMessage::Todo => {
-                use notify_rust::Notification;
-                Notification::new()
-                    .appname(crate::APP_NAME)
-                    .summary("TODO")
-                    .show()?;
-                Ok(())
+            ViewerMessage::Todo => notify("TODO"),
+            #[cfg(feature = "debug")]
+            ViewerMessage::DumpPageContent => {
+                self.dump_page_content()?;
+                notify("Page content dumped to /tmp/page-content")
             }
         }
     }
@@ -264,7 +284,7 @@ impl Viewer {
                         new_menu_item("Page Object id", ViewerMessage::ShowPageId),
                         MenuTree::new(horizontal_rule(4)),
                         new_menu_item("Page Object", ViewerMessage::Todo),
-                        new_menu_item("Page Content", ViewerMessage::Todo),
+                        new_menu_item("Page Content", ViewerMessage::DumpPageContent),
                         new_menu_item("Page Stream", ViewerMessage::Todo),
                         MenuTree::new(horizontal_rule(4)),
                         new_menu_item("Dump Page", ViewerMessage::Todo),
