@@ -1,3 +1,4 @@
+use std::process::ExitCode;
 use std::sync::Arc;
 #[cfg(feature = "debug")]
 use std::time::{Duration, Instant};
@@ -21,6 +22,7 @@ use iced_aw::{
     native::helpers::menu_tree,
     native::menu::{ItemHeight, MenuTree},
 };
+use log::error;
 use nipdf::file::{File as PdfFile, ObjectResolver, RenderOptionBuilder, XRefTable};
 
 #[derive(Clone, Debug, Copy)]
@@ -77,6 +79,8 @@ pub enum ViewerMessage {
     DumpPageContent,
     #[cfg(feature = "debug")]
     DumpPageStream,
+    #[cfg(feature = "debug")]
+    DumpPageRenderLog,
     #[cfg(feature = "debug")]
     DumpPageThree,
 }
@@ -256,6 +260,42 @@ impl Viewer {
         Ok(())
     }
 
+    /// Run `cargo run -p nipdf-dump -- page -f <current pdf file path> --png <current page no>`,
+    /// redirect `stderr` to `/tmp/log` file, Set environment string: `RUST_LOG=debug RUST_BACKTRACE=1`
+    /// Return non-empty string on error
+    #[cfg(feature = "debug")]
+    fn dump_page_render_log(&self) -> Result<String> {
+        use std::process::Command;
+        let mut child = Command::new("cargo")
+            .arg("run")
+            .arg("-p")
+            .arg("nipdf-dump")
+            .arg("--")
+            .arg("page")
+            .arg("-f")
+            .arg(&self.file_path)
+            .arg("--png")
+            .arg(format!("{}", self.navi.current_page))
+            .stderr(std::fs::File::create("/tmp/log")?)
+            .stdout(std::fs::File::open("/dev/null")?)
+            .env("RUST_LOG", "debug")
+            .env("RUST_BACKTRACE", "1")
+            .spawn();
+        Ok(match child {
+            Err(err) => format!("{:?}", err),
+            Ok(mut child) => child.wait().map_or_else(
+                |e| format!("{:?}", e),
+                |exit_code| {
+                    if exit_code.success() {
+                        format!("exit code: {}", exit_code)
+                    } else {
+                        "".to_owned()
+                    }
+                },
+            ),
+        })
+    }
+
     pub fn update(&mut self, message: ViewerMessage) -> Result<()> {
         fn notify(msg: &str) -> Result<()> {
             use notify_rust::Notification;
@@ -323,6 +363,15 @@ impl Viewer {
             }
             #[cfg(feature = "debug")]
             ViewerMessage::DumpPageThree => self.dump_page_three(),
+            #[cfg(feature = "debug")]
+            ViewerMessage::DumpPageRenderLog => {
+                let err = self.dump_page_render_log()?;
+                if err.is_empty() {
+                    notify("Page render log dumped to /tmp/log")
+                } else {
+                    notify(&format!("Error: {}", err))
+                }
+            }
         }
     }
 
@@ -374,6 +423,7 @@ impl Viewer {
                         new_menu_item("Page Object", ViewerMessage::DumpPageObject),
                         new_menu_item("Page Content", ViewerMessage::DumpPageContent),
                         new_menu_item("Page Stream", ViewerMessage::DumpPageStream),
+                        new_menu_item("Page Render Log", ViewerMessage::DumpPageRenderLog),
                         MenuTree::new(horizontal_rule(4)),
                         new_menu_item("Dump Page", ViewerMessage::DumpPageThree),
                     ]
