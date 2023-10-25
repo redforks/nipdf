@@ -801,8 +801,14 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let state = self.stack.last().unwrap();
 
         if xobject.image_mask().unwrap() {
-            let mask = load_image_as_mask(self.width, self.height, xobject, self.resources, state)
-                .unwrap();
+            let mask = load_image_as_mask(
+                (self.width as f32 * state.zoom) as u32,
+                (self.height as f32 * state.zoom) as u32,
+                xobject,
+                self.resources,
+                state,
+            )
+            .unwrap();
             // fill canvas with current fill paint with mask
             let paint = state.get_fill_paint();
             self.canvas.fill_rect(

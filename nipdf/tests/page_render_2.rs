@@ -24,3 +24,8 @@ fn decode_page(page_no: usize) -> AnyResult<String> {
 fn clip_mask() {
     assert_ron_snapshot!(&decode_page(141).unwrap());
 }
+
+#[test]
+fn mask_image() {
+    assert_ron_snapshot!(&decode_page(163).unwrap());
+}

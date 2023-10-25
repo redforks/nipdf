@@ -30,14 +30,14 @@ impl<S, D> IntoSkiaTransform for Transform2D<f32, S, D> {
 /// Return a transform convert space to device space.
 /// Flip y-axis and apply zoom, because pdf use left-bottom as origin.
 pub fn to_device_space<S>(
-    height: f32,
+    device_independent_height: f32,
     zoom: f32,
     to_device_independent: Transform2D<f32, S, DeviceIndependentSpace>,
 ) -> Transform2D<f32, S, DeviceSpace> {
     to_device_independent
         .with_destination()
         .then_scale(zoom, -zoom)
-        .then_translate((0.0, height * zoom).into())
+        .then_translate((0.0, device_independent_height * zoom).into())
 }
 
 /// Return a transform from image space to user space.
@@ -49,12 +49,12 @@ pub fn image_to_user_space(img_w: u32, img_h: u32) -> ImageToUserSpace {
 pub fn image_to_device_space(
     img_w: u32,
     img_h: u32,
-    device_h: f32,
+    device_independent_height: f32,
     zoom: f32,
     ctm: UserToDeviceIndependentSpace,
 ) -> ImageToDeviceSpace {
     let user = image_to_user_space(img_w, img_h).then(&ctm);
-    to_device_space(device_h, zoom, user)
+    to_device_space(device_independent_height, zoom, user)
 }
 
 #[cfg(test)]
