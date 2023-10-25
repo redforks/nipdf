@@ -269,8 +269,8 @@ impl State {
     }
 
     fn new_mask(&self) -> Mask {
-        let w = self.width;
-        let h = self.height;
+        let w = self.width * self.zoom;
+        let h = self.height * self.zoom;
         let mut r = Mask::new(w as u32, h as u32).unwrap();
         let p = PathBuilder::from_rect(Rect::from_xywh(0.0, 0.0, w, h).unwrap());
         r.fill_path(&p, FillRule::Winding, true, Transform::identity());

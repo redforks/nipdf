@@ -44,7 +44,9 @@ euclid = "0.22.9"
 [dev-dependencies]
 env_logger = "0.10.0"
 glob = "0.3.1"
+hex = "0.4"
 insta = { version = "1.29.0", features = ["ron"] }
+md-5 = "0.10"
 static_assertions = "1.1.0"
 test-case = "3.1.0"
 test-log = "0.2.12"
