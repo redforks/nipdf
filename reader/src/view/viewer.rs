@@ -147,6 +147,15 @@ impl Viewer {
         Ok(())
     }
 
+    #[cfg(feature = "debug")]
+    fn page_object_number(&self) -> Result<u32> {
+        let resolver = ObjectResolver::new(&self.file_data, &self.xref);
+        let catalog = self.file.catalog(&resolver)?;
+        let pages = catalog.pages()?;
+        let page = &pages[self.navi.current_page as usize];
+        Ok(page.id())
+    }
+
     pub fn update(&mut self, message: ViewerMessage) -> Result<()> {
         match message {
             ViewerMessage::NextPage => {
@@ -186,17 +195,20 @@ impl Viewer {
             #[cfg(feature = "debug")]
             ViewerMessage::ShowPageId => {
                 use notify_rust::Notification;
+                let id = self.page_object_number()?;
                 Notification::new()
-                    .summary("Firefox News")
-                    .body("This will almost look like a real firefox notification.")
-                    .icon("firefox")
+                    .appname(crate::APP_NAME)
+                    .summary(&id.to_string())
                     .show()?;
                 Ok(())
             }
             #[cfg(feature = "debug")]
             ViewerMessage::Todo => {
                 use notify_rust::Notification;
-                Notification::new().summary("TODO").icon("pdf").show()?;
+                Notification::new()
+                    .appname(crate::APP_NAME)
+                    .summary("TODO")
+                    .show()?;
                 Ok(())
             }
         }
