@@ -46,7 +46,7 @@ enum View {
 /// Messages for application view.
 #[derive(Debug, Clone)]
 enum AppMessage {
-    Inited,
+    Initialized,
     Viewer(ViewerMessage),
 
     SelectFile,
@@ -153,7 +153,7 @@ impl Application for App {
         (
             r,
             // load icon font for iced_aw, without this modal close button icon will not show.
-            font::load(iced_aw::graphics::icons::ICON_FONT_BYTES).map(|_| AppMessage::Inited),
+            font::load(iced_aw::graphics::icons::ICON_FONT_BYTES).map(|_| AppMessage::Initialized),
         )
     }
 
@@ -165,7 +165,7 @@ impl Application for App {
 
     fn update(&mut self, message: AppMessage) -> Command<Self::Message> {
         match message {
-            AppMessage::Inited => {}
+            AppMessage::Initialized => {}
             AppMessage::Viewer(msg) => {
                 let rv = self.mut_viewer().unwrap().update(msg);
                 self.handle_result(rv);
