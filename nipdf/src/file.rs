@@ -327,10 +327,10 @@ impl<'a> ObjectResolver<'a> {
         c: &'c C,
         id: &str,
     ) -> Result<Option<T>, ObjectValueError> {
-        if let Some(obj) = self.opt_resolve_container_value(c, id)? {
+        if let Some((id, obj)) = self._opt_resolve_container_value(c, id)? {
             match obj {
-                Object::Dictionary(d) => Ok(Some(T::new(None, d, self)?)),
-                Object::Stream(s) => Ok(Some(T::new(None, s.as_dict(), self)?)),
+                Object::Dictionary(d) => Ok(Some(T::new(id, d, self)?)),
+                Object::Stream(s) => Ok(Some(T::new(id, s.as_dict(), self)?)),
                 _ => Err(ObjectValueError::UnexpectedType),
             }
         } else {
@@ -368,6 +368,14 @@ impl<'a> ObjectResolver<'a> {
             error!("{}: {}", e, id);
             e
         })
+    }
+
+    fn _opt_resolve_container_value<'b: 'a, 'd: 'c, 'c, C: DataContainer<'a>>(
+        &'d self,
+        c: &'c C,
+        id: &str,
+    ) -> Result<Option<(Option<NonZeroU32>, &'c Object<'a>)>, ObjectValueError> {
+        Self::not_found_error_to_opt(self._resolve_container_value(c, id))
     }
 
     fn _resolve_container_value<'b: 'a, 'd: 'c, 'c, C: DataContainer<'a>>(
