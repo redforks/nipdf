@@ -1,4 +1,5 @@
-use std::process::ExitCode;
+#[cfg(feature = "debug")]
+use iced::{alignment, widget::horizontal_rule};
 use std::sync::Arc;
 #[cfg(feature = "debug")]
 use std::time::{Duration, Instant};
@@ -6,9 +7,8 @@ use std::time::{Duration, Instant};
 use crate::{AppMessage, ShardedData};
 use anyhow::Result;
 use iced::{
-    alignment,
     widget::{
-        button, column, horizontal_rule, horizontal_space,
+        button, column, horizontal_space,
         image::{Handle, Image},
         row, scrollable,
         scrollable::{Direction, Properties},
@@ -17,12 +17,12 @@ use iced::{
     Length,
 };
 use iced::{Color, Element};
+#[cfg(feature = "debug")]
 use iced_aw::{
     menu_bar,
     native::helpers::menu_tree,
     native::menu::{ItemHeight, MenuTree},
 };
-use log::error;
 use nipdf::file::{File as PdfFile, ObjectResolver, RenderOptionBuilder, XRefTable};
 
 #[derive(Clone, Debug, Copy)]
@@ -266,7 +266,7 @@ impl Viewer {
     #[cfg(feature = "debug")]
     fn dump_page_render_log(&self) -> Result<String> {
         use std::process::Command;
-        let mut child = Command::new("cargo")
+        let child = Command::new("cargo")
             .arg("run")
             .arg("-p")
             .arg("nipdf-dump")
@@ -297,6 +297,7 @@ impl Viewer {
     }
 
     pub fn update(&mut self, message: ViewerMessage) -> Result<()> {
+        #[cfg(feature = "debug")]
         fn notify(msg: &str) -> Result<()> {
             use notify_rust::Notification;
             Notification::new()
@@ -449,6 +450,7 @@ impl Viewer {
     }
 }
 
+#[cfg(feature = "debug")]
 fn new_menu_item(label: &str, message: ViewerMessage) -> MenuTree<AppMessage, iced::Renderer> {
     MenuTree::new(
         button(
