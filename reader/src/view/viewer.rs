@@ -16,7 +16,11 @@ use iced::{
     Length,
 };
 use iced::{Color, Element};
-use iced_aw::{menu_bar, native::helpers::menu_tree, native::menu::MenuTree};
+use iced_aw::{
+    menu_bar,
+    native::helpers::menu_tree,
+    native::menu::{ItemHeight, MenuTree},
+};
 use nipdf::file::{File as PdfFile, ObjectResolver, RenderOptionBuilder, XRefTable};
 
 #[derive(Clone, Debug, Copy)]
@@ -258,14 +262,15 @@ impl Viewer {
                     text("Debug"),
                     vec![
                         new_menu_item("Page Object id", ViewerMessage::ShowPageId),
-                        MenuTree::new(horizontal_rule(8)),
+                        MenuTree::new(horizontal_rule(4)),
                         new_menu_item("Page Object", ViewerMessage::Todo),
                         new_menu_item("Page Content", ViewerMessage::Todo),
                         new_menu_item("Page Stream", ViewerMessage::Todo),
-                        MenuTree::new(horizontal_rule(8)),
+                        MenuTree::new(horizontal_rule(4)),
                         new_menu_item("Dump Page", ViewerMessage::Todo),
                     ]
                 ))
+                .item_height(ItemHeight::Dynamic(24))
                 .into()
             ])
             .align_items(iced::Alignment::Center),
