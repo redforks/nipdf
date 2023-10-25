@@ -39,8 +39,8 @@ use crate::graphics::color_space;
 use crate::graphics::color_space::ColorSpace;
 
 use crate::graphics::trans::{
-    image_to_device_space, to_device_space, ImageToDeviceSpace, IntoSkiaTransform,
-    UserToDeviceIndependentSpace, UserToDeviceSpace,
+    image_to_device_space, move_text_space_right, to_device_space, ImageToDeviceSpace,
+    IntoSkiaTransform, TextToUserSpace, UserToDeviceIndependentSpace, UserToDeviceSpace,
 };
 use tiny_skia::{
     FillRule, FilterQuality, GradientStop, Mask, MaskType, Paint, Path as SkiaPath, PathBuilder,
@@ -1023,7 +1023,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let font_size = text_object.font_size;
         let mut glyph_render = font.create_glyph_render(font_size).unwrap();
 
-        let mut transform: Transform = text_object.matrix.into();
+        let mut text_to_user_space: TextToUserSpace = text_object.matrix;
         let render_mode = text_object.render_mode;
         let mut text_clip_path = Path::default();
         let flip_y = to_device_space(state.height, state.zoom, state.ctm).into_skia();
@@ -1036,10 +1036,10 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             let path = Self::gen_glyph_path(glyph_render.as_mut(), gid);
             if !path.is_empty() {
                 let path = path.finish().unwrap();
-                // pre transform path to unit space, render_glyph() will zoom line_width,
+                // pre transform path to user space, render_glyph() will zoom line_width,
                 // pdf line_width state is in user space, but skia line_width is in device space
-                // so we need to transform path to unit space, and zoom line_width in device space
-                let path = path.transform(transform).unwrap();
+                // so we need to transform path to user space, and zoom line_width in device space
+                let path = path.transform(text_to_user_space.into_skia()).unwrap();
 
                 Self::render_glyph(
                     &mut self.canvas,
@@ -1050,11 +1050,11 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                     flip_y,
                 );
             }
-            transform = transform.pre_translate(width, 0.0);
+            text_to_user_space = move_text_space_right(text_to_user_space, width);
         }
         drop(op);
         drop(glyph_render);
-        self.text_object_mut().matrix = transform.into();
+        self.text_object_mut().matrix = text_to_user_space;
         if let Some(text_clip_path) = text_clip_path.finish() {
             self.text_object_mut()
                 .text_clipping_path
@@ -1846,8 +1846,8 @@ impl<'a> FontOp for TrueTypeFontOp<'a> {
 #[derive(Educe, Clone)]
 #[educe(Debug)]
 struct TextObject {
-    matrix: TransformMatrix,
-    line_matrix: TransformMatrix,
+    matrix: TextToUserSpace,
+    line_matrix: TextToUserSpace,
     font_size: f32,
     font_name: Option<String>,
     text_clipping_path: Path,
@@ -1864,8 +1864,8 @@ struct TextObject {
 impl TextObject {
     pub fn new() -> Self {
         Self {
-            matrix: TransformMatrix::identity(),
-            line_matrix: TransformMatrix::identity(),
+            matrix: TextToUserSpace::identity(),
+            line_matrix: TextToUserSpace::identity(),
             font_size: 0.0,
             font_name: None,
             text_clipping_path: Path::default(),
@@ -1881,8 +1881,8 @@ impl TextObject {
     }
 
     fn reset(&mut self) {
-        self.matrix = TransformMatrix::identity();
-        self.line_matrix = TransformMatrix::identity();
+        self.matrix = TextToUserSpace::identity();
+        self.line_matrix = TextToUserSpace::identity();
     }
 
     fn set_font(&mut self, name: &NameOfDict, size: f32) {
@@ -1891,22 +1891,20 @@ impl TextObject {
     }
 
     fn move_text_position(&mut self, p: Point) {
-        let matrix: Transform = self.line_matrix.into();
-        let matrix = matrix.pre_translate(p.x, p.y).into();
+        let matrix = self.line_matrix.pre_translate((p.x, p.y).into());
         self.matrix = matrix;
         self.line_matrix = matrix;
     }
 
-    fn set_text_matrix(&mut self, m: TransformMatrix) {
+    fn set_text_matrix(&mut self, m: TextToUserSpace) {
         self.matrix = m;
         self.line_matrix = m;
     }
 
     fn move_right(&mut self, n: f32) {
-        let matrix: Transform = self.matrix.into();
         let tx = -n * 0.001 * self.font_size;
         let ty = 0.0;
-        self.matrix = matrix.pre_translate(tx, ty).into();
+        self.matrix = self.matrix.pre_translate((tx, ty).into());
     }
 
     fn set_character_spacing(&mut self, spacing: f32) {

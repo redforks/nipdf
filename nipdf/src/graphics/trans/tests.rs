@@ -1,7 +1,7 @@
 use super::*;
 use euclid::approxeq::ApproxEq;
 use euclid::default::Transform2D as Transform;
-use euclid::Point2D;
+use euclid::{Angle, Point2D};
 
 #[test]
 fn to_skia() {
@@ -110,4 +110,15 @@ fn test_image_to_device_space() {
     );
     let f = new_assert(r);
     f((0., 0.), (105.7 * 1.5, (842. - (401.5 + 383.9)) * 1.5));
+}
+
+#[test]
+fn test_move_text_space_right() {
+    let f = new_assert(move_text_space_right(
+        Transform2D::identity()
+            .then_scale(2.0, 3.)
+            .then_rotate(Angle::degrees(90.)),
+        10.0,
+    ));
+    f((0., 0.), (0. * 3., 10. * 2.));
 }

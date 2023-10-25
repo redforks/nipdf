@@ -10,11 +10,13 @@ pub enum DeviceIndependentSpace {}
 pub enum DeviceSpace {}
 // pub enum TextSpace;
 pub enum ImageSpace {}
+pub enum TextSpace {}
 pub type UserToDeviceIndependentSpace = Transform2D<f32, UserSpace, DeviceIndependentSpace>;
 // pub enum PatternSpace;
 pub type UserToDeviceSpace = Transform2D<f32, UserSpace, DeviceSpace>;
 pub type ImageToUserSpace = Transform2D<f32, ImageSpace, UserSpace>;
 pub type ImageToDeviceSpace = Transform2D<f32, ImageSpace, DeviceSpace>;
+pub type TextToUserSpace = Transform2D<f32, TextSpace, UserSpace>;
 
 /// Convert current object into tiny_skia `Transform`.
 pub trait IntoSkiaTransform {
@@ -55,6 +57,11 @@ pub fn image_to_device_space(
 ) -> ImageToDeviceSpace {
     let user = image_to_user_space(img_w, img_h).then(&ctm);
     to_device_space(device_independent_height, zoom, user)
+}
+
+/// Adjust transform moves text space to right.
+pub fn move_text_space_right(transform: TextToUserSpace, text_space_unit: f32) -> TextToUserSpace {
+    transform.pre_translate((text_space_unit, 0.0).into())
 }
 
 #[cfg(test)]
