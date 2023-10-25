@@ -102,13 +102,8 @@ fn transform_matrix_try_from_array() {
     let act = TransformMatrix::try_from(&o).unwrap();
     assert_eq!(
         act,
-        TransformMatrix {
-            sx: 1f32,
-            kx: 2f32,
-            ky: 3f32,
-            sy: 4f32,
-            tx: 5f32,
-            ty: 6f32
-        }
+        TransformMatrix(TransformUnknownUnit::new(
+            1f32, 2f32, 3f32, 4f32, 5f32, 6f32
+        ))
     );
 }

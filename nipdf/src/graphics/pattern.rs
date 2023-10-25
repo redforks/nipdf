@@ -2,6 +2,7 @@ use ahash::HashMap;
 use nipdf_macro::{pdf_object, TryFromIntObject};
 
 use super::{ColorArgs, ColorSpaceArgs, Rectangle};
+use crate::graphics::trans::{DeviceIndependentSpace, UserSpace};
 use crate::{
     file::{GraphicsStateParameterDict, ResourceDict},
     function::{default_domain, Domain, FunctionDict},
@@ -72,7 +73,7 @@ pub trait TilingPatternDictTrait {
 
     #[try_from]
     #[or_default]
-    fn matrix(&self) -> TransformMatrix;
+    fn matrix(&self) -> TransformMatrix<UserSpace, DeviceIndependentSpace>;
 }
 
 #[pdf_object(2i32)]
@@ -83,7 +84,7 @@ pub trait ShadingPatternDictTrait {
 
     #[try_from]
     #[or_default]
-    fn matrix(&self) -> TransformMatrix;
+    fn matrix(&self) -> TransformMatrix<UserSpace, DeviceIndependentSpace>;
 
     #[nested]
     fn ext_g_state() -> HashMap<String, GraphicsStateParameterDict<'a, 'b>>;

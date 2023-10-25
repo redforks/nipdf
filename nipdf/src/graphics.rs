@@ -4,7 +4,7 @@ use ahash::RandomState;
 use anyhow::Result as AnyResult;
 
 use educe::Educe;
-use euclid::Transform2D;
+use euclid::{default::Transform2D as TransformUnknownUnit, Transform2D};
 use lazy_static::lazy_static;
 use log::error;
 use nom::{
@@ -15,7 +15,6 @@ use nom::{
     multi::many0,
     Parser,
 };
-use tiny_skia::Transform;
 
 use crate::{
     file::{Rectangle, ResourceDict},
@@ -36,52 +35,20 @@ pub(crate) use pattern::*;
 
 pub(crate) mod trans;
 
-#[derive(Debug, Clone, Copy, PartialEq, Educe)]
-#[educe(Default)]
-pub struct TransformMatrix {
-    #[educe(Default = 1.0)]
-    pub sx: f32,
-    pub kx: f32,
-    pub ky: f32,
-    #[educe(Default = 1.0)]
-    pub sy: f32,
-    pub tx: f32,
-    pub ty: f32,
-}
+#[derive(Clone, Copy, Educe)]
+#[educe(Default, Debug, PartialEq)]
+pub struct TransformMatrix<S, T>(pub Transform2D<f32, S, T>);
 
-impl TransformMatrix {
-    pub fn identity() -> Self {
-        Self::default()
-    }
-}
+impl<S, T> std::ops::Deref for TransformMatrix<S, T> {
+    type Target = Transform2D<f32, S, T>;
 
-impl From<TransformMatrix> for Transform {
-    fn from(m: TransformMatrix) -> Self {
-        Self::from_row(m.sx, m.ky, m.kx, m.sy, m.tx, m.ty)
-    }
-}
-
-impl From<TransformMatrix> for UserToDeviceIndependentSpace {
-    fn from(m: TransformMatrix) -> Self {
-        Self::new(m.sx, m.ky, m.kx, m.sy, m.tx, m.ty)
-    }
-}
-
-impl From<Transform> for TransformMatrix {
-    fn from(m: Transform) -> Self {
-        Self {
-            sx: m.sx,
-            kx: m.kx,
-            ky: m.ky,
-            sy: m.sy,
-            tx: m.tx,
-            ty: m.ty,
-        }
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
 /// Create TransformMatrix from Object::Array
-impl<'a> TryFrom<&Object<'a>> for TransformMatrix {
+impl<'a, S, T> TryFrom<&Object<'a>> for TransformMatrix<S, T> {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
@@ -89,14 +56,14 @@ impl<'a> TryFrom<&Object<'a>> for TransformMatrix {
         if arr.len() != 6 {
             return Err(ObjectValueError::UnexpectedType);
         }
-        Ok(TransformMatrix {
-            sx: arr[0].as_number()?,
-            kx: arr[1].as_number()?,
-            ky: arr[2].as_number()?,
-            sy: arr[3].as_number()?,
-            tx: arr[4].as_number()?,
-            ty: arr[5].as_number()?,
-        })
+        Ok(TransformMatrix(Transform2D::<f32, S, T>::new(
+            arr[0].as_number()?,
+            arr[1].as_number()?,
+            arr[2].as_number()?,
+            arr[3].as_number()?,
+            arr[4].as_number()?,
+            arr[5].as_number()?,
+        )))
     }
 }
 
@@ -343,25 +310,6 @@ impl<'a, 'b, S, T> ConvertFromObject<'a, 'b> for Transform2D<f32, S, T> {
         let b = objects.pop().unwrap().as_number()?;
         let a = objects.pop().unwrap().as_number()?;
         Ok(Self::new(a, b, c, d, e, f))
-    }
-}
-
-impl<'a, 'b> ConvertFromObject<'a, 'b> for TransformMatrix {
-    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
-        let f = objects.pop().unwrap().as_number()?;
-        let e = objects.pop().unwrap().as_number()?;
-        let d = objects.pop().unwrap().as_number()?;
-        let c = objects.pop().unwrap().as_number()?;
-        let b = objects.pop().unwrap().as_number()?;
-        let a = objects.pop().unwrap().as_number()?;
-        Ok(Self {
-            sx: a,
-            ky: b,
-            kx: c,
-            sy: d,
-            tx: e,
-            ty: f,
-        })
     }
 }
 
