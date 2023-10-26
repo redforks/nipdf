@@ -353,6 +353,9 @@ impl Viewer {
         self.open_in_gvim = open_in_gvim;
         self.page_input.visible = true;
         self.page_input.place_holder = format!("{}", self.navi.current_page + 1);
+        if self.page_input.value.is_empty() {
+            self.page_input.value = self.page_input.place_holder.clone();
+        }
         Ok(())
     }
 
