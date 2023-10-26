@@ -231,5 +231,18 @@ impl<T: ColorComp> ColorSpace<T> for DeviceCMYK {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct PatternColorSpace;
+
+impl<T> ColorSpace<T> for PatternColorSpace {
+    fn to_rgba(&self, _color: &[T]) -> [T; 4] {
+        unreachable!("PatternColorSpace.to_rgba() should not be called")
+    }
+
+    fn components(&self) -> usize {
+        0
+    }
+}
+
 #[cfg(test)]
 mod tests;

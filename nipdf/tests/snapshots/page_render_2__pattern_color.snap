@@ -1,0 +1,5 @@
+---
+source: nipdf/tests/page_render_2.rs
+expression: "&decode_file_page(\"sample_files/normal/SamplePdf1_12mb_6pages.pdf\",\n            5).unwrap()"
+---
+"6bef2c6eea5f14b78b07ab734d1ddf56"

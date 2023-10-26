@@ -28,7 +28,7 @@ use nipdf_macro::{pdf_object, OperationParser, TryFromIntObject, TryFromNameObje
 pub(crate) mod color_space;
 mod pattern;
 use crate::file::ObjectResolver;
-use crate::graphics::color_space::ColorSpace as ColorSpaceTrait;
+use crate::graphics::color_space::{ColorSpace as ColorSpaceTrait, PatternColorSpace};
 use crate::graphics::trans::{TextToUserSpace, UserToDeviceIndependentSpace};
 pub(crate) use pattern::*;
 
@@ -198,6 +198,7 @@ impl ColorSpaceArgs {
                 let args = spaces.get(name).ok_or(ObjectValueError::DictNameMissing)?;
                 args.create_color_space(resolver, resources)
             }
+            Self::Pattern => Ok(Box::new(PatternColorSpace)),
             _ => todo!("Convert {:?} to Color space", self),
         }
     }

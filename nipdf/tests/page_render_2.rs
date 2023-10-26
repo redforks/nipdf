@@ -5,9 +5,7 @@ use insta::assert_ron_snapshot;
 use md5::{Digest, Md5};
 use nipdf::file::{File, ObjectResolver, RenderOptionBuilder};
 
-/// Render page to image, and returns its md5 hash converted to hex
-fn decode_page(page_no: usize) -> AnyResult<String> {
-    let path = "sample_files/normal/pdfreference1.0.pdf";
+fn decode_file_page(path: &str, page_no: usize) -> AnyResult<String> {
     let buf = std::fs::read(path)?;
     let (f, xref) = File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {path:?}"));
     let resolver = ObjectResolver::new(&buf[..], &xref);
@@ -20,6 +18,11 @@ fn decode_page(page_no: usize) -> AnyResult<String> {
     Ok(hex::encode(hash))
 }
 
+/// Render page to image, and returns its md5 hash converted to hex
+fn decode_page(page_no: usize) -> AnyResult<String> {
+    decode_file_page("sample_files/normal/pdfreference1.0.pdf", page_no)
+}
+
 #[test]
 fn clip_mask() {
     assert_ron_snapshot!(&decode_page(141).unwrap());
@@ -28,4 +31,11 @@ fn clip_mask() {
 #[test]
 fn mask_image() {
     assert_ron_snapshot!(&decode_page(163).unwrap());
+}
+
+#[test]
+fn pattern_color() {
+    assert_ron_snapshot!(
+        &decode_file_page("sample_files/normal/SamplePdf1_12mb_6pages.pdf", 5).unwrap()
+    );
 }
