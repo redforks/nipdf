@@ -1596,7 +1596,7 @@ impl<'c> FontCache<'c> {
         let family = desc.font_family()?;
         if let Some(family) = &family {
             if !family.is_empty() {
-                families.push(Family::Name(&family));
+                families.push(Family::Name(family));
             }
         }
         let flags = desc.flags()?;

@@ -1,11 +1,17 @@
 #[cfg(feature = "debug")]
 use iced::{alignment, widget::horizontal_rule};
+#[cfg(feature = "debug")]
+use iced_aw::{modal, Card};
 use std::sync::Arc;
 #[cfg(feature = "debug")]
 use std::time::{Duration, Instant};
 
 use crate::{AppMessage, ShardedData};
 use anyhow::Result;
+#[cfg(feature = "debug")]
+use iced::alignment::Horizontal;
+#[cfg(feature = "debug")]
+use iced::widget::{Button, Row, Text};
 use iced::{
     widget::{
         button, column, horizontal_space,
@@ -60,6 +66,69 @@ struct Page {
     data: ShardedData,
 }
 
+#[cfg(feature = "debug")]
+#[derive(Debug, Clone)]
+pub enum PageInputMessage {
+    Hide,
+    EditValue(String),
+}
+
+#[cfg(feature = "debug")]
+#[derive(Default)]
+struct PageInput {
+    visible: bool,
+    place_holder: String,
+    value: String,
+}
+
+#[cfg(feature = "debug")]
+impl PageInput {
+    pub fn update(&mut self, m: PageInputMessage) -> Result<()> {
+        match m {
+            PageInputMessage::Hide => {
+                self.visible = false;
+            }
+            PageInputMessage::EditValue(s) => {
+                self.value = s;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn view(&self) -> Element<AppMessage> {
+        Card::new(
+            Text::new(crate::APP_NAME),
+            text_input(&self.place_holder, &self.value)
+                .on_input(|v| {
+                    AppMessage::Viewer(ViewerMessage::PageInput(PageInputMessage::EditValue(v)))
+                })
+                .on_submit(AppMessage::Viewer(ViewerMessage::DumpFourForSpecificPage)),
+        )
+        .foot(
+            Row::new()
+                .spacing(10)
+                .padding(5)
+                .width(Length::Fill)
+                .push(
+                    Button::new(Text::new("Cancel").horizontal_alignment(Horizontal::Center))
+                        .width(Length::Fill)
+                        .on_press(AppMessage::Viewer(ViewerMessage::PageInput(
+                            PageInputMessage::Hide,
+                        ))),
+                )
+                .push(
+                    Button::new(Text::new("Ok").horizontal_alignment(Horizontal::Center))
+                        .width(Length::Fill)
+                        .on_press(AppMessage::Viewer(ViewerMessage::DumpFourForSpecificPage)),
+                ),
+        )
+        .max_width(300.0)
+        .on_close(AppMessage::CancelSelectFile)
+        .into()
+    }
+}
+
 /// Messages for pdf file viewer view.
 #[derive(Debug, Clone)]
 pub enum ViewerMessage {
@@ -82,9 +151,13 @@ pub enum ViewerMessage {
     #[cfg(feature = "debug")]
     DumpPageRenderLog,
     #[cfg(feature = "debug")]
-    DumpPageThree,
+    DumpPage,
     #[cfg(feature = "debug")]
-    DumpPageThreeWithoutGvim,
+    DumpPageWithoutGvim,
+    #[cfg(feature = "debug")]
+    DumpFourForSpecificPage,
+    #[cfg(feature = "debug")]
+    PageInput(PageInputMessage),
 }
 
 /// Pdf file viewer
@@ -94,11 +167,15 @@ pub struct Viewer {
     navi: PageNavigator,
     zoom: f32,
     cur_page_editing: String,
-    #[cfg(feature = "debug")]
-    render_time: Duration,
     file_data: Vec<u8>,
     xref: XRefTable,
     file: PdfFile,
+    #[cfg(feature = "debug")]
+    render_time: Duration,
+    #[cfg(feature = "debug")]
+    page_input: PageInput,
+    #[cfg(feature = "debug")]
+    open_in_gvim: bool,
 }
 
 impl Viewer {
@@ -124,6 +201,10 @@ impl Viewer {
             xref,
             file,
             file_data,
+            #[cfg(feature = "debug")]
+            page_input: PageInput::default(),
+            #[cfg(feature = "debug")]
+            open_in_gvim: false,
         };
         r.load_page(0)?;
         Ok(r)
@@ -173,13 +254,16 @@ impl Viewer {
     }
 
     /// Decode page content stream, dump using Debug trait and save to `/tmp/page-content` file.
+    /// Use current page if page_no is None.
     #[cfg(feature = "debug")]
-    fn dump_page_content(&self) -> Result<()> {
+    fn dump_page_content(&self, page_no: Option<u32>) -> Result<()> {
+        let page_no = page_no.unwrap_or_else(|| self.navi.current_page) as usize;
+
         use std::io::Write;
         let resolver = ObjectResolver::new(&self.file_data, &self.xref);
         let catalog = self.file.catalog(&resolver)?;
         let pages = catalog.pages()?;
-        let page = &pages[self.navi.current_page as usize];
+        let page = &pages[page_no];
         let contents = page.content()?;
         let mut f = std::fs::File::create("/tmp/page-content")?;
         for op in contents.operations() {
@@ -189,8 +273,11 @@ impl Viewer {
     }
 
     /// Save page and related object using Debug trait and save to `/tmp/page-object` file.
+    /// Use current page if page_no is None.
     #[cfg(feature = "debug")]
-    fn dump_page_object(&self) -> Result<()> {
+    fn dump_page_object(&self, page_no: Option<u32>) -> Result<()> {
+        let page_no = page_no.unwrap_or_else(|| self.navi.current_page) as usize;
+
         use nipdf::object::Object;
         use std::collections::HashSet;
         use std::io::Write;
@@ -199,7 +286,7 @@ impl Viewer {
         let resolver = ObjectResolver::new(&self.file_data, &self.xref);
         let catalog = self.file.catalog(&resolver)?;
         let pages = catalog.pages()?;
-        let page = &pages[self.navi.current_page as usize];
+        let page = &pages[page_no];
 
         let id = NonZeroU32::new(page.id()).unwrap();
         let mut id_wait_scanned = vec![id];
@@ -226,14 +313,17 @@ impl Viewer {
         Ok(())
     }
 
-    /// Decode current page content stream and save to `/tmp/page-stream` file.
+    /// Decode page content stream and save to `/tmp/page-stream` file.
+    /// Use current page if page_no is None.
     #[cfg(feature = "debug")]
-    fn dump_page_stream(&self) -> Result<()> {
+    fn dump_page_stream(&self, page_no: Option<u32>) -> Result<()> {
+        let page_no = page_no.unwrap_or_else(|| self.navi.current_page) as usize;
+
         use std::io::Write;
         let resolver = ObjectResolver::new(&self.file_data, &self.xref);
         let catalog = self.file.catalog(&resolver)?;
         let pages = catalog.pages()?;
-        let page = &pages[self.navi.current_page as usize];
+        let page = &pages[page_no];
         let contents = page.content()?;
         let mut f = std::fs::File::create("/tmp/page-stream")?;
         for buf in contents.as_ref() {
@@ -242,33 +332,38 @@ impl Viewer {
         Ok(())
     }
 
-    /// Dump current page content/object/stream, and then open them
-    /// in `gvim`
     #[cfg(feature = "debug")]
-    fn dump_page_three(&self, open_in_gvim: bool) -> Result<()> {
-        self.dump_page_object()?;
-        self.dump_page_content()?;
-        self.dump_page_stream()?;
-
-        if open_in_gvim {
-            use std::process::Command;
-            Command::new("gvim")
-                .arg("-O")
-                .arg("/tmp/page-object")
-                .arg("/tmp/page-content")
-                .arg("/tmp/page-stream")
-                .arg("-c")
-                .arg("tabe /tmp/log")
-                .spawn()?;
-        }
+    fn open_in_gvim() -> Result<()> {
+        use std::process::Command;
+        Command::new("gvim")
+            .arg("-O")
+            .arg("/tmp/page-object")
+            .arg("/tmp/page-content")
+            .arg("/tmp/page-stream")
+            .arg("-c")
+            .arg("tabe /tmp/log")
+            .spawn()?;
         Ok(())
     }
 
-    /// Run `cargo run -p nipdf-dump -- page -f <current pdf file path> --png <current page no>`,
+    /// Dump current page content/object/stream, and then open them
+    /// in `gvim`
+    #[cfg(feature = "debug")]
+    fn dump_page(&mut self, open_in_gvim: bool) -> Result<()> {
+        self.open_in_gvim = open_in_gvim;
+        self.page_input.visible = true;
+        self.page_input.place_holder = format!("{}", self.navi.current_page + 1);
+        Ok(())
+    }
+
+    /// Run `cargo run -p nipdf-dump -- page -f <current pdf file path> --png <page no>`,
     /// redirect `stderr` to `/tmp/log` file, Set environment string: `RUST_LOG=debug RUST_BACKTRACE=1`
+    /// Use current page if page_no is None
     /// Return non-empty string on error
     #[cfg(feature = "debug")]
-    fn dump_page_render_log(&self) -> Result<String> {
+    fn dump_page_render_log(&self, page_no: Option<u32>) -> Result<String> {
+        let page_no = page_no.unwrap_or_else(|| self.navi.current_page) as usize;
+
         use std::process::Command;
         let child = Command::new("cargo")
             .arg("run")
@@ -279,7 +374,7 @@ impl Viewer {
             .arg("-f")
             .arg(&self.file_path)
             .arg("--png")
-            .arg(format!("{}", self.navi.current_page))
+            .arg(format!("{}", page_no))
             .stderr(std::fs::File::create("/tmp/log")?)
             .stdout(std::fs::File::create("/tmp/foo.png")?)
             .env("RUST_LOG", "debug")
@@ -298,6 +393,17 @@ impl Viewer {
                 },
             ),
         })
+    }
+
+    /// Dump `page_no` page's content/object/stream, and render to `/tmp/foo.png`,
+    /// save render log to `/tmp/log` file.
+    #[cfg(feature = "debug")]
+    fn dump_four_for_specific_page(&self, page_no: u32) -> Result<()> {
+        self.dump_page_object(Some(page_no))?;
+        self.dump_page_content(Some(page_no))?;
+        self.dump_page_stream(Some(page_no))?;
+        self.dump_page_render_log(Some(page_no))?;
+        Ok(())
     }
 
     pub fn update(&mut self, message: ViewerMessage) -> Result<()> {
@@ -353,37 +459,54 @@ impl Viewer {
             }
             #[cfg(feature = "debug")]
             ViewerMessage::DumpPageContent => {
-                self.dump_page_content()?;
+                self.dump_page_content(None)?;
                 notify("Page content dumped to /tmp/page-content")
             }
             #[cfg(feature = "debug")]
             ViewerMessage::DumpPageObject => {
-                self.dump_page_object()?;
+                self.dump_page_object(None)?;
                 notify("Page object dumped to /tmp/page-object")
             }
             #[cfg(feature = "debug")]
             ViewerMessage::DumpPageStream => {
-                self.dump_page_stream()?;
+                self.dump_page_stream(None)?;
                 notify("Page stream dumped to /tmp/page-stream")
             }
             #[cfg(feature = "debug")]
-            ViewerMessage::DumpPageThree => self.dump_page_three(true),
+            ViewerMessage::DumpPage => self.dump_page(true),
             #[cfg(feature = "debug")]
-            ViewerMessage::DumpPageThreeWithoutGvim => self.dump_page_three(false),
+            ViewerMessage::DumpPageWithoutGvim => self.dump_page(false),
             #[cfg(feature = "debug")]
             ViewerMessage::DumpPageRenderLog => {
-                let err = self.dump_page_render_log()?;
+                let err = self.dump_page_render_log(None)?;
                 if err.is_empty() {
                     notify("Page render log dumped to /tmp/log")
                 } else {
                     notify(&format!("Error: {}", err))
                 }
             }
+            #[cfg(feature = "debug")]
+            ViewerMessage::DumpFourForSpecificPage => {
+                if let Ok(page) = self.page_input.value.parse::<u32>() {
+                    self.page_input.visible = false;
+                    let page = page.clamp(1, self.navi.total_pages);
+                    self.dump_four_for_specific_page(page - 1)?;
+                    if self.open_in_gvim {
+                        Self::open_in_gvim()
+                    } else {
+                        notify("Dumped page content/object/stream/render-log for specific page")
+                    }
+                } else {
+                    notify("Invalid page number")
+                }
+            }
+            #[cfg(feature = "debug")]
+            ViewerMessage::PageInput(m) => self.page_input.update(m),
         }
     }
 
     pub(crate) fn view(&self) -> Element<AppMessage> {
-        column![
+        let main: Element<AppMessage> = column![
             row(vec![
                 // can not use row! macro, it has compile problems because of #[cfg] attribute on some of items
                 button("Open...").on_press(AppMessage::SelectFile).into(),
@@ -432,8 +555,8 @@ impl Viewer {
                         new_menu_item("Page Stream", ViewerMessage::DumpPageStream),
                         new_menu_item("Page Render Log", ViewerMessage::DumpPageRenderLog),
                         MenuTree::new(horizontal_rule(4)),
-                        new_menu_item("Dump Page and open", ViewerMessage::DumpPageThree),
-                        new_menu_item("Dump Page", ViewerMessage::DumpPageThreeWithoutGvim),
+                        new_menu_item("Dump Page and open", ViewerMessage::DumpPage),
+                        new_menu_item("Dump Page", ViewerMessage::DumpPageWithoutGvim),
                     ]
                 ))
                 .item_height(ItemHeight::Dynamic(24))
@@ -453,7 +576,18 @@ impl Viewer {
                 horizontal: Properties::default(),
             })
         ]
-        .into()
+        .into();
+
+        if cfg!(feature = "debug") {
+            #[cfg(feature = "debug")]
+            return modal(
+                main,
+                self.page_input.visible.then(|| self.page_input.view()),
+            )
+            .into();
+        }
+
+        main
     }
 }
 
