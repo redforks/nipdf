@@ -33,6 +33,7 @@ use swash::{
     zeno::{Command as PathCommand, PathData},
     CacheKey, FontRef,
 };
+use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
 
 use super::{GraphicsStateParameterDict, Operation, Rectangle, ResourceDict};
 use crate::graphics::color_space;
@@ -1029,7 +1030,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let mut text_clip_path = Path::default();
         let flip_y = to_device_space(state.height, state.zoom, state.ctm).into_skia();
         for ch in op.decode_chars(text) {
-            let width = op.char_width(ch) as f32 / 1000.0 * font_size
+            let width = op.char_width(ch) as f32 / op.units_per_em() as f32 * font_size
                 + char_spacing
                 + if ch == 32 { word_spacing } else { 0.0 };
 
@@ -1494,6 +1495,127 @@ impl<'a, 'b> Font for Type1Font<'a, 'b> {
     }
 }
 
+struct TTFParserFontOp<'a> {
+    face: TTFFace<'a>,
+    units_per_em: u16,
+}
+
+impl<'a> FontOp for TTFParserFontOp<'a> {
+    fn decode_chars(&self, s: &[u8]) -> Vec<u32> {
+        s.iter().map(|v| *v as u32).collect()
+    }
+
+    fn char_to_gid(&self, ch: u32) -> u16 {
+        self.face
+            .glyph_index(unsafe { char::from_u32_unchecked(ch) })
+            .unwrap_or_else(|| {
+                error!("Failed convert char {} to gid", ch);
+                GlyphId(ch as u16)
+            })
+            .0
+    }
+
+    fn char_width(&self, ch: u32) -> u32 {
+        self.face
+            .glyph_hor_advance(GlyphId(self.char_to_gid(ch)))
+            .unwrap() as u32
+    }
+
+    fn units_per_em(&self) -> u16 {
+        self.units_per_em
+    }
+}
+
+struct TTFParserPathSink<'a> {
+    path: &'a mut PathBuilder,
+    scale: f32,
+}
+
+impl<'a> TTFParserPathSink<'a> {
+    pub fn new(path: &'a mut PathBuilder, font_size: f32, units_per_em: f32) -> Self {
+        Self {
+            path,
+            scale: font_size / units_per_em,
+        }
+    }
+}
+
+impl<'a> OutlineBuilder for TTFParserPathSink<'a> {
+    fn move_to(&mut self, x: f32, y: f32) {
+        self.path.move_to(x * self.scale, y * self.scale);
+    }
+
+    fn line_to(&mut self, x: f32, y: f32) {
+        self.path.line_to(x * self.scale, y * self.scale);
+    }
+
+    fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {
+        self.path.quad_to(
+            x1 * self.scale,
+            y1 * self.scale,
+            x * self.scale,
+            y * self.scale,
+        );
+    }
+
+    fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32) {
+        self.path.cubic_to(
+            x1 * self.scale,
+            y1 * self.scale,
+            x2 * self.scale,
+            y2 * self.scale,
+            x * self.scale,
+            y * self.scale,
+        );
+    }
+
+    fn close(&mut self) {
+        self.path.close()
+    }
+}
+
+struct TTFParserGlyphRender<'a> {
+    face: TTFFace<'a>,
+    font_size: f32,
+    units_per_em: f32,
+}
+
+impl<'a> GlyphRender for TTFParserGlyphRender<'a> {
+    fn render(&mut self, gid: u16, sink: &mut PathSink) -> AnyResult<()> {
+        let mut sink = TTFParserPathSink::new(sink.0, self.font_size, self.units_per_em);
+        self.face.outline_glyph(GlyphId(gid), &mut sink);
+        Ok(())
+    }
+}
+
+struct TTFParserFont {
+    typ: FontType,
+    data: Vec<u8>,
+}
+
+impl Font for TTFParserFont {
+    fn font_type(&self) -> FontType {
+        self.typ
+    }
+
+    fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
+        let face = TTFFace::parse(&self.data, 0)?;
+        Ok(Box::new(TTFParserFontOp {
+            units_per_em: face.units_per_em(),
+            face,
+        }))
+    }
+
+    fn create_glyph_render(&self, font_size: f32) -> AnyResult<Box<dyn GlyphRender + '_>> {
+        let face = TTFFace::parse(&self.data, 0)?;
+        Ok(Box::new(TTFParserGlyphRender {
+            units_per_em: face.units_per_em() as f32,
+            face,
+            font_size,
+        }))
+    }
+}
+
 struct SwashFont<'a, 'b> {
     typ: FontType,
     data: Vec<u8>,
@@ -1572,6 +1694,13 @@ struct FontCache<'c> {
 }
 
 impl<'c> FontCache<'c> {
+    fn load_true_type_font_from_bytes1(font: FontDict, bytes: Vec<u8>) -> AnyResult<TTFParserFont> {
+        Ok(TTFParserFont {
+            typ: font.subtype()?,
+            data: bytes,
+        })
+    }
+
     fn load_true_type_font_from_bytes<'a, 'b>(
         font: FontDict<'a, 'b>,
         bytes: Vec<u8>,
@@ -1650,7 +1779,7 @@ impl<'c> FontCache<'c> {
     fn load_swash_font<'a, 'b>(
         font: FontDict<'a, 'b>,
         resolve_desc: fn(&FontDict<'a, 'b>) -> AnyResult<FontDescriptorDict<'a, 'b>>,
-    ) -> AnyResult<SwashFont<'a, 'b>> {
+    ) -> AnyResult<TTFParserFont> {
         let desc = resolve_desc(&font)?;
         let bytes = match desc.font_file2()? {
             Some(stream) => Self::load_embed_font_bytes(desc.resolver(), stream)?,
@@ -1663,7 +1792,7 @@ impl<'c> FontCache<'c> {
                 Self::load_true_type_from_os(&desc)?
             }
         };
-        Self::load_true_type_font_from_bytes(font, bytes)
+        Self::load_true_type_font_from_bytes1(font, bytes)
     }
 
     /// Load Type1 font, only standard 14 fonts supported, these fonts are replaced
@@ -1771,6 +1900,9 @@ trait FontOp {
     fn char_to_gid(&self, ch: u32) -> u16;
     /// Return glyph width for specified char
     fn char_width(&self, ch: u32) -> u32;
+    fn units_per_em(&self) -> u16 {
+        1000
+    }
 }
 
 struct Type0FontOp {
