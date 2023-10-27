@@ -336,12 +336,13 @@ pub trait EncodingDictTrait {
     fn differences(&self) -> Option<EncodingDifferences<'b>>;
 }
 
-/// Encoding for Type1
+/// Encoding for Type1 and other font types except Type0, which allows
+/// char code larger than u8.
 /// map char code (u8) to glyph name
 #[derive(Debug)]
-pub struct Encoding<'a>([&'a str; 256]);
+pub struct Encoding256<'a>([&'a str; 256]);
 
-impl<'a> Encoding<'a> {
+impl<'a> Encoding256<'a> {
     pub fn new(encodings: [&'a str; 256]) -> Self {
         Self(encodings)
     }
@@ -361,7 +362,7 @@ impl<'a> Encoding<'a> {
 
 const NOTDEF: &str = ".notdef";
 
-impl Encoding<'static> {
+impl Encoding256<'static> {
     pub fn predefined(name: &str) -> Option<Self> {
         match name {
             "MacRomanEncoding" => Some(Self::MAC_ROMAN),

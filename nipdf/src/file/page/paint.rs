@@ -13,7 +13,7 @@ use crate::{
     },
     object::{Object, PdfObject, Stream, TextStringOrNumber},
     text::{
-        CIDFontType, CIDFontWidths, Encoding, EncodingDict, FontDescriptorDict,
+        CIDFontType, CIDFontWidths, Encoding256, EncodingDict, FontDescriptorDict,
         FontDescriptorFlags, FontDict, FontType, Type0FontDict, Type1FontDict,
     },
 };
@@ -1276,7 +1276,7 @@ trait Font {
 struct Type1FontOp<'a> {
     font_width: Either<FirstLastFontWidth, FreeTypeFontWidth<'a>>,
     font: &'a FontKitFont,
-    encoding: Encoding<'a>,
+    encoding: Encoding256<'a>,
 }
 
 impl<'c> Type1FontOp<'c> {
@@ -1287,9 +1287,9 @@ impl<'c> Type1FontOp<'c> {
         font_data: &'c [u8],
     ) -> AnyResult<Self> {
         let font_name = font_dict.font_name()?;
-        let resolve_by_name = |encoding_name: Option<&str>| -> AnyResult<Encoding> {
+        let resolve_by_name = |encoding_name: Option<&str>| -> AnyResult<Encoding256> {
             if let Some(encoding_name) = encoding_name {
-                return Encoding::predefined(encoding_name)
+                return Encoding256::predefined(encoding_name)
                     .ok_or_else(|| anyhow!("Unknown encoding: {}", encoding_name));
             }
 
@@ -1297,17 +1297,17 @@ impl<'c> Type1FontOp<'c> {
                 info!("scan encoding from cff font. ({})", font_name);
                 let cff_file: CffFile<'c> = CffFile::open(font_data)?;
                 let font: CffFont<'c> = cff_file.iter()?.next().expect("no font in cff?");
-                return Ok(Encoding::new(font.encodings()?));
+                return Ok(Encoding256::new(font.encodings()?));
             }
             info!("TODO: resolve encoding from type1 font. ({})", font_name);
 
             // if font not embed encoding, use known encoding for the two standard symbol fonts
             match font_name.to_ascii_lowercase().as_str() {
                 "symbol" => {
-                    return Ok(Encoding::SYMBOL);
+                    return Ok(Encoding256::SYMBOL);
                 }
                 "zapfdingbats" => {
-                    return Ok(Encoding::ZAPFDINGBATS);
+                    return Ok(Encoding256::ZAPFDINGBATS);
                 }
                 _ => (),
             }
@@ -1318,7 +1318,7 @@ impl<'c> Type1FontOp<'c> {
                 }
             }
 
-            Ok(Encoding::STANDARD)
+            Ok(Encoding256::STANDARD)
         };
 
         let font_width = FirstLastFontWidth::from_type1_type(&font_dict)?
