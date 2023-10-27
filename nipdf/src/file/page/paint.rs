@@ -18,6 +18,7 @@ use crate::{
     },
 };
 use anyhow::{anyhow, Ok, Result as AnyResult};
+use cff_parser::{File as CffFile, Font as CffFont};
 use educe::Educe;
 use font_kit::loaders::freetype::Font as FontKitFont;
 use fontdb::{Database, Family, Query, Source, Weight};
@@ -38,7 +39,6 @@ use crate::graphics::trans::{
     ImageToDeviceSpace, IntoSkiaTransform, TextToUserSpace, UserToDeviceIndependentSpace,
     UserToDeviceSpace,
 };
-use crate::text::NOTDEF;
 use tiny_skia::{
     FillRule, FilterQuality, GradientStop, Mask, MaskType, Paint, Path as SkiaPath, PathBuilder,
     Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect, Stroke, StrokeDash, Transform,
@@ -1279,19 +1279,6 @@ struct Type1FontOp<'a> {
     encoding: Encoding256<'a>,
 }
 
-fn load_encoding_from_cff(font_data: &[u8]) -> AnyResult<Encoding256<'_>> {
-    use ttf_parser::cff::Table;
-
-    let cff = Table::parse(font_data).ok_or(anyhow!("not a cff font"))?;
-    let mut encodings = [NOTDEF; 256];
-    for (idx, p) in encodings.iter_mut().enumerate() {
-        *p = cff
-            .glyph_index(idx as u8)
-            .map_or(NOTDEF, |gid| cff.glyph_name(gid).unwrap());
-    }
-    Ok(Encoding256::new(encodings))
-}
-
 impl<'c> Type1FontOp<'c> {
     fn new<'a: 'c, 'b: 'c>(
         font_dict: Type1FontDict<'a, 'b>,
@@ -1308,7 +1295,9 @@ impl<'c> Type1FontOp<'c> {
 
             if is_cff {
                 info!("scan encoding from cff font. ({})", font_name);
-                return load_encoding_from_cff(font_data);
+                let cff_file: CffFile<'c> = CffFile::open(font_data)?;
+                let font: CffFont<'c> = cff_file.iter()?.next().expect("no font in cff?");
+                return Ok(Encoding256::new(font.encodings()?));
             }
             info!("TODO: resolve encoding from type1 font. ({})", font_name);
 

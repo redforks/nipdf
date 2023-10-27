@@ -360,7 +360,7 @@ impl<'a> Encoding256<'a> {
     }
 }
 
-pub const NOTDEF: &str = ".notdef";
+const NOTDEF: &str = ".notdef";
 
 impl Encoding256<'static> {
     pub fn predefined(name: &str) -> Option<Self> {
