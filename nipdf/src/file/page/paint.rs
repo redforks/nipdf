@@ -1588,22 +1588,32 @@ impl<'a> GlyphRender for TTFParserGlyphRender<'a> {
     }
 }
 
-struct TTFParserFont {
+struct TTFParserFont<'a, 'b> {
     typ: FontType,
     data: Vec<u8>,
+    font_dict: FontDict<'a, 'b>,
 }
 
-impl Font for TTFParserFont {
+impl<'a, 'b> Font for TTFParserFont<'a, 'b> {
     fn font_type(&self) -> FontType {
         self.typ
     }
 
     fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
-        let face = TTFFace::parse(&self.data, 0)?;
-        Ok(Box::new(TTFParserFontOp {
-            units_per_em: face.units_per_em(),
-            face,
-        }))
+        Ok(match self.font_type() {
+            FontType::TrueType => {
+                let face = TTFFace::parse(&self.data, 0)?;
+                Box::new(TTFParserFontOp {
+                    units_per_em: face.units_per_em(),
+                    face,
+                })
+            }
+            FontType::Type0 => Box::new(Type0FontOp::new(&self.font_dict.type0()?)?),
+            _ => unreachable!(
+                "TTFParserFont not support font type: {:?}",
+                self.font_type()
+            ),
+        })
     }
 
     fn create_glyph_render(&self, font_size: f32) -> AnyResult<Box<dyn GlyphRender + '_>> {
@@ -1694,10 +1704,14 @@ struct FontCache<'c> {
 }
 
 impl<'c> FontCache<'c> {
-    fn load_true_type_font_from_bytes1(font: FontDict, bytes: Vec<u8>) -> AnyResult<TTFParserFont> {
+    fn load_true_type_font_from_bytes1<'a, 'b>(
+        font: FontDict<'a, 'b>,
+        bytes: Vec<u8>,
+    ) -> AnyResult<TTFParserFont<'a, 'b>> {
         Ok(TTFParserFont {
             typ: font.subtype()?,
             data: bytes,
+            font_dict: font,
         })
     }
 
@@ -1779,7 +1793,7 @@ impl<'c> FontCache<'c> {
     fn load_swash_font<'a, 'b>(
         font: FontDict<'a, 'b>,
         resolve_desc: fn(&FontDict<'a, 'b>) -> AnyResult<FontDescriptorDict<'a, 'b>>,
-    ) -> AnyResult<TTFParserFont> {
+    ) -> AnyResult<TTFParserFont<'a, 'b>> {
         let desc = resolve_desc(&font)?;
         let bytes = match desc.font_file2()? {
             Some(stream) => Self::load_embed_font_bytes(desc.resolver(), stream)?,
