@@ -343,7 +343,7 @@ pub trait EncodingDictTrait {
 pub struct Encoding256<'a>([&'a str; 256]);
 
 impl<'a> Encoding256<'a> {
-    pub const fn new(encodings: [&'a str; 256]) -> Self {
+    pub fn new(encodings: [&'a str; 256]) -> Self {
         Self(encodings)
     }
 
@@ -1668,7 +1668,7 @@ impl Encoding256<'static> {
         NOTDEF,
     ]);
 
-    pub const ZAPFDINGBATS: Self = Self::new([
+    pub const ZAPFDINGBATS: Self = Self([
         NOTDEF, NOTDEF, NOTDEF, NOTDEF, NOTDEF, NOTDEF, NOTDEF, NOTDEF, NOTDEF, NOTDEF, NOTDEF,
         NOTDEF, NOTDEF, NOTDEF, NOTDEF, NOTDEF, NOTDEF, NOTDEF, NOTDEF, NOTDEF, NOTDEF, NOTDEF,
         NOTDEF, NOTDEF, NOTDEF, NOTDEF, NOTDEF, NOTDEF, NOTDEF, NOTDEF, NOTDEF, NOTDEF, "space",

@@ -27,7 +27,6 @@ use log::{debug, error, info, warn};
 use nom::{combinator::eof, sequence::terminated};
 use once_cell::sync::Lazy;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
-use ttf_parser::cff::Table as CffFont;
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
 
 use super::{GraphicsStateParameterDict, Operation, Rectangle, ResourceDict};
@@ -39,14 +38,11 @@ use crate::graphics::trans::{
     ImageToDeviceSpace, IntoSkiaTransform, TextToUserSpace, UserToDeviceIndependentSpace,
     UserToDeviceSpace,
 };
+use crate::text::NOTDEF;
 use tiny_skia::{
     FillRule, FilterQuality, GradientStop, Mask, MaskType, Paint, Path as SkiaPath, PathBuilder,
     Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect, Stroke, StrokeDash, Transform,
 };
-
-fn load_cff_font(font_data: &[u8]) -> AnyResult<CffFont<'_>> {
-    CffFont::parse(font_data).ok_or_else(|| anyhow!("invalid cff font"))
-}
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
     fn from(cap: LineCapStyle) -> Self {
@@ -1251,29 +1247,6 @@ impl<'a> font_kit::outline::OutlineSink for FreeTypePathSink<'a> {
     }
 }
 
-struct CffGlyphRender<'a> {
-    font: CffFont<'a>,
-    font_size: f32,
-}
-
-impl<'a> CffGlyphRender<'a> {
-    pub fn new(font_data: &'a [u8], font_size: f32) -> AnyResult<Self> {
-        let font = load_cff_font(font_data)?;
-
-        Ok(Self { font, font_size })
-    }
-}
-
-impl<'a> GlyphRender for CffGlyphRender<'a> {
-    fn render(&mut self, gid: u16, sink: &mut PathSink) -> AnyResult<()> {
-        let mut sink = TTFParserPathSink::new(sink.0, self.font_size, 1000.);
-        self.font
-            .outline(GlyphId(gid), &mut sink)
-            .map_err(|e| anyhow!("{:?}", e))?;
-        Ok(())
-    }
-}
-
 struct Type1GlyphRender<'a> {
     font: &'a FontKitFont,
     font_size: f32,
@@ -1306,10 +1279,25 @@ struct Type1FontOp<'a> {
     encoding: Encoding256<'a>,
 }
 
+fn load_encoding_from_cff(font_data: &[u8]) -> AnyResult<Encoding256<'_>> {
+    use ttf_parser::cff::Table;
+
+    let cff = Table::parse(font_data).ok_or(anyhow!("not a cff font"))?;
+    let mut encodings = [NOTDEF; 256];
+    for (idx, p) in encodings.iter_mut().enumerate() {
+        *p = cff
+            .glyph_index(idx as u8)
+            .map_or(NOTDEF, |gid| cff.glyph_name(gid).unwrap());
+    }
+    Ok(Encoding256::new(encodings))
+}
+
 impl<'c> Type1FontOp<'c> {
     fn new<'a: 'c, 'b: 'c>(
         font_dict: Type1FontDict<'a, 'b>,
         font: &'c FontKitFont,
+        is_cff: bool,
+        font_data: &'c [u8],
     ) -> AnyResult<Self> {
         let font_name = font_dict.font_name()?;
         let resolve_by_name = |encoding_name: Option<&str>| -> AnyResult<Encoding256> {
@@ -1318,6 +1306,10 @@ impl<'c> Type1FontOp<'c> {
                     .ok_or_else(|| anyhow!("Unknown encoding: {}", encoding_name));
             }
 
+            if is_cff {
+                info!("scan encoding from cff font. ({})", font_name);
+                return load_encoding_from_cff(font_data);
+            }
             info!("TODO: resolve encoding from type1 font. ({})", font_name);
 
             // if font not embed encoding, use known encoding for the two standard symbol fonts
@@ -1340,6 +1332,8 @@ impl<'c> Type1FontOp<'c> {
             Ok(Encoding256::STANDARD)
         };
 
+        let font_width = FirstLastFontWidth::from_type1_type(&font_dict)?
+            .map_or_else(|| Either::Right(FreeTypeFontWidth::new(font)), Either::Left);
         let encoding = font_dict.encoding()?;
         let encoding = match encoding {
             Some(NameOrDictByRef::Dict(d)) => {
@@ -1354,12 +1348,6 @@ impl<'c> Type1FontOp<'c> {
             Some(NameOrDictByRef::Name(name)) => resolve_by_name(Some(name.as_ref()))?,
             None => resolve_by_name(None)?,
         };
-
-        let font_width = match FirstLastFontWidth::from_type1_type(&font_dict)? {
-            Some(x) => Either::Left(x),
-            None => Either::Right(FreeTypeFontWidth::new(font)),
-        };
-
         Ok(Self {
             font_width,
             font,
@@ -1376,8 +1364,8 @@ impl<'a> FontOp for Type1FontOp<'a> {
     /// Use font.glyph_for_char() if encoding is None or encoding.replace() returns None
     fn char_to_gid(&self, ch: u32) -> u16 {
         let gid_name = self.encoding.decode(ch as u8);
-        if let Some(r) = self.font.glyph_by_name(gid_name).map(|g| g as u16) {
-            r
+        if let Some(r) = self.font.glyph_by_name(gid_name) {
+            r as u16
         } else {
             info!("glyph id not found for char: {:?}/{}", ch, gid_name);
             // .notdef gid is always be 0 for type1 font
@@ -1385,10 +1373,10 @@ impl<'a> FontOp for Type1FontOp<'a> {
         }
     }
 
-    fn char_width(&self, ch: u32) -> u32 {
+    fn char_width(&self, gid: u32) -> u32 {
         self.font_width.as_ref().either(
-            |x| x.char_width(ch),
-            |x| x.glyph_width(self.char_to_gid(ch) as u32),
+            |x| x.char_width(gid),
+            |x| x.glyph_width(self.char_to_gid(gid) as u32),
         )
     }
 }
@@ -1396,7 +1384,8 @@ impl<'a> FontOp for Type1FontOp<'a> {
 /// Font implementation using freetype/(font-kit), to handle Type1 fonts
 struct Type1Font<'a, 'b> {
     font_data: Vec<u8>,
-    font: Option<FontKitFont>,
+    is_cff: bool,
+    font: FontKitFont,
     font_dict: FontDict<'a, 'b>,
 }
 
@@ -1404,14 +1393,10 @@ impl<'a, 'b> Type1Font<'a, 'b> {
     fn new(is_cff: bool, data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> AnyResult<Self> {
         debug_assert_eq!(data.capacity(), data.len());
 
-        let font = if is_cff {
-            None
-        } else {
-            Some(FontKitFont::from_bytes(data.clone().into(), 0)?)
-        };
-
+        let font = FontKitFont::from_bytes(data.clone().into(), 0)?;
         Ok(Self {
             font_data: data,
+            is_cff,
             font,
             font_dict,
         })
@@ -1424,56 +1409,25 @@ impl<'a, 'b> Font for Type1Font<'a, 'b> {
     }
 
     fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
-        match &self.font {
-            Some(f) => Ok(Box::new(Type1FontOp::new(self.font_dict.type1()?, f)?)),
-            None => Ok(Box::new(CffFontOp::new(&self.font_data)?)),
-        }
+        Ok(Box::new(Type1FontOp::new(
+            self.font_dict.type1()?,
+            &self.font,
+            self.is_cff,
+            self.font_data.as_slice(),
+        )?))
     }
 
     fn create_glyph_render(&self, font_size: f32) -> AnyResult<Box<dyn GlyphRender + '_>> {
-        match self.font.as_ref() {
-            Some(font) => Ok(Box::new(Type1GlyphRender { font, font_size })),
-            None => Ok(Box::new(CffGlyphRender::new(&self.font_data, font_size)?)),
-        }
-    }
-}
-
-struct CffFontOp<'a>(CffFont<'a>);
-
-impl<'a> CffFontOp<'a> {
-    pub fn new(font_data: &'a [u8]) -> AnyResult<Self> {
-        let font = load_cff_font(font_data)?;
-        Ok(Self(font))
-    }
-}
-
-impl<'a> FontOp for CffFontOp<'a> {
-    fn decode_chars(&self, s: &[u8]) -> Vec<u32> {
-        s.iter().map(|v| *v as u32).collect()
-    }
-
-    fn char_to_gid(&self, ch: u32) -> u16 {
-        assert!(ch < 256);
-        self.0.glyph_index(ch as u8).unwrap().0
-    }
-
-    fn char_width(&self, ch: u32) -> u32 {
-        self.0.glyph_width(GlyphId(self.char_to_gid(ch))).unwrap() as u32
+        Ok(Box::new(Type1GlyphRender {
+            font: &self.font,
+            font_size,
+        }))
     }
 }
 
 struct TTFParserFontOp<'a> {
     face: TTFFace<'a>,
     units_per_em: u16,
-}
-
-impl<'a> TTFParserFontOp<'a> {
-    pub fn new(face: TTFFace<'a>) -> Self {
-        Self {
-            units_per_em: face.units_per_em(),
-            face,
-        }
-    }
 }
 
 impl<'a> FontOp for TTFParserFontOp<'a> {
@@ -1579,7 +1533,10 @@ impl<'a, 'b> Font for TTFParserFont<'a, 'b> {
         Ok(match self.font_type() {
             FontType::TrueType => {
                 let face = TTFFace::parse(&self.data, 0)?;
-                Box::new(TTFParserFontOp::new(face))
+                Box::new(TTFParserFontOp {
+                    units_per_em: face.units_per_em(),
+                    face,
+                })
             }
             FontType::Type0 => Box::new(Type0FontOp::new(&self.font_dict.type0()?)?),
             _ => unreachable!(
