@@ -34,6 +34,7 @@ use super::{GraphicsStateParameterDict, Operation, Rectangle, ResourceDict};
 use crate::graphics::color_space;
 use crate::graphics::color_space::ColorSpace;
 
+use crate::file::XObjectType;
 use crate::graphics::trans::{
     image_to_device_space, move_text_space_pos, move_text_space_right, to_device_space,
     ImageToDeviceSpace, IntoSkiaTransform, TextToUserSpace, UserToDeviceIndependentSpace,
@@ -659,7 +660,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             }
 
             // XObject Operation
-            Operation::PaintXObject(name) => self.paint_x_object(&name),
+            Operation::PaintXObject(name) => self.paint_x_object(&name).unwrap(),
 
             _ => {
                 eprintln!("unimplemented: {:?}", op);
@@ -745,8 +746,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         self.fill_and_stroke_even_odd();
     }
 
-    /// Paints the specified XObject. Only XObjectType::Image supported
-    fn paint_x_object(&mut self, name: &NameOfDict) {
+    fn paint_image_x_object(&mut self, x_object: &XObjectDict<'a, '_>) -> AnyResult<()> {
         fn load_image<'a, 'b>(
             image_dict: &XObjectDict<'a, 'b>,
             resources: &ResourceDict<'a, 'b>,
@@ -790,20 +790,16 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             Ok(Mask::from_pixmap(canvas.as_ref(), MaskType::Alpha))
         }
 
-        let xobjects = self.resources.x_object().unwrap();
-        let xobject = xobjects.get(&name.0).unwrap();
-
         let state = self.stack.last().unwrap();
 
-        if xobject.image_mask().unwrap() {
+        if x_object.image_mask()? {
             let mask = load_image_as_mask(
                 self.device_width(),
                 self.device_height(),
-                xobject,
+                x_object,
                 self.resources,
                 state,
-            )
-            .unwrap();
+            )?;
             // fill canvas with current fill paint with mask
             let paint = state.get_fill_paint();
             self.canvas.fill_rect(
@@ -818,10 +814,10 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 Transform::identity(),
                 Some(&mask),
             );
-            return;
+            return Ok(());
         }
 
-        let s_mask = xobject.s_mask().unwrap().map(|s_mask| {
+        let s_mask = x_object.s_mask()?.map(|s_mask| {
             load_image_as_mask(
                 self.device_width(),
                 self.device_height(),
@@ -833,14 +829,14 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         });
 
         let paint = PixmapPaint {
-            quality: if xobject.interpolate().unwrap() {
+            quality: if x_object.interpolate()? {
                 FilterQuality::Bilinear
             } else {
                 FilterQuality::Nearest
             },
             ..Default::default()
         };
-        let img = load_image(xobject, self.resources);
+        let img = load_image(x_object, self.resources);
         let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
         self.canvas.draw_pixmap(
             0,
@@ -850,6 +846,17 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             state.image_transform(img.width(), img.height()).into_skia(),
             s_mask.as_ref().or_else(|| state.get_mask()),
         );
+        Ok(())
+    }
+
+    /// Paints the specified XObject. Only XObjectType::Image supported
+    fn paint_x_object(&mut self, name: &NameOfDict) -> AnyResult<()> {
+        let x_objects = self.resources.x_object()?;
+        let x_object = x_objects.get(&name.0).unwrap();
+        match x_object.subtype()? {
+            XObjectType::Image => self.paint_image_x_object(x_object),
+            t @ _ => todo!("{:?}", t),
+        }
     }
 
     fn set_fill_color_or_pattern(&mut self, color_or_name: &ColorArgsOrName) -> AnyResult<()> {
@@ -919,15 +926,15 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let stream = stream.as_stream()?;
         let bytes = stream.decode(tile.resolver())?;
         let (_, ops) = terminated(parse_operations, eof)(bytes.as_ref()).unwrap();
-        let bbox = tile.b_box()?;
-        assert_eq!(bbox.width(), tile.x_step()?, "x_step not supported");
-        assert_eq!(bbox.height(), tile.y_step()?, "y_step not supported");
+        let b_box = tile.b_box()?;
+        assert_eq!(b_box.width(), tile.x_step()?, "x_step not supported");
+        assert_eq!(b_box.height(), tile.y_step()?, "y_step not supported");
 
         let resources = tile.resources()?;
         let mut render = Render::new(
             RenderOptionBuilder::default()
-                .width(bbox.width() as u32)
-                .height(bbox.height() as u32)
+                .width(b_box.width() as u32)
+                .height(b_box.height() as u32)
                 .build(),
             &resources,
         );
@@ -1121,9 +1128,9 @@ fn build_linear_gradient_stops(domain: Domain, f: FunctionDict) -> AnyResult<Vec
 }
 
 fn build_linear_gradient(shading: &AxialShadingDict) -> AnyResult<tiny_skia::Shader<'static>> {
-    let coords = shading.coords()?;
-    let start = coords.left_lower();
-    let end = coords.right_upper();
+    let coord = shading.coords()?;
+    let start = coord.left_lower();
+    let end = coord.right_upper();
     let stops = build_linear_gradient_stops(shading.domain()?, shading.function()?)?;
     Ok(tiny_skia::LinearGradient::new(
         start.into(),

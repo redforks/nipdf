@@ -133,7 +133,7 @@ pub enum XObjectType {
 #[pdf_object(Some("XObject"))]
 pub trait XObjectDictTrait {
     #[try_from]
-    fn subtype(&self) -> Option<XObjectType>;
+    fn subtype(&self) -> XObjectType;
 
     // available if it is soft-mask image, see Table 146
     #[try_from]
@@ -151,7 +151,7 @@ pub trait XObjectDictTrait {
 
 impl<'a, 'b> XObjectDict<'a, 'b> {
     fn as_image(&self) -> Option<&Stream<'a>> {
-        if self.subtype().unwrap() == Some(XObjectType::Image) {
+        if self.subtype().unwrap() == XObjectType::Image {
             Some(
                 self.d
                     .resolver()
