@@ -33,7 +33,6 @@ tiny-skia = "0.11.2"
 educe = "0.4.22"
 pretty = { version = "0.12.1", optional = true }
 bitflags = "2.4.0"
-swash = "0.1.8"
 fontdb = "0.15.0"
 font-kit = { version = "0.11.0", features = ["loader-freetype"] }
 pathfinder_geometry = "0.5.1"

@@ -14,7 +14,7 @@ use crate::{
     object::{Object, PdfObject, Stream, TextStringOrNumber},
     text::{
         CIDFontType, CIDFontWidths, Encoding, EncodingDict, FontDescriptorDict,
-        FontDescriptorFlags, FontDict, FontType, TrueTypeFontDict, Type0FontDict, Type1FontDict,
+        FontDescriptorFlags, FontDict, FontType, Type0FontDict, Type1FontDict,
     },
 };
 use anyhow::{anyhow, Ok, Result as AnyResult};
@@ -28,11 +28,6 @@ use log::{debug, error, info, warn};
 use nom::{combinator::eof, sequence::terminated};
 use once_cell::sync::Lazy;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
-use swash::{
-    scale::ScaleContext,
-    zeno::{Command as PathCommand, PathData},
-    CacheKey, FontRef,
-};
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
 
 use super::{GraphicsStateParameterDict, Operation, Rectangle, ResourceDict};
@@ -1157,17 +1152,6 @@ impl FirstLastFontWidth {
         }
     }
 
-    pub fn from_true_type(font: &TrueTypeFontDict) -> AnyResult<Self> {
-        let desc = font
-            .font_descriptor()?
-            .ok_or_else(|| anyhow!("font descriptor failed to load"))?;
-        let widths = font.widths()?;
-        let first_char = font.first_char()?;
-        let last_char = font.last_char()?;
-        let default_width = desc.missing_width()?;
-        Ok(Self::_new(first_char, last_char, default_width, widths))
-    }
-
     pub fn from_type1_type(font: &Type1FontDict) -> AnyResult<Option<Self>> {
         let widths = font.widths()?;
         let first_char = font.first_char()?;
@@ -1279,73 +1263,8 @@ impl<'a> GlyphRender for Type1GlyphRender<'a> {
     }
 }
 
-impl PathSink<'_> {
-    pub fn move_to(&mut self, x: f32, y: f32) {
-        self.0.move_to(x, y);
-    }
-
-    pub fn line_to(&mut self, x: f32, y: f32) {
-        self.0.line_to(x, y);
-    }
-
-    pub fn quad_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32) {
-        self.0.quad_to(x1, y1, x2, y2);
-    }
-
-    pub fn cubic_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) {
-        self.0.cubic_to(x1, y1, x2, y2, x3, y3);
-    }
-
-    pub fn close(&mut self) {
-        self.0.close();
-    }
-}
-
 trait GlyphRender {
     fn render(&mut self, gid: u16, sink: &mut PathSink) -> AnyResult<()>;
-}
-
-struct TrueTypeGlyphRender<'a> {
-    font_ref: FontRef<'a>,
-    context: ScaleContext,
-    font_size: f32,
-}
-
-impl<'a> GlyphRender for TrueTypeGlyphRender<'a> {
-    fn render(&mut self, gid: u16, sink: &mut PathSink) -> AnyResult<()> {
-        let builder = self
-            .context
-            .builder(self.font_ref)
-            .size(self.font_size)
-            .hint(true);
-        let mut scaler = builder.build();
-        let Some(outline) = scaler.scale_outline(gid) else {
-            error!("Failed get outline for gid: {}", gid);
-            return Ok(());
-        };
-
-        (0..outline.len()).for_each(|idx| {
-            let layer = outline.get(idx).unwrap();
-            layer.path().commands().for_each(|v| match v {
-                PathCommand::MoveTo(p) => {
-                    sink.move_to(p.x, p.y);
-                }
-                PathCommand::LineTo(p) => {
-                    sink.line_to(p.x, p.y);
-                }
-                PathCommand::CurveTo(p1, p2, p3) => {
-                    sink.cubic_to(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
-                }
-                PathCommand::QuadTo(p1, p2) => {
-                    sink.quad_to(p1.x, p1.y, p2.x, p2.y);
-                }
-                PathCommand::Close => {
-                    sink.close();
-                }
-            })
-        });
-        Ok(())
-    }
 }
 
 trait Font {
@@ -1626,53 +1545,6 @@ impl<'a, 'b> Font for TTFParserFont<'a, 'b> {
     }
 }
 
-struct SwashFont<'a, 'b> {
-    typ: FontType,
-    data: Vec<u8>,
-    offset: u32,
-    key: CacheKey,
-    font_dict: FontDict<'a, 'b>,
-}
-
-impl SwashFont<'_, '_> {
-    fn as_ref(&self) -> FontRef {
-        FontRef {
-            data: &self.data[..],
-            offset: self.offset,
-            key: self.key,
-        }
-    }
-}
-
-impl<'a, 'b> Font for SwashFont<'a, 'b> {
-    fn font_type(&self) -> FontType {
-        self.typ
-    }
-
-    fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
-        Ok(match self.font_type() {
-            FontType::TrueType => Box::new(TrueTypeFontOp::new(&self.font_dict, self.as_ref())?),
-            FontType::Type0 => Box::new(Type0FontOp::new(&self.font_dict.type0()?)?),
-            _ => unreachable!("SwashFont not support font type: {:?}", self.font_type()),
-        })
-    }
-
-    fn create_glyph_render(&self, font_size: f32) -> AnyResult<Box<dyn GlyphRender + '_>> {
-        Ok(match self.font_type() {
-            FontType::TrueType | FontType::Type0 => {
-                let font_ref = self.as_ref();
-                let context = ScaleContext::new();
-                Box::new(TrueTypeGlyphRender {
-                    font_ref,
-                    context,
-                    font_size,
-                })
-            }
-            _ => todo!(),
-        })
-    }
-}
-
 static SYSTEM_FONTS: Lazy<Database> = Lazy::new(|| {
     let mut db = Database::new();
     db.load_system_fonts();
@@ -1704,31 +1576,13 @@ struct FontCache<'c> {
 }
 
 impl<'c> FontCache<'c> {
-    fn load_true_type_font_from_bytes1<'a, 'b>(
+    fn load_true_type_font_from_bytes<'a, 'b>(
         font: FontDict<'a, 'b>,
         bytes: Vec<u8>,
     ) -> AnyResult<TTFParserFont<'a, 'b>> {
         Ok(TTFParserFont {
             typ: font.subtype()?,
             data: bytes,
-            font_dict: font,
-        })
-    }
-
-    fn load_true_type_font_from_bytes<'a, 'b>(
-        font: FontDict<'a, 'b>,
-        bytes: Vec<u8>,
-    ) -> AnyResult<SwashFont<'a, 'b>> {
-        let font_ref =
-            FontRef::from_index(&bytes[..], 0).ok_or_else(|| anyhow!("Failed to load font"))?;
-        let offset = font_ref.offset;
-        let key = font_ref.key;
-
-        Ok(SwashFont {
-            typ: font.subtype()?,
-            data: bytes,
-            offset,
-            key,
             font_dict: font,
         })
     }
@@ -1790,7 +1644,7 @@ impl<'c> FontCache<'c> {
         Ok(s.decode(resolver)?.into_owned())
     }
 
-    fn load_swash_font<'a, 'b>(
+    fn load_ttf_parser_font<'a, 'b>(
         font: FontDict<'a, 'b>,
         resolve_desc: fn(&FontDict<'a, 'b>) -> AnyResult<FontDescriptorDict<'a, 'b>>,
     ) -> AnyResult<TTFParserFont<'a, 'b>> {
@@ -1806,7 +1660,7 @@ impl<'c> FontCache<'c> {
                 Self::load_true_type_from_os(&desc)?
             }
         };
-        Self::load_true_type_font_from_bytes1(font, bytes)
+        Self::load_true_type_font_from_bytes(font, bytes)
     }
 
     /// Load Type1 font, only standard 14 fonts supported, these fonts are replaced
@@ -1854,12 +1708,12 @@ impl<'c> FontCache<'c> {
         'b: 'c,
     {
         match font.subtype()? {
-            FontType::TrueType => Ok(Some(Box::new(Self::load_swash_font(font, |f| {
+            FontType::TrueType => Ok(Some(Box::new(Self::load_ttf_parser_font(font, |f| {
                 let tt = f.truetype()?;
                 Ok(tt.font_descriptor()?.unwrap())
             })?))),
 
-            FontType::Type0 => Ok(Some(Box::new(Self::load_swash_font(font, |f| {
+            FontType::Type0 => Ok(Some(Box::new(Self::load_ttf_parser_font(font, |f| {
                 let type0_font = f.type0()?;
                 let descentdant_fonts = type0_font.descendant_fonts()?;
                 assert_eq!(
@@ -1960,35 +1814,6 @@ impl FontOp for Type0FontOp {
 
     fn char_width(&self, ch: u32) -> u32 {
         self.widths.char_width(ch).unwrap_or(self.default_width)
-    }
-}
-
-struct TrueTypeFontOp<'a> {
-    font_width: FirstLastFontWidth,
-    font: FontRef<'a>,
-}
-
-impl<'a> TrueTypeFontOp<'a> {
-    fn new(font_dict: &FontDict, font_ref: FontRef<'a>) -> AnyResult<Self> {
-        Ok(Self {
-            font_width: FirstLastFontWidth::from_true_type(&font_dict.truetype()?)?,
-            font: font_ref,
-        })
-    }
-}
-
-impl<'a> FontOp for TrueTypeFontOp<'a> {
-    /// Each byte as a char code
-    fn decode_chars(&self, s: &[u8]) -> Vec<u32> {
-        s.iter().map(|v| *v as u32).collect()
-    }
-
-    fn char_to_gid(&self, ch: u32) -> u16 {
-        self.font.charmap().map(ch)
-    }
-
-    fn char_width(&self, ch: u32) -> u32 {
-        self.font_width.char_width(ch)
     }
 }
 
