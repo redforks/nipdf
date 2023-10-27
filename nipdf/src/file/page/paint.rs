@@ -294,6 +294,7 @@ impl State {
 
     fn set_text_knockout_flag(&mut self, knockout: bool) {
         self.text_object.knockout = knockout;
+        todo!("text knockout");
     }
 
     pub fn end_text_object(&mut self) {
@@ -1890,6 +1891,9 @@ impl TextObject {
 
     fn set_horizontal_scaling(&mut self, scale: f32) {
         self.horiz_scaling = scale;
+        if scale != 100.0 {
+            todo!("text horizontal scaling");
+        }
     }
 
     fn set_leading(&mut self, leading: f32) {
@@ -1902,6 +1906,9 @@ impl TextObject {
 
     fn set_text_rise(&mut self, rise: f32) {
         self.rise = rise;
+        if rise != 0. {
+            todo!("text rise");
+        }
     }
 }
 
