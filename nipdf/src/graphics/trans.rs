@@ -36,7 +36,7 @@ impl<S, D> IntoSkiaTransform for Transform2D<f32, S, D> {
 pub fn to_device_space<S>(
     device_independent_height: f32,
     zoom: f32,
-    to_device_independent: Transform2D<f32, S, DeviceIndependentSpace>,
+    to_device_independent: &Transform2D<f32, S, DeviceIndependentSpace>,
 ) -> Transform2D<f32, S, DeviceSpace> {
     to_device_independent
         .with_destination()
@@ -55,20 +55,20 @@ pub fn image_to_device_space(
     img_h: u32,
     device_independent_height: f32,
     zoom: f32,
-    ctm: UserToDeviceIndependentSpace,
+    ctm: &UserToDeviceIndependentSpace,
 ) -> ImageToDeviceSpace {
     let user = image_to_user_space(img_w, img_h).then(&ctm);
-    to_device_space(device_independent_height, zoom, user)
+    to_device_space(device_independent_height, zoom, &user)
 }
 
 /// Adjust transform moves text space to right.
-pub fn move_text_space_right(transform: TextToUserSpace, x_text_space: f32) -> TextToUserSpace {
+pub fn move_text_space_right(transform: &TextToUserSpace, x_text_space: f32) -> TextToUserSpace {
     move_text_space_pos(transform, x_text_space, 0.)
 }
 
 /// Adjust transform to moves position in text space.
 pub fn move_text_space_pos(
-    transform: TextToUserSpace,
+    transform: &TextToUserSpace,
     x_text_space: f32,
     y_text_space: f32,
 ) -> TextToUserSpace {

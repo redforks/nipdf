@@ -95,7 +95,7 @@ impl PaintCreator {
             PaintCreator::Tile((p, matrix)) => {
                 let mut r = Paint::default();
                 let height = p.height() as f32;
-                let transform = to_device_space(height, 1.0, *matrix);
+                let transform = to_device_space(height, 1.0, matrix);
                 r.shader = tiny_skia::Pattern::new(
                     p.as_ref(),
                     tiny_skia::SpreadMode::Repeat,
@@ -137,7 +137,7 @@ impl State {
             user_to_device: to_device_space(
                 option.height as f32,
                 option.zoom,
-                UserToDeviceIndependentSpace::identity(),
+                &UserToDeviceIndependentSpace::identity(),
             ),
             ctm: UserToDeviceIndependentSpace::identity(),
             fill_paint: PaintCreator::Color(tiny_skia::Color::BLACK),
@@ -216,7 +216,7 @@ impl State {
 
     fn concat_ctm(&mut self, ctm: UserToDeviceIndependentSpace) {
         self.ctm = self.ctm.then(&ctm.with_source());
-        self.user_to_device = to_device_space(self.height, self.zoom, self.ctm);
+        self.user_to_device = to_device_space(self.height, self.zoom, &self.ctm);
         debug!("ctm to {:?}", self.ctm);
         debug!("user_to_device to {:?}", self.user_to_device);
     }
@@ -234,7 +234,7 @@ impl State {
     }
 
     fn image_transform(&self, img_w: u32, img_h: u32) -> ImageToDeviceSpace {
-        image_to_device_space(img_w, img_h, self.height, self.zoom, self.ctm)
+        image_to_device_space(img_w, img_h, self.height, self.zoom, &self.ctm)
     }
 
     fn get_mask(&self) -> Option<&Mask> {
@@ -276,7 +276,7 @@ impl State {
     fn update_mask(&mut self, path: &SkiaPath, rule: FillRule, flip_y: bool) {
         let mut mask = self.mask.take().unwrap_or_else(|| self.new_mask());
         let transform = if flip_y {
-            to_device_space(self.height, self.zoom, self.ctm).into_skia()
+            to_device_space(self.height, self.zoom, &self.ctm).into_skia()
         } else {
             Transform::identity()
         };
@@ -514,7 +514,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             let transform = to_device_space(
                 state.height,
                 state.zoom,
-                UserToDeviceIndependentSpace::identity(),
+                &UserToDeviceIndependentSpace::identity(),
             );
             let p = transform.transform_point((rect.left_x, rect.upper_y).into());
             let mut canvas = Pixmap::new(
@@ -924,7 +924,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let user_to_device = to_device_space(
             self.height as f32,
             self.zoom,
-            UserToDeviceIndependentSpace::identity(),
+            &UserToDeviceIndependentSpace::identity(),
         );
         let p = user_to_device.transform_point((b_box.left_x, b_box.upper_y).into());
 
@@ -1127,7 +1127,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let mut text_to_user_space: TextToUserSpace = text_object.matrix;
         let render_mode = text_object.render_mode;
         let mut text_clip_path = Path::default();
-        let flip_y = to_device_space(state.height, state.zoom, state.ctm).into_skia();
+        let flip_y = to_device_space(state.height, state.zoom, &state.ctm).into_skia();
         for ch in op.decode_chars(text) {
             let width = op.char_width(ch) as f32 / op.units_per_em() as f32 * font_size
                 + char_spacing
@@ -1151,7 +1151,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                     flip_y,
                 );
             }
-            text_to_user_space = move_text_space_right(text_to_user_space, width);
+            text_to_user_space = move_text_space_right(&text_to_user_space, width);
         }
         drop(op);
         drop(glyph_render);
@@ -1969,7 +1969,7 @@ impl TextObject {
     }
 
     fn move_text_position(&mut self, p: Point) {
-        let matrix = move_text_space_pos(self.line_matrix, p.x, p.y);
+        let matrix = move_text_space_pos(&self.line_matrix, p.x, p.y);
         self.matrix = matrix;
         self.line_matrix = matrix;
     }
@@ -1981,7 +1981,7 @@ impl TextObject {
 
     fn move_right(&mut self, n: f32) {
         let tx = -n * 0.001 * self.font_size;
-        self.matrix = move_text_space_right(self.matrix, tx);
+        self.matrix = move_text_space_right(&self.matrix, tx);
     }
 
     fn set_character_spacing(&mut self, spacing: f32) {

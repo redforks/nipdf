@@ -36,7 +36,7 @@ fn test_user_to_device_space() {
     let f = new_assert(to_device_space::<UserSpace>(
         600.0,
         1.0,
-        Transform2D::identity(),
+        &Transform2D::identity(),
     ));
     f((0.0, 0.0), (0.0, 600.0));
     f((10.0, 20.0), (10.0, 600.0 - 20.0));
@@ -45,7 +45,7 @@ fn test_user_to_device_space() {
     let f = new_assert(to_device_space::<UserSpace>(
         600.0,
         1.5,
-        Transform2D::identity(),
+        &Transform2D::identity(),
     ));
     f((0.0, 0.0), (0.0, 600.0 * 1.5));
     f((10.0, 20.0), (10.0 * 1.5, 600.0 * 1.5 - 20.0 * 1.5));
@@ -54,7 +54,7 @@ fn test_user_to_device_space() {
     let f = new_assert(to_device_space::<UserSpace>(
         600.0,
         1.5,
-        Transform2D::translation(10.0, 20.0),
+        &Transform2D::translation(10.0, 20.0),
     ));
     f((0.0, 0.0), (10.0 * 1.5, (600.0 - 20.) * 1.5));
     f((10.0, 20.0), (20.0 * 1.5, (600.0 - 40.) * 1.5));
@@ -68,7 +68,7 @@ fn test_user_to_device_space() {
     let f = new_assert(to_device_space::<UserSpace>(
         600.0,
         1.5,
-        Transform2D::scale(2.0, 3.0).then_translate((10.0, 20.0).into()),
+        &Transform2D::scale(2.0, 3.0).then_translate((10.0, 20.0).into()),
     ));
     f((0.0, 0.0), (10.0 * 1.5, (600.0 - 20.) * 1.5));
     f(
@@ -95,7 +95,7 @@ fn test_image_to_device_space() {
         1352,
         648.,
         1.,
-        UserToDeviceIndependentSpace::new(531.0, 0.0, 0.0, 648.0, 0.0, 0.0),
+        &UserToDeviceIndependentSpace::new(531.0, 0.0, 0.0, 648.0, 0.0, 0.0),
     ));
     f((0., 0.), (0., 0.));
     f((1107., 0.), (531., 0.));
@@ -106,7 +106,7 @@ fn test_image_to_device_space() {
         512,
         842.,
         1.5,
-        UserToDeviceIndependentSpace::new(383.9, 0.0, 0.0, 383.9, 105.7, 401.5),
+        &UserToDeviceIndependentSpace::new(383.9, 0.0, 0.0, 383.9, 105.7, 401.5),
     );
     let f = new_assert(r);
     f((0., 0.), (105.7 * 1.5, (842. - (401.5 + 383.9)) * 1.5));
@@ -115,7 +115,7 @@ fn test_image_to_device_space() {
 #[test]
 fn test_move_text_space_right() {
     let f = new_assert(move_text_space_right(
-        Transform2D::identity()
+        &Transform2D::identity()
             .then_scale(2.0, 3.)
             .then_rotate(Angle::degrees(90.)),
         10.0,
