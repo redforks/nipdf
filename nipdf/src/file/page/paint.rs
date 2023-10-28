@@ -6,10 +6,11 @@ use crate::{
     file::{ObjectResolver, XObjectDict},
     function::{Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
-        parse_operations, AxialExtend, AxialShadingDict, ColorArgs, ColorArgsOrName, LineCapStyle,
-        LineJoinStyle, NameOfDict, NameOrDictByRef, NameOrStream, PatternType, Point,
-        RenderingIntent, ShadingPatternDict, ShadingType, TextRenderingMode, TilingPaintType,
-        TilingPatternDict,
+        parse_operations,
+        trans::{DeviceIndependentSpace, UserSpace},
+        AxialExtend, AxialShadingDict, ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle,
+        NameOfDict, NameOrDictByRef, NameOrStream, PatternType, Point, RenderingIntent,
+        ShadingPatternDict, ShadingType, TextRenderingMode, TilingPaintType, TilingPatternDict,
     },
     object::{Object, PdfObject, Stream, TextStringOrNumber},
     text::{
@@ -20,6 +21,7 @@ use crate::{
 use anyhow::{anyhow, Ok, Result as AnyResult};
 use cff_parser::{File as CffFile, Font as CffFont};
 use educe::Educe;
+use euclid::Transform2D;
 use font_kit::loaders::freetype::Font as FontKitFont;
 use fontdb::{Database, Family, Query, Source, Weight};
 use image::RgbaImage;
@@ -30,7 +32,7 @@ use once_cell::sync::Lazy;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
 
-use super::{GraphicsStateParameterDict, Operation, Rectangle, ResourceDict};
+use super::{GraphicsStateParameterDict, Operation, PageContent, Rectangle, ResourceDict};
 use crate::graphics::color_space;
 use crate::graphics::color_space::ColorSpace;
 
@@ -41,8 +43,9 @@ use crate::graphics::trans::{
     UserToDeviceSpace,
 };
 use tiny_skia::{
-    FillRule, FilterQuality, GradientStop, Mask, MaskType, Paint, Path as SkiaPath, PathBuilder,
-    Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect, Stroke, StrokeDash, Transform,
+    Color as SkiaColor, FillRule, FilterQuality, GradientStop, Mask, MaskType, Paint,
+    Path as SkiaPath, PathBuilder, Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect,
+    Stroke, StrokeDash, Transform,
 };
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -189,7 +192,6 @@ impl State {
     }
 
     fn set_stroke_color(&mut self, color: tiny_skia::Color) {
-        debug!("set stroke color: {:?}", color);
         self.stroke_paint = PaintCreator::Color(color);
     }
 
@@ -204,7 +206,6 @@ impl State {
     }
 
     fn set_fill_color(&mut self, color: tiny_skia::Color) {
-        debug!("set fill color: {:?}", color);
         self.fill_paint = PaintCreator::Color(color);
     }
 
@@ -216,6 +217,8 @@ impl State {
     fn concat_ctm(&mut self, ctm: UserToDeviceIndependentSpace) {
         self.ctm = self.ctm.then(&ctm.with_source());
         self.user_to_device = to_device_space(self.height, self.zoom, self.ctm);
+        debug!("ctm to {:?}", self.ctm);
+        debug!("user_to_device to {:?}", self.user_to_device);
     }
 
     fn get_fill_paint(&self) -> Cow<'_, Paint<'_>> {
@@ -398,6 +401,8 @@ pub struct RenderOption {
     height: u32,
     /// If crop is specified, the output canvas will be cropped to the specified rectangle.
     crop: Option<Rectangle>,
+    #[educe(Default(expression = "SkiaColor::WHITE"))]
+    background_color: SkiaColor,
 }
 
 #[derive(Educe)]
@@ -425,6 +430,11 @@ impl RenderOptionBuilder {
         self
     }
 
+    pub fn background_color(mut self, color: SkiaColor) -> Self {
+        self.0.background_color = color;
+        self
+    }
+
     pub fn build(self) -> RenderOption {
         self.0
     }
@@ -437,6 +447,7 @@ pub struct Render<'a, 'b, 'c> {
     stack: Vec<State>,
     width: u32,
     height: u32,
+    zoom: f32,
     path: Path,
     #[educe(Debug(ignore))]
     font_cache: FontCache<'c>,
@@ -454,10 +465,10 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let h = (option.height as f32 * option.zoom) as u32;
 
         let mut canvas = Pixmap::new(w, h).unwrap();
-        // fill the whole canvas with white
-        canvas.fill(tiny_skia::Color::WHITE);
+        canvas.fill(option.background_color);
         Self {
             canvas,
+            zoom: option.zoom,
             stack: vec![State::new(&option)],
             width: option.width,
             height: option.height,
@@ -492,6 +503,13 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let r = self.canvas;
         // crop the canvas if crop is specified
         if let Some(rect) = self.crop {
+            use std::sync::atomic::{AtomicU32, Ordering};
+            static mut IDX: std::sync::atomic::AtomicU32 = AtomicU32::new(0);
+            r.save_png(format!("/tmp/before-crop-{:?}.png", unsafe {
+                IDX.fetch_add(1, Ordering::Relaxed)
+            }))
+            .unwrap();
+
             let state = self.stack.last().unwrap();
             let transform = to_device_space(
                 state.height,
@@ -627,12 +645,12 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             // Color Operations
             Operation::SetStrokeColorSpace(args) => {
                 self.current_mut().stroke_color_space = args
-                    .create_color_space(self.resources.resolver(), Some(self.resources))
+                    .create_color_space(self.resources.resolver(), Some(&self.resources))
                     .unwrap()
             }
             Operation::SetFillColorSpace(args) => {
                 self.current_mut().fill_color_space = args
-                    .create_color_space(self.resources.resolver(), Some(self.resources))
+                    .create_color_space(self.resources.resolver(), Some(&self.resources))
                     .unwrap()
             }
             Operation::SetStrokeColor(args) => self.current_mut().set_stroke_color_args(args),
@@ -751,7 +769,9 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             image_dict: &XObjectDict<'a, 'b>,
             resources: &ResourceDict<'a, 'b>,
         ) -> RgbaImage {
-            let image = image_dict.as_image().expect("Only Image XObject supported");
+            let image = image_dict
+                .as_stream()
+                .expect("Only Image XObject supported");
             image
                 .decode_image(resources.resolver(), Some(resources))
                 .unwrap()
@@ -771,7 +791,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             };
 
             let mut canvas = Pixmap::new(page_width, page_height).unwrap();
-            let img = img_dict.as_image().unwrap();
+            let img = img_dict.as_stream().unwrap();
             let img = img.decode_image(resources.resolver(), Some(resources))?;
             let mut img = img.into_rgba8();
             img.pixels_mut().for_each(|p| {
@@ -797,7 +817,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 self.device_width(),
                 self.device_height(),
                 x_object,
-                self.resources,
+                &self.resources,
                 state,
             )?;
             // fill canvas with current fill paint with mask
@@ -822,7 +842,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 self.device_width(),
                 self.device_height(),
                 &s_mask,
-                self.resources,
+                &self.resources,
                 state,
             )
             .unwrap()
@@ -836,7 +856,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             },
             ..Default::default()
         };
-        let img = load_image(x_object, self.resources);
+        let img = load_image(x_object, &self.resources);
         let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
         self.canvas.draw_pixmap(
             0,
@@ -849,12 +869,88 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         Ok(())
     }
 
+    /// Paint form x_object.
+    ///
+    /// 1. Create a sub Render to paint the form, set transparent as background
+    /// 1. Clone current state to sub render to use exist state
+    /// 1. Sub render concatenate form's Matrix to ctm
+    /// 1. Assert form b_box start point is (0, 0), because I'm not sure what
+    /// will happen, wait for an example pdf file that b_box start point is not (0, 0)
+    /// 1. Paints the graphics objects specified in the form object's stream in sub render.
+    /// 1. Paint the rendered image on parent render
+    fn paint_form_x_object(&mut self, x_object: &XObjectDict<'a, 'b>) -> AnyResult<()> {
+        debug!("Render form");
+
+        let form = x_object.as_form()?;
+        let matrix = form.matrix()?;
+        let b_box = form.b_box()?;
+        let stream = x_object.as_stream()?;
+        let stream = stream.decode(self.resources.resolver())?;
+        let content = PageContent::new(vec![stream.into_owned()]);
+        let resources = form.resources()?;
+        let resources = resources.as_ref().unwrap_or(self.resources);
+
+        let mut render = Render::new(
+            RenderOptionBuilder::default()
+                .width(self.width)
+                .height(self.height)
+                .zoom(self.zoom)
+                .crop(Some(b_box))
+                .background_color(SkiaColor::TRANSPARENT)
+                .build(),
+            resources,
+        );
+        debug!("Set form sub render state to parent");
+        let state = self.stack.last().unwrap();
+        render.stack = vec![state.clone()];
+        render
+            .current_mut()
+            .concat_ctm(matrix.with_destination().with_source());
+        content
+            .operations()
+            .into_iter()
+            .for_each(|op| render.exec(op));
+
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static mut IDX: std::sync::atomic::AtomicU32 = AtomicU32::new(0);
+        let image = render.into();
+        image
+            .save_png(format!("/tmp/form-{:?}.png", unsafe {
+                IDX.fetch_add(1, Ordering::Relaxed)
+            }))
+            .unwrap();
+
+        // Calc b_box top-left point in device space
+        let user_to_device = to_device_space(
+            self.height as f32,
+            self.zoom,
+            UserToDeviceIndependentSpace::identity(),
+        );
+        let p = user_to_device.transform_point((b_box.left_x, b_box.upper_y).into());
+
+        let paint = PixmapPaint {
+            quality: FilterQuality::Nearest,
+            ..Default::default()
+        };
+        self.canvas.draw_pixmap(
+            p.x as i32,
+            p.y as i32,
+            image.as_ref(),
+            &paint,
+            Transform::identity(),
+            None,
+        );
+        Ok(())
+    }
+
     /// Paints the specified XObject. Only XObjectType::Image supported
     fn paint_x_object(&mut self, name: &NameOfDict) -> AnyResult<()> {
         let x_objects = self.resources.x_object()?;
         let x_object = x_objects.get(&name.0).unwrap();
+
         match x_object.subtype()? {
             XObjectType::Image => self.paint_image_x_object(x_object),
+            XObjectType::Form => self.paint_form_x_object(x_object),
             t @ _ => todo!("{:?}", t),
         }
     }

@@ -16,6 +16,7 @@ use crate::{
 use self::paint::Render;
 pub use self::paint::{RenderOption, RenderOptionBuilder};
 
+use crate::graphics::trans::FormToUserSpace;
 use crate::graphics::{ColorArgs, ColorSpaceArgs};
 use std::{iter::once, ops::Deref};
 
@@ -147,23 +148,37 @@ pub trait XObjectDictTrait {
 
     #[or_default]
     fn image_mask(&self) -> bool;
+
+    #[self_as]
+    fn as_form(&self) -> FormXObjectDict<'a, 'b>;
 }
 
 impl<'a, 'b> XObjectDict<'a, 'b> {
-    fn as_image(&self) -> Option<&Stream<'a>> {
-        if self.subtype().unwrap() == XObjectType::Image {
-            Some(
-                self.d
-                    .resolver()
-                    .resolve(self.id().unwrap())
-                    .unwrap()
-                    .as_stream()
-                    .unwrap(),
-            )
-        } else {
-            None
-        }
+    fn as_stream(&self) -> Result<&Stream<'a>, ObjectValueError> {
+        self.d.resolver().resolve(self.id().unwrap())?.as_stream()
     }
+}
+
+#[pdf_object((Some("XObject"), "Form"))]
+pub trait FormXObjectDictTrait {
+    #[try_from]
+    fn b_box(&self) -> Rectangle;
+
+    #[try_from]
+    #[or_default]
+    fn matrix(&self) -> FormToUserSpace;
+
+    #[nested]
+    fn resources(&self) -> Option<ResourceDict<'a, 'b>>;
+
+    fn group(&self) -> Option<&'b Dictionary<'a>>;
+
+    #[key("Ref")]
+    fn ref_dict(&self) -> Option<&'b Dictionary<'a>>;
+
+    fn metadata(&self) -> Option<&'b Dictionary<'a>>;
+
+    fn piece_info(&self) -> Option<&'b Dictionary<'a>>;
 }
 
 /// Wrap type to impl TryFrom<> trait
@@ -347,6 +362,10 @@ pub struct PageContent {
 }
 
 impl PageContent {
+    pub fn new(bufs: Vec<Vec<u8>>) -> Self {
+        Self { bufs }
+    }
+
     pub fn operations(&self) -> Vec<Operation<'_>> {
         let mut r = vec![];
         for buf in &self.bufs {

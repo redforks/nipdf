@@ -11,12 +11,14 @@ pub enum DeviceSpace {}
 // pub enum TextSpace;
 pub enum ImageSpace {}
 pub enum TextSpace {}
+pub enum FormSpace {}
 pub type UserToDeviceIndependentSpace = Transform2D<f32, UserSpace, DeviceIndependentSpace>;
 // pub enum PatternSpace;
 pub type UserToDeviceSpace = Transform2D<f32, UserSpace, DeviceSpace>;
 pub type ImageToUserSpace = Transform2D<f32, ImageSpace, UserSpace>;
 pub type ImageToDeviceSpace = Transform2D<f32, ImageSpace, DeviceSpace>;
 pub type TextToUserSpace = Transform2D<f32, TextSpace, UserSpace>;
+pub type FormToUserSpace = Transform2D<f32, FormSpace, UserSpace>;
 
 /// Convert current object into tiny_skia `Transform`.
 pub trait IntoSkiaTransform {

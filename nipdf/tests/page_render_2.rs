@@ -39,3 +39,10 @@ fn pattern_color() {
         &decode_file_page("sample_files/normal/SamplePdf1_12mb_6pages.pdf", 5).unwrap()
     );
 }
+
+#[test]
+fn form() {
+    assert_ron_snapshot!(
+        &decode_file_page("sample_files/xobject/form.pdf", 0).unwrap()
+    );
+}
