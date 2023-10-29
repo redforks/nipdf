@@ -2,8 +2,6 @@
 /// Two kinds of color component: float or integer.
 /// For float color component must in range [0, 1].
 pub trait ColorComp: Copy + std::fmt::Debug {
-    fn from_f32_color(v: f32) -> Self;
-
     fn min_color() -> Self;
     /// Max value of color component, for float color component must be 1.0
     fn max_color() -> Self;
@@ -45,10 +43,6 @@ impl ColorCompConvertTo<f32> for f32 {
 }
 
 impl ColorComp for u8 {
-    fn from_f32_color(v: f32) -> Self {
-        (v * 255.0).clamp(0., 255.) as u8
-    }
-
     fn min_color() -> Self {
         0
     }
@@ -59,11 +53,6 @@ impl ColorComp for u8 {
 }
 
 impl ColorComp for f32 {
-    fn from_f32_color(v: f32) -> Self {
-        debug_assert!((0.0f32..=1.0f32).contains(&v));
-        v
-    }
-
     fn min_color() -> Self {
         0.0
     }
@@ -160,7 +149,11 @@ impl<T: ColorComp> ColorSpace<T> for DeviceRGB {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DeviceCMYK();
 
-impl<T: ColorComp + ColorCompConvertTo<f32>> ColorSpace<T> for DeviceCMYK {
+impl<T> ColorSpace<T> for DeviceCMYK
+where
+    T: ColorComp + ColorCompConvertTo<f32>,
+    f32: ColorCompConvertTo<T>,
+{
     fn to_rgba(&self, color: &[T]) -> [T; 4] {
         let c = color[0].into_color_comp();
         let m = color[1].into_color_comp();
@@ -220,9 +213,9 @@ impl<T: ColorComp + ColorCompConvertTo<f32>> ColorSpace<T> for DeviceCMYK {
         b += 0.2235 * x;
 
         [
-            T::from_f32_color(r),
-            T::from_f32_color(g),
-            T::from_f32_color(b),
+            r.into_color_comp(),
+            g.into_color_comp(),
+            b.into_color_comp(),
             T::max_color(),
         ]
     }
