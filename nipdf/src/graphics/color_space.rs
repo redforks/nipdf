@@ -88,6 +88,43 @@ where
     ]
 }
 
+#[derive(Debug, Clone)]
+pub enum ColorSpace<T> {
+    DeviceGray,
+    DeviceRGB,
+    DeviceCMYK,
+    Pattern,
+    Indexed(IndexedColorSpace<T>),
+}
+
+impl<T> ColorSpaceTrait<T> for ColorSpace<T>
+where
+    T: ColorComp + ColorCompConvertTo<f32> + Default + 'static,
+    T: ColorCompConvertTo<u8>,
+    f32: ColorCompConvertTo<T>,
+    u8: ColorCompConvertTo<T>,
+{
+    fn to_rgba(&self, color: &[T]) -> [T; 4] {
+        match self {
+            ColorSpace::DeviceGray => DeviceGray().to_rgba(color),
+            ColorSpace::DeviceRGB => DeviceRGB().to_rgba(color),
+            ColorSpace::DeviceCMYK => DeviceCMYK().to_rgba(color),
+            ColorSpace::Pattern => PatternColorSpace().to_rgba(color),
+            ColorSpace::Indexed(indexed) => indexed.to_rgba(color),
+        }
+    }
+
+    fn components(&self) -> usize {
+        match self {
+            ColorSpace::DeviceGray => ColorSpaceTrait::<T>::components(&DeviceGray()),
+            ColorSpace::DeviceRGB => ColorSpaceTrait::<T>::components(&DeviceRGB()),
+            ColorSpace::DeviceCMYK => ColorSpaceTrait::<T>::components(&DeviceCMYK()),
+            ColorSpace::Pattern => ColorSpaceTrait::<T>::components(&PatternColorSpace()),
+            ColorSpace::Indexed(indexed) => indexed.components(),
+        }
+    }
+}
+
 pub trait ColorSpaceTrait<T>: std::fmt::Debug + ColorSpaceBoxClone<T> {
     /// Convert color from current space to RGBA.
     /// `color` len should at least be `components()`
@@ -226,7 +263,7 @@ where
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct PatternColorSpace;
+pub struct PatternColorSpace();
 
 impl<T> ColorSpaceTrait<T> for PatternColorSpace {
     fn to_rgba(&self, _color: &[T]) -> [T; 4] {

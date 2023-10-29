@@ -228,7 +228,7 @@ impl ColorSpaceArgs {
                 let args = spaces.get(name).ok_or(ObjectValueError::DictNameMissing)?;
                 args.create_color_space(resolver, resources)
             }
-            Self::Pattern => Ok(Box::new(PatternColorSpace)),
+            Self::Pattern => Ok(Box::new(PatternColorSpace())),
             _ => todo!("Convert {:?} to Color space", self),
         }
     }
