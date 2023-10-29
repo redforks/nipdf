@@ -1,3 +1,6 @@
+use itertools::Itertools;
+use tinyvec::ArrayVec;
+
 /// Color component composes a color.
 /// Two kinds of color component: float or integer.
 /// For float color component must in range [0, 1].
@@ -88,6 +91,7 @@ where
 pub trait ColorSpace<T>: std::fmt::Debug + ColorSpaceBoxClone<T> {
     /// Convert color from current space to RGBA.
     /// `color` len should at least be `components()`
+    /// Use `color_to_rgba()` function, if target color space is not T.
     fn to_rgba(&self, color: &[T]) -> [T; 4];
 
     /// Number of color components in this color space.
@@ -231,6 +235,43 @@ impl<T> ColorSpace<T> for PatternColorSpace {
 
     fn components(&self) -> usize {
         0
+    }
+}
+
+/// Indexed Color Space, access color by index, resolve the real color
+/// using base color space. The index is 1 byte.
+/// Base color stored in data, each color component is a u8. Max index
+/// is data.len() / base.components().
+#[derive(Debug, Clone)]
+pub struct IndexedColorSpace<T> {
+    pub base: Box<dyn ColorSpace<T>>,
+    pub data: Vec<u8>,
+}
+
+impl<T> IndexedColorSpace<T> {
+    /// Counts of colors in this color space.
+    /// Max index is this value - 1.
+    pub fn len(&self) -> usize {
+        self.data.len() / self.base.components()
+    }
+}
+
+impl<T> ColorSpace<T> for IndexedColorSpace<T>
+where
+    T: ColorComp + 'static + ColorCompConvertTo<u8> + Default,
+    u8: ColorCompConvertTo<T>,
+{
+    fn to_rgba(&self, color: &[T]) -> [T; 4] {
+        let index = color[0].into_color_comp() as usize;
+        let n = self.base.components();
+        let u8_color = &self.data[index * n..(index + 1) * n];
+        let c: ArrayVec<[T; 4]> = u8_color.iter().map(|v| v.into_color_comp()).collect();
+
+        self.base.to_rgba(c.as_slice())
+    }
+
+    fn components(&self) -> usize {
+        1
     }
 }
 

@@ -64,3 +64,17 @@ fn test_color_to_rgba() {
         [0.2f32, 0.2f32, 0.2f32, 1.0f32]
     );
 }
+
+#[test]
+fn indexed_color_space() {
+    let color_space = IndexedColorSpace {
+        base: Box::new(DeviceRGB()),
+        data: vec![
+            0x00, 0x00, 0x00, // black
+            0xff, 0xff, 0xff, // white
+        ],
+    };
+    assert_eq!(2, color_space.len());
+    assert_eq!(color_space.to_rgba(&[0]), [0, 0, 0, 255]);
+    assert_eq!(color_space.to_rgba(&[1]), [255, 255, 255, 255]);
+}
