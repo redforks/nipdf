@@ -2,8 +2,6 @@
 /// Two kinds of color component: float or integer.
 /// For float color component must in range [0, 1].
 pub trait ColorComp: Copy + std::fmt::Debug {
-    fn to_u8_color_comp(self) -> u8;
-
     fn from_f32_color(v: f32) -> Self;
 
     fn min_color() -> Self;
@@ -47,10 +45,6 @@ impl ColorCompConvertTo<f32> for f32 {
 }
 
 impl ColorComp for u8 {
-    fn to_u8_color_comp(self) -> u8 {
-        self
-    }
-
     fn from_f32_color(v: f32) -> Self {
         (v * 255.0).clamp(0., 255.) as u8
     }
@@ -65,10 +59,6 @@ impl ColorComp for u8 {
 }
 
 impl ColorComp for f32 {
-    fn to_u8_color_comp(self) -> u8 {
-        (self * 255.0).clamp(0., 255.) as u8
-    }
-
     fn from_f32_color(v: f32) -> Self {
         debug_assert!((0.0f32..=1.0f32).contains(&v));
         v

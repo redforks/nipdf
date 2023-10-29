@@ -25,7 +25,7 @@ fn cmyk_to_rgb() {
 
     let color = [255, 0, 0, 0];
     let rgb = color_space.to_rgba(&color);
-    assert_eq!(rgb, [0, 172, 239, 255]);
+    assert_eq!(rgb, [0, 173, 239, 255]);
 }
 
 #[test]
