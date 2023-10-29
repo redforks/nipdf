@@ -5,10 +5,6 @@ pub trait ColorComp: Copy + std::fmt::Debug {
     fn min_color() -> Self;
     /// Max value of color component, for float color component must be 1.0
     fn max_color() -> Self;
-
-    fn range() -> std::ops::RangeInclusive<Self> {
-        Self::min_color()..=Self::max_color()
-    }
 }
 
 pub trait ColorCompConvertTo<T: ColorComp> {
