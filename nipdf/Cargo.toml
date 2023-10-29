@@ -47,5 +47,6 @@ hex = "0.4"
 insta = { version = "1.29.0", features = ["ron"] }
 md-5 = "0.10"
 static_assertions = "1.1.0"
+assert_approx_eq = "1.1"
 test-case = "3.1.0"
 test-log = "0.2.12"

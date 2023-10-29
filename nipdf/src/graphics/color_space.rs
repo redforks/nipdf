@@ -1,7 +1,7 @@
 /// Color component composes a color.
 /// Two kinds of color component: float or integer.
 /// For float color component must in range [0, 1].
-pub trait ColorComp: Copy {
+pub trait ColorComp: Copy + std::fmt::Debug {
     fn to_f32_color_comp(self) -> f32;
     fn to_u8_color_comp(self) -> u8;
 
@@ -13,6 +13,37 @@ pub trait ColorComp: Copy {
 
     fn range() -> std::ops::RangeInclusive<Self> {
         Self::min_color()..=Self::max_color()
+    }
+}
+
+pub trait ColorCompConvertTo<T: ColorComp> {
+    fn into_color_comp(self) -> T;
+}
+
+impl ColorCompConvertTo<u8> for u8 {
+    fn into_color_comp(self) -> u8 {
+        self
+    }
+}
+
+impl ColorCompConvertTo<f32> for u8 {
+    fn into_color_comp(self) -> f32 {
+        self as f32 / 255.0
+    }
+}
+
+impl ColorCompConvertTo<u8> for f32 {
+    fn into_color_comp(self) -> u8 {
+        // according to pdf file specification, float color component should be
+        // rounded to nearest integer, See page 157 of PDF 32000-1:2008
+        // If the value is a real number, it shall be rounded to the nearest integer;
+        (self * 255.0).round().clamp(0., 255.) as u8
+    }
+}
+
+impl ColorCompConvertTo<f32> for f32 {
+    fn into_color_comp(self) -> f32 {
+        self
     }
 }
 
@@ -61,34 +92,6 @@ impl ColorComp for f32 {
     }
 }
 
-pub trait ToF32Color<T, const N: usize> {
-    fn to_f32_color(self) -> [f32; N];
-}
-
-impl<T: ColorComp, const N: usize> ToF32Color<T, N> for [T; N] {
-    fn to_f32_color(self) -> [f32; N] {
-        let mut color = [0.; N];
-        for i in 0..N {
-            color[i] = self[i].to_f32_color_comp();
-        }
-        color
-    }
-}
-
-pub trait ToU8Color<T, const N: usize> {
-    fn to_u8_color(self) -> [u8; N];
-}
-
-impl<T: ColorComp, const N: usize> ToU8Color<T, N> for [T; N] {
-    fn to_u8_color(self) -> [u8; N] {
-        let mut color = [0; N];
-        for i in 0..N {
-            color[i] = self[i].to_u8_color_comp();
-        }
-        color
-    }
-}
-
 pub trait ColorSpaceBoxClone<T> {
     fn clone_box(&self) -> Box<dyn ColorSpace<T>>;
 }
@@ -97,6 +100,23 @@ impl<T, O: Clone + ColorSpace<T> + 'static> ColorSpaceBoxClone<T> for O {
     fn clone_box(&self) -> Box<dyn ColorSpace<T>> {
         Box::new(self.clone())
     }
+}
+
+/// Convert color to rgba color space, convert result to f32 or u8 by T generic type.
+pub fn color_to_rgba<F, T, CS>(cs: CS, color: &[F]) -> [T; 4]
+where
+    F: ColorComp,
+    T: ColorComp,
+    CS: ColorSpace<F>,
+    F: ColorCompConvertTo<T>,
+{
+    let rgba = cs.to_rgba(color);
+    [
+        rgba[0].into_color_comp(),
+        rgba[1].into_color_comp(),
+        rgba[2].into_color_comp(),
+        rgba[3].into_color_comp(),
+    ]
 }
 
 pub trait ColorSpace<T>: std::fmt::Debug + ColorSpaceBoxClone<T> {
