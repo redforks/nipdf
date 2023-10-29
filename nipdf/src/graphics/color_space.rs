@@ -2,7 +2,6 @@
 /// Two kinds of color component: float or integer.
 /// For float color component must in range [0, 1].
 pub trait ColorComp: Copy + std::fmt::Debug {
-    fn to_f32_color_comp(self) -> f32;
     fn to_u8_color_comp(self) -> u8;
 
     fn from_f32_color(v: f32) -> Self;
@@ -48,10 +47,6 @@ impl ColorCompConvertTo<f32> for f32 {
 }
 
 impl ColorComp for u8 {
-    fn to_f32_color_comp(self) -> f32 {
-        self as f32 / 255.0
-    }
-
     fn to_u8_color_comp(self) -> u8 {
         self
     }
@@ -70,10 +65,6 @@ impl ColorComp for u8 {
 }
 
 impl ColorComp for f32 {
-    fn to_f32_color_comp(self) -> f32 {
-        self
-    }
-
     fn to_u8_color_comp(self) -> u8 {
         (self * 255.0).clamp(0., 255.) as u8
     }
@@ -131,14 +122,14 @@ pub trait ColorSpace<T>: std::fmt::Debug + ColorSpaceBoxClone<T> {
     /// `color` len should at least be `components()`
     fn to_skia_color(&self, color: &[T]) -> tiny_skia::Color
     where
-        T: ColorComp,
+        T: ColorComp + ColorCompConvertTo<f32>,
     {
         let rgba = self.to_rgba(color);
         tiny_skia::Color::from_rgba(
-            rgba[0].to_f32_color_comp(),
-            rgba[1].to_f32_color_comp(),
-            rgba[2].to_f32_color_comp(),
-            rgba[3].to_f32_color_comp(),
+            rgba[0].into_color_comp(),
+            rgba[1].into_color_comp(),
+            rgba[2].into_color_comp(),
+            rgba[3].into_color_comp(),
         )
         .unwrap()
     }
@@ -179,12 +170,12 @@ impl<T: ColorComp> ColorSpace<T> for DeviceRGB {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DeviceCMYK();
 
-impl<T: ColorComp> ColorSpace<T> for DeviceCMYK {
+impl<T: ColorComp + ColorCompConvertTo<f32>> ColorSpace<T> for DeviceCMYK {
     fn to_rgba(&self, color: &[T]) -> [T; 4] {
-        let c = color[0].to_f32_color_comp();
-        let m = color[1].to_f32_color_comp();
-        let y = color[2].to_f32_color_comp();
-        let k = color[3].to_f32_color_comp();
+        let c = color[0].into_color_comp();
+        let m = color[1].into_color_comp();
+        let y = color[2].into_color_comp();
+        let k = color[3].into_color_comp();
         let c1 = 1.0 - c;
         let m1 = 1.0 - m;
         let y1 = 1.0 - y;
