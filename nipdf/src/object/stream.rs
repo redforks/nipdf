@@ -15,7 +15,7 @@ use nipdf_macro::pdf_object;
 use once_cell::unsync::Lazy;
 
 use crate::file::ResourceDict;
-use crate::graphics::color_space::ColorSpace;
+use crate::graphics::color_space::ColorSpaceTrait;
 use crate::graphics::{color_space, ColorSpaceArgs, PredefinedColorSpace};
 use crate::{
     ccitt::Flags,

@@ -62,11 +62,11 @@ impl ColorComp for f32 {
 }
 
 pub trait ColorSpaceBoxClone<T> {
-    fn clone_box(&self) -> Box<dyn ColorSpace<T>>;
+    fn clone_box(&self) -> Box<dyn ColorSpaceTrait<T>>;
 }
 
-impl<T, O: Clone + ColorSpace<T> + 'static> ColorSpaceBoxClone<T> for O {
-    fn clone_box(&self) -> Box<dyn ColorSpace<T>> {
+impl<T, O: Clone + ColorSpaceTrait<T> + 'static> ColorSpaceBoxClone<T> for O {
+    fn clone_box(&self) -> Box<dyn ColorSpaceTrait<T>> {
         Box::new(self.clone())
     }
 }
@@ -76,7 +76,7 @@ pub fn color_to_rgba<F, T, CS>(cs: CS, color: &[F]) -> [T; 4]
 where
     F: ColorComp,
     T: ColorComp,
-    CS: ColorSpace<F>,
+    CS: ColorSpaceTrait<F>,
     F: ColorCompConvertTo<T>,
 {
     let rgba = cs.to_rgba(color);
@@ -88,7 +88,7 @@ where
     ]
 }
 
-pub trait ColorSpace<T>: std::fmt::Debug + ColorSpaceBoxClone<T> {
+pub trait ColorSpaceTrait<T>: std::fmt::Debug + ColorSpaceBoxClone<T> {
     /// Convert color from current space to RGBA.
     /// `color` len should at least be `components()`
     /// Use `color_to_rgba()` function, if target color space is not T.
@@ -114,7 +114,7 @@ pub trait ColorSpace<T>: std::fmt::Debug + ColorSpaceBoxClone<T> {
     }
 }
 
-impl<T> Clone for Box<dyn ColorSpace<T>> {
+impl<T> Clone for Box<dyn ColorSpaceTrait<T>> {
     fn clone(&self) -> Self {
         self.clone_box()
     }
@@ -123,7 +123,7 @@ impl<T> Clone for Box<dyn ColorSpace<T>> {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DeviceGray();
 
-impl<T: ColorComp> ColorSpace<T> for DeviceGray {
+impl<T: ColorComp> ColorSpaceTrait<T> for DeviceGray {
     fn to_rgba(&self, color: &[T]) -> [T; 4] {
         [color[0], color[0], color[0], T::max_color()]
     }
@@ -136,7 +136,7 @@ impl<T: ColorComp> ColorSpace<T> for DeviceGray {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DeviceRGB();
 
-impl<T: ColorComp> ColorSpace<T> for DeviceRGB {
+impl<T: ColorComp> ColorSpaceTrait<T> for DeviceRGB {
     fn to_rgba(&self, color: &[T]) -> [T; 4] {
         [color[0], color[1], color[2], T::max_color()]
     }
@@ -149,7 +149,7 @@ impl<T: ColorComp> ColorSpace<T> for DeviceRGB {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DeviceCMYK();
 
-impl<T> ColorSpace<T> for DeviceCMYK
+impl<T> ColorSpaceTrait<T> for DeviceCMYK
 where
     T: ColorComp + ColorCompConvertTo<f32>,
     f32: ColorCompConvertTo<T>,
@@ -228,7 +228,7 @@ where
 #[derive(Debug, Clone, Copy)]
 pub struct PatternColorSpace;
 
-impl<T> ColorSpace<T> for PatternColorSpace {
+impl<T> ColorSpaceTrait<T> for PatternColorSpace {
     fn to_rgba(&self, _color: &[T]) -> [T; 4] {
         unreachable!("PatternColorSpace.to_rgba() should not be called")
     }
@@ -244,7 +244,7 @@ impl<T> ColorSpace<T> for PatternColorSpace {
 /// is data.len() / base.components().
 #[derive(Debug, Clone)]
 pub struct IndexedColorSpace<T> {
-    pub base: Box<dyn ColorSpace<T>>,
+    pub base: Box<dyn ColorSpaceTrait<T>>,
     pub data: Vec<u8>,
 }
 
@@ -256,7 +256,7 @@ impl<T> IndexedColorSpace<T> {
     }
 }
 
-impl<T> ColorSpace<T> for IndexedColorSpace<T>
+impl<T> ColorSpaceTrait<T> for IndexedColorSpace<T>
 where
     T: ColorComp + 'static + ColorCompConvertTo<u8> + Default,
     u8: ColorCompConvertTo<T>,
