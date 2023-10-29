@@ -18,7 +18,7 @@ use nom::{
 use crate::{
     file::{Rectangle, ResourceDict},
     object::{
-        Dictionary, Name, Object, ObjectValueError, PdfObject, Stream, TextString,
+        Array, Dictionary, Name, Object, ObjectValueError, PdfObject, Stream, TextString,
         TextStringOrNumber,
     },
     parser::{parse_object, ws_prefixed, ws_terminated, ParseError, ParseResult},
@@ -135,6 +135,36 @@ pub enum PredefinedColorSpace {
     DeviceGray,
     DeviceRGB,
     DeviceCMYK,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub enum ColorSpaceArgs1<'a> {
+    Name(Name<'a>),
+    Array(Array<'a>),
+    Ref(NonZeroU32),
+}
+
+impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceArgs1<'a> {
+    type Error = ObjectValueError;
+
+    fn try_from(object: &'b Object<'a>) -> Result<Self, Self::Error> {
+        match object {
+            Object::Name(name) => Ok(Self::Name(name.clone())),
+            Object::Array(arr) => Ok(Self::Array(arr.clone())),
+            Object::Reference(id) => Ok(Self::Ref(id.id().id())),
+            _ => {
+                error!("Can not parse ColorSpaceArgs from {:?}", object);
+                Err(ObjectValueError::GraphicsOperationSchemaError)
+            }
+        }
+    }
+}
+
+impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorSpaceArgs1<'a> {
+    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+        let o = objects.pop().unwrap();
+        ColorSpaceArgs1::try_from(&o).map_err(|_| ObjectValueError::GraphicsOperationSchemaError)
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
