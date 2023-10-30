@@ -63,8 +63,7 @@ fn parse_file() {
     p.push("normal");
     p.push("SamplePdf1_12mb_6pages.pdf");
     let buf = std::fs::read(p).unwrap();
-    let (f, xref) = File::parse(&buf).unwrap();
-    let resolver = ObjectResolver::new(&buf, &xref);
+    let f = File::parse(buf).unwrap();
+    let resolver = f.resolver().unwrap();
     assert_eq!("1.5", f.version(&resolver).unwrap());
-    assert_eq!(311, f.total_objects);
 }

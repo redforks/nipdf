@@ -235,6 +235,11 @@ impl<'a> ObjectResolver<'a> {
         }
     }
 
+    /// Return total objects count.
+    pub fn len(&self) -> usize {
+        self.objects.len()
+    }
+
     #[cfg(test)]
     pub fn empty(xref_table: &'a XRefTable) -> Self {
         Self {
@@ -495,11 +500,11 @@ impl<'a, 'b> Catalog<'a, 'b> {
     }
 }
 
-#[derive(Debug)]
 pub struct File {
-    total_objects: u32,
     root_id: NonZeroU32,
     head_ver: String,
+    data: Vec<u8>,
+    xref: XRefTable,
 }
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -511,34 +516,29 @@ pub enum FileError {
 }
 
 impl File {
-    pub fn parse(buf: &[u8]) -> AnyResult<(Self, XRefTable)> {
-        let (_, head_ver) = parse_header(buf).unwrap();
-        let (_, frame_set) = parse_frame_set(buf).unwrap();
-        let xref = XRefTable::from_frame_set(&frame_set);
-        let resolver = ObjectResolver::new(buf, &xref);
-
+    pub fn parse(buf: Vec<u8>) -> AnyResult<Self> {
+        let (_, head_ver) = parse_header(&buf).unwrap();
+        let (_, frame_set) = parse_frame_set(&buf).unwrap();
         let trailers = frame_set.iter().map(|f| &f.trailer).collect_vec();
-        let root_id = trailers.iter().find_map(|t| t.get(&b"Root"[..])).unwrap();
-        let root_id = root_id.as_ref().unwrap().id().id();
-        let total_objects = resolver
-            .resolve_container_value(&trailers, "Size")
-            .map_err(|_| FileError::MissingRequiredTrailerValue)?
-            .as_int()? as u32;
+        let xref = XRefTable::from_frame_set(&frame_set);
         assert!(
-            resolver
-                .opt_resolve_container_value(&trailers, "Encrypt")?
-                .is_none(),
+            !trailers.iter().any(|d| d.contains_key(&b"Encrypt"[..])),
             "Encrypted file is not supported"
         );
 
-        Ok((
-            Self {
-                head_ver: head_ver.to_owned(),
-                total_objects,
-                root_id,
-            },
+        let root_id = trailers.iter().find_map(|t| t.get(&b"Root"[..])).unwrap();
+        let root_id = root_id.as_ref().unwrap().id().id();
+
+        Ok(Self {
+            head_ver: head_ver.to_owned(),
+            root_id,
+            data: buf,
             xref,
-        ))
+        })
+    }
+
+    pub fn resolver(&self) -> AnyResult<ObjectResolver<'_>> {
+        Ok(ObjectResolver::new(&self.data, &self.xref))
     }
 
     pub fn version(&self, resolver: &ObjectResolver) -> Result<String, ObjectValueError> {
@@ -547,10 +547,6 @@ impl File {
             .ver()
             .map(|s| s.to_owned())
             .unwrap_or(self.head_ver.clone()))
-    }
-
-    pub fn total_objects(&self) -> u32 {
-        self.total_objects
     }
 
     pub fn catalog<'a, 'b>(
@@ -592,8 +588,8 @@ pub(crate) fn decode_stream<
     f_assert: impl for<'a> FnOnce(&'a Dictionary<'a>, &'a ObjectResolver<'a>) -> AnyResult<()>,
 ) -> AnyResult<Vec<u8>> {
     let buf = read_sample_file(file_path);
-    let (_, xref) = File::parse(&buf)?;
-    let resolver = ObjectResolver::new(&buf, &xref);
+    let f = File::parse(buf)?;
+    let resolver = f.resolver()?;
     let stream = resolver.resolve(id.try_into()?)?.as_stream()?;
     f_assert(stream.as_dict(), &resolver)?;
     Ok(stream.decode(&resolver)?.into_owned())

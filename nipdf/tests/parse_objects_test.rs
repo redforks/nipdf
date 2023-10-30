@@ -12,12 +12,12 @@ fn scan_objects() {
         let path = entry.unwrap();
         let buf = std::fs::read(&path).unwrap();
         println!("parsing {path:?}");
-        let (f, xref) =
-            File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {path:?}"));
-        let resolver = ObjectResolver::new(&buf[..], &xref);
-        for id in 1..f.total_objects() {
+        let f =
+            File::parse(buf).unwrap_or_else(|_| panic!("failed to parse {path:?}"));
+        let resolver = f.resolver().unwrap();
+        for id in 1..resolver.len() {
             print!("scan object: {id}");
-            match resolver.resolve(NonZeroU32::new(id).unwrap()) {
+            match resolver.resolve(NonZeroU32::new(id as u32).unwrap()) {
                 Err(ObjectValueError::ObjectIDNotFound(_)) => {
                     print!(" not found")
                 }

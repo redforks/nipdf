@@ -7,8 +7,8 @@ use nipdf::file::{File, ObjectResolver, RenderOptionBuilder};
 
 fn decode_file_page(path: &str, page_no: usize) -> AnyResult<String> {
     let buf = std::fs::read(path)?;
-    let (f, xref) = File::parse(&buf[..]).unwrap_or_else(|_| panic!("failed to parse {path:?}"));
-    let resolver = ObjectResolver::new(&buf[..], &xref);
+    let f = File::parse(buf).unwrap_or_else(|_| panic!("failed to parse {path:?}"));
+    let resolver = f.resolver()?;
     let catalog = f.catalog(&resolver)?;
     let pages = catalog.pages()?;
     let page = &pages[page_no];
