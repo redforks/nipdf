@@ -1205,15 +1205,16 @@ fn build_linear_gradient_stops(domain: Domain, f: FunctionDict) -> AnyResult<Vec
         }
         FunctionType::Stitching => {
             let sf = f.stitch()?;
+            let sff = sf.func()?;
             let mut stops = Vec::with_capacity(sf.functions()?.len() + 1);
-            stops.push(create_stop(&sf, domain.start)?);
+            stops.push(create_stop(&sff, domain.start)?);
             let functions = sf.functions()?;
             for f in &functions {
                 let ef = f.exponential_interpolation()?; // only support exponential interpolation
                 assert_eq!(ef.n()?, 1f32, "Only linear gradient function supported");
             }
             for t in sf.bounds()?.iter() {
-                stops.push(create_stop(&sf, *t)?);
+                stops.push(create_stop(&sff, *t)?);
             }
             stops.push(create_stop(&f, domain.end)?);
             Ok(stops)

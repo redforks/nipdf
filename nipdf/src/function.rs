@@ -130,6 +130,18 @@ impl<'a, 'b> FunctionDict<'a, 'b> {
         self.range().unwrap().map(|range| range.n())
     }
 
+    /// Create boxed Function for this Function dict.
+    pub fn func(&self) -> AnyResult<Box<dyn Function>> {
+        match self.function_type()? {
+            Type::Sampled => Ok(Box::new(self.sampled()?.func()?)),
+            Type::ExponentialInterpolation => {
+                todo!("Ok(Box::new(self.exponential_interpolation()?))")
+            }
+            Type::Stitching => Ok(Box::new(self.stitch()?.func()?)),
+            Type::PostScriptCalculator => todo!(),
+        }
+    }
+
     fn clip_args(&self, args: &[f32]) -> Vec<f32> {
         let domain = self.domain().unwrap();
         assert_eq!(args.len(), domain.n());
@@ -198,7 +210,7 @@ impl<'a, 'b> Function for FunctionDict<'a, 'b> {
         match self.function_type()? {
             Type::Sampled => self.sampled()?.func()?.call(args),
             Type::ExponentialInterpolation => self.exponential_interpolation()?.call(args),
-            Type::Stitching => self.stitch()?.call(args),
+            Type::Stitching => self.stitch()?.func()?.call(args),
             Type::PostScriptCalculator => todo!(),
         }
     }
@@ -374,6 +386,24 @@ pub trait StitchingFunctionDictTrait {
 }
 
 impl<'a, 'b> StitchingFunctionDict<'a, 'b> {
+    pub fn func(&self) -> AnyResult<StitchingFunction> {
+        let functions = self
+            .functions()?
+            .into_iter()
+            .map(|f| f.func())
+            .collect::<AnyResult<_>>()?;
+        let bounds = self.bounds()?;
+        let encode = self.encode()?;
+        let f = self.function_dict()?;
+        let domains = f.domain()?;
+        Ok(StitchingFunction {
+            functions,
+            bounds,
+            encode,
+            domains,
+        })
+    }
+
     fn find_function(bounds: &[f32], x: f32) -> usize {
         bounds
             .iter()
@@ -403,25 +433,26 @@ impl<'a, 'b> StitchingFunctionDict<'a, 'b> {
     }
 }
 
-impl<'a, 'b> Function for StitchingFunctionDict<'a, 'b> {
+pub struct StitchingFunction {
+    functions: Vec<Box<dyn Function>>,
+    bounds: Vec<f32>,
+    encode: Domains,
+    domains: Domains,
+}
+
+impl Function for StitchingFunction {
     fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>> {
         assert_eq!(args.len(), 1);
 
-        let f = self.function_dict()?;
-        let bounds = self.bounds()?;
-        let encode = self.encode()?;
-        let domains = f.domain()?;
-        assert_eq!(1, domains.n()); // stitching function only has 1 input argument
-
-        let args = f.clip_args(args);
         let x = args[0];
-        let function_idx = Self::find_function(&bounds, x);
-        let sub_domain = Self::sub_domain(&domains.0[0], &bounds, function_idx);
-        let x = Self::interpolation(&sub_domain, &encode.0[function_idx], x);
+        let function_idx = StitchingFunctionDict::find_function(&self.bounds, x);
+        let sub_domain =
+            StitchingFunctionDict::sub_domain(&self.domains.0[0], &self.bounds, function_idx);
+        let x = StitchingFunctionDict::interpolation(&sub_domain, &self.encode.0[function_idx], x);
 
-        let f = &self.functions()?[function_idx];
+        let f = &self.functions[function_idx];
         let r = f.call(&[x])?;
-        Ok(f.clip_returns(r))
+        Ok(r)
     }
 }
 
