@@ -105,7 +105,7 @@ pub enum ColorSpace<T> {
     DeviceCMYK,
     Pattern,
     Indexed(IndexedColorSpace<T>),
-    Foo(T),
+    Phantom(T),
 }
 
 impl<T> ColorSpace<T> {
