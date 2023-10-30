@@ -73,7 +73,7 @@ fn test_color_to_rgba() {
 #[test]
 fn indexed_color_space() {
     let color_space = IndexedColorSpace {
-        base: Box::new(ColorSpace::DeviceRGB),
+        base: ColorSpace::DeviceRGB,
         data: vec![
             0x00, 0x00, 0x00, // black
             0xff, 0xff, 0xff, // white

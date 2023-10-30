@@ -6,7 +6,6 @@ use tinyvec::ArrayVec;
 use crate::{
     file::{ObjectResolver, ResourceDict},
     graphics::ICCStreamDict,
-    object::Object,
 };
 
 use super::ColorSpaceArgs1;
@@ -104,7 +103,7 @@ pub enum ColorSpace<T> {
     DeviceRGB,
     DeviceCMYK,
     Pattern,
-    Indexed(IndexedColorSpace<T>),
+    Indexed(Box<IndexedColorSpace<T>>),
     Phantom(T),
 }
 
@@ -346,7 +345,7 @@ impl<T> ColorSpaceTrait<T> for PatternColorSpace {
 /// is data.len() / base.components().
 #[derive(Debug, Clone, PartialEq)]
 pub struct IndexedColorSpace<T> {
-    pub base: Box<ColorSpace<T>>,
+    pub base: ColorSpace<T>,
     pub data: Vec<u8>,
 }
 
