@@ -290,14 +290,6 @@ impl<'a, 'b, const N: usize> ConvertFromObject<'a, 'b> for [f32; N] {
     }
 }
 
-pub fn cmyk_to_rgb8(c: f32, y: f32, m: f32, k: f32) -> (u8, u8, u8) {
-    (
-        ((1.0 - c) * (1.0 - k) * 255.0) as u8,
-        ((1.0 - m) * (1.0 - k) * 255.0) as u8,
-        ((1.0 - y) * (1.0 - k) * 255.0) as u8,
-    )
-}
-
 impl<'a> TryFrom<&Object<'a>> for ColorArgs {
     type Error = ObjectValueError;
 

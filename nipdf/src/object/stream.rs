@@ -14,22 +14,12 @@ use log::error;
 use nipdf_macro::pdf_object;
 use once_cell::unsync::Lazy;
 
-use crate::graphics::{color_space, ColorSpaceArgs, PredefinedColorSpace};
 use crate::graphics::{
-    color_space::{color_to_rgba, ColorCompConvertTo, ColorSpaceTrait},
+    color_space::{color_to_rgba, ColorCompConvertTo, ColorSpaceTrait, DeviceCMYK},
     ColorSpaceArgs1,
 };
-use crate::{
-    ccitt::Flags,
-    file::ObjectResolver,
-    function::{Function, FunctionDict, Type as FunctionType},
-    graphics::cmyk_to_rgb8,
-    object::PdfObject,
-};
-use crate::{
-    file::ResourceDict,
-    graphics::color_space::{ColorSpace, SeparationColorSpace},
-};
+use crate::{ccitt::Flags, file::ObjectResolver, object::PdfObject};
+use crate::{file::ResourceDict, graphics::color_space::ColorSpace};
 
 use super::{Dictionary, Name, Object, ObjectValueError};
 
@@ -589,7 +579,7 @@ impl<'a> Stream<'a> {
                 }
             }
             FilterDecodedData::CmykImage((width, height, pixels)) => {
-                let cs = color_space::DeviceCMYK();
+                let cs = DeviceCMYK();
                 DynamicImage::ImageRgba8(RgbaImage::from_fn(width, height, |x, y| {
                     let i = (y * width + x) as usize * 4;
                     Rgba(cs.to_rgba(&[
