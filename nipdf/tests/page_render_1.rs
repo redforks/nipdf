@@ -2,19 +2,21 @@
 //! This file checks file pdfReferenceUpdated.pdf
 use anyhow::Result as AnyResult;
 use insta::assert_ron_snapshot;
+use md5::{Digest, Md5};
 use nipdf::file::File;
 use std::num::NonZeroU32;
 
 /// Decode pdf embed image and return the result as Vec<u8>.
 /// The image is specified by ref id.
-fn decode_image(id: u32) -> AnyResult<Vec<u8>> {
+fn decode_image(id: u32) -> AnyResult<String> {
     let path = "sample_files/bizarre/pdfReferenceUpdated.pdf";
     let buf = std::fs::read(path)?;
     let f = File::parse(buf).unwrap_or_else(|_| panic!("failed to parse {path:?}"));
     let resolver = f.resolver()?;
     let obj = resolver.resolve(NonZeroU32::new(id).unwrap())?;
     let image = obj.as_stream()?.decode_image(&resolver, None)?;
-    Ok(image.into_bytes())
+    let hash = Md5::digest(&image.into_bytes());
+    Ok(hex::encode(hash))
 }
 
 #[test]
