@@ -32,6 +32,8 @@ use crate::graphics::color_space::{ColorSpaceTrait, PatternColorSpace};
 use crate::graphics::trans::{TextToUserSpace, UserToDeviceIndependentSpace};
 pub(crate) use pattern::*;
 
+use self::color_space::ColorSpace;
+
 pub(crate) mod trans;
 
 impl<'a, S, T> TryFrom<&Object<'a>> for Transform2D<f32, S, T> {
@@ -200,37 +202,39 @@ impl ColorSpaceArgs {
         &self,
         resolver: &ObjectResolver<'a>,
         resources: Option<&ResourceDict<'a, '_>>,
-    ) -> AnyResult<Box<dyn ColorSpaceTrait<f32>>> {
-        match self {
-            Self::Predefined(cs) => Ok(match cs {
-                PredefinedColorSpace::DeviceGray => Box::new(color_space::DeviceGray()),
-                PredefinedColorSpace::DeviceRGB => Box::new(color_space::DeviceRGB()),
-                PredefinedColorSpace::DeviceCMYK => Box::new(color_space::DeviceCMYK()),
-            }),
-            Self::LaterResolve(id) => {
-                let cs_owner: Self = resolver.resolve(*id)?.try_into()?;
-                match &cs_owner {
-                    ColorSpaceArgs::ICCBased(id) => {
-                        let d = resolver.resolve(*id)?.as_stream()?.as_dict();
-                        let d = ICCStreamDict::new(None, d, resolver)?;
-                        let space_args = d
-                            .alternate()?
-                            .expect("unsupported if ICCBased color no alternate color space");
-                        space_args.create_color_space(resolver, resources)
-                    }
-                    _ => todo!("Unsupported color space: {:?}", &cs_owner),
-                }
-            }
-            Self::Custom(name) => {
-                let spaces = resources
-                    .expect("Page resources needed to handle Custom ColorSpaceArgs")
-                    .color_space()?;
-                let args = spaces.get(name).ok_or(ObjectValueError::DictNameMissing)?;
-                args.create_color_space(resolver, resources)
-            }
-            Self::Pattern => Ok(Box::new(PatternColorSpace())),
-            _ => todo!("Convert {:?} to Color space", self),
-        }
+    ) -> AnyResult<ColorSpace<f32>> {
+        todo!()
+        // match self {
+        //     Self::Predefined(cs) => Ok(match cs {
+        //         PredefinedColorSpace::DeviceGray => Box::new(color_space::DeviceGray()),
+        //         PredefinedColorSpace::DeviceRGB => Box::new(color_space::DeviceRGB()),
+        //         PredefinedColorSpace::DeviceCMYK => Box::new(color_space::DeviceCMYK()),
+        //     }),
+        //     Self::LaterResolve(id) => {
+        //         let cs_owner: Self = resolver.resolve(*id)?.try_into()?;
+        //         match &cs_owner {
+        //             ColorSpaceArgs::ICCBased(id) => {
+        //                 let d = resolver.resolve(*id)?.as_stream()?.as_dict();
+        //                 let d = ICCStreamDict::new(None, d, resolver)?;
+        //                 let space_args = d
+        //                     .alternate()?
+        //                     .expect("unsupported if ICCBased color no alternate color space");
+        //                 space_args.create_color_space(resolver, resources)
+        //             }
+        //             _ => todo!("Unsupported color space: {:?}", &cs_owner),
+        //         }
+        //     }
+        //     Self::Custom(name) => {
+        //         // let spaces = resources
+        //         //     .expect("Page resources needed to handle Custom ColorSpaceArgs")
+        //         //     .color_space()?;
+        //         // let args = spaces.get(name).ok_or(ObjectValueError::DictNameMissing)?;
+        //         // args.create_color_space(resolver, resources)
+        //         todo!()
+        //     }
+        //     Self::Pattern => Ok(Box::new(PatternColorSpace())),
+        //     _ => todo!("Convert {:?} to Color space", self),
+        // }
     }
 }
 

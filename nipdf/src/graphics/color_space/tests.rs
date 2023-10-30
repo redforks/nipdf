@@ -1,3 +1,6 @@
+use crate::file::XRefTable;
+use test_case::test_case;
+
 use super::*;
 use assert_approx_eq::assert_approx_eq;
 
@@ -68,7 +71,7 @@ fn test_color_to_rgba() {
 #[test]
 fn indexed_color_space() {
     let color_space = IndexedColorSpace {
-        base: Box::new(DeviceRGB()),
+        base: Box::new(ColorSpace::DeviceRGB),
         data: vec![
             0x00, 0x00, 0x00, // black
             0xff, 0xff, 0xff, // white
@@ -78,3 +81,16 @@ fn indexed_color_space() {
     assert_eq!(color_space.to_rgba(&[0]), [0, 0, 0, 255]);
     assert_eq!(color_space.to_rgba(&[1]), [255, 255, 255, 255]);
 }
+
+#[test_case("DeviceRGB" => ColorSpace::DeviceRGB)]
+#[test_case("DeviceGray" => ColorSpace::DeviceGray)]
+#[test_case("DeviceCMYK" => ColorSpace::DeviceCMYK)]
+#[test_case("Pattern" => ColorSpace::Pattern)]
+fn simple_color_space_from_args(name: &str) -> ColorSpace<f32> {
+    let empty_xref = XRefTable::empty();
+    let resolver = ObjectResolver::empty(&empty_xref);
+    ColorSpace::<f32>::from_args(&ColorSpaceArgs1::Name(name.into()), &resolver, None).unwrap()
+}
+
+#[test]
+fn icc_based() {}

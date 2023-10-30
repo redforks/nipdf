@@ -17,7 +17,7 @@ use self::paint::Render;
 pub use self::paint::{RenderOption, RenderOptionBuilder};
 
 use crate::graphics::trans::FormToUserSpace;
-use crate::graphics::{ColorArgs, ColorSpaceArgs};
+use crate::graphics::{ColorArgs, ColorSpaceArgs1};
 use std::{iter::once, ops::Deref};
 
 mod paint;
@@ -182,9 +182,9 @@ pub trait FormXObjectDictTrait {
 }
 
 /// Wrap type to impl TryFrom<> trait
-pub struct ColorSpaceResources(HashMap<String, ColorSpaceArgs>);
+pub struct ColorSpaceResources<'a>(HashMap<String, ColorSpaceArgs1<'a>>);
 
-impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceResources {
+impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceResources<'a> {
     type Error = ObjectValueError;
 
     fn try_from(object: &'b Object<'a>) -> Result<Self, Self::Error> {
@@ -192,7 +192,7 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceResources {
         match object {
             Object::Dictionary(dict) => {
                 for (k, v) in dict.iter() {
-                    let cs = ColorSpaceArgs::try_from(v)?;
+                    let cs = ColorSpaceArgs1::try_from(v)?;
                     map.insert(k.as_ref().to_owned(), cs);
                 }
                 Ok(Self(map))
@@ -205,8 +205,8 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceResources {
     }
 }
 
-impl Deref for ColorSpaceResources {
-    type Target = HashMap<String, ColorSpaceArgs>;
+impl<'a> Deref for ColorSpaceResources<'a> {
+    type Target = HashMap<String, ColorSpaceArgs1<'a>>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -217,7 +217,7 @@ pub trait ResourceDictTrait {
     #[nested]
     fn ext_g_state(&self) -> HashMap<String, GraphicsStateParameterDict<'a, 'b>>;
     #[try_from]
-    fn color_space(&self) -> ColorSpaceResources;
+    fn color_space(&self) -> ColorSpaceResources<'a>;
     #[nested]
     fn pattern(&self) -> HashMap<String, PatternDict<'a, 'b>>;
     fn shading(&self) -> Option<&'b Dictionary<'a>>;

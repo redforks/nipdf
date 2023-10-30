@@ -1,5 +1,9 @@
-use itertools::Itertools;
+use anyhow::{anyhow, Result as AnyResult};
 use tinyvec::ArrayVec;
+
+use crate::file::{ObjectResolver, ResourceDict};
+
+use super::ColorSpaceArgs1;
 
 /// Color component composes a color.
 /// Two kinds of color component: float or integer.
@@ -61,15 +65,15 @@ impl ColorComp for f32 {
     }
 }
 
-pub trait ColorSpaceBoxClone<T> {
-    fn clone_box(&self) -> Box<dyn ColorSpaceTrait<T>>;
-}
+// pub trait ColorSpaceBoxClone<T> {
+//     fn clone_box(&self) -> Box<dyn ColorSpaceTrait<T>>;
+// }
 
-impl<T, O: Clone + ColorSpaceTrait<T> + 'static> ColorSpaceBoxClone<T> for O {
-    fn clone_box(&self) -> Box<dyn ColorSpaceTrait<T>> {
-        Box::new(self.clone())
-    }
-}
+// impl<T, O: Clone + ColorSpaceTrait<T> + 'static> ColorSpaceBoxClone<T> for O {
+//     fn clone_box(&self) -> Box<dyn ColorSpaceTrait<T>> {
+//         Box::new(self.clone())
+//     }
+// }
 
 /// Convert color to rgba color space, convert result to f32 or u8 by T generic type.
 pub fn color_to_rgba<F, T, CS>(cs: CS, color: &[F]) -> [T; 4]
@@ -88,18 +92,56 @@ where
     ]
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ColorSpace<T> {
     DeviceGray,
     DeviceRGB,
     DeviceCMYK,
     Pattern,
     Indexed(IndexedColorSpace<T>),
+    Foo(T),
+}
+
+impl<T> ColorSpace<T> {
+    /// Create from color space args.
+    /// Panic if need resolve resource but resources is None.
+    pub fn from_args<'a>(
+        args: &ColorSpaceArgs1<'a>,
+        resolver: &ObjectResolver<'a>,
+        resources: Option<&ResourceDict<'a, '_>>,
+    ) -> AnyResult<Self> {
+        match args {
+            ColorSpaceArgs1::Ref(id) => {
+                let obj = resolver.resolve(*id)?;
+                let args = ColorSpaceArgs1::try_from(obj)?;
+                Self::from_args(&args, resolver, resources)
+            }
+            ColorSpaceArgs1::Name(name) => {
+                let name = name.as_ref();
+                match name {
+                    "DeviceGray" => Ok(ColorSpace::DeviceGray),
+                    "DeviceRGB" => Ok(ColorSpace::DeviceRGB),
+                    "DeviceCMYK" => Ok(ColorSpace::DeviceCMYK),
+                    "Pattern" => Ok(ColorSpace::Pattern),
+                    _ => {
+                        let color_spaces = resources.unwrap().color_space()?;
+                        let args = color_spaces.get(name).ok_or_else(|| {
+                            anyhow!("ColorSpace::from_args() color space not found")
+                        })?;
+                        Self::from_args(&args, resolver, resources)
+                    }
+                }
+            }
+            ColorSpaceArgs1::Array(arr) => {
+                todo!()
+            }
+        }
+    }
 }
 
 impl<T> ColorSpaceTrait<T> for ColorSpace<T>
 where
-    T: ColorComp + ColorCompConvertTo<f32> + Default + 'static,
+    T: ColorComp + ColorCompConvertTo<f32> + Default + PartialEq + 'static,
     T: ColorCompConvertTo<u8>,
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
@@ -111,6 +153,7 @@ where
             ColorSpace::DeviceCMYK => DeviceCMYK().to_rgba(color),
             ColorSpace::Pattern => PatternColorSpace().to_rgba(color),
             ColorSpace::Indexed(indexed) => indexed.to_rgba(color),
+            _ => todo!(),
         }
     }
 
@@ -121,11 +164,12 @@ where
             ColorSpace::DeviceCMYK => ColorSpaceTrait::<T>::components(&DeviceCMYK()),
             ColorSpace::Pattern => ColorSpaceTrait::<T>::components(&PatternColorSpace()),
             ColorSpace::Indexed(indexed) => indexed.components(),
+            _ => todo!(),
         }
     }
 }
 
-pub trait ColorSpaceTrait<T>: std::fmt::Debug + ColorSpaceBoxClone<T> {
+pub trait ColorSpaceTrait<T> {
     /// Convert color from current space to RGBA.
     /// `color` len should at least be `components()`
     /// Use `color_to_rgba()` function, if target color space is not T.
@@ -151,11 +195,11 @@ pub trait ColorSpaceTrait<T>: std::fmt::Debug + ColorSpaceBoxClone<T> {
     }
 }
 
-impl<T> Clone for Box<dyn ColorSpaceTrait<T>> {
-    fn clone(&self) -> Self {
-        self.clone_box()
-    }
-}
+// impl<T> Clone for Box<dyn ColorSpaceTrait<T>> {
+//     fn clone(&self) -> Self {
+//         self.clone_box()
+//     }
+// }
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DeviceGray();
@@ -279,13 +323,19 @@ impl<T> ColorSpaceTrait<T> for PatternColorSpace {
 /// using base color space. The index is 1 byte.
 /// Base color stored in data, each color component is a u8. Max index
 /// is data.len() / base.components().
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct IndexedColorSpace<T> {
-    pub base: Box<dyn ColorSpaceTrait<T>>,
+    pub base: Box<ColorSpace<T>>,
     pub data: Vec<u8>,
 }
 
-impl<T> IndexedColorSpace<T> {
+impl<T> IndexedColorSpace<T>
+where
+    T: ColorComp + ColorCompConvertTo<f32> + Default + PartialEq + 'static,
+    T: ColorCompConvertTo<u8>,
+    f32: ColorCompConvertTo<T>,
+    u8: ColorCompConvertTo<T>,
+{
     /// Counts of colors in this color space.
     /// Max index is this value - 1.
     pub fn len(&self) -> usize {
@@ -295,11 +345,13 @@ impl<T> IndexedColorSpace<T> {
 
 impl<T> ColorSpaceTrait<T> for IndexedColorSpace<T>
 where
-    T: ColorComp + 'static + ColorCompConvertTo<u8> + Default,
+    T: ColorComp + ColorCompConvertTo<f32> + Default + PartialEq + 'static,
+    T: ColorCompConvertTo<u8>,
+    f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
 {
     fn to_rgba(&self, color: &[T]) -> [T; 4] {
-        let index = color[0].into_color_comp() as usize;
+        let index = ColorCompConvertTo::<u8>::into_color_comp(color[0]) as usize;
         let n = self.base.components();
         let u8_color = &self.data[index * n..(index + 1) * n];
         let c: ArrayVec<[T; 4]> = u8_color.iter().map(|v| v.into_color_comp()).collect();

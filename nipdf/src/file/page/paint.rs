@@ -6,6 +6,7 @@ use crate::{
     file::{ObjectResolver, XObjectDict},
     function::{Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
+        color_space::ColorSpace,
         parse_operations,
         trans::{DeviceIndependentSpace, UserSpace},
         AxialExtend, AxialShadingDict, ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle,
@@ -122,8 +123,8 @@ pub struct State {
     stroke_paint: PaintCreator,
     stroke: Stroke,
     mask: Option<Mask>,
-    fill_color_space: Box<dyn ColorSpaceTrait<f32>>,
-    stroke_color_space: Box<dyn ColorSpaceTrait<f32>>,
+    fill_color_space: ColorSpace<f32>,
+    stroke_color_space: ColorSpace<f32>,
     text_object: TextObject,
 }
 
@@ -144,8 +145,8 @@ impl State {
             stroke_paint: PaintCreator::Color(tiny_skia::Color::BLACK),
             stroke: Stroke::default(),
             mask: None,
-            fill_color_space: Box::new(color_space::DeviceRGB()),
-            stroke_color_space: Box::new(color_space::DeviceRGB()),
+            fill_color_space: ColorSpace::DeviceRGB,
+            stroke_color_space: ColorSpace::DeviceRGB,
             text_object: TextObject::new(),
         };
 
@@ -186,7 +187,7 @@ impl State {
         info!("not implemented: render intent: {}", intent);
     }
 
-    fn set_stroke_color_and_space(&mut self, cs: Box<dyn ColorSpaceTrait<f32>>, color: &[f32]) {
+    fn set_stroke_color_and_space(&mut self, cs: ColorSpace<f32>, color: &[f32]) {
         self.set_stroke_color(cs.to_skia_color(color));
         self.stroke_color_space = cs;
     }
@@ -200,7 +201,7 @@ impl State {
         self.set_stroke_color(color);
     }
 
-    fn set_fill_color_and_space(&mut self, cs: Box<dyn ColorSpaceTrait<f32>>, color: &[f32]) {
+    fn set_fill_color_and_space(&mut self, cs: ColorSpace<f32>, color: &[f32]) {
         self.set_fill_color(cs.to_skia_color(color));
         self.fill_color_space = cs;
     }
@@ -656,23 +657,23 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             Operation::SetStrokeColor(args) => self.current_mut().set_stroke_color_args(args),
             Operation::SetStrokeGray(color) => self
                 .current_mut()
-                .set_stroke_color_and_space(Box::new(color_space::DeviceGray()), &color),
+                .set_stroke_color_and_space(ColorSpace::DeviceGray, &color),
             Operation::SetStrokeCMYK(color) => self
                 .current_mut()
-                .set_stroke_color_and_space(Box::new(color_space::DeviceCMYK()), &color),
+                .set_stroke_color_and_space(ColorSpace::DeviceCMYK, &color),
             Operation::SetStrokeRGB(color) => self
                 .current_mut()
                 .set_stroke_color(color_space::DeviceRGB().to_skia_color(&color)),
             Operation::SetFillColor(args) => self.current_mut().set_fill_color_args(args),
             Operation::SetFillGray(color) => self
                 .current_mut()
-                .set_fill_color_and_space(Box::new(color_space::DeviceGray()), &color),
+                .set_fill_color_and_space(ColorSpace::DeviceGray, &color),
             Operation::SetFillCMYK(color) => self
                 .current_mut()
-                .set_fill_color_and_space(Box::new(color_space::DeviceCMYK()), &color),
+                .set_fill_color_and_space(ColorSpace::DeviceCMYK, &color),
             Operation::SetFillRGB(color) => self
                 .current_mut()
-                .set_fill_color_and_space(Box::new(color_space::DeviceRGB()), &color),
+                .set_fill_color_and_space(ColorSpace::DeviceRGB, &color),
             Operation::SetFillColorOrWithPattern(name) => {
                 self.set_fill_color_or_pattern(&name).unwrap()
             }
