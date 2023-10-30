@@ -131,14 +131,6 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorArgs {
     }
 }
 
-/// Predefined simple color space
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub enum PredefinedColorSpace {
-    DeviceGray,
-    DeviceRGB,
-    DeviceCMYK,
-}
-
 #[derive(Clone, PartialEq, Debug)]
 pub enum ColorSpaceArgs1<'a> {
     Name(Name<'a>),
