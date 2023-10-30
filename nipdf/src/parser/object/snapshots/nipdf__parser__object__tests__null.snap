@@ -3,15 +3,7 @@ source: nipdf/src/parser/object/tests.rs
 expression: parse_indirected_object(buf.as_ref()).unwrap()
 ---
 (
-    [
-        10,
-        101,
-        110,
-        100,
-        111,
-        98,
-        106,
-    ],
+    [],
     IndirectObject(
         ObjectId {
             id: 1,

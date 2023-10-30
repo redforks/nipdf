@@ -19,7 +19,7 @@ use crate::object::{
     Reference, Stream,
 };
 
-use super::{whitespace_or_comment, ws, ws_terminated, ParseError, ParseResult};
+use super::{whitespace_or_comment, ws, ws_prefixed, ws_terminated, ParseError, ParseResult};
 
 /// Unwrap the result of nom parser to a *normal* result.
 pub fn unwrap_parse_result<'a, T: 'a>(obj: ParseResult<'a, T>) -> Result<T, ParseError<'a>> {
@@ -168,7 +168,14 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<Object> {
                 line_ending,
             ))(input)?;
             if begin_stream.is_some() {
-                Ok((input, Object::Stream(Stream::new(d, input))))
+                let l = d.get_int("Length", -1).unwrap();
+                if l != -1 {
+                    let (input, data) = take(l as usize)(input)?;
+                    let (input, _) = preceded(opt(line_ending), tag(b"endstream"))(input)?;
+                    Ok((input, Object::Stream(Stream::new(d, data))))
+                } else {
+                    Ok((input, Object::Stream(Stream::new(d, input))))
+                }
             } else {
                 Ok((input, Object::Dictionary(d)))
             }
@@ -192,6 +199,7 @@ fn parse_stream_that_length_not_ref_id(input: &[u8]) -> ParseResult<Stream> {
 pub fn parse_indirected_object(input: &[u8]) -> ParseResult<'_, IndirectObject<'_>> {
     let (input, (id, gen)) = separated_pair(u32, multispace1, u16)(input)?;
     let (input, obj) = preceded(ws(tag(b"obj")), parse_object_and_stream)(input)?;
+    let (input, _) = opt(ws_prefixed(tag("endobj")))(input)?;
     Ok((
         input,
         IndirectObject::new(NonZeroU32::new(id).unwrap(), gen, obj),
