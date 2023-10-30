@@ -1,6 +1,9 @@
 use std::num::NonZeroU32;
 
-use crate::{file::XRefTable, function::MockFunction};
+use crate::{
+    file::XRefTable,
+    function::{MockFunction, StitchingFunction},
+};
 use test_case::test_case;
 
 use super::*;
@@ -156,4 +159,29 @@ fn separation_color_space() {
     };
 
     assert_eq!(cs.to_rgba(&[0.5f32]), [0.1f32, 0.2f32, 0.3f32, 1.0]);
+}
+
+#[test]
+fn separation() -> AnyResult<()> {
+    // use Alternate color space
+    let buf = br#"
+1 0 obj
+[/Separation /Black /DeviceGray 2 0 R]
+endobj
+2 0 obj
+<</FunctionType 2/Domain [0 1]/N 1>>
+endobj
+"#;
+    let xref = XRefTable::from_buf(buf);
+    let resolver = ObjectResolver::new(buf, &xref);
+    let args = ColorSpaceArgs1::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap())?)?;
+    let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None)?;
+    assert_eq!(
+        ColorSpace::Separation(Box::new(SeparationColorSpace {
+            base: ColorSpace::DeviceGray,
+            f: Rc::new(MockFunction::new())
+        })),
+        color_space
+    );
+    Ok(())
 }

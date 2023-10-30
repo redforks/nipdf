@@ -6,7 +6,7 @@ use tinyvec::ArrayVec;
 
 use crate::{
     file::{ObjectResolver, ResourceDict},
-    function::{Function, SampledFunction},
+    function::{Function, FunctionDict, SampledFunction},
     graphics::ICCStreamDict,
 };
 
@@ -144,8 +144,7 @@ impl<T: PartialEq + std::fmt::Debug> ColorSpace<T> {
                 "ICCBased" => {
                     debug_assert_eq!(2, arr.len());
                     let id = arr[1].as_ref()?;
-                    let d: ICCStreamDict =
-                        resolver.resolve_pdf_object(id.id().id())?;
+                    let d: ICCStreamDict = resolver.resolve_pdf_object(id.id().id())?;
                     match d.alternate()?.as_ref() {
                         Some(args) => Self::from_args(args, resolver, resources),
                         None => match d.n()? {
@@ -155,6 +154,17 @@ impl<T: PartialEq + std::fmt::Debug> ColorSpace<T> {
                             _ => unreachable!("ICC color space n value should be 1, 3 or 4"),
                         },
                     }
+                }
+                "Separation" => {
+                    debug_assert_eq!(4, arr.len());
+                    let alternate = ColorSpaceArgs1::try_from(&arr[2])?;
+                    let function: FunctionDict =
+                        resolver.resolve_pdf_object(arr[3].as_ref()?.id().id())?;
+                    let base = Self::from_args(&alternate, resolver, resources)?;
+                    Ok(ColorSpace::Separation(Box::new(SeparationColorSpace {
+                        base,
+                        f: Rc::new(function.func()?),
+                    })))
                 }
                 _ => todo!(),
             },
