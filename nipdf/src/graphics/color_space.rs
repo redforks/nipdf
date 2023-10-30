@@ -83,7 +83,7 @@ impl ColorComp for f32 {
 // }
 
 /// Convert color to rgba color space, convert result to f32 or u8 by T generic type.
-pub fn color_to_rgba<F, T, CS>(cs: CS, color: &[F]) -> [T; 4]
+pub fn color_to_rgba<F, T, CS>(cs: &CS, color: &[F]) -> [T; 4]
 where
     F: ColorComp,
     T: ColorComp,
@@ -100,7 +100,7 @@ where
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ColorSpace<T: PartialEq + std::fmt::Debug> {
+pub enum ColorSpace<T: PartialEq + std::fmt::Debug = f32> {
     DeviceGray,
     DeviceRGB,
     DeviceCMYK,
@@ -186,7 +186,7 @@ where
             ColorSpace::DeviceCMYK => DeviceCMYK().to_rgba(color),
             ColorSpace::Pattern => PatternColorSpace().to_rgba(color),
             ColorSpace::Indexed(indexed) => indexed.to_rgba(color),
-            ColorSpace::Separation(sep) => sep.to_rgba(color),
+            ColorSpace::Separation(sep) => sep.as_ref().to_rgba(color),
             ColorSpace::Phantom(_) => unreachable!(),
         }
     }
@@ -198,7 +198,7 @@ where
             ColorSpace::DeviceCMYK => ColorSpaceTrait::<T>::components(&DeviceCMYK()),
             ColorSpace::Pattern => ColorSpaceTrait::<T>::components(&PatternColorSpace()),
             ColorSpace::Indexed(indexed) => indexed.components(),
-            ColorSpace::Separation(sep) => sep.components(),
+            ColorSpace::Separation(sep) => sep.as_ref().components(),
             ColorSpace::Phantom(_) => unreachable!(),
         }
     }
@@ -229,12 +229,6 @@ pub trait ColorSpaceTrait<T> {
         .unwrap()
     }
 }
-
-// impl<T> Clone for Box<dyn ColorSpaceTrait<T>> {
-//     fn clone(&self) -> Self {
-//         self.clone_box()
-//     }
-// }
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DeviceGray();
