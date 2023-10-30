@@ -169,115 +169,11 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorSpaceArgs1<'a> {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub enum ColorSpaceArgs {
-    Predefined(PredefinedColorSpace),
-
-    CalGray,
-
-    Pattern,
-    ICCBased(NonZeroU32), // stream id
-    /// Separation color space, the first element is the alternate color space,
-    /// the second element is ref id of the tint transform function.
-    Separation((Box<Self>, NonZeroU32)),
-
-    /// Reference id to the ColorSpace object, need later resolve
-    LaterResolve(NonZeroU32),
-
-    /// User defined custom ColorSpace, resolve it from Resource Dictionary
-    Custom(String),
-}
-
 #[pdf_object(())]
 trait ICCStreamDictTrait {
     fn n(&self) -> u32;
     #[try_from]
     fn alternate(&self) -> Option<ColorSpaceArgs1>;
-}
-
-impl ColorSpaceArgs {
-    /// Convert args to ColorSpace, resolve from page resources if it is Custom.
-    /// Panic if self is ColorSpaceArgs::Custom(), and resources is None,
-    /// because in this case color space is defined in page resources.
-    pub fn create_color_space<'a>(
-        &self,
-        resolver: &ObjectResolver<'a>,
-        resources: Option<&ResourceDict<'a, '_>>,
-    ) -> AnyResult<ColorSpace<f32>> {
-        todo!()
-        // match self {
-        //     Self::Predefined(cs) => Ok(match cs {
-        //         PredefinedColorSpace::DeviceGray => Box::new(color_space::DeviceGray()),
-        //         PredefinedColorSpace::DeviceRGB => Box::new(color_space::DeviceRGB()),
-        //         PredefinedColorSpace::DeviceCMYK => Box::new(color_space::DeviceCMYK()),
-        //     }),
-        //     Self::LaterResolve(id) => {
-        //         let cs_owner: Self = resolver.resolve(*id)?.try_into()?;
-        //         match &cs_owner {
-        //             ColorSpaceArgs::ICCBased(id) => {
-        //                 let d = resolver.resolve(*id)?.as_stream()?.as_dict();
-        //                 let d = ICCStreamDict::new(None, d, resolver)?;
-        //                 let space_args = d
-        //                     .alternate()?
-        //                     .expect("unsupported if ICCBased color no alternate color space");
-        //                 space_args.create_color_space(resolver, resources)
-        //             }
-        //             _ => todo!("Unsupported color space: {:?}", &cs_owner),
-        //         }
-        //     }
-        //     Self::Custom(name) => {
-        //         // let spaces = resources
-        //         //     .expect("Page resources needed to handle Custom ColorSpaceArgs")
-        //         //     .color_space()?;
-        //         // let args = spaces.get(name).ok_or(ObjectValueError::DictNameMissing)?;
-        //         // args.create_color_space(resolver, resources)
-        //         todo!()
-        //     }
-        //     Self::Pattern => Ok(Box::new(PatternColorSpace())),
-        //     _ => todo!("Convert {:?} to Color space", self),
-        // }
-    }
-}
-
-impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceArgs {
-    type Error = ObjectValueError;
-    fn try_from(object: &'b Object<'a>) -> Result<Self, Self::Error> {
-        match object {
-            Object::Name(name) => match name.as_ref() {
-                "DeviceGray" => Ok(Self::Predefined(PredefinedColorSpace::DeviceGray)),
-                "DeviceRGB" => Ok(Self::Predefined(PredefinedColorSpace::DeviceRGB)),
-                "DeviceCMYK" => Ok(Self::Predefined(PredefinedColorSpace::DeviceCMYK)),
-                "CalGray" => Ok(Self::CalGray),
-                "Pattern" => Ok(Self::Pattern),
-                _ => Ok(Self::Custom(name.as_ref().to_owned())),
-            },
-            Object::Array(arr) => match arr[0].as_name()? {
-                "ICCBased" => {
-                    assert_eq!(2, arr.len());
-                    Ok(Self::ICCBased(arr[1].as_ref()?.id().id()))
-                }
-                "Separation" => {
-                    assert_eq!(4, arr.len());
-                    let cs = Box::new(Self::try_from(&arr[2])?);
-                    let tint_transform = arr[3].as_ref()?.id().id();
-                    Ok(Self::Separation((cs, tint_transform)))
-                }
-                _ => todo!("Unsupported color space: {:?}", arr),
-            },
-            Object::Reference(id) => Ok(Self::LaterResolve(id.id().id())),
-            _ => {
-                error!("{:?}", object);
-                Err(ObjectValueError::GraphicsOperationSchemaError)
-            }
-        }
-    }
-}
-
-impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorSpaceArgs {
-    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
-        let o = objects.pop().unwrap();
-        ColorSpaceArgs::try_from(&o).map_err(|_| ObjectValueError::GraphicsOperationSchemaError)
-    }
 }
 
 impl<'a, 'b, const N: usize> ConvertFromObject<'a, 'b> for [f32; N] {
