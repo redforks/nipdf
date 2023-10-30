@@ -1,4 +1,4 @@
-use std::{num::NonZeroU32, rc::Rc};
+use std::rc::Rc;
 
 use anyhow::{anyhow, Result as AnyResult};
 use educe::Educe;
@@ -6,7 +6,7 @@ use tinyvec::ArrayVec;
 
 use crate::{
     file::{ObjectResolver, ResourceDict},
-    function::{Function, FunctionDict, SampledFunction},
+    function::{Function, FunctionDict},
     graphics::ICCStreamDict,
 };
 
@@ -136,7 +136,7 @@ impl<T: PartialEq + std::fmt::Debug> ColorSpace<T> {
                         let args = color_spaces.get(name).ok_or_else(|| {
                             anyhow!("ColorSpace::from_args() color space not found")
                         })?;
-                        Self::from_args(&args, resolver, resources)
+                        Self::from_args(args, resolver, resources)
                     }
                 }
             }
@@ -367,6 +367,7 @@ where
 {
     /// Counts of colors in this color space.
     /// Max index is this value - 1.
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.data.len() / self.base.components()
     }

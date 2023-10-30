@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 
 use crate::{
     file::XRefTable,
-    function::{MockFunction, StitchingFunction},
+    function::{MockFunction},
 };
 use test_case::test_case;
 

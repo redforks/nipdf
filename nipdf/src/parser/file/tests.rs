@@ -1,4 +1,4 @@
-use crate::file::{read_sample_file, File, ObjectResolver};
+use crate::file::{read_sample_file, File};
 
 use super::*;
 use insta::assert_debug_snapshot;

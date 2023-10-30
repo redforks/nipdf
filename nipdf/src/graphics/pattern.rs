@@ -1,7 +1,8 @@
 use ahash::HashMap;
 use nipdf_macro::{pdf_object, TryFromIntObject};
 
-use super::{ColorArgs, Rectangle};
+use super::ColorArgs;
+use crate::file::Rectangle;
 use crate::graphics::trans::UserToDeviceIndependentSpace;
 use crate::graphics::ColorSpaceArgs;
 use crate::{

@@ -29,7 +29,7 @@ use iced_aw::{
     native::helpers::menu_tree,
     native::menu::{ItemHeight, MenuTree},
 };
-use nipdf::file::{File as PdfFile, ObjectResolver, RenderOptionBuilder, XRefTable};
+use nipdf::file::{File as PdfFile, RenderOptionBuilder};
 
 #[derive(Clone, Debug, Copy)]
 struct PageNavigator {

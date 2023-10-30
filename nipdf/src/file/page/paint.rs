@@ -643,12 +643,12 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             // Color Operations
             Operation::SetStrokeColorSpace(args) => {
                 self.current_mut().stroke_color_space =
-                    ColorSpace::from_args(&args, self.resources.resolver(), Some(&self.resources))
+                    ColorSpace::from_args(&args, self.resources.resolver(), Some(self.resources))
                         .unwrap()
             }
             Operation::SetFillColorSpace(args) => {
                 self.current_mut().fill_color_space =
-                    ColorSpace::from_args(&args, self.resources.resolver(), Some(&self.resources))
+                    ColorSpace::from_args(&args, self.resources.resolver(), Some(self.resources))
                         .unwrap()
             }
             Operation::SetStrokeColor(args) => self.current_mut().set_stroke_color_args(args),
@@ -815,7 +815,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 self.device_width(),
                 self.device_height(),
                 x_object,
-                &self.resources,
+                self.resources,
                 state,
             )?;
             // fill canvas with current fill paint with mask
@@ -840,7 +840,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 self.device_width(),
                 self.device_height(),
                 &s_mask,
-                &self.resources,
+                self.resources,
                 state,
             )
             .unwrap()
@@ -854,7 +854,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             },
             ..Default::default()
         };
-        let img = load_image(x_object, &self.resources);
+        let img = load_image(x_object, self.resources);
         let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
         self.canvas.draw_pixmap(
             0,
@@ -949,7 +949,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         match x_object.subtype()? {
             XObjectType::Image => self.paint_image_x_object(x_object),
             XObjectType::Form => self.paint_form_x_object(x_object),
-            t @ _ => todo!("{:?}", t),
+            t => todo!("{:?}", t),
         }
     }
 

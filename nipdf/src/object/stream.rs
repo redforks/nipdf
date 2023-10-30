@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::Result as AnyResult;
 use bitstream_io::{BigEndian, BitReader};
-use image::{DynamicImage, GrayImage, Luma, Rgb, RgbImage, Rgba, RgbaImage};
+use image::{DynamicImage, GrayImage, Luma, RgbImage, Rgba, RgbaImage};
 use jpeg_decoder::PixelFormat;
 use lazy_static::__Deref;
 use log::error;

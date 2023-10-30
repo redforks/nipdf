@@ -57,7 +57,7 @@ pub fn image_to_device_space(
     zoom: f32,
     ctm: &UserToDeviceIndependentSpace,
 ) -> ImageToDeviceSpace {
-    let user = image_to_user_space(img_w, img_h).then(&ctm);
+    let user = image_to_user_space(img_w, img_h).then(ctm);
     to_device_space(device_independent_height, zoom, &user)
 }
 

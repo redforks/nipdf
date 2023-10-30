@@ -9,7 +9,7 @@ use anyhow::Result as AnyResult;
 use clap::{arg, Command};
 use image::ImageOutputFormat;
 use nipdf::{
-    file::{File, RenderOptionBuilder, XRefTable},
+    file::{File, RenderOptionBuilder},
     object::Object,
 };
 

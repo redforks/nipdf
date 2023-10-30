@@ -259,7 +259,8 @@ impl<'a> ObjectResolver<'a> {
     }
 
     /// Return total objects count.
-    pub fn len(&self) -> usize {
+    #[allow(dead_code)]
+    pub fn n(&self) -> usize {
         self.objects.len()
     }
 

@@ -1,7 +1,6 @@
 use std::{collections::HashSet, num::NonZeroU32};
 
 use ahash::RandomState;
-use anyhow::Result as AnyResult;
 
 use euclid::Transform2D;
 use lazy_static::lazy_static;
@@ -16,10 +15,8 @@ use nom::{
 };
 
 use crate::{
-    file::{Rectangle, ResourceDict},
     object::{
-        Array, Dictionary, Name, Object, ObjectValueError, PdfObject, Stream, TextString,
-        TextStringOrNumber,
+        Array, Dictionary, Name, Object, ObjectValueError, Stream, TextString, TextStringOrNumber,
     },
     parser::{parse_object, ws_prefixed, ws_terminated, ParseError, ParseResult},
 };
@@ -27,12 +24,9 @@ use nipdf_macro::{pdf_object, OperationParser, TryFromIntObject, TryFromNameObje
 
 pub(crate) mod color_space;
 mod pattern;
-use crate::file::ObjectResolver;
-use crate::graphics::color_space::{ColorSpaceTrait, PatternColorSpace};
+
 use crate::graphics::trans::{TextToUserSpace, UserToDeviceIndependentSpace};
 pub(crate) use pattern::*;
-
-use self::color_space::ColorSpace;
 
 pub(crate) mod trans;
 

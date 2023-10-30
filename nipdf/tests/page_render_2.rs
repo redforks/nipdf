@@ -3,7 +3,7 @@
 use anyhow::Result as AnyResult;
 use insta::assert_ron_snapshot;
 use md5::{Digest, Md5};
-use nipdf::file::{File, ObjectResolver, RenderOptionBuilder};
+use nipdf::file::{File, RenderOptionBuilder};
 
 fn decode_file_page(path: &str, page_no: usize) -> AnyResult<String> {
     let buf = std::fs::read(path)?;
