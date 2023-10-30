@@ -501,9 +501,9 @@ pub enum Operation<'a> {
 
     // Color Operations
     #[op_tag("CS")]
-    SetStrokeColorSpace(ColorSpaceArgs),
+    SetStrokeColorSpace(ColorSpaceArgs1<'a>),
     #[op_tag("cs")]
-    SetFillColorSpace(ColorSpaceArgs),
+    SetFillColorSpace(ColorSpaceArgs1<'a>),
     #[op_tag("SC")]
     SetStrokeColor(ColorArgs),
     #[op_tag("SCN")]

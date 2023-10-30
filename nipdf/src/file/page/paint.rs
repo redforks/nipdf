@@ -6,12 +6,10 @@ use crate::{
     file::{ObjectResolver, XObjectDict},
     function::{Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
-        color_space::ColorSpace,
-        parse_operations,
-        trans::{DeviceIndependentSpace, UserSpace},
-        AxialExtend, AxialShadingDict, ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle,
-        NameOfDict, NameOrDictByRef, NameOrStream, PatternType, Point, RenderingIntent,
-        ShadingPatternDict, ShadingType, TextRenderingMode, TilingPaintType, TilingPatternDict,
+        color_space::ColorSpace, parse_operations, AxialExtend, AxialShadingDict, ColorArgs,
+        ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, NameOrDictByRef, NameOrStream,
+        PatternType, Point, RenderingIntent, ShadingPatternDict, ShadingType, TextRenderingMode,
+        TilingPaintType, TilingPatternDict,
     },
     object::{Object, PdfObject, Stream, TextStringOrNumber},
     text::{
@@ -22,7 +20,6 @@ use crate::{
 use anyhow::{anyhow, Ok, Result as AnyResult};
 use cff_parser::{File as CffFile, Font as CffFont};
 use educe::Educe;
-use euclid::Transform2D;
 use font_kit::loaders::freetype::Font as FontKitFont;
 use fontdb::{Database, Family, Query, Source, Weight};
 use image::RgbaImage;
@@ -645,14 +642,14 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
 
             // Color Operations
             Operation::SetStrokeColorSpace(args) => {
-                self.current_mut().stroke_color_space = args
-                    .create_color_space(self.resources.resolver(), Some(&self.resources))
-                    .unwrap()
+                self.current_mut().stroke_color_space =
+                    ColorSpace::from_args(&args, self.resources.resolver(), Some(&self.resources))
+                        .unwrap()
             }
             Operation::SetFillColorSpace(args) => {
-                self.current_mut().fill_color_space = args
-                    .create_color_space(self.resources.resolver(), Some(&self.resources))
-                    .unwrap()
+                self.current_mut().fill_color_space =
+                    ColorSpace::from_args(&args, self.resources.resolver(), Some(&self.resources))
+                        .unwrap()
             }
             Operation::SetStrokeColor(args) => self.current_mut().set_stroke_color_args(args),
             Operation::SetStrokeGray(color) => self
