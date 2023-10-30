@@ -100,7 +100,7 @@ fn icc_based() -> AnyResult<()> {
     // use Alternate color space
     let buf = br#"
 1 0 obj
-[/ICCBased 2]
+[/ICCBased 2 0 R]
 endobj
 2 0 obj
 <</Length 0/N 1/Alternate /DeviceGray>>
@@ -123,7 +123,7 @@ endobj
         let buf = format!(
             r#"
 1 0 obj
-[/ICCBased 2]
+[/ICCBased 2 0 R]
 endobj
 2 0 obj
 <</Length 0/N {}>>

@@ -143,9 +143,9 @@ impl<T: PartialEq + std::fmt::Debug> ColorSpace<T> {
             ColorSpaceArgs1::Array(arr) => match arr[0].as_name()? {
                 "ICCBased" => {
                     debug_assert_eq!(2, arr.len());
-                    let id = arr[1].as_int()?;
+                    let id = arr[1].as_ref()?;
                     let d: ICCStreamDict =
-                        resolver.resolve_pdf_object(NonZeroU32::new(id as u32).unwrap())?;
+                        resolver.resolve_pdf_object(id.id().id())?;
                     match d.alternate()?.as_ref() {
                         Some(args) => Self::from_args(args, resolver, resources),
                         None => match d.n()? {
