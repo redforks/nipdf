@@ -13,6 +13,7 @@ use lazy_static::__Deref;
 use log::error;
 use nipdf_macro::pdf_object;
 use once_cell::unsync::Lazy;
+use tinyvec::ArrayVec;
 
 use crate::graphics::{
     color_space::{color_to_rgba, ColorCompConvertTo, ColorSpaceTrait, DeviceCMYK},
@@ -612,27 +613,21 @@ impl<'a> Stream<'a> {
                         }
                         DynamicImage::ImageLuma8(img)
                     }
-                    (Some(ColorSpace::DeviceGray), 8) => {
-                        let img = GrayImage::from_raw(
-                            img_dict.width().unwrap(),
-                            img_dict.height().unwrap(),
-                            data.into_owned(),
-                        )
-                        .unwrap();
-                        DynamicImage::ImageLuma8(img)
-                    }
-                    (Some(ColorSpace::DeviceRGB), 8) => {
-                        let img = RgbImage::from_raw(
-                            img_dict.width().unwrap(),
-                            img_dict.height().unwrap(),
-                            data.into_owned(),
-                        )
-                        .unwrap();
-                        DynamicImage::ImageRgb8(img)
+                    (Some(cs), 8) => {
+                        let n_colors = cs.components();
+                        let mut img =
+                            RgbaImage::new(img_dict.width().unwrap(), img_dict.height().unwrap());
+                        for (p, dest_p) in data.chunks(n_colors).zip(img.pixels_mut()) {
+                            let c: ArrayVec<[f32; 4]> =
+                                p.iter().map(|v| v.into_color_comp()).collect();
+                            let color: [u8; 4] = color_to_rgba(cs, c.as_slice());
+                            *dest_p = Rgba(color);
+                        }
+                        DynamicImage::ImageRgba8(img)
                     }
                     _ => todo!(
                         "unsupported interoperate decoded stream data as image: {:?} {}",
-                        img_dict.color_space(),
+                        color_space,
                         img_dict.bits_per_component().unwrap().unwrap()
                     ),
                 }
