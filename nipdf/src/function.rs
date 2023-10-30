@@ -134,7 +134,9 @@ impl<'a, 'b> FunctionDict<'a, 'b> {
     pub fn func(&self) -> AnyResult<Box<dyn Function>> {
         match self.function_type()? {
             Type::Sampled => Ok(Box::new(self.sampled()?.func()?)),
-            Type::ExponentialInterpolation => Ok(Box::new(self.exponential_interpolation()?.func()?)),
+            Type::ExponentialInterpolation => {
+                Ok(Box::new(self.exponential_interpolation()?.func()?))
+            }
             Type::Stitching => Ok(Box::new(self.stitch()?.func()?)),
             Type::PostScriptCalculator => todo!(),
         }
@@ -412,7 +414,16 @@ impl<'a, 'b> StitchingFunctionDict<'a, 'b> {
             domains,
         })
     }
+}
 
+pub struct StitchingFunction {
+    functions: Vec<Box<dyn Function>>,
+    bounds: Vec<f32>,
+    encode: Domains,
+    domains: Domains,
+}
+
+impl StitchingFunction {
     fn find_function(bounds: &[f32], x: f32) -> usize {
         bounds
             .iter()
@@ -442,22 +453,14 @@ impl<'a, 'b> StitchingFunctionDict<'a, 'b> {
     }
 }
 
-pub struct StitchingFunction {
-    functions: Vec<Box<dyn Function>>,
-    bounds: Vec<f32>,
-    encode: Domains,
-    domains: Domains,
-}
-
 impl Function for StitchingFunction {
     fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>> {
         assert_eq!(args.len(), 1);
 
         let x = args[0];
-        let function_idx = StitchingFunctionDict::find_function(&self.bounds, x);
-        let sub_domain =
-            StitchingFunctionDict::sub_domain(&self.domains.0[0], &self.bounds, function_idx);
-        let x = StitchingFunctionDict::interpolation(&sub_domain, &self.encode.0[function_idx], x);
+        let function_idx = Self::find_function(&self.bounds, x);
+        let sub_domain = Self::sub_domain(&self.domains.0[0], &self.bounds, function_idx);
+        let x = Self::interpolation(&sub_domain, &self.encode.0[function_idx], x);
 
         let f = &self.functions[function_idx];
         let r = f.call(&[x])?;
