@@ -167,8 +167,6 @@ pub struct Viewer {
     navi: PageNavigator,
     zoom: f32,
     cur_page_editing: String,
-    file_data: Vec<u8>,
-    xref: XRefTable,
     file: PdfFile,
     #[cfg(feature = "debug")]
     render_time: Duration,
@@ -182,7 +180,7 @@ impl Viewer {
     pub fn new(file_path: impl Into<String>) -> Result<Self> {
         let file_path = file_path.into();
         let file_data = std::fs::read(&file_path)?;
-        let (file, xref) = PdfFile::parse(&file_data[..])?;
+        let file = PdfFile::parse(file_data)?;
         let mut r = Self {
             file_path,
             page: Page {
@@ -198,9 +196,7 @@ impl Viewer {
             cur_page_editing: "".to_owned(),
             #[cfg(feature = "debug")]
             render_time: Duration::default(),
-            xref,
             file,
-            file_data,
             #[cfg(feature = "debug")]
             page_input: PageInput::default(),
             #[cfg(feature = "debug")]
@@ -221,7 +217,7 @@ impl Viewer {
     fn load_page(&mut self, no: u32) -> Result<()> {
         #[cfg(feature = "debug")]
         let now = Instant::now();
-        let resolver = ObjectResolver::new(&self.file_data, &self.xref);
+        let resolver = self.file.resolver()?;
         let catalog = self.file.catalog(&resolver)?;
         let pages = catalog.pages()?;
         let page = &pages[no as usize];
@@ -246,7 +242,7 @@ impl Viewer {
 
     #[cfg(feature = "debug")]
     fn page_object_number(&self) -> Result<u32> {
-        let resolver = ObjectResolver::new(&self.file_data, &self.xref);
+        let resolver = self.file.resolver()?;
         let catalog = self.file.catalog(&resolver)?;
         let pages = catalog.pages()?;
         let page = &pages[self.navi.current_page as usize];
@@ -260,7 +256,7 @@ impl Viewer {
         let page_no = page_no.unwrap_or_else(|| self.navi.current_page) as usize;
 
         use std::io::Write;
-        let resolver = ObjectResolver::new(&self.file_data, &self.xref);
+        let resolver = self.file.resolver()?;
         let catalog = self.file.catalog(&resolver)?;
         let pages = catalog.pages()?;
         let page = &pages[page_no];
@@ -283,7 +279,7 @@ impl Viewer {
         use std::io::Write;
         use std::num::NonZeroU32;
 
-        let resolver = ObjectResolver::new(&self.file_data, &self.xref);
+        let resolver = self.file.resolver()?;
         let catalog = self.file.catalog(&resolver)?;
         let pages = catalog.pages()?;
         let page = &pages[page_no];
@@ -320,7 +316,7 @@ impl Viewer {
         let page_no = page_no.unwrap_or_else(|| self.navi.current_page) as usize;
 
         use std::io::Write;
-        let resolver = ObjectResolver::new(&self.file_data, &self.xref);
+        let resolver = self.file.resolver()?;
         let catalog = self.file.catalog(&resolver)?;
         let pages = catalog.pages()?;
         let page = &pages[page_no];

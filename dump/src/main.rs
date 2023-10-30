@@ -9,7 +9,7 @@ use anyhow::Result as AnyResult;
 use clap::{arg, Command};
 use image::ImageOutputFormat;
 use nipdf::{
-    file::{File, ObjectResolver, RenderOptionBuilder, XRefTable},
+    file::{File, RenderOptionBuilder, XRefTable},
     object::Object,
 };
 
@@ -44,15 +44,14 @@ fn cli() -> Command {
         )
 }
 
-fn open(path: &str, buf: &mut Vec<u8>) -> AnyResult<(File, XRefTable)> {
-    *buf = std::fs::read(path)?;
-    File::parse(&buf[..])
+fn open(path: &str) -> AnyResult<File> {
+    let buf = std::fs::read(path)?;
+    File::parse(buf)
 }
 
 fn dump_stream(path: &str, id: NonZeroU32, raw: bool, as_png: bool) -> AnyResult<()> {
-    let mut buf: Vec<u8> = vec![];
-    let (_f, xref) = open(path, &mut buf)?;
-    let resolver = ObjectResolver::new(&buf, &xref);
+    let f = open(path)?;
+    let resolver = f.resolver()?;
     let obj = resolver.resolve(id)?;
     match obj {
         Object::Stream(s) => {
@@ -86,9 +85,8 @@ fn dump_page(
     steps: Option<usize>,
     zoom: Option<f32>,
 ) -> AnyResult<()> {
-    let mut buf: Vec<u8> = vec![];
-    let (f, xref) = open(path, &mut buf)?;
-    let resolver = ObjectResolver::new(&buf, &xref);
+    let f = open(path)?;
+    let resolver = f.resolver()?;
     let catalog = f.catalog(&resolver)?;
 
     if show_total_pages {
@@ -116,9 +114,8 @@ fn dump_page(
 }
 
 fn dump_object(path: &str, id: NonZeroU32) -> AnyResult<()> {
-    let mut buf: Vec<u8> = vec![];
-    let (_f, xref) = open(path, &mut buf)?;
-    let resolver = ObjectResolver::new(&buf, &xref);
+    let f = open(path)?;
+    let resolver = f.resolver()?;
 
     let mut id_wait_scanned = vec![id];
     let mut ids = HashSet::new();
