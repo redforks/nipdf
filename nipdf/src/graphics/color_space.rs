@@ -110,7 +110,13 @@ pub enum ColorSpace<T: PartialEq + std::fmt::Debug = f32> {
     Phantom(T),
 }
 
-impl<T: PartialEq + std::fmt::Debug> ColorSpace<T> {
+impl<T> ColorSpace<T>
+where
+    T: ColorComp + ColorCompConvertTo<f32> + Default + PartialEq + 'static,
+    T: ColorCompConvertTo<u8>,
+    f32: ColorCompConvertTo<T>,
+    u8: ColorCompConvertTo<T>,
+{
     /// Create from color space args.
     /// Panic if need resolve resource but resources is None.
     pub fn from_args<'a>(
@@ -166,7 +172,20 @@ impl<T: PartialEq + std::fmt::Debug> ColorSpace<T> {
                         f: Rc::new(function.func()?),
                     })))
                 }
-                _ => todo!(),
+                "Indexed" => {
+                    debug_assert_eq!(4, arr.len());
+                    let base = ColorSpaceArgs::try_from(&arr[1])?;
+                    let base: ColorSpace<T> = Self::from_args(&base, resolver, resources)?;
+                    let hival = arr[2].as_int()?;
+                    let stream = resolver.resolve(arr[3].as_ref()?.id().id())?.as_stream()?;
+                    let data = stream.decode(&resolver)?;
+                    assert!(data.len() >= (hival + 1) as usize * base.components());
+                    Ok(ColorSpace::Indexed(Box::new(IndexedColorSpace {
+                        base,
+                        data: data.into_owned(),
+                    })))
+                }
+                s => todo!("ColorSpace::from_args() {} color space", s),
             },
         }
     }

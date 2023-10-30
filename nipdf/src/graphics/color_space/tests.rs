@@ -1,9 +1,6 @@
 use std::num::NonZeroU32;
 
-use crate::{
-    file::XRefTable,
-    function::{MockFunction},
-};
+use crate::{file::XRefTable, function::MockFunction};
 use test_case::test_case;
 
 use super::*;
@@ -180,6 +177,33 @@ endobj
         ColorSpace::Separation(Box::new(SeparationColorSpace {
             base: ColorSpace::DeviceGray,
             f: Rc::new(MockFunction::new())
+        })),
+        color_space
+    );
+    Ok(())
+}
+
+#[test]
+fn indexed() -> AnyResult<()> {
+    let buf = b"
+1 0 obj
+[/Indexed /DeviceRGB 1 2 0 R]
+endobj
+2 0 obj
+<</Length 6>>
+stream
+\x01\x02\x03\x04\x05\x06
+endstream
+endobj
+";
+    let xref = XRefTable::from_buf(buf);
+    let resolver = ObjectResolver::new(buf, &xref);
+    let args = ColorSpaceArgs::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap())?).unwrap();
+    let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None).unwrap();
+    assert_eq!(
+        ColorSpace::Indexed(Box::new(IndexedColorSpace {
+            base: ColorSpace::DeviceRGB,
+            data: vec![1, 2, 3, 4, 5, 6]
         })),
         color_space
     );
