@@ -141,29 +141,6 @@ impl<'a, 'b> FunctionDict<'a, 'b> {
             Type::PostScriptCalculator => todo!(),
         }
     }
-
-    fn clip_args(&self, args: &[f32]) -> Vec<f32> {
-        let domain = self.domain().unwrap();
-        assert_eq!(args.len(), domain.n());
-
-        args.iter()
-            .zip(domain.0.iter())
-            .map(|(&arg, domain)| domain.clamp(arg))
-            .collect()
-    }
-
-    fn clip_returns(&self, returns: Vec<f32>) -> Vec<f32> {
-        let Some(range) = self.range().unwrap() else {
-            return returns;
-        };
-        assert_eq!(returns.len(), range.n());
-
-        returns
-            .iter()
-            .zip(range.0.iter())
-            .map(|(&ret, domain)| domain.clamp(ret))
-            .collect()
-    }
 }
 
 /// Function signature, clip input args and returns.

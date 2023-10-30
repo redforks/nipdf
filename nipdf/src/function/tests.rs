@@ -8,30 +8,32 @@ use test_case::test_case;
 
 #[test]
 fn test_clip_args() {
-    let (_, d) = parse_dict(br#"<</FunctionType 2/Domain[0 1 -2 2]>>"#).unwrap();
-    let xref = XRefTable::empty();
-    let resolver = ObjectResolver::empty(&xref);
-    let f = FunctionDict::new(None, &d, &resolver).unwrap();
-    assert_eq!(f.clip_args(&[0.5, 0.0]), vec![0.5, 0.0]);
-    assert_eq!(f.clip_args(&[-1.0, 100.0]), vec![0.0, 2.0]);
+    let signature = Signature {
+        domain: Domains(vec![Domain::new(0.0, 1.0), Domain::new(-2.0, 2.0)]),
+        range: None,
+    };
+    assert_eq!(signature.clip_args(&[0.5, 0.0]), vec![0.5, 0.0]);
+    assert_eq!(signature.clip_args(&[-1.0, 100.0]), vec![0.0, 2.0]);
 }
 
 #[test]
 fn test_clip_returns() {
-    let (_, d) = parse_dict(br#"<</FunctionType 2>>"#).unwrap();
-    let xref = XRefTable::empty();
-    let resolver = ObjectResolver::empty(&xref);
-    let f = FunctionDict::new(None, &d, &resolver).unwrap();
-    assert_eq!(f.clip_returns(vec![100.0, -100.0]), vec![100.0, -100.0]);
-    assert_eq!(f.clip_returns(vec![]), vec![]);
+    let signature = Signature {
+        domain: Domains(vec![]),
+        range: None,
+    };
+    assert_eq!(
+        signature.clip_returns(vec![100.0, -100.0]),
+        vec![100.0, -100.0]
+    );
+    assert_eq!(signature.clip_returns(vec![]), vec![]);
 
-    let d = parse_dict(br#"<</FunctionType 2/Range[0 1 -2 2]>>"#)
-        .unwrap()
-        .1;
-    let f = FunctionDict::new(None, &d, &resolver).unwrap();
-    assert_eq!(Type::ExponentialInterpolation, f.function_type().unwrap());
-    assert_eq!(f.clip_returns(vec![0.5, 0.0]), vec![0.5, 0.0]);
-    assert_eq!(f.clip_returns(vec![-1.0, 100.0]), vec![0.0, 2.0]);
+    let signature = Signature {
+        domain: Domains(vec![]),
+        range: Some(Domains(vec![Domain::new(0.0, 1.0), Domain::new(-2.0, 2.0)])),
+    };
+    assert_eq!(signature.clip_returns(vec![0.5, 0.0]), vec![0.5, 0.0]);
+    assert_eq!(signature.clip_returns(vec![-1.0, 100.0]), vec![0.0, 2.0]);
 }
 
 #[test]
