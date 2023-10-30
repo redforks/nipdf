@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use crate::file::XRefTable;
 use test_case::test_case;
 
@@ -93,4 +95,50 @@ fn simple_color_space_from_args(name: &str) -> ColorSpace<f32> {
 }
 
 #[test]
-fn icc_based() {}
+fn icc_based() -> AnyResult<()> {
+    // use Alternate color space
+    let buf = br#"
+1 0 obj
+[/ICCBased 2]
+endobj
+2 0 obj
+<</Length 0/N 1/Alternate /DeviceGray>>
+stream
+endstream
+endobj
+"#;
+    let xref = XRefTable::from_buf(buf);
+    let resolver = ObjectResolver::new(buf, &xref);
+    let args = ColorSpaceArgs1::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap())?)?;
+    let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None)?;
+    assert_eq!(ColorSpace::DeviceGray, color_space);
+
+    // if no Alternate, use Device{Gray, RGB, CMYK} by N value
+    for (n, exp) in [
+        (1, ColorSpace::DeviceGray),
+        (3, ColorSpace::DeviceRGB),
+        (4, ColorSpace::DeviceCMYK),
+    ] {
+        let buf = format!(
+            r#"
+1 0 obj
+[/ICCBased 2]
+endobj
+2 0 obj
+<</Length 0/N {}>>
+stream
+endstream
+endobj
+"#,
+            n
+        );
+        let buf = buf.as_bytes();
+        let xref = XRefTable::from_buf(buf);
+        let resolver = ObjectResolver::new(buf, &xref);
+        let args = ColorSpaceArgs1::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap())?)?;
+        let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None)?;
+        assert_eq!(exp, color_space);
+    }
+
+    Ok(())
+}

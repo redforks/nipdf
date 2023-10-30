@@ -190,8 +190,9 @@ pub enum ColorSpaceArgs {
 
 #[pdf_object(())]
 trait ICCStreamDictTrait {
+    fn n(&self) -> u32;
     #[try_from]
-    fn alternate(&self) -> Option<ColorSpaceArgs>;
+    fn alternate(&self) -> Option<ColorSpaceArgs1>;
 }
 
 impl ColorSpaceArgs {

@@ -1,7 +1,13 @@
+use std::num::NonZeroU32;
+
 use anyhow::{anyhow, Result as AnyResult};
 use tinyvec::ArrayVec;
 
-use crate::file::{ObjectResolver, ResourceDict};
+use crate::{
+    file::{ObjectResolver, ResourceDict},
+    graphics::ICCStreamDict,
+    object::Object,
+};
 
 use super::ColorSpaceArgs1;
 
@@ -106,7 +112,7 @@ impl<T> ColorSpace<T> {
     /// Create from color space args.
     /// Panic if need resolve resource but resources is None.
     pub fn from_args<'a>(
-        args: &ColorSpaceArgs1<'a>,
+        args: &ColorSpaceArgs1,
         resolver: &ObjectResolver<'a>,
         resources: Option<&ResourceDict<'a, '_>>,
     ) -> AnyResult<Self> {
@@ -132,9 +138,24 @@ impl<T> ColorSpace<T> {
                     }
                 }
             }
-            ColorSpaceArgs1::Array(arr) => {
-                todo!()
-            }
+            ColorSpaceArgs1::Array(arr) => match arr[0].as_name()? {
+                "ICCBased" => {
+                    debug_assert_eq!(2, arr.len());
+                    let id = arr[1].as_int()?;
+                    let d: ICCStreamDict =
+                        resolver.resolve_pdf_object(NonZeroU32::new(id as u32).unwrap())?;
+                    match d.alternate()?.as_ref() {
+                        Some(args) => Self::from_args(args, resolver, resources),
+                        None => match d.n()? {
+                            1 => Ok(ColorSpace::DeviceGray),
+                            3 => Ok(ColorSpace::DeviceRGB),
+                            4 => Ok(ColorSpace::DeviceCMYK),
+                            _ => unreachable!("ICC color space n value should be 1, 3 or 4"),
+                        },
+                    }
+                }
+                _ => todo!(),
+            },
         }
     }
 }
