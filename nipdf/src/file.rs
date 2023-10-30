@@ -122,6 +122,29 @@ impl XRefTable {
         }
     }
 
+    /// Scan IDOffsetMap by scan indirect object declaration,
+    /// helps to create pdf file objects for testing.
+    #[cfg(test)]
+    pub fn from_buf(buf: &[u8]) -> Self {
+        use crate::parser::{whitespace_or_comment, ws_prefixed};
+        use nom::combinator::all_consuming;
+        use nom::multi::many1;
+
+        let (input, objects) = many1(ws_prefixed(parse_indirected_object))(buf).unwrap();
+        all_consuming(whitespace_or_comment)(input).unwrap();
+        let mut id_offset = IDOffsetMap::new();
+        for o in objects {
+            let search_key = format!("{} {} obj", o.id().id(), o.id().generation());
+            let pos = buf
+                .windows(search_key.len())
+                .position(|w| w == search_key.as_bytes())
+                .unwrap() as u32;
+            id_offset.insert(o.id().id().into(), ObjectPos::Offset(pos));
+        }
+
+        Self::new(id_offset)
+    }
+
     fn scan(frame_set: &FrameSet) -> IDOffsetMap {
         let mut r = IDOffsetMap::with_capacity(5000);
         for (id, entry) in frame_set.iter().rev().flat_map(|f| f.xref_section.iter()) {
