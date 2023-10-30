@@ -1,10 +1,12 @@
-use std::num::NonZeroU32;
+use std::{num::NonZeroU32, rc::Rc};
 
 use anyhow::{anyhow, Result as AnyResult};
+use educe::Educe;
 use tinyvec::ArrayVec;
 
 use crate::{
     file::{ObjectResolver, ResourceDict},
+    function::{Function, SampledFunction},
     graphics::ICCStreamDict,
 };
 
@@ -98,16 +100,17 @@ where
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ColorSpace<T> {
+pub enum ColorSpace<T: PartialEq + std::fmt::Debug> {
     DeviceGray,
     DeviceRGB,
     DeviceCMYK,
     Pattern,
     Indexed(Box<IndexedColorSpace<T>>),
+    Separation(Box<SeparationColorSpace<T>>),
     Phantom(T),
 }
 
-impl<T> ColorSpace<T> {
+impl<T: PartialEq + std::fmt::Debug> ColorSpace<T> {
     /// Create from color space args.
     /// Panic if need resolve resource but resources is None.
     pub fn from_args<'a>(
@@ -173,7 +176,8 @@ where
             ColorSpace::DeviceCMYK => DeviceCMYK().to_rgba(color),
             ColorSpace::Pattern => PatternColorSpace().to_rgba(color),
             ColorSpace::Indexed(indexed) => indexed.to_rgba(color),
-            _ => todo!(),
+            ColorSpace::Separation(sep) => sep.to_rgba(color),
+            ColorSpace::Phantom(_) => unreachable!(),
         }
     }
 
@@ -184,7 +188,8 @@ where
             ColorSpace::DeviceCMYK => ColorSpaceTrait::<T>::components(&DeviceCMYK()),
             ColorSpace::Pattern => ColorSpaceTrait::<T>::components(&PatternColorSpace()),
             ColorSpace::Indexed(indexed) => indexed.components(),
-            _ => todo!(),
+            ColorSpace::Separation(sep) => sep.components(),
+            ColorSpace::Phantom(_) => unreachable!(),
         }
     }
 }
@@ -344,7 +349,7 @@ impl<T> ColorSpaceTrait<T> for PatternColorSpace {
 /// Base color stored in data, each color component is a u8. Max index
 /// is data.len() / base.components().
 #[derive(Debug, Clone, PartialEq)]
-pub struct IndexedColorSpace<T> {
+pub struct IndexedColorSpace<T: PartialEq + std::fmt::Debug> {
     pub base: ColorSpace<T>,
     pub data: Vec<u8>,
 }
@@ -376,6 +381,35 @@ where
         let u8_color = &self.data[index * n..(index + 1) * n];
         let c: ArrayVec<[T; 4]> = u8_color.iter().map(|v| v.into_color_comp()).collect();
 
+        self.base.to_rgba(c.as_slice())
+    }
+
+    fn components(&self) -> usize {
+        1
+    }
+}
+
+#[derive(Clone, Educe)]
+#[educe(Debug, PartialEq)]
+pub struct SeparationColorSpace<T: PartialEq + std::fmt::Debug> {
+    base: ColorSpace<T>,
+
+    // use Rc, because Box not impl clone trait
+    #[educe(Debug(ignore))]
+    #[educe(PartialEq(ignore))]
+    f: Rc<dyn Function>,
+}
+
+impl<T> ColorSpaceTrait<T> for SeparationColorSpace<T>
+where
+    T: ColorComp + ColorCompConvertTo<f32> + Default + PartialEq + 'static,
+    T: ColorCompConvertTo<u8>,
+    f32: ColorCompConvertTo<T>,
+    u8: ColorCompConvertTo<T>,
+{
+    fn to_rgba(&self, color: &[T]) -> [T; 4] {
+        let c = self.f.call(&[color[0].into_color_comp()]).unwrap();
+        let c: ArrayVec<[T; 4]> = c.iter().map(|v| v.into_color_comp()).collect();
         self.base.to_rgba(c.as_slice())
     }
 

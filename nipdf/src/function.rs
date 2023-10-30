@@ -3,6 +3,8 @@ use anyhow::Result as AnyResult;
 use nipdf_macro::{pdf_object, TryFromIntObject};
 
 use crate::object::{Object, ObjectValueError};
+#[cfg(test)]
+use mockall::automock;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Domain<T = f32> {
@@ -49,6 +51,7 @@ impl<'a> TryFrom<&Object<'a>> for Domain<u32> {
     }
 }
 
+#[derive(Debug, PartialEq, Clone)]
 pub struct Domains<T = f32>(pub Vec<Domain<T>>);
 
 impl<'a, T> TryFrom<&Object<'a>> for Domains<T>
@@ -77,6 +80,7 @@ impl Domains {
     }
 }
 
+#[cfg_attr(test, automock)]
 pub trait Function {
     fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>>;
 }
@@ -151,6 +155,7 @@ impl<'a, 'b> FunctionDict<'a, 'b> {
 }
 
 /// Function signature, clip input args and returns.
+#[derive(Debug, PartialEq, Clone)]
 struct Signature {
     domain: Domains,
     range: Option<Domains>,
@@ -236,6 +241,7 @@ pub trait SampledFunctionDictTrait {
 
 /// strut to implement Function trait for SampledFunctionDict,
 /// because sampled function need to load sample data from stream.
+#[derive(Debug, PartialEq, Clone)]
 pub struct SampledFunction {
     signature: Signature,
     encode: Domains,

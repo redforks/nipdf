@@ -1,10 +1,11 @@
 use std::num::NonZeroU32;
 
-use crate::file::XRefTable;
+use crate::{file::XRefTable, function::MockFunction};
 use test_case::test_case;
 
 use super::*;
 use assert_approx_eq::assert_approx_eq;
+use mockall::predicate::*;
 
 #[test]
 fn device_gray_to_rgb() {
@@ -141,4 +142,18 @@ endobj
     }
 
     Ok(())
+}
+
+#[test]
+fn separation_color_space() {
+    let mut f = MockFunction::new();
+    f.expect_call()
+        .with(eq(vec![0.5f32]))
+        .returning(|_| Ok(vec![0.1f32, 0.2f32, 0.3f32]));
+    let cs = SeparationColorSpace::<f32> {
+        base: ColorSpace::DeviceRGB,
+        f: Rc::new(f),
+    };
+
+    assert_eq!(cs.to_rgba(&[0.5f32]), [0.1f32, 0.2f32, 0.3f32, 1.0]);
 }
