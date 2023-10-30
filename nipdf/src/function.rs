@@ -134,9 +134,7 @@ impl<'a, 'b> FunctionDict<'a, 'b> {
     pub fn func(&self) -> AnyResult<Box<dyn Function>> {
         match self.function_type()? {
             Type::Sampled => Ok(Box::new(self.sampled()?.func()?)),
-            Type::ExponentialInterpolation => {
-                todo!("Ok(Box::new(self.exponential_interpolation()?))")
-            }
+            Type::ExponentialInterpolation => Ok(Box::new(self.exponential_interpolation()?.func()?)),
             Type::Stitching => Ok(Box::new(self.stitch()?.func()?)),
             Type::PostScriptCalculator => todo!(),
         }
@@ -209,7 +207,7 @@ impl<'a, 'b> Function for FunctionDict<'a, 'b> {
     fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>> {
         match self.function_type()? {
             Type::Sampled => self.sampled()?.func()?.call(args),
-            Type::ExponentialInterpolation => self.exponential_interpolation()?.call(args),
+            Type::ExponentialInterpolation => self.exponential_interpolation()?.func()?.call(args),
             Type::Stitching => self.stitch()?.func()?.call(args),
             Type::PostScriptCalculator => todo!(),
         }
@@ -340,30 +338,41 @@ pub trait ExponentialInterpolationFunctionDictTrait {
     fn function_dict(&self) -> FunctionDict<'a, 'b>;
 }
 
-impl<'a, 'b> Function for ExponentialInterpolationFunctionDict<'a, 'b> {
+pub struct ExponentialInterpolationFunction {
+    c0: Vec<f32>,
+    c1: Vec<f32>,
+    n: f32,
+    signature: Signature,
+}
+
+impl Function for ExponentialInterpolationFunction {
     fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>> {
-        let f = self.function_dict()?;
-
-        assert_eq!(args.len(), 1);
-
-        let args = f.clip_args(args);
+        let args = self.signature.clip_args(args);
         let x = args[0];
-        let c0 = self.c0()?;
-        let c1 = self.c1()?;
-
-        if x == 0.0 {
-            return Ok(c0.clone());
-        } else if x == 1.0 {
-            return Ok(c1.clone());
-        }
-
-        let n = self.n()?;
-        assert_eq!(n.fract(), 0.0);
-        let n_returns = f.n_returns().unwrap_or(c0.len());
-        let r = (0..n_returns)
+        let c0 = &self.c0;
+        let c1 = &self.c1;
+        let n = self.n;
+        let r = (0..c0.len())
             .map(|i| c0[i] + x.powf(n) * (c1[i] - c0[i]))
             .collect();
-        Ok(f.clip_returns(r))
+        Ok(self.signature.clip_returns(r))
+    }
+}
+
+impl<'a, 'b> ExponentialInterpolationFunctionDict<'a, 'b> {
+    pub fn func(&self) -> AnyResult<ExponentialInterpolationFunction> {
+        let f = self.function_dict()?;
+        let signature = f.signature()?;
+        let c0 = self.c0()?;
+        let c1 = self.c1()?;
+        let n = self.n()?;
+        assert_eq!(n.fract(), 0.0);
+        Ok(ExponentialInterpolationFunction {
+            c0,
+            c1,
+            n,
+            signature,
+        })
     }
 }
 

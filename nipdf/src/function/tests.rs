@@ -42,6 +42,7 @@ fn test_exponential_function() {
     let xref = XRefTable::empty();
     let resolver = ObjectResolver::empty(&xref);
     let f = ExponentialInterpolationFunctionDict::new(None, &d, &resolver).unwrap();
+    let f = f.func().unwrap();
     assert_eq!(f.call(&[0.0]).unwrap(), vec![0.1, 0.2]);
     assert_eq!(f.call(&[1.0]).unwrap(), vec![0.2, 0.4]);
     assert_eq!(f.call(&[0.5]).unwrap(), vec![0.15, 0.3]);
