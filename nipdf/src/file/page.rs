@@ -17,7 +17,7 @@ use self::paint::Render;
 pub use self::paint::{RenderOption, RenderOptionBuilder};
 
 use crate::graphics::trans::FormToUserSpace;
-use crate::graphics::{ColorArgs, ColorSpaceArgs1};
+use crate::graphics::{ColorArgs, ColorSpaceArgs};
 use std::{iter::once, ops::Deref};
 
 mod paint;
@@ -182,7 +182,7 @@ pub trait FormXObjectDictTrait {
 }
 
 /// Wrap type to impl TryFrom<> trait
-pub struct ColorSpaceResources<'a>(HashMap<String, ColorSpaceArgs1<'a>>);
+pub struct ColorSpaceResources<'a>(HashMap<String, ColorSpaceArgs<'a>>);
 
 impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceResources<'a> {
     type Error = ObjectValueError;
@@ -192,7 +192,7 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceResources<'a> {
         match object {
             Object::Dictionary(dict) => {
                 for (k, v) in dict.iter() {
-                    let cs = ColorSpaceArgs1::try_from(v)?;
+                    let cs = ColorSpaceArgs::try_from(v)?;
                     map.insert(k.as_ref().to_owned(), cs);
                 }
                 Ok(Self(map))
@@ -206,7 +206,7 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceResources<'a> {
 }
 
 impl<'a> Deref for ColorSpaceResources<'a> {
-    type Target = HashMap<String, ColorSpaceArgs1<'a>>;
+    type Target = HashMap<String, ColorSpaceArgs<'a>>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }

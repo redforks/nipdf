@@ -3,7 +3,7 @@ use nipdf_macro::{pdf_object, TryFromIntObject};
 
 use super::{ColorArgs, Rectangle};
 use crate::graphics::trans::UserToDeviceIndependentSpace;
-use crate::graphics::ColorSpaceArgs1;
+use crate::graphics::ColorSpaceArgs;
 use crate::{
     file::{GraphicsStateParameterDict, ResourceDict},
     function::{default_domain, Domain, FunctionDict},
@@ -96,7 +96,7 @@ pub trait ShadingDictTrait {
     fn shading_type(&self) -> ShadingType;
 
     #[try_from]
-    fn color_space(&self) -> ColorSpaceArgs1;
+    fn color_space(&self) -> ColorSpaceArgs;
 
     #[try_from]
     fn background(&self) -> Option<ColorArgs>;

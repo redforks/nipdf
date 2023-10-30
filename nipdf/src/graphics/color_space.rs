@@ -10,7 +10,7 @@ use crate::{
     graphics::ICCStreamDict,
 };
 
-use super::ColorSpaceArgs1;
+use super::ColorSpaceArgs;
 
 /// Color component composes a color.
 /// Two kinds of color component: float or integer.
@@ -114,17 +114,17 @@ impl<T: PartialEq + std::fmt::Debug> ColorSpace<T> {
     /// Create from color space args.
     /// Panic if need resolve resource but resources is None.
     pub fn from_args<'a>(
-        args: &ColorSpaceArgs1,
+        args: &ColorSpaceArgs,
         resolver: &ObjectResolver<'a>,
         resources: Option<&ResourceDict<'a, '_>>,
     ) -> AnyResult<Self> {
         match args {
-            ColorSpaceArgs1::Ref(id) => {
+            ColorSpaceArgs::Ref(id) => {
                 let obj = resolver.resolve(*id)?;
-                let args = ColorSpaceArgs1::try_from(obj)?;
+                let args = ColorSpaceArgs::try_from(obj)?;
                 Self::from_args(&args, resolver, resources)
             }
-            ColorSpaceArgs1::Name(name) => {
+            ColorSpaceArgs::Name(name) => {
                 let name = name.as_ref();
                 match name {
                     "DeviceGray" => Ok(ColorSpace::DeviceGray),
@@ -140,7 +140,7 @@ impl<T: PartialEq + std::fmt::Debug> ColorSpace<T> {
                     }
                 }
             }
-            ColorSpaceArgs1::Array(arr) => match arr[0].as_name()? {
+            ColorSpaceArgs::Array(arr) => match arr[0].as_name()? {
                 "ICCBased" => {
                     debug_assert_eq!(2, arr.len());
                     let id = arr[1].as_ref()?;
@@ -157,7 +157,7 @@ impl<T: PartialEq + std::fmt::Debug> ColorSpace<T> {
                 }
                 "Separation" => {
                     debug_assert_eq!(4, arr.len());
-                    let alternate = ColorSpaceArgs1::try_from(&arr[2])?;
+                    let alternate = ColorSpaceArgs::try_from(&arr[2])?;
                     let function: FunctionDict =
                         resolver.resolve_pdf_object(arr[3].as_ref()?.id().id())?;
                     let base = Self::from_args(&alternate, resolver, resources)?;

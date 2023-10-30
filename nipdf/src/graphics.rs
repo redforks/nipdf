@@ -132,13 +132,13 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorArgs {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub enum ColorSpaceArgs1<'a> {
+pub enum ColorSpaceArgs<'a> {
     Name(Name<'a>),
     Array(Array<'a>),
     Ref(NonZeroU32),
 }
 
-impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceArgs1<'a> {
+impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceArgs<'a> {
     type Error = ObjectValueError;
 
     fn try_from(object: &'b Object<'a>) -> Result<Self, Self::Error> {
@@ -154,10 +154,10 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceArgs1<'a> {
     }
 }
 
-impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorSpaceArgs1<'a> {
+impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorSpaceArgs<'a> {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
-        ColorSpaceArgs1::try_from(&o).map_err(|_| ObjectValueError::GraphicsOperationSchemaError)
+        ColorSpaceArgs::try_from(&o).map_err(|_| ObjectValueError::GraphicsOperationSchemaError)
     }
 }
 
@@ -165,7 +165,7 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorSpaceArgs1<'a> {
 trait ICCStreamDictTrait {
     fn n(&self) -> u32;
     #[try_from]
-    fn alternate(&self) -> Option<ColorSpaceArgs1>;
+    fn alternate(&self) -> Option<ColorSpaceArgs>;
 }
 
 impl<'a, 'b, const N: usize> ConvertFromObject<'a, 'b> for [f32; N] {
@@ -389,9 +389,9 @@ pub enum Operation<'a> {
 
     // Color Operations
     #[op_tag("CS")]
-    SetStrokeColorSpace(ColorSpaceArgs1<'a>),
+    SetStrokeColorSpace(ColorSpaceArgs<'a>),
     #[op_tag("cs")]
-    SetFillColorSpace(ColorSpaceArgs1<'a>),
+    SetFillColorSpace(ColorSpaceArgs<'a>),
     #[op_tag("SC")]
     SetStrokeColor(ColorArgs),
     #[op_tag("SCN")]

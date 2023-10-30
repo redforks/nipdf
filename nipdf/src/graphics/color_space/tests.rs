@@ -95,7 +95,7 @@ fn indexed_color_space() {
 fn simple_color_space_from_args(name: &str) -> ColorSpace<f32> {
     let empty_xref = XRefTable::empty();
     let resolver = ObjectResolver::empty(&empty_xref);
-    ColorSpace::<f32>::from_args(&ColorSpaceArgs1::Name(name.into()), &resolver, None).unwrap()
+    ColorSpace::<f32>::from_args(&ColorSpaceArgs::Name(name.into()), &resolver, None).unwrap()
 }
 
 #[test]
@@ -113,7 +113,7 @@ endobj
 "#;
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref);
-    let args = ColorSpaceArgs1::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap())?)?;
+    let args = ColorSpaceArgs::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap())?)?;
     let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None)?;
     assert_eq!(ColorSpace::DeviceGray, color_space);
 
@@ -139,7 +139,7 @@ endobj
         let buf = buf.as_bytes();
         let xref = XRefTable::from_buf(buf);
         let resolver = ObjectResolver::new(buf, &xref);
-        let args = ColorSpaceArgs1::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap())?)?;
+        let args = ColorSpaceArgs::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap())?)?;
         let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None)?;
         assert_eq!(exp, color_space);
     }
@@ -174,7 +174,7 @@ endobj
 "#;
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref);
-    let args = ColorSpaceArgs1::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap())?)?;
+    let args = ColorSpaceArgs::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap())?)?;
     let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None)?;
     assert_eq!(
         ColorSpace::Separation(Box::new(SeparationColorSpace {

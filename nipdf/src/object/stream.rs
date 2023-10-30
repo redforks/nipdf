@@ -16,7 +16,7 @@ use once_cell::unsync::Lazy;
 
 use crate::graphics::{
     color_space::{color_to_rgba, ColorCompConvertTo, ColorSpaceTrait, DeviceCMYK},
-    ColorSpaceArgs1,
+    ColorSpaceArgs,
 };
 use crate::{ccitt::Flags, file::ObjectResolver, object::PdfObject};
 use crate::{file::ResourceDict, graphics::color_space::ColorSpace};
@@ -324,7 +324,7 @@ pub(crate) trait ImageDictTrait {
     fn height(&self) -> u32;
     fn bits_per_component(&self) -> Option<u8>;
     #[try_from]
-    fn color_space(&self) -> Option<ColorSpaceArgs1<'a>>;
+    fn color_space(&self) -> Option<ColorSpaceArgs<'a>>;
 }
 
 #[pdf_object(())]
