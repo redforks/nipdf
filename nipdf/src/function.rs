@@ -85,6 +85,12 @@ pub trait Function {
     fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>>;
 }
 
+impl Function for Box<dyn Function> {
+    fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>> {
+        self.as_ref().call(args)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, TryFromIntObject)]
 pub enum Type {
     Sampled = 0,
@@ -179,17 +185,6 @@ impl Signature {
             .zip(range.0.iter())
             .map(|(&ret, domain)| domain.clamp(ret))
             .collect()
-    }
-}
-
-impl<'a, 'b> Function for FunctionDict<'a, 'b> {
-    fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>> {
-        match self.function_type()? {
-            Type::Sampled => self.sampled()?.func()?.call(args),
-            Type::ExponentialInterpolation => self.exponential_interpolation()?.func()?.call(args),
-            Type::Stitching => self.stitch()?.func()?.call(args),
-            Type::PostScriptCalculator => todo!(),
-        }
     }
 }
 

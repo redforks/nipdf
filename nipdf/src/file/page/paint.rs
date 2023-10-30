@@ -1217,7 +1217,7 @@ fn build_linear_gradient_stops(domain: Domain, f: FunctionDict) -> AnyResult<Vec
             for t in sf.bounds()?.iter() {
                 stops.push(create_stop(&sff, *t)?);
             }
-            stops.push(create_stop(&f, domain.end)?);
+            stops.push(create_stop(&f.func()?, domain.end)?);
             Ok(stops)
         }
         _ => {
