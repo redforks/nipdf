@@ -178,7 +178,7 @@ where
                     let base: ColorSpace<T> = Self::from_args(&base, resolver, resources)?;
                     let hival = arr[2].as_int()?;
                     let stream = resolver.resolve(arr[3].as_ref()?.id().id())?.as_stream()?;
-                    let data = stream.decode(&resolver)?;
+                    let data = stream.decode(resolver)?;
                     assert!(data.len() >= (hival + 1) as usize * base.components());
                     Ok(ColorSpace::Indexed(Box::new(IndexedColorSpace {
                         base,

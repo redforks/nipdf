@@ -40,7 +40,7 @@ use crate::graphics::trans::{
     UserToDeviceSpace,
 };
 use tiny_skia::{
-    Color as SkiaColor, FillRule, FilterQuality, GradientStop, Mask, MaskType, Paint,
+    Color as SkiaColor, FillRule, FilterQuality, Mask, MaskType, Paint,
     Path as SkiaPath, PathBuilder, Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect,
     Stroke, StrokeDash, Transform,
 };
@@ -962,7 +962,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         }
     }
 
-    fn paint_shading(&self, name: NameOfDict) -> AnyResult<()> {
+    fn paint_shading(&self, _name: NameOfDict) -> AnyResult<()> {
         todo!("paint shading")
     }
 

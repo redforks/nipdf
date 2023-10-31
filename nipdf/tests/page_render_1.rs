@@ -15,7 +15,7 @@ fn decode_image(id: u32) -> AnyResult<String> {
     let resolver = f.resolver()?;
     let obj = resolver.resolve(NonZeroU32::new(id).unwrap())?;
     let image = obj.as_stream()?.decode_image(&resolver, None)?;
-    let hash = Md5::digest(&image.into_bytes());
+    let hash = Md5::digest(image.into_bytes());
     Ok(hex::encode(hash))
 }
 
