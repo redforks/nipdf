@@ -681,9 +681,16 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             // XObject Operation
             Operation::PaintXObject(name) => self.paint_x_object(&name).unwrap(),
 
-            _ => {
-                eprintln!("unimplemented: {:?}", op);
+            // Marked Content Operations
+            Operation::DesignateMarkedContentPoint(_)
+            | Operation::DesignateMarkedContentPointWithProperties(_, _)
+            | Operation::BeginMarkedContent(_)
+            | Operation::BeginMarkedContentWithProperties(_, _)
+            | Operation::EndMarkedContent => {
+                debug!("not implemented: {:?}", op);
             }
+
+            _ => todo!("{:?}", op),
         }
     }
 
