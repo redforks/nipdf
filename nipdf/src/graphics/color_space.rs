@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use anyhow::{anyhow, Result as AnyResult};
 use educe::Educe;
-use tinyvec::ArrayVec;
+use smallvec::SmallVec;
 
 use crate::{
     file::{ObjectResolver, ResourceDict},
@@ -403,7 +403,7 @@ where
         let index = ColorCompConvertTo::<u8>::into_color_comp(color[0]) as usize;
         let n = self.base.components();
         let u8_color = &self.data[index * n..(index + 1) * n];
-        let c: ArrayVec<[T; 4]> = u8_color.iter().map(|v| v.into_color_comp()).collect();
+        let c: SmallVec<[T; 4]> = u8_color.iter().map(|v| v.into_color_comp()).collect();
 
         self.base.to_rgba(c.as_slice())
     }
@@ -433,7 +433,7 @@ where
 {
     fn to_rgba(&self, color: &[T]) -> [T; 4] {
         let c = self.f.call(&[color[0].into_color_comp()]).unwrap();
-        let c: ArrayVec<[T; 4]> = c.iter().map(|v| v.into_color_comp()).collect();
+        let c: SmallVec<[T; 4]> = c.iter().map(|v| v.into_color_comp()).collect();
         self.base.to_rgba(c.as_slice())
     }
 

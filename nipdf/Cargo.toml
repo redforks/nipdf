@@ -39,7 +39,7 @@ weezl = "0.1.7"
 either = "1.9.0"
 euclid = "0.22.9"
 ttf-parser = { version = "0.20", features = ["gvar-alloc"] }
-tinyvec = "1.6"
+smallvec = "1.11"
 
 [dev-dependencies]
 env_logger = "0.10.0"

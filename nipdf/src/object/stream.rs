@@ -13,7 +13,7 @@ use lazy_static::__Deref;
 use log::error;
 use nipdf_macro::pdf_object;
 use once_cell::unsync::Lazy;
-use tinyvec::ArrayVec;
+use smallvec::SmallVec;
 
 use crate::graphics::{
     color_space::{color_to_rgba, ColorCompConvertTo, ColorSpaceTrait, DeviceCMYK},
@@ -623,7 +623,7 @@ impl<'a> Stream<'a> {
                         let mut img =
                             RgbaImage::new(img_dict.width().unwrap(), img_dict.height().unwrap());
                         for (p, dest_p) in data.chunks(n_colors).zip(img.pixels_mut()) {
-                            let c: ArrayVec<[f32; 4]> =
+                            let c: SmallVec<[f32; 4]> =
                                 p.iter().map(|v| v.into_color_comp()).collect();
                             let color: [u8; 4] = color_to_rgba(cs, c.as_slice());
                             *dest_p = Rgba(color);
