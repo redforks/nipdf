@@ -4,13 +4,10 @@ use std::{
 
 use crate::{
     file::{ObjectResolver, XObjectDict},
-    function::{Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
-        color_space::ColorSpace,
-        parse_operations,
-        shading::{AxialExtend, AxialShadingDict, ShadingType},
-        ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, NameOrDictByRef,
-        NameOrStream, PatternType, Point, RenderingIntent, ShadingPatternDict, TextRenderingMode,
+        color_space::ColorSpace, parse_operations, shading::build_pattern, ColorArgs,
+        ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, NameOrDictByRef, NameOrStream,
+        PatternType, Point, RenderingIntent, ShadingPatternDict, TextRenderingMode,
         TilingPaintType, TilingPatternDict,
     },
     object::{Object, PdfObject, Stream, TextStringOrNumber},
@@ -1007,14 +1004,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             "TODO: support Background of shading, paint background before shading"
         );
 
-        assert_eq!(shading.shading_type()?, ShadingType::Axial);
-        let axial = shading.axial()?;
-        assert_eq!(
-            axial.extend()?,
-            AxialExtend::new(true, true),
-            "Extend not supported"
-        );
-        let shader = build_linear_gradient(&axial)?;
+        let shader = build_pattern(&shading)?;
         self.stack.last_mut().unwrap().fill_paint = PaintCreator::Gradient(Paint {
             shader,
             ..Default::default()
@@ -1192,66 +1182,6 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
     fn end_text(&mut self) {
         self.current_mut().end_text_object();
     }
-}
-
-fn build_linear_gradient_stops(domain: Domain, f: FunctionDict) -> AnyResult<Vec<GradientStop>> {
-    fn create_stop<F: Function>(f: &F, x: f32) -> AnyResult<GradientStop> {
-        let rv = f.call(&[x])?;
-        // TODO: use current color space to check array length, and convert to skia color
-        let color = match rv.len() {
-            1 => color_space::DeviceGray().to_skia_color(&rv),
-            3 => color_space::DeviceRGB().to_skia_color(&rv),
-            4 => color_space::DeviceCMYK().to_skia_color(&rv),
-            _ => unreachable!(),
-        };
-        Ok(GradientStop::new(x, color))
-    }
-
-    match f.function_type()? {
-        FunctionType::ExponentialInterpolation => {
-            let ef = f.exponential_interpolation()?;
-            let eff = ef.func()?;
-            assert_eq!(ef.n()?, 1f32, "Only linear gradient function supported");
-            Ok(vec![
-                create_stop(&eff, domain.start)?,
-                create_stop(&eff, domain.end)?,
-            ])
-        }
-        FunctionType::Stitching => {
-            let sf = f.stitch()?;
-            let sff = sf.func()?;
-            let mut stops = Vec::with_capacity(sf.functions()?.len() + 1);
-            stops.push(create_stop(&sff, domain.start)?);
-            let functions = sf.functions()?;
-            for f in &functions {
-                let ef = f.exponential_interpolation()?; // only support exponential interpolation
-                assert_eq!(ef.n()?, 1f32, "Only linear gradient function supported");
-            }
-            for t in sf.bounds()?.iter() {
-                stops.push(create_stop(&sff, *t)?);
-            }
-            stops.push(create_stop(&f.func()?, domain.end)?);
-            Ok(stops)
-        }
-        _ => {
-            todo!("Unsupported function type: {:?}", f.function_type()?);
-        }
-    }
-}
-
-fn build_linear_gradient(shading: &AxialShadingDict) -> AnyResult<tiny_skia::Shader<'static>> {
-    let coord = shading.coords()?;
-    let start = coord.left_lower();
-    let end = coord.right_upper();
-    let stops = build_linear_gradient_stops(shading.domain()?, shading.function()?)?;
-    Ok(tiny_skia::LinearGradient::new(
-        start.into(),
-        end.into(),
-        stops,
-        tiny_skia::SpreadMode::Pad,
-        Transform::identity(),
-    )
-    .unwrap())
 }
 
 /// FontWidth used in Type1 and TrueType fonts
