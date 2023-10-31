@@ -15,6 +15,7 @@ use nom::{
 };
 
 use crate::{
+    graphics::trans::{TextToUserSpace, UserToDeviceIndependentSpace},
     object::{
         Array, Dictionary, Name, Object, ObjectValueError, Stream, TextString, TextStringOrNumber,
     },
@@ -24,11 +25,9 @@ use nipdf_macro::{pdf_object, OperationParser, TryFromIntObject, TryFromNameObje
 
 pub(crate) mod color_space;
 mod pattern;
-
-use crate::graphics::trans::{TextToUserSpace, UserToDeviceIndependentSpace};
-pub(crate) use pattern::*;
-
 pub(crate) mod trans;
+pub(crate) use pattern::*;
+pub(crate) mod shading;
 
 impl<'a, S, T> TryFrom<&Object<'a>> for Transform2D<f32, S, T> {
     type Error = ObjectValueError;
