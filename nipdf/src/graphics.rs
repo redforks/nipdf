@@ -10,17 +10,17 @@ use nom::{
     bytes::complete::is_not,
     combinator::map_res,
     error::{ErrorKind, FromExternalError, ParseError as NomParseError},
-    multi::many0,
-    Parser,
+    Err, Parser,
 };
-
 
 use crate::{
     graphics::trans::{TextToUserSpace, UserToDeviceIndependentSpace},
     object::{
         Array, Dictionary, Name, Object, ObjectValueError, Stream, TextString, TextStringOrNumber,
     },
-    parser::{parse_object, ws_prefixed, ws_terminated, ParseError, ParseResult},
+    parser::{
+        parse_object, whitespace_or_comment, ws_prefixed, ParseError, ParseResult,
+    },
 };
 use nipdf_macro::{pdf_object, OperationParser, TryFromIntObject, TryFromNameObject};
 
@@ -585,11 +585,7 @@ fn parse_operator(input: &[u8]) -> ParseResult<ObjectOrOperator> {
     let p = is_not(b" \t\n\r%[<(/".as_slice());
     map_res(p, |op| {
         let op = unsafe { std::str::from_utf8_unchecked(op) };
-        if OPERATORS.contains(op) {
-            Ok(ObjectOrOperator::Operator(op))
-        } else {
-            Err(ParseError::from_error_kind(input, ErrorKind::Tag))
-        }
+        Ok::<_, ParseError>(ObjectOrOperator::Operator(op))
     })(input)
 }
 
@@ -597,32 +593,57 @@ fn parse_object_or_operator(input: &[u8]) -> ParseResult<ObjectOrOperator> {
     alt((parse_object.map(ObjectOrOperator::Object), parse_operator))(input)
 }
 
-fn parse_operation(mut input: &[u8]) -> ParseResult<Operation> {
+pub fn parse_operations(mut input: &[u8]) -> ParseResult<Vec<Operation>> {
     let mut operands = Vec::with_capacity(8);
+    let mut ignore_parse_error = false;
+    let mut r = vec![];
     loop {
-        let vr = ws_prefixed(parse_object_or_operator)(input)?;
+        let vr = ws_prefixed(parse_object_or_operator)(input);
         match vr {
-            (remains, ObjectOrOperator::Object(o)) => {
+            Err(Err::Error(_)) => break,
+            Err(e) => return Err(e),
+            Ok((remains, vr)) => {
                 input = remains;
-                operands.push(o);
-            }
-            (remains, ObjectOrOperator::Operator(op)) => {
-                input = remains;
-                let r = (
-                    input,
-                    create_operation(op, &mut operands).map_err(|e| {
-                        nom::Err::Error(ParseError::from_external_error(input, ErrorKind::Fail, e))
-                    })?,
-                );
-                assert!(operands.is_empty());
-                return Ok(r);
+                match vr {
+                    ObjectOrOperator::Object(o) => {
+                        operands.push(o);
+                    }
+                    ObjectOrOperator::Operator(op) => {
+                        let (input, opt_op) = (
+                            input,
+                            create_operation(op, &mut operands).map_err(|e| {
+                                nom::Err::Error(ParseError::from_external_error(
+                                    input,
+                                    ErrorKind::Fail,
+                                    e,
+                                ))
+                            })?,
+                        );
+                        match opt_op {
+                            Some(Operation::BeginCompatibilitySection) => ignore_parse_error = true,
+                            Some(Operation::EndCompatibilitySection) => ignore_parse_error = false,
+                            Some(op) => r.push(op),
+                            None => {
+                                if ignore_parse_error {
+                                    operands.clear();
+                                } else {
+                                    error!("Unknown operation: {:?}", op);
+                                    return Err(nom::Err::Error(ParseError::from_error_kind(
+                                        input,
+                                        ErrorKind::Tag,
+                                    )));
+                                }
+                            }
+                        }
+                        assert!(operands.is_empty());
+                    }
+                }
             }
         }
+        (input, _) = whitespace_or_comment(input)?;
     }
-}
 
-pub fn parse_operations(input: &[u8]) -> ParseResult<Vec<Operation<'_>>> {
-    ws_terminated(many0(parse_operation))(input)
+    Ok((input, r))
 }
 
 #[cfg(test)]

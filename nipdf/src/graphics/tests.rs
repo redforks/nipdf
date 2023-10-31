@@ -19,14 +19,6 @@ fn parse_operator_succeed(s: &str, op: &str) {
     assert_eq!(result, ObjectOrOperator::Operator(op));
 }
 
-#[test_case("foo " ; "unknown operator")]
-fn parse_operator_failed(s: &str) {
-    assert!(matches!(
-        parse_operator(s.as_bytes()).unwrap_err(),
-        nom::Err::Error(_)
-    ));
-}
-
 #[test_case(""=> Vec::<Operation>::new(); "empty")]
 #[test_case(" % comment\n "=> Vec::<Operation>::new(); "comment only")]
 #[test_case(" % comment\n q Q"=> vec![
@@ -65,8 +57,40 @@ fn test_parse_operations(s: &str) -> Vec<Operation> {
 #[test_case("/tag /name DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict("tag".into()), NameOrDict::Name("name".into())); "DP with name")]
 #[test_case("/tag<<>>DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict("tag".into()), NameOrDict::Dict(Dictionary::new())); "DP with dict")]
 fn test_parse_operation(s: &str) -> Operation {
-    let (_, result) = parse_operation(s.as_bytes()).unwrap();
-    result
+    let (_, mut result) = parse_operations(s.as_bytes()).unwrap();
+    assert_eq!(1, result.len());
+    result.pop().unwrap()
+}
+
+#[test]
+fn test_ignore_bx_ex() {
+    let (buf, result) = parse_operations(b"BX\nq\nEX\nQ").unwrap();
+    assert_eq!(buf, b"");
+    assert_eq!(
+        vec![
+            Operation::SaveGraphicsState,
+            Operation::RestoreGraphicsState
+        ],
+        result
+    );
+}
+
+#[test]
+fn error_in_bx_ex_block() {
+    // ignore unknown operation in BX/EX block
+    let (buf, result) = parse_operations(b"BX\nq\n1 2 foo\nEX\nQ").unwrap();
+    assert_eq!(buf, b"");
+    assert_eq!(
+        vec![
+            Operation::SaveGraphicsState,
+            Operation::RestoreGraphicsState
+        ],
+        result
+    );
+
+    // error on unknown operation not in BX/EX block
+    let vr = parse_operations(b"q\n1 2 foo\nQ");
+    assert!(vr.is_err());
 }
 
 #[test_case(0 => LineCapStyle::Butt)]

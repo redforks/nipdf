@@ -159,8 +159,8 @@ pub fn graphics_operation_parser(input: TokenStream) -> TokenStream {
         arms.push(new_arm(
             &s.expect("op_tag not defined"),
             match convert_args.len() {
-                0 => op,
-                1 => parse_quote!( #op(#(#convert_args),*) ),
+                0 => parse_quote!(Some(#op)),
+                1 => parse_quote!(Some(#op(#(#convert_args),*))),
                 _ => {
                     let mut save_to_vars = vec![];
                     let mut vars = vec![];
@@ -173,7 +173,7 @@ pub fn graphics_operation_parser(input: TokenStream) -> TokenStream {
                     save_to_vars.reverse();
                     parse_quote!( {
                         #( #save_to_vars )*
-                        #op(#(#vars),*)
+                        Some(#op(#(#vars),*))
                     })
                 }
             },
@@ -187,10 +187,10 @@ pub fn graphics_operation_parser(input: TokenStream) -> TokenStream {
     // }));
 
     let tokens = quote! {
-        fn create_operation<'a>(op: &str, operands: &mut Vec<crate::object::Object<'a>>) -> Result<Operation<'a>, crate::object::ObjectValueError> {
+        fn create_operation<'a>(op: &str, operands: &mut Vec<crate::object::Object<'a>>) -> Result<Option<Operation<'a>>, crate::object::ObjectValueError> {
             Ok(match op {
                 #( #arms, )*
-                _ => todo!(),
+                _ => None,
             })
         }
     };
