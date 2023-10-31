@@ -168,9 +168,8 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<Object> {
                 line_ending,
             ))(input)?;
             if begin_stream.is_some() {
-                let l = d.get_int("Length", -1).unwrap();
-                if l != -1 {
-                    let (input, data) = take(l as usize)(input)?;
+                if let Some(Object::Integer(l)) = d.get(&b"Length"[..]) {
+                    let (input, data) = take(*l as usize)(input)?;
                     let (input, _) = preceded(opt(line_ending), tag(b"endstream"))(input)?;
                     Ok((input, Object::Stream(Stream::new(d, data))))
                 } else {

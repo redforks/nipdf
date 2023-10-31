@@ -524,6 +524,11 @@ impl<'a> Stream<'a> {
         self.0
     }
 
+    #[cfg(test)]
+    pub fn buf(&self) -> &[u8] {
+        self.1
+    }
+
     /// Get stream un-decoded raw data.
     pub fn raw(&self, resolver: &ObjectResolver<'a>) -> Result<&'a [u8], ObjectValueError> {
         let len = resolver

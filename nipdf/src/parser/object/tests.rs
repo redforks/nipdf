@@ -79,3 +79,29 @@ fn test_parse_reference(buf: impl AsRef<[u8]>, name: &str) {
 fn name_normalize(exp: impl AsRef<[u8]>, name: impl AsRef<[u8]>) {
     assert_eq!(normalize_name(name.as_ref()).unwrap(), exp.as_ref());
 }
+
+#[test]
+fn test_parse_object_and_stream() {
+    // length is int
+    let buf = br#"<</Length 4>>
+stream
+1234
+endstream
+"#;
+    let (input, o) = parse_object_and_stream(buf).unwrap();
+    assert_eq!(input, b"\n");
+    let stream = o.as_stream().unwrap();
+    assert_eq!(b"1234", stream.buf());
+
+    // length is ref
+    let buf = br#"<</Length 1 0 R>>
+stream
+blah
+endstream
+"#;
+    let (input, o) = parse_object_and_stream(buf).unwrap();
+    assert_eq!(input[0], b'b');
+    assert!(input.len() > 4);
+    let stream = o.as_stream().unwrap();
+    assert!(stream.buf().starts_with(b"blah"));
+}
