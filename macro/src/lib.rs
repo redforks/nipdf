@@ -72,15 +72,15 @@ pub fn try_from_int_object(input: TokenStream) -> TokenStream {
                 let n = object.as_int()?;
                 match n {
                     #( #arms, )*
-                    _ => Err(ObjectValueError::GraphicsOperationSchemaError),
+                    _ => Err(crate::object::ObjectValueError::GraphicsOperationSchemaError),
                 }
             }
         }
 
         impl<'a, 'b> crate::graphics::ConvertFromObject<'a, 'b> for #t {
-            fn convert_from_object(objects: &'b mut Vec<crate::object::Object<'a>>) -> Result<Self, ObjectValueError> {
+            fn convert_from_object(objects: &'b mut Vec<crate::object::Object<'a>>) -> Result<Self, crate::object::ObjectValueError> {
                 let o = objects.pop().unwrap();
-                #t::try_from(&o).map_err(|_| ObjectValueError::GraphicsOperationSchemaError)
+                #t::try_from(&o).map_err(|_| crate::object::ObjectValueError::GraphicsOperationSchemaError)
             }
         }
     };
