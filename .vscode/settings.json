@@ -1,13 +1,20 @@
 {
     "cSpell.words": [
+        "bolditalic",
+        "boldoblique",
         "CCITT",
         "Dumer",
         "endobj",
         "endstream",
         "ffilter",
         "Flate",
+        "notdef",
         "Parms",
-        "startxref"
+        "skia",
+        "startxref",
+        "Tmode",
+        "Trise",
+        "zapfdingbats"
     ],
     "rust-analyzer.check.allTargets": false,
     "rust-analyzer.cargo.target": "x86_64-unknown-linux-gnu",

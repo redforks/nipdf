@@ -675,6 +675,9 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 self.set_fill_color_or_pattern(&name).unwrap()
             }
 
+            // Shading Operation
+            Operation::PaintShading(name) => self.paint_shading(name).unwrap(),
+
             // XObject Operation
             Operation::PaintXObject(name) => self.paint_x_object(&name).unwrap(),
 
@@ -951,6 +954,10 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             XObjectType::Form => self.paint_form_x_object(x_object),
             t => todo!("{:?}", t),
         }
+    }
+
+    fn paint_shading(&self, name: NameOfDict) -> AnyResult<()> {
+        todo!("paint shading")
     }
 
     fn set_fill_color_or_pattern(&mut self, color_or_name: &ColorArgsOrName) -> AnyResult<()> {
@@ -1474,7 +1481,7 @@ impl<'a> FontOp for Type1FontOp<'a> {
     }
 }
 
-/// Font implementation using freetype/(font-kit), to handle Type1 fonts
+/// Font implementation using free-type/(font-kit), to handle Type1 fonts
 struct Type1Font<'a, 'b> {
     font_data: Vec<u8>,
     is_cff: bool,
