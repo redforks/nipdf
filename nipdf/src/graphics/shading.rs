@@ -25,15 +25,15 @@ pub enum ShadingType {
 
 /// Return type of `AxialShadingDict::extend()`
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct AxialExtend(bool, bool);
+pub struct Extend(bool, bool);
 
-impl AxialExtend {
+impl Extend {
     pub fn new(begin: bool, end: bool) -> Self {
         Self(begin, end)
     }
 }
 
-impl<'a> TryFrom<&Object<'a>> for AxialExtend {
+impl<'a> TryFrom<&Object<'a>> for Extend {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
@@ -60,7 +60,61 @@ pub trait AxialShadingDictTrait {
 
     #[try_from]
     #[or_default]
-    fn extend(&self) -> AxialExtend;
+    fn extend(&self) -> Extend;
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct RadialCircle {
+    x: f32,
+    y: f32,
+    r: f32,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct RadialCoords {
+    start: RadialCircle,
+    end: RadialCircle,
+}
+
+impl<'a> TryFrom<&Object<'a>> for RadialCoords {
+    type Error = ObjectValueError;
+
+    fn try_from(obj: &Object) -> Result<Self, Self::Error> {
+        let arr = obj.as_arr()?;
+        if arr.len() != 6 {
+            return Err(ObjectValueError::UnexpectedType);
+        }
+        Ok(Self {
+            start: RadialCircle {
+                x: arr[0].as_number()?,
+                y: arr[1].as_number()?,
+                r: arr[2].as_number()?,
+            },
+            end: RadialCircle {
+                x: arr[3].as_number()?,
+                y: arr[4].as_number()?,
+                r: arr[5].as_number()?,
+            },
+        })
+    }
+}
+
+#[pdf_object(3i32)]
+#[type_field("ShadingType")]
+pub trait RadialShadingDictTrait {
+    #[try_from]
+    fn coords(&self) -> RadialCoords;
+
+    #[try_from]
+    #[default_fn(default_domain)]
+    fn domain(&self) -> Domain;
+
+    #[nested]
+    fn function(&self) -> FunctionDict<'a, 'b>;
+
+    #[try_from]
+    #[or_default]
+    fn extend(&self) -> Extend;
 }
 
 #[pdf_object(())]
@@ -82,6 +136,9 @@ pub trait ShadingDictTrait {
 
     #[self_as]
     fn axial(&self) -> AxialShadingDict<'a, 'b>;
+
+    #[self_as]
+    fn radial(&self) -> RadialShadingDict<'a, 'b>;
 }
 
 fn build_linear_gradient_stops(domain: Domain, f: FunctionDict) -> AnyResult<Vec<GradientStop>> {
@@ -143,7 +200,7 @@ pub fn build_pattern(d: &ShadingDict) -> AnyResult<Shader<'static>> {
     let axial = d.axial()?;
     assert_eq!(
         axial.extend()?,
-        AxialExtend::new(true, true),
+        Extend::new(true, true),
         "Extend not supported"
     );
     match d.shading_type()? {
@@ -151,3 +208,6 @@ pub fn build_pattern(d: &ShadingDict) -> AnyResult<Shader<'static>> {
         t => todo!("{:?}", t),
     }
 }
+
+#[cfg(test)]
+mod tests;
