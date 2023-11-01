@@ -4,16 +4,16 @@ use nipdf_macro::{pdf_object, TryFromIntObject};
 use tiny_skia::{GradientStop, Shader, Transform};
 
 use crate::{
-    file::Rectangle,
+    file::{Rectangle, ResourceDict},
     function::{default_domain, Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
         color_space::{ColorSpaceTrait, DeviceCMYK, DeviceGray, DeviceRGB},
         ColorArgs, ColorSpaceArgs,
     },
-    object::{Object, ObjectValueError},
+    object::{Object, ObjectValueError, PdfObject},
 };
 
-use super::Point;
+use super::{color_space::ColorSpace, Point};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromIntObject)]
 pub enum ShadingType {
@@ -69,8 +69,8 @@ pub trait AxialShadingDictTrait {
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct RadialCircle {
-    point: Point,
-    r: f32,
+    pub point: Point,
+    pub r: f32,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -215,13 +215,14 @@ fn build_linear_gradient(d: &AxialShadingDict) -> AnyResult<Option<Shader<'stati
 #[derive(Educe)]
 #[educe(PartialEq, Debug)]
 pub struct Radial {
-    start: RadialCircle,
-    end: RadialCircle,
+    pub start: RadialCircle,
+    pub end: RadialCircle,
     #[educe(PartialEq(ignore))]
     #[educe(Debug(ignore))]
-    function: Box<dyn Function>,
-    domain: Domain,
-    extend: Extend,
+    pub function: Box<dyn Function>,
+    pub domain: Domain,
+    pub extend: Extend,
+    pub color_space: ColorSpace,
 }
 
 pub enum Shading {
@@ -230,15 +231,25 @@ pub enum Shading {
 }
 
 /// Return None if shading is not need to be rendered, such as Axial start point == end point.
-pub fn build_shading(d: &ShadingDict) -> AnyResult<Option<Shading>> {
+pub fn build_shading<'a, 'b>(
+    d: &ShadingDict<'a, 'b>,
+    resources: &ResourceDict<'a, 'b>,
+) -> AnyResult<Option<Shading>> {
     Ok(match d.shading_type()? {
         ShadingType::Axial => build_linear_gradient(&d.axial()?)?.map(Shading::Shader),
-        ShadingType::Radial => build_radial(&d.radial()?)?.map(Shading::Radial),
+        ShadingType::Radial => build_radial(d, resources)?.map(Shading::Radial),
         t => todo!("{:?}", t),
     })
 }
 
-fn build_radial(d: &RadialShadingDict) -> AnyResult<Option<Radial>> {
+fn build_radial<'a, 'b>(
+    d: &ShadingDict<'a, 'b>,
+    resources: &ResourceDict<'a, 'b>,
+) -> AnyResult<Option<Radial>> {
+    let color_space = d.color_space()?;
+    let color_space = ColorSpace::from_args(&color_space, resources.resolver(), Some(resources))?;
+
+    let d = d.radial()?;
     let RadialCoords { start, end } = d.coords()?;
     if (start.r == 0.0 && end.r == 0.0) || start.r < 0. || end.r < 0. || end.r < start.r {
         return Ok(None);
@@ -248,6 +259,7 @@ fn build_radial(d: &RadialShadingDict) -> AnyResult<Option<Radial>> {
     let domain = d.domain()?;
     let extend = d.extend()?;
     Ok(Some(Radial {
+        color_space,
         start,
         end,
         function,

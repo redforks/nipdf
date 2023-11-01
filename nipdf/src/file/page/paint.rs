@@ -4,10 +4,11 @@ use std::{
 
 use crate::{
     file::{ObjectResolver, XObjectDict},
+    function::Domain,
     graphics::{
         color_space::ColorSpace,
         parse_operations,
-        shading::{build_shading, Shading},
+        shading::{build_shading, Radial, Shading},
         ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, NameOrDictByRef,
         NameOrStream, PatternType, Point, RenderingIntent, ShadingPatternDict, TextRenderingMode,
         TilingPaintType, TilingPatternDict,
@@ -21,6 +22,7 @@ use crate::{
 use anyhow::{anyhow, Ok, Result as AnyResult};
 use cff_parser::{File as CffFile, Font as CffFont};
 use educe::Educe;
+use euclid::Point2D;
 use font_kit::loaders::freetype::Font as FontKitFont;
 use fontdb::{Database, Family, Query, Source, Weight};
 use image::RgbaImage;
@@ -961,11 +963,37 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         }
     }
 
-    fn paint_shading(&self, name: NameOfDict) -> AnyResult<()> {
+    fn paint_radial(&mut self, radial: &Radial) -> AnyResult<()> {
+        let Domain { start: t0, end: t1 } = radial.domain;
+        let Point { x: x0, y: y0 } = radial.start.point;
+        let Point { x: x1, y: y1 } = radial.end.point;
+        let r0 = radial.start.r;
+        let r1 = radial.end.r;
+        let ctm = self.current_mut().ctm;
+        let ctm = to_device_space(self.height as f32, self.zoom, &ctm).into_skia();
+        let mut paint = Paint::default();
+        let stroke = Stroke::default();
+        for t in 0..=50 {
+            let t = t as f32 / 50.0;
+            let s = (t - t0) / (t1 - t0);
+            let x = x0 + s * (x1 - x0);
+            let y = y0 + s * (y1 - y0);
+            let r = r0 + s * (r1 - r0);
+            let c = radial.function.call(&[t][..])?;
+            let c = radial.color_space.to_rgba(c.as_slice());
+
+            let path = PathBuilder::from_circle(x, y, r).unwrap();
+            paint.set_color(SkiaColor::from_rgba(c[0], c[1], c[2], c[3]).unwrap());
+            self.canvas.stroke_path(&path, &paint, &stroke, ctm, None);
+        }
+        Ok(())
+    }
+
+    fn paint_shading(&mut self, name: NameOfDict) -> AnyResult<()> {
         let shading = self.resources.shading()?;
         let shading = shading.get(&name.0).unwrap();
-        match build_shading(&shading)? {
-            Some(Shading::Radial(_)) => todo!(),
+        match build_shading(&shading, self.resources)? {
+            Some(Shading::Radial(radial)) => self.paint_radial(&radial),
             None => Ok(()),
             s => todo!("Paint shading: {:?}", std::mem::discriminant(&s)),
         }
@@ -999,7 +1027,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         }
     }
 
-    fn set_shading_pattern(&mut self, pattern: ShadingPatternDict) -> AnyResult<()> {
+    fn set_shading_pattern(&mut self, pattern: ShadingPatternDict<'a, 'b>) -> AnyResult<()> {
         assert_eq!(
             pattern.matrix()?,
             UserToDeviceIndependentSpace::default(),
@@ -1014,7 +1042,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             "TODO: support Background of shading, paint background before shading"
         );
 
-        let shader = match build_shading(&shading)? {
+        let shader = match build_shading(&shading, self.resources)? {
             Some(Shading::Shader(shader)) => shader,
             None => return Ok(()),
             _ => todo!(),
