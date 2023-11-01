@@ -663,8 +663,8 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             Operation::SetStrokeRGB(color) => self
                 .current_mut()
                 .set_stroke_color(color_space::DeviceRGB().to_skia_color(&color)),
-            Operation::SetStrokeColorOrWithPattern(name) => {
-                self.set_stroke_color_or_pattern(&name).unwrap()
+            Operation::SetStrokeColorOrWithPattern(color_or_name) => {
+                self.set_stroke_color_or_pattern(&color_or_name).unwrap()
             }
             Operation::SetFillColor(args) => self.current_mut().set_fill_color_args(args),
             Operation::SetFillGray(color) => self
@@ -676,8 +676,8 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             Operation::SetFillRGB(color) => self
                 .current_mut()
                 .set_fill_color_and_space(ColorSpace::DeviceRGB, &color),
-            Operation::SetFillColorOrWithPattern(name) => {
-                self.set_fill_color_or_pattern(&name).unwrap()
+            Operation::SetFillColorOrWithPattern(color_or_name) => {
+                self.set_fill_color_or_pattern(&color_or_name).unwrap()
             }
 
             // Shading Operation
@@ -1067,9 +1067,22 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         }
     }
 
-    fn set_stroke_color_or_pattern(&self, name: &ColorArgsOrName) -> AnyResult<()> {
-        error!("todo");
-        Ok(())
+    fn set_stroke_color_or_pattern(&mut self, color_or_name: &ColorArgsOrName) -> AnyResult<()> {
+        match color_or_name {
+            ColorArgsOrName::Name(name) => {
+                todo!("set_stroke_color_or_pattern: {:?}", name);
+            }
+            ColorArgsOrName::Color(args) => {
+                let color = self
+                    .stack
+                    .last()
+                    .unwrap()
+                    .fill_color_space
+                    .to_skia_color(args.as_ref());
+                self.current_mut().set_stroke_color(color);
+                Ok(())
+            }
+        }
     }
 
     fn set_fill_color_or_pattern(&mut self, color_or_name: &ColorArgsOrName) -> AnyResult<()> {
