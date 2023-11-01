@@ -251,7 +251,7 @@ fn build_radial<'a, 'b>(
 
     let d = d.radial()?;
     let RadialCoords { start, end } = d.coords()?;
-    if (start.r == 0.0 && end.r == 0.0) || start.r < 0. || end.r < 0. || end.r < start.r {
+    if (start.r == 0.0 && end.r == 0.0) || start.r < 0. || end.r < 0. {
         return Ok(None);
     }
 

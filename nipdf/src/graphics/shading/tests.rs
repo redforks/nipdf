@@ -1,7 +1,10 @@
 use std::num::NonZeroU32;
 use test_case::test_case;
 
-use crate::file::{ObjectResolver, XRefTable};
+use crate::{
+    file::{ObjectResolver, XRefTable},
+    object::Dictionary,
+};
 
 use super::*;
 
@@ -34,11 +37,12 @@ fn radial_coords_try_from() {
 #[test_case(b"1 0 obj<</ShadingType 3/ColorSpace/DeviceGray/Coords[1 1 0 1 1 0]>>endobj"; "radius both be zero")]
 #[test_case(b"1 0 obj<</ShadingType 3/ColorSpace/DeviceGray/Coords[1 1 -1 1 1 1]>>endobj"; "negative start radius")]
 #[test_case(b"1 0 obj<</ShadingType 3/ColorSpace/DeviceGray/Coords[1 1 1 1 1 -1]>>endobj"; "negative end radius")]
-#[test_case(b"1 0 obj<</ShadingType 3/ColorSpace/DeviceGray/Coords[1 1 2 1 1 1]>>endobj"; "end radius less than start radius")]
 fn build_invalid_radial(buf: &[u8]) -> AnyResult<()> {
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref);
-    let d: RadialShadingDict = resolver.resolve_pdf_object(NonZeroU32::new(1).unwrap())?;
-    assert_eq!(None, build_radial(&d)?);
+    let d: ShadingDict = resolver.resolve_pdf_object(NonZeroU32::new(1).unwrap())?;
+    let empty_d = Dictionary::new();
+    let resource = ResourceDict::new(None, &empty_d, &resolver)?;
+    assert_eq!(None, build_radial(&d, &resource)?);
     Ok(())
 }
