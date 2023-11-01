@@ -190,6 +190,8 @@ fn build_linear_gradient_stops(
 }
 
 fn build_linear_gradient(d: &AxialShadingDict) -> AnyResult<Shader<'static>> {
+    assert_eq!(d.extend()?, Extend::new(true, true), "Extend not supported");
+
     let coord = d.coords()?;
     let start = coord.left_lower();
     let end = coord.right_upper();
@@ -207,7 +209,6 @@ fn build_linear_gradient(d: &AxialShadingDict) -> AnyResult<Shader<'static>> {
 pub struct Radial {
     start: RadialCircle,
     end: RadialCircle,
-    stops: Vec<GradientStop>,
     function: Box<dyn Function>,
     domain: Domain,
     extend: Extend,
@@ -219,12 +220,6 @@ pub enum Shading {
 }
 
 pub fn build_shading(d: &ShadingDict) -> AnyResult<Shading> {
-    let axial = d.axial()?;
-    assert_eq!(
-        axial.extend()?,
-        Extend::new(true, true),
-        "Extend not supported"
-    );
     Ok(match d.shading_type()? {
         ShadingType::Axial => Shading::Shader(build_linear_gradient(&d.axial()?)?),
         ShadingType::Radial => Shading::Radial(build_radial(&d.radial()?)?),
@@ -236,14 +231,12 @@ fn build_radial(d: &RadialShadingDict) -> AnyResult<Radial> {
     let coords = d.coords()?;
     let start = coords.start;
     let end = coords.end;
-    let stops = build_linear_gradient_stops(d.domain()?, d.function()?)?;
     let function = d.function()?.pop().unwrap().func()?;
     let domain = d.domain()?;
     let extend = d.extend()?;
     Ok(Radial {
         start,
         end,
-        stops,
         function,
         domain,
         extend,

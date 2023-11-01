@@ -964,8 +964,13 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         }
     }
 
-    fn paint_shading(&self, _name: NameOfDict) -> AnyResult<()> {
-        todo!("paint shading")
+    fn paint_shading(&self, name: NameOfDict) -> AnyResult<()> {
+        let shading = self.resources.shading()?;
+        let shading = shading.get(&name.0).unwrap();
+        match build_shading(&shading)? {
+            Shading::Radial(_) => todo!(),
+            s => todo!("Paint shading: {:?}", std::mem::discriminant(&s)),
+        }
     }
 
     fn set_fill_color_or_pattern(&mut self, color_or_name: &ColorArgsOrName) -> AnyResult<()> {

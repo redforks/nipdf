@@ -6,8 +6,8 @@ use tiny_skia::Pixmap;
 
 use crate::{
     graphics::{
-        parse_operations, LineCapStyle, LineJoinStyle, Operation, PatternDict, Point,
-        RenderingIntent,
+        parse_operations, shading::ShadingDict, LineCapStyle, LineJoinStyle, Operation,
+        PatternDict, Point, RenderingIntent,
     },
     object::{Dictionary, Object, ObjectValueError, PdfObject, Stream},
     text::FontDict,
@@ -220,7 +220,8 @@ pub trait ResourceDictTrait {
     fn color_space(&self) -> ColorSpaceResources<'a>;
     #[nested]
     fn pattern(&self) -> HashMap<String, PatternDict<'a, 'b>>;
-    fn shading(&self) -> Option<&'b Dictionary<'a>>;
+    #[nested]
+    fn shading(&self) -> HashMap<String, ShadingDict<'a, 'b>>;
     #[nested]
     fn x_object(&self) -> HashMap<String, XObjectDict<'a, 'b>>;
     #[nested]
