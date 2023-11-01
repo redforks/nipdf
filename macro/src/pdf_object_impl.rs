@@ -154,6 +154,11 @@ fn nested<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &
     has_attr("nested", rt, attrs)
 }
 
+/// Return true if `#[one_or_more]` attribute defined.
+fn one_or_more(attrs: &[Attribute]) -> bool {
+    attrs.iter().any(|attr| attr.path().is_ident("one_or_more"))
+}
+
 fn self_as<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
     has_attr("self_as", rt, attrs)
 }
@@ -545,7 +550,11 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 },
                 |ty| {
                     if is_vec(ty) {
-                        quote! { self.d.resolver().resolve_container_pdf_object_array(self.d.dict(), #key) }
+                        if one_or_more(attrs) {
+                            quote! { self.d.resolver().resolve_container_one_or_more_pdf_object(self.d.dict(), #key) }
+                        } else {
+                            quote! { self.d.resolver().resolve_container_pdf_object_array(self.d.dict(), #key) }
+                        }
                     } else if is_map(ty) {
                         quote! { self.d.resolver().resolve_container_pdf_object_map(self.d.dict(), #key) }
                     } else {
