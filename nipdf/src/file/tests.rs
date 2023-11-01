@@ -64,7 +64,9 @@ endobj
     let d = resolver
         .resolve(NonZeroU32::new(1_u32).unwrap())?
         .as_dict()?;
-    assert!(resolver.resolve_container_one_or_more_pdf_object::<_, FooDict>(d, "foo")?.is_empty());
+    assert!(resolver
+        .resolve_container_one_or_more_pdf_object::<_, FooDict>(d, "foo")?
+        .is_empty());
 
     // field is dictionary
     let buf = br#"1 0 obj
@@ -77,7 +79,9 @@ endobj
     let d = resolver
         .resolve(NonZeroU32::new(1_u32).unwrap())?
         .as_dict()?;
-    assert_eq!(resolver.resolve_container_one_or_more_pdf_object::<_, FooDict>(d, "foo")?.len(), 1);
+    let list = resolver.resolve_container_one_or_more_pdf_object::<_, FooDict>(d, "foo")?;
+    assert_eq!(list.len(), 1);
+    assert_eq!(Some(NonZeroU32::new(2).unwrap()), list[0].id());
 
     // field is array
     let buf = br#"1 0 obj
@@ -90,7 +94,10 @@ endobj
     let d = resolver
         .resolve(NonZeroU32::new(1_u32).unwrap())?
         .as_dict()?;
-    assert_eq!(resolver.resolve_container_one_or_more_pdf_object::<_, FooDict>(d, "foo")?.len(), 2);
+    let list = resolver.resolve_container_one_or_more_pdf_object::<_, FooDict>(d, "foo")?;
+    assert_eq!(list.len(), 2);
+    assert_eq!(None, list[0].id());
+    assert_eq!(Some(NonZeroU32::new(3).unwrap()), list[1].id());
 
     Ok(())
 }

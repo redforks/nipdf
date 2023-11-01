@@ -435,12 +435,12 @@ impl<'a> ObjectResolver<'a> {
         c: &'c C,
         id: &str,
     ) -> Result<Vec<T>, ObjectValueError> {
-        let obj = self.opt_resolve_container_value(c, id)?;
-        obj.map_or_else(
+        let id_n_obj = self._opt_resolve_container_value(c, id)?;
+        id_n_obj.map_or_else(
             || Ok(vec![]),
-            |obj| match obj {
-                Object::Dictionary(d) => Ok(vec![T::new(None, d, self)?]),
-                Object::Stream(s) => Ok(vec![T::new(None, s.as_dict(), self)?]),
+            |(id, obj)| match obj {
+                Object::Dictionary(d) => Ok(vec![T::new(id, d, self)?]),
+                Object::Stream(s) => Ok(vec![T::new(id, s.as_dict(), self)?]),
                 Object::Array(arr) => {
                     let mut res = Vec::with_capacity(arr.len());
                     for obj in arr {
