@@ -404,12 +404,15 @@ impl<'a, 'b> StitchingFunctionDict<'a, 'b> {
         let bounds = self.bounds()?;
         let encode = self.encode()?;
         let f = self.function_dict()?;
-        let domains = f.domain()?;
+        let signature = Signature {
+            domain: f.domain()?,
+            range: f.range()?,
+        };
         Ok(StitchingFunction {
             functions,
             bounds,
             encode,
-            domains,
+            signature,
         })
     }
 }
@@ -418,7 +421,7 @@ pub struct StitchingFunction {
     functions: Vec<Box<dyn Function>>,
     bounds: Vec<f32>,
     encode: Domains,
-    domains: Domains,
+    signature: Signature,
 }
 
 impl StitchingFunction {
@@ -449,6 +452,10 @@ impl StitchingFunction {
         let t = (t - a.start) / a_len;
         b.start + t * b_len
     }
+
+    fn domains(&self) -> &Domains {
+        &self.signature.domain
+    }
 }
 
 impl Function for StitchingFunction {
@@ -457,7 +464,7 @@ impl Function for StitchingFunction {
 
         let x = args[0];
         let function_idx = Self::find_function(&self.bounds, x);
-        let sub_domain = Self::sub_domain(&self.domains.0[0], &self.bounds, function_idx);
+        let sub_domain = Self::sub_domain(&self.domains().0[0], &self.bounds, function_idx);
         let x = Self::interpolation(&sub_domain, &self.encode.0[function_idx], x);
 
         let f = &self.functions[function_idx];
@@ -466,7 +473,7 @@ impl Function for StitchingFunction {
     }
 
     fn sigunature(&self) -> &Signature {
-        todo!()
+        return &self.signature;
     }
 }
 
