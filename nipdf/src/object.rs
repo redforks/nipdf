@@ -18,26 +18,13 @@ pub use stream::*;
 
 pub type Array<'a> = Vec<Object<'a>>;
 
-#[derive(PartialEq, Debug, Clone, Default)]
+#[derive(PartialEq, Debug, Clone, Default, Educe)]
+#[educe(Deref, DerefMut)]
 pub struct Dictionary<'a>(HashMap<Name<'a>, Object<'a>>);
-
-impl<'a> std::ops::DerefMut for Dictionary<'a> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
 
 impl<'a> FromIterator<(Name<'a>, Object<'a>)> for Dictionary<'a> {
     fn from_iter<T: IntoIterator<Item = (Name<'a>, Object<'a>)>>(iter: T) -> Self {
         Self(iter.into_iter().collect())
-    }
-}
-
-impl<'a> std::ops::Deref for Dictionary<'a> {
-    type Target = HashMap<Name<'a>, Object<'a>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
     }
 }
 

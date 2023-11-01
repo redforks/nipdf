@@ -1,4 +1,5 @@
 use ahash::{HashMap, HashMapExt};
+use educe::Educe;
 use log::error;
 use nipdf_macro::{pdf_object, TryFromNameObject};
 use nom::Finish;
@@ -18,7 +19,7 @@ pub use self::paint::{RenderOption, RenderOptionBuilder};
 
 use crate::graphics::trans::FormToUserSpace;
 use crate::graphics::{ColorArgs, ColorSpaceArgs};
-use std::{iter::once, ops::Deref};
+use std::iter::once;
 
 mod paint;
 
@@ -182,6 +183,8 @@ pub trait FormXObjectDictTrait {
 }
 
 /// Wrap type to impl TryFrom<> trait
+#[derive(Educe)]
+#[educe(Deref)]
 pub struct ColorSpaceResources<'a>(HashMap<String, ColorSpaceArgs<'a>>);
 
 impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceResources<'a> {
@@ -202,13 +205,6 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceResources<'a> {
                 Err(ObjectValueError::GraphicsOperationSchemaError)
             }
         }
-    }
-}
-
-impl<'a> Deref for ColorSpaceResources<'a> {
-    type Target = HashMap<String, ColorSpaceArgs<'a>>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
     }
 }
 
