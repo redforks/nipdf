@@ -204,17 +204,22 @@ fn build_linear_gradient(d: &AxialShadingDict) -> AnyResult<Shader<'static>> {
     .unwrap())
 }
 
-pub fn build_shading(d: &ShadingDict) -> AnyResult<Shader<'static>> {
+pub enum Shading {
+    Shader(Shader<'static>),
+    Radial,
+}
+
+pub fn build_shading(d: &ShadingDict) -> AnyResult<Shading> {
     let axial = d.axial()?;
     assert_eq!(
         axial.extend()?,
         Extend::new(true, true),
         "Extend not supported"
     );
-    match d.shading_type()? {
-        ShadingType::Axial => build_linear_gradient(&d.axial()?),
+    Ok(match d.shading_type()? {
+        ShadingType::Axial => Shading::Shader(build_linear_gradient(&d.axial()?)?),
         t => todo!("{:?}", t),
-    }
+    })
 }
 
 #[cfg(test)]

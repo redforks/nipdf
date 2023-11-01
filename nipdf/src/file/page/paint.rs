@@ -5,9 +5,11 @@ use std::{
 use crate::{
     file::{ObjectResolver, XObjectDict},
     graphics::{
-        color_space::ColorSpace, parse_operations, shading::build_shading, ColorArgs,
-        ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, NameOrDictByRef, NameOrStream,
-        PatternType, Point, RenderingIntent, ShadingPatternDict, TextRenderingMode,
+        color_space::ColorSpace,
+        parse_operations,
+        shading::{build_shading, Shading},
+        ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, NameOrDictByRef,
+        NameOrStream, PatternType, Point, RenderingIntent, ShadingPatternDict, TextRenderingMode,
         TilingPaintType, TilingPatternDict,
     },
     object::{Object, PdfObject, Stream, TextStringOrNumber},
@@ -1004,7 +1006,10 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             "TODO: support Background of shading, paint background before shading"
         );
 
-        let shader = build_shading(&shading)?;
+        let shader = match build_shading(&shading)? {
+            Shading::Shader(shader) => shader,
+            _ => todo!(),
+        };
         self.stack.last_mut().unwrap().fill_paint = PaintCreator::Gradient(Paint {
             shader,
             ..Default::default()
