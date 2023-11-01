@@ -968,7 +968,8 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let shading = self.resources.shading()?;
         let shading = shading.get(&name.0).unwrap();
         match build_shading(&shading)? {
-            Shading::Radial(_) => todo!(),
+            Some(Shading::Radial(_)) => todo!(),
+            None => Ok(()),
             s => todo!("Paint shading: {:?}", std::mem::discriminant(&s)),
         }
     }
@@ -1012,7 +1013,8 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         );
 
         let shader = match build_shading(&shading)? {
-            Shading::Shader(shader) => shader,
+            Some(Shading::Shader(shader)) => shader,
+            None => return Ok(()),
             _ => todo!(),
         };
         self.stack.last_mut().unwrap().fill_paint = PaintCreator::Gradient(Paint {

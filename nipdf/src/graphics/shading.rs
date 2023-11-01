@@ -189,20 +189,20 @@ fn build_linear_gradient_stops(
     }
 }
 
-fn build_linear_gradient(d: &AxialShadingDict) -> AnyResult<Shader<'static>> {
+fn build_linear_gradient(d: &AxialShadingDict) -> AnyResult<Option<Shader<'static>>> {
     assert_eq!(d.extend()?, Extend::new(true, true), "Extend not supported");
 
     let coord = d.coords()?;
     let start = coord.left_lower();
     let end = coord.right_upper();
     let stops = build_linear_gradient_stops(d.domain()?, d.function()?)?;
-    Ok(tiny_skia::LinearGradient::new(
+    Ok(Some(tiny_skia::LinearGradient::new(
         start.into(),
         end.into(),
         stops,
         tiny_skia::SpreadMode::Pad,
         Transform::identity(),
-    )
+    ))
     .unwrap())
 }
 
@@ -219,28 +219,29 @@ pub enum Shading {
     Radial(Radial),
 }
 
-pub fn build_shading(d: &ShadingDict) -> AnyResult<Shading> {
+/// Return None if shading is not need to be rendered, such as Axial start point == end point.
+pub fn build_shading(d: &ShadingDict) -> AnyResult<Option<Shading>> {
     Ok(match d.shading_type()? {
-        ShadingType::Axial => Shading::Shader(build_linear_gradient(&d.axial()?)?),
-        ShadingType::Radial => Shading::Radial(build_radial(&d.radial()?)?),
+        ShadingType::Axial => build_linear_gradient(&d.axial()?)?.map(Shading::Shader),
+        ShadingType::Radial => build_radial(&d.radial()?)?.map(Shading::Radial),
         t => todo!("{:?}", t),
     })
 }
 
-fn build_radial(d: &RadialShadingDict) -> AnyResult<Radial> {
+fn build_radial(d: &RadialShadingDict) -> AnyResult<Option<Radial>> {
     let coords = d.coords()?;
     let start = coords.start;
     let end = coords.end;
     let function = d.function()?.pop().unwrap().func()?;
     let domain = d.domain()?;
     let extend = d.extend()?;
-    Ok(Radial {
+    Ok(Some(Radial {
         start,
         end,
         function,
         domain,
         extend,
-    })
+    }))
 }
 
 #[cfg(test)]
