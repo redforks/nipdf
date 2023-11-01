@@ -13,6 +13,8 @@ use crate::{
     object::{Object, ObjectValueError},
 };
 
+use super::Point;
+
 #[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromIntObject)]
 pub enum ShadingType {
     Function = 1,
@@ -67,15 +69,14 @@ pub trait AxialShadingDictTrait {
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct RadialCircle {
-    x: f32,
-    y: f32,
+    point: Point,
     r: f32,
 }
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct RadialCoords {
-    start: RadialCircle,
-    end: RadialCircle,
+    pub start: RadialCircle,
+    pub end: RadialCircle,
 }
 
 impl<'a> TryFrom<&Object<'a>> for RadialCoords {
@@ -88,13 +89,17 @@ impl<'a> TryFrom<&Object<'a>> for RadialCoords {
         }
         Ok(Self {
             start: RadialCircle {
-                x: arr[0].as_number()?,
-                y: arr[1].as_number()?,
+                point: Point {
+                    x: arr[0].as_number()?,
+                    y: arr[1].as_number()?,
+                },
                 r: arr[2].as_number()?,
             },
             end: RadialCircle {
-                x: arr[3].as_number()?,
-                y: arr[4].as_number()?,
+                point: Point {
+                    x: arr[3].as_number()?,
+                    y: arr[4].as_number()?,
+                },
                 r: arr[5].as_number()?,
             },
         })

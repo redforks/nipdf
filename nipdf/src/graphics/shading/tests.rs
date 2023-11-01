@@ -20,13 +20,11 @@ fn radial_coords_try_from() {
         coords,
         RadialCoords {
             start: RadialCircle {
-                x: 1.,
-                y: 2.,
+                point: Point { x: 1., y: 2. },
                 r: 3.
             },
             end: RadialCircle {
-                x: 4.,
-                y: 5.,
+                point: Point { x: 4., y: 5. },
                 r: 6.
             },
         }
