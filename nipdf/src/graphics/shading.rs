@@ -204,7 +204,7 @@ fn build_linear_gradient(d: &AxialShadingDict) -> AnyResult<Shader<'static>> {
     .unwrap())
 }
 
-pub fn build_pattern(d: &ShadingDict) -> AnyResult<Shader<'static>> {
+pub fn build_shading(d: &ShadingDict) -> AnyResult<Shader<'static>> {
     let axial = d.axial()?;
     assert_eq!(
         axial.extend()?,
