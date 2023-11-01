@@ -421,6 +421,43 @@ impl<'a> ObjectResolver<'a> {
         }
     }
 
+    /// Resolve pdf_object from container, if its end value is dictionary, return with one element vec.
+    /// If its end value is array, return all elements in array.
+    /// If value not exist, return empty vector.
+    pub fn resolve_container_one_or_more_pdf_object<
+        'b: 'a,
+        'd: 'c,
+        'c,
+        C: DataContainer<'a>,
+        T: PdfObject<'a, 'c>,
+    >(
+        &'d self,
+        c: &'c C,
+        id: &str,
+    ) -> Result<Vec<T>, ObjectValueError> {
+        let obj = self.opt_resolve_container_value(c, id)?;
+        obj.map_or_else(
+            || Ok(vec![]),
+            |obj| match obj {
+                Object::Dictionary(d) => Ok(vec![T::new(None, d, self)?]),
+                Object::Stream(s) => Ok(vec![T::new(None, s.as_dict(), self)?]),
+                Object::Array(arr) => {
+                    let mut res = Vec::with_capacity(arr.len());
+                    for obj in arr {
+                        let dict = self.resolve_reference(obj)?;
+                        res.push(T::new(
+                            obj.as_ref().ok().map(|id| id.id().id()),
+                            dict.as_dict()?,
+                            self,
+                        )?);
+                    }
+                    Ok(res)
+                }
+                _ => Err(ObjectValueError::UnexpectedType),
+            },
+        )
+    }
+
     /// Resolve root pdf_objects from data container `c` with key `k`, if value is reference,
     /// resolve it recursively. Return empty vector if object is not found.
     /// The raw value should be an array of references.

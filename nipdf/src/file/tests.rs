@@ -18,7 +18,7 @@ fn xref_table_resolve_object_buf() {
     );
     assert_eq!(
         xref_table.resolve_object_buf(buf, to_non_zero_u32(2)),
-        Some(Either::Left( &b"4567890"[..]))
+        Some(Either::Left(&b"4567890"[..]))
     );
     assert_eq!(xref_table.resolve_object_buf(buf, to_non_zero_u32(3)), None);
 }
@@ -47,6 +47,52 @@ fn object_resolver() {
         Ok(&Object::Integer(5))
     );
     assert_eq!(resolver.resolve(to_non_zero_u32(1)), Ok(&Object::Null));
+}
+
+#[pdf_object(())]
+trait FooDictTrait {}
+
+#[test]
+fn resolve_container_one_or_more_pdf_object() -> AnyResult<()> {
+    // field not exist
+    let buf = br#"1 0 obj
+<<>>
+endobj
+"#;
+    let xref = XRefTable::from_buf(buf);
+    let resolver = ObjectResolver::new(buf, &xref);
+    let d = resolver
+        .resolve(NonZeroU32::new(1_u32).unwrap())?
+        .as_dict()?;
+    assert!(resolver.resolve_container_one_or_more_pdf_object::<_, FooDict>(d, "foo")?.is_empty());
+
+    // field is dictionary
+    let buf = br#"1 0 obj
+<</foo 2 0 R>>
+endobj
+2 0 obj<<>>endobj
+"#;
+    let xref = XRefTable::from_buf(buf);
+    let resolver = ObjectResolver::new(buf, &xref);
+    let d = resolver
+        .resolve(NonZeroU32::new(1_u32).unwrap())?
+        .as_dict()?;
+    assert_eq!(resolver.resolve_container_one_or_more_pdf_object::<_, FooDict>(d, "foo")?.len(), 1);
+
+    // field is array
+    let buf = br#"1 0 obj
+<</foo [<<>> 3 0 R]>>
+endobj
+3 0 obj<<>>endobj
+"#;
+    let xref = XRefTable::from_buf(buf);
+    let resolver = ObjectResolver::new(buf, &xref);
+    let d = resolver
+        .resolve(NonZeroU32::new(1_u32).unwrap())?
+        .as_dict()?;
+    assert_eq!(resolver.resolve_container_one_or_more_pdf_object::<_, FooDict>(d, "foo")?.len(), 2);
+
+    Ok(())
 }
 
 #[test]
