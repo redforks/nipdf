@@ -82,8 +82,16 @@ impl Domains {
 
 #[cfg_attr(test, automock)]
 pub trait Function {
-    fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>>;
+    fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>> {
+        let args = self.sigunature().clip_args(args);
+        let r = self.inner_call(args)?;
+        Ok(self.sigunature().clip_returns(r))
+    }
+
     fn sigunature(&self) -> &Signature;
+
+    /// Called by `self.call()`, args and return value are clipped by signature.
+    fn inner_call(&self, args: Vec<f32>) -> AnyResult<Vec<f32>>;
 }
 
 impl Function for Box<dyn Function> {
@@ -93,6 +101,10 @@ impl Function for Box<dyn Function> {
 
     fn sigunature(&self) -> &Signature {
         self.as_ref().sigunature()
+    }
+
+    fn inner_call(&self, args: Vec<f32>) -> AnyResult<Vec<f32>> {
+        unreachable!()
     }
 }
 
@@ -240,8 +252,7 @@ pub struct SampledFunction {
 }
 
 impl Function for SampledFunction {
-    fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>> {
-        let args = self.signature.clip_args(args);
+    fn inner_call(&self, args: Vec<f32>) -> AnyResult<Vec<f32>> {
         let mut idx = 0;
         for (i, arg) in args.iter().enumerate() {
             let domain = &self.signature.domain.0[i];
@@ -329,8 +340,7 @@ pub struct ExponentialInterpolationFunction {
 }
 
 impl Function for ExponentialInterpolationFunction {
-    fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>> {
-        let args = self.signature.clip_args(args);
+    fn inner_call(&self, args: Vec<f32>) -> AnyResult<Vec<f32>> {
         let x = args[0];
         let c0 = &self.c0;
         let c1 = &self.c1;
@@ -439,7 +449,7 @@ impl StitchingFunction {
 }
 
 impl Function for StitchingFunction {
-    fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>> {
+    fn inner_call(&self, args: Vec<f32>) -> AnyResult<Vec<f32>> {
         assert_eq!(args.len(), 1);
 
         let x = args[0];
