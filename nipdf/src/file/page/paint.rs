@@ -40,9 +40,9 @@ use crate::graphics::trans::{
     UserToDeviceSpace,
 };
 use tiny_skia::{
-    Color as SkiaColor, FillRule, FilterQuality, Mask, MaskType, Paint,
-    Path as SkiaPath, PathBuilder, Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect,
-    Stroke, StrokeDash, Transform,
+    Color as SkiaColor, FillRule, FilterQuality, Mask, MaskType, Paint, Path as SkiaPath,
+    PathBuilder, Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect, Stroke, StrokeDash,
+    Transform,
 };
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -500,12 +500,12 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let r = self.canvas;
         // crop the canvas if crop is specified
         if let Some(rect) = self.crop {
-            use std::sync::atomic::{AtomicU32, Ordering};
-            static mut IDX: std::sync::atomic::AtomicU32 = AtomicU32::new(0);
-            r.save_png(format!("/tmp/before-crop-{:?}.png", unsafe {
-                IDX.fetch_add(1, Ordering::Relaxed)
-            }))
-            .unwrap();
+            // use std::sync::atomic::{AtomicU32, Ordering};
+            // static mut IDX: std::sync::atomic::AtomicU32 = AtomicU32::new(0);
+            // r.save_png(format!("/tmp/before-crop-{:?}.png", unsafe {
+            //     IDX.fetch_add(1, Ordering::Relaxed)
+            // }))
+            // .unwrap();
 
             let state = self.stack.last().unwrap();
             let transform = to_device_space(
@@ -918,14 +918,14 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             .into_iter()
             .for_each(|op| render.exec(op));
 
-        use std::sync::atomic::{AtomicU32, Ordering};
-        static mut IDX: std::sync::atomic::AtomicU32 = AtomicU32::new(0);
+        // use std::sync::atomic::{AtomicU32, Ordering};
+        // static mut IDX: std::sync::atomic::AtomicU32 = AtomicU32::new(0);
         let image = render.into();
-        image
-            .save_png(format!("/tmp/form-{:?}.png", unsafe {
-                IDX.fetch_add(1, Ordering::Relaxed)
-            }))
-            .unwrap();
+        // image
+        //     .save_png(format!("/tmp/form-{:?}.png", unsafe {
+        //         IDX.fetch_add(1, Ordering::Relaxed)
+        //     }))
+        //     .unwrap();
 
         // Calc b_box top-left point in device space
         let user_to_device = to_device_space(
