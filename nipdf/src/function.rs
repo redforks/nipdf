@@ -83,11 +83,16 @@ impl Domains {
 #[cfg_attr(test, automock)]
 pub trait Function {
     fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>>;
+    fn sigunature(&self) -> &Signature;
 }
 
 impl Function for Box<dyn Function> {
     fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>> {
         self.as_ref().call(args)
+    }
+
+    fn sigunature(&self) -> &Signature {
+        self.as_ref().sigunature()
     }
 }
 
@@ -151,7 +156,7 @@ impl<'a, 'b> FunctionDict<'a, 'b> {
 
 /// Function signature, clip input args and returns.
 #[derive(Debug, PartialEq, Clone)]
-struct Signature {
+pub struct Signature {
     domain: Domains,
     range: Option<Domains>,
 }
@@ -257,6 +262,10 @@ impl Function for SampledFunction {
         }
         Ok(self.signature.clip_returns(r))
     }
+
+    fn sigunature(&self) -> &Signature {
+        &self.signature
+    }
 }
 
 impl<'a, 'b> SampledFunctionDict<'a, 'b> {
@@ -330,6 +339,10 @@ impl Function for ExponentialInterpolationFunction {
             .map(|i| c0[i] + x.powf(n) * (c1[i] - c0[i]))
             .collect();
         Ok(self.signature.clip_returns(r))
+    }
+
+    fn sigunature(&self) -> &Signature {
+        &self.signature
     }
 }
 
@@ -437,6 +450,10 @@ impl Function for StitchingFunction {
         let f = &self.functions[function_idx];
         let r = f.call(&[x])?;
         Ok(r)
+    }
+
+    fn sigunature(&self) -> &Signature {
+        todo!()
     }
 }
 
