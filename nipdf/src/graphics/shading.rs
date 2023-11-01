@@ -210,14 +210,13 @@ fn build_linear_gradient(d: &AxialShadingDict) -> AnyResult<Option<Shader<'stati
     let start = coord.left_lower();
     let end = coord.right_upper();
     let stops = build_linear_gradient_stops(d.domain()?, d.function()?)?;
-    Ok(Some(tiny_skia::LinearGradient::new(
+    Ok(tiny_skia::LinearGradient::new(
         start.into(),
         end.into(),
         stops,
         tiny_skia::SpreadMode::Pad,
         Transform::identity(),
     ))
-    .unwrap())
 }
 
 #[derive(Educe)]

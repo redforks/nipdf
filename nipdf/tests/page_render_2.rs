@@ -47,3 +47,10 @@ fn pattern_color() {
 fn form() {
     assert_ron_snapshot!(&decode_file_page("sample_files/xobject/form.pdf", 0).unwrap());
 }
+
+#[test]
+fn radial_shade() {
+    assert_ron_snapshot!(
+        &decode_file_page("sample_files/bizarre/pdfReferenceUpdated.pdf", 809).unwrap()
+    )
+}
