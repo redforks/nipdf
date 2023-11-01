@@ -55,8 +55,9 @@ pub trait AxialShadingDictTrait {
     #[default_fn(default_domain)]
     fn domain(&self) -> Domain;
 
+    #[one_or_more]
     #[nested]
-    fn function(&self) -> FunctionDict<'a, 'b>;
+    fn function(&self) -> Vec<FunctionDict<'a, 'b>>;
 
     #[try_from]
     #[or_default]
@@ -109,8 +110,9 @@ pub trait RadialShadingDictTrait {
     #[default_fn(default_domain)]
     fn domain(&self) -> Domain;
 
+    #[one_or_more]
     #[nested]
-    fn function(&self) -> FunctionDict<'a, 'b>;
+    fn function(&self) -> Vec<FunctionDict<'a, 'b>>;
 
     #[try_from]
     #[or_default]
@@ -141,7 +143,13 @@ pub trait ShadingDictTrait {
     fn radial(&self) -> RadialShadingDict<'a, 'b>;
 }
 
-fn build_linear_gradient_stops(domain: Domain, f: FunctionDict) -> AnyResult<Vec<GradientStop>> {
+fn build_linear_gradient_stops(
+    domain: Domain,
+    mut f: Vec<FunctionDict>,
+) -> AnyResult<Vec<GradientStop>> {
+    assert!(f.len() == 1, "todo: support functions");
+
+    let f = f.pop().unwrap();
     fn create_stop<F: Function>(f: &F, x: f32) -> AnyResult<GradientStop> {
         let rv = f.call(&[x])?;
         // TODO: use current color space to check array length, and convert to skia color
