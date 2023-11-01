@@ -1,4 +1,5 @@
 use anyhow::Result as AnyResult;
+use educe::Educe;
 use nipdf_macro::{pdf_object, TryFromIntObject};
 use tiny_skia::{GradientStop, Shader, Transform};
 
@@ -206,9 +207,13 @@ fn build_linear_gradient(d: &AxialShadingDict) -> AnyResult<Option<Shader<'stati
     .unwrap())
 }
 
+#[derive(Educe)]
+#[educe(PartialEq, Debug)]
 pub struct Radial {
     start: RadialCircle,
     end: RadialCircle,
+    #[educe(PartialEq(ignore))]
+    #[educe(Debug(ignore))]
     function: Box<dyn Function>,
     domain: Domain,
     extend: Extend,
@@ -229,9 +234,11 @@ pub fn build_shading(d: &ShadingDict) -> AnyResult<Option<Shading>> {
 }
 
 fn build_radial(d: &RadialShadingDict) -> AnyResult<Option<Radial>> {
-    let coords = d.coords()?;
-    let start = coords.start;
-    let end = coords.end;
+    let RadialCoords { start, end } = d.coords()?;
+    if (start.r == 0.0 && end.r == 0.0) || start.r < 0. || end.r < 0. || end.r < start.r {
+        return Ok(None);
+    }
+
     let function = d.function()?.pop().unwrap().func()?;
     let domain = d.domain()?;
     let extend = d.extend()?;
