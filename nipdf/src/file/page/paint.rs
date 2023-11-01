@@ -656,6 +656,9 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             Operation::SetStrokeRGB(color) => self
                 .current_mut()
                 .set_stroke_color(color_space::DeviceRGB().to_skia_color(&color)),
+            Operation::SetStrokeColorOrWithPattern(name) => {
+                self.set_stroke_color_or_pattern(&name).unwrap()
+            }
             Operation::SetFillColor(args) => self.current_mut().set_fill_color_args(args),
             Operation::SetFillGray(color) => self
                 .current_mut()
@@ -966,6 +969,11 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             None => Ok(()),
             s => todo!("Paint shading: {:?}", std::mem::discriminant(&s)),
         }
+    }
+
+    fn set_stroke_color_or_pattern(&self, name: &ColorArgsOrName) -> AnyResult<()> {
+        error!("todo");
+        Ok(())
     }
 
     fn set_fill_color_or_pattern(&mut self, color_or_name: &ColorArgsOrName) -> AnyResult<()> {
