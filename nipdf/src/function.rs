@@ -86,12 +86,12 @@ pub type FunctionValue = SmallVec<[f32; 4]>;
 #[cfg_attr(test, automock)]
 pub trait Function {
     fn call(&self, args: &[f32]) -> AnyResult<FunctionValue> {
-        let args = self.sigunature().clip_args(args);
+        let args = self.signature().clip_args(args);
         let r = self.inner_call(args)?;
-        Ok(self.sigunature().clip_returns(r))
+        Ok(self.signature().clip_returns(r))
     }
 
-    fn sigunature(&self) -> &Signature;
+    fn signature(&self) -> &Signature;
 
     /// Called by `self.call()`, args and return value are clipped by signature.
     fn inner_call(&self, args: FunctionValue) -> AnyResult<FunctionValue>;
@@ -102,12 +102,57 @@ impl Function for Box<dyn Function> {
         self.as_ref().call(args)
     }
 
-    fn sigunature(&self) -> &Signature {
-        self.as_ref().sigunature()
+    fn signature(&self) -> &Signature {
+        self.as_ref().signature()
     }
 
     fn inner_call(&self, _args: SmallVec<[f32; 4]>) -> AnyResult<FunctionValue> {
         unreachable!()
+    }
+}
+
+/// Combine functions to create a new function. These functions called with
+/// the same arguments as the original function, and returns only one value.
+/// The end result gather the results of the component functions into an vec.
+pub struct NFunc(Vec<Box<dyn Function>>, Signature);
+
+impl NFunc {
+    /// Returns error if any of the functions has more than one return value.
+    pub fn new(functions: Vec<Box<dyn Function>>) -> AnyResult<Self> {
+        if functions.is_empty() {
+            anyhow::bail!("at least one function is required")
+        }
+
+        for f in &functions {
+            if f.signature().n_returns().unwrap_or(1) != 1 {
+                return Err(ObjectValueError::UnexpectedType.into());
+            }
+        }
+        let signature = Signature {
+            // assume functions in list have same domain
+            domain: functions[0].signature().domain.clone(),
+            // each function in list clips its return value, so NFunc no need to clip return value.
+            range: None,
+        };
+        Ok(Self(functions, signature))
+    }
+}
+
+impl Function for NFunc {
+    fn call(&self, args: &[f32]) -> AnyResult<FunctionValue> {
+        let mut r = FunctionValue::new();
+        for f in &self.0 {
+            r.extend_from_slice(&f.call(args)?);
+        }
+        Ok(r)
+    }
+
+    fn inner_call(&self, _args: FunctionValue) -> AnyResult<FunctionValue> {
+        unreachable!()
+    }
+
+    fn signature(&self) -> &Signature {
+        &self.1
     }
 }
 
@@ -177,6 +222,10 @@ pub struct Signature {
 }
 
 impl Signature {
+    pub fn new(domain: Domains, range: Option<Domains>) -> Self {
+        Self { domain, range }
+    }
+
     pub fn n_args(&self) -> usize {
         self.domain.n()
     }
@@ -277,7 +326,7 @@ impl Function for SampledFunction {
         Ok(self.signature.clip_returns(r))
     }
 
-    fn sigunature(&self) -> &Signature {
+    fn signature(&self) -> &Signature {
         &self.signature
     }
 }
@@ -354,7 +403,7 @@ impl Function for ExponentialInterpolationFunction {
         Ok(self.signature.clip_returns(r))
     }
 
-    fn sigunature(&self) -> &Signature {
+    fn signature(&self) -> &Signature {
         &self.signature
     }
 }
@@ -472,8 +521,8 @@ impl Function for StitchingFunction {
         Ok(r)
     }
 
-    fn sigunature(&self) -> &Signature {
-        return &self.signature;
+    fn signature(&self) -> &Signature {
+        &self.signature
     }
 }
 

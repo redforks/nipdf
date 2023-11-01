@@ -4,6 +4,7 @@ use crate::{
     object::PdfObject,
     parser::parse_dict,
 };
+use mockall::predicate::eq;
 use smallvec::smallvec;
 use test_case::test_case;
 
@@ -141,4 +142,37 @@ fn stitching_function() {
         f.call(&[0f32]).unwrap(),
         smallvec![0.2_f32, 0.4_f32] as FunctionValue
     );
+}
+
+#[test]
+fn test_n_func() {
+    assert!(NFunc::new(vec![]).is_err(), "check empty functions");
+
+    let mut f1 = MockFunction::new();
+    f1.expect_signature().return_const(Signature::new(
+        Domains(vec![Domain::new(0.0, 1.0), Domain::new(2., 3.)]),
+        Some(Domains(vec![Domain::new(0.0, 1.0)])),
+    ));
+    f1.expect_call()
+        .with(eq(&[0.5_f32, 3.0_f32][..]))
+        .returning(|_| Ok(FunctionValue::from_slice(&[0.6_f32])));
+    let mut f2 = MockFunction::new();
+    f2.expect_signature().return_const(Signature::new(
+        Domains(vec![Domain::new(0.0, 1.0), Domain::new(2., 3.)]),
+        None,
+    ));
+    f2.expect_call()
+        .with(eq(&[0.5_f32, 3.0_f32][..]))
+        .returning(|_| Ok(FunctionValue::from_slice(&[0.8_f32])));
+    let f = NFunc::new(vec![Box::new(f1), Box::new(f2)]).unwrap();
+    assert_eq!(
+        f.signature().domain,
+        Domains(vec![Domain::new(0.0, 1.0), Domain::new(2., 3.)])
+    );
+    assert!(f.signature().range.is_none());
+
+    assert_eq!(
+        f.call(&[0.5_f32, 3.0_f32][..]).unwrap(),
+        FunctionValue::from_slice(&[0.6_f32, 0.8_f32])
+    )
 }
