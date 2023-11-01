@@ -311,17 +311,11 @@ impl State {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Educe)]
+#[educe(Default)]
 struct Path {
+    #[educe(Default(expression = "Either::Left(PathBuilder::new())"))]
     path: Either<PathBuilder, SkiaPath>,
-}
-
-impl Default for Path {
-    fn default() -> Self {
-        Self {
-            path: Either::Left(PathBuilder::new()),
-        }
-    }
 }
 
 impl Path {
