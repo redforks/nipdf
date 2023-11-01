@@ -22,7 +22,6 @@ use crate::{
 use anyhow::{anyhow, Ok, Result as AnyResult};
 use cff_parser::{File as CffFile, Font as CffFont};
 use educe::Educe;
-use euclid::Point2D;
 use font_kit::loaders::freetype::Font as FontKitFont;
 use fontdb::{Database, Family, Query, Source, Weight};
 use image::RgbaImage;
@@ -282,6 +281,12 @@ impl State {
             Transform::identity()
         };
         mask.intersect_path(path, rule, true, transform);
+        // use std::sync::atomic::{AtomicU32, Ordering};
+        // static mut IDX: std::sync::atomic::AtomicU32 = AtomicU32::new(0);
+        // mask.save_png(format!("/tmp/mask-{:?}.png", unsafe {
+        //     IDX.fetch_add(1, Ordering::Relaxed)
+        // }))
+        // .unwrap();
         self.mask = Some(mask);
     }
 
@@ -969,23 +974,86 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let Point { x: x1, y: y1 } = radial.end.point;
         let r0 = radial.start.r;
         let r1 = radial.end.r;
-        let ctm = self.current_mut().ctm;
-        let ctm = to_device_space(self.height as f32, self.zoom, &ctm).into_skia();
+        let state = self.stack.last().unwrap();
+        let ctm = to_device_space(self.height as f32, self.zoom, &state.ctm);
+        let mask = state.mask.as_ref();
         let mut paint = Paint::default();
         let stroke = Stroke::default();
-        for t in 0..=50 {
-            let t = t as f32 / 50.0;
+
+        let circle = |t: f32| {
             let s = (t - t0) / (t1 - t0);
             let x = x0 + s * (x1 - x0);
             let y = y0 + s * (y1 - y0);
             let r = r0 + s * (r1 - r0);
+            (x, y, r)
+        };
+
+        // calc how many steps to paint: get start circle point, and end circle point, calc distance
+        // between them, then calc how many steps to paint
+        let (cx1, cy1, cr1) = circle(0.0);
+        let (cx2, cy2, cr2) = circle(1.0);
+        let (cx1, cy1) = ctm.transform_point((cx1, cy1).into()).into();
+        let (cx2, cy2) = ctm.transform_point((cx2, cy2).into()).into();
+        let d = ((cx1 - cx2).powi(2) + (cy1 - cy2).powi(2)).sqrt();
+        let steps = if d < 1.0 {
+            (cr1 + cr2) * (ctm.m11.powi(2) + ctm.m22.powi(2)).sqrt() * 2.
+        } else {
+            d / 2.0
+        }
+        .ceil() as usize;
+        let steps = steps.max(3);
+
+        let ctm = ctm.into_skia();
+        if radial.extend.end() {
+            let c = radial.function.call(&[1.0])?;
+            let c = radial.color_space.to_rgba(c.as_slice());
+            paint.set_color(SkiaColor::from_rgba(c[0], c[1], c[2], c[3]).unwrap());
+            self.canvas.fill_rect(
+                Rect::from_xywh(
+                    0.0,
+                    0.0,
+                    self.device_width() as f32,
+                    self.device_height() as f32,
+                )
+                .unwrap(),
+                &paint,
+                Transform::identity(),
+                mask,
+            );
+        }
+
+        if radial.extend.begin() && radial.start.r > 0.0 {
+            let Point { x, y } = radial.start.point;
+            let r = radial.start.r;
+            let c = radial.function.call(&[0.0])?;
+            let c = radial.color_space.to_rgba(c.as_slice());
+            paint.set_color(SkiaColor::from_rgba(c[0], c[1], c[2], c[3]).unwrap());
+            let path = PathBuilder::from_circle(x, y, r).unwrap();
+            let path = path.transform(ctm).unwrap();
+            self.canvas.fill_path(
+                &path,
+                &paint,
+                FillRule::Winding,
+                Transform::identity(),
+                mask,
+            );
+        }
+
+        for t in 0..=steps {
+            let t = t as f32 / steps as f32;
+            let (x, y, r) = circle(t);
             let c = radial.function.call(&[t][..])?;
             let c = radial.color_space.to_rgba(c.as_slice());
 
-            let path = PathBuilder::from_circle(x, y, r).unwrap();
+            let Some(path) = PathBuilder::from_circle(x, y, r) else {
+                continue;
+            };
+            let path = path.transform(ctm).unwrap();
             paint.set_color(SkiaColor::from_rgba(c[0], c[1], c[2], c[3]).unwrap());
-            self.canvas.stroke_path(&path, &paint, &stroke, ctm, None);
+            self.canvas
+                .stroke_path(&path, &paint, &stroke, Transform::identity(), mask);
         }
+
         Ok(())
     }
 

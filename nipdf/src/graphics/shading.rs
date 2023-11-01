@@ -34,6 +34,14 @@ impl Extend {
     pub fn new(begin: bool, end: bool) -> Self {
         Self(begin, end)
     }
+
+    pub fn begin(&self) -> bool {
+        self.0
+    }
+
+    pub fn end(&self) -> bool {
+        self.1
+    }
 }
 
 impl<'a> TryFrom<&Object<'a>> for Extend {
