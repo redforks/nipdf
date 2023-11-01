@@ -4,6 +4,7 @@ use crate::{
     object::PdfObject,
     parser::parse_dict,
 };
+use smallvec::smallvec;
 use test_case::test_case;
 
 #[test]
@@ -12,8 +13,14 @@ fn test_clip_args() {
         domain: Domains(vec![Domain::new(0.0, 1.0), Domain::new(-2.0, 2.0)]),
         range: None,
     };
-    assert_eq!(signature.clip_args(&[0.5, 0.0]), vec![0.5, 0.0]);
-    assert_eq!(signature.clip_args(&[-1.0, 100.0]), vec![0.0, 2.0]);
+    assert_eq!(
+        signature.clip_args(&[0.5, 0.0]),
+        smallvec![0.5_f32, 0.0_f32] as SmallVec<[f32; 4]>
+    );
+    assert_eq!(
+        signature.clip_args(&[-1.0, 100.0]),
+        smallvec![0.0_f32, 2.0_f32] as SmallVec<[f32; 4]>
+    );
 }
 
 #[test]
@@ -23,17 +30,26 @@ fn test_clip_returns() {
         range: None,
     };
     assert_eq!(
-        signature.clip_returns(vec![100.0, -100.0]),
-        vec![100.0, -100.0]
+        signature.clip_returns(smallvec![100.0, -100.0]),
+        smallvec![100.0_f32, -100.0_f32] as FunctionValue
     );
-    assert_eq!(signature.clip_returns(vec![]), vec![]);
+    assert_eq!(
+        signature.clip_returns(FunctionValue::new()),
+        FunctionValue::new()
+    );
 
     let signature = Signature {
         domain: Domains(vec![]),
         range: Some(Domains(vec![Domain::new(0.0, 1.0), Domain::new(-2.0, 2.0)])),
     };
-    assert_eq!(signature.clip_returns(vec![0.5, 0.0]), vec![0.5, 0.0]);
-    assert_eq!(signature.clip_returns(vec![-1.0, 100.0]), vec![0.0, 2.0]);
+    assert_eq!(
+        signature.clip_returns(smallvec![0.5, 0.0]),
+        FunctionValue::from_slice(&[0.5, 0.0]),
+    );
+    assert_eq!(
+        signature.clip_returns(smallvec![-1.0, 100.0]),
+        FunctionValue::from_slice(&[0.0, 2.0]),
+    );
 }
 
 #[test]
@@ -45,9 +61,18 @@ fn test_exponential_function() {
     let resolver = ObjectResolver::empty(&xref);
     let f = ExponentialInterpolationFunctionDict::new(None, &d, &resolver).unwrap();
     let f = f.func().unwrap();
-    assert_eq!(f.call(&[0.0]).unwrap(), vec![0.1, 0.2]);
-    assert_eq!(f.call(&[1.0]).unwrap(), vec![0.2, 0.4]);
-    assert_eq!(f.call(&[0.5]).unwrap(), vec![0.15, 0.3]);
+    assert_eq!(
+        f.call(&[0.0]).unwrap(),
+        smallvec![0.1_f32, 0.2_f32] as FunctionValue
+    );
+    assert_eq!(
+        f.call(&[1.0]).unwrap(),
+        smallvec![0.2_f32, 0.4_f32] as FunctionValue
+    );
+    assert_eq!(
+        f.call(&[0.5]).unwrap(),
+        smallvec![0.15_f32, 0.3_f32] as FunctionValue
+    );
 }
 
 #[test]
@@ -112,5 +137,8 @@ fn stitching_function() {
     let resolver = ObjectResolver::empty(&xref);
     let f = StitchingFunctionDict::new(None, &d, &resolver).unwrap();
     let f = f.func().unwrap();
-    assert_eq!(f.call(&[0f32]).unwrap(), vec![0.2, 0.4]);
+    assert_eq!(
+        f.call(&[0f32]).unwrap(),
+        smallvec![0.2_f32, 0.4_f32] as FunctionValue
+    );
 }

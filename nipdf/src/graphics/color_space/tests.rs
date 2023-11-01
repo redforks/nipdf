@@ -1,11 +1,12 @@
 use std::num::NonZeroU32;
 
-use crate::{file::XRefTable, function::MockFunction};
+use crate::{file::XRefTable, function::{MockFunction, FunctionValue}};
 use test_case::test_case;
 
 use super::*;
 use assert_approx_eq::assert_approx_eq;
 use mockall::predicate::*;
+use smallvec::smallvec;
 
 #[test]
 fn device_gray_to_rgb() {
@@ -149,7 +150,7 @@ fn separation_color_space() {
     let mut f = MockFunction::new();
     f.expect_call()
         .with(eq(vec![0.5f32]))
-        .returning(|_| Ok(vec![0.1f32, 0.2f32, 0.3f32]));
+        .returning(|_| Ok(smallvec![0.1f32, 0.2f32, 0.3f32] as FunctionValue));
     let cs = SeparationColorSpace::<f32> {
         base: ColorSpace::DeviceRGB,
         f: Rc::new(f),

@@ -1,6 +1,7 @@
 use anyhow::Result as AnyResult;
 
 use nipdf_macro::{pdf_object, TryFromIntObject};
+use smallvec::{smallvec, SmallVec};
 
 use crate::object::{Object, ObjectValueError};
 #[cfg(test)]
@@ -80,9 +81,11 @@ impl Domains {
     }
 }
 
+pub type FunctionValue = SmallVec<[f32; 4]>;
+
 #[cfg_attr(test, automock)]
 pub trait Function {
-    fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>> {
+    fn call(&self, args: &[f32]) -> AnyResult<FunctionValue> {
         let args = self.sigunature().clip_args(args);
         let r = self.inner_call(args)?;
         Ok(self.sigunature().clip_returns(r))
@@ -91,11 +94,11 @@ pub trait Function {
     fn sigunature(&self) -> &Signature;
 
     /// Called by `self.call()`, args and return value are clipped by signature.
-    fn inner_call(&self, args: Vec<f32>) -> AnyResult<Vec<f32>>;
+    fn inner_call(&self, args: FunctionValue) -> AnyResult<FunctionValue>;
 }
 
 impl Function for Box<dyn Function> {
-    fn call(&self, args: &[f32]) -> AnyResult<Vec<f32>> {
+    fn call(&self, args: &[f32]) -> AnyResult<FunctionValue> {
         self.as_ref().call(args)
     }
 
@@ -103,7 +106,7 @@ impl Function for Box<dyn Function> {
         self.as_ref().sigunature()
     }
 
-    fn inner_call(&self, args: Vec<f32>) -> AnyResult<Vec<f32>> {
+    fn inner_call(&self, _args: SmallVec<[f32; 4]>) -> AnyResult<FunctionValue> {
         unreachable!()
     }
 }
@@ -182,7 +185,7 @@ impl Signature {
         self.range.as_ref().map(|range| range.n())
     }
 
-    fn clip_args(&self, args: &[f32]) -> Vec<f32> {
+    fn clip_args(&self, args: &[f32]) -> SmallVec<[f32; 4]> {
         debug_assert_eq!(args.len(), self.n_args());
 
         args.iter()
@@ -191,7 +194,7 @@ impl Signature {
             .collect()
     }
 
-    fn clip_returns(&self, returns: Vec<f32>) -> Vec<f32> {
+    fn clip_returns(&self, returns: FunctionValue) -> FunctionValue {
         let Some(range) = self.range.as_ref() else {
             return returns;
         };
@@ -252,7 +255,7 @@ pub struct SampledFunction {
 }
 
 impl Function for SampledFunction {
-    fn inner_call(&self, args: Vec<f32>) -> AnyResult<Vec<f32>> {
+    fn inner_call(&self, args: SmallVec<[f32; 4]>) -> AnyResult<FunctionValue> {
         let mut idx = 0;
         for (i, arg) in args.iter().enumerate() {
             let domain = &self.signature.domain.0[i];
@@ -263,7 +266,7 @@ impl Function for SampledFunction {
         }
 
         let n = self.signature.n_returns().unwrap();
-        let mut r = Vec::with_capacity(n);
+        let mut r = smallvec![];
         let decode = &self.decode.0[0];
         for i in 0..n {
             let sample = self.samples[idx as usize * n + i];
@@ -340,7 +343,7 @@ pub struct ExponentialInterpolationFunction {
 }
 
 impl Function for ExponentialInterpolationFunction {
-    fn inner_call(&self, args: Vec<f32>) -> AnyResult<Vec<f32>> {
+    fn inner_call(&self, args: SmallVec<[f32; 4]>) -> AnyResult<FunctionValue> {
         let x = args[0];
         let c0 = &self.c0;
         let c1 = &self.c1;
@@ -449,7 +452,7 @@ impl StitchingFunction {
 }
 
 impl Function for StitchingFunction {
-    fn inner_call(&self, args: Vec<f32>) -> AnyResult<Vec<f32>> {
+    fn inner_call(&self, args: SmallVec<[f32; 4]>) -> AnyResult<FunctionValue> {
         assert_eq!(args.len(), 1);
 
         let x = args[0];
