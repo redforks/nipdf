@@ -7,7 +7,7 @@ use crate::{
     graphics::{
         color_space::{self, ColorSpace, ColorSpaceTrait},
         parse_operations,
-        shading::{build_shading, Radial, Shading},
+        shading::{build_shading, Extend, Radial, Shading},
         trans::{
             image_to_device_space, move_text_space_pos, move_text_space_right, to_device_space,
             ImageToDeviceSpace, IntoSkiaTransform, TextToUserSpace, UserToDeviceIndependentSpace,
@@ -26,9 +26,9 @@ use log::{debug, info};
 use nom::{combinator::eof, sequence::terminated};
 use std::{borrow::Cow, convert::AsRef};
 use tiny_skia::{
-    Color as SkiaColor, FillRule, FilterQuality, Mask, MaskType, Paint, Path as SkiaPath,
-    PathBuilder, Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect, Stroke, StrokeDash,
-    Transform,
+    Color as SkiaColor, FillRule, FilterQuality, LinearGradient, Mask, MaskType, Paint,
+    Path as SkiaPath, PathBuilder, Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect,
+    Shader, Stroke, StrokeDash, Transform,
 };
 
 mod fonts;
@@ -1112,7 +1112,20 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         );
 
         let shader = match build_shading(&shading, self.resources)? {
-            Some(Shading::Shader(shader)) => shader,
+            Some(Shading::Axial(axial)) => {
+                // TODO: false extend, requires to limit the gradient to the bounds of the shading (b_box),
+                // which not possible through paint object. The fill operation need to known
+                // the b_box of the shading.
+                assert_eq!(Extend::new(true, true), axial.extend,);
+                LinearGradient::new(
+                    axial.start.into(),
+                    axial.end.into(),
+                    axial.stops,
+                    tiny_skia::SpreadMode::Pad,
+                    Transform::identity(),
+                )
+                .unwrap()
+            }
             None => return Ok(()),
             _ => todo!(),
         };

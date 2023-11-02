@@ -23,7 +23,7 @@ use std::iter::once;
 
 mod paint;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Rectangle {
     pub left_x: f32,
     pub lower_y: f32,

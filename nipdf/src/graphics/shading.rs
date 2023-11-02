@@ -73,6 +73,9 @@ pub trait AxialShadingDictTrait {
     #[try_from]
     #[or_default]
     fn extend(&self) -> Extend;
+
+    #[try_from]
+    fn b_box(&self) -> Option<Rectangle>;
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -203,20 +206,31 @@ fn build_linear_gradient_stops(
     }
 }
 
-fn build_linear_gradient(d: &AxialShadingDict) -> AnyResult<Option<Shader<'static>>> {
-    assert_eq!(d.extend()?, Extend::new(true, true), "Extend not supported");
-
+fn build_axial(d: &AxialShadingDict) -> AnyResult<Option<Axial>> {
     let coord = d.coords()?;
     let start = coord.left_lower();
     let end = coord.right_upper();
+    if start == end {
+        return Ok(None);
+    }
+
     let stops = build_linear_gradient_stops(d.domain()?, d.function()?)?;
-    Ok(tiny_skia::LinearGradient::new(
-        start.into(),
-        end.into(),
+    Ok(Some(Axial {
+        start,
+        end,
+        extend: d.extend()?,
         stops,
-        tiny_skia::SpreadMode::Pad,
-        Transform::identity(),
-    ))
+        b_box: d.b_box()?,
+    }))
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Axial {
+    pub start: Point,
+    pub end: Point,
+    pub extend: Extend,
+    pub stops: Vec<GradientStop>,
+    pub b_box: Option<Rectangle>,
 }
 
 #[derive(Educe)]
@@ -233,7 +247,7 @@ pub struct Radial {
 }
 
 pub enum Shading {
-    Shader(Shader<'static>),
+    Axial(Axial),
     Radial(Radial),
 }
 
@@ -243,7 +257,7 @@ pub fn build_shading<'a, 'b>(
     resources: &ResourceDict<'a, 'b>,
 ) -> AnyResult<Option<Shading>> {
     Ok(match d.shading_type()? {
-        ShadingType::Axial => build_linear_gradient(&d.axial()?)?.map(Shading::Shader),
+        ShadingType::Axial => build_axial(&d.axial()?)?.map(Shading::Axial),
         ShadingType::Radial => build_radial(d, resources)?.map(Shading::Radial),
         t => todo!("{:?}", t),
     })
