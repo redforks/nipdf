@@ -965,7 +965,6 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             ..Default::default()
         };
         let state = self.stack.last().unwrap();
-        dbg!(state.ctm);
         let ctm = to_device_space(self.height as f32, self.zoom, &state.ctm).into_skia();
         let mask = state.mask.as_ref();
         self.canvas.fill_rect(rect, &paint, ctm, mask);

@@ -1,3 +1,4 @@
+#![deny(clippy::dbg_macro)]
 mod ascii85;
 mod ccitt;
 pub mod file;
