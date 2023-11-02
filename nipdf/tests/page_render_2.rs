@@ -54,3 +54,10 @@ fn radial_shade() {
         &decode_file_page("sample_files/bizarre/pdfReferenceUpdated.pdf", 809).unwrap()
     )
 }
+
+#[test]
+fn type0_cid_font() {
+    assert_ron_snapshot!(
+        &decode_file_page("sample_files/bizarre/pdfReferenceUpdated.pdf", 1013).unwrap()
+    )
+}

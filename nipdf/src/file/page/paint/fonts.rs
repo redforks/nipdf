@@ -607,14 +607,21 @@ impl<'c> FontCache<'c> {
                     "Type0 font should have one descendant fonts"
                 );
                 let descentdant_font = descentdant_fonts.into_iter().next().unwrap();
-                assert_eq!(
-                    descentdant_font.subtype()?,
-                    CIDFontType::CIDFontType2,
-                    "Only CIDFontType2 supported"
-                );
-                let desc = descentdant_font.font_descriptor()?.unwrap();
+                match descentdant_font.subtype()? {
+                    CIDFontType::CIDFontType0 => {
+                        let desc = descentdant_font.font_descriptor()?.unwrap();
+                        let stream = desc.font_file3()?.unwrap();
+                        Ok(Some(Box::new(CIDFontType0Font::new(
+                            font,
+                            Self::load_embed_font_bytes(descentdant_font.resolver(), stream)?,
+                        )?)))
+                    }
+                    CIDFontType::CIDFontType2 => {
+                        let desc = descentdant_font.font_descriptor()?.unwrap();
 
-                Ok(Some(Box::new(Self::load_ttf_parser_font(font, desc)?)))
+                        Ok(Some(Box::new(Self::load_ttf_parser_font(font, desc)?)))
+                    }
+                }
             }
 
             FontType::Type1 => {
@@ -701,6 +708,36 @@ impl FontOp for Type0FontOp {
 
     fn char_width(&self, ch: u32) -> u32 {
         self.widths.char_width(ch).unwrap_or(self.default_width)
+    }
+}
+
+/// Font for Type 0 CIDFont, its descendant font is Cff.
+struct CIDFontType0Font<'a, 'b> {
+    font_dict: FontDict<'a, 'b>,
+    font: FontKitFont,
+}
+
+impl<'a, 'b> CIDFontType0Font<'a, 'b> {
+    fn new(font_dict: FontDict<'a, 'b>, data: Vec<u8>) -> AnyResult<Self> {
+        let font = FontKitFont::from_bytes(data.clone().into(), 0)?;
+        Ok(Self { font_dict, font })
+    }
+}
+
+impl<'a, 'b> Font for CIDFontType0Font<'a, 'b> {
+    fn font_type(&self) -> FontType {
+        FontType::Type0
+    }
+
+    fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
+        Ok(Box::new(Type0FontOp::new(&self.font_dict.type0()?)?))
+    }
+
+    fn create_glyph_render(&self, font_size: f32) -> AnyResult<Box<dyn GlyphRender + '_>> {
+        Ok(Box::new(Type1GlyphRender {
+            font: &self.font,
+            font_size,
+        }))
     }
 }
 

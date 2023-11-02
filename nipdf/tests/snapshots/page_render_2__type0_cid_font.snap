@@ -1,0 +1,5 @@
+---
+source: nipdf/tests/page_render_2.rs
+expression: "&decode_file_page(\"sample_files/bizarre/pdfReferenceUpdated.pdf\",\n            1013).unwrap()"
+---
+"2032f0a0daacbda94eb66ea33bcddc6d"
