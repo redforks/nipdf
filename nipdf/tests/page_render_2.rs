@@ -67,3 +67,8 @@ fn type0_cid_font() {
         &decode_file_page("sample_files/bizarre/pdfReferenceUpdated.pdf", 1013).unwrap()
     )
 }
+
+#[test]
+fn not_embed_type1_load_ttf_from_os() {
+    assert_ron_snapshot!(&decode_file_page("../../../code.pdf", 620).unwrap())
+}

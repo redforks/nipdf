@@ -7,7 +7,7 @@ use crate::{
         FontDescriptorFlags, FontDict, FontType, Type0FontDict, Type1FontDict,
     },
 };
-use anyhow::{anyhow, Ok, Result as AnyResult};
+use anyhow::{anyhow, bail, Ok, Result as AnyResult};
 use cff_parser::{File as CffFile, Font as CffFont};
 use either::Either;
 use font_kit::loaders::freetype::Font as FontKitFont;
@@ -406,7 +406,7 @@ impl<'a, 'b> Font for TTFParserFont<'a, 'b> {
 
     fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
         Ok(match self.font_type() {
-            FontType::TrueType => {
+            FontType::TrueType | FontType::Type1 => {
                 let face = TTFFace::parse(&self.data, 0)?;
                 Box::new(TTFParserFontOp {
                     units_per_em: face.units_per_em(),
@@ -601,9 +601,11 @@ impl<'c> FontCache<'c> {
             Some(s) => (s.0, Self::load_embed_font_bytes(f.resolver(), s.1)?),
             None => (
                 false,
-                standard_14_type1_font_data(font_name.as_str())
-                    .expect("Failed to find font data")
-                    .to_owned(),
+                if let Some(font_data) = standard_14_type1_font_data(font_name.as_str()) {
+                    font_data.to_owned()
+                } else {
+                    bail!("Standard 14 type1 font not found: {}", font_name)
+                },
             ),
         };
         bytes.shrink_to_fit();
@@ -648,9 +650,16 @@ impl<'c> FontCache<'c> {
                 }
             }
 
-            FontType::Type1 => {
-                Self::load_type1_font(font).map(|v| Some(Box::new(v) as Box<dyn Font + 'c>))
-            }
+            FontType::Type1 => Self::load_type1_font(font.clone())
+                .map(|v| Some(Box::new(v) as Box<dyn Font + 'c>))
+                .or_else(|err| {
+                    info!(
+                        "Failed to load type1 font \"{:?}\", try load as truetype",
+                        err
+                    );
+                    let desc = font.font_descriptor()?.unwrap();
+                    Ok(Some(Box::new(Self::load_ttf_parser_font(font, desc)?)))
+                }),
             _ => {
                 error!("Unsupported font type: {:?}", font.subtype()?);
                 Ok(None)

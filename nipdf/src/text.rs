@@ -38,6 +38,9 @@ pub trait FontDictTrait {
 
     #[self_as]
     fn truetype(&self) -> TrueTypeFontDict<'a, 'b>;
+
+    #[nested]
+    fn font_descriptor(&self) -> Option<FontDescriptorDict<'a, 'b>>;
 }
 
 #[pdf_object(("Font", "Type0"))]
