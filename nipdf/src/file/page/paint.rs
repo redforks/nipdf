@@ -1821,9 +1821,8 @@ impl<'c> FontCache<'c> {
 
     fn load_ttf_parser_font<'a, 'b>(
         font: FontDict<'a, 'b>,
-        resolve_desc: fn(&FontDict<'a, 'b>) -> AnyResult<FontDescriptorDict<'a, 'b>>,
+        desc: FontDescriptorDict<'a, 'b>,
     ) -> AnyResult<TTFParserFont<'a, 'b>> {
-        let desc = resolve_desc(&font)?;
         let bytes = match desc.font_file2()? {
             Some(stream) => Self::load_embed_font_bytes(desc.resolver(), stream)?,
             None => {
@@ -1883,13 +1882,14 @@ impl<'c> FontCache<'c> {
         'b: 'c,
     {
         match font.subtype()? {
-            FontType::TrueType => Ok(Some(Box::new(Self::load_ttf_parser_font(font, |f| {
-                let tt = f.truetype()?;
-                Ok(tt.font_descriptor()?.unwrap())
-            })?))),
+            FontType::TrueType => {
+                let tt = font.truetype()?;
+                let desc = tt.font_descriptor()?.unwrap();
+                Ok(Some(Box::new(Self::load_ttf_parser_font(font, desc)?)))
+            }
 
-            FontType::Type0 => Ok(Some(Box::new(Self::load_ttf_parser_font(font, |f| {
-                let type0_font = f.type0()?;
+            FontType::Type0 => {
+                let type0_font = font.type0()?;
                 let descentdant_fonts = type0_font.descendant_fonts()?;
                 assert_eq!(
                     descentdant_fonts.len(),
@@ -1902,8 +1902,10 @@ impl<'c> FontCache<'c> {
                     CIDFontType::CIDFontType2,
                     "Only CIDFontType2 supported"
                 );
-                Ok(descentdant_font.font_descriptor()?.unwrap())
-            })?))),
+                let desc = descentdant_font.font_descriptor()?.unwrap();
+
+                Ok(Some(Box::new(Self::load_ttf_parser_font(font, desc)?)))
+            }
 
             FontType::Type1 => {
                 Self::load_type1_font(font).map(|v| Some(Box::new(v) as Box<dyn Font + 'c>))
