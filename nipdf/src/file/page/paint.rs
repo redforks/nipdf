@@ -996,12 +996,14 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let (cx2, cy2) = ctm.transform_point((cx2, cy2).into()).into();
         let d = ((cx1 - cx2).powi(2) + (cy1 - cy2).powi(2)).sqrt();
         let steps = if d < 1.0 {
-            (cr1 + cr2) * (ctm.m11.powi(2) + ctm.m22.powi(2)).sqrt() * 2.
+            let (cx1, cy1) = ctm.transform_point((0., 0.).into()).into();
+            let (cx2, cy2) = ctm.transform_point((cr1 + cr2, 0.).into()).into();
+            ((cx1 - cx2).powi(2) + (cy1 - cy2).powi(2)).sqrt() * 2.
         } else {
             d / 2.0
         }
         .ceil() as usize;
-        let steps = steps.max(3);
+        let steps = steps.max(10);
 
         let ctm = ctm.into_skia();
         if radial.extend.end() {
