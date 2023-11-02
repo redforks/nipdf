@@ -133,10 +133,10 @@ where
             ColorSpaceArgs::Name(name) => {
                 let name = name.as_ref();
                 match name {
-                    "DeviceGray" => Ok(ColorSpace::DeviceGray),
-                    "DeviceRGB" => Ok(ColorSpace::DeviceRGB),
-                    "DeviceCMYK" => Ok(ColorSpace::DeviceCMYK),
-                    "Pattern" => Ok(ColorSpace::Pattern),
+                    "DeviceGray" => Ok(Self::DeviceGray),
+                    "DeviceRGB" => Ok(Self::DeviceRGB),
+                    "DeviceCMYK" => Ok(Self::DeviceCMYK),
+                    "Pattern" => Ok(Self::Pattern),
                     _ => {
                         let color_spaces = resources.unwrap().color_space()?;
                         let args = color_spaces.get(name).ok_or_else(|| {
@@ -154,9 +154,9 @@ where
                     match d.alternate()?.as_ref() {
                         Some(args) => Self::from_args(args, resolver, resources),
                         None => match d.n()? {
-                            1 => Ok(ColorSpace::DeviceGray),
-                            3 => Ok(ColorSpace::DeviceRGB),
-                            4 => Ok(ColorSpace::DeviceCMYK),
+                            1 => Ok(Self::DeviceGray),
+                            3 => Ok(Self::DeviceRGB),
+                            4 => Ok(Self::DeviceCMYK),
                             _ => unreachable!("ICC color space n value should be 1, 3 or 4"),
                         },
                     }
@@ -170,7 +170,7 @@ where
                         functions.into_iter().map(|f| f.func()).collect();
                     let function = NFunc::new_box(functions?)?;
                     let base = Self::from_args(&alternate, resolver, resources)?;
-                    Ok(ColorSpace::Separation(Box::new(SeparationColorSpace {
+                    Ok(Self::Separation(Box::new(SeparationColorSpace {
                         base,
                         f: Rc::new(function),
                     })))
@@ -183,7 +183,7 @@ where
                     let stream = resolver.resolve(arr[3].as_ref()?.id().id())?.as_stream()?;
                     let data = stream.decode(resolver)?;
                     assert!(data.len() >= (hival + 1) as usize * base.components());
-                    Ok(ColorSpace::Indexed(Box::new(IndexedColorSpace {
+                    Ok(Self::Indexed(Box::new(IndexedColorSpace {
                         base,
                         data: data.into_owned(),
                     })))
@@ -203,25 +203,25 @@ where
 {
     fn to_rgba(&self, color: &[T]) -> [T; 4] {
         match self {
-            ColorSpace::DeviceGray => DeviceGray.to_rgba(color),
-            ColorSpace::DeviceRGB => DeviceRGB.to_rgba(color),
-            ColorSpace::DeviceCMYK => DeviceCMYK.to_rgba(color),
-            ColorSpace::Pattern => PatternColorSpace.to_rgba(color),
-            ColorSpace::Indexed(indexed) => indexed.to_rgba(color),
-            ColorSpace::Separation(sep) => sep.as_ref().to_rgba(color),
-            ColorSpace::_Phantom(_) => unreachable!(),
+            Self::DeviceGray => DeviceGray.to_rgba(color),
+            Self::DeviceRGB => DeviceRGB.to_rgba(color),
+            Self::DeviceCMYK => DeviceCMYK.to_rgba(color),
+            Self::Pattern => PatternColorSpace.to_rgba(color),
+            Self::Indexed(indexed) => indexed.to_rgba(color),
+            Self::Separation(sep) => sep.as_ref().to_rgba(color),
+            Self::_Phantom(_) => unreachable!(),
         }
     }
 
     fn components(&self) -> usize {
         match self {
-            ColorSpace::DeviceGray => ColorSpaceTrait::<T>::components(&DeviceGray),
-            ColorSpace::DeviceRGB => ColorSpaceTrait::<T>::components(&DeviceRGB),
-            ColorSpace::DeviceCMYK => ColorSpaceTrait::<T>::components(&DeviceCMYK),
-            ColorSpace::Pattern => ColorSpaceTrait::<T>::components(&PatternColorSpace),
-            ColorSpace::Indexed(indexed) => indexed.components(),
-            ColorSpace::Separation(sep) => sep.as_ref().components(),
-            ColorSpace::_Phantom(_) => unreachable!(),
+            Self::DeviceGray => ColorSpaceTrait::<T>::components(&DeviceGray),
+            Self::DeviceRGB => ColorSpaceTrait::<T>::components(&DeviceRGB),
+            Self::DeviceCMYK => ColorSpaceTrait::<T>::components(&DeviceCMYK),
+            Self::Pattern => ColorSpaceTrait::<T>::components(&PatternColorSpace),
+            Self::Indexed(indexed) => indexed.components(),
+            Self::Separation(sep) => sep.as_ref().components(),
+            Self::_Phantom(_) => unreachable!(),
         }
     }
 }

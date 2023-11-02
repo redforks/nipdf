@@ -450,7 +450,7 @@ where
 impl<'a, 'b, T: for<'c> ConvertFromObject<'a, 'c>> ConvertFromObject<'a, 'b> for Vec<T> {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let mut arr = objects.pop().unwrap().into_arr()?;
-        let mut result = Vec::new();
+        let mut result = Self::new();
         while !arr.is_empty() {
             result.push(T::convert_from_object(&mut arr)?);
         }
