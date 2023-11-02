@@ -22,11 +22,11 @@ use crate::graphics::{
 use crate::{ccitt::Flags, file::ObjectResolver, object::PdfObject};
 use crate::{file::ResourceDict, graphics::color_space::ColorSpace};
 
-use super::{Dictionary, Name, Object, ObjectValueError};
+use super::{Dictionary, Object, ObjectValueError};
 
-const KEY_FILTER: &[u8] = b"Filter";
-const KEY_FILTER_PARAMS: &[u8] = b"DecodeParms";
-const KEY_FFILTER: &[u8] = b"FFilter";
+const KEY_FILTER: &str = "Filter";
+const KEY_FILTER_PARAMS: &str = "DecodeParms";
+const KEY_FFILTER: &str = "FFilter";
 
 const FILTER_FLATE_DECODE: &str = "FlateDecode";
 const FILTER_LZW_DECODE: &str = "LZWDecode";
@@ -101,15 +101,11 @@ impl LZWDeflateDecodeParams {
             }
         } else {
             Self {
-                predictor: d.get(&b"Predictor"[..]).map_or(1, |o| o.as_int().unwrap()),
-                colors: d.get(&b"Colors"[..]).map_or(1, |o| o.as_int().unwrap()),
-                bits_per_comonent: d
-                    .get(&b"BitsPerComponent"[..])
-                    .map_or(8, |o| o.as_int().unwrap()),
-                columns: d.get(&b"Columns"[..]).map_or(1, |o| o.as_int().unwrap()),
-                early_change: d
-                    .get(&b"EarlyChange"[..])
-                    .map_or(1, |o| o.as_int().unwrap()),
+                predictor: d.get("Predictor").map_or(1, |o| o.as_int().unwrap()),
+                colors: d.get("Colors").map_or(1, |o| o.as_int().unwrap()),
+                bits_per_comonent: d.get("BitsPerComponent").map_or(8, |o| o.as_int().unwrap()),
+                columns: d.get("Columns").map_or(1, |o| o.as_int().unwrap()),
+                early_change: d.get("EarlyChange").map_or(1, |o| o.as_int().unwrap()),
             }
         })
     }
@@ -557,7 +553,7 @@ impl<'a> Stream<'a> {
     /// Decode stream but requires that `Length` field is no ref-id, so no need to use `ObjectResolver`
     pub fn decode_without_resolve_length(&self) -> Result<Cow<'a, [u8]>, ObjectValueError> {
         let mut decoded = FilterDecodedData::Bytes(
-            self.1[0..self.0.get(&b"Length"[..]).unwrap().as_int().unwrap() as usize].into(),
+            self.1[0..self.0.get("Length").unwrap().as_int().unwrap() as usize].into(),
         );
         for (filter_name, params) in self.iter_filter()? {
             decoded = filter(decoded.into_bytes()?, None, filter_name, params)?;
@@ -643,11 +639,11 @@ impl<'a> Stream<'a> {
     fn iter_filter(
         &self,
     ) -> Result<impl Iterator<Item = (&str, Option<&Dictionary<'a>>)>, ObjectValueError> {
-        if self.0.contains_key(&Name::borrowed(KEY_FFILTER)) {
+        if self.0.contains_key(KEY_FFILTER) {
             return Err(ObjectValueError::ExternalStreamNotSupported);
         }
 
-        let filters = self.0.get(&Name::borrowed(KEY_FILTER)).map_or_else(
+        let filters = self.0.get(KEY_FILTER).map_or_else(
             || Ok(vec![]),
             |v| match v {
                 Object::Array(vals) => vals
@@ -658,7 +654,7 @@ impl<'a> Stream<'a> {
                 _ => Err(ObjectValueError::UnexpectedType),
             },
         )?;
-        let params = self.0.get(&Name::borrowed(KEY_FILTER_PARAMS)).map_or_else(
+        let params = self.0.get(KEY_FILTER_PARAMS).map_or_else(
             || Ok(vec![]),
             |v| match v {
                 Object::Null => Ok(vec![]),

@@ -20,11 +20,15 @@ pub type Array<'a> = Vec<Object<'a>>;
 
 #[derive(PartialEq, Debug, Clone, Default, Educe)]
 #[educe(Deref, DerefMut)]
-pub struct Dictionary<'a>(HashMap<Name<'a>, Object<'a>>);
+pub struct Dictionary<'a>(HashMap<Box<str>, Object<'a>>);
 
 impl<'a> FromIterator<(Name<'a>, Object<'a>)> for Dictionary<'a> {
     fn from_iter<T: IntoIterator<Item = (Name<'a>, Object<'a>)>>(iter: T) -> Self {
-        Self(iter.into_iter().collect())
+        Self(
+            iter.into_iter()
+                .map(|(k, v)| (k.as_ref().into(), v))
+                .collect(),
+        )
     }
 }
 
@@ -35,30 +39,24 @@ impl<'a> Dictionary<'a> {
 
     pub fn get_opt_int_ref(&self, id: &str) -> Result<Option<&i32>, ObjectValueError> {
         self.0
-            .get(id.as_bytes())
+            .get(id)
             .map_or(Ok(None), |o| o.as_int_ref().map(Some))
     }
 
     pub fn get_int(&self, id: &str, default: i32) -> Result<i32, ObjectValueError> {
-        self.0
-            .get(id.as_bytes())
-            .map_or(Ok(default), |o| o.as_int())
+        self.0.get(id).map_or(Ok(default), |o| o.as_int())
     }
 
     pub fn get_bool(&self, id: &str, default: bool) -> Result<bool, ObjectValueError> {
-        self.0
-            .get(id.as_bytes())
-            .map_or(Ok(default), |o| o.as_bool())
+        self.0.get(id).map_or(Ok(default), |o| o.as_bool())
     }
 
-    pub fn set(&mut self, id: impl Into<Name<'a>>, value: impl Into<Object<'a>>) {
+    pub fn set(&mut self, id: impl Into<Box<str>>, value: impl Into<Object<'a>>) {
         self.0.insert(id.into(), value.into());
     }
 
     pub fn get_name(&self, id: &'static str) -> Result<Option<&str>, ObjectValueError> {
-        self.0
-            .get(id.as_bytes())
-            .map_or(Ok(None), |o| o.as_name().map(Some))
+        self.0.get(id).map_or(Ok(None), |o| o.as_name().map(Some))
     }
 
     pub fn get_name_or(
@@ -66,9 +64,7 @@ impl<'a> Dictionary<'a> {
         id: &'static str,
         default: &'static str,
     ) -> Result<&str, ObjectValueError> {
-        self.0
-            .get(id.as_bytes())
-            .map_or(Ok(default), |o| o.as_name())
+        self.0.get(id).map_or(Ok(default), |o| o.as_name())
     }
 }
 
@@ -518,12 +514,10 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         id: &'static str,
         f: impl Fn(&Object<'a>) -> Result<Item, ObjectValueError>,
     ) -> Result<Vec<Item>, ObjectValueError> {
-        self.d
-            .get(id.as_bytes())
-            .map_or(Ok(Vec::new()), |o| match o {
-                Object::Array(arr) => arr.iter().map(f).collect(),
-                _ => f(o).map(|o| vec![o]),
-            })
+        self.d.get(id).map_or(Ok(Vec::new()), |o| match o {
+            Object::Array(arr) => arr.iter().map(f).collect(),
+            _ => f(&o).map(|o| vec![o]),
+        })
     }
 
     pub fn opt_single_or_arr_stream(
@@ -556,7 +550,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn required_ref(&self, id: &'static str) -> Result<NonZeroU32, ObjectValueError> {
         self.d
-            .get(id.as_bytes())
+            .get(id)
             .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_ref()
             .map(|r| r.id().id())
@@ -564,7 +558,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn opt_ref(&self, id: &'static str) -> Result<Option<NonZeroU32>, ObjectValueError> {
         self.d
-            .get(id.as_bytes())
+            .get(id)
             .map_or(Ok(None), |o| o.as_ref().map(|r| Some(r.id().id())))
     }
 
@@ -790,8 +784,8 @@ use pretty::RcDoc;
 #[cfg(feature = "pretty")]
 impl<'a> Object<'a> {
     pub fn to_doc(&self) -> RcDoc {
-        fn name_to_doc<'a>(n: &'a Name) -> RcDoc<'a> {
-            RcDoc::text("/").append(RcDoc::text(n.as_ref()))
+        fn name_to_doc<'a>(n: impl Into<Cow<'a, str>>) -> RcDoc<'a> {
+            RcDoc::text("/").append(RcDoc::text(n.into()))
         }
 
         fn dict_to_doc<'a>(d: &'a Dictionary) -> RcDoc<'a> {
@@ -801,7 +795,7 @@ impl<'a> Object<'a> {
                 .append(
                     RcDoc::intersperse(
                         keys.into_iter().map(|k| {
-                            name_to_doc(k)
+                            name_to_doc(Cow::Borrowed(k.as_ref()))
                                 .append(RcDoc::space())
                                 .append(d.get(k).unwrap().to_doc())
                         }),
@@ -820,7 +814,7 @@ impl<'a> Object<'a> {
             Object::Number(f) => RcDoc::as_string(PrettyNumber(*f)),
             Object::LiteralString(s) => RcDoc::text(from_utf8(s.0).unwrap()),
             Object::HexString(s) => RcDoc::text(from_utf8(s.0).unwrap()),
-            Object::Name(n) => name_to_doc(n),
+            Object::Name(n) => name_to_doc(n.as_ref()),
             Object::Dictionary(d) => dict_to_doc(d),
             Object::Array(a) => RcDoc::text("[")
                 .append(RcDoc::intersperse(

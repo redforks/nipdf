@@ -17,7 +17,7 @@ use nom::{
 
 use crate::{
     function::{Domain, Domains},
-    object::{Dictionary, Entry, Frame, FrameSet, Name, ObjectValueError, XRefSection},
+    object::{Dictionary, Entry, Frame, FrameSet, ObjectValueError, XRefSection},
     parser::{parse_dict, parse_indirected_stream},
 };
 
@@ -95,18 +95,16 @@ struct CrossReferenceStreamDict {
 impl CrossReferenceStreamDict {
     pub fn new(d: &Dictionary) -> Result<Self, ObjectValueError> {
         let size = d
-            .get(&Name::borrowed(b"Size"))
+            .get("Size")
             .ok_or(ObjectValueError::DictKeyNotFound)?
             .as_int()? as u32;
-        let index = d
-            .get(&Name::borrowed(b"Index"))
-            .map(|o| Domains::<u32>::try_from(o).unwrap());
+        let index = d.get("Index").map(|o| Domains::<u32>::try_from(o).unwrap());
         let prev = d
-            .get(&Name::borrowed(b"Prev"))
+            .get("Prev")
             .map(|o| o.as_int().map(|v| v as u32))
             .transpose()?;
         let w = d
-            .get(&Name::borrowed(b"W"))
+            .get("W")
             .ok_or(ObjectValueError::DictKeyNotFound)?
             .as_arr()?
             .iter()
@@ -245,10 +243,7 @@ fn parse_frame(buf: &[u8]) -> ParseResult<(Dictionary, XRefSection)> {
 
 pub fn parse_frame_set(input: &[u8]) -> ParseResult<FrameSet> {
     fn get_prev(frame: &Frame) -> Option<i32> {
-        frame
-            .trailer
-            .get(&Name::borrowed(b"Prev"))
-            .map(|o| o.as_int().unwrap())
+        frame.trailer.get("Prev").map(|o| o.as_int().unwrap())
     }
 
     let mut frames = Vec::new();
