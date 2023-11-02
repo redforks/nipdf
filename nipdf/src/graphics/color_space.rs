@@ -5,7 +5,7 @@ use smallvec::SmallVec;
 
 use crate::{
     file::{ObjectResolver, ResourceDict},
-    function::{Function, FunctionDict},
+    function::{Function, FunctionDict, NFunc},
     graphics::ICCStreamDict,
 };
 
@@ -164,12 +164,15 @@ where
                 "Separation" => {
                     debug_assert_eq!(4, arr.len());
                     let alternate = ColorSpaceArgs::try_from(&arr[2])?;
-                    let function: FunctionDict =
-                        resolver.resolve_pdf_object(arr[3].as_ref()?.id().id())?;
+                    let functions: Vec<FunctionDict> =
+                        resolver.resolve_one_or_more_pdf_object(arr[3].as_ref()?.id().id())?;
+                    let functions: Result<Vec<_>, _> =
+                        functions.into_iter().map(|f| f.func()).collect();
+                    let function = NFunc::new_box(functions?)?;
                     let base = Self::from_args(&alternate, resolver, resources)?;
                     Ok(ColorSpace::Separation(Box::new(SeparationColorSpace {
                         base,
-                        f: Rc::new(function.func()?),
+                        f: Rc::new(function),
                     })))
                 }
                 "Indexed" => {
