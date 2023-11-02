@@ -153,9 +153,9 @@ fn parse_real(buf: &[u8]) -> ParseResult<f32> {
     let b0 = b0[0];
     if b0 == 30 {
         let mut sign = 1.0;
-        let mut exponent = 0.0;
-        let mut int = 0.0;
-        let mut mantissa = 0.0;
+        let mut exponent: f32 = 0.0;
+        let mut int: f32 = 0.0;
+        let mut mantissa: f32 = 0.0;
         let mut mantissa_len = 0;
         let mut exponent_sign = 1.0;
         let mut number_state = NumberState::Int;
@@ -168,14 +168,14 @@ fn parse_real(buf: &[u8]) -> ParseResult<f32> {
             match nibble {
                 0..=9 => match number_state {
                     NumberState::Int => {
-                        int = int * 10.0 + (nibble as f32);
+                        int = int.mul_add(10.0, nibble as f32);
                     }
                     NumberState::Mantissa => {
-                        mantissa = mantissa * 10.0 + (nibble as f32);
+                        mantissa = mantissa.mul_add(10.0, nibble as f32);
                         mantissa_len += 1;
                     }
                     NumberState::Exponent => {
-                        exponent = exponent * 10.0 + (nibble as f32);
+                        exponent = exponent.mul_add(10.0_f32, nibble as f32);
                     }
                 },
                 0xa => {
@@ -200,8 +200,10 @@ fn parse_real(buf: &[u8]) -> ParseResult<f32> {
                 }
             }
         }
-        let mut r =
-            int + mantissa * 10f32.powi(-mantissa_len) * 10f32.powf(exponent * exponent_sign);
+        let mut r = mantissa.mul_add(
+            10f32.powi(-mantissa_len) * 10f32.powf(exponent * exponent_sign),
+            int,
+        );
         r *= sign;
         Ok((buf, r))
     } else {

@@ -985,9 +985,9 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
 
         let circle = |t: f32| {
             let s = (t - t0) / (t1 - t0);
-            let x = x0 + s * (x1 - x0);
-            let y = y0 + s * (y1 - y0);
-            let r = r0 + s * (r1 - r0);
+            let x = s.mul_add(x1 - x0, x0);
+            let y = s.mul_add(y1 - y0, y0);
+            let r = s.mul_add(r1 - r0, r0);
             (x, y, r)
         };
 
@@ -1264,9 +1264,10 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let mut text_clip_path = Path::default();
         let flip_y = to_device_space(state.height, state.zoom, &state.ctm).into_skia();
         for ch in op.decode_chars(text) {
-            let width = op.char_width(ch) as f32 / op.units_per_em() as f32 * font_size
-                + char_spacing
-                + if ch == 32 { word_spacing } else { 0.0 };
+            let width = font_size.mul_add(
+                op.char_width(ch) as f32 / op.units_per_em() as f32,
+                char_spacing + if ch == 32 { word_spacing } else { 0.0 },
+            );
 
             let gid = op.char_to_gid(ch);
             let path = Self::gen_glyph_path(glyph_render.as_mut(), gid);

@@ -320,7 +320,7 @@ impl Function for SampledFunction {
             let domain = &self.signature.domain.0[i];
             let encode = &self.encode.0[i];
             let arg = (arg - domain.start) / (domain.end - domain.start);
-            let arg = arg * (encode.end - encode.start) + encode.start;
+            let arg = arg.mul_add(encode.end - encode.start, encode.start);
             idx += (arg as u32).clamp(0, self.size[i] - 1);
         }
 
@@ -330,7 +330,7 @@ impl Function for SampledFunction {
         for i in 0..n {
             let sample = self.samples[idx as usize * n + i];
             let sample = sample as f32 / 255.0;
-            let sample = sample * (decode.end - decode.start) + decode.start;
+            let sample = sample.mul_add(decode.end - decode.start, decode.start);
             r.push(sample);
         }
         Ok(self.signature.clip_returns(r))
@@ -408,7 +408,7 @@ impl Function for ExponentialInterpolationFunction {
         let c1 = &self.c1;
         let n = self.n;
         let r = (0..c0.len())
-            .map(|i| c0[i] + x.powf(n) * (c1[i] - c0[i]))
+            .map(|i| x.powf(n).mul_add(c1[i] - c0[i], c0[i])) // x.powf(n) * (c1[i] - c0[i]) + c0[i]
             .collect();
         Ok(self.signature.clip_returns(r))
     }
@@ -509,7 +509,7 @@ impl StitchingFunction {
         let a_len = a.end - a.start;
         let b_len = b.end - b.start;
         let t = (t - a.start) / a_len;
-        b.start + t * b_len
+        t.mul_add(b_len, b.start) // t * b_len + b.start
     }
 
     fn domains(&self) -> &Domains {
