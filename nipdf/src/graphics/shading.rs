@@ -259,7 +259,7 @@ pub struct Axial {
 }
 
 impl Axial {
-    pub fn to_skia(self) -> Shader<'static> {
+    pub fn into_skia(self) -> Shader<'static> {
         LinearGradient::new(
             self.start.into(),
             self.end.into(),

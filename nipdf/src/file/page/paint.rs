@@ -26,9 +26,9 @@ use log::{debug, info};
 use nom::{combinator::eof, sequence::terminated};
 use std::{borrow::Cow, convert::AsRef};
 use tiny_skia::{
-    Color as SkiaColor, FillRule, FilterQuality, LinearGradient, Mask, MaskType, Paint,
-    Path as SkiaPath, PathBuilder, Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect,
-    Shader, Stroke, StrokeDash, Transform,
+    Color as SkiaColor, FillRule, FilterQuality, Mask, MaskType, Paint, Path as SkiaPath,
+    PathBuilder, Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect, Stroke, StrokeDash,
+    Transform,
 };
 
 mod fonts;
@@ -959,7 +959,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let rect = b_box
             .unwrap_or_else(|| Rectangle::from_xywh(0., 0., self.width as f32, self.height as f32))
             .into();
-        let shader = axial.to_skia();
+        let shader = axial.into_skia();
         let paint = Paint {
             shader,
             ..Default::default()
@@ -1132,7 +1132,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let shader = match build_shading(&shading, self.resources)? {
             Some(Shading::Axial(axial)) => {
                 assert_eq!(Extend::new(true, true), axial.extend);
-                axial.to_skia()
+                axial.into_skia()
             }
             None => return Ok(()),
             _ => todo!(),

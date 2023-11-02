@@ -56,6 +56,12 @@ fn radial_shade() {
 }
 
 #[test]
+fn axial_shade() {
+    // TODO: find a sample page contains PaintShading("axial-shade") operation
+    assert_ron_snapshot!(&decode_file_page("../../../code.pdf", 619).unwrap())
+}
+
+#[test]
 fn type0_cid_font() {
     assert_ron_snapshot!(
         &decode_file_page("sample_files/bizarre/pdfReferenceUpdated.pdf", 1013).unwrap()
