@@ -103,6 +103,44 @@ endobj
 }
 
 #[test]
+fn resolve_one_or_more_pdf_object() {
+    // object is dictionary
+    let buf = b"1 0 obj <</foo 2 0 R>> endobj";
+    let xref = XRefTable::from_buf(buf);
+    let resolver = ObjectResolver::new(buf, &xref);
+    let list = resolver
+        .resolve_one_or_more_pdf_object::<FooDict>(NonZeroU32::new(1).unwrap())
+        .unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(Some(NonZeroU32::new(1).unwrap()), list[0].id());
+
+    // object is stream
+    let buf = br#"1 0 obj <</foo 2 0 R/Length 3>> stream
+123
+endstream
+endobj"#;
+    let xref = XRefTable::from_buf(buf);
+    let resolver = ObjectResolver::new(buf, &xref);
+    let list = resolver
+        .resolve_one_or_more_pdf_object::<FooDict>(NonZeroU32::new(1).unwrap())
+        .unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(Some(NonZeroU32::new(1).unwrap()), list[0].id());
+
+    // object is array
+    let buf = br#"1 0 obj [2 0 R<<>>] endobj
+2 0 obj<<>>endobj"#;
+    let xref = XRefTable::from_buf(buf);
+    let resolver = ObjectResolver::new(buf, &xref);
+    let list = resolver
+        .resolve_one_or_more_pdf_object::<FooDict>(NonZeroU32::new(1).unwrap())
+        .unwrap();
+    assert_eq!(list.len(), 2);
+    assert_eq!(Some(NonZeroU32::new(2).unwrap()), list[0].id());
+    assert_eq!(None, list[1].id());
+}
+
+#[test]
 fn parse_file() {
     let mut p = PathBuf::from(file!());
     assert_eq!(

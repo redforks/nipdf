@@ -421,6 +421,32 @@ impl<'a> ObjectResolver<'a> {
         }
     }
 
+    /// Resolve pdf_object by id, if its end value is dictionary, return with one element vec.
+    /// If its end value is array, return all elements in array.
+    pub fn resolve_one_or_more_pdf_object<'b, T: PdfObject<'a, 'b>>(
+        &'b self,
+        id: NonZeroU32,
+    ) -> Result<Vec<T>, ObjectValueError> {
+        let obj = self.resolve(id)?;
+        match obj {
+            Object::Dictionary(d) => Ok(vec![T::new(Some(id), d, self)?]),
+            Object::Stream(s) => Ok(vec![T::new(Some(id), s.as_dict(), self)?]),
+            Object::Array(arr) => {
+                let mut res = Vec::with_capacity(arr.len());
+                for obj in arr {
+                    let dict = self.resolve_reference(obj)?;
+                    res.push(T::new(
+                        obj.as_ref().ok().map(|id| id.id().id()),
+                        dict.as_dict()?,
+                        self,
+                    )?);
+                }
+                Ok(res)
+            }
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
+    }
+
     /// Resolve pdf_object from container, if its end value is dictionary, return with one element vec.
     /// If its end value is array, return all elements in array.
     /// If value not exist, return empty vector.
