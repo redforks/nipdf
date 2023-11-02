@@ -12,12 +12,10 @@ use syn::{
 /// If `#[key("key")]` attribute defined, return key value
 fn key_attr(attrs: &[Attribute]) -> Option<String> {
     attrs.iter().find_map(|attr| {
-        if attr.path().is_ident("key") {
+        attr.path().is_ident("key").then(|| {
             let lit: LitStr = attr.parse_args().expect("expect string literal");
-            Some(lit.value())
-        } else {
-            None
-        }
+            lit.value()
+        })
     })
 }
 
@@ -107,24 +105,20 @@ fn is_map(t: &Type) -> bool {
 /// Return Some(literal) if `#[default(literal)]` attribute defined, otherwise return None
 fn default_lit(attrs: &[Attribute]) -> Option<ExprLit> {
     attrs.iter().find_map(|attr| {
-        if attr.path().is_ident("default") {
+        attr.path().is_ident("default").then(|| {
             let lit: ExprLit = attr.parse_args().expect("expect literal");
-            Some(lit)
-        } else {
-            None
-        }
+            lit
+        })
     })
 }
 
 /// Return Some(func_name) if `#[default_fn(func)]` attribute defined, otherwise return None
 fn default_fn(attrs: &[Attribute]) -> Option<ExprPath> {
     attrs.iter().find_map(|attr| {
-        if attr.path().is_ident("default_fn") {
+        attr.path().is_ident("default_fn").then(|| {
             let lit: ExprPath = attr.parse_args().expect("expect function");
-            Some(lit)
-        } else {
-            None
-        }
+            lit
+        })
     })
 }
 
@@ -171,12 +165,10 @@ fn try_from<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type,
 fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
     let get_type = || {
         attrs.iter().find_map(|attr| {
-            if attr.path().is_ident("typ") {
+            attr.path().is_ident("typ").then(|| {
                 let lit: LitStr = attr.parse_args().expect("expect string literal");
-                Some(lit.value())
-            } else {
-                None
-            }
+                lit.value()
+            })
         })
     };
 
@@ -307,12 +299,10 @@ fn get_literal_from_possible_some(t: &Expr) -> Either<&Expr, &Expr> {
 
 fn type_field(attrs: &[Attribute]) -> Option<String> {
     attrs.iter().find_map(|attr| {
-        if attr.path().is_ident("type_field") {
+        attr.path().is_ident("type_field").then(|| {
             let lit: LitStr = attr.parse_args().expect("expect string literal");
-            Some(lit.value())
-        } else {
-            None
-        }
+            lit.value()
+        })
     })
 }
 
@@ -449,7 +439,6 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         Expr::Array(arr) => {
-            let mut ty: Vec<Type> = vec![];
             let mut arg = vec![];
             for expr in arr.elems {
                 match expr {
@@ -457,7 +446,6 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                         let lit = lit.lit;
                         match lit {
                             syn::Lit::Str(lit) => {
-                                ty.push(parse_quote! { &'static str });
                                 arg.push(Expr::Lit(ExprLit {
                                     attrs: vec![],
                                     lit: lit.into(),

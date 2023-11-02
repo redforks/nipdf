@@ -648,7 +648,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 .set_stroke_color_and_space(ColorSpace::DeviceCMYK, &color),
             Operation::SetStrokeRGB(color) => self
                 .current_mut()
-                .set_stroke_color(color_space::DeviceRGB().to_skia_color(&color)),
+                .set_stroke_color(color_space::DeviceRGB.to_skia_color(&color)),
             Operation::SetStrokeColorOrWithPattern(color_or_name) => {
                 self.set_stroke_color_or_pattern(&color_or_name).unwrap()
             }
@@ -945,7 +945,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
     /// Paints the specified XObject. Only XObjectType::Image supported
     fn paint_x_object(&mut self, name: &NameOfDict) -> AnyResult<()> {
         let x_objects = self.resources.x_object()?;
-        let x_object = x_objects.get(&name.0).unwrap();
+        let x_object = &x_objects[&name.0];
 
         match x_object.subtype()? {
             XObjectType::Image => self.paint_image_x_object(x_object),
@@ -997,11 +997,11 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let (cx2, cy2, cr2) = circle(1.0);
         let (cx1, cy1) = ctm.transform_point((cx1, cy1).into()).into();
         let (cx2, cy2) = ctm.transform_point((cx2, cy2).into()).into();
-        let d = ((cx1 - cx2).powi(2) + (cy1 - cy2).powi(2)).sqrt();
+        let d = (cx1 - cx2).hypot(cy1 - cy2);
         let steps = if d < 1.0 {
             let (cx1, cy1) = ctm.transform_point((0., 0.).into()).into();
             let (cx2, cy2) = ctm.transform_point((cr1 + cr2, 0.).into()).into();
-            ((cx1 - cx2).powi(2) + (cy1 - cy2).powi(2)).sqrt() * 2.
+            (cx1 - cx2).hypot(cy1 - cy2) * 2.
         } else {
             d / 2.0
         }
@@ -1064,7 +1064,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
 
     fn paint_shading(&mut self, name: NameOfDict) -> AnyResult<()> {
         let shading = self.resources.shading()?;
-        let shading = shading.get(&name.0).unwrap();
+        let shading = &shading[&name.0];
         match build_shading(shading, self.resources)? {
             Some(Shading::Radial(radial)) => self.paint_radial(&radial),
             Some(Shading::Axial(axial)) => self.paint_axial(axial),
@@ -1094,7 +1094,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         match color_or_name {
             ColorArgsOrName::Name(name) => {
                 let pattern = self.resources.pattern()?;
-                let pattern = pattern.get(name.as_str()).unwrap();
+                let pattern = &pattern[name.as_str()];
                 match pattern.pattern_type()? {
                     PatternType::Tiling => self.set_tiling_pattern(pattern.tiling_pattern()?),
                     PatternType::Shading => self.set_shading_pattern(pattern.shading_pattern()?),

@@ -2,7 +2,6 @@
 use iced::{alignment, widget::horizontal_rule};
 #[cfg(feature = "debug")]
 use iced_aw::{modal, Card};
-use std::sync::Arc;
 #[cfg(feature = "debug")]
 use std::time::{Duration, Instant};
 
@@ -186,7 +185,7 @@ impl Viewer {
             page: Page {
                 width: 0,
                 height: 0,
-                data: ShardedData(Arc::new(vec![])),
+                data: ShardedData(vec![].into()),
             },
             navi: PageNavigator {
                 current_page: 0,
@@ -226,7 +225,7 @@ impl Viewer {
         self.page = Page {
             width: page.width(),
             height: page.height(),
-            data: ShardedData(Arc::new(page.take())),
+            data: ShardedData(page.take().into()),
         };
         self.navi = PageNavigator {
             current_page: no,

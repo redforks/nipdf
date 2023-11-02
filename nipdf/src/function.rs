@@ -321,7 +321,7 @@ impl Function for SampledFunction {
             let encode = &self.encode.0[i];
             let arg = (arg - domain.start) / (domain.end - domain.start);
             let arg = arg * (encode.end - encode.start) + encode.start;
-            idx += (arg as u32).min(self.size[i] - 1).max(0);
+            idx += (arg as u32).clamp(0, self.size[i] - 1);
         }
 
         let n = self.signature.n_returns().unwrap();

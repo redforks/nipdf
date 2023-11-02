@@ -585,7 +585,7 @@ impl<'a> Stream<'a> {
                 }
             }
             FilterDecodedData::CmykImage((width, height, pixels)) => {
-                let cs = DeviceCMYK();
+                let cs = DeviceCMYK;
                 DynamicImage::ImageRgba8(RgbaImage::from_fn(width, height, |x, y| {
                     let i = (y * width + x) as usize * 4;
                     Rgba(cs.to_rgba(&[

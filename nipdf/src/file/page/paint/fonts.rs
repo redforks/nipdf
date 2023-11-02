@@ -16,7 +16,7 @@ use log::{error, info, warn};
 use once_cell::sync::Lazy;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
 use smallvec::SmallVec;
-use std::{borrow::Cow, collections::HashMap, fs::File, io::Read, ops::RangeInclusive};
+use std::{borrow::Cow, collections::HashMap, ops::RangeInclusive};
 use tiny_skia::PathBuilder;
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
 
@@ -535,12 +535,7 @@ impl<'c> FontCache<'c> {
         let face = SYSTEM_FONTS.face(id).unwrap();
         assert_eq!(face.index, 0, "Only one face supported");
         match face.source {
-            Source::File(ref path) => {
-                let mut file = File::open(path)?;
-                let mut bytes = Vec::new();
-                file.read_to_end(&mut bytes)?;
-                Ok(bytes)
-            }
+            Source::File(ref path) => Ok(std::fs::read(path)?),
             Source::Binary(ref bytes) => Ok(bytes.as_ref().as_ref().to_owned()),
             Source::SharedFile(_, ref bytes) => Ok(bytes.as_ref().as_ref().to_owned()),
         }
@@ -714,7 +709,7 @@ impl Type0FontOp {
             todo!("Only IdentityH encoding supported");
         }
         let cid_fonts = font.descendant_fonts()?;
-        let cid_font = cid_fonts.get(0).unwrap();
+        let cid_font = &cid_fonts[0];
         let widths = cid_font.w()?;
         Ok(Self {
             widths,
@@ -752,7 +747,7 @@ struct CIDFontType0Font<'a, 'b> {
 
 impl<'a, 'b> CIDFontType0Font<'a, 'b> {
     fn new(font_dict: FontDict<'a, 'b>, data: Vec<u8>) -> AnyResult<Self> {
-        let font = FontKitFont::from_bytes(data.clone().into(), 0)?;
+        let font = FontKitFont::from_bytes(data.into(), 0)?;
         Ok(Self { font_dict, font })
     }
 }

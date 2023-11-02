@@ -29,7 +29,7 @@ fn main() -> iced::Result {
 
 /// Share [u8] data, implements `AsRef<[u8]` trait, `Arc<Vec<u8>>` itself not implement the trait.
 #[derive(Clone)]
-struct ShardedData(Arc<Vec<u8>>);
+struct ShardedData(Arc<[u8]>);
 
 impl AsRef<[u8]> for ShardedData {
     fn as_ref(&self) -> &[u8] {

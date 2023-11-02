@@ -198,9 +198,9 @@ fn build_linear_gradient_stops(
         let rv = f.call(&[x])?;
         // TODO: use current color space to check array length, and convert to skia color
         let color = match rv.len() {
-            1 => DeviceGray().to_skia_color(&rv),
-            3 => DeviceRGB().to_skia_color(&rv),
-            4 => DeviceCMYK().to_skia_color(&rv),
+            1 => DeviceGray.to_skia_color(&rv),
+            3 => DeviceRGB.to_skia_color(&rv),
+            4 => DeviceCMYK.to_skia_color(&rv),
             _ => unreachable!(),
         };
         Ok(GradientStop::new(x, color))

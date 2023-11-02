@@ -444,7 +444,7 @@ impl Dict {
     /// Return default value if value not exist.
     pub fn as_delta_encoded_or(&self, k: Operator, default: &'static [f32]) -> Result<Vec<f32>> {
         self.as_delta_encoded(k)
-            .map(|v| v.unwrap_or(default.to_vec()))
+            .map(|v| v.unwrap_or_else(|| default.to_vec()))
     }
 
     pub fn delta_encoded(&self, k: Operator) -> Result<Vec<f32>> {

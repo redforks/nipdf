@@ -203,10 +203,10 @@ where
 {
     fn to_rgba(&self, color: &[T]) -> [T; 4] {
         match self {
-            ColorSpace::DeviceGray => DeviceGray().to_rgba(color),
-            ColorSpace::DeviceRGB => DeviceRGB().to_rgba(color),
-            ColorSpace::DeviceCMYK => DeviceCMYK().to_rgba(color),
-            ColorSpace::Pattern => PatternColorSpace().to_rgba(color),
+            ColorSpace::DeviceGray => DeviceGray.to_rgba(color),
+            ColorSpace::DeviceRGB => DeviceRGB.to_rgba(color),
+            ColorSpace::DeviceCMYK => DeviceCMYK.to_rgba(color),
+            ColorSpace::Pattern => PatternColorSpace.to_rgba(color),
             ColorSpace::Indexed(indexed) => indexed.to_rgba(color),
             ColorSpace::Separation(sep) => sep.as_ref().to_rgba(color),
             ColorSpace::_Phantom(_) => unreachable!(),
@@ -215,10 +215,10 @@ where
 
     fn components(&self) -> usize {
         match self {
-            ColorSpace::DeviceGray => ColorSpaceTrait::<T>::components(&DeviceGray()),
-            ColorSpace::DeviceRGB => ColorSpaceTrait::<T>::components(&DeviceRGB()),
-            ColorSpace::DeviceCMYK => ColorSpaceTrait::<T>::components(&DeviceCMYK()),
-            ColorSpace::Pattern => ColorSpaceTrait::<T>::components(&PatternColorSpace()),
+            ColorSpace::DeviceGray => ColorSpaceTrait::<T>::components(&DeviceGray),
+            ColorSpace::DeviceRGB => ColorSpaceTrait::<T>::components(&DeviceRGB),
+            ColorSpace::DeviceCMYK => ColorSpaceTrait::<T>::components(&DeviceCMYK),
+            ColorSpace::Pattern => ColorSpaceTrait::<T>::components(&PatternColorSpace),
             ColorSpace::Indexed(indexed) => indexed.components(),
             ColorSpace::Separation(sep) => sep.as_ref().components(),
             ColorSpace::_Phantom(_) => unreachable!(),
@@ -253,7 +253,7 @@ pub trait ColorSpaceTrait<T> {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct DeviceGray();
+pub struct DeviceGray;
 
 impl<T: ColorComp> ColorSpaceTrait<T> for DeviceGray {
     fn to_rgba(&self, color: &[T]) -> [T; 4] {
@@ -266,7 +266,7 @@ impl<T: ColorComp> ColorSpaceTrait<T> for DeviceGray {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct DeviceRGB();
+pub struct DeviceRGB;
 
 impl<T: ColorComp> ColorSpaceTrait<T> for DeviceRGB {
     fn to_rgba(&self, color: &[T]) -> [T; 4] {
@@ -279,7 +279,7 @@ impl<T: ColorComp> ColorSpaceTrait<T> for DeviceRGB {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct DeviceCMYK();
+pub struct DeviceCMYK;
 
 impl<T> ColorSpaceTrait<T> for DeviceCMYK
 where
@@ -358,7 +358,7 @@ where
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct PatternColorSpace();
+pub struct PatternColorSpace;
 
 impl<T> ColorSpaceTrait<T> for PatternColorSpace {
     fn to_rgba(&self, _color: &[T]) -> [T; 4] {

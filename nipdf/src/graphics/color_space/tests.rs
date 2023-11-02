@@ -1,6 +1,9 @@
 use std::num::NonZeroU32;
 
-use crate::{file::XRefTable, function::{MockFunction, FunctionValue}};
+use crate::{
+    file::XRefTable,
+    function::{FunctionValue, MockFunction},
+};
 use test_case::test_case;
 
 use super::*;
@@ -10,14 +13,14 @@ use smallvec::smallvec;
 
 #[test]
 fn device_gray_to_rgb() {
-    let color_space = DeviceGray();
+    let color_space = DeviceGray;
     let rgba = color_space.to_rgba(&[0x80]);
     assert_eq!(rgba, [0x80, 0x80, 0x80, 0xff]);
 }
 
 #[test]
 fn rgb_to_rgb() {
-    let color_space = DeviceRGB();
+    let color_space = DeviceRGB;
     let color = [0x1, 0x2, 0x3];
     let rgba = color_space.to_rgba(&color);
     assert_eq!(rgba, [1, 2, 3, 255]);
@@ -25,7 +28,7 @@ fn rgb_to_rgb() {
 
 #[test]
 fn cmyk_to_rgb() {
-    let color_space = DeviceCMYK();
+    let color_space = DeviceCMYK;
     let color = [0, 0, 0, 0];
     let rgb = color_space.to_rgba(&color);
     assert_eq!(rgb, [255, 255, 255, 255]);
@@ -58,14 +61,14 @@ fn convert_color_com_f32_to_u8() {
 #[test]
 fn test_color_to_rgba() {
     // DeviceGray u8 to u8 rgba
-    let color_space = DeviceGray();
+    let color_space = DeviceGray;
     assert_eq!(
         color_to_rgba::<_, u8, _>(&color_space, &[0x80]),
         [0x80, 0x80, 0x80, 0xff]
     );
 
     // DeviceGray u8 to f32 rgba
-    let color_space = DeviceGray();
+    let color_space = DeviceGray;
     assert_eq!(
         color_to_rgba::<_, f32, _>(&color_space, &[51]),
         [0.2f32, 0.2f32, 0.2f32, 1.0f32]

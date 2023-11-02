@@ -170,10 +170,7 @@ impl XRefTable {
         self.id_offset.get(&id.into()).map(|entry| match entry {
             ObjectPos::Offset(offset) => Either::Left(&buf[*offset as usize..]),
             ObjectPos::InStream(id, idx) => {
-                let object_stream = self
-                    .object_streams
-                    .get(id)
-                    .unwrap()
+                let object_stream = self.object_streams[id]
                     .get_or_try_init(|| {
                         let buf = self.resolve_object_buf(buf, *id).unwrap();
                         let (_, (_, stream)) = parse_indirected_stream(&buf).unwrap();
@@ -633,7 +630,7 @@ impl File {
         Ok(catalog
             .ver()
             .map(|s| s.to_owned())
-            .unwrap_or(self.head_ver.clone()))
+            .unwrap_or_else(|| self.head_ver.clone()))
     }
 
     pub fn catalog<'a, 'b>(

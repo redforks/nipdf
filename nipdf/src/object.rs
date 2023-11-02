@@ -380,13 +380,13 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn required_name(&self, id: &'static str) -> Result<&'b str, ObjectValueError> {
         self.opt_get(id)?
-            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
+            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_name()
     }
 
     pub fn required_int(&self, id: &'static str) -> Result<i32, ObjectValueError> {
         self.opt_get(id)?
-            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
+            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_int()
     }
 
@@ -401,7 +401,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn required_bool(&self, id: &'static str) -> Result<bool, ObjectValueError> {
         self.opt_get(id)?
-            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
+            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_bool()
     }
 
@@ -448,7 +448,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn required_f32(&self, id: &'static str) -> Result<f32, ObjectValueError> {
         self.opt_get(id)?
-            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
+            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_number()
     }
 
@@ -462,7 +462,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn required_object(&self, id: &'static str) -> Result<&'b Object<'a>, ObjectValueError> {
         self.opt_object(id)?
-            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))
+            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))
     }
 
     /// Return empty vec if not exist, error if not array
@@ -489,7 +489,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         f: impl Fn(&Object) -> Result<V, ObjectValueError>,
     ) -> Result<Vec<V>, ObjectValueError> {
         self.opt_get(id)?
-            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
+            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_arr()?
             .iter()
             .map(f)
@@ -549,14 +549,15 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     }
 
     pub fn required_dict(&self, id: &'static str) -> Result<&'b Dictionary<'a>, ObjectValueError> {
-        self.opt_dict(id)
-            .and_then(|o| o.ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id)))
+        self.opt_dict(id).and_then(|o| {
+            o.ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))
+        })
     }
 
     pub fn required_ref(&self, id: &'static str) -> Result<NonZeroU32, ObjectValueError> {
         self.d
             .get(id.as_bytes())
-            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
+            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_ref()
             .map(|r| r.id().id())
     }
@@ -584,7 +585,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn required_str(&self, id: &'static str) -> Result<String, ObjectValueError> {
         self.opt_get(id)?
-            .ok_or(ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
+            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_string()
     }
 }
@@ -757,7 +758,7 @@ impl<'a> Object<'a> {
 
     pub fn as_text_string(&self) -> Result<String, ObjectValueError> {
         match self {
-            Object::LiteralString(s) => Ok(s.decoded()?.to_owned()),
+            Object::LiteralString(s) => Ok(s.decoded()?),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
@@ -799,13 +800,11 @@ impl<'a> Object<'a> {
             RcDoc::text("<<")
                 .append(
                     RcDoc::intersperse(
-                        keys.into_iter()
-                            .map(|k| {
-                                name_to_doc(k)
-                                    .append(RcDoc::space())
-                                    .append(d.get(k).unwrap().to_doc())
-                            })
-                            .collect::<Vec<_>>(),
+                        keys.into_iter().map(|k| {
+                            name_to_doc(k)
+                                .append(RcDoc::space())
+                                .append(d.get(k).unwrap().to_doc())
+                        }),
                         RcDoc::line(),
                     )
                     .nest(2)
