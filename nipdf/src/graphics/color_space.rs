@@ -106,7 +106,8 @@ pub enum ColorSpace<T = f32> {
     Pattern,
     Indexed(Box<IndexedColorSpace<T>>),
     Separation(Box<SeparationColorSpace<T>>),
-    Phantom(T),
+    /// Without this, complier complains T is not referenced in any of enum branches
+    _Phantom(T),
 }
 
 impl<T> ColorSpace<T>
@@ -205,7 +206,7 @@ where
             ColorSpace::Pattern => PatternColorSpace().to_rgba(color),
             ColorSpace::Indexed(indexed) => indexed.to_rgba(color),
             ColorSpace::Separation(sep) => sep.as_ref().to_rgba(color),
-            ColorSpace::Phantom(_) => unreachable!(),
+            ColorSpace::_Phantom(_) => unreachable!(),
         }
     }
 
@@ -217,7 +218,7 @@ where
             ColorSpace::Pattern => ColorSpaceTrait::<T>::components(&PatternColorSpace()),
             ColorSpace::Indexed(indexed) => indexed.components(),
             ColorSpace::Separation(sep) => sep.as_ref().components(),
-            ColorSpace::Phantom(_) => unreachable!(),
+            ColorSpace::_Phantom(_) => unreachable!(),
         }
     }
 }
