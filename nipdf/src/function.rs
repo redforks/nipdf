@@ -117,6 +117,16 @@ impl Function for Box<dyn Function> {
 pub struct NFunc(Vec<Box<dyn Function>>, Signature);
 
 impl NFunc {
+    /// If one element in `functions`, returns it directly.
+    /// Returns `NFunc` otherwise.
+    pub fn new_box(functions: Vec<Box<dyn Function>>) -> AnyResult<Box<dyn Function>> {
+        if functions.len() == 1 {
+            Ok(functions.into_iter().next().unwrap())
+        } else {
+            Ok(Box::new(Self::new(functions)?))
+        }
+    }
+
     /// Returns error if any of the functions has more than one return value.
     pub fn new(functions: Vec<Box<dyn Function>>) -> AnyResult<Self> {
         if functions.is_empty() {
