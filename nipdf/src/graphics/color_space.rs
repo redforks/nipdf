@@ -1,7 +1,6 @@
 use std::rc::Rc;
 
 use anyhow::{anyhow, Result as AnyResult};
-use educe::Educe;
 use smallvec::SmallVec;
 
 use crate::{
@@ -100,7 +99,7 @@ where
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ColorSpace<T: PartialEq + std::fmt::Debug = f32> {
+pub enum ColorSpace<T = f32> {
     DeviceGray,
     DeviceRGB,
     DeviceCMYK,
@@ -112,7 +111,7 @@ pub enum ColorSpace<T: PartialEq + std::fmt::Debug = f32> {
 
 impl<T> ColorSpace<T>
 where
-    T: ColorComp + ColorCompConvertTo<f32> + Default + PartialEq + 'static,
+    T: ColorComp + ColorCompConvertTo<f32> + 'static,
     T: ColorCompConvertTo<u8>,
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
@@ -193,7 +192,7 @@ where
 
 impl<T> ColorSpaceTrait<T> for ColorSpace<T>
 where
-    T: ColorComp + ColorCompConvertTo<f32> + Default + PartialEq + 'static,
+    T: ColorComp + ColorCompConvertTo<f32> + 'static,
     T: ColorCompConvertTo<u8>,
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
@@ -372,14 +371,14 @@ impl<T> ColorSpaceTrait<T> for PatternColorSpace {
 /// Base color stored in data, each color component is a u8. Max index
 /// is data.len() / base.components().
 #[derive(Debug, Clone, PartialEq)]
-pub struct IndexedColorSpace<T: PartialEq + std::fmt::Debug> {
+pub struct IndexedColorSpace<T> {
     pub base: ColorSpace<T>,
     pub data: Vec<u8>,
 }
 
 impl<T> IndexedColorSpace<T>
 where
-    T: ColorComp + ColorCompConvertTo<f32> + Default + PartialEq + 'static,
+    T: ColorComp + ColorCompConvertTo<f32> + 'static,
     T: ColorCompConvertTo<u8>,
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
@@ -394,7 +393,7 @@ where
 
 impl<T> ColorSpaceTrait<T> for IndexedColorSpace<T>
 where
-    T: ColorComp + ColorCompConvertTo<f32> + Default + PartialEq + 'static,
+    T: ColorComp + ColorCompConvertTo<f32> + 'static,
     T: ColorCompConvertTo<u8>,
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
@@ -413,20 +412,31 @@ where
     }
 }
 
-#[derive(Clone, Educe)]
-#[educe(Debug, PartialEq)]
-pub struct SeparationColorSpace<T: PartialEq + std::fmt::Debug> {
+#[derive(Clone)]
+pub struct SeparationColorSpace<T> {
     base: ColorSpace<T>,
 
     // use Rc, because Box not impl clone trait
-    #[educe(Debug(ignore))]
-    #[educe(PartialEq(ignore))]
     f: Rc<dyn Function>,
+}
+
+impl<T: core::fmt::Debug> core::fmt::Debug for SeparationColorSpace<T> {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
+        let mut builder = formatter.debug_struct("SeparationColorSpace");
+        builder.field("base", &self.base);
+        builder.finish()
+    }
+}
+
+impl<T: PartialEq> core::cmp::PartialEq for SeparationColorSpace<T> {
+    fn eq(&self, other: &Self) -> bool {
+        core::cmp::PartialEq::eq(&self.base, &other.base)
+    }
 }
 
 impl<T> ColorSpaceTrait<T> for SeparationColorSpace<T>
 where
-    T: ColorComp + ColorCompConvertTo<f32> + Default + PartialEq + 'static,
+    T: ColorComp + ColorCompConvertTo<f32> + 'static,
     T: ColorCompConvertTo<u8>,
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
