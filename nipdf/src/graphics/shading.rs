@@ -1,7 +1,7 @@
 use anyhow::Result as AnyResult;
 use educe::Educe;
 use nipdf_macro::{pdf_object, TryFromIntObject};
-use tiny_skia::{GradientStop, Shader, Transform};
+use tiny_skia::{GradientStop, LinearGradient, Shader, Transform};
 
 use crate::{
     file::{Rectangle, ResourceDict},
@@ -56,11 +56,38 @@ impl<'a> TryFrom<&Object<'a>> for Extend {
     }
 }
 
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub struct AxialCoords {
+    pub start: Point,
+    pub end: Point,
+}
+
+impl<'a> TryFrom<&Object<'a>> for AxialCoords {
+    type Error = ObjectValueError;
+
+    fn try_from(obj: &Object) -> Result<Self, Self::Error> {
+        let arr = obj.as_arr()?;
+        if arr.len() != 4 {
+            return Err(ObjectValueError::UnexpectedType);
+        }
+        Ok(Self {
+            start: Point {
+                x: arr[0].as_number()?,
+                y: arr[1].as_number()?,
+            },
+            end: Point {
+                x: arr[2].as_number()?,
+                y: arr[3].as_number()?,
+            },
+        })
+    }
+}
+
 #[pdf_object(2i32)]
 #[type_field("ShadingType")]
 pub trait AxialShadingDictTrait {
     #[try_from]
-    fn coords(&self) -> Rectangle;
+    fn coords(&self) -> AxialCoords;
 
     #[try_from]
     #[default_fn(default_domain)]
@@ -207,9 +234,7 @@ fn build_linear_gradient_stops(
 }
 
 fn build_axial(d: &AxialShadingDict) -> AnyResult<Option<Axial>> {
-    let coord = d.coords()?;
-    let start = coord.left_lower();
-    let end = coord.right_upper();
+    let AxialCoords { start, end } = d.coords()?;
     if start == end {
         return Ok(None);
     }
@@ -231,6 +256,19 @@ pub struct Axial {
     pub extend: Extend,
     pub stops: Vec<GradientStop>,
     pub b_box: Option<Rectangle>,
+}
+
+impl Axial {
+    pub fn to_skia(self) -> Shader<'static> {
+        LinearGradient::new(
+            self.start.into(),
+            self.end.into(),
+            self.stops,
+            tiny_skia::SpreadMode::Pad,
+            Transform::identity(),
+        )
+        .unwrap()
+    }
 }
 
 #[derive(Educe)]

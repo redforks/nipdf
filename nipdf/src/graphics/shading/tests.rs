@@ -34,6 +34,19 @@ fn radial_coords_try_from() {
     );
 }
 
+#[test]
+fn axias_coords_try_from() {
+    let o = Object::Array(vec![1.into(), 2_f32.into(), 3.into(), 4.into()]);
+    let coords = AxialCoords::try_from(&o).unwrap();
+    assert_eq!(
+        coords,
+        AxialCoords {
+            start: Point { x: 1., y: 2. },
+            end: Point { x: 3., y: 4. },
+        }
+    );
+}
+
 #[test_case(b"1 0 obj<</ShadingType 3/ColorSpace/DeviceGray/Coords[1 1 0 1 1 0]>>endobj"; "radius both be zero")]
 #[test_case(b"1 0 obj<</ShadingType 3/ColorSpace/DeviceGray/Coords[1 1 -1 1 1 1]>>endobj"; "negative start radius")]
 #[test_case(b"1 0 obj<</ShadingType 3/ColorSpace/DeviceGray/Coords[1 1 1 1 1 -1]>>endobj"; "negative end radius")]

@@ -18,9 +18,7 @@ use crate::{
     object::{
         Array, Dictionary, Name, Object, ObjectValueError, Stream, TextString, TextStringOrNumber,
     },
-    parser::{
-        parse_object, whitespace_or_comment, ws_prefixed, ParseError, ParseResult,
-    },
+    parser::{parse_object, whitespace_or_comment, ws_prefixed, ParseError, ParseResult},
 };
 use nipdf_macro::{pdf_object, OperationParser, TryFromIntObject, TryFromNameObject};
 

@@ -7,7 +7,7 @@ use crate::{
     graphics::{
         color_space::{self, ColorSpace, ColorSpaceTrait},
         parse_operations,
-        shading::{build_shading, Extend, Radial, Shading},
+        shading::{build_shading, Axial, Extend, Radial, Shading},
         trans::{
             image_to_device_space, move_text_space_pos, move_text_space_right, to_device_space,
             ImageToDeviceSpace, IntoSkiaTransform, TextToUserSpace, UserToDeviceIndependentSpace,
@@ -954,6 +954,24 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         }
     }
 
+    fn paint_axial(&mut self, axial: Axial) -> Result<(), anyhow::Error> {
+        let b_box = axial.b_box;
+        let rect = b_box
+            .unwrap_or_else(|| Rectangle::from_xywh(0., 0., self.width as f32, self.height as f32))
+            .into();
+        let shader = axial.to_skia();
+        let paint = Paint {
+            shader,
+            ..Default::default()
+        };
+        let state = self.stack.last().unwrap();
+        dbg!(state.ctm);
+        let ctm = to_device_space(self.height as f32, self.zoom, &state.ctm).into_skia();
+        let mask = state.mask.as_ref();
+        self.canvas.fill_rect(rect, &paint, ctm, mask);
+        Ok(())
+    }
+
     fn paint_radial(&mut self, radial: &Radial) -> AnyResult<()> {
         let Domain { start: t0, end: t1 } = radial.domain;
         let Point { x: x0, y: y0 } = radial.start.point;
@@ -1050,8 +1068,8 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let shading = shading.get(&name.0).unwrap();
         match build_shading(shading, self.resources)? {
             Some(Shading::Radial(radial)) => self.paint_radial(&radial),
+            Some(Shading::Axial(axial)) => self.paint_axial(axial),
             None => Ok(()),
-            s => todo!("Paint shading: {:?}", std::mem::discriminant(&s)),
         }
     }
 
@@ -1113,18 +1131,8 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
 
         let shader = match build_shading(&shading, self.resources)? {
             Some(Shading::Axial(axial)) => {
-                // TODO: false extend, requires to limit the gradient to the bounds of the shading (b_box),
-                // which not possible through paint object. The fill operation need to known
-                // the b_box of the shading.
-                assert_eq!(Extend::new(true, true), axial.extend,);
-                LinearGradient::new(
-                    axial.start.into(),
-                    axial.end.into(),
-                    axial.stops,
-                    tiny_skia::SpreadMode::Pad,
-                    Transform::identity(),
-                )
-                .unwrap()
+                assert_eq!(Extend::new(true, true), axial.extend);
+                axial.to_skia()
             }
             None => return Ok(()),
             _ => todo!(),
