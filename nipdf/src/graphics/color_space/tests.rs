@@ -1,15 +1,13 @@
-use std::num::NonZeroU32;
-
+use super::*;
 use crate::{
     file::XRefTable,
     function::{FunctionValue, MockFunction},
 };
-use test_case::test_case;
-
-use super::*;
 use assert_approx_eq::assert_approx_eq;
 use mockall::predicate::*;
 use smallvec::smallvec;
+use std::num::NonZeroU32;
+use test_case::test_case;
 
 #[test]
 fn device_gray_to_rgb() {
@@ -187,10 +185,7 @@ endobj
     Ok(())
 }
 
-#[test]
-fn indexed() -> AnyResult<()> {
-    let buf = b"
-1 0 obj
+#[test_case(b"1 0 obj
 [/Indexed /DeviceRGB 1 2 0 R]
 endobj
 2 0 obj
@@ -199,7 +194,10 @@ stream
 \x01\x02\x03\x04\x05\x06
 endstream
 endobj
-";
+"; "stream")]
+#[test_case(b"1 0 obj[/Indexed/DeviceRGB 1(\x01\x02\x03\x04\x05\x06)]endobj"; "Literal String")]
+#[test_case(b"1 0 obj[/Indexed/DeviceRGB 1<010203040506>]endobj"; "Hex String")]
+fn indexed(buf: &[u8]) -> AnyResult<()> {
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref);
     let args = ColorSpaceArgs::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap())?).unwrap();

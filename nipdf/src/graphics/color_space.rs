@@ -1,12 +1,13 @@
 use std::rc::Rc;
 
-use anyhow::{anyhow, Result as AnyResult};
+use anyhow::{anyhow, bail, Result as AnyResult};
 use smallvec::SmallVec;
 
 use crate::{
     file::{ObjectResolver, ResourceDict},
     function::{Function, FunctionDict, NFunc},
     graphics::ICCStreamDict,
+    object::Object,
 };
 
 use super::ColorSpaceArgs;
@@ -180,18 +181,32 @@ where
                     let base = ColorSpaceArgs::try_from(&arr[1])?;
                     let base: ColorSpace<T> = Self::from_args(&base, resolver, resources)?;
                     let hival = arr[2].as_int()?;
-                    let stream = resolver.resolve(arr[3].as_ref()?.id().id())?.as_stream()?;
-                    let data = stream.decode(resolver)?;
+                    let data = resolve_index_data(&arr[3], resolver)?;
                     assert!(data.len() >= (hival + 1) as usize * base.components());
-                    Ok(Self::Indexed(Box::new(IndexedColorSpace {
-                        base,
-                        data: data.into_owned(),
-                    })))
+                    Ok(Self::Indexed(Box::new(IndexedColorSpace { base, data })))
                 }
                 s => todo!("ColorSpace::from_args() {} color space", s),
             },
         }
     }
+}
+
+/// Resolve data for indexed color space, it may exist in stream or HexString or LiteralString
+fn resolve_index_data(o: &Object, resolver: &ObjectResolver) -> AnyResult<Vec<u8>> {
+    Ok(match o {
+        Object::HexString(s) => s.decoded()?,
+        Object::LiteralString(s) => s.decode_to_bytes()?,
+        Object::Reference(id) => {
+            let o = resolver.resolve(id.id().id())?;
+            match o {
+                Object::HexString(s) => s.decoded()?,
+                Object::LiteralString(s) => s.decode_to_bytes()?,
+                Object::Stream(s) => s.decode(resolver)?.into_owned(),
+                _ => bail!("Unexpected object type when resolve indexed color space data"),
+            }
+        }
+        _ => bail!("Unexpected object type when resolve indexed color space data"),
+    })
 }
 
 impl<T> ColorSpaceTrait<T> for ColorSpace<T>
