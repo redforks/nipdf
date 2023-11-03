@@ -799,7 +799,7 @@ impl<'a> Object<'a> {
             Object::HexString(s) => RcDoc::text(
                 from_utf8(s.0)
                     .map(|s| s.to_owned())
-                    .unwrap_or_else(|_| format!("0X{}", hex::encode(&s.decoded().unwrap()))),
+                    .unwrap_or_else(|_| format!("0X{}", hex::encode(s.decoded().unwrap()))),
             ),
             Object::Name(n) => name_to_doc(n),
             Object::Dictionary(d) => dict_to_doc(d),

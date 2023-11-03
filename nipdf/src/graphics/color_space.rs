@@ -72,16 +72,6 @@ impl ColorComp for f32 {
     }
 }
 
-// pub trait ColorSpaceBoxClone<T> {
-//     fn clone_box(&self) -> Box<dyn ColorSpaceTrait<T>>;
-// }
-
-// impl<T, O: Clone + ColorSpaceTrait<T> + 'static> ColorSpaceBoxClone<T> for O {
-//     fn clone_box(&self) -> Box<dyn ColorSpaceTrait<T>> {
-//         Box::new(self.clone())
-//     }
-// }
-
 /// Convert color to rgba color space, convert result to f32 or u8 by T generic type.
 pub fn color_to_rgba<F, T, CS>(cs: &CS, color: &[F]) -> [T; 4]
 where

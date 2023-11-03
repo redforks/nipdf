@@ -1,3 +1,5 @@
+#![allow(clippy::suboptimal_flops)]
+
 use super::*;
 use euclid::approxeq::ApproxEq;
 use euclid::default::Transform2D as Transform;
