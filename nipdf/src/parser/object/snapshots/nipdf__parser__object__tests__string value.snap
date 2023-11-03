@@ -6,7 +6,12 @@ expression: parse_dict(buf.as_ref()).unwrap()
     [],
     Dictionary(
         {
-            "id": LiteralString(
+            Name(
+                [
+                    105,
+                    100,
+                ],
+            ): LiteralString(
                 LiteralString(
                     [
                         40,

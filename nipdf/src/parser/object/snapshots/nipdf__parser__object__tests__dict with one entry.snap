@@ -6,7 +6,14 @@ expression: parse_dict(buf.as_ref()).unwrap()
     [],
     Dictionary(
         {
-            "Type": Name(
+            Name(
+                [
+                    84,
+                    121,
+                    112,
+                    101,
+                ],
+            ): Name(
                 Name(
                     "Catalog",
                 ),

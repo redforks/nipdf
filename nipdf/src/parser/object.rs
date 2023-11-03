@@ -168,7 +168,7 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<Object> {
                 line_ending,
             ))(input)?;
             if begin_stream.is_some() {
-                if let Some(Object::Integer(l)) = d.get("Length") {
+                if let Some(Object::Integer(l)) = d.get(&b"Length"[..]) {
                     let (input, data) = take(*l as usize)(input)?;
                     let (input, _) = preceded(opt(line_ending), tag(b"endstream"))(input)?;
                     Ok((input, Object::Stream(Stream::new(d, data))))
@@ -190,7 +190,7 @@ fn parse_stream_that_length_not_ref_id(input: &[u8]) -> ParseResult<Stream> {
         parse_dict,
         delimited(whitespace_or_comment, tag(b"stream"), line_ending),
     ))(input)?;
-    let (input, data) = take(dict.get("Length").unwrap().as_int().unwrap() as usize)(input)?;
+    let (input, data) = take(dict.get(&b"Length"[..]).unwrap().as_int().unwrap() as usize)(input)?;
     let (input, _) = preceded(line_ending, tag(b"endstream"))(input)?;
     Ok((input, Stream::new(dict, data)))
 }

@@ -69,7 +69,7 @@ impl ObjectStream {
         let d = stream.as_dict();
         assert_eq!("ObjStm", d.get_name("Type")?.unwrap());
         let n = d.get_int("N", 0)? as usize;
-        assert!(!d.contains_key("Extends"), "Extends is not supported");
+        assert!(!d.contains_key(&b"Extends"[..]), "Extends is not supported");
         let buf = stream.decode_without_resolve_length()?;
         parse_object_stream(n, buf.as_ref())
             .map_err(|e| ObjectValueError::ParseError(e.to_string()))
@@ -223,7 +223,7 @@ pub trait DataContainer<'a> {
 impl<'a> DataContainer<'a> for Dictionary<'a> {
     fn get_value(&self, key: &str) -> Option<&Object<'a>> {
         debug_assert!(!key.starts_with('/'));
-        self.get(key)
+        self.get(key.as_bytes())
     }
 }
 
@@ -231,7 +231,7 @@ impl<'a> DataContainer<'a> for Dictionary<'a> {
 impl<'a> DataContainer<'a> for Vec<&Dictionary<'a>> {
     fn get_value(&self, key: &str) -> Option<&Object<'a>> {
         debug_assert!(!key.starts_with('/'));
-        self.iter().find_map(|d| d.get(key))
+        self.iter().find_map(|d| d.get(key.as_bytes()))
     }
 }
 
@@ -606,11 +606,11 @@ impl File {
         let trailers = frame_set.iter().map(|f| &f.trailer).collect_vec();
         let xref = XRefTable::from_frame_set(&frame_set);
         assert!(
-            !trailers.iter().any(|d| d.contains_key("Encrypt")),
+            !trailers.iter().any(|d| d.contains_key(&b"Encrypt"[..])),
             "Encrypted file is not supported"
         );
 
-        let root_id = trailers.iter().find_map(|t| t.get("Root")).unwrap();
+        let root_id = trailers.iter().find_map(|t| t.get(&b"Root"[..])).unwrap();
         let root_id = root_id.as_ref().unwrap().id().id();
 
         Ok(Self {
