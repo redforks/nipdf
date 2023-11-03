@@ -51,15 +51,11 @@ impl<'a> Dictionary<'a> {
         self.0.insert(id.into(), value.into());
     }
 
-    pub fn get_name(&self, id: &'static str) -> Result<Option<&str>, ObjectValueError> {
+    pub fn get_name(&self, id: &str) -> Result<Option<&str>, ObjectValueError> {
         self.0.get(id).map_or(Ok(None), |o| o.as_name().map(Some))
     }
 
-    pub fn get_name_or(
-        &self,
-        id: &'static str,
-        default: &'static str,
-    ) -> Result<&str, ObjectValueError> {
+    pub fn get_name_or(&self, id: &str, default: &'static str) -> Result<&str, ObjectValueError> {
         self.0.get(id).map_or(Ok(default), |o| o.as_name())
     }
 }
