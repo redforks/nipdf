@@ -1151,12 +1151,12 @@ impl<'a> From<&'a str> for Name<'a> {
 
 impl<'a> Name<'a> {
     pub fn borrowed(v: &'a str) -> Self {
-        debug_assert!(!v.starts_with("/"));
+        debug_assert!(!v.starts_with('/'));
         Self(Cow::Borrowed(v))
     }
 
     pub fn owned(v: String) -> Self {
-        debug_assert!(!v.starts_with("/"));
+        debug_assert!(!v.starts_with('/'));
         Self(Cow::Owned(v))
     }
 }
