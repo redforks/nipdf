@@ -1,4 +1,4 @@
-use crate::file::decode_stream;
+use crate::{file::decode_stream, object::Name};
 
 use super::*;
 use itertools::Itertools;
@@ -61,7 +61,7 @@ use test_case::test_case;
      "filter not supported"
 )]
 fn test_iter_filter(
-    dict: impl IntoIterator<Item = (&'static [u8], Object<'static>)>,
+    dict: impl IntoIterator<Item = (&'static str, Object<'static>)>,
 ) -> Result<Vec<(String, Option<Dictionary<'static>>)>, ObjectValueError> {
     let dict: Dictionary<'static> = dict
         .into_iter()
@@ -87,7 +87,7 @@ fn test_paeth(a: u8, b: u8, c: u8) -> u8 {
 fn predictor_8bit() {
     insta::assert_debug_snapshot!(
         &decode_stream("filters/predictor.pdf", 7u32, |d, resolver| {
-            let params = d.get(&b"DecodeParms"[..]).unwrap().as_dict()?;
+            let params = d.get("DecodeParms").unwrap().as_dict()?;
             assert_eq!(
                 15,
                 resolver
@@ -104,7 +104,7 @@ fn predictor_8bit() {
 fn predictor_24bit() {
     insta::assert_debug_snapshot!(
         &decode_stream("color-space/cal-rgb.pdf", 6u32, |d, resolver| {
-            let params = d.get(&b"DecodeParms"[..]).unwrap().as_dict()?;
+            let params = d.get("DecodeParms").unwrap().as_dict()?;
             assert_eq!(
                 15,
                 resolver

@@ -10,12 +10,7 @@ expression: "parse_frame_set(b\"%PDF-1.7\nxref\n1 1\n0000000000 00000 n\ntrailer
             trailer: Dictionary(
                 {
                     Name(
-                        [
-                            80,
-                            114,
-                            101,
-                            118,
-                        ],
+                        "Prev",
                     ): Integer(
                         9,
                     ),
@@ -39,12 +34,7 @@ expression: "parse_frame_set(b\"%PDF-1.7\nxref\n1 1\n0000000000 00000 n\ntrailer
             trailer: Dictionary(
                 {
                     Name(
-                        [
-                            83,
-                            105,
-                            122,
-                            101,
-                        ],
+                        "Size",
                     ): Integer(
                         1,
                     ),

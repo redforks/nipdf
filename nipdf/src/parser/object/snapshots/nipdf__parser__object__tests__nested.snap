@@ -7,13 +7,7 @@ expression: parse_dict(buf.as_ref()).unwrap()
     Dictionary(
         {
             Name(
-                [
-                    73,
-                    110,
-                    110,
-                    101,
-                    114,
-                ],
+                "Inner",
             ): Dictionary(
                 Dictionary(
                     {},

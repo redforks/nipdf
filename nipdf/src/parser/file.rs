@@ -95,18 +95,18 @@ struct CrossReferenceStreamDict {
 impl CrossReferenceStreamDict {
     pub fn new(d: &Dictionary) -> Result<Self, ObjectValueError> {
         let size = d
-            .get(&Name::borrowed(b"Size"))
+            .get("Size")
             .ok_or(ObjectValueError::DictKeyNotFound)?
             .as_int()? as u32;
         let index = d
-            .get(&Name::borrowed(b"Index"))
+            .get("Index")
             .map(|o| Domains::<u32>::try_from(o).unwrap());
         let prev = d
-            .get(&Name::borrowed(b"Prev"))
+            .get("Prev")
             .map(|o| o.as_int().map(|v| v as u32))
             .transpose()?;
         let w = d
-            .get(&Name::borrowed(b"W"))
+            .get("W")
             .ok_or(ObjectValueError::DictKeyNotFound)?
             .as_arr()?
             .iter()
@@ -247,7 +247,7 @@ pub fn parse_frame_set(input: &[u8]) -> ParseResult<FrameSet> {
     fn get_prev(frame: &Frame) -> Option<i32> {
         frame
             .trailer
-            .get(&Name::borrowed(b"Prev"))
+            .get(&Name::borrowed("Prev"))
             .map(|o| o.as_int().unwrap())
     }
 

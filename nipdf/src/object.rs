@@ -35,19 +35,19 @@ impl<'a> Dictionary<'a> {
 
     pub fn get_opt_int_ref(&self, id: &str) -> Result<Option<&i32>, ObjectValueError> {
         self.0
-            .get(id.as_bytes())
+            .get(id)
             .map_or(Ok(None), |o| o.as_int_ref().map(Some))
     }
 
     pub fn get_int(&self, id: &str, default: i32) -> Result<i32, ObjectValueError> {
         self.0
-            .get(id.as_bytes())
+            .get(id)
             .map_or(Ok(default), |o| o.as_int())
     }
 
     pub fn get_bool(&self, id: &str, default: bool) -> Result<bool, ObjectValueError> {
         self.0
-            .get(id.as_bytes())
+            .get(id)
             .map_or(Ok(default), |o| o.as_bool())
     }
 
@@ -57,7 +57,7 @@ impl<'a> Dictionary<'a> {
 
     pub fn get_name(&self, id: &'static str) -> Result<Option<&str>, ObjectValueError> {
         self.0
-            .get(id.as_bytes())
+            .get(id)
             .map_or(Ok(None), |o| o.as_name().map(Some))
     }
 
@@ -67,7 +67,7 @@ impl<'a> Dictionary<'a> {
         default: &'static str,
     ) -> Result<&str, ObjectValueError> {
         self.0
-            .get(id.as_bytes())
+            .get(id)
             .map_or(Ok(default), |o| o.as_name())
     }
 }
@@ -519,7 +519,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         f: impl Fn(&Object<'a>) -> Result<Item, ObjectValueError>,
     ) -> Result<Vec<Item>, ObjectValueError> {
         self.d
-            .get(id.as_bytes())
+            .get(id)
             .map_or(Ok(Vec::new()), |o| match o {
                 Object::Array(arr) => arr.iter().map(f).collect(),
                 _ => f(o).map(|o| vec![o]),
@@ -556,7 +556,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn required_ref(&self, id: &'static str) -> Result<NonZeroU32, ObjectValueError> {
         self.d
-            .get(id.as_bytes())
+            .get(id)
             .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_ref()
             .map(|r| r.id().id())
@@ -564,7 +564,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn opt_ref(&self, id: &'static str) -> Result<Option<NonZeroU32>, ObjectValueError> {
         self.d
-            .get(id.as_bytes())
+            .get(id)
             .map_or(Ok(None), |o| o.as_ref().map(|r| Some(r.id().id())))
     }
 
@@ -1136,6 +1136,12 @@ impl<'a> From<HexString<'a>> for Object<'a> {
 /// A PDF name object, preceding '/' not included.
 #[derive(Eq, PartialEq, Hash, Debug, Clone, PartialOrd, Ord)]
 pub struct Name<'a>(pub Cow<'a, str>);
+
+impl<'a> Borrow<str> for Name<'a> {
+    fn borrow(&self) -> &str {
+        self.0.borrow()
+    }
+}
 
 impl<'a> From<&'a str> for Name<'a> {
     fn from(value: &'a str) -> Self {
