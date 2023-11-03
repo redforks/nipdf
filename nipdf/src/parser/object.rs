@@ -195,7 +195,7 @@ fn parse_stream_that_length_not_ref_id(input: &[u8]) -> ParseResult<Stream> {
     Ok((input, Stream::new(dict, data)))
 }
 
-pub fn parse_indirected_object(input: &[u8]) -> ParseResult<'_, IndirectObject<'_>> {
+pub fn parse_indirect_object(input: &[u8]) -> ParseResult<'_, IndirectObject<'_>> {
     let (input, (id, gen)) = separated_pair(u32, multispace1, u16)(input)?;
     let (input, obj) = preceded(ws(tag(b"obj")), parse_object_and_stream)(input)?;
     let (input, _) = opt(ws_prefixed(tag("endobj")))(input)?;
@@ -206,8 +206,8 @@ pub fn parse_indirected_object(input: &[u8]) -> ParseResult<'_, IndirectObject<'
 }
 
 /// Parse stream wrapped in indirect object tag,
-/// different from `parse_indirected_object()`, buf will after the end of `endobj`
-pub fn parse_indirected_stream(input: &[u8]) -> ParseResult<(NonZeroU32, Stream)> {
+/// different from `parse_indirect_object()`, buf will after the end of `endobj`
+pub fn parse_indirect_stream(input: &[u8]) -> ParseResult<(NonZeroU32, Stream)> {
     let (input, (id, _)) = separated_pair(u32, multispace1, u16)(input)?;
     let (input, stream) = preceded(ws(tag(b"obj")), parse_stream_that_length_not_ref_id)(input)?;
     let (input, _) = ws(tag(b"endobj"))(input)?;

@@ -12,8 +12,8 @@ use std::{iter::repeat_with, num::NonZeroU32};
 use crate::{
     object::{Dictionary, Entry, FrameSet, Object, ObjectValueError, PdfObject, Stream},
     parser::{
-        parse_frame_set, parse_header, parse_indirected_object, parse_indirected_stream,
-        parse_object, ParseResult,
+        parse_frame_set, parse_header, parse_indirect_object, parse_indirect_stream, parse_object,
+        ParseResult,
     },
 };
 use log::error;
@@ -130,7 +130,7 @@ impl XRefTable {
         use nom::combinator::all_consuming;
         use nom::multi::many1;
 
-        let (input, objects) = many1(ws_prefixed(parse_indirected_object))(buf).unwrap();
+        let (input, objects) = many1(ws_prefixed(parse_indirect_object))(buf).unwrap();
         all_consuming(whitespace_or_comment)(input).unwrap();
         let mut id_offset = IDOffsetMap::new();
         for o in objects {
@@ -173,7 +173,7 @@ impl XRefTable {
                 let object_stream = self.object_streams[id]
                     .get_or_try_init(|| {
                         let buf = self.resolve_object_buf(buf, *id).unwrap();
-                        let (_, (_, stream)) = parse_indirected_stream(&buf).unwrap();
+                        let (_, (_, stream)) = parse_indirect_stream(&buf).unwrap();
                         ObjectStream::new(stream)
                     })
                     .unwrap();
@@ -192,7 +192,7 @@ impl XRefTable {
             .and_then(|buf| {
                 buf.either(
                     |buf| {
-                        parse_indirected_object(buf)
+                        parse_indirect_object(buf)
                             .finish()
                             .map(|(_, o)| o.take())
                             .map_err(ObjectValueError::from)

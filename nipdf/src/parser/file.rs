@@ -18,7 +18,7 @@ use nom::{
 use crate::{
     function::{Domain, Domains},
     object::{Dictionary, Entry, Frame, FrameSet, Name, ObjectValueError, XRefSection},
-    parser::{parse_dict, parse_indirected_stream},
+    parser::{parse_dict, parse_indirect_stream},
 };
 
 use super::{ws_terminated, FileError, ParseError, ParseResult};
@@ -98,9 +98,7 @@ impl CrossReferenceStreamDict {
             .get("Size")
             .ok_or(ObjectValueError::DictKeyNotFound)?
             .as_int()? as u32;
-        let index = d
-            .get("Index")
-            .map(|o| Domains::<u32>::try_from(o).unwrap());
+        let index = d.get("Index").map(|o| Domains::<u32>::try_from(o).unwrap());
         let prev = d
             .get("Prev")
             .map(|o| o.as_int().map(|v| v as u32))
@@ -146,7 +144,7 @@ fn parse_xref_stream(buf: &[u8]) -> ParseResult<(XRefSection, Dictionary<'_>)> {
         nom::Err::Error(ParseError::from_error_kind(b"", ErrorKind::Fail))
     }
 
-    let (buf, (_, stream)) = parse_indirected_stream(buf)?;
+    let (buf, (_, stream)) = parse_indirect_stream(buf)?;
     let d = stream.as_dict();
     let d = CrossReferenceStreamDict::new(d).map_err(to_parse_error)?;
     assert!(
