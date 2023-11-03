@@ -10,7 +10,7 @@ use crate::{
         parse_operations, shading::ShadingDict, LineCapStyle, LineJoinStyle, Operation,
         PatternDict, Point, RenderingIntent,
     },
-    object::{Dictionary, Object, ObjectValueError, PdfObject, Stream},
+    object::{Dictionary, Name, Object, ObjectValueError, PdfObject, Stream},
     text::FontDict,
 };
 
@@ -185,7 +185,7 @@ pub trait FormXObjectDictTrait {
 /// Wrap type to impl TryFrom<> trait
 #[derive(Educe)]
 #[educe(Deref)]
-pub struct ColorSpaceResources<'a>(HashMap<String, ColorSpaceArgs<'a>>);
+pub struct ColorSpaceResources<'a>(HashMap<Name<'a>, ColorSpaceArgs<'a>>);
 
 impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceResources<'a> {
     type Error = ObjectValueError;
@@ -196,7 +196,7 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceResources<'a> {
             Object::Dictionary(dict) => {
                 for (k, v) in dict.iter() {
                     let cs = ColorSpaceArgs::try_from(v)?;
-                    map.insert(k.as_ref().to_owned(), cs);
+                    map.insert(k.clone(), cs);
                 }
                 Ok(Self(map))
             }
