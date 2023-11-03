@@ -8,13 +8,7 @@ expression: parse_dict(buf.as_ref()).unwrap()
         {
             "id": Name(
                 Name(
-                    [
-                        86,
-                        97,
-                        108,
-                        117,
-                        101,
-                    ],
+                    "Value",
                 ),
             ),
         },

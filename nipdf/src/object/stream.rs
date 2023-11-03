@@ -2,7 +2,6 @@ use std::{
     borrow::{Borrow, Cow},
     fmt::Display,
     iter::{once, repeat},
-    str::from_utf8,
 };
 
 use anyhow::Result as AnyResult;
@@ -650,7 +649,7 @@ impl<'a> Stream<'a> {
                     .iter()
                     .map(|v| v.as_name().map_err(|_| ObjectValueError::UnexpectedType))
                     .collect(),
-                Object::Name(n) => Ok(vec![from_utf8(n.0.borrow()).unwrap()]),
+                Object::Name(n) => Ok(vec![n.as_ref()]),
                 _ => Err(ObjectValueError::UnexpectedType),
             },
         )?;

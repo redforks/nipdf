@@ -80,7 +80,7 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<Object> {
 
 /// Return `Err(ObjectValueError::InvalidNameForma)` if the name is not a valid PDF name encoding,
 /// not two hex char after `#`.
-fn normalize_name(buf: &[u8]) -> Result<Cow<[u8]>, ObjectValueError> {
+fn normalize_name(buf: &[u8]) -> Result<Cow<str>, ObjectValueError> {
     fn next_hex_char(iter: &mut impl Iterator<Item = u8>) -> Option<u8> {
         let mut result = 0;
         for _ in 0..2 {
@@ -114,9 +114,9 @@ fn normalize_name(buf: &[u8]) -> Result<Cow<[u8]>, ObjectValueError> {
                 result.push(next);
             }
         }
-        Ok(Cow::Owned(result))
+        Ok(Cow::Owned(String::from_utf8(result).unwrap()))
     } else {
-        Ok(Cow::Borrowed(s))
+        Ok(Cow::Borrowed(from_utf8(s).unwrap()))
     }
 }
 

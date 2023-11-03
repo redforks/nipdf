@@ -709,7 +709,7 @@ impl<'a> Object<'a> {
     /// value is not Name..
     pub fn as_name(&self) -> Result<&str, ObjectValueError> {
         match self {
-            Object::Name(n) => Ok(from_utf8(n.0.borrow()).unwrap()),
+            Object::Name(n) => Ok(n.as_ref()),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
@@ -884,7 +884,7 @@ impl<'a> From<&'a [u8]> for Object<'a> {
         match value[0] {
             b'(' => Self::LiteralString(LiteralString::new(value)),
             b'<' => Self::HexString(HexString::new(value)),
-            b'/' => Self::Name((&value[1..]).into()),
+            b'/' => Self::Name(from_utf8(&value[1..]).unwrap().into()),
             _ => panic!("invalid object"),
         }
     }
@@ -1129,45 +1129,29 @@ impl<'a> From<HexString<'a>> for Object<'a> {
 
 /// A PDF name object, preceding '/' not included.
 #[derive(Eq, PartialEq, Hash, Debug, Clone, PartialOrd, Ord)]
-pub struct Name<'a>(pub Cow<'a, [u8]>);
-
-/// Name can borrow to &[u8], for use as key in HashMap.
-///
-/// Note: do not impl `Borrow<str>` for Name, because it will use
-/// different hash algorithm, which may not get value from HashMap.
-impl<'a> Borrow<[u8]> for Name<'a> {
-    fn borrow(&self) -> &[u8] {
-        &self.0
-    }
-}
+pub struct Name<'a>(pub Cow<'a, str>);
 
 impl<'a> From<&'a str> for Name<'a> {
     fn from(value: &'a str) -> Self {
-        Self(Cow::Borrowed(value.as_bytes()))
-    }
-}
-
-impl<'a> From<&'a [u8]> for Name<'a> {
-    fn from(value: &'a [u8]) -> Self {
         Self(Cow::Borrowed(value))
     }
 }
 
 impl<'a> Name<'a> {
-    pub fn borrowed(v: &'a [u8]) -> Self {
-        debug_assert!(!v.starts_with(b"/"));
+    pub fn borrowed(v: &'a str) -> Self {
+        debug_assert!(!v.starts_with("/"));
         Self(Cow::Borrowed(v))
     }
 
-    pub fn owned(v: Vec<u8>) -> Self {
-        debug_assert!(!v.starts_with(b"/"));
+    pub fn owned(v: String) -> Self {
+        debug_assert!(!v.starts_with("/"));
         Self(Cow::Owned(v))
     }
 }
 
 impl<'a> AsRef<str> for Name<'a> {
     fn as_ref(&self) -> &str {
-        std::str::from_utf8(&self.0).unwrap()
+        self.0.as_ref()
     }
 }
 

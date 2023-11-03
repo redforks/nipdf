@@ -8,15 +8,7 @@ expression: parse_dict(buf.as_ref()).unwrap()
         {
             "Type": Name(
                 Name(
-                    [
-                        67,
-                        97,
-                        116,
-                        97,
-                        108,
-                        111,
-                        103,
-                    ],
+                    "Catalog",
                 ),
             ),
         },
