@@ -40,15 +40,11 @@ impl<'a> Dictionary<'a> {
     }
 
     pub fn get_int(&self, id: &str, default: i32) -> Result<i32, ObjectValueError> {
-        self.0
-            .get(id)
-            .map_or(Ok(default), |o| o.as_int())
+        self.0.get(id).map_or(Ok(default), |o| o.as_int())
     }
 
     pub fn get_bool(&self, id: &str, default: bool) -> Result<bool, ObjectValueError> {
-        self.0
-            .get(id)
-            .map_or(Ok(default), |o| o.as_bool())
+        self.0.get(id).map_or(Ok(default), |o| o.as_bool())
     }
 
     pub fn set(&mut self, id: impl Into<Name<'a>>, value: impl Into<Object<'a>>) {
@@ -56,9 +52,7 @@ impl<'a> Dictionary<'a> {
     }
 
     pub fn get_name(&self, id: &'static str) -> Result<Option<&str>, ObjectValueError> {
-        self.0
-            .get(id)
-            .map_or(Ok(None), |o| o.as_name().map(Some))
+        self.0.get(id).map_or(Ok(None), |o| o.as_name().map(Some))
     }
 
     pub fn get_name_or(
@@ -66,9 +60,7 @@ impl<'a> Dictionary<'a> {
         id: &'static str,
         default: &'static str,
     ) -> Result<&str, ObjectValueError> {
-        self.0
-            .get(id)
-            .map_or(Ok(default), |o| o.as_name())
+        self.0.get(id).map_or(Ok(default), |o| o.as_name())
     }
 }
 
@@ -509,21 +501,6 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn opt_arr(&self, id: &'static str) -> Result<Option<&'b Array<'a>>, ObjectValueError> {
         self.opt_get(id)?.map_or(Ok(None), |o| o.as_arr().map(Some))
-    }
-
-    /// Item can be a single object or an array of objects.
-    /// If item not exist, returns empty vec.
-    pub fn opt_single_or_arr<Item>(
-        &self,
-        id: &'static str,
-        f: impl Fn(&Object<'a>) -> Result<Item, ObjectValueError>,
-    ) -> Result<Vec<Item>, ObjectValueError> {
-        self.d
-            .get(id)
-            .map_or(Ok(Vec::new()), |o| match o {
-                Object::Array(arr) => arr.iter().map(f).collect(),
-                _ => f(o).map(|o| vec![o]),
-            })
     }
 
     pub fn opt_single_or_arr_stream(
