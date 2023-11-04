@@ -8,7 +8,6 @@ use crate::{
 use anyhow::{anyhow, bail, Result as AnyResult};
 use euclid::default::{Point3D, Transform3D};
 use nipdf_macro::pdf_object;
-use smallvec::SmallVec;
 use std::rc::Rc;
 
 /// Color component composes a color.
@@ -430,7 +429,7 @@ where
         let u8_color = &self.data[index * n..(index + 1) * n];
         let c: [T; 4] = std::array::from_fn(|i| {
             if i == 3 {
-                T::max_color()
+                T::min_color()
             } else {
                 u8_color[i].into_color_comp()
             }
@@ -475,8 +474,12 @@ where
 {
     fn to_rgba(&self, color: &[T]) -> [T; 4] {
         let c = self.f.call(&[color[0].into_color_comp()]).unwrap();
-        let c: SmallVec<[T; 4]> = c.iter().map(|v| v.into_color_comp()).collect();
-        self.base.to_rgba(c.as_slice())
+        // let c: SmallVec<[T; 4]> = c.iter().map(|v| v.into_color_comp()).collect();
+        let mut r = [T::max_color(); 4];
+        c.iter()
+            .zip(r.iter_mut())
+            .for_each(|(v, r)| *r = v.into_color_comp());
+        self.base.to_rgba(r.as_slice())
     }
 
     fn components(&self) -> usize {
