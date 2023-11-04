@@ -309,56 +309,6 @@ pub trait Resolver<'a> {
         c: &'c C,
         id: &str,
     ) -> Result<(Option<NonZeroU32>, &'c Object<'a>), ObjectValueError>;
-
-    fn opt_resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
-        &'b self,
-        c: &'c C,
-        id: &str,
-    ) -> Result<Option<&'c Object<'a>>, ObjectValueError> {
-        self.do_resolve_container_value(c, id)
-            .map(|(_, o)| o)
-            .map(Some)
-            .or_else(|e| match e {
-                ObjectValueError::ObjectIDNotFound(_) | ObjectValueError::DictKeyNotFound => {
-                    Ok(None)
-                }
-                _ => Err(e),
-            })
-    }
-
-    fn _opt_resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
-        &'b self,
-        c: &'c C,
-        id: &str,
-    ) -> Result<Option<(Option<NonZeroU32>, &'c Object<'a>)>, ObjectValueError> {
-        self.do_resolve_container_value(c, id)
-            .map(Some)
-            .or_else(|e| match e {
-                ObjectValueError::ObjectIDNotFound(_) | ObjectValueError::DictKeyNotFound => {
-                    Ok(None)
-                }
-                _ => Err(e),
-            })
-    }
-
-    fn resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
-        &'b self,
-        c: &'c C,
-        id: &str,
-    ) -> Result<&'c Object<'a>, ObjectValueError> {
-        self.resolve_required_value(c, id).map(|(_, o)| o)
-    }
-
-    fn resolve_required_value<'b: 'c, 'c, C: DataContainer<'a>>(
-        &'b self,
-        c: &'c C,
-        id: &str,
-    ) -> Result<(Option<NonZeroU32>, &'c Object<'a>), ObjectValueError> {
-        self.do_resolve_container_value(c, id).map_err(|e| {
-            error!("{}: {}", e, id);
-            e
-        })
-    }
 }
 
 impl<'a> Resolver<'a> for () {
@@ -386,7 +336,7 @@ impl<'a> Resolver<'a> for () {
                 );
                 (None, o)
             })
-            .ok_or_else(|| ObjectValueError::DictKeyNotFound)
+            .ok_or(ObjectValueError::DictKeyNotFound)
     }
 }
 
@@ -445,8 +395,53 @@ impl<'a, 'b, T: TypeValidator, R> SchemaDict<'a, 'b, T, R> {
 }
 
 impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
+    fn _opt_resolve_container_value(
+        &self,
+        id: &str,
+    ) -> Result<Option<(Option<NonZeroU32>, &'b Object<'a>)>, ObjectValueError> {
+        self.r
+            .do_resolve_container_value(self.d, id)
+            .map(Some)
+            .or_else(|e| match e {
+                ObjectValueError::ObjectIDNotFound(_) | ObjectValueError::DictKeyNotFound => {
+                    Ok(None)
+                }
+                _ => Err(e),
+            })
+    }
+
+    fn opt_resolve_container_value(
+        &self,
+        id: &str,
+    ) -> Result<Option<&'b Object<'a>>, ObjectValueError> {
+        self.r
+            .do_resolve_container_value(self.d, id)
+            .map(|(_, o)| o)
+            .map(Some)
+            .or_else(|e| match e {
+                ObjectValueError::ObjectIDNotFound(_) | ObjectValueError::DictKeyNotFound => {
+                    Ok(None)
+                }
+                _ => Err(e),
+            })
+    }
+
+    fn resolve_required_value(
+        &self,
+        id: &str,
+    ) -> Result<(Option<NonZeroU32>, &'b Object<'a>), ObjectValueError> {
+        self.r.do_resolve_container_value(self.d, id).map_err(|e| {
+            error!("{}: {}", e, id);
+            e
+        })
+    }
+
+    fn resolve_container_value(&self, id: &str) -> Result<&'b Object<'a>, ObjectValueError> {
+        self.resolve_required_value(id).map(|(_, o)| o)
+    }
+
     fn opt_get(&self, id: &'static str) -> Result<Option<&'b Object<'a>>, ObjectValueError> {
-        self.r.opt_resolve_container_value(self.d, id)
+        self.opt_resolve_container_value(id)
     }
 
     pub fn opt_name(&self, id: &'static str) -> Result<Option<&'b str>, ObjectValueError> {
@@ -592,7 +587,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
         id: &'static str,
     ) -> Result<Vec<&'b Stream<'a>>, ObjectValueError> {
         let resolver = self.resolver();
-        match resolver.resolve_container_value(self.d, id)? {
+        match self.resolve_container_value(id)? {
             Object::Array(arr) => arr
                 .iter()
                 .map(|o| resolver.resolve_reference(o)?.as_stream())
@@ -654,7 +649,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
         &self,
         id: &str,
     ) -> Result<Option<O>, ObjectValueError> {
-        if let Some((id, obj)) = self.r._opt_resolve_container_value(self.d, id)? {
+        if let Some((id, obj)) = self._opt_resolve_container_value(id)? {
             match obj {
                 Object::Dictionary(d) => Ok(Some(O::new(id, d, self.r)?)),
                 Object::Stream(s) => Ok(Some(O::new(id, s.as_dict(), self.r)?)),
@@ -675,7 +670,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
     where
         O: PdfObject<'a, 'b, R>,
     {
-        let id_n_obj = self.r._opt_resolve_container_value(self.d, id)?;
+        let id_n_obj = self._opt_resolve_container_value(id)?;
         id_n_obj.map_or_else(
             || Ok(vec![]),
             |(id, obj)| match obj {
@@ -708,7 +703,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
     where
         O: PdfObject<'a, 'b, R>,
     {
-        let arr = self.r.opt_resolve_container_value(self.d, id)?;
+        let arr = self.opt_resolve_container_value(id)?;
         arr.map_or_else(
             || Ok(vec![]),
             |arr| {
@@ -737,7 +732,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
     where
         O: PdfObject<'a, 'b, R>,
     {
-        let dict = self.r.opt_resolve_container_value(self.d, id)?;
+        let dict = self.opt_resolve_container_value(id)?;
         dict.map_or_else(
             || Ok(HashMap::default()),
             |dict| {
@@ -759,7 +754,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
         &self,
         id: &str,
     ) -> Result<O, ObjectValueError> {
-        let (id, obj) = self.r.resolve_required_value(self.d, id)?;
+        let (id, obj) = self.resolve_required_value(id)?;
         let obj = match obj {
             Object::Dictionary(d) => d,
             Object::Stream(s) => s.as_dict(),
