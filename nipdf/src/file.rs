@@ -10,7 +10,7 @@ use once_cell::unsync::OnceCell;
 use std::{iter::repeat_with, num::NonZeroU32};
 
 use crate::{
-    object::{Dictionary, Entry, FrameSet, Object, ObjectValueError, PdfObject, Stream},
+    object::{Dictionary, Entry, FrameSet, Object, ObjectValueError, PdfObject, Resolver, Stream},
     parser::{
         parse_frame_set, parse_header, parse_indirect_object, parse_indirect_stream, parse_object,
         ParseResult,
@@ -538,6 +538,27 @@ impl<'a> ObjectResolver<'a> {
             ObjectValueError::ObjectIDNotFound(_) | ObjectValueError::DictKeyNotFound => Ok(None),
             _ => Err(e),
         })
+    }
+}
+
+impl<'a> Resolver<'a> for ObjectResolver<'a> {
+    fn do_resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
+        &'b self,
+        c: &'c C,
+        id: &str,
+    ) -> Result<(Option<NonZeroU32>, &'c Object<'a>), ObjectValueError> {
+        self._resolve_container_value(c, id)
+    }
+
+    fn resolve_reference<'b>(
+        &'b self,
+        v: &'b Object<'a>,
+    ) -> Result<&'b Object<'a>, ObjectValueError> {
+        if let Object::Reference(id) = v {
+            self.resolve(id.id().id())
+        } else {
+            Ok(v)
+        }
     }
 }
 

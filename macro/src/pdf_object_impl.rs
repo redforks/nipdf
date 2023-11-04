@@ -608,7 +608,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
     let tokens = quote! {
         #[derive(Clone, Debug)]
         #vis struct #struct_name<'a, 'b> {
-            d: crate::object::SchemaDict<'a, 'b, #valid_ty>,
+            d: crate::object::SchemaDict<'a, 'b, #valid_ty, crate::file::ObjectResolver<'a>>,
             id: Option<std::num::NonZeroU32>,
         }
 

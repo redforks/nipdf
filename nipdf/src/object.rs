@@ -2,7 +2,6 @@
 use ahash::HashMap;
 use educe::Educe;
 use log::error;
-
 use std::{
     borrow::{Borrow, Cow},
     fmt::{Debug, Display},
@@ -297,13 +296,84 @@ where
     }
 }
 
-#[derive(Clone, Educe)]
-#[educe(Debug)]
-pub struct SchemaDict<'a, 'b, T: Clone + Debug> {
-    t: T,
-    d: &'b Dictionary<'a>,
-    #[educe(Debug(ignore))]
-    r: &'b ObjectResolver<'a>,
+/// Abstract `ObjectResolver` out, to help
+/// `SchemaDict` works without `ObjectResolver`.
+/// Some `Dictionary` are known not contains Reference.
+pub trait Resolver<'a> {
+    fn resolve_reference<'b>(
+        &'b self,
+        v: &'b Object<'a>,
+    ) -> Result<&'b Object<'a>, ObjectValueError>;
+
+    fn do_resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
+        &'b self,
+        c: &'c C,
+        id: &str,
+    ) -> Result<(Option<NonZeroU32>, &'c Object<'a>), ObjectValueError>;
+
+    fn opt_resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
+        &'b self,
+        c: &'c C,
+        id: &str,
+    ) -> Result<Option<&'c Object<'a>>, ObjectValueError> {
+        self.do_resolve_container_value(c, id)
+            .map(|(_, o)| o)
+            .map(Some)
+            .or_else(|e| match e {
+                ObjectValueError::ObjectIDNotFound(_) | ObjectValueError::DictKeyNotFound => {
+                    Ok(None)
+                }
+                _ => Err(e),
+            })
+    }
+
+    fn resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
+        &'b self,
+        c: &'c C,
+        id: &str,
+    ) -> Result<&'c Object<'a>, ObjectValueError> {
+        self.resolve_required_value(c, id).map(|(_, o)| o)
+    }
+
+    fn resolve_required_value<'b: 'c, 'c, C: DataContainer<'a>>(
+        &'b self,
+        c: &'c C,
+        id: &str,
+    ) -> Result<(Option<NonZeroU32>, &'c Object<'a>), ObjectValueError> {
+        self.do_resolve_container_value(c, id).map_err(|e| {
+            error!("{}: {}", e, id);
+            e
+        })
+    }
+}
+
+impl<'a> Resolver<'a> for () {
+    fn resolve_reference<'b>(
+        &'b self,
+        v: &'b Object<'a>,
+    ) -> Result<&'b Object<'a>, ObjectValueError> {
+        debug_assert!(
+            !matches!(v, Object::Reference(_)),
+            "Cannot resolve id in current SchemaDict"
+        );
+        Ok(v)
+    }
+
+    fn do_resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
+        &'b self,
+        c: &'c C,
+        id: &str,
+    ) -> Result<(Option<NonZeroU32>, &'c Object<'a>), ObjectValueError> {
+        c.get_value(id)
+            .map(|o| {
+                debug_assert!(
+                    !matches!(o, Object::Reference(_)),
+                    "Cannot resolve id in current SchemaDict"
+                );
+                (None, o)
+            })
+            .ok_or_else(|| ObjectValueError::DictKeyNotFound)
+    }
 }
 
 pub trait PdfObject<'a, 'b>
@@ -327,21 +397,22 @@ where
     fn resolver(&self) -> &'b ObjectResolver<'a>;
 }
 
-impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
-    pub fn new(
-        d: &'b Dictionary<'a>,
-        r: &'b ObjectResolver<'a>,
-        t: T,
-    ) -> Result<Self, ObjectValueError> {
+#[derive(Educe)]
+#[educe(Debug, Clone)]
+pub struct SchemaDict<'a, 'b, T: Clone + Debug, R: 'a> {
+    t: T,
+    d: &'b Dictionary<'a>,
+    #[educe(Debug(ignore))]
+    r: &'b R,
+}
+
+impl<'a, 'b, T: TypeValidator, R> SchemaDict<'a, 'b, T, R> {
+    pub fn new(d: &'b Dictionary<'a>, r: &'b R, t: T) -> Result<Self, ObjectValueError> {
         t.valid(d)?;
         Ok(Self { t, d, r })
     }
 
-    pub fn from(
-        d: &'b Dictionary<'a>,
-        r: &'b ObjectResolver<'a>,
-        t: T,
-    ) -> Result<Option<Self>, ObjectValueError> {
+    pub fn from(d: &'b Dictionary<'a>, r: &'b R, t: T) -> Result<Option<Self>, ObjectValueError> {
         if t.check(d)? {
             Ok(Some(Self { t, d, r }))
         } else {
@@ -353,10 +424,12 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         self.d
     }
 
-    pub fn resolver(&self) -> &'b ObjectResolver<'a> {
+    pub fn resolver(&self) -> &'b R {
         self.r
     }
+}
 
+impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
     fn opt_get(&self, id: &'static str) -> Result<Option<&'b Object<'a>>, ObjectValueError> {
         self.r.opt_resolve_container_value(self.d, id)
     }
@@ -589,7 +662,10 @@ pub use xref::{Entry as XRefEntry, Section as XRefSection, *};
 mod frame;
 pub use frame::*;
 
-use crate::{file::ObjectResolver, parser};
+use crate::{
+    file::{DataContainer, ObjectResolver},
+    parser,
+};
 
 #[derive(Clone, PartialEq, Debug, thiserror::Error)]
 pub enum ObjectValueError {
