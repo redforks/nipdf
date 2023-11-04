@@ -236,3 +236,14 @@ fn transform_3d_try_from() {
         )
     );
 }
+
+#[test]
+fn point_3d_try_from() {
+    let o = Object::Array(vec![
+        Object::Integer(1),
+        Object::Integer(2),
+        Object::Number(3.),
+    ]);
+    let point = Point3D::try_from(&o).unwrap();
+    assert_eq!(point, Point3D::new(1.0, 2.0, 3.0)); 
+}

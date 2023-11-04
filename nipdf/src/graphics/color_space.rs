@@ -1,7 +1,8 @@
 use std::rc::Rc;
 
 use anyhow::{anyhow, bail, Result as AnyResult};
-use euclid::default::Transform3D;
+use euclid::default::{Point3D, Transform3D};
+use nipdf_macro::pdf_object;
 use smallvec::SmallVec;
 
 use crate::{
@@ -462,11 +463,32 @@ where
     }
 }
 
+#[pdf_object(())]
 trait CalRGBDictTrait {
-    fn gamma(&self) -> [f32; 3];
-    fn matrix(&self) -> [f32; 9];
-    fn black_point(&self) -> [f32; 3];
-    fn white_point(&self) -> [f32; 3];
+    #[try_from]
+    fn gamma(&self) -> Point3D<f32>;
+    #[try_from]
+    fn matrix(&self) -> Transform3D<f32>;
+    #[try_from]
+    fn black_point(&self) -> Point3D<f32>;
+    #[try_from]
+    fn white_point(&self) -> Point3D<f32>;
+}
+
+impl<'a> TryFrom<&Object<'a>> for Point3D<f32> {
+    type Error = ObjectValueError;
+
+    fn try_from(obj: &Object<'a>) -> Result<Self, Self::Error> {
+        let arr = obj.as_arr()?;
+        if arr.len() != 3 {
+            return Err(ObjectValueError::UnexpectedType);
+        }
+        Ok(Point3D::new(
+            arr[0].as_number()?,
+            arr[1].as_number()?,
+            arr[2].as_number()?,
+        ))
+    }
 }
 
 impl<'a> TryFrom<&Object<'a>> for Transform3D<f32> {
