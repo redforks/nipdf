@@ -757,6 +757,22 @@ impl<'a> Object<'a> {
     }
 }
 
+impl<'a, const N: usize> TryFrom<&Object<'a>> for [f32; N] {
+    type Error = ObjectValueError;
+
+    fn try_from(obj: &Object<'a>) -> Result<Self, Self::Error> {
+        let arr = obj.as_arr()?;
+        if arr.len() != N {
+            return Err(ObjectValueError::UnexpectedType);
+        }
+        let mut r = [0.0; N];
+        for (i, v) in arr.iter().enumerate() {
+            r[i] = v.as_number()?;
+        }
+        Ok(r)
+    }
+}
+
 #[cfg(feature = "pretty")]
 use pretty::RcDoc;
 
