@@ -442,10 +442,10 @@ where
         let n = self.base.components();
         let u8_color = &self.data[index * n..(index + 1) * n];
         let c: [T; 4] = std::array::from_fn(|i| {
-            if i == 3 {
-                T::min_color()
-            } else {
+            if i < n {
                 u8_color[i].into_color_comp()
+            } else {
+                T::min_color()
             }
         });
 
