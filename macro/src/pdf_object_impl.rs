@@ -127,6 +127,13 @@ fn or_default(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|attr| attr.path().is_ident("or_default"))
 }
 
+/// Return true if `#[stub_resolver]` attribute defined.
+fn stub_resolver(attrs: &[Attribute]) -> bool {
+    attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("stub_resolver"))
+}
+
 enum DefaultAttr {
     Literal(ExprLit),
     Function(ExprPath),
@@ -534,20 +541,20 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 &key,
                 |ty| {
                     let type_name = remove_generic(ty);
-                    quote! { self.d.resolver().opt_resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key) }
+                    quote! { self.d.opt_resolve_container_pdf_object::<#type_name>(#key) }
                 },
                 |ty| {
                     if is_vec(ty) {
                         if one_or_more(attrs) {
-                            quote! { self.d.resolver().resolve_container_one_or_more_pdf_object(self.d.dict(), #key) }
+                            quote! { self.d.resolve_container_one_or_more_pdf_object(#key) }
                         } else {
-                            quote! { self.d.resolver().resolve_container_pdf_object_array(self.d.dict(), #key) }
+                            quote! { self.d.resolve_container_pdf_object_array(#key) }
                         }
                     } else if is_map(ty) {
-                        quote! { self.d.resolver().resolve_container_pdf_object_map(self.d.dict(), #key) }
+                        quote! { self.d.resolve_container_pdf_object_map(#key) }
                     } else {
                         let type_name = remove_generic(ty);
-                        quote! { self.d.resolver().resolve_container_pdf_object::<_, #type_name>(self.d.dict(), #key) }
+                        quote! { self.d.resolve_container_pdf_object::<#type_name>(#key) }
                     }
                 },
             )
@@ -568,7 +575,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 &key,
                 |_| unreachable!("self_as methods never return Option"),
                 |ty| {
-                    quote! { <#ty as crate::object::PdfObject>::new(self.id, self.d.dict(), self.d.resolver()) }
+                    quote! { <#ty as crate::object::PdfObject::<_>>::new(self.id, self.d.dict(), self.d.resolver()) }
                 },
             )
         } else {
@@ -605,35 +612,69 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     let vis = &def.vis;
-    let tokens = quote! {
-        #[derive(Clone, Debug)]
-        #vis struct #struct_name<'a, 'b> {
-            d: crate::object::SchemaDict<'a, 'b, #valid_ty, crate::file::ObjectResolver<'a>>,
-            id: Option<std::num::NonZeroU32>,
+    let tokens = if stub_resolver(&def.attrs) {
+        quote! {
+            #[derive(Clone, Debug)]
+            #vis struct #struct_name<'a, 'b> {
+                d: crate::object::SchemaDict<'a, 'b, #valid_ty, ()>,
+                id: Option<std::num::NonZeroU32>,
+            }
+
+            impl<'a, 'b> crate::object::PdfObject<'a, 'b> for #struct_name<'a, 'b> {
+                fn new(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary<'a>, r: ()) -> Result<Self, crate::object::ObjectValueError> {
+                    let d = crate::object::SchemaDict::new(dict, r, #valid_arg)?;
+                    Ok(Self { d, id})
+                }
+
+                fn checked(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary<'a>, r: ()) -> Result<Option<Self>, crate::object::ObjectValueError> {
+                    let d = crate::object::SchemaDict::from(dict, r, #valid_arg)?;
+                    Ok(d.map(|d| Self { d, id}))
+                }
+
+                fn id(&self) -> Option<std::num::NonZeroU32> {
+                    self.id
+                }
+
+                fn resolver(&self) -> &'b () {
+                    self.d.resolver()
+                }
+            }
+
+            impl<'a, 'b> #struct_name<'a, 'b> {
+                #(#methods)*
+            }
         }
-
-        impl<'a, 'b> crate::object::PdfObject<'a, 'b> for #struct_name<'a, 'b> {
-            fn new(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary<'a>, r: &'b crate::file::ObjectResolver<'a>) -> Result<Self, crate::object::ObjectValueError> {
-                let d = crate::object::SchemaDict::new(dict, r, #valid_arg)?;
-                Ok(Self { d, id})
+    } else {
+        quote! {
+            #[derive(Clone, Debug)]
+            #vis struct #struct_name<'a, 'b> {
+                d: crate::object::SchemaDict<'a, 'b, #valid_ty, crate::file::ObjectResolver<'a>>,
+                id: Option<std::num::NonZeroU32>,
             }
 
-            fn checked(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary<'a>, r: &'b crate::file::ObjectResolver<'a>) -> Result<Option<Self>, crate::object::ObjectValueError> {
-                let d = crate::object::SchemaDict::from(dict, r, #valid_arg)?;
-                Ok(d.map(|d| Self { d, id}))
+            impl<'a, 'b> crate::object::PdfObject<'a, 'b, crate::file::ObjectResolver<'a>> for #struct_name<'a, 'b> {
+                fn new(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary<'a>, r: &'b crate::file::ObjectResolver<'a>) -> Result<Self, crate::object::ObjectValueError> {
+                    let d = crate::object::SchemaDict::new(dict, r, #valid_arg)?;
+                    Ok(Self { d, id})
+                }
+
+                fn checked(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary<'a>, r: &'b crate::file::ObjectResolver<'a>) -> Result<Option<Self>, crate::object::ObjectValueError> {
+                    let d = crate::object::SchemaDict::from(dict, r, #valid_arg)?;
+                    Ok(d.map(|d| Self { d, id}))
+                }
+
+                fn id(&self) -> Option<std::num::NonZeroU32> {
+                    self.id
+                }
+
+                fn resolver(&self) -> &'b crate::file::ObjectResolver<'a> {
+                    self.d.resolver()
+                }
             }
 
-            fn id(&self) -> Option<std::num::NonZeroU32> {
-                self.id
+            impl<'a, 'b> #struct_name<'a, 'b> {
+                #(#methods)*
             }
-
-            fn resolver(&self) -> &'b crate::file::ObjectResolver<'a> {
-                self.d.resolver()
-            }
-        }
-
-        impl<'a, 'b> #struct_name<'a, 'b> {
-            #(#methods)*
         }
     };
 

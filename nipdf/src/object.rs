@@ -1,5 +1,5 @@
 //! object mod contains data structure map to low level pdf objects
-use ahash::HashMap;
+use ahash::{HashMap, HashMapExt};
 use educe::Educe;
 use log::error;
 use std::{
@@ -9,13 +9,12 @@ use std::{
     num::NonZeroU32,
     str::from_utf8,
 };
-
 mod indirect_object;
 pub use indirect_object::IndirectObject;
 mod stream;
 pub use stream::*;
-
 pub type Array<'a> = Vec<Object<'a>>;
+use anyhow::Context;
 
 #[derive(PartialEq, Debug, Clone, Default, Educe)]
 #[educe(Deref, DerefMut)]
@@ -327,6 +326,21 @@ pub trait Resolver<'a> {
             })
     }
 
+    fn _opt_resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
+        &'b self,
+        c: &'c C,
+        id: &str,
+    ) -> Result<Option<(Option<NonZeroU32>, &'c Object<'a>)>, ObjectValueError> {
+        self.do_resolve_container_value(c, id)
+            .map(Some)
+            .or_else(|e| match e {
+                ObjectValueError::ObjectIDNotFound(_) | ObjectValueError::DictKeyNotFound => {
+                    Ok(None)
+                }
+                _ => Err(e),
+            })
+    }
+
     fn resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
         &'b self,
         c: &'c C,
@@ -376,25 +390,26 @@ impl<'a> Resolver<'a> for () {
     }
 }
 
-pub trait PdfObject<'a, 'b>
+pub trait PdfObject<'a, 'b, R>
 where
     Self: Sized,
+    R: Resolver<'a>,
 {
     fn new(
         id: Option<NonZeroU32>,
         dict: &'b Dictionary<'a>,
-        r: &'b ObjectResolver<'a>,
+        r: &'b R,
     ) -> Result<Self, ObjectValueError>;
 
     fn checked(
         id: Option<NonZeroU32>,
         dict: &'b Dictionary<'a>,
-        r: &'b ObjectResolver<'a>,
+        r: &'b R,
     ) -> Result<Option<Self>, ObjectValueError>;
 
     fn id(&self) -> Option<NonZeroU32>;
 
-    fn resolver(&self) -> &'b ObjectResolver<'a>;
+    fn resolver(&self) -> &'b R;
 }
 
 #[derive(Educe)]
@@ -634,6 +649,124 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
             .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_string()
     }
+
+    pub fn opt_resolve_container_pdf_object<'s, O: PdfObject<'a, 'b, R>>(
+        &self,
+        id: &str,
+    ) -> Result<Option<O>, ObjectValueError> {
+        if let Some((id, obj)) = self.r._opt_resolve_container_value(self.d, id)? {
+            match obj {
+                Object::Dictionary(d) => Ok(Some(O::new(id, d, self.r)?)),
+                Object::Stream(s) => Ok(Some(O::new(id, s.as_dict(), self.r)?)),
+                _ => Err(ObjectValueError::UnexpectedType),
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Resolve pdf_object from container, if its end value is dictionary, return with one element vec.
+    /// If its end value is array, return all elements in array.
+    /// If value not exist, return empty vector.
+    pub fn resolve_container_one_or_more_pdf_object<O>(
+        &self,
+        id: &str,
+    ) -> Result<Vec<O>, ObjectValueError>
+    where
+        O: PdfObject<'a, 'b, R>,
+    {
+        let id_n_obj = self.r._opt_resolve_container_value(self.d, id)?;
+        id_n_obj.map_or_else(
+            || Ok(vec![]),
+            |(id, obj)| match obj {
+                Object::Dictionary(d) => Ok(vec![O::new(id, d, self.r)?]),
+                Object::Stream(s) => Ok(vec![O::new(id, s.as_dict(), self.r)?]),
+                Object::Array(arr) => {
+                    let mut res = Vec::with_capacity(arr.len());
+                    for obj in arr {
+                        let dict = self.r.resolve_reference(obj)?;
+                        res.push(O::new(
+                            obj.as_ref().ok().map(|id| id.id().id()),
+                            dict.as_dict()?,
+                            self.r,
+                        )?);
+                    }
+                    Ok(res)
+                }
+                _ => Err(ObjectValueError::UnexpectedType),
+            },
+        )
+    }
+
+    /// Resolve root pdf_objects from data container `c` with key `k`, if value is reference,
+    /// resolve it recursively. Return empty vector if object is not found.
+    /// The raw value should be an array of references.
+    pub fn resolve_container_pdf_object_array<O>(
+        &self,
+        id: &str,
+    ) -> Result<Vec<O>, ObjectValueError>
+    where
+        O: PdfObject<'a, 'b, R>,
+    {
+        let arr = self.r.opt_resolve_container_value(self.d, id)?;
+        arr.map_or_else(
+            || Ok(vec![]),
+            |arr| {
+                let arr = arr.as_arr()?;
+                let mut res = Vec::with_capacity(arr.len());
+                for obj in arr {
+                    let dict = self.r.resolve_reference(obj)?;
+                    res.push(O::new(
+                        obj.as_ref().ok().map(|id| id.id().id()),
+                        dict.as_dict()?,
+                        self.r,
+                    )?);
+                }
+                Ok(res)
+            },
+        )
+    }
+
+    /// Resolve pdf object from data container `c` with key `k`, if value is reference,
+    /// resolve it recursively. Return empty Map if object is not found.
+    /// The raw value should be a dictionary, that key is Name and value is Dictionary.
+    pub fn resolve_container_pdf_object_map<O>(
+        &self,
+        id: &str,
+    ) -> anyhow::Result<HashMap<String, O>>
+    where
+        O: PdfObject<'a, 'b, R>,
+    {
+        let dict = self.r.opt_resolve_container_value(self.d, id)?;
+        dict.map_or_else(
+            || Ok(HashMap::default()),
+            |dict| {
+                let dict = dict.as_dict().context("Value not dict")?;
+                let mut res = HashMap::with_capacity(dict.len());
+                for k in dict.keys() {
+                    let obj: O = self
+                        .resolve_container_pdf_object(k.as_ref())
+                        .with_context(|| format!("Key: {}", k.as_ref()))?;
+                    res.insert(k.as_ref().to_owned(), obj);
+                }
+                Ok(res)
+            },
+        )
+    }
+
+    // TODO: rename it
+    pub fn resolve_container_pdf_object<O: PdfObject<'a, 'b, R>>(
+        &self,
+        id: &str,
+    ) -> Result<O, ObjectValueError> {
+        let (id, obj) = self.r.resolve_required_value(self.d, id)?;
+        let obj = match obj {
+            Object::Dictionary(d) => d,
+            Object::Stream(s) => s.as_dict(),
+            _ => return Err(ObjectValueError::UnexpectedType),
+        };
+        O::new(id, obj, self.r)
+    }
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
@@ -662,10 +795,7 @@ pub use xref::{Entry as XRefEntry, Section as XRefSection, *};
 mod frame;
 pub use frame::*;
 
-use crate::{
-    file::{DataContainer, ObjectResolver},
-    parser,
-};
+use crate::{file::DataContainer, parser};
 
 #[derive(Clone, PartialEq, Debug, thiserror::Error)]
 pub enum ObjectValueError {

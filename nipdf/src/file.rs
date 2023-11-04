@@ -276,7 +276,7 @@ impl<'a> ObjectResolver<'a> {
             .insert(NonZeroU32::new(id).unwrap(), OnceCell::with_value(v));
     }
 
-    pub fn resolve_pdf_object<'b, T: PdfObject<'a, 'b>>(
+    pub fn resolve_pdf_object<'b, T: PdfObject<'a, 'b, Self>>(
         &'b self,
         id: NonZeroU32,
     ) -> Result<T, ObjectValueError> {
@@ -284,7 +284,7 @@ impl<'a> ObjectResolver<'a> {
         T::new(Some(id), obj, self)
     }
 
-    pub fn opt_resolve_pdf_object<'b, T: PdfObject<'a, 'b>>(
+    pub fn opt_resolve_pdf_object<'b, T: PdfObject<'a, 'b, Self>>(
         &'b self,
         id: NonZeroU32,
     ) -> Result<Option<T>, ObjectValueError> {
@@ -349,7 +349,7 @@ impl<'a> ObjectResolver<'a> {
     ) -> Result<Option<T>, ObjectValueError>
     where
         C: DataContainer<'a>,
-        T: PdfObject<'a, 'c>,
+        T: PdfObject<'a, 'c, Self>,
     {
         if let Some((id, obj)) = self._opt_resolve_container_value(c, id)? {
             match obj {
@@ -362,7 +362,12 @@ impl<'a> ObjectResolver<'a> {
         }
     }
 
-    pub fn resolve_container_pdf_object<'b: 'c, 'c, C: DataContainer<'a>, T: PdfObject<'a, 'c>>(
+    pub fn resolve_container_pdf_object<
+        'b: 'c,
+        'c,
+        C: DataContainer<'a>,
+        T: PdfObject<'a, 'c, Self>,
+    >(
         &'b self,
         c: &'c C,
         id: &str,
@@ -412,7 +417,7 @@ impl<'a> ObjectResolver<'a> {
 
     /// Resolve pdf_object by id, if its end value is dictionary, return with one element vec.
     /// If its end value is array, return all elements in array.
-    pub fn resolve_one_or_more_pdf_object<'b, T: PdfObject<'a, 'b>>(
+    pub fn resolve_one_or_more_pdf_object<'b, T: PdfObject<'a, 'b, Self>>(
         &'b self,
         id: NonZeroU32,
     ) -> Result<Vec<T>, ObjectValueError> {
@@ -446,7 +451,7 @@ impl<'a> ObjectResolver<'a> {
     ) -> Result<Vec<T>, ObjectValueError>
     where
         C: DataContainer<'a>,
-        T: PdfObject<'a, 'c>,
+        T: PdfObject<'a, 'c, Self>,
     {
         let id_n_obj = self._opt_resolve_container_value(c, id)?;
         id_n_obj.map_or_else(
@@ -481,7 +486,7 @@ impl<'a> ObjectResolver<'a> {
     ) -> Result<Vec<T>, ObjectValueError>
     where
         C: DataContainer<'a>,
-        T: PdfObject<'a, 'c>,
+        T: PdfObject<'a, 'c, Self>,
     {
         let arr = self.opt_resolve_container_value(c, id)?;
         arr.map_or_else(
@@ -512,7 +517,7 @@ impl<'a> ObjectResolver<'a> {
     ) -> anyhow::Result<HashMap<String, T>>
     where
         C: DataContainer<'a>,
-        T: PdfObject<'a, 'c>,
+        T: PdfObject<'a, 'c, Self>,
     {
         let dict = self.opt_resolve_container_value(c, id)?;
         dict.map_or_else(
