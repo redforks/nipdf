@@ -417,7 +417,13 @@ where
         let index = ColorCompConvertTo::<u8>::into_color_comp(color[0]) as usize;
         let n = self.base.components();
         let u8_color = &self.data[index * n..(index + 1) * n];
-        let c: [T; 4] = convert_color_to(u8_color);
+        let c: [T; 4] = std::array::from_fn(|i| {
+            if i == 3 {
+                T::max_color()
+            } else {
+                u8_color[i].into_color_comp()
+            }
+        });
 
         self.base.to_rgba(&c)
     }
