@@ -1,4 +1,7 @@
-use crate::object::{Object, SchemaDict};
+use crate::{
+    object::{Object, SchemaDict},
+    parser::parse_dict,
+};
 
 use std::path::PathBuf;
 
@@ -47,6 +50,20 @@ fn object_resolver() {
         Ok(&Object::Integer(5))
     );
     assert_eq!(resolver.resolve(to_non_zero_u32(1)), Ok(&Object::Null));
+}
+
+#[test]
+fn object_resolver_resolve_container_value() {
+    let dict = b"<</a 1>>";
+    let (_, dict) = parse_dict(dict).unwrap();
+    let xref = XRefTable::empty();
+    let resolver = ObjectResolver::empty(&xref);
+
+    assert_eq!(
+        resolver.do_resolve_container_value(&dict, "a").unwrap(),
+        (None, &Object::Integer(1))
+    );
+    assert_eq!(Err(ObjectValueError::DictKeyNotFound), resolver.resolve_container_value(&dict, "b"));
 }
 
 #[pdf_object(())]
