@@ -740,7 +740,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
                 let mut res = HashMap::with_capacity(dict.len());
                 for k in dict.keys() {
                     let obj: O = self
-                        .resolve_container_pdf_object(k.as_ref())
+                        ._resolve_container_pdf_object(dict, k.as_ref())
                         .with_context(|| format!("Key: {}", k.as_ref()))?;
                     res.insert(k.as_ref().to_owned(), obj);
                 }
@@ -749,18 +749,26 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
         )
     }
 
-    // TODO: rename it
-    pub fn resolve_container_pdf_object<O: PdfObject<'a, 'b, R>>(
+    fn _resolve_container_pdf_object<O: PdfObject<'a, 'b, R>>(
         &self,
+        d: &'b Dictionary<'a>,
         id: &str,
     ) -> Result<O, ObjectValueError> {
-        let (id, obj) = self.resolve_required_value(id)?;
+        let (id, obj) = self.r.do_resolve_container_value(d, id)?;
         let obj = match obj {
             Object::Dictionary(d) => d,
             Object::Stream(s) => s.as_dict(),
             _ => return Err(ObjectValueError::UnexpectedType),
         };
         O::new(id, obj, self.r)
+    }
+
+    // TODO: rename it
+    pub fn resolve_container_pdf_object<O: PdfObject<'a, 'b, R>>(
+        &self,
+        id: &str,
+    ) -> Result<O, ObjectValueError> {
+        self._resolve_container_pdf_object(self.d, id)
     }
 }
 

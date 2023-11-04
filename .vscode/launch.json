@@ -37,12 +37,12 @@
             "args": [
                 "page",
                 "-f",
-                "../nipdf/sample_files/bizarre/pdfReferenceUpdated.pdf",
-                "488",
+                "../nipdf/sample_files/filters/predictor.pdf",
+                "0",
                 "--png"
             ],
             "stopOnEntry": false,
-            "cwd": "${workspaceFolder}/nipdf-dump"
+            "cwd": "${workspaceFolder}/dump"
         },
         {
             "type": "lldb",
