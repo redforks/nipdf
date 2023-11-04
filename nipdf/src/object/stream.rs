@@ -1,27 +1,26 @@
+use super::{Dictionary, Object, ObjectValueError};
+use crate::{
+    ccitt::Flags,
+    file::{ObjectResolver, ResourceDict},
+    graphics::{
+        color_space::{color_to_rgba, ColorCompConvertTo, ColorSpace, ColorSpaceTrait, DeviceCMYK},
+        ColorSpaceArgs,
+    },
+    object::PdfObject,
+};
+use anyhow::Result as AnyResult;
+use bitstream_io::{BigEndian, BitReader};
+use image::{DynamicImage, GrayImage, Luma, RgbImage, Rgba, RgbaImage};
+use jpeg_decoder::PixelFormat;
+use log::error;
+use nipdf_macro::pdf_object;
+use once_cell::unsync::Lazy;
+use smallvec::SmallVec;
 use std::{
     borrow::{Borrow, Cow},
     fmt::Display,
     iter::{once, repeat},
 };
-
-use anyhow::Result as AnyResult;
-use bitstream_io::{BigEndian, BitReader};
-use image::{DynamicImage, GrayImage, Luma, RgbImage, Rgba, RgbaImage};
-use jpeg_decoder::PixelFormat;
-use lazy_static::__Deref;
-use log::error;
-use nipdf_macro::pdf_object;
-use once_cell::unsync::Lazy;
-use smallvec::SmallVec;
-
-use crate::graphics::{
-    color_space::{color_to_rgba, ColorCompConvertTo, ColorSpaceTrait, DeviceCMYK},
-    ColorSpaceArgs,
-};
-use crate::{ccitt::Flags, file::ObjectResolver, object::PdfObject};
-use crate::{file::ResourceDict, graphics::color_space::ColorSpace};
-
-use super::{Dictionary, Object, ObjectValueError};
 
 const KEY_FILTER: &str = "Filter";
 const KEY_FILTER_PARAMS: &str = "DecodeParms";
@@ -424,7 +423,7 @@ fn filter<'a: 'b, 'b>(
     match filter_name {
         FILTER_FLATE_DECODE => decode_flate(
             &buf,
-            LZWDeflateDecodeParams::new(params.unwrap_or_else(|| empty_dict.deref()), resolver)?,
+            LZWDeflateDecodeParams::new(params.unwrap_or_else(|| &*empty_dict), resolver)?,
         )
         .map(FilterDecodedData::bytes),
         FILTER_DCT_DECODE => decode_dct(buf, params),
@@ -432,7 +431,7 @@ fn filter<'a: 'b, 'b>(
             &buf,
             CCITTFaxDecodeParamsDict::new(
                 None,
-                params.unwrap_or_else(|| empty_dict.deref()),
+                params.unwrap_or_else(|| &*empty_dict),
                 resolver.unwrap(),
             )?,
         )
@@ -442,7 +441,7 @@ fn filter<'a: 'b, 'b>(
         FILTER_JPX_DECODE => decode_jpx(buf, params),
         FILTER_LZW_DECODE => decode_lzw(
             &buf,
-            LZWDeflateDecodeParams::new(params.unwrap_or_else(|| empty_dict.deref()), resolver)?,
+            LZWDeflateDecodeParams::new(params.unwrap_or_else(|| &*empty_dict), resolver)?,
         )
         .map(FilterDecodedData::bytes),
         _ => {
