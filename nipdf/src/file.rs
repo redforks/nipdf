@@ -1,7 +1,7 @@
 //! Contains types of PDF file structures.
 
 use ahash::{HashMap, HashMapExt};
-use anyhow::{Context, Result as AnyResult};
+use anyhow::Result as AnyResult;
 use either::Either;
 use itertools::Itertools;
 use nipdf_macro::pdf_object;

@@ -13,10 +13,21 @@ use std::rc::Rc;
 /// Color component composes a color.
 /// Two kinds of color component: float or integer.
 /// For float color component must in range [0, 1].
-pub trait ColorComp: Copy + std::fmt::Debug {
+pub trait ColorComp: Copy + std::fmt::Debug + std::cmp::PartialOrd {
     fn min_color() -> Self;
     /// Max value of color component, for float color component must be 1.0
     fn max_color() -> Self;
+
+    /// Clamp color component to range [min_color(), max_color()]
+    fn clamp(self) -> Self {
+        if self < Self::min_color() {
+            Self::min_color()
+        } else if self > Self::max_color() {
+            Self::max_color()
+        } else {
+            self
+        }
+    }
 }
 
 pub trait ColorCompConvertTo<T: ColorComp> {
@@ -364,6 +375,9 @@ where
         r += 0.2118 * x;
         g += 0.2119 * x;
         b += 0.2235 * x;
+        r = ColorComp::clamp(r);
+        g = ColorComp::clamp(g);
+        b = ColorComp::clamp(b);
 
         [
             r.into_color_comp(),
@@ -474,7 +488,6 @@ where
 {
     fn to_rgba(&self, color: &[T]) -> [T; 4] {
         let c = self.f.call(&[color[0].into_color_comp()]).unwrap();
-        // let c: SmallVec<[T; 4]> = c.iter().map(|v| v.into_color_comp()).collect();
         let mut r = [T::max_color(); 4];
         c.iter()
             .zip(r.iter_mut())
