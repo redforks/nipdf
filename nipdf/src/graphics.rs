@@ -1,18 +1,3 @@
-use std::{collections::HashSet, num::NonZeroU32};
-
-use ahash::RandomState;
-
-use euclid::Transform2D;
-use lazy_static::lazy_static;
-use log::error;
-use nom::{
-    branch::alt,
-    bytes::complete::is_not,
-    combinator::map_res,
-    error::{ErrorKind, FromExternalError, ParseError as NomParseError},
-    Err, Parser,
-};
-
 use crate::{
     graphics::trans::{TextToUserSpace, UserToDeviceIndependentSpace},
     object::{
@@ -20,7 +5,17 @@ use crate::{
     },
     parser::{parse_object, whitespace_or_comment, ws_prefixed, ParseError, ParseResult},
 };
+use euclid::Transform2D;
+use log::error;
 use nipdf_macro::{pdf_object, OperationParser, TryFromIntObject, TryFromNameObject};
+use nom::{
+    branch::alt,
+    bytes::complete::is_not,
+    combinator::map_res,
+    error::{ErrorKind, FromExternalError, ParseError as NomParseError},
+    Err, Parser,
+};
+use std::num::NonZeroU32;
 
 pub(crate) mod color_space;
 mod pattern;
@@ -540,43 +535,6 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for Point {
 enum ObjectOrOperator<'a> {
     Object(Object<'a>),
     Operator(&'a str),
-}
-
-lazy_static! {
-    static ref OPERATORS: HashSet<&'static str, RandomState> = [
-        // General graphics state
-        "w", "J", "j", "M", "d", "ri", "i", "gs",
-        // Special graphics state
-        "q", "Q", "cm",
-        // Path construction
-        "m", "l", "c", "v", "y", "h", "re",
-        // Path Painting
-        "S", "s", "f", "F", "f*", "B", "B*", "b", "b*", "n",
-        // Clipping paths
-        "W", "W*",
-        // Text objects
-        "BT", "ET",
-        // Text state
-        "Tc", "Tw", "Tz", "TL", "Tf", "Tr", "Ts",
-        // Text positioning
-        "Td", "TD", "Tm", "T*",
-        // Text showing
-        "Tj", "TJ","'", "\"",
-        // Type 3 font
-        "d0", "d1",
-        // Color
-        "CS", "cs", "SC", "SCN", "sc", "scn", "G", "g", "RG", "rg", "K", "k",
-        // Shading patterns
-        "sh",
-        // Inline images
-        "BI", "ID", "EI",
-        // XObjects
-        "Do",
-        // Marked content
-        "MP", "DP", "BMC", "BDC", "EMC",
-        // Compatibility
-        "BX", "EX",
-    ].iter().copied().collect();
 }
 
 fn parse_operator(input: &[u8]) -> ParseResult<ObjectOrOperator> {
