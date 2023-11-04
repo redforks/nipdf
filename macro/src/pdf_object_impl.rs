@@ -541,20 +541,20 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 &key,
                 |ty| {
                     let type_name = remove_generic(ty);
-                    quote! { self.d.opt_resolve_container_pdf_object::<#type_name>(#key) }
+                    quote! { self.d.opt_resolve_pdf_object::<#type_name>(#key) }
                 },
                 |ty| {
                     if is_vec(ty) {
                         if one_or_more(attrs) {
-                            quote! { self.d.resolve_container_one_or_more_pdf_object(#key) }
+                            quote! { self.d.resolve_one_or_more_pdf_object(#key) }
                         } else {
-                            quote! { self.d.resolve_container_pdf_object_array(#key) }
+                            quote! { self.d.resolve_pdf_object_array(#key) }
                         }
                     } else if is_map(ty) {
-                        quote! { self.d.resolve_container_pdf_object_map(#key) }
+                        quote! { self.d.resolve_pdf_object_map(#key) }
                     } else {
                         let type_name = remove_generic(ty);
-                        quote! { self.d.resolve_container_pdf_object::<#type_name>(#key) }
+                        quote! { self.d.resolve_pdf_object::<#type_name>(#key) }
                     }
                 },
             )

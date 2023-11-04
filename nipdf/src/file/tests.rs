@@ -1,11 +1,9 @@
+use super::*;
 use crate::{
     object::{Object, SchemaDict},
     parser::parse_dict,
 };
-
 use std::path::PathBuf;
-
-use super::*;
 
 #[test]
 fn xref_table_resolve_object_buf() {
@@ -63,7 +61,10 @@ fn object_resolver_resolve_container_value() {
         resolver.do_resolve_container_value(&dict, "a").unwrap(),
         (None, &Object::Integer(1))
     );
-    assert_eq!(Err(ObjectValueError::DictKeyNotFound), resolver.resolve_container_value(&dict, "b"));
+    assert_eq!(
+        Err(ObjectValueError::DictKeyNotFound),
+        resolver.resolve_container_value(&dict, "b")
+    );
 }
 
 #[pdf_object(())]
@@ -83,7 +84,7 @@ endobj
         .as_dict()?;
     let d = SchemaDict::new(d, &resolver, ())?;
     assert!(d
-        .resolve_container_one_or_more_pdf_object::<FooDict>("foo")?
+        .resolve_one_or_more_pdf_object::<FooDict>("foo")?
         .is_empty());
 
     // field is dictionary
@@ -98,7 +99,7 @@ endobj
         .resolve(NonZeroU32::new(1_u32).unwrap())?
         .as_dict()?;
     let d = SchemaDict::new(d, &resolver, ())?;
-    let list = d.resolve_container_one_or_more_pdf_object::<FooDict>("foo")?;
+    let list = d.resolve_one_or_more_pdf_object::<FooDict>("foo")?;
     assert_eq!(list.len(), 1);
     assert_eq!(Some(NonZeroU32::new(2).unwrap()), list[0].id());
 
@@ -114,7 +115,7 @@ endobj
         .resolve(NonZeroU32::new(1_u32).unwrap())?
         .as_dict()?;
     let d = SchemaDict::new(d, &resolver, ())?;
-    let list = d.resolve_container_one_or_more_pdf_object::<FooDict>("foo")?;
+    let list = d.resolve_one_or_more_pdf_object::<FooDict>("foo")?;
     assert_eq!(list.len(), 2);
     assert_eq!(None, list[0].id());
     assert_eq!(Some(NonZeroU32::new(3).unwrap()), list[1].id());
