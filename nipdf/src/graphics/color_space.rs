@@ -1,13 +1,14 @@
 use std::rc::Rc;
 
 use anyhow::{anyhow, bail, Result as AnyResult};
+use euclid::default::Transform3D;
 use smallvec::SmallVec;
 
 use crate::{
     file::{ObjectResolver, ResourceDict},
     function::{Function, FunctionDict, NFunc},
     graphics::ICCStreamDict,
-    object::Object,
+    object::{Object, ObjectValueError},
 };
 
 use super::ColorSpaceArgs;
@@ -458,6 +459,36 @@ where
 
     fn components(&self) -> usize {
         1
+    }
+}
+
+trait CalRGBDictTrait {
+    fn gamma(&self) -> [f32; 3];
+    fn matrix(&self) -> [f32; 9];
+    fn black_point(&self) -> [f32; 3];
+    fn white_point(&self) -> [f32; 3];
+}
+
+impl<'a> TryFrom<&Object<'a>> for Transform3D<f32> {
+    type Error = ObjectValueError;
+
+    fn try_from(obj: &Object<'a>) -> Result<Self, Self::Error> {
+        let arr = obj.as_arr()?;
+        if arr.len() != 9 {
+            return Err(ObjectValueError::UnexpectedType);
+        }
+        let mut m = [0.0; 9];
+        for (i, v) in arr.iter().enumerate() {
+            m[i] = v.as_number()?;
+        }
+
+        // No 3x3 transform in euclid crate
+        Ok(Transform3D::new(
+            m[0], m[1], m[2], 0.0, // line 1
+            m[3], m[4], m[5], 0.0, // line 2
+            m[6], m[7], m[8], 0.0, // line 3
+            0.0, 0.0, 0.0, 1.0, // line 4
+        ))
     }
 }
 

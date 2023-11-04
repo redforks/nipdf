@@ -211,3 +211,28 @@ fn indexed(buf: &[u8]) -> AnyResult<()> {
     );
     Ok(())
 }
+
+#[test]
+fn transform_3d_try_from() {
+    let o = Object::Array(vec![
+        Object::Integer(1),
+        Object::Integer(2),
+        Object::Integer(3),
+        Object::Integer(4),
+        Object::Number(5.0),
+        Object::Integer(6),
+        Object::Integer(7),
+        Object::Integer(8),
+        Object::Integer(9),
+    ]);
+    let transform = Transform3D::try_from(&o).unwrap();
+    assert_eq!(
+        transform,
+        Transform3D::new(
+            1.0, 2.0, 3.0, 0., // line 1
+            4.0, 5.0, 6.0, 0., // line 2
+            7., 8., 9., 0., // line 3
+            0., 0., 0., 1.0
+        )
+    );
+}
