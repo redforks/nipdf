@@ -620,13 +620,13 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 id: Option<std::num::NonZeroU32>,
             }
 
-            impl<'a, 'b> crate::object::PdfObject<'a, 'b> for #struct_name<'a, 'b> {
-                fn new(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary<'a>, r: ()) -> Result<Self, crate::object::ObjectValueError> {
+            impl<'a, 'b> crate::object::PdfObject<'a, 'b, ()> for #struct_name<'a, 'b> {
+                fn new(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary<'a>, r: &'b ()) -> Result<Self, crate::object::ObjectValueError> {
                     let d = crate::object::SchemaDict::new(dict, r, #valid_arg)?;
                     Ok(Self { d, id})
                 }
 
-                fn checked(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary<'a>, r: ()) -> Result<Option<Self>, crate::object::ObjectValueError> {
+                fn checked(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary<'a>, r: &'b ()) -> Result<Option<Self>, crate::object::ObjectValueError> {
                     let d = crate::object::SchemaDict::from(dict, r, #valid_arg)?;
                     Ok(d.map(|d| Self { d, id}))
                 }
