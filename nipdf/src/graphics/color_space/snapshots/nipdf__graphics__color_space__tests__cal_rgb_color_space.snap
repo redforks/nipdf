@@ -1,0 +1,10 @@
+---
+source: nipdf/src/graphics/color_space/tests.rs
+expression: "cs.to_rgba(&[0.4, 0.5, 0.6])"
+---
+[
+    0.16671406,
+    0.31006765,
+    0.4272814,
+    1.0,
+]

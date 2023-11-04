@@ -4,6 +4,7 @@ use crate::{
     function::{FunctionValue, MockFunction},
 };
 use assert_approx_eq::assert_approx_eq;
+use insta::assert_debug_snapshot;
 use mockall::predicate::*;
 use smallvec::smallvec;
 use std::num::NonZeroU32;
@@ -245,5 +246,19 @@ fn point_3d_try_from() {
         Object::Number(3.),
     ]);
     let point = Point3D::try_from(&o).unwrap();
-    assert_eq!(point, Point3D::new(1.0, 2.0, 3.0)); 
+    assert_eq!(point, Point3D::new(1.0, 2.0, 3.0));
+}
+
+#[test]
+fn cal_rgb_color_space() {
+    let cs = CalRGBColorSpace {
+        white_point: [0.9505, 1.0, 1.089],
+        black_point: [0.01, 0.02, 0.03],
+        gamma: [1.8, 1.8, 1.8],
+        matrix: [
+            0.4497, 0.2446, 0.0252, 0.3163, 0.672, 0.1412, 0.1845, 0.0833, 0.9227,
+        ],
+    };
+
+    assert_debug_snapshot!(cs.to_rgba(&[0.4, 0.5, 0.6]));
 }

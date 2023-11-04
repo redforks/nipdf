@@ -74,6 +74,14 @@ impl ColorComp for f32 {
     }
 }
 
+fn convert_color_to<F, T, const N: usize>(from: &[F]) -> [T; N]
+where
+    F: ColorComp + ColorCompConvertTo<T>,
+    T: ColorComp,
+{
+    std::array::from_fn(|i| from[i].into_color_comp())
+}
+
 /// Convert color to rgba color space, convert result to f32 or u8 by T generic type.
 pub fn color_to_rgba<F, T, CS>(cs: &CS, color: &[F]) -> [T; 4]
 where
@@ -82,13 +90,7 @@ where
     CS: ColorSpaceTrait<F>,
     F: ColorCompConvertTo<T>,
 {
-    let rgba = cs.to_rgba(color);
-    [
-        rgba[0].into_color_comp(),
-        rgba[1].into_color_comp(),
-        rgba[2].into_color_comp(),
-        rgba[3].into_color_comp(),
-    ]
+    convert_color_to(&cs.to_rgba(color))
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -99,6 +101,7 @@ pub enum ColorSpace<T = f32> {
     Pattern,
     Indexed(Box<IndexedColorSpace<T>>),
     Separation(Box<SeparationColorSpace<T>>),
+    CalRGB(Box<CalRGBColorSpace>),
     /// Without this, complier complains T is not referenced in any of enum branches
     _Phantom(T),
 }
@@ -216,6 +219,11 @@ where
             Self::Pattern => PatternColorSpace.to_rgba(color),
             Self::Indexed(indexed) => indexed.to_rgba(color),
             Self::Separation(sep) => sep.as_ref().to_rgba(color),
+            Self::CalRGB(cal_rgb) => {
+                let p: [f32; 4] = convert_color_to(color);
+                cal_rgb.to_rgba(&p);
+                convert_color_to(&p)
+            }
             Self::_Phantom(_) => unreachable!(),
         }
     }
@@ -228,6 +236,7 @@ where
             Self::Pattern => ColorSpaceTrait::<T>::components(&PatternColorSpace),
             Self::Indexed(indexed) => indexed.components(),
             Self::Separation(sep) => sep.as_ref().components(),
+            Self::CalRGB(cal_rgb) => cal_rgb.components(),
             Self::_Phantom(_) => unreachable!(),
         }
     }
@@ -249,13 +258,8 @@ pub trait ColorSpaceTrait<T> {
         T: ColorComp + ColorCompConvertTo<f32>,
     {
         let rgba = self.to_rgba(color);
-        tiny_skia::Color::from_rgba(
-            rgba[0].into_color_comp(),
-            rgba[1].into_color_comp(),
-            rgba[2].into_color_comp(),
-            rgba[3].into_color_comp(),
-        )
-        .unwrap()
+        let rgba: [_; 4] = convert_color_to(&rgba);
+        tiny_skia::Color::from_rgba(rgba[0], rgba[1], rgba[2], rgba[3]).unwrap()
     }
 }
 
@@ -413,9 +417,9 @@ where
         let index = ColorCompConvertTo::<u8>::into_color_comp(color[0]) as usize;
         let n = self.base.components();
         let u8_color = &self.data[index * n..(index + 1) * n];
-        let c: SmallVec<[T; 4]> = u8_color.iter().map(|v| v.into_color_comp()).collect();
+        let c: [T; 4] = convert_color_to(u8_color);
 
-        self.base.to_rgba(c.as_slice())
+        self.base.to_rgba(&c)
     }
 
     fn components(&self) -> usize {
@@ -466,23 +470,31 @@ where
 #[pdf_object(())]
 trait CalRGBDictTrait {
     #[try_from]
-    fn gamma(&self) -> Point3D<f32>;
+    fn gamma(&self) -> [f32; 3];
 
     #[try_from]
-    #[default_fn(Transform3D::<f32>::identity)]
-    fn matrix(&self) -> Transform3D<f32>;
+    #[default_fn(default_matrix)]
+    fn matrix(&self) -> [f32; 9];
 
     #[try_from]
     #[or_default]
-    fn black_point(&self) -> Point3D<f32>;
+    fn black_point(&self) -> [f32; 3];
 
     #[try_from]
-    #[default_fn(point_3d_one)]
-    fn white_point(&self) -> Point3D<f32>;
+    #[default_fn(default_white_point)]
+    fn white_point(&self) -> [f32; 3];
 }
 
-fn point_3d_one() -> Point3D<f32> {
-    Point3D::new(1.0, 1.0, 1.0)
+fn default_matrix() -> [f32; 9] {
+    [
+        1.0, 0.0, 0.0, // line 1
+        0.0, 1.0, 0.0, // line 2
+        0.0, 0.0, 1.0, // line 3
+    ]
+}
+
+fn default_white_point() -> [f32; 3] {
+    [1.0, 1.0, 1.0]
 }
 
 impl<'a> TryFrom<&Object<'a>> for Point3D<f32> {
@@ -521,6 +533,35 @@ impl<'a> TryFrom<&Object<'a>> for Transform3D<f32> {
             m[6], m[7], m[8], 0.0, // line 3
             0.0, 0.0, 0.0, 1.0, // line 4
         ))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CalRGBColorSpace {
+    gamma: [f32; 3],
+    matrix: [f32; 9],
+    black_point: [f32; 3],
+    white_point: [f32; 3],
+}
+
+impl ColorSpaceTrait<f32> for CalRGBColorSpace {
+    fn to_rgba(&self, color: &[f32]) -> [f32; 4] {
+        let ag = color[0].powf(self.gamma[0]);
+        let bg = color[1].powf(self.gamma[1]);
+        let cg = color[2].powf(self.gamma[2]);
+
+        let x = self.matrix[0] * ag + self.matrix[1] * bg + self.matrix[2] * cg;
+        let y = self.matrix[3] * ag + self.matrix[4] * bg + self.matrix[5] * cg;
+        let z = self.matrix[6] * ag + self.matrix[7] * bg + self.matrix[8] * cg;
+        let x = x.clamp(0.0, 1.0);
+        let y = y.clamp(0.0, 1.0);
+        let z = z.clamp(0.0, 1.0);
+
+        [x, y, z, 1.0]
+    }
+
+    fn components(&self) -> usize {
+        3
     }
 }
 
