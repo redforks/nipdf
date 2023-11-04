@@ -1,4 +1,4 @@
-use crate::file::XRefTable;
+use crate::file::{ObjectResolver, XRefTable};
 
 use super::*;
 use static_assertions::assert_impl_all;

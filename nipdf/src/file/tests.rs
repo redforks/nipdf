@@ -1,4 +1,4 @@
-use crate::object::Object;
+use crate::object::{Object, SchemaDict};
 
 use std::path::PathBuf;
 
@@ -64,8 +64,9 @@ endobj
     let d = resolver
         .resolve(NonZeroU32::new(1_u32).unwrap())?
         .as_dict()?;
-    assert!(resolver
-        .resolve_container_one_or_more_pdf_object::<_, FooDict>(d, "foo")?
+    let d = SchemaDict::new(d, &resolver, ())?;
+    assert!(d
+        .resolve_container_one_or_more_pdf_object::<FooDict>("foo")?
         .is_empty());
 
     // field is dictionary
@@ -79,7 +80,8 @@ endobj
     let d = resolver
         .resolve(NonZeroU32::new(1_u32).unwrap())?
         .as_dict()?;
-    let list = resolver.resolve_container_one_or_more_pdf_object::<_, FooDict>(d, "foo")?;
+    let d = SchemaDict::new(d, &resolver, ())?;
+    let list = d.resolve_container_one_or_more_pdf_object::<FooDict>("foo")?;
     assert_eq!(list.len(), 1);
     assert_eq!(Some(NonZeroU32::new(2).unwrap()), list[0].id());
 
@@ -94,7 +96,8 @@ endobj
     let d = resolver
         .resolve(NonZeroU32::new(1_u32).unwrap())?
         .as_dict()?;
-    let list = resolver.resolve_container_one_or_more_pdf_object::<_, FooDict>(d, "foo")?;
+    let d = SchemaDict::new(d, &resolver, ())?;
+    let list = d.resolve_container_one_or_more_pdf_object::<FooDict>("foo")?;
     assert_eq!(list.len(), 2);
     assert_eq!(None, list[0].id());
     assert_eq!(Some(NonZeroU32::new(3).unwrap()), list[1].id());

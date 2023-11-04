@@ -284,30 +284,6 @@ impl<'a> ObjectResolver<'a> {
         T::new(Some(id), obj, self)
     }
 
-    pub fn opt_resolve_pdf_object<'b, T: PdfObject<'a, 'b, Self>>(
-        &'b self,
-        id: NonZeroU32,
-    ) -> Result<Option<T>, ObjectValueError> {
-        Self::not_found_error_to_opt(self.resolve_pdf_object(id))
-    }
-
-    /// Resolve object with id `id`, if object is reference, resolve it recursively.
-    /// Return `None` if object is not found.
-    pub fn opt_resolve(&self, id: NonZeroU32) -> Result<Option<&Object<'a>>, ObjectValueError> {
-        Self::not_found_error_to_opt(self.resolve(id))
-    }
-
-    pub fn resolve_reference<'b>(
-        &'b self,
-        v: &'b Object<'a>,
-    ) -> Result<&'b Object<'a>, ObjectValueError> {
-        if let Object::Reference(id) = v {
-            self.resolve(id.id().id())
-        } else {
-            Ok(v)
-        }
-    }
-
     /// Resolve object with id `id`, if object is reference, resolve it recursively.
     pub fn resolve(&self, id: NonZeroU32) -> Result<&Object<'a>, ObjectValueError> {
         self.objects
@@ -342,45 +318,6 @@ impl<'a> ObjectResolver<'a> {
         self.resolve_required_value(c, id).map(|(_, o)| o)
     }
 
-    pub fn opt_resolve_container_pdf_object<'b: 'c, 'c, C, T>(
-        &'b self,
-        c: &'c C,
-        id: &str,
-    ) -> Result<Option<T>, ObjectValueError>
-    where
-        C: DataContainer<'a>,
-        T: PdfObject<'a, 'c, Self>,
-    {
-        if let Some((id, obj)) = self._opt_resolve_container_value(c, id)? {
-            match obj {
-                Object::Dictionary(d) => Ok(Some(T::new(id, d, self)?)),
-                Object::Stream(s) => Ok(Some(T::new(id, s.as_dict(), self)?)),
-                _ => Err(ObjectValueError::UnexpectedType),
-            }
-        } else {
-            Ok(None)
-        }
-    }
-
-    pub fn resolve_container_pdf_object<
-        'b: 'c,
-        'c,
-        C: DataContainer<'a>,
-        T: PdfObject<'a, 'c, Self>,
-    >(
-        &'b self,
-        c: &'c C,
-        id: &str,
-    ) -> Result<T, ObjectValueError> {
-        let (id, obj) = self.resolve_required_value(c, id)?;
-        let obj = match obj {
-            Object::Dictionary(d) => d,
-            Object::Stream(s) => s.as_dict(),
-            _ => return Err(ObjectValueError::UnexpectedType),
-        };
-        T::new(id, obj, self)
-    }
-
     /// Like _resolve_container_value(), but error logs if value not exist
     fn resolve_required_value<'b: 'c, 'c, C: DataContainer<'a>>(
         &'b self,
@@ -391,14 +328,6 @@ impl<'a> ObjectResolver<'a> {
             error!("{}: {}", e, id);
             e
         })
-    }
-
-    fn _opt_resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
-        &'b self,
-        c: &'c C,
-        id: &str,
-    ) -> Result<Option<(Option<NonZeroU32>, &'c Object<'a>)>, ObjectValueError> {
-        Self::not_found_error_to_opt(self._resolve_container_value(c, id))
     }
 
     fn _resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
@@ -439,101 +368,6 @@ impl<'a> ObjectResolver<'a> {
             }
             _ => Err(ObjectValueError::UnexpectedType),
         }
-    }
-
-    /// Resolve pdf_object from container, if its end value is dictionary, return with one element vec.
-    /// If its end value is array, return all elements in array.
-    /// If value not exist, return empty vector.
-    pub fn resolve_container_one_or_more_pdf_object<'d: 'c, 'c, C, T>(
-        &'d self,
-        c: &'c C,
-        id: &str,
-    ) -> Result<Vec<T>, ObjectValueError>
-    where
-        C: DataContainer<'a>,
-        T: PdfObject<'a, 'c, Self>,
-    {
-        let id_n_obj = self._opt_resolve_container_value(c, id)?;
-        id_n_obj.map_or_else(
-            || Ok(vec![]),
-            |(id, obj)| match obj {
-                Object::Dictionary(d) => Ok(vec![T::new(id, d, self)?]),
-                Object::Stream(s) => Ok(vec![T::new(id, s.as_dict(), self)?]),
-                Object::Array(arr) => {
-                    let mut res = Vec::with_capacity(arr.len());
-                    for obj in arr {
-                        let dict = self.resolve_reference(obj)?;
-                        res.push(T::new(
-                            obj.as_ref().ok().map(|id| id.id().id()),
-                            dict.as_dict()?,
-                            self,
-                        )?);
-                    }
-                    Ok(res)
-                }
-                _ => Err(ObjectValueError::UnexpectedType),
-            },
-        )
-    }
-
-    /// Resolve root pdf_objects from data container `c` with key `k`, if value is reference,
-    /// resolve it recursively. Return empty vector if object is not found.
-    /// The raw value should be an array of references.
-    pub fn resolve_container_pdf_object_array<'b: 'c, 'c, C, T>(
-        &'b self,
-        c: &'c C,
-        id: &str,
-    ) -> Result<Vec<T>, ObjectValueError>
-    where
-        C: DataContainer<'a>,
-        T: PdfObject<'a, 'c, Self>,
-    {
-        let arr = self.opt_resolve_container_value(c, id)?;
-        arr.map_or_else(
-            || Ok(vec![]),
-            |arr| {
-                let arr = arr.as_arr()?;
-                let mut res = Vec::with_capacity(arr.len());
-                for obj in arr {
-                    let dict = self.resolve_reference(obj)?;
-                    res.push(T::new(
-                        obj.as_ref().ok().map(|id| id.id().id()),
-                        dict.as_dict()?,
-                        self,
-                    )?);
-                }
-                Ok(res)
-            },
-        )
-    }
-
-    /// Resolve pdf object from data container `c` with key `k`, if value is reference,
-    /// resolve it recursively. Return empty Map if object is not found.
-    /// The raw value should be a dictionary, that key is Name and value is Dictionary.
-    pub fn resolve_container_pdf_object_map<'b: 'c, 'c, C, T>(
-        &'b self,
-        c: &'c C,
-        id: &str,
-    ) -> anyhow::Result<HashMap<String, T>>
-    where
-        C: DataContainer<'a>,
-        T: PdfObject<'a, 'c, Self>,
-    {
-        let dict = self.opt_resolve_container_value(c, id)?;
-        dict.map_or_else(
-            || Ok(HashMap::default()),
-            |dict| {
-                let dict = dict.as_dict().context("Value not dict")?;
-                let mut res = HashMap::with_capacity(dict.len());
-                for k in dict.keys() {
-                    let obj: T = self
-                        .resolve_container_pdf_object(dict, k.as_ref())
-                        .with_context(|| format!("Key: {}", k.as_ref()))?;
-                    res.insert(k.as_ref().to_owned(), obj);
-                }
-                Ok(res)
-            },
-        )
     }
 
     fn not_found_error_to_opt<T>(
