@@ -467,12 +467,22 @@ where
 trait CalRGBDictTrait {
     #[try_from]
     fn gamma(&self) -> Point3D<f32>;
+
     #[try_from]
+    #[default_fn(Transform3D::<f32>::identity)]
     fn matrix(&self) -> Transform3D<f32>;
+
     #[try_from]
+    #[or_default]
     fn black_point(&self) -> Point3D<f32>;
+
     #[try_from]
+    #[default_fn(point_3d_one)]
     fn white_point(&self) -> Point3D<f32>;
+}
+
+fn point_3d_one() -> Point3D<f32> {
+    Point3D::new(1.0, 1.0, 1.0)
 }
 
 impl<'a> TryFrom<&Object<'a>> for Point3D<f32> {
