@@ -1,18 +1,15 @@
-use std::rc::Rc;
-
-use anyhow::{anyhow, bail, Result as AnyResult};
-use euclid::default::{Point3D, Transform3D};
-use nipdf_macro::pdf_object;
-use smallvec::SmallVec;
-
+use super::ColorSpaceArgs;
 use crate::{
     file::{ObjectResolver, ResourceDict},
     function::{Function, FunctionDict, NFunc},
     graphics::ICCStreamDict,
-    object::{Object, ObjectValueError},
+    object::{Object, ObjectValueError, PdfObject},
 };
-
-use super::ColorSpaceArgs;
+use anyhow::{anyhow, bail, Result as AnyResult};
+use euclid::default::{Point3D, Transform3D};
+use nipdf_macro::pdf_object;
+use smallvec::SmallVec;
+use std::rc::Rc;
 
 /// Color component composes a color.
 /// Two kinds of color component: float or integer.
@@ -179,6 +176,20 @@ where
                     let data = resolve_index_data(&arr[3], resolver)?;
                     assert!(data.len() >= (hival + 1) as usize * base.components());
                     Ok(Self::Indexed(Box::new(IndexedColorSpace { base, data })))
+                }
+                "CalRGB" => {
+                    debug_assert_eq!(2, arr.len());
+                    let dict = CalRGBDict::new(None, arr[1].as_dict()?, &())?;
+                    let gamma = dict.gamma()?;
+                    let matrix = dict.matrix()?;
+                    let black_point = dict.black_point()?;
+                    let white_point = dict.white_point()?;
+                    Ok(Self::CalRGB(Box::new(CalRGBColorSpace {
+                        gamma,
+                        matrix,
+                        black_point,
+                        white_point,
+                    })))
                 }
                 s => todo!("ColorSpace::from_args() {} color space", s),
             },
@@ -474,6 +485,7 @@ where
 }
 
 #[pdf_object(())]
+#[stub_resolver]
 trait CalRGBDictTrait {
     #[try_from]
     fn gamma(&self) -> [f32; 3];

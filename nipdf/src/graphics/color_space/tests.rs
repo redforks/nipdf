@@ -214,6 +214,28 @@ fn indexed(buf: &[u8]) -> AnyResult<()> {
 }
 
 #[test]
+fn cal_rgb_from_args()  {
+    let buf = br#" 
+1 0 obj
+[/CalRGB <</WhitePoint[0.9505 1.0 1.089]/BlackPoint[0.01 0.02 0.03]/Gamma[1.8 1.8 1.8]/Matrix[0.4497 0.2446 0.0252 0.3163 0.672 0.1412 0.1845 0.0833 0.9227]>>]
+endobj
+"#;
+    let xref = XRefTable::from_buf(buf);
+    let resolver = ObjectResolver::new(buf, &xref);
+    let args = ColorSpaceArgs::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap()).unwrap()).unwrap();
+    let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None).unwrap();
+    assert_eq!(
+        ColorSpace::CalRGB(Box::new(CalRGBColorSpace {
+            white_point: [0.9505, 1.0, 1.089],
+            black_point: [0.01, 0.02, 0.03],
+            gamma: [1.8, 1.8, 1.8],
+            matrix: [0.4497, 0.2446, 0.0252, 0.3163, 0.672, 0.1412, 0.1845, 0.0833, 0.9227],
+        })),
+        color_space
+    );
+}
+
+#[test]
 fn transform_3d_try_from() {
     let o = Object::Array(vec![
         Object::Integer(1),
