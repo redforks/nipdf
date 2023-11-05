@@ -540,19 +540,10 @@ where
     f32: ColorCompConvertTo<T>,
 {
     fn to_rgba(&self, color: &[T]) -> [T; 4] {
-        let ag = color[0].into_color_comp().powf(self.gamma[0]);
-        let bg = color[1].into_color_comp().powf(self.gamma[1]);
-        let cg = color[2].into_color_comp().powf(self.gamma[2]);
-
-        let x = self.matrix[0] * ag + self.matrix[1] * bg + self.matrix[2] * cg;
-        let y = self.matrix[3] * ag + self.matrix[4] * bg + self.matrix[5] * cg;
-        let z = self.matrix[6] * ag + self.matrix[7] * bg + self.matrix[8] * cg;
-        let x = x.clamp(0.0, 1.0);
-        let y = y.clamp(0.0, 1.0);
-        let z = z.clamp(0.0, 1.0);
-
-        let r = [x, y, z, 1.0];
-        convert_color_to(&r)
+        // no need to do conversion to rgb, it is already rgb
+        // gamma and other settings are used for converting to other color space
+        // such as CMYK etc.
+        [color[0], color[1], color[2], T::max_color()]
     }
 
     fn components(&self) -> usize {

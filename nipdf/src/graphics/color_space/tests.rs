@@ -247,5 +247,5 @@ fn cal_rgb_color_space() {
         ],
     };
 
-    assert_debug_snapshot!(cs.to_rgba(&[0.4, 0.5, 0.6]));
+    assert_eq!(cs.to_rgba(&[0., 1.0, 0.5]), [0., 1.0, 0.5, 1.0]);
 }

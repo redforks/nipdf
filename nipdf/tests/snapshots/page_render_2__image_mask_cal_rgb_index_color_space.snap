@@ -2,4 +2,4 @@
 source: nipdf/tests/page_render_2.rs
 expression: "&decode_file_page(\"sample_files/filters/predictor.pdf\", 0).unwrap()"
 ---
-"c983952ef1009445f9b08040bd282628"
+"1dab001388070a79bc98abca08333381"
