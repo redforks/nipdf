@@ -9,6 +9,7 @@
         "ffilter",
         "Flate",
         "notdef",
+        "Paeth",
         "Parms",
         "skia",
         "startxref",

@@ -3,10 +3,9 @@ use crate::{
     file::{ObjectResolver, ResourceDict},
     function::{Function, FunctionDict, NFunc},
     graphics::ICCStreamDict,
-    object::{Object, ObjectValueError, PdfObject},
+    object::{Object, PdfObject},
 };
 use anyhow::{anyhow, bail, Result as AnyResult};
-use euclid::default::{Point3D, Transform3D};
 use nipdf_macro::pdf_object;
 use std::rc::Rc;
 
@@ -529,45 +528,6 @@ fn default_matrix() -> [f32; 9] {
 
 fn default_white_point() -> [f32; 3] {
     [1.0, 1.0, 1.0]
-}
-
-impl<'a> TryFrom<&Object<'a>> for Point3D<f32> {
-    type Error = ObjectValueError;
-
-    fn try_from(obj: &Object<'a>) -> Result<Self, Self::Error> {
-        let arr = obj.as_arr()?;
-        if arr.len() != 3 {
-            return Err(ObjectValueError::UnexpectedType);
-        }
-        Ok(Point3D::new(
-            arr[0].as_number()?,
-            arr[1].as_number()?,
-            arr[2].as_number()?,
-        ))
-    }
-}
-
-impl<'a> TryFrom<&Object<'a>> for Transform3D<f32> {
-    type Error = ObjectValueError;
-
-    fn try_from(obj: &Object<'a>) -> Result<Self, Self::Error> {
-        let arr = obj.as_arr()?;
-        if arr.len() != 9 {
-            return Err(ObjectValueError::UnexpectedType);
-        }
-        let mut m = [0.0; 9];
-        for (i, v) in arr.iter().enumerate() {
-            m[i] = v.as_number()?;
-        }
-
-        // No 3x3 transform in euclid crate
-        Ok(Transform3D::new(
-            m[0], m[1], m[2], 0.0, // line 1
-            m[3], m[4], m[5], 0.0, // line 2
-            m[6], m[7], m[8], 0.0, // line 3
-            0.0, 0.0, 0.0, 1.0, // line 4
-        ))
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
