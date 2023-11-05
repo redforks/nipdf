@@ -69,13 +69,14 @@ fn type0_cid_font() {
 }
 
 #[test]
-fn not_embed_type1_load_ttf_from_os() {
+fn standard_14_font_alias_name() {
+    // Font name: TimesNewRomanPSMT alias of Times-Roman, see normalize_font_name()
     assert_ron_snapshot!(&decode_file_page("../../../code.pdf", 620).unwrap())
 }
 
 #[test]
 fn image_mask_cal_rgb_index_color_space() {
-    // test paint image has mask, and its color space is Indexed to CalRGB, 
+    // test paint image has mask, and its color space is Indexed to CalRGB,
     // image stream processed with Predicator
     assert_ron_snapshot!(&decode_file_page("sample_files/filters/predictor.pdf", 0).unwrap())
 }

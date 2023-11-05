@@ -188,11 +188,11 @@ impl<'c> Type1FontOp<'c> {
             info!("TODO: resolve encoding from type1 font. ({})", font_name);
 
             // if font not embed encoding, use known encoding for the two standard symbol fonts
-            match font_name.to_ascii_lowercase().as_str() {
-                "symbol" => {
+            match font_name {
+                "Symbol" => {
                     return Ok(Encoding256::SYMBOL);
                 }
-                "zapfdingbats" => {
+                "ZapfDingbats" => {
                     return Ok(Encoding256::ZAPFDINGBATS);
                 }
                 _ => (),
@@ -448,87 +448,95 @@ static SYSTEM_FONTS: Lazy<Database> = Lazy::new(|| {
 /// ````
 ///
 /// This function returns the standard 14 font if the font name is an known internal name.
-/// Assume `name` already converted to lowercase.
 fn normalize_font_name(name: &str) -> &str {
     match name {
-        "arial" | "arialmt" => "helvetica",
-        "arial,bold" | "arial-bold" | "arial-boldmt" => "helvetica-bold",
-        "arial,bolditalic" | "arial-bolditalic" | "arial-bolditalicmt" => "helvetica-boldoblique",
-        "arial,italic" | "arial-italic" | "arial-italicmt" => "helvetica-oblique",
-        "courier" => "courier",
-        "couriernew" => "courier",
-        "courier,bold" => "courier-bold",
-        "courier,bolditalic" => "courier-boldoblique",
-        "courier,italic" => "courier-oblique",
-        "courier-bold" => "courier-bold",
-        "courier-boldoblique" => "courier-boldoblique",
-        "courier-oblique" => "courier-oblique",
-        "couriernew,bold" => "courier-bold",
-        "couriernew,bolditalic" => "courier-boldoblique",
-        "couriernew,italic" => "courier-oblique",
-        "couriernew-bold" => "courier-bold",
-        "couriernew-bolditalic" => "courier-boldoblique",
-        "couriernew-italic" => "courier-oblique",
-        "couriernewps-bolditalicmt" => "courier-boldoblique",
-        "couriernewps-boldmt" => "courier-bold",
-        "couriernewps-italicmt" => "courier-oblique",
-        "couriernewpsmt" => "courier",
-        "helvetica" => "helvetica",
-        "helvetica,bold" => "helvetica-bold",
-        "helvetica,bolditalic" => "helvetica-boldoblique",
-        "helvetica,italic" => "helvetica-oblique",
-        "helvetica-bold" => "helvetica-bold",
-        "helvetica-bolditalic" => "helvetica-boldoblique",
-        "helvetica-boldoblique" => "helvetica-boldoblique",
-        "helvetica-italic" => "helvetica-oblique",
-        "helvetica-oblique" => "helvetica-oblique",
-        "symbol" => "symbol",
-        "symbol,bold" => "symbol",
-        "symbol,bolditalic" => "symbol",
-        "symbol,italic" => "symbol",
-        "times-bold" => "times-bold",
-        "times-bolditalic" => "times-bolditalic",
-        "times-italic" => "times-italic",
-        "times-roman" => "times-roman",
-        "timesnewroman" => "times-roman",
-        "timesnewroman,bold" => "times-bold",
-        "timesnewroman,bolditalic" => "times-bolditalic",
-        "timesnewroman,italic" => "times-italic",
-        "timesnewroman-bold" => "times-bold",
-        "timesnewroman-bolditalic" => "times-bolditalic",
-        "timesnewroman-italic" => "times-italic",
-        "timesnewromanps" => "times-roman",
-        "timesnewromanps-bold" => "times-bold",
-        "timesnewromanps-bolditalic" => "times-bolditalic",
-        "timesnewromanps-bolditalicmt" => "times-bolditalic",
-        "timesnewromanps-boldmt" => "times-bold",
-        "timesnewromanps-italic" => "times-italic",
-        "timesnewromanps-italicmt" => "times-italic",
-        "timesnewromanpsmt" => "times-roman",
-        "timesnewromanpsmt,bold" => "times-bold",
-        "timesnewromanpsmt,bolditalic" => "times-bolditalic",
-        "timesnewromanpsmt,italic" => "times-italic",
-        "zapfdingbats" => "zapfdingbats",
-        s => s,
+        "Arial" => "Helvetica".into(),
+        "Arial,Bold" => "Helvetica-Bold".into(),
+        "Arial,BoldItalic" => "Helvetica-BoldOblique".into(),
+        "Arial,Italic" => "Helvetica-Oblique".into(),
+        "Arial-Bold" => "Helvetica-Bold".into(),
+        "Arial-BoldItalic" => "Helvetica-BoldOblique".into(),
+        "Arial-BoldItalicMT" => "Helvetica-BoldOblique".into(),
+        "Arial-BoldMT" => "Helvetica-Bold".into(),
+        "Arial-Italic" => "Helvetica-Oblique".into(),
+        "Arial-ItalicMT" => "Helvetica-Oblique".into(),
+        "ArialMT" => "Helvetica".into(),
+        "Courier" => "Courier".into(),
+        "Courier,Bold" => "Courier-Bold".into(),
+        "Courier,BoldItalic" => "Courier-BoldOblique".into(),
+        "Courier,Italic" => "Courier-Oblique".into(),
+        "Courier-Bold" => "Courier-Bold".into(),
+        "Courier-BoldOblique" => "Courier-BoldOblique".into(),
+        "Courier-Oblique" => "Courier-Oblique".into(),
+        "CourierNew" => "Courier".into(),
+        "CourierNew,Bold" => "Courier-Bold".into(),
+        "CourierNew,BoldItalic" => "Courier-BoldOblique".into(),
+        "CourierNew,Italic" => "Courier-Oblique".into(),
+        "CourierNew-Bold" => "Courier-Bold".into(),
+        "CourierNew-BoldItalic" => "Courier-BoldOblique".into(),
+        "CourierNew-Italic" => "Courier-Oblique".into(),
+        "CourierNewPS-BoldItalicMT" => "Courier-BoldOblique".into(),
+        "CourierNewPS-BoldMT" => "Courier-Bold".into(),
+        "CourierNewPS-ItalicMT" => "Courier-Oblique".into(),
+        "CourierNewPSMT" => "Courier".into(),
+        "Helvetica" => "Helvetica".into(),
+        "Helvetica,Bold" => "Helvetica-Bold".into(),
+        "Helvetica,BoldItalic" => "Helvetica-BoldOblique".into(),
+        "Helvetica,Italic" => "Helvetica-Oblique".into(),
+        "Helvetica-Bold" => "Helvetica-Bold".into(),
+        "Helvetica-BoldItalic" => "Helvetica-BoldOblique".into(),
+        "Helvetica-BoldOblique" => "Helvetica-BoldOblique".into(),
+        "Helvetica-Italic" => "Helvetica-Oblique".into(),
+        "Helvetica-Oblique" => "Helvetica-Oblique".into(),
+        "Symbol" => "Symbol".into(),
+        "Symbol,Bold" => "Symbol".into(),
+        "Symbol,BoldItalic" => "Symbol".into(),
+        "Symbol,Italic" => "Symbol".into(),
+        "Times-Bold" => "Times-Bold".into(),
+        "Times-BoldItalic" => "Times-BoldItalic".into(),
+        "Times-Italic" => "Times-Italic".into(),
+        "Times-Roman" => "Times-Roman".into(),
+        "TimesNewRoman" => "Times-Roman".into(),
+        "TimesNewRoman,Bold" => "Times-Bold".into(),
+        "TimesNewRoman,BoldItalic" => "Times-BoldItalic".into(),
+        "TimesNewRoman,Italic" => "Times-Italic".into(),
+        "TimesNewRoman-Bold" => "Times-Bold".into(),
+        "TimesNewRoman-BoldItalic" => "Times-BoldItalic".into(),
+        "TimesNewRoman-Italic" => "Times-Italic".into(),
+        "TimesNewRomanPS" => "Times-Roman".into(),
+        "TimesNewRomanPS-Bold" => "Times-Bold".into(),
+        "TimesNewRomanPS-BoldItalic" => "Times-BoldItalic".into(),
+        "TimesNewRomanPS-BoldItalicMT" => "Times-BoldItalic".into(),
+        "TimesNewRomanPS-BoldMT" => "Times-Bold".into(),
+        "TimesNewRomanPS-Italic" => "Times-Italic".into(),
+        "TimesNewRomanPS-ItalicMT" => "Times-Italic".into(),
+        "TimesNewRomanPSMT" => "Times-Roman".into(),
+        "TimesNewRomanPSMT,Bold" => "Times-Bold".into(),
+        "TimesNewRomanPSMT,BoldItalic" => "Times-BoldItalic".into(),
+        "TimesNewRomanPSMT,Italic" => "Times-Italic".into(),
+        "ZapfDingbats" => "ZapfDingbats".into(),
+        others => others,
     }
 }
 
 fn standard_14_type1_font_data(font_name: &str) -> Option<&'static [u8]> {
+    let font_name = normalize_font_name(font_name);
+
     match font_name {
-        "courier" => Some(&include_bytes!("../../../../fonts/n022003l.pfb")[..]),
-        "courier-bold" => Some(&include_bytes!("../../../../fonts/n022004l.pfb")[..]),
-        "courier-boldoblique" => Some(&include_bytes!("../../../../fonts/n022024l.pfb")[..]),
-        "courier-oblique" => Some(&include_bytes!("../../../../fonts/n022023l.pfb")[..]),
-        "helvetica" => Some(&include_bytes!("../../../../fonts/n019003l.pfb")[..]),
-        "helvetica-bold" => Some(&include_bytes!("../../../../fonts/n019004l.pfb")[..]),
-        "helvetica-boldoblique" => Some(&include_bytes!("../../../../fonts/n019024l.pfb")[..]),
-        "helvetica-oblique" => Some(&include_bytes!("../../../../fonts/n019023l.pfb")[..]),
-        "symbol" => Some(&include_bytes!("../../../../fonts/s050000l.pfb")[..]),
-        "times-bold" => Some(&include_bytes!("../../../../fonts/n021004l.pfb")[..]),
-        "times-bolditalic" => Some(&include_bytes!("../../../../fonts/n021024l.pfb")[..]),
-        "times-italic" => Some(&include_bytes!("../../../../fonts/n021023l.pfb")[..]),
-        "times-roman" => Some(&include_bytes!("../../../../fonts/n021003l.pfb")[..]),
-        "zapfdingbats" => Some(&include_bytes!("../../../../fonts/d050000l.pfb")[..]),
+        "Courier" => Some(&include_bytes!("../../../../fonts/n022003l.pfb")[..]),
+        "Courier-Bold" => Some(&include_bytes!("../../../../fonts/n022004l.pfb")[..]),
+        "Courier-BoldOblique" => Some(&include_bytes!("../../../../fonts/n022024l.pfb")[..]),
+        "Courier-Oblique" => Some(&include_bytes!("../../../../fonts/n022023l.pfb")[..]),
+        "Helvetica" => Some(&include_bytes!("../../../../fonts/n019003l.pfb")[..]),
+        "Helvetica-Bold" => Some(&include_bytes!("../../../../fonts/n019004l.pfb")[..]),
+        "Helvetica-BoldOblique" => Some(&include_bytes!("../../../../fonts/n019024l.pfb")[..]),
+        "Helvetica-Oblique" => Some(&include_bytes!("../../../../fonts/n019023l.pfb")[..]),
+        "Symbol" => Some(&include_bytes!("../../../../fonts/s050000l.pfb")[..]),
+        "Times-Bold" => Some(&include_bytes!("../../../../fonts/n021004l.pfb")[..]),
+        "Times-BoldItalic" => Some(&include_bytes!("../../../../fonts/n021024l.pfb")[..]),
+        "Times-Italic" => Some(&include_bytes!("../../../../fonts/n021023l.pfb")[..]),
+        "Times-Roman" => Some(&include_bytes!("../../../../fonts/n021003l.pfb")[..]),
+        "ZapfDingbats" => Some(&include_bytes!("../../../../fonts/d050000l.pfb")[..]),
         _ => None,
     }
 }
@@ -538,7 +546,7 @@ pub struct FontCache<'c> {
 }
 
 /// Split string by capital char.
-fn captital_to_space_separated(s: &str) -> Cow<str> {
+fn capital_to_space_separated(s: &str) -> Cow<str> {
     let mut rv: SmallVec<[&str; 3]> = SmallVec::new();
     let mut last = 0;
     for (i, c) in s.char_indices() {
@@ -573,7 +581,7 @@ impl<'c> FontCache<'c> {
 
     fn load_true_type_from_os(desc: &FontDescriptorDict) -> AnyResult<Vec<u8>> {
         let font_name = desc.font_name()?;
-        let font_name = captital_to_space_separated(font_name);
+        let font_name = capital_to_space_separated(font_name);
         let mut families = vec![Family::Name(font_name.as_ref())];
         let family = desc.font_family()?;
         if let Some(family) = &family {
@@ -652,7 +660,7 @@ impl<'c> FontCache<'c> {
         'b: 'c,
     {
         let f = font.type1()?;
-        let font_name = f.font_name()?.to_lowercase();
+        let font_name = f.font_name()?;
         let desc = f.font_descriptor()?;
         let font_data = desc
             .map(|desc| -> AnyResult<_> {
@@ -672,7 +680,7 @@ impl<'c> FontCache<'c> {
             Some(s) => (s.0, Self::load_embed_font_bytes(f.resolver(), s.1)?),
             None => (
                 false,
-                if let Some(font_data) = standard_14_type1_font_data(font_name.as_str()) {
+                if let Some(font_data) = standard_14_type1_font_data(font_name) {
                     font_data.to_owned()
                 } else {
                     bail!("Standard 14 type1 font not found: {}", font_name)
@@ -869,6 +877,6 @@ mod tests {
     #[test_case("Bar" => "Bar")]
     #[test_case("FooBar" => "Foo Bar")]
     fn test_split_by_capital(s: &str) -> String {
-        captital_to_space_separated(s).into_owned()
+        capital_to_space_separated(s).into_owned()
     }
 }

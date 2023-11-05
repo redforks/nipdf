@@ -2,4 +2,4 @@
 source: nipdf/tests/page_render_2.rs
 expression: "&decode_file_page(\"../../../code.pdf\", 620).unwrap()"
 ---
-"fb893c0d40bcbd3a4e003c0d9c26dc11"
+"df93babd06cbd20742a0d0978518b191"
