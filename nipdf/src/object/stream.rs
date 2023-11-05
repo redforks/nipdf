@@ -5,8 +5,8 @@ use crate::{
     function::Domains,
     graphics::{
         color_space::{
-            color_to_rgba, convert_color_to, ColorCompConvertTo, ColorSpace, ColorSpaceTrait,
-            DeviceCMYK,
+            color_to_rgba, convert_color_to, ColorComp, ColorCompConvertTo, ColorSpace,
+            ColorSpaceTrait, DeviceCMYK,
         },
         ColorSpaceArgs,
     },
@@ -329,6 +329,22 @@ pub(crate) trait ImageDictTrait {
     fn color_space(&self) -> Option<ColorSpaceArgs<'a>>;
     #[try_from]
     fn mask(&self) -> Option<ImageMask<'a>>;
+    #[try_from]
+    fn decode(&self) -> Option<Domains>;
+}
+
+/// Return true if arr is None, or arr is default value based on color space.
+fn decode_array_is_default(cs: Option<&ColorSpace>, arr: Option<Domains>) -> bool {
+    arr.map_or(true, |arr| {
+        arr.n()
+            == cs
+                .expect("image decode array exist but no ColorSpace")
+                .components()
+            && arr
+                .0
+                .iter()
+                .all(|d| d.start == f32::min_color() && d.end == f32::max_color())
+    })
 }
 
 #[pdf_object(())]
@@ -642,6 +658,10 @@ impl<'a> Stream<'a> {
             }
         };
 
+        assert!(
+            decode_array_is_default(color_space.as_ref(), img_dict.decode().unwrap()),
+            "TODO: handle image decode array"
+        );
         if let Some(mask) = img_dict.mask().unwrap() {
             let ImageMask::ColorKey(color_key) = mask else {
                 todo!("image mask: {:?}", mask);
