@@ -12,7 +12,10 @@ render-test-1: release-build-dump
 render-test-2: release-build-dump
 	for i in $$(seq 0 951); echo $$i; if not target/release/nipdf-dump page -f ~/code.pdf $$i --png > /dev/null 2>/tmp/log; break; end; end
 
-render-test: render-test-1 render-test-2
+render-test-3: release-build-dump
+	for i in $$(seq 0 30); echo $$i; if not target/release/nipdf-dump page -f ~/ICEpower125ASX2_Datasheet_2.0.pdf $$i --png > /dev/null 2>/tmp/log; break; end; end
+
+render-test: render-test-1 render-test-2 render-test-3
 	# ensure that page rendering not panic
 
 CLIPPY_RULES = -W clippy::clone_on_ref_ptr -W clippy::empty_structs_with_brackets -D clippy::dbg_macro -W clippy::get_unwrap -W clippy::if_then_some_else_none -W clippy::large_include_file -W clippy::rc_buffer -W clippy::redundant_type_annotations -W clippy::verbose_file_reads -W clippy::collection_is_never_read -W clippy::debug_assert_with_mut_call -W clippy::imprecise_flops -W clippy::manual_clamp -W clippy::needless_collect -W clippy::or_fun_call -W clippy::redundant_clone -W clippy::suboptimal_flops
