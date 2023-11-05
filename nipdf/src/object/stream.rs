@@ -2,6 +2,7 @@ use super::{Dictionary, Object, ObjectValueError};
 use crate::{
     ccitt::Flags,
     file::{ObjectResolver, ResourceDict},
+    function::Domains,
     graphics::{
         color_space::{color_to_rgba, ColorCompConvertTo, ColorSpace, ColorSpaceTrait, DeviceCMYK},
         ColorSpaceArgs,
@@ -295,6 +296,27 @@ fn decode_jpx<'a>(
     Ok(FilterDecodedData::Image(img))
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum ImageMask<'a> {
+    Explicit(Stream<'a>),
+    ColorKey(Domains),
+}
+
+impl<'a> TryFrom<&Object<'a>> for ImageMask<'a> {
+    type Error = ObjectValueError;
+
+    fn try_from(v: &Object<'a>) -> Result<Self, Self::Error> {
+        Ok(match v {
+            Object::Stream(s) => Self::Explicit(s.clone()),
+            Object::Array(_) => {
+                let domains = Domains::try_from(v)?;
+                Self::ColorKey(domains)
+            }
+            _ => return Err(ObjectValueError::UnexpectedType),
+        })
+    }
+}
+
 #[pdf_object((Some("XObject"), "Image"))]
 pub(crate) trait ImageDictTrait {
     fn width(&self) -> u32;
@@ -302,6 +324,8 @@ pub(crate) trait ImageDictTrait {
     fn bits_per_component(&self) -> Option<u8>;
     #[try_from]
     fn color_space(&self) -> Option<ColorSpaceArgs<'a>>;
+    #[try_from]
+    fn mask(&self) -> Option<ImageMask<'a>>;
 }
 
 #[pdf_object(())]

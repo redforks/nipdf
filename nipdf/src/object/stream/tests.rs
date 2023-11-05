@@ -1,6 +1,7 @@
-use crate::{file::decode_stream, object::Name};
+use crate::{file::decode_stream, function::Domain, object::Name};
 
 use super::*;
+use bitvec::vec;
 use itertools::Itertools;
 use test_case::test_case;
 
@@ -114,5 +115,40 @@ fn predictor_24bit() {
             Ok(())
         })
         .unwrap()[..255]
+    );
+}
+
+#[test]
+fn image_mask_try_from_object() {
+    // ColorKeyMask
+    #[rustfmt::skip]
+    let o = Object::Array(
+        vec![
+            0.into(), 1.into(), // domain 1
+            0.1.into(), 0.9.into(), // domain 2
+            0.2.into(), 0.8.into(), // domain 3
+        ]
+        .into(),
+    );
+    let mask = ImageMask::try_from(&o).unwrap();
+    assert_eq!(
+        mask,
+        ImageMask::ColorKey(Domains(vec![
+            Domain::new(0., 1.),
+            Domain::new(0.1, 0.9),
+            Domain::new(0.2, 0.8),
+        ]))
+    );
+
+    // ExplicitMask
+    let stream = Stream(
+        Dictionary::default(),
+        b"0 1 2 3 4 5 6 7 8 9".as_ref(),
+    );
+    let o = Object::Stream(stream.clone());
+    let mask = ImageMask::try_from(&o).unwrap();
+    assert_eq!(
+        mask,
+        ImageMask::Explicit(stream)
     );
 }
