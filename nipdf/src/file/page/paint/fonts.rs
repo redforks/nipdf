@@ -437,6 +437,82 @@ static SYSTEM_FONTS: Lazy<Database> = Lazy::new(|| {
     db
 });
 
+/// For historic bugs, some pdf file use internal names for the 14 standard fonts
+/// @see https://community.adobe.com/t5/acrobat-discussions/timesnewromanpsmt-also-arialmt-and-other-fonts-error-message/td-p/11115292
+///
+/// ```
+/// This has been an ongoing issue over the years. A few instances have been
+/// found to be due to bugs in Acrobat (in reading PDF files) that we have tried
+/// to address as quickly as possible with QFE patch releases. Please make sure
+/// your copies of Acrobat are indeed updated to the most recent release.
+/// ````
+///
+/// This function returns the standard 14 font if the font name is an known internal name.
+/// Assume `name` already converted to lowercase.
+fn normalize_font_name(name: &str) -> &str {
+    match name {
+        "arial" | "arialmt" => "helvetica",
+        "arial,bold" | "arial-bold" | "arial-boldmt" => "helvetica-bold",
+        "arial,bolditalic" | "arial-bolditalic" | "arial-bolditalicmt" => "helvetica-boldoblique",
+        "arial,italic" | "arial-italic" | "arial-italicmt" => "helvetica-oblique",
+        "courier" => "courier",
+        "couriernew" => "courier",
+        "courier,bold" => "courier-bold",
+        "courier,bolditalic" => "courier-boldoblique",
+        "courier,italic" => "courier-oblique",
+        "courier-bold" => "courier-bold",
+        "courier-boldoblique" => "courier-boldoblique",
+        "courier-oblique" => "courier-oblique",
+        "couriernew,bold" => "courier-bold",
+        "couriernew,bolditalic" => "courier-boldoblique",
+        "couriernew,italic" => "courier-oblique",
+        "couriernew-bold" => "courier-bold",
+        "couriernew-bolditalic" => "courier-boldoblique",
+        "couriernew-italic" => "courier-oblique",
+        "couriernewps-bolditalicmt" => "courier-boldoblique",
+        "couriernewps-boldmt" => "courier-bold",
+        "couriernewps-italicmt" => "courier-oblique",
+        "couriernewpsmt" => "courier",
+        "helvetica" => "helvetica",
+        "helvetica,bold" => "helvetica-bold",
+        "helvetica,bolditalic" => "helvetica-boldoblique",
+        "helvetica,italic" => "helvetica-oblique",
+        "helvetica-bold" => "helvetica-bold",
+        "helvetica-bolditalic" => "helvetica-boldoblique",
+        "helvetica-boldoblique" => "helvetica-boldoblique",
+        "helvetica-italic" => "helvetica-oblique",
+        "helvetica-oblique" => "helvetica-oblique",
+        "symbol" => "symbol",
+        "symbol,bold" => "symbol",
+        "symbol,bolditalic" => "symbol",
+        "symbol,italic" => "symbol",
+        "times-bold" => "times-bold",
+        "times-bolditalic" => "times-bolditalic",
+        "times-italic" => "times-italic",
+        "times-roman" => "times-roman",
+        "timesnewroman" => "times-roman",
+        "timesnewroman,bold" => "times-bold",
+        "timesnewroman,bolditalic" => "times-bolditalic",
+        "timesnewroman,italic" => "times-italic",
+        "timesnewroman-bold" => "times-bold",
+        "timesnewroman-bolditalic" => "times-bolditalic",
+        "timesnewroman-italic" => "times-italic",
+        "timesnewromanps" => "times-roman",
+        "timesnewromanps-bold" => "times-bold",
+        "timesnewromanps-bolditalic" => "times-bolditalic",
+        "timesnewromanps-bolditalicmt" => "times-bolditalic",
+        "timesnewromanps-boldmt" => "times-bold",
+        "timesnewromanps-italic" => "times-italic",
+        "timesnewromanps-italicmt" => "times-italic",
+        "timesnewromanpsmt" => "times-roman",
+        "timesnewromanpsmt,bold" => "times-bold",
+        "timesnewromanpsmt,bolditalic" => "times-bolditalic",
+        "timesnewromanpsmt,italic" => "times-italic",
+        "zapfdingbats" => "zapfdingbats",
+        s => s,
+    }
+}
+
 fn standard_14_type1_font_data(font_name: &str) -> Option<&'static [u8]> {
     match font_name {
         "courier" => Some(&include_bytes!("../../../../fonts/n022003l.pfb")[..]),
