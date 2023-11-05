@@ -177,3 +177,16 @@ fn test_n_func() {
         FunctionValue::from_slice(&[0.6_f32, 0.8_f32])
     )
 }
+
+#[test]
+fn domains_to_start_end_pair() {
+    let d = Domains(vec![
+        Domain::new(0.0, 1.0),
+        Domain::new(2.0, 3.0),
+        Domain::new(4.0, 5.0),
+    ]);
+    assert_eq!(
+        d.to_start_end_pair(),
+        (vec![0.0, 2.0, 4.0].into(), vec![1.0, 3.0, 5.0].into())
+    );
+}
