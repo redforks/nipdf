@@ -126,8 +126,7 @@ fn image_mask_try_from_object() {
             0.into(), 1.into(), // domain 1
             0.1.into(), 0.9.into(), // domain 2
             0.2.into(), 0.8.into(), // domain 3
-        ]
-        .into(),
+        ],
     );
     let mask = ImageMask::try_from(&o).unwrap();
     assert_eq!(

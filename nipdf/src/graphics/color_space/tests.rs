@@ -4,7 +4,7 @@ use crate::{
     function::{FunctionValue, MockFunction},
 };
 use assert_approx_eq::assert_approx_eq;
-use insta::assert_debug_snapshot;
+
 use mockall::predicate::*;
 use smallvec::smallvec;
 use std::num::NonZeroU32;

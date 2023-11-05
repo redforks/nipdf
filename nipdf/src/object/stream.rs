@@ -746,7 +746,7 @@ fn color_key_range(range: &Domains, cs: &ColorSpace) -> ColorKey {
 
 /// Return true if rgb color in color_key range inclusive, alpha part not compared.
 fn color_matches_color_key(color_key: ColorKey, color: [u8; 4]) -> bool {
-    return &color_key.0[0..2] <= &color[0..2] && &color[0..2] <= &color_key.1[0..2];
+    color_key.0[0..2] <= color[0..2] && color[0..2] <= color_key.1[0..2]
 }
 
 #[cfg(test)]
