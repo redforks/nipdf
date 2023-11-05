@@ -74,21 +74,10 @@ where
     }
 }
 
-impl<T: Copy> Domains<T> {
+impl Domains {
     /// Function input argument count
     pub fn n(&self) -> usize {
         self.0.len()
-    }
-
-    /// Convert to (start, end) pair, gather all start and end values.
-    pub fn to_start_end_pair(&self) -> (Box<[T]>, Box<[T]>) {
-        let mut start = Vec::with_capacity(self.0.len());
-        let mut end = Vec::with_capacity(self.0.len());
-        for domain in &self.0 {
-            start.push(domain.start);
-            end.push(domain.end);
-        }
-        (start.into_boxed_slice(), end.into_boxed_slice())
     }
 }
 
