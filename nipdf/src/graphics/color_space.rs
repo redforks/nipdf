@@ -80,7 +80,7 @@ impl ColorComp for f32 {
     }
 }
 
-fn convert_color_to<F, T, const N: usize>(from: &[F]) -> [T; N]
+pub fn convert_color_to<F, T, const N: usize>(from: &[F]) -> [T; N]
 where
     F: ColorComp + ColorCompConvertTo<T>,
     T: ColorComp,

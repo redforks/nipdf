@@ -1,7 +1,6 @@
 use crate::{file::decode_stream, function::Domain, object::Name};
 
 use super::*;
-use bitvec::vec;
 use itertools::Itertools;
 use test_case::test_case;
 
@@ -141,14 +140,35 @@ fn image_mask_try_from_object() {
     );
 
     // ExplicitMask
-    let stream = Stream(
-        Dictionary::default(),
-        b"0 1 2 3 4 5 6 7 8 9".as_ref(),
-    );
+    let stream = Stream(Dictionary::default(), b"0 1 2 3 4 5 6 7 8 9".as_ref());
     let o = Object::Stream(stream.clone());
     let mask = ImageMask::try_from(&o).unwrap();
+    assert_eq!(mask, ImageMask::Explicit(stream));
+}
+
+#[test_case([10, 15, 20, 0] => true; "matches lower range")]
+#[test_case([110, 115, 120, 0] => true; "matches upper range")]
+#[test_case([10, 15, 20, 1] => true; "alpha not compared")]
+#[test_case([109, 114, 120, 0] => true; "in range")]
+#[test_case([9, 15, 20, 0] => false; "red part less than min")]
+#[test_case([111, 115, 120, 0] => false; "red part greater than max")]
+#[test_case([10, 14, 20, 0] => false; "green part less than min")]
+#[test_case([110, 116, 120, 0] => false; "green part greater than max")]
+fn test_color_matches_color_key(color: [u8; 4]) -> bool {
+    let color_key: ColorKey = ([10, 15, 20, 0], [110, 115, 120, 0]);
+    color_matches_color_key(color_key, color)
+}
+
+#[test]
+fn test_color_key_range() {
+    let range = Domains(vec![
+        Domain::new(10., 110.),
+        Domain::new(15., 115.),
+        Domain::new(20., 120.),
+    ]);
+    let color_key: ColorKey = ([10, 15, 20, 255], [110, 115, 120, 255]);
     assert_eq!(
-        mask,
-        ImageMask::Explicit(stream)
+        color_key,
+        color_key_range(&range, &ColorSpace::DeviceRGB)
     );
 }

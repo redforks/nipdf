@@ -4,7 +4,10 @@ use crate::{
     file::{ObjectResolver, ResourceDict},
     function::Domains,
     graphics::{
-        color_space::{color_to_rgba, ColorCompConvertTo, ColorSpace, ColorSpaceTrait, DeviceCMYK},
+        color_space::{
+            color_to_rgba, convert_color_to, ColorCompConvertTo, ColorSpace, ColorSpaceTrait,
+            DeviceCMYK,
+        },
         ColorSpaceArgs,
     },
     object::PdfObject,
@@ -576,7 +579,7 @@ impl<'a> Stream<'a> {
         let color_space = img_dict.color_space().unwrap();
         let color_space =
             color_space.map(|args| ColorSpace::from_args(&args, resolver, resources).unwrap());
-        Ok(match decoded {
+        let mut r = match decoded {
             FilterDecodedData::Image(img) => {
                 if let Some(color_space) = color_space.as_ref() {
                     image_transform_color_space(img, color_space).unwrap()
@@ -637,7 +640,28 @@ impl<'a> Stream<'a> {
                     ),
                 }
             }
-        })
+        };
+
+        if let Some(mask) = img_dict.mask().unwrap() {
+            let ImageMask::ColorKey(color_key) = mask else {
+                todo!("image mask: {:?}", mask);
+            };
+            let Some(cs) = color_space else {
+                todo!("Color Space not defined when process color key mask");
+            };
+            let mut img = r.into_rgba8();
+            let color_key = color_key_range(&color_key, &cs);
+
+            for p in img.pixels_mut() {
+                // set alpha color to 0 if its rgb color in color_key range inclusive
+                if color_matches_color_key(color_key, p.0) {
+                    p[3] = 0;
+                }
+            }
+            r = DynamicImage::ImageRgba8(img);
+        }
+
+        Ok(r)
     }
 
     fn iter_filter(
@@ -678,6 +702,31 @@ impl<'a> Stream<'a> {
             .into_iter()
             .zip(params.into_iter().chain(repeat(None))))
     }
+}
+
+type ColorKey = ([u8; 4], [u8; 4]);
+
+/// `range` length is n which is ColorSpace component counts,
+/// Convert min and max color into ColorSpace, return (min, max) rgba8
+fn color_key_range(range: &Domains, cs: &ColorSpace) -> ColorKey {
+    let n = cs.components();
+    assert_eq!(range.n(), n);
+    assert!(range.n() <= 4);
+
+    let mut min = [0u8; 4];
+    let mut max = [0u8; 4];
+    for (i, (min, max)) in min.iter_mut().zip(max.iter_mut()).take(n).enumerate() {
+        *min = range.0[i].start as u8;
+        *max = range.0[i].end as u8;
+    }
+    let min: [_; 4] = convert_color_to(&min[..]);
+    let max: [_; 4] = convert_color_to(&max[..]);
+    (color_to_rgba(cs, &min[..]), color_to_rgba(cs, &max[..]))
+}
+
+/// Return true if rgb color in color_key range inclusive, alpha part not compared.
+fn color_matches_color_key(color_key: ColorKey, color: [u8; 4]) -> bool {
+    return &color_key.0[0..2] <= &color[0..2] && &color[0..2] <= &color_key.1[0..2];
 }
 
 #[cfg(test)]
