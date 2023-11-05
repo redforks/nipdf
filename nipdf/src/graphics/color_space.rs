@@ -239,11 +239,7 @@ where
             Self::Pattern => PatternColorSpace.to_rgba(color),
             Self::Indexed(indexed) => indexed.to_rgba(color),
             Self::Separation(sep) => sep.as_ref().to_rgba(color),
-            Self::CalRGB(cal_rgb) => {
-                let p: [f32; 4] = convert_color_to(color);
-                cal_rgb.to_rgba(&p);
-                convert_color_to(&p)
-            }
+            Self::CalRGB(cal_rgb) => cal_rgb.to_rgba(color),
             Self::_Phantom(_) => unreachable!(),
         }
     }
@@ -538,11 +534,15 @@ pub struct CalRGBColorSpace {
     white_point: [f32; 3],
 }
 
-impl ColorSpaceTrait<f32> for CalRGBColorSpace {
-    fn to_rgba(&self, color: &[f32]) -> [f32; 4] {
-        let ag = color[0].powf(self.gamma[0]);
-        let bg = color[1].powf(self.gamma[1]);
-        let cg = color[2].powf(self.gamma[2]);
+impl<T> ColorSpaceTrait<T> for CalRGBColorSpace
+where
+    T: ColorComp + ColorCompConvertTo<f32>,
+    f32: ColorCompConvertTo<T>,
+{
+    fn to_rgba(&self, color: &[T]) -> [T; 4] {
+        let ag = color[0].into_color_comp().powf(self.gamma[0]);
+        let bg = color[1].into_color_comp().powf(self.gamma[1]);
+        let cg = color[2].into_color_comp().powf(self.gamma[2]);
 
         let x = self.matrix[0] * ag + self.matrix[1] * bg + self.matrix[2] * cg;
         let y = self.matrix[3] * ag + self.matrix[4] * bg + self.matrix[5] * cg;
@@ -551,7 +551,8 @@ impl ColorSpaceTrait<f32> for CalRGBColorSpace {
         let y = y.clamp(0.0, 1.0);
         let z = z.clamp(0.0, 1.0);
 
-        [x, y, z, 1.0]
+        let r = [x, y, z, 1.0];
+        convert_color_to(&r)
     }
 
     fn components(&self) -> usize {
