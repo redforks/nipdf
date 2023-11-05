@@ -437,6 +437,34 @@ static SYSTEM_FONTS: Lazy<Database> = Lazy::new(|| {
     db
 });
 
+/// Remove suffix "MT"/"PSMT" from font name. And remove ",Bold", ",BoldItalic", ".BoldOblique",
+/// ",Italic", "-BoldItalic", "-Bold", "-Italic", "-BoldOblique", "-Oblique", "-BoldOblique"
+fn normalize_true_type_font_name(name: &str) -> String {
+    let names = vec![
+        "PSMT",
+        "MT",
+        ",BoldItalic",
+        ".BoldOblique",
+        ",Bold",
+        ",Italic",
+        ",Oblique",
+        "-BoldItalic",
+        "-BoldOblique",
+        "-Bold",
+        "-Italic",
+        "-Oblique",
+    ];
+
+    let mut rv = name.to_owned();
+    for n in names {
+        if rv.ends_with(n) {
+            rv.truncate(rv.len() - n.len());
+            break;
+        }
+    }
+    rv
+}
+
 /// For historic bugs, some pdf file use internal names for the 14 standard fonts
 /// @see https://community.adobe.com/t5/acrobat-discussions/timesnewromanpsmt-also-arialmt-and-other-fonts-error-message/td-p/11115292
 ///
@@ -581,7 +609,8 @@ impl<'c> FontCache<'c> {
 
     fn load_true_type_from_os(desc: &FontDescriptorDict) -> AnyResult<Vec<u8>> {
         let font_name = desc.font_name()?;
-        let font_name = capital_to_space_separated(font_name);
+        let font_name = normalize_true_type_font_name(font_name);
+        let font_name = capital_to_space_separated(&font_name);
         let mut families = vec![Family::Name(font_name.as_ref())];
         let family = desc.font_family()?;
         if let Some(family) = &family {
@@ -878,5 +907,11 @@ mod tests {
     #[test_case("FooBar" => "Foo Bar")]
     fn test_split_by_capital(s: &str) -> String {
         capital_to_space_separated(s).into_owned()
+    }
+
+    #[test_case("s" => "s"; "no need to normalize")]
+    #[test_case("TimesNewRomanPSMT" => "TimesNewRoman"; "PSMT")]
+    fn test_normalize_true_type_font_name(s: &str) -> String {
+        normalize_true_type_font_name(s)
     }
 }
