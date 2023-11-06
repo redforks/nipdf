@@ -13,6 +13,7 @@ use iced_aw::{modal, Card};
 mod app_state;
 mod view;
 use log::error;
+use std::env;
 use view::{
     error::ErrorView,
     viewer::{Viewer, ViewerMessage},
@@ -24,7 +25,10 @@ const APP_NAME: &str = "nipdf";
 fn main() -> iced::Result {
     env_logger::init();
 
-    App::run(Settings::default())
+    let mut args: Vec<String> = env::args().collect();
+    let filename = (args.len() >= 2).then(|| args.remove(1));
+
+    App::run(Settings::with_flags(filename))
 }
 
 /// Share [u8] data, implements `AsRef<[u8]` trait, `Arc<Vec<u8>>` itself not implement the trait.
@@ -139,17 +143,22 @@ impl App {
 
 impl Application for App {
     type Message = AppMessage;
-    type Flags = ();
+    type Flags = Option<String>;
     type Executor = executor::Default;
     type Theme = Theme;
 
-    fn new(_: Self::Flags) -> (Self, Command<Self::Message>) {
+    fn new(file_path: Self::Flags) -> (Self, Command<Self::Message>) {
         let mut r = Self {
             current: View::Welcome(Welcome),
             selecting_file: false,
             file_path_selecting: "".to_owned(),
         };
-        r.open_last_file();
+        if let Some(path) = file_path {
+            r.file_path_selecting = path.clone();
+            r.open();
+        } else {
+            r.open_last_file();
+        }
         (
             r,
             // load icon font for iced_aw, without this modal close button icon will not show.
