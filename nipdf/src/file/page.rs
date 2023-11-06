@@ -310,7 +310,8 @@ impl<'a, 'b> Page<'a, 'b> {
         } else {
             ops.into_iter().for_each(|op| renderer.exec(op));
         };
-        Ok(renderer.finish().into_owned())
+        drop(renderer);
+        Ok(canvas)
     }
 
     pub fn render(&self, option: RenderOptionBuilder) -> Result<Pixmap, ObjectValueError> {

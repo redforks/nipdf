@@ -264,7 +264,7 @@ impl State {
     fn update_mask(&mut self, path: &SkiaPath, rule: FillRule, flip_y: bool) {
         let mut mask = self.mask.take().unwrap_or_else(|| self.new_mask());
         let transform = if flip_y {
-            to_device_space(self.height, self.zoom, &self.ctm).into_skia()
+            self.user_to_device.into_skia()
         } else {
             Transform::identity()
         };
@@ -478,11 +478,15 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         'a: 'c,
         'b: 'c,
     {
-        let state = if let Some(state) = option.state {
+        let mut state = if let Some(state) = option.state {
             state
         } else {
             State::new(&option)
         };
+
+        if let Some(rect) = option.crop {
+            state.clip_non_zero(&PathBuilder::from_rect(rect.into()), true);
+        }
 
         Self {
             canvas,
@@ -515,43 +519,6 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
 
     fn current_mut(&mut self) -> &mut State {
         self.stack.last_mut().unwrap()
-    }
-
-    pub fn finish(self) -> Cow<'c, Pixmap> {
-        let r = self.canvas;
-        // crop the canvas if crop is specified
-        if let Some(rect) = self.crop {
-            // use std::sync::atomic::{AtomicU32, Ordering};
-            // static mut IDX: std::sync::atomic::AtomicU32 = AtomicU32::new(0);
-            // r.save_png(format!("/tmp/before-crop-{:?}.png", unsafe {
-            //     IDX.fetch_add(1, Ordering::Relaxed)
-            // }))
-            // .unwrap();
-
-            let state = self.stack.last().unwrap();
-            let transform = to_device_space(
-                state.height,
-                state.zoom,
-                &UserToDeviceIndependentSpace::identity(),
-            );
-            let p = transform.transform_point((rect.left_x, rect.upper_y).into());
-            let mut canvas = Pixmap::new(
-                (rect.width() * state.zoom) as u32,
-                (rect.height() * state.zoom) as u32,
-            )
-            .unwrap();
-            canvas.draw_pixmap(
-                -p.x as i32,
-                -p.y as i32,
-                r.as_ref(),
-                &PixmapPaint::default(),
-                Transform::identity(),
-                None,
-            );
-            Cow::Owned(canvas)
-        } else {
-            Cow::Borrowed(r)
-        }
     }
 
     fn text_object(&self) -> &TextObject {
@@ -1172,8 +1139,8 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let mut canvas = option.create_canvas();
         let mut render = Render::new(&mut canvas, option, &resources);
         ops.into_iter().for_each(|op| render.exec(op));
-        self.stack.last_mut().unwrap().fill_paint =
-            PaintCreator::Tile((render.finish().into_owned(), tile.matrix()?));
+        drop(render);
+        self.stack.last_mut().unwrap().fill_paint = PaintCreator::Tile((canvas, tile.matrix()?));
         Ok(())
     }
 
