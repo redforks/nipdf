@@ -471,11 +471,6 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         'a: 'c,
         'b: 'c,
     {
-        // let w = option.canvas_width();
-        // let h = option.canvas_height();
-
-        // let mut canvas = Pixmap::new(w, h).unwrap();
-        // canvas.fill(option.background_color);
         Self {
             canvas,
             zoom: option.zoom,
@@ -1272,7 +1267,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 let path = path.transform(text_to_user_space.into_skia()).unwrap();
 
                 Self::render_glyph(
-                    &mut self.canvas,
+                    self.canvas,
                     &mut text_clip_path,
                     state,
                     path,
