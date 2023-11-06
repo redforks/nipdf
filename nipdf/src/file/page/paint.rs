@@ -96,7 +96,7 @@ impl PaintCreator {
 }
 
 #[derive(Debug, Clone)]
-pub struct State {
+struct State {
     width: f32,
     height: f32,
     zoom: f32,
