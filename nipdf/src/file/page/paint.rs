@@ -391,6 +391,8 @@ pub struct RenderOption {
     crop: Option<Rectangle>,
     #[educe(Default(expression = "SkiaColor::WHITE"))]
     background_color: SkiaColor,
+    /// Initial state, used in paint_x_form to pass parent state to form Render.
+    state: Option<State>,
 }
 
 impl RenderOption {
@@ -441,6 +443,11 @@ impl RenderOptionBuilder {
         self
     }
 
+    fn state(mut self, state: State) -> Self {
+        self.0.state = Some(state);
+        self
+    }
+
     pub fn build(self) -> RenderOption {
         self.0
     }
@@ -471,10 +478,16 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         'a: 'c,
         'b: 'c,
     {
+        let state = if let Some(state) = option.state {
+            state
+        } else {
+            State::new(&option)
+        };
+
         Self {
             canvas,
             zoom: option.zoom,
-            stack: vec![State::new(&option)],
+            stack: vec![state],
             width: option.width,
             height: option.height,
             path: Path::default(),
@@ -908,6 +921,10 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let resources = form.resources()?;
         let resources = resources.as_ref().unwrap_or(self.resources);
 
+        let state = self.stack.last().unwrap();
+        let mut inner_state = self.stack.last().unwrap().clone();
+        let ctm = matrix.then(&state.ctm).with_destination().with_source();
+        inner_state.reset_ctm(ctm);
         let mut render = Render::new(
             self.canvas,
             RenderOptionBuilder::default()
@@ -916,13 +933,10 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 .zoom(self.zoom)
                 .crop(Some(b_box))
                 .background_color(SkiaColor::TRANSPARENT)
+                .state(inner_state)
                 .build(),
             resources,
         );
-        let state = self.stack.last().unwrap();
-        let mut inner_state = self.stack.last().unwrap().clone();
-        inner_state.reset_ctm(matrix.then(&state.ctm).with_destination().with_source());
-        render.stack = vec![inner_state];
         content
             .operations()
             .into_iter()
