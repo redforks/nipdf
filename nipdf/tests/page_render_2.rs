@@ -49,6 +49,11 @@ fn form() {
 }
 
 #[test]
+fn form_ctm() {
+    assert_ron_snapshot!(&decode_file_page("../../../ICEpower125ASX2_Datasheet_2.0.pdf", 4).unwrap());
+}
+
+#[test]
 fn radial_shade() {
     assert_ron_snapshot!(
         &decode_file_page("sample_files/bizarre/pdfReferenceUpdated.pdf", 809).unwrap()

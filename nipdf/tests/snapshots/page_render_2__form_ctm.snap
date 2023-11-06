@@ -1,0 +1,5 @@
+---
+source: nipdf/tests/page_render_2.rs
+expression: "&decode_file_page(\"../../../ICEpower125ASX2_Datasheet_2.0.pdf\", 4).unwrap()"
+---
+"5b847a83d2443acbc352fef93c01c230"
