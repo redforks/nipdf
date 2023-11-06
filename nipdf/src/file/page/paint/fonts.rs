@@ -468,12 +468,10 @@ fn normalize_true_type_font_name(name: &str) -> String {
 /// For historic bugs, some pdf file use internal names for the 14 standard fonts
 /// @see https://community.adobe.com/t5/acrobat-discussions/timesnewromanpsmt-also-arialmt-and-other-fonts-error-message/td-p/11115292
 ///
-/// ```
 /// This has been an ongoing issue over the years. A few instances have been
 /// found to be due to bugs in Acrobat (in reading PDF files) that we have tried
 /// to address as quickly as possible with QFE patch releases. Please make sure
 /// your copies of Acrobat are indeed updated to the most recent release.
-/// ````
 ///
 /// This function returns the standard 14 font if the font name is an known internal name.
 fn normalize_font_name(name: &str) -> &str {
