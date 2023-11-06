@@ -120,11 +120,7 @@ impl State {
             zoom: option.zoom,
             width: option.width as f32,
             height: option.height as f32,
-            user_to_device: to_device_space(
-                option.height as f32,
-                option.zoom,
-                &UserToDeviceIndependentSpace::identity(),
-            ),
+            user_to_device: UserToDeviceSpace::identity(),
             ctm: UserToDeviceIndependentSpace::identity(),
             fill_paint: PaintCreator::Color(tiny_skia::Color::BLACK),
             stroke_paint: PaintCreator::Color(tiny_skia::Color::BLACK),
@@ -135,6 +131,7 @@ impl State {
             text_object: TextObject::new(),
         };
 
+        r.reset_ctm(UserToDeviceIndependentSpace::identity());
         r.set_line_cap(LineCapStyle::default());
         r.set_line_join(LineJoinStyle::default());
         r.set_miter_limit(10.0);
@@ -142,6 +139,11 @@ impl State {
         r.set_render_intent(RenderingIntent::default());
 
         r
+    }
+
+    fn reset_ctm(&mut self, ctm: UserToDeviceIndependentSpace) {
+        self.ctm = ctm;
+        self.user_to_device = to_device_space(self.height, self.zoom, &self.ctm);
     }
 
     fn set_line_width(&mut self, w: f32) {
@@ -391,6 +393,24 @@ pub struct RenderOption {
     background_color: SkiaColor,
 }
 
+impl RenderOption {
+    pub fn create_canvas(&self) -> Pixmap {
+        let mut r = Pixmap::new(self.canvas_width(), self.canvas_height()).unwrap();
+        if self.background_color.is_opaque() {
+            r.fill(self.background_color);
+        }
+        r
+    }
+
+    pub fn canvas_width(&self) -> u32 {
+        (self.width as f32 * self.zoom) as u32
+    }
+
+    pub fn canvas_height(&self) -> u32 {
+        (self.height as f32 * self.zoom) as u32
+    }
+}
+
 #[derive(Educe)]
 #[educe(Default(new))]
 pub struct RenderOptionBuilder(RenderOption);
@@ -429,7 +449,7 @@ impl RenderOptionBuilder {
 #[derive(Educe)]
 #[educe(Debug)]
 pub struct Render<'a, 'b, 'c> {
-    canvas: Pixmap,
+    canvas: &'c mut Pixmap,
     stack: Vec<State>,
     width: u32,
     height: u32,
@@ -442,16 +462,20 @@ pub struct Render<'a, 'b, 'c> {
 }
 
 impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
-    pub fn new(option: RenderOption, resources: &'c ResourceDict<'a, 'b>) -> Self
+    pub fn new(
+        canvas: &'c mut Pixmap,
+        option: RenderOption,
+        resources: &'c ResourceDict<'a, 'b>,
+    ) -> Self
     where
         'a: 'c,
         'b: 'c,
     {
-        let w = (option.width as f32 * option.zoom) as u32;
-        let h = (option.height as f32 * option.zoom) as u32;
+        // let w = option.canvas_width();
+        // let h = option.canvas_height();
 
-        let mut canvas = Pixmap::new(w, h).unwrap();
-        canvas.fill(option.background_color);
+        // let mut canvas = Pixmap::new(w, h).unwrap();
+        // canvas.fill(option.background_color);
         Self {
             canvas,
             zoom: option.zoom,
@@ -485,7 +509,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         self.stack.last_mut().unwrap()
     }
 
-    pub fn into(self) -> Pixmap {
+    pub fn finish(self) -> Cow<'c, Pixmap> {
         let r = self.canvas;
         // crop the canvas if crop is specified
         if let Some(rect) = self.crop {
@@ -516,9 +540,9 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 Transform::identity(),
                 None,
             );
-            canvas
+            Cow::Owned(canvas)
         } else {
-            r
+            Cow::Borrowed(r)
         }
     }
 
@@ -890,6 +914,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let resources = resources.as_ref().unwrap_or(self.resources);
 
         let mut render = Render::new(
+            self.canvas,
             RenderOptionBuilder::default()
                 .width(self.width)
                 .height(self.height)
@@ -899,46 +924,15 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 .build(),
             resources,
         );
-        debug!("Set form sub render state to parent");
         let state = self.stack.last().unwrap();
-        render.stack = vec![state.clone()];
-        render
-            .current_mut()
-            .concat_ctm(matrix.with_destination().with_source());
+        let mut inner_state = self.stack.last().unwrap().clone();
+        inner_state.reset_ctm(matrix.then(&state.ctm).with_destination().with_source());
+        render.stack = vec![inner_state];
         content
             .operations()
             .into_iter()
             .for_each(|op| render.exec(op));
 
-        // use std::sync::atomic::{AtomicU32, Ordering};
-        // static mut IDX: std::sync::atomic::AtomicU32 = AtomicU32::new(0);
-        let image = render.into();
-        // image
-        //     .save_png(format!("/tmp/form-{:?}.png", unsafe {
-        //         IDX.fetch_add(1, Ordering::Relaxed)
-        //     }))
-        //     .unwrap();
-
-        // Calc b_box top-left point in device space
-        let user_to_device = to_device_space(
-            self.height as f32,
-            self.zoom,
-            &UserToDeviceIndependentSpace::identity(),
-        );
-        let p = user_to_device.transform_point((b_box.left_x, b_box.upper_y).into());
-
-        let paint = PixmapPaint {
-            quality: FilterQuality::Nearest,
-            ..Default::default()
-        };
-        self.canvas.draw_pixmap(
-            p.x as i32,
-            p.y as i32,
-            image.as_ref(),
-            &paint,
-            Transform::identity(),
-            None,
-        );
         Ok(())
     }
 
@@ -1162,16 +1156,15 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         assert_eq!(b_box.height(), tile.y_step()?, "y_step not supported");
 
         let resources = tile.resources()?;
-        let mut render = Render::new(
-            RenderOptionBuilder::default()
-                .width(b_box.width() as u32)
-                .height(b_box.height() as u32)
-                .build(),
-            &resources,
-        );
+        let option = RenderOptionBuilder::default()
+            .width(b_box.width() as u32)
+            .height(b_box.height() as u32)
+            .build();
+        let mut canvas = option.create_canvas();
+        let mut render = Render::new(&mut canvas, option, &resources);
         ops.into_iter().for_each(|op| render.exec(op));
         self.stack.last_mut().unwrap().fill_paint =
-            PaintCreator::Tile((render.into(), tile.matrix()?));
+            PaintCreator::Tile((render.finish().into_owned(), tile.matrix()?));
         Ok(())
     }
 

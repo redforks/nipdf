@@ -2,4 +2,4 @@
 source: nipdf/tests/page_render_2.rs
 expression: "&decode_file_page(\"sample_files/xobject/form.pdf\", 0).unwrap()"
 ---
-"f02be115fea677497c1cfc3106d199e3"
+"1d0f3c18d4a5af780abff4575d88d0db"

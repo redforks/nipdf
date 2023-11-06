@@ -303,13 +303,14 @@ impl<'a, 'b> Page<'a, 'b> {
         let content = self.content()?;
         let ops = content.operations();
         let resource = self.resources();
-        let mut renderer = Render::new(option, &resource);
+        let mut canvas = option.create_canvas();
+        let mut renderer = Render::new(&mut canvas, option, &resource);
         if let Some(steps) = steps {
             ops.into_iter().take(steps).for_each(|op| renderer.exec(op));
         } else {
             ops.into_iter().for_each(|op| renderer.exec(op));
         };
-        Ok(renderer.into())
+        Ok(renderer.finish().into_owned())
     }
 
     pub fn render(&self, option: RenderOptionBuilder) -> Result<Pixmap, ObjectValueError> {

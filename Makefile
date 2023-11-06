@@ -1,7 +1,8 @@
 SHELL := /usr/bin/fish
 
 dump-page-to-png:
-	RUST_LOG=debug cargo run -p nipdf-dump -- page -f $(f) --png $(n) > /tmp/foo.png 2>/tmp/log && feh /tmp/foo.png
+	RUST_LOG=debug cargo run -p nipdf-dump -- page -f $(f) $(n) > /tmp/page-content 2>/tmp/log 
+	RUST_LOG=debug cargo run -p nipdf-dump -- page -f $(f) --png $(n) > /tmp/foo.png 2>/tmp/log 
 
 release-build-dump:
 	cargo build -p nipdf-dump --release
