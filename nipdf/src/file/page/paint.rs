@@ -782,6 +782,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             img_dict: &XObjectDict<'a, 'b>,
             resources: &ResourceDict<'a, 'b>,
             state: &State,
+            s_mask: bool,
         ) -> AnyResult<Mask> {
             let paint = PixmapPaint {
                 quality: FilterQuality::Nearest,
@@ -792,9 +793,8 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             let img = img_dict.as_stream().unwrap();
             let img = img.decode_image(resources.resolver(), Some(resources))?;
             let mut img = img.into_rgba8();
-            img.pixels_mut().for_each(|p| {
-                p[3] = p[0];
-            });
+            img.pixels_mut()
+                .for_each(|p| p[3] = if s_mask { p[0] } else { 255 - p[0] });
 
             let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
             canvas.draw_pixmap(
@@ -817,6 +817,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 x_object,
                 self.resources,
                 state,
+                false,
             )?;
             // fill canvas with current fill paint with mask
             let paint = state.get_fill_paint();
@@ -842,6 +843,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 &s_mask,
                 self.resources,
                 state,
+                true,
             )
             .unwrap()
         });
