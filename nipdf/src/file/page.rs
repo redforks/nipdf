@@ -295,10 +295,11 @@ impl<'a, 'b> Page<'a, 'b> {
         steps: Option<usize>,
     ) -> Result<Pixmap, ObjectValueError> {
         let media_box = self.media_box();
+        let crop_box = self.crop_box();
         let option = option
             .width(media_box.width() as u32)
             .height(media_box.height() as u32)
-            .crop(self.crop_box())
+            .crop(need_crop(crop_box, media_box).then(|| crop_box.unwrap()))
             .build();
         let content = self.content()?;
         let ops = content.operations();
@@ -353,6 +354,13 @@ impl<'a, 'b> Page<'a, 'b> {
             d: d.clone(),
             parents_to_root: parents,
         })
+    }
+}
+
+fn need_crop(crop: Option<Rectangle>, media: Rectangle) -> bool {
+    match crop {
+        None => false,
+        Some(crop) => crop != media,
     }
 }
 
