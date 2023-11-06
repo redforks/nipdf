@@ -11,6 +11,16 @@ fn test_decode() {
     insta::assert_debug_snapshot!(decode(include_bytes!("./ccitt-1"), 24, None, flags).unwrap());
 }
 
+#[test]
+fn inverse_black_white() {
+    let flags = Flags {
+        encoded_byte_align: true,
+        inverse_black_white: true,
+    };
+    // ccitt-1 extracted by `dump-pdf stream -f sample_files/normal/pdfreference1.0.pdf 643 --raw`
+    insta::assert_debug_snapshot!(decode(include_bytes!("./ccitt-1"), 24, None, flags).unwrap());
+}
+
 #[test_case(&[], &[]; "empty")]
 #[test_case(&[Code::Pass], &[0b0001_0000]; "pass")]
 #[test_case(&[Code::Vertical(0)], &[0b1000_0000])]

@@ -531,7 +531,9 @@ pub fn decode(buf: &[u8], width: u16, rows: Option<usize>, flags: Flags) -> Resu
     }
 
     if flags.inverse_black_white {
-        r.reverse();
+        for byte in r.as_raw_mut_slice() {
+            *byte = !*byte;
+        }
     }
     Ok(r.into_vec())
 }
