@@ -24,7 +24,13 @@ use either::Either;
 use image::RgbaImage;
 use log::{debug, info};
 use nom::{combinator::eof, sequence::terminated};
-use std::{borrow::Cow, convert::AsRef};
+use std::{
+    borrow::Cow,
+    cell::{Ref, RefCell},
+    collections::VecDeque,
+    convert::AsRef,
+    rc::Rc,
+};
 use tiny_skia::{
     Color as SkiaColor, FillRule, FilterQuality, Mask, MaskType, Paint, Path as SkiaPath,
     PathBuilder, Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect, Stroke, StrokeDash,
@@ -95,6 +101,67 @@ impl PaintCreator {
     }
 }
 
+type MaskEntry = (Rc<SkiaPath>, Rc<RefCell<Mask>>);
+
+/// Keep last N records of (Path, Mask), reuse the mask if path is the same.
+#[derive(Debug)]
+struct MaskCache<const N: usize> {
+    recents: VecDeque<MaskEntry>,
+}
+
+impl<const N: usize> MaskCache<N> {
+    pub fn new() -> Self {
+        Self {
+            recents: VecDeque::with_capacity(N),
+        }
+    }
+
+    /// Update current mask by intersect a new path on current mask.
+    ///
+    /// If current mask is None, create the mask, and save into cache.
+    ///
+    /// If current mask is not None, intersect current path with the new path.
+    /// iterate all cached records, if path is the same, return it.
+    ///
+    /// If not found, intersect the new path with current mask, and save into cache.
+    pub fn update(
+        &mut self,
+        p: SkiaPath,
+        current: Option<MaskEntry>,
+        rule: FillRule,
+        create_mask: impl FnOnce() -> Mask,
+    ) -> MaskEntry {
+        debug_assert!(!p.is_empty());
+
+        let (new_path, cur_mask) = match current {
+            None => (p.clone(), None),
+            Some(cur) => {
+                let mut r = PathBuilder::new();
+                r.push_path(&cur.0);
+                r.push_path(&p);
+                (r.finish().unwrap(), Some(cur.1.clone()))
+            }
+        };
+
+        for (i, e) in self.recents.iter().enumerate() {
+            if e.0.as_ref() == &new_path {
+                let entry = self.recents.swap_remove_front(i).unwrap();
+                self.recents.push_back(entry.clone());
+                return entry;
+            }
+        }
+
+        let mut mask: Mask = cur_mask.map_or_else(|| create_mask(), |m| m.borrow().clone());
+        mask.intersect_path(&p, rule, true, Transform::identity());
+        let entry = (Rc::new(new_path), Rc::new(RefCell::new(mask)));
+        if self.recents.len() == N {
+            self.recents.pop_front();
+        }
+        self.recents.push_back(entry.clone());
+        entry
+    }
+}
+
 #[derive(Debug, Clone)]
 struct State {
     width: f32,
@@ -107,7 +174,8 @@ struct State {
     fill_paint: PaintCreator,
     stroke_paint: PaintCreator,
     stroke: Stroke,
-    mask: Option<Mask>,
+    mask: Option<MaskEntry>,
+    mask_cache: Rc<RefCell<MaskCache<4>>>,
     fill_color_space: ColorSpace<f32>,
     stroke_color_space: ColorSpace<f32>,
     text_object: TextObject,
@@ -126,6 +194,7 @@ impl State {
             stroke_paint: PaintCreator::Color(tiny_skia::Color::BLACK),
             stroke: Stroke::default(),
             mask: None,
+            mask_cache: Rc::new(RefCell::new(MaskCache::new())),
             fill_color_space: ColorSpace::DeviceRGB,
             stroke_color_space: ColorSpace::DeviceRGB,
             text_object: TextObject::new(),
@@ -225,8 +294,8 @@ impl State {
         image_to_device_space(img_w, img_h, self.height, self.zoom, &self.ctm)
     }
 
-    fn get_mask(&self) -> Option<&Mask> {
-        self.mask.as_ref()
+    fn get_mask(&self) -> Option<Ref<Mask>> {
+        self.mask.as_ref().map(|m| m.1.borrow())
     }
 
     fn set_graphics_state(&mut self, res: &GraphicsStateParameterDict) {
@@ -252,30 +321,41 @@ impl State {
         }
     }
 
-    fn new_mask(&self) -> Mask {
+    fn update_mask(&mut self, path: &SkiaPath, rule: FillRule, flip_y: bool) {
         let w = self.width * self.zoom;
         let h = self.height * self.zoom;
-        let mut r = Mask::new(w as u32, h as u32).unwrap();
-        let p = PathBuilder::from_rect(Rect::from_xywh(0.0, 0.0, w, h).unwrap());
-        r.fill_path(&p, FillRule::Winding, true, Transform::identity());
-        r
-    }
-
-    fn update_mask(&mut self, path: &SkiaPath, rule: FillRule, flip_y: bool) {
-        let mut mask = self.mask.take().unwrap_or_else(|| self.new_mask());
-        let transform = if flip_y {
-            self.user_to_device.into_skia()
-        } else {
-            Transform::identity()
+        let new_mask = || {
+            let mut r = Mask::new(w as u32, h as u32).unwrap();
+            let p = PathBuilder::from_rect(Rect::from_xywh(0.0, 0.0, w, h).unwrap());
+            r.fill_path(&p, FillRule::Winding, true, Transform::identity());
+            r
         };
-        mask.intersect_path(path, rule, true, transform);
+
+        let mut path = path.clone();
+        if flip_y {
+            path = path.transform(self.user_to_device.into_skia()).unwrap();
+        }
+
+        self.mask = Some(self.mask_cache.borrow_mut().update(
+            path,
+            self.mask.clone(),
+            rule,
+            new_mask,
+        ));
+        // let mut mask = self.mask.take().unwrap_or_else(|| self.new_mask());
+        // let transform = if flip_y {
+        //     self.user_to_device.into_skia()
+        // } else {
+        //     Transform::identity()
+        // };
+        // mask.intersect_path(path, rule, true, transform);
         // use std::sync::atomic::{AtomicU32, Ordering};
         // static mut IDX: std::sync::atomic::AtomicU32 = AtomicU32::new(0);
         // mask.save_png(format!("/tmp/mask-{:?}.png", unsafe {
         //     IDX.fetch_add(1, Ordering::Relaxed)
         // }))
         // .unwrap();
-        self.mask = Some(mask);
+        // self.mask = Some(mask);
     }
 
     /// Apply current path to mask. Create mask if None, otherwise intersect with current path,
@@ -696,7 +776,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 &paint,
                 stroke,
                 state.user_to_device.into_skia(),
-                state.get_mask(),
+                state.get_mask().as_deref(),
             );
         } else {
             debug!("stroke: empty or invalid path");
@@ -726,7 +806,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 &paint,
                 fill_rule,
                 state.user_to_device.into_skia(),
-                state.get_mask(),
+                state.get_mask().as_deref(),
             );
         }
         if reset_path {
@@ -858,13 +938,14 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         };
         let img = load_image(x_object, self.resources);
         let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
+        let state_mask = state.get_mask();
         self.canvas.draw_pixmap(
             0,
             0,
             img,
             &paint,
             state.image_transform(img.width(), img.height()).into_skia(),
-            s_mask.as_ref().or_else(|| state.get_mask()),
+            s_mask.as_ref().or_else(|| state_mask.as_deref()),
         );
         Ok(())
     }
@@ -938,8 +1019,8 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         };
         let state = self.stack.last().unwrap();
         let ctm = to_device_space(self.height as f32, self.zoom, &state.ctm).into_skia();
-        let mask = state.mask.as_ref();
-        self.canvas.fill_rect(rect, &paint, ctm, mask);
+        self.canvas
+            .fill_rect(rect, &paint, ctm, state.get_mask().as_deref());
         Ok(())
     }
 
@@ -951,7 +1032,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let r1 = radial.end.r;
         let state = self.stack.last().unwrap();
         let ctm = to_device_space(self.height as f32, self.zoom, &state.ctm);
-        let mask = state.mask.as_ref();
+        let mask = state.get_mask();
         let mut paint = Paint::default();
         let stroke = Stroke::default();
 
@@ -995,7 +1076,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 .unwrap(),
                 &paint,
                 Transform::identity(),
-                mask,
+                state.get_mask().as_deref(),
             );
         }
 
@@ -1012,7 +1093,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                 &paint,
                 FillRule::Winding,
                 Transform::identity(),
-                mask,
+                state.get_mask().as_deref(),
             );
         }
 
@@ -1027,8 +1108,13 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             };
             let path = path.transform(ctm).unwrap();
             paint.set_color(SkiaColor::from_rgba(c[0], c[1], c[2], c[3]).unwrap());
-            self.canvas
-                .stroke_path(&path, &paint, &stroke, Transform::identity(), mask);
+            self.canvas.stroke_path(
+                &path,
+                &paint,
+                &stroke,
+                Transform::identity(),
+                mask.as_deref(),
+            );
         }
 
         Ok(())
@@ -1168,7 +1254,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                     &state.get_fill_paint(),
                     FillRule::Winding,
                     trans,
-                    state.get_mask(),
+                    state.get_mask().as_deref(),
                 );
             }
             TextRenderingMode::Stroke => {
@@ -1181,7 +1267,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                     &state.get_stroke_paint(),
                     state.get_stroke(),
                     trans,
-                    state.get_mask(),
+                    state.get_mask().as_deref(),
                 );
             }
             TextRenderingMode::FillAndStroke => {
@@ -1190,14 +1276,14 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
                     &state.get_fill_paint(),
                     FillRule::Winding,
                     trans,
-                    state.get_mask(),
+                    state.get_mask().as_deref(),
                 );
                 canvas.stroke_path(
                     &path,
                     &state.get_stroke_paint(),
                     state.get_stroke(),
                     trans,
-                    state.get_mask(),
+                    state.get_mask().as_deref(),
                 );
             }
             TextRenderingMode::Clip => {
