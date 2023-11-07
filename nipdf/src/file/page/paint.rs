@@ -145,8 +145,8 @@ impl<const N: usize> MaskCache<N> {
 
         for (i, e) in self.recents.iter().enumerate() {
             if e.0.as_ref() == &new_path {
-                let entry = self.recents.swap_remove_front(i).unwrap();
-                self.recents.push_back(entry.clone());
+                let entry = self.recents.swap_remove_back(i).unwrap();
+                self.recents.push_front(entry.clone());
                 return entry;
             }
         }
@@ -155,9 +155,9 @@ impl<const N: usize> MaskCache<N> {
         mask.intersect_path(&p, rule, true, Transform::identity());
         let entry = (Rc::new(new_path), Rc::new(RefCell::new(mask)));
         if self.recents.len() == N {
-            self.recents.pop_front();
+            self.recents.pop_back();
         }
-        self.recents.push_back(entry.clone());
+        self.recents.push_front(entry.clone());
         entry
     }
 }
