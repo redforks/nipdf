@@ -135,7 +135,7 @@ impl<'a> font_kit::outline::OutlineSink for FreeTypePathSink<'a> {
 }
 
 pub trait GlyphRender {
-    fn render(&mut self, gid: u16, font_size: f32, sink: &mut PathSink) -> AnyResult<()>;
+    fn render(&self, gid: u16, font_size: f32, sink: &mut PathSink) -> AnyResult<()>;
 }
 
 struct Type1GlyphRender<'a> {
@@ -143,7 +143,7 @@ struct Type1GlyphRender<'a> {
 }
 
 impl<'a> GlyphRender for Type1GlyphRender<'a> {
-    fn render(&mut self, gid: u16, font_size: f32, sink: &mut PathSink) -> AnyResult<()> {
+    fn render(&self, gid: u16, font_size: f32, sink: &mut PathSink) -> AnyResult<()> {
         let mut sink = FreeTypePathSink::new(sink.0, font_size);
         Ok(self.font.outline(
             gid as u32,
@@ -382,7 +382,7 @@ struct TTFParserGlyphRender<'a> {
 }
 
 impl<'a> GlyphRender for TTFParserGlyphRender<'a> {
-    fn render(&mut self, gid: u16, font_size: f32, sink: &mut PathSink) -> AnyResult<()> {
+    fn render(&self, gid: u16, font_size: f32, sink: &mut PathSink) -> AnyResult<()> {
         let mut sink = TTFParserPathSink::new(sink.0, font_size, self.units_per_em);
         self.face.outline_glyph(GlyphId(gid), &mut sink);
         Ok(())
@@ -568,6 +568,9 @@ struct FontCacheInner<'c> {
     #[borrows(fonts)]
     #[covariant]
     ops: HashMap<String, Box<dyn FontOp + 'this>>,
+    #[borrows(fonts)]
+    #[covariant]
+    renders: HashMap<String, Box<dyn GlyphRender + 'this>>,
 }
 
 pub struct FontCache<'c>(FontCacheInner<'c>);
@@ -788,13 +791,24 @@ impl<'c> FontCache<'c> {
                 fonts.insert(k, font);
             }
         }
-        Ok(Self(FontCacheInner::try_new(fonts, |fonts| {
-            let mut ops = HashMap::with_capacity(fonts.len());
-            for (k, v) in fonts {
-                ops.insert(k.clone(), v.create_op()?);
-            }
-            Ok(ops)
-        })?))
+
+        Ok(Self(FontCacheInner::try_new(
+            fonts,
+            |fonts| {
+                let mut ops = HashMap::with_capacity(fonts.len());
+                for (k, v) in fonts {
+                    ops.insert(k.clone(), v.create_op()?);
+                }
+                Ok(ops)
+            },
+            |fonts| {
+                let mut renders = HashMap::with_capacity(fonts.len());
+                for (k, v) in fonts {
+                    renders.insert(k.clone(), v.create_glyph_render()?);
+                }
+                Ok(renders)
+            },
+        )?))
     }
 
     pub fn get_font(&self, s: &str) -> Option<&dyn Font> {
@@ -803,6 +817,10 @@ impl<'c> FontCache<'c> {
 
     pub fn get_op(&self, s: &str) -> Option<&(dyn FontOp)> {
         self.0.borrow_ops().get(s).map(|x| x.as_ref())
+    }
+
+    pub fn get_glyph_render(&self, s: &str) -> Option<&(dyn GlyphRender)> {
+        self.0.borrow_renders().get(s).map(|x| x.as_ref())
     }
 }
 
