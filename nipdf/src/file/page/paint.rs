@@ -1146,7 +1146,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         Ok(())
     }
 
-    fn gen_glyph_path(glyph_render: &mut dyn GlyphRender, gid: u16) -> PathBuilder {
+    fn gen_glyph_path(glyph_render: &dyn GlyphRender, gid: u16) -> PathBuilder {
         let mut path = PathBuilder::new();
         let mut sink = PathSink(&mut path);
         glyph_render.render(gid, &mut sink).unwrap();
@@ -1231,7 +1231,9 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
 
         let text_object = &state.text_object;
         let font_size = text_object.font_size;
-        let mut glyph_render = font.create_glyph_render(font_size).unwrap();
+        let glyph_render = self
+            .font_cache
+            .get_glyph_render(self.text_object().font_name.as_ref().unwrap()).unwrap();
 
         let mut text_to_user_space: TextToUserSpace = text_object.matrix;
         let render_mode = text_object.render_mode;
@@ -1244,7 +1246,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             );
 
             let gid = op.char_to_gid(ch);
-            let path = Self::gen_glyph_path(glyph_render.as_mut(), gid);
+            let path = Self::gen_glyph_path(glyph_render, gid);
             if !path.is_empty() {
                 let path = path.finish().unwrap();
                 // pre transform path to user space, render_glyph() will zoom line_width,
@@ -1263,7 +1265,6 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             }
             text_to_user_space = move_text_space_right(&text_to_user_space, width);
         }
-        drop(glyph_render);
         self.text_object_mut().matrix = text_to_user_space;
         if let Some(text_clip_path) = text_clip_path.finish() {
             self.text_object_mut()
