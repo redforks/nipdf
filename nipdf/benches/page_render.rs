@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use anyhow::Result as AnyResult;
 use criterion::{criterion_group, criterion_main, Criterion};
 use nipdf::file::{File, RenderOptionBuilder};
@@ -33,7 +31,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
 criterion_group! {
   name = benches;
-  config = Criterion::default().measurement_time(Duration::from_secs(20));
+  config = Criterion::default();
   targets = criterion_benchmark
 }
 criterion_main!(benches);
