@@ -455,7 +455,7 @@ impl RenderOptionBuilder {
 
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct Render<'a, 'b: 'a, 'c> {
+pub struct Render<'a, 'b, 'c> {
     canvas: &'c mut Pixmap,
     stack: Vec<State>,
     width: u32,

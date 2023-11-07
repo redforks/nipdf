@@ -257,34 +257,25 @@ impl<'a> FontOp for Type1FontOp<'a> {
     }
 }
 
-#[self_referencing]
-struct Type1FontInner<'a, 'b: 'a> {
+/// Font implementation using free-type/(font-kit), to handle Type1 fonts
+struct Type1Font<'a, 'b> {
     font_data: Vec<u8>,
     is_cff: bool,
     font: FontKitFont,
     font_dict: FontDict<'a, 'b>,
-    #[borrows(font_dict, font, font_data)]
-    #[covariant]
-    op: Type1FontOp<'this>,
 }
-
-/// Font implementation using free-type/(font-kit), to handle Type1 fonts
-struct Type1Font<'a, 'b>(Type1FontInner<'a, 'b>);
 
 impl<'a, 'b> Type1Font<'a, 'b> {
     fn new(is_cff: bool, data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> AnyResult<Self> {
         debug_assert_eq!(data.capacity(), data.len());
 
         let font = FontKitFont::from_bytes(data.clone().into(), 0)?;
-        Ok(Self(Type1FontInner::try_new(
-            data,
+        Ok(Self {
+            font_data: data,
             is_cff,
             font,
             font_dict,
-            |font_dict, font, font_data| {
-                Type1FontOp::new(font_dict.type1()?, font, is_cff, font_data.as_slice())
-            },
-        )?))
+        })
     }
 }
 
@@ -294,18 +285,17 @@ impl<'a, 'b> Font for Type1Font<'a, 'b> {
     }
 
     fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
-        Ok(Box::new(self.0.borrow_op()))
-        // self.0.Ok(Box::new(Type1FontOp::new(
-        //     self.font_dict.type1()?,
-        //     &self.font,
-        //     self.is_cff,
-        //     self.font_data.as_slice(),
-        // )?))
+        Ok(Box::new(Type1FontOp::new(
+            self.font_dict.type1()?,
+            &self.font,
+            self.is_cff,
+            self.font_data.as_slice(),
+        )?))
     }
 
     fn create_glyph_render(&self, font_size: f32) -> AnyResult<Box<dyn GlyphRender + '_>> {
         Ok(Box::new(Type1GlyphRender {
-            font: self.0.borrow_font(),
+            font: &self.font,
             font_size,
         }))
     }
@@ -735,7 +725,7 @@ impl<'c> FontCache<'c> {
         Type1Font::new(is_cff, bytes, font)
     }
 
-    fn scan_font<'a, 'b: 'a>(font: FontDict<'a, 'b>) -> AnyResult<Option<Box<dyn Font + 'c>>>
+    fn scan_font<'a, 'b>(font: FontDict<'a, 'b>) -> AnyResult<Option<Box<dyn Font + 'c>>>
     where
         'a: 'c,
         'b: 'c,
@@ -790,7 +780,7 @@ impl<'c> FontCache<'c> {
         }
     }
 
-    pub fn new<'a, 'b: 'a>(resource: &'c ResourceDict<'a, 'b>) -> anyhow::Result<Self>
+    pub fn new<'a, 'b>(resource: &'c ResourceDict<'a, 'b>) -> anyhow::Result<Self>
     where
         'a: 'c,
         'b: 'c,
@@ -830,24 +820,6 @@ pub trait FontOp {
     fn char_width(&self, ch: u32) -> u32;
     fn units_per_em(&self) -> u16 {
         1000
-    }
-}
-
-impl<T: FontOp> FontOp for &T {
-    fn decode_chars(&self, s: &[u8]) -> Vec<u32> {
-        (**self).decode_chars(s)
-    }
-
-    fn char_to_gid(&self, ch: u32) -> u16 {
-        (**self).char_to_gid(ch)
-    }
-
-    fn char_width(&self, ch: u32) -> u32 {
-        (**self).char_width(ch)
-    }
-
-    fn units_per_em(&self) -> u16 {
-        (**self).units_per_em()
     }
 }
 
