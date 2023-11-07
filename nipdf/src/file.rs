@@ -414,7 +414,7 @@ pub struct Catalog<'a, 'b> {
     d: CatalogDict<'a, 'b>,
 }
 
-impl<'a, 'b> Catalog<'a, 'b> {
+impl<'a, 'b: 'a> Catalog<'a, 'b> {
     fn parse(id: NonZeroU32, resolver: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
         Ok(Self {
             d: resolver.resolve_pdf_object(id)?,
@@ -471,7 +471,10 @@ impl File {
         Ok(ObjectResolver::new(&self.data, &self.xref))
     }
 
-    pub fn version(&self, resolver: &ObjectResolver) -> Result<String, ObjectValueError> {
+    pub fn version<'a, 'b: 'a>(
+        &self,
+        resolver: &'b ObjectResolver<'a>,
+    ) -> Result<String, ObjectValueError> {
         let catalog = self.catalog(resolver)?;
         Ok(catalog
             .ver()
@@ -479,7 +482,7 @@ impl File {
             .unwrap_or_else(|| self.head_ver.clone()))
     }
 
-    pub fn catalog<'a, 'b>(
+    pub fn catalog<'a, 'b: 'a>(
         &self,
         resolver: &'b ObjectResolver<'a>,
     ) -> Result<Catalog<'a, 'b>, ObjectValueError> {
