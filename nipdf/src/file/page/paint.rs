@@ -1223,7 +1223,10 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             text_object.font_name.as_ref().unwrap(),
             font.font_type()
         );
-        let op = font.create_op().unwrap();
+        let op = self
+            .font_cache
+            .get_op(self.text_object().font_name.as_ref().unwrap())
+            .unwrap();
         let state = self.stack.last().unwrap();
 
         let text_object = &state.text_object;
@@ -1260,7 +1263,6 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             }
             text_to_user_space = move_text_space_right(&text_to_user_space, width);
         }
-        drop(op);
         drop(glyph_render);
         self.text_object_mut().matrix = text_to_user_space;
         if let Some(text_clip_path) = text_clip_path.finish() {

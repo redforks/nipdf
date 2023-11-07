@@ -578,9 +578,15 @@ fn standard_14_type1_font_data(font_name: &str) -> Option<&'static [u8]> {
     }
 }
 
-pub struct FontCache<'c> {
+#[self_referencing]
+struct FontCacheInner<'c> {
     fonts: HashMap<String, Box<dyn Font + 'c>>,
+    #[borrows(fonts)]
+    #[covariant]
+    ops: HashMap<String, Box<dyn FontOp + 'this>>,
 }
+
+pub struct FontCache<'c>(FontCacheInner<'c>);
 
 /// Split string by capital char.
 fn capital_to_space_separated(s: &str) -> Cow<str> {
@@ -798,11 +804,21 @@ impl<'c> FontCache<'c> {
                 fonts.insert(k, font);
             }
         }
-        Ok(Self { fonts })
+        Ok(Self(FontCacheInner::try_new(fonts, |fonts| {
+            let mut ops = HashMap::with_capacity(fonts.len());
+            for (k, v) in fonts {
+                ops.insert(k.clone(), v.create_op()?);
+            }
+            Ok(ops)
+        })?))
     }
 
     pub fn get_font(&self, s: &str) -> Option<&dyn Font> {
-        self.fonts.get(s).map(|x| x.as_ref())
+        self.0.borrow_fonts().get(s).map(|x| x.as_ref())
+    }
+
+    pub fn get_op(&self, s: &str) -> Option<&(dyn FontOp)> {
+        self.0.borrow_ops().get(s).map(|x| x.as_ref())
     }
 }
 
