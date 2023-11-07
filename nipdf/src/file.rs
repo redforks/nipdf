@@ -3,7 +3,6 @@
 use ahash::{HashMap, HashMapExt};
 use anyhow::Result as AnyResult;
 use either::Either;
-use itertools::Itertools;
 use nipdf_macro::pdf_object;
 use nom::Finish;
 use once_cell::unsync::OnceCell;
@@ -449,7 +448,7 @@ impl File {
     pub fn parse(buf: Vec<u8>) -> AnyResult<Self> {
         let (_, head_ver) = parse_header(&buf).unwrap();
         let (_, frame_set) = parse_frame_set(&buf).unwrap();
-        let trailers = frame_set.iter().map(|f| &f.trailer).collect_vec();
+        let trailers: Vec<_> = frame_set.iter().map(|f| &f.trailer).collect();
         let xref = XRefTable::from_frame_set(&frame_set);
         assert!(
             !trailers.iter().any(|d| d.contains_key("Encrypt")),

@@ -1,7 +1,6 @@
 use crate::{file::decode_stream, function::Domain, object::Name};
 
 use super::*;
-use itertools::Itertools;
 use test_case::test_case;
 
 #[test_case([] => Ok(vec![]); "empty")]
@@ -71,7 +70,7 @@ fn test_iter_filter(
     let r: Vec<(String, Option<Dictionary<'static>>)> = stream
         .iter_filter()?
         .map(|(k, v)| (k.to_owned(), v.cloned()))
-        .collect_vec();
+        .collect();
     Ok(r)
 }
 
@@ -166,8 +165,5 @@ fn test_color_key_range() {
         Domain::new(20., 120.),
     ]);
     let color_key: ColorKey = ([10, 15, 20, 255], [110, 115, 120, 255]);
-    assert_eq!(
-        color_key,
-        color_key_range(&range, &ColorSpace::DeviceRGB)
-    );
+    assert_eq!(color_key, color_key_range(&range, &ColorSpace::DeviceRGB));
 }
