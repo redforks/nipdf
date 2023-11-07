@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use anyhow::Result as AnyResult;
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use nipdf::file::{File, RenderOptionBuilder};
 
 fn read_sample_file(file_path: impl AsRef<std::path::Path>) -> Vec<u8> {
@@ -20,7 +20,7 @@ fn render_page(file_path: impl AsRef<std::path::Path>, no: usize) -> AnyResult<t
     let f = File::parse(buf)?;
     let resolver = f.resolver()?;
     let pages = f.catalog(&resolver)?.pages()?;
-    let page = pages.get(no).unwrap();
+    let page = &pages[no];
     let option = RenderOptionBuilder::new().zoom(1.5);
     Ok(page.render(option)?)
 }

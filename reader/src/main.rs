@@ -154,7 +154,7 @@ impl Application for App {
             file_path_selecting: "".to_owned(),
         };
         if let Some(path) = file_path {
-            r.file_path_selecting = path.clone();
+            r.file_path_selecting = path;
             r.open();
         } else {
             r.open_last_file();
