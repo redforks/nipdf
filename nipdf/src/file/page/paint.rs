@@ -139,7 +139,7 @@ impl<const N: usize> MaskCache<N> {
                 let mut r = PathBuilder::new();
                 r.push_path(&cur.0);
                 r.push_path(&p);
-                (r.finish().unwrap(), Some(cur.1.clone()))
+                (r.finish().unwrap(), Some(Rc::clone(&cur.1)))
             }
         };
 
@@ -151,7 +151,7 @@ impl<const N: usize> MaskCache<N> {
             }
         }
 
-        let mut mask: Mask = cur_mask.map_or_else(|| create_mask(), |m| m.borrow().clone());
+        let mut mask: Mask = cur_mask.map_or_else(create_mask, |m| m.borrow().clone());
         mask.intersect_path(&p, rule, true, Transform::identity());
         let entry = (Rc::new(new_path), Rc::new(RefCell::new(mask)));
         if self.recents.len() == N {
@@ -945,7 +945,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             img,
             &paint,
             state.image_transform(img.width(), img.height()).into_skia(),
-            s_mask.as_ref().or_else(|| state_mask.as_deref()),
+            s_mask.as_ref().or(state_mask.as_deref()),
         );
         Ok(())
     }
