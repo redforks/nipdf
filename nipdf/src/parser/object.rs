@@ -191,7 +191,7 @@ fn parse_stream_that_length_not_ref_id(input: &[u8]) -> ParseResult<Stream> {
         delimited(whitespace_or_comment, tag(b"stream"), line_ending),
     ))(input)?;
     let (input, data) = take(dict.get("Length").unwrap().as_int().unwrap() as usize)(input)?;
-    let (input, _) = preceded(line_ending, tag(b"endstream"))(input)?;
+    let (input, _) = preceded(opt(line_ending), tag(b"endstream"))(input)?;
     Ok((input, Stream::new(dict, data)))
 }
 
