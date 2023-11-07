@@ -135,17 +135,16 @@ impl<'a> font_kit::outline::OutlineSink for FreeTypePathSink<'a> {
 }
 
 pub trait GlyphRender {
-    fn render(&mut self, gid: u16, sink: &mut PathSink) -> AnyResult<()>;
+    fn render(&mut self, gid: u16, font_size: f32, sink: &mut PathSink) -> AnyResult<()>;
 }
 
 struct Type1GlyphRender<'a> {
     font: &'a FontKitFont,
-    font_size: f32,
 }
 
 impl<'a> GlyphRender for Type1GlyphRender<'a> {
-    fn render(&mut self, gid: u16, sink: &mut PathSink) -> AnyResult<()> {
-        let mut sink = FreeTypePathSink::new(sink.0, self.font_size);
+    fn render(&mut self, gid: u16, font_size: f32, sink: &mut PathSink) -> AnyResult<()> {
+        let mut sink = FreeTypePathSink::new(sink.0, font_size);
         Ok(self.font.outline(
             gid as u32,
             font_kit::hinting::HintingOptions::None,
@@ -157,7 +156,7 @@ impl<'a> GlyphRender for Type1GlyphRender<'a> {
 pub trait Font {
     fn font_type(&self) -> FontType;
     fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>>;
-    fn create_glyph_render(&self, font_size: f32) -> AnyResult<Box<dyn GlyphRender + '_>>;
+    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender + '_>>;
 }
 
 struct Type1FontOp<'a> {
@@ -293,11 +292,8 @@ impl<'a, 'b> Font for Type1Font<'a, 'b> {
         )?))
     }
 
-    fn create_glyph_render(&self, font_size: f32) -> AnyResult<Box<dyn GlyphRender + '_>> {
-        Ok(Box::new(Type1GlyphRender {
-            font: &self.font,
-            font_size,
-        }))
+    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender + '_>> {
+        Ok(Box::new(Type1GlyphRender { font: &self.font }))
     }
 }
 
@@ -382,13 +378,12 @@ impl<'a> OutlineBuilder for TTFParserPathSink<'a> {
 
 struct TTFParserGlyphRender<'a> {
     face: TTFFace<'a>,
-    font_size: f32,
     units_per_em: f32,
 }
 
 impl<'a> GlyphRender for TTFParserGlyphRender<'a> {
-    fn render(&mut self, gid: u16, sink: &mut PathSink) -> AnyResult<()> {
-        let mut sink = TTFParserPathSink::new(sink.0, self.font_size, self.units_per_em);
+    fn render(&mut self, gid: u16, font_size: f32, sink: &mut PathSink) -> AnyResult<()> {
+        let mut sink = TTFParserPathSink::new(sink.0, font_size, self.units_per_em);
         self.face.outline_glyph(GlyphId(gid), &mut sink);
         Ok(())
     }
@@ -422,12 +417,11 @@ impl<'a, 'b> Font for TTFParserFont<'a, 'b> {
         })
     }
 
-    fn create_glyph_render(&self, font_size: f32) -> AnyResult<Box<dyn GlyphRender + '_>> {
+    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender + '_>> {
         let face = TTFFace::parse(&self.data, 0)?;
         Ok(Box::new(TTFParserGlyphRender {
             units_per_em: face.units_per_em() as f32,
             face,
-            font_size,
         }))
     }
 }
@@ -889,11 +883,8 @@ impl<'a, 'b> Font for CIDFontType0Font<'a, 'b> {
         Ok(Box::new(Type0FontOp::new(&self.font_dict.type0()?)?))
     }
 
-    fn create_glyph_render(&self, font_size: f32) -> AnyResult<Box<dyn GlyphRender + '_>> {
-        Ok(Box::new(Type1GlyphRender {
-            font: &self.font,
-            font_size,
-        }))
+    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender + '_>> {
+        Ok(Box::new(Type1GlyphRender { font: &self.font }))
     }
 }
 
