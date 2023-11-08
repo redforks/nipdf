@@ -486,11 +486,27 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
     }
 
     pub fn opt_u32(&self, id: &'static str) -> Result<Option<u32>, ObjectValueError> {
-        self.opt_int(id).map(|i| i.map(|i| i as u32))
+        self.opt_int(id).map(|i| {
+            i.map(|i| unsafe {
+                // u32 used in two cases:
+                // 1. it is reasonable, such as used as length/count
+                // 1. used as a flag
+                // If convert from i32 using `as` operator, it will break when used as flag.
+                // transmute() works for the first use case as well.
+                std::mem::transmute(i)
+            })
+        })
     }
 
     pub fn required_u32(&self, id: &'static str) -> Result<u32, ObjectValueError> {
-        self.required_int(id).map(|i| i as u32)
+        self.required_int(id).map(|i| unsafe {
+            // u32 used in two cases:
+            // 1. it is reasonable, such as used as length/count
+            // 1. used as a flag
+            // If convert from i32 using `as` operator, it will break when used as flag.
+            // transmute() works for the first use case as well.
+            std::mem::transmute(i)
+        })
     }
 
     pub fn u32_or(&self, id: &'static str, default: u32) -> Result<u32, ObjectValueError> {
