@@ -1,3 +1,5 @@
+use arc4::Arc4;
+use md5::{Digest, Md5};
 use nipdf_macro::{pdf_object, TryFromIntObject};
 
 #[derive(TryFromIntObject, Default, PartialEq, Eq, Clone, Copy)]
@@ -10,10 +12,10 @@ enum Algorithm {
     DefinedInDoc = 4,
 }
 
-#[derive(TryFromIntObject, PartialEq, Eq, Clone, Copy)]
+#[derive(TryFromIntObject, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
 enum StandardHandlerRevion {
-    V1 = 2,
-    V2 = 3,
+    V2 = 2,
+    V3 = 3,
     V4 = 4,
 }
 
@@ -40,11 +42,11 @@ trait EncryptDictTrait {
 
     /// 32-byte long string.
     #[key("O")]
-    fn owner_password(&self) -> String;
+    fn owner_password_hash(&self) -> String;
 
     /// 32-byte long string.
     #[key("U")]
-    fn user_password(&self) -> String;
+    fn user_password_hash(&self) -> String;
 }
 
 const PADDING: [u8; 32] = [
@@ -60,6 +62,149 @@ const PADDING: [u8; 32] = [
 fn pad_trunc_password(s: &[u8]) -> [u8; 32] {
     let mut iter = s.into_iter().copied().chain(PADDING.into_iter()).take(32);
     std::array::from_fn(|_| iter.next().unwrap())
+}
+
+// algorithm 2
+fn calc_encrypt_key(
+    revion: StandardHandlerRevion,
+    key_length: usize,
+    user_password: &[u8],
+    owner_hash: &[u8; 32],
+    permission_flags: u32,
+    doc_id: &[u8],
+) -> Box<[u8]> {
+    let user_password = pad_trunc_password(user_password);
+    let mut md5 = Md5::new();
+    md5.update(&user_password);
+    md5.update(&owner_hash);
+    md5.update(&permission_flags.to_le_bytes());
+    md5.update(&doc_id);
+    // md5.update(&[0xff, 0xff, 0xff, 0xff]);
+    let mut hash = md5.finalize();
+    let n = key_length / 8;
+    if revion > StandardHandlerRevion::V2 {
+        for _ in 0..50 {
+            hash = Md5::digest(&hash[..n]);
+        }
+    }
+    (&hash[..n]).into()
+}
+
+// algorithm 4 and 5
+fn calc_user_hash(
+    revion: StandardHandlerRevion,
+    key_length: usize,
+    user_password: &[u8],
+    owner_hash: &[u8; 32],
+    permission_flags: u32,
+    doc_id: &[u8],
+) -> [u8; 32] {
+    let key = calc_encrypt_key(
+        revion,
+        key_length,
+        user_password,
+        owner_hash,
+        permission_flags,
+        doc_id,
+    );
+
+    if revion == StandardHandlerRevion::V2 {
+        let mut r = PADDING.to_owned();
+        Arc4::with_key(&key).encrypt(&mut r);
+        r
+    } else {
+        let mut md5 = Md5::new();
+        md5.update(&PADDING);
+        md5.update(&doc_id);
+        let mut hash = md5.finalize();
+        let mut tmp = key.to_vec();
+        for i in 0..=19 {
+            for (t, k) in tmp.as_mut_slice().iter_mut().zip(&key[..]) {
+                *t = *k ^ i;
+            }
+            Arc4::with_key(&tmp[..]).encrypt(&mut hash);
+        }
+        let mut r = [0u8; 32];
+        (&mut r[..16]).copy_from_slice(&hash[..]);
+        r
+    }
+}
+
+// algorithm 6
+fn authorize_user(
+    revion: StandardHandlerRevion,
+    key_length: usize,
+    user_password: &[u8],
+    owner_hash: &[u8; 32],
+    user_hash: &[u8; 32],
+    permission_flags: u32,
+    doc_id: &[u8],
+) -> bool {
+    let hash = calc_user_hash(
+        revion,
+        key_length,
+        user_password,
+        owner_hash,
+        permission_flags,
+        doc_id,
+    );
+
+    if revion == StandardHandlerRevion::V2 {
+        &hash[..] == user_hash
+    } else {
+        hash[..16] == user_hash[..16]
+    }
+}
+
+/// algorithm 3 step a to d
+fn calc_rc4_key(
+    revion: StandardHandlerRevion,
+    key_length: usize,
+    owner_password: &[u8],
+) -> Box<[u8]> {
+    let mut owner_password = Md5::digest(&pad_trunc_password(owner_password));
+    if revion > StandardHandlerRevion::V2 {
+        for _ in 0..50 {
+            owner_password = Md5::digest(&owner_password[..]);
+        }
+    }
+    (&owner_password[..(key_length / 8)]).into()
+}
+
+// algorithm 7
+fn authorize_owner(
+    revion: StandardHandlerRevion,
+    key_length: usize,
+    owner_password: &[u8],
+    owner_hash: &[u8; 32],
+    user_hash: &[u8; 32],
+    permission_flag: u32,
+    doc_id: &[u8],
+) -> bool {
+    let rc4_key = &calc_rc4_key(revion, key_length, owner_password);
+    let mut decrypt = owner_hash.to_vec();
+    if revion == StandardHandlerRevion::V2 {
+        Arc4::with_key(rc4_key).encrypt(&mut decrypt);
+    } else {
+        let mut tmp = rc4_key.to_vec();
+        for i in 19..=0 {
+            for (t, k) in tmp.as_mut_slice().iter_mut().zip(&rc4_key[..]) {
+                *t = *k ^ i;
+            }
+            Arc4::with_key(&tmp[..]).encrypt(&mut decrypt);
+        }
+    }
+    dbg!(&decrypt);
+
+    authorize_user(
+        revion,
+        key_length,
+        &decrypt,
+        owner_hash,
+        user_hash,
+        permission_flag,
+        doc_id,
+    )
 }
 
 #[cfg(test)]
