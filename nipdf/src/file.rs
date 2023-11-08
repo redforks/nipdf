@@ -1,13 +1,5 @@
 //! Contains types of PDF file structures.
 
-use ahash::{HashMap, HashMapExt};
-use anyhow::Result as AnyResult;
-use either::Either;
-use nipdf_macro::pdf_object;
-use nom::Finish;
-use once_cell::unsync::OnceCell;
-use std::{iter::repeat_with, num::NonZeroU32};
-
 use crate::{
     object::{Dictionary, Entry, FrameSet, Object, ObjectValueError, PdfObject, Resolver, Stream},
     parser::{
@@ -15,11 +7,19 @@ use crate::{
         ParseResult,
     },
 };
+use ahash::{HashMap, HashMapExt};
+use anyhow::Result as AnyResult;
+use either::Either;
 use log::error;
+use nipdf_macro::pdf_object;
+use nom::Finish;
+use once_cell::unsync::OnceCell;
+use std::{iter::repeat_with, num::NonZeroU32};
 
 mod page;
-
 pub use page::*;
+
+mod encrypt;
 
 #[derive(Debug, Copy, Clone)]
 pub enum ObjectPos {
