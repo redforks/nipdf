@@ -15,7 +15,10 @@ impl<'a> TryFrom<&Object<'a>> for DocId {
             return Err(ObjectValueError::UnexpectedType);
         }
 
-        Ok(Self(arr[0].as_byte_string()?, arr[1].as_byte_string()?))
+        Ok(Self(
+            arr[0].as_byte_string()?.into(),
+            arr[1].as_byte_string()?.into(),
+        ))
     }
 }
 

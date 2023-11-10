@@ -647,12 +647,12 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
             .map_or(Ok(None), |o| o.as_stream().map(Some))
     }
 
-    pub fn opt_str(&self, id: &'static str) -> Result<Option<String>, ObjectValueError> {
+    pub fn opt_str(&self, id: &'static str) -> Result<Option<&str>, ObjectValueError> {
         self.opt_get(id)?
             .map_or(Ok(None), |o| o.as_string().map(Some))
     }
 
-    pub fn required_str(&self, id: &'static str) -> Result<String, ObjectValueError> {
+    pub fn required_str(&self, id: &'static str) -> Result<&str, ObjectValueError> {
         self.opt_get(id)?
             .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_string()
@@ -774,7 +774,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
         self._resolve_pdf_object(self.d, id)
     }
 
-    pub fn as_byte_string(&self, id: &'static str) -> Result<Box<[u8]>, ObjectValueError> {
+    pub fn as_byte_string(&self, id: &'static str) -> Result<&[u8], ObjectValueError> {
         self.opt_get(id)?
             .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_byte_string()
@@ -865,7 +865,7 @@ pub enum Object<'a> {
     Bool(bool),
     Integer(i32),
     Number(f32),
-    LiteralString(LiteralString<'a>), // including the parentheses
+    LiteralString(LiteralString), // including the parentheses
     HexString(HexString),
     Name(Name<'a>), // with the leading slash
     Dictionary(Dictionary<'a>),
@@ -955,27 +955,27 @@ impl<'a> Object<'a> {
         }
     }
 
-    pub fn as_text_string(&self) -> Result<String, ObjectValueError> {
+    pub fn as_text_string(&self) -> Result<&str, ObjectValueError> {
         match self {
-            Object::LiteralString(s) => Ok(s.decoded()?),
+            Object::LiteralString(s) => Ok(s.as_str()),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
 
     /// Return decoded string from LiteralString or HexString
-    pub fn as_string(&self) -> Result<String, ObjectValueError> {
+    pub fn as_string(&self) -> Result<&str, ObjectValueError> {
         match self {
-            Object::LiteralString(s) => Ok(s.decoded()?),
-            Object::HexString(s) => Ok(s.as_str().to_owned()),
+            Object::LiteralString(s) => Ok(s.as_str()),
+            Object::HexString(s) => Ok(s.as_str()),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
 
     /// Decode Literal string and hex string into bytes.
-    pub fn as_byte_string(&self) -> Result<Box<[u8]>, ObjectValueError> {
+    pub fn as_byte_string(&self) -> Result<&[u8], ObjectValueError> {
         match self {
-            Object::LiteralString(s) => Ok(s.decode_to_bytes()?.into_boxed_slice()),
-            Object::HexString(s) => Ok(s.as_bytes().into()),
+            Object::LiteralString(s) => Ok(s.as_bytes()),
+            Object::HexString(s) => Ok(s.as_bytes()),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
@@ -1045,7 +1045,7 @@ impl<'a> Object<'a> {
             Object::LiteralString(s) => RcDoc::text(
                 from_utf8(&s.0)
                     .map(|s| s.to_owned())
-                    .unwrap_or_else(|_| format!("0x{}", hex::encode(s.decode_to_bytes().unwrap()))),
+                    .unwrap_or_else(|_| format!("0x{}", hex::encode(s.as_bytes()))),
             ),
             Object::HexString(s) => RcDoc::text(
                 from_utf8(&s.0)
@@ -1157,27 +1157,10 @@ impl<'a> From<bool> for Object<'a> {
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct LiteralString<'a>(Cow<'a, [u8]>);
+pub struct LiteralString(Box<[u8]>);
 
-impl<'a> From<&'a [u8]> for LiteralString<'a> {
-    fn from(s: &'a [u8]) -> Self {
-        debug_assert!(s.len() >= 2 && s[0] == b'(' && *s.last().unwrap() == b')');
-        Self(s.into())
-    }
-}
-
-impl<'a> From<&'a str> for LiteralString<'a> {
-    fn from(value: &'a str) -> Self {
-        value.as_bytes().into()
-    }
-}
-
-impl<'a> LiteralString<'a> {
-    pub fn new(s: &'a [u8]) -> Self {
-        Self(s.into())
-    }
-
-    pub fn decode_to_bytes(&self) -> Result<Vec<u8>, ObjectValueError> {
+impl LiteralString {
+    pub fn new(s: &[u8]) -> Self {
         fn skip_cur_new_line<I: Iterator<Item = u8>>(cur: u8, s: &mut Peekable<I>) -> bool {
             if cur == b'\r' {
                 s.next_if_eq(&b'\n');
@@ -1214,7 +1197,6 @@ impl<'a> LiteralString<'a> {
             hit.then_some(result)
         }
 
-        let s = self.0.as_ref();
         let s = &s[1..s.len() - 1];
         let mut result: Vec<u8> = Vec::with_capacity(s.len());
         let mut iter = s.iter().copied().peekable();
@@ -1255,45 +1237,43 @@ impl<'a> LiteralString<'a> {
             }
         }
 
-        Ok(result)
+        Self(result.into())
     }
 
-    pub fn decoded(&self) -> Result<String, ObjectValueError> {
-        let bytes = self.decode_to_bytes()?;
-        from_utf8(&bytes)
-            .map_err(|_| {
-                error!("invalid literal string: {:?}/{:?}", bytes, self.0);
-                ObjectValueError::InvalidHexString
-            })
-            .map(|v| v.to_owned())
+    pub fn as_str(&self) -> &str {
+        from_utf8(&self.0).unwrap()
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_ref()
     }
 }
 
-impl<'a> From<LiteralString<'a>> for Object<'a> {
-    fn from(value: LiteralString<'a>) -> Self {
+impl From<LiteralString> for Object<'static> {
+    fn from(value: LiteralString) -> Self {
         Self::LiteralString(value)
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum TextString<'a> {
-    Text(LiteralString<'a>),
+pub enum TextString {
+    Text(LiteralString),
     // maybe CID font
     HexText(HexString),
 }
 
-impl<'a> TextString<'a> {
-    pub fn to_bytes(&self) -> Result<Vec<u8>, ObjectValueError> {
+impl TextString {
+    pub fn to_bytes(&self) -> Result<&[u8], ObjectValueError> {
         match self {
-            TextString::Text(s) => s.decode_to_bytes(),
-            TextString::HexText(s) => Ok(s.as_bytes().to_owned()),
+            TextString::Text(s) => Ok(s.as_bytes()),
+            TextString::HexText(s) => Ok(s.as_bytes()),
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum TextStringOrNumber<'a> {
-    TextString(TextString<'a>),
+pub enum TextStringOrNumber {
+    TextString(TextString),
     Number(f32),
 }
 

@@ -21,7 +21,7 @@ use test_case::test_case;
 #[test_case("\x05a", b"(\\05a)"; "oct 2")]
 #[test_case("\x05a", b"(\\005a)"; "oct 3")]
 fn literal_string_decoded(exp: &str, buf: impl AsRef<[u8]>) {
-    assert_eq!(LiteralString::new(buf.as_ref()).decoded().unwrap(), exp);
+    assert_eq!(LiteralString::new(buf.as_ref()).as_str(), exp);
 }
 
 #[test_case(b"", b"<>" ; "empty")]
@@ -29,10 +29,7 @@ fn literal_string_decoded(exp: &str, buf: impl AsRef<[u8]>) {
 #[test_case(b"\x90\x1f\xa0", b"<901FA>"; "append 0 if odd")]
 #[test_case(b"\x90\x1f\xa0", b"<90 1F\tA>"; "ignore whitespace")]
 fn hex_string_decoded(exp: impl AsRef<[u8]>, buf: impl AsRef<[u8]>) {
-    assert_eq!(
-        HexString::new(buf.as_ref()).as_bytes(),
-        exp.as_ref()
-    );
+    assert_eq!(HexString::new(buf.as_ref()).as_bytes(), exp.as_ref());
 }
 
 #[test_case(Ok(10), "unknown"; "not exist use default value")]
@@ -46,7 +43,7 @@ fn dict_get_int(exp: Result<i32, ObjectValueError>, id: &str) {
     assert_eq!(exp, d.get_int(id, 10));
 }
 
-#[test_case(Object::LiteralString("(foo)".into()), "(foo)"; "literal string")]
+#[test_case(Object::LiteralString(LiteralString::new(b"(foo)")), "(foo)"; "literal string")]
 #[test_case(Object::HexString(HexString::new(b"<901FA3>")), "<901FA3>"; "hex string")]
 #[test_case(Object::Name("foo".into()), "/foo"; "name")]
 fn buf_or_str_to_object<'a>(exp: Object<'a>, s: &'a str) {

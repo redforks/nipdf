@@ -183,18 +183,14 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         if get_type().is_some_and(|s| s == "Name") {
             Some("required_name")
         } else {
-            panic!("unsupported type: &str, use String instead")
+            Some("required_str")
         }
-    } else if rt == &(parse_quote!(String)) {
-        Some("required_str")
     } else if rt == &(parse_quote!(Option<&str>)) || rt == &(parse_quote!(Option<&'b str>)) {
         if get_type().is_some_and(|s| s == "Name") {
             Some("opt_name")
         } else {
-            panic!("unsupported type: Option<&str>, use Option<String> instead")
+            Some("opt_str")
         }
-    } else if rt == &(parse_quote!(Option<String>)) {
-        Some("opt_str")
     } else if rt == &(parse_quote!(u32)) {
         Some("required_u32")
     } else if rt == &(parse_quote!(Option<u32>)) {
@@ -245,7 +241,7 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         Some("required_ref")
     } else if rt == &(parse_quote!(Option<NonZeroU32>)) {
         Some("opt_ref")
-    } else if rt == &(parse_quote!(Box<[u8]>)) {
+    } else if rt == &(parse_quote!(&[u8])) {
         Some("as_byte_string")
     } else {
         None

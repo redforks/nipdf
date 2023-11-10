@@ -48,11 +48,11 @@ pub trait EncryptDictTrait {
 
     /// 32-byte long string.
     #[key("O")]
-    fn owner_password_hash(&self) -> Box<[u8]>;
+    fn owner_password_hash(&self) -> &[u8];
 
     /// 32-byte long string.
     #[key("U")]
-    fn user_password_hash(&self) -> Box<[u8]>;
+    fn user_password_hash(&self) -> &[u8];
 }
 
 const PADDING: [u8; 32] = [

@@ -360,9 +360,9 @@ pub enum Operation<'a> {
 
     // Text Showing Operations
     #[op_tag("Tj")]
-    ShowText(TextString<'a>),
+    ShowText(TextString),
     #[op_tag("TJ")]
-    ShowTexts(Vec<TextStringOrNumber<'a>>),
+    ShowTexts(Vec<TextStringOrNumber>),
     #[op_tag("'")]
     MoveToNextLineAndShowText(String),
     #[op_tag("\"")]
@@ -454,7 +454,7 @@ impl<'a, 'b, T: for<'c> ConvertFromObject<'a, 'c>> ConvertFromObject<'a, 'b> for
     }
 }
 
-impl<'a, 'b> ConvertFromObject<'a, 'b> for TextString<'a> {
+impl<'a, 'b> ConvertFromObject<'a, 'b> for TextString {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
         match o {
@@ -465,7 +465,7 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for TextString<'a> {
     }
 }
 
-impl<'a, 'b> ConvertFromObject<'a, 'b> for TextStringOrNumber<'a> {
+impl<'a, 'b> ConvertFromObject<'a, 'b> for TextStringOrNumber {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
         match o {
@@ -501,7 +501,7 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for f32 {
 impl<'a, 'b> ConvertFromObject<'a, 'b> for String {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
-        o.as_text_string()
+        o.as_text_string().map(|s| s.to_owned())
     }
 }
 

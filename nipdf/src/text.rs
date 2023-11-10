@@ -226,7 +226,7 @@ pub trait FontDescriptorDictTrait {
     #[typ("Name")]
     fn font_name(&self) -> &'b str;
 
-    fn font_family(&self) -> Option<String>;
+    fn font_family(&self) -> Option<&str>;
 
     #[try_from]
     fn font_stretch(&self) -> Option<FontStretch>;
@@ -273,7 +273,7 @@ pub trait FontDescriptorDictTrait {
 
     fn font_file3(&self) -> Option<&'b Stream<'a>>;
 
-    fn char_set(&self) -> Option<String>;
+    fn char_set(&self) -> Option<&str>;
 }
 
 bitflags! {
