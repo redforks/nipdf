@@ -1043,12 +1043,12 @@ impl<'a> Object<'a> {
             Object::Integer(i) => RcDoc::as_string(i),
             Object::Number(f) => RcDoc::as_string(PrettyNumber(*f)),
             Object::LiteralString(s) => RcDoc::text(
-                from_utf8(s.0)
+                from_utf8(&s.0)
                     .map(|s| s.to_owned())
                     .unwrap_or_else(|_| format!("0x{}", hex::encode(s.decode_to_bytes().unwrap()))),
             ),
             Object::HexString(s) => RcDoc::text(
-                from_utf8(s.0)
+                from_utf8(&s.0)
                     .map(|s| s.to_owned())
                     .unwrap_or_else(|_| format!("0X{}", hex::encode(s.decoded().unwrap()))),
             ),
@@ -1157,12 +1157,12 @@ impl<'a> From<bool> for Object<'a> {
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct LiteralString<'a>(&'a [u8]);
+pub struct LiteralString<'a>(Cow<'a, [u8]>);
 
 impl<'a> From<&'a [u8]> for LiteralString<'a> {
     fn from(s: &'a [u8]) -> Self {
         debug_assert!(s.len() >= 2 && s[0] == b'(' && *s.last().unwrap() == b')');
-        Self(s)
+        Self(s.into())
     }
 }
 
@@ -1174,7 +1174,7 @@ impl<'a> From<&'a str> for LiteralString<'a> {
 
 impl<'a> LiteralString<'a> {
     pub fn new(s: &'a [u8]) -> Self {
-        Self(s)
+        Self(s.into())
     }
 
     pub fn decode_to_bytes(&self) -> Result<Vec<u8>, ObjectValueError> {
@@ -1214,7 +1214,7 @@ impl<'a> LiteralString<'a> {
             hit.then_some(result)
         }
 
-        let s = self.0;
+        let s = self.0.as_ref();
         let s = &s[1..s.len() - 1];
         let mut result: Vec<u8> = Vec::with_capacity(s.len());
         let mut iter = s.iter().copied().peekable();
@@ -1299,11 +1299,11 @@ pub enum TextStringOrNumber<'a> {
 
 /// Decoded PDF literal string object, enclosing '(' and ')' not included.
 #[derive(Eq, PartialEq, Debug, Clone)]
-pub struct HexString<'a>(&'a [u8]);
+pub struct HexString<'a>(Cow<'a, [u8]>);
 
 impl<'a> From<&'a [u8]> for HexString<'a> {
     fn from(s: &'a [u8]) -> Self {
-        Self::new(s)
+        Self::new(s.into())
     }
 }
 
@@ -1315,7 +1315,7 @@ impl<'a> From<&'a str> for HexString<'a> {
 
 impl<'a> HexString<'a> {
     pub fn new(s: &'a [u8]) -> Self {
-        Self(s)
+        Self(s.into())
     }
 
     pub fn as_string(&self) -> Result<String, ObjectValueError> {
@@ -1350,7 +1350,7 @@ impl<'a> HexString<'a> {
                 Cow::Owned(v)
             }
         }
-        let s = self.0;
+        let s = self.0.as_ref();
         debug_assert!(s.starts_with(b"<") && s.ends_with(b">"));
         let s = &s[1..s.len() - 1];
         let s = filter_whitespace(s);
