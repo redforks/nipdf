@@ -66,7 +66,7 @@ fn test_iter_filter(
         .into_iter()
         .map(|(k, v)| (Name::borrowed(k), v))
         .collect::<Dictionary>();
-    let stream = Stream(dict, &[]);
+    let stream = Stream(dict, &[], ObjectId::empty());
     let r: Vec<(String, Option<Dictionary<'static>>)> = stream
         .iter_filter()?
         .map(|(k, v)| (k.to_owned(), v.cloned()))
@@ -138,7 +138,11 @@ fn image_mask_try_from_object() {
     );
 
     // ExplicitMask
-    let stream = Stream(Dictionary::default(), b"0 1 2 3 4 5 6 7 8 9".as_ref());
+    let stream = Stream(
+        Dictionary::default(),
+        b"0 1 2 3 4 5 6 7 8 9".as_ref(),
+        ObjectId::empty(),
+    );
     let o = Object::Stream(stream.clone());
     let mask = ImageMask::try_from(&o).unwrap();
     assert_eq!(mask, ImageMask::Explicit(stream));

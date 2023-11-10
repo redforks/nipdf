@@ -1,5 +1,6 @@
 use std::{borrow::Cow, num::NonZeroU32, str::from_utf8, str::FromStr};
 
+use either::Either;
 use nom::{
     branch::alt,
     bytes::complete::{escaped, is_not, tag, take, take_till, take_while},
@@ -8,15 +9,15 @@ use nom::{
         is_hex_digit,
     },
     combinator::{map, not, opt, peek, recognize, value},
-    error::{ErrorKind, FromExternalError},
+    error::{ErrorKind, FromExternalError, ParseError as ParseErrorTrait},
     multi::{many0, many0_count},
     number::complete::float,
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
 };
 
 use crate::object::{
-    Array, Dictionary, HexString, IndirectObject, LiteralString, Name, Object, ObjectValueError,
-    Reference, Stream,
+    Array, Dictionary, HexString, IndirectObject, LiteralString, Name, Object, ObjectId,
+    ObjectValueError, Reference, Stream,
 };
 
 use super::{whitespace_or_comment, ws, ws_prefixed, ws_terminated, ParseError, ParseResult};
@@ -158,7 +159,7 @@ pub fn parse_dict(input: &[u8]) -> ParseResult<Dictionary> {
     )(input)
 }
 
-fn parse_object_and_stream(input: &[u8]) -> ParseResult<Object> {
+fn parse_object_and_stream(input: &[u8]) -> ParseResult<Either<Object, (Dictionary, &[u8])>> {
     let (input, o) = parse_object(input)?;
     match o {
         Object::Dictionary(d) => {
@@ -171,33 +172,29 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<Object> {
                 if let Some(Object::Integer(l)) = d.get("Length") {
                     let (input, data) = take(*l as usize)(input)?;
                     let (input, _) = preceded(opt(line_ending), tag(b"endstream"))(input)?;
-                    Ok((input, Object::Stream(Stream::new(d, data))))
+                    Ok((input, Either::Right((d, data))))
                 } else {
-                    Ok((input, Object::Stream(Stream::new(d, input))))
+                    Ok((input, Either::Right((d, input))))
                 }
             } else {
-                Ok((input, Object::Dictionary(d)))
+                Ok((input, Either::Left(Object::Dictionary(d))))
             }
         }
-        _ => Ok((input, o)),
+        _ => Ok((input, Either::Left(o))),
     }
-}
-
-/// Parse Stream that its length not ref_id(no need to resolve), return
-/// &[u8] that just after endstream
-fn parse_stream_that_length_not_ref_id(input: &[u8]) -> ParseResult<Stream> {
-    let (input, (dict, _)) = tuple((
-        parse_dict,
-        delimited(whitespace_or_comment, tag(b"stream"), line_ending),
-    ))(input)?;
-    let (input, data) = take(dict.get("Length").unwrap().as_int().unwrap() as usize)(input)?;
-    let (input, _) = preceded(opt(line_ending), tag(b"endstream"))(input)?;
-    Ok((input, Stream::new(dict, data)))
 }
 
 pub fn parse_indirect_object(input: &[u8]) -> ParseResult<'_, IndirectObject<'_>> {
     let (input, (id, gen)) = separated_pair(u32, multispace1, u16)(input)?;
     let (input, obj) = preceded(ws(tag(b"obj")), parse_object_and_stream)(input)?;
+    let obj = match obj {
+        Either::Left(o) => o,
+        Either::Right((dict, data)) => Object::Stream(Stream::new(
+            dict,
+            data,
+            ObjectId::new(NonZeroU32::new(id).unwrap(), gen),
+        )),
+    };
     let (input, _) = opt(ws_prefixed(tag("endobj")))(input)?;
     Ok((
         input,
@@ -207,11 +204,15 @@ pub fn parse_indirect_object(input: &[u8]) -> ParseResult<'_, IndirectObject<'_>
 
 /// Parse stream wrapped in indirect object tag,
 /// different from `parse_indirect_object()`, buf will after the end of `endobj`
-pub fn parse_indirect_stream(input: &[u8]) -> ParseResult<(NonZeroU32, Stream)> {
-    let (input, (id, _)) = separated_pair(u32, multispace1, u16)(input)?;
-    let (input, stream) = preceded(ws(tag(b"obj")), parse_stream_that_length_not_ref_id)(input)?;
-    let (input, _) = ws(tag(b"endobj"))(input)?;
-    Ok((input, (NonZeroU32::new(id).unwrap(), stream)))
+pub fn parse_indirect_stream(input: &[u8]) -> ParseResult<Stream> {
+    let (input, o) = parse_indirect_object(input)?;
+    let Object::Stream(s) = o.take() else {
+        return Err(nom::Err::Failure(ParseError::from_error_kind(
+            input,
+            ErrorKind::Fail,
+        )));
+    };
+    Ok((input, s))
 }
 
 fn parse_reference(input: &[u8]) -> ParseResult<Reference> {

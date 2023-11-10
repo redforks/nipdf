@@ -1,4 +1,4 @@
-use super::{Dictionary, Object, ObjectValueError};
+use super::{Dictionary, Object, ObjectId, ObjectValueError};
 use crate::{
     ccitt::Flags,
     file::{ObjectResolver, ResourceDict},
@@ -39,7 +39,7 @@ const FILTER_RUN_LENGTH_DECODE: &str = "RunLengthDecode";
 const FILTER_JPX_DECODE: &str = "JPXDecode";
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct Stream<'a>(Dictionary<'a>, &'a [u8]); // NOTE: buf end at the file end
+pub struct Stream<'a>(Dictionary<'a>, &'a [u8], ObjectId); // NOTE: buf end at the file end
 
 /// error!() log if r is error, returns `Err<ObjectValueError::FilterDecodeError>`
 fn handle_filter_error<V, E: Display>(
@@ -531,8 +531,8 @@ fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> AnyResult<
 }
 
 impl<'a> Stream<'a> {
-    pub fn new(dict: Dictionary<'a>, data: &'a [u8]) -> Self {
-        Self(dict, data)
+    pub fn new(dict: Dictionary<'a>, data: &'a [u8], id: ObjectId) -> Self {
+        Self(dict, data, id)
     }
 
     pub fn as_dict(&self) -> &Dictionary<'a> {

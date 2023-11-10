@@ -792,6 +792,14 @@ impl ObjectId {
         Self { id, generation }
     }
 
+    #[cfg(test)]
+    pub fn empty() -> Self {
+        Self {
+            id: NonZeroU32::new(1u32).unwrap(),
+            generation: 0,
+        }
+    }
+
     pub fn id(&self) -> NonZeroU32 {
         self.id
     }

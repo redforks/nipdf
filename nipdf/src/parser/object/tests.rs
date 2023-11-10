@@ -90,8 +90,8 @@ endstream
 "#;
     let (input, o) = parse_object_and_stream(buf).unwrap();
     assert_eq!(input, b"\n");
-    let stream = o.as_stream().unwrap();
-    assert_eq!(b"1234", stream.buf());
+    let stream = o.right().unwrap();
+    assert_eq!(b"1234", stream.1);
 
     // length is ref
     let buf = br#"<</Length 1 0 R>>
@@ -102,6 +102,6 @@ endstream
     let (input, o) = parse_object_and_stream(buf).unwrap();
     assert_eq!(input[0], b'b');
     assert!(input.len() > 4);
-    let stream = o.as_stream().unwrap();
-    assert!(stream.buf().starts_with(b"blah"));
+    let stream = o.right().unwrap();
+    assert!(stream.1.starts_with(b"blah"));
 }

@@ -177,7 +177,7 @@ impl XRefTable {
                 let object_stream = self.object_streams[id]
                     .get_or_try_init(|| {
                         let buf = self.resolve_object_buf(buf, *id).unwrap();
-                        let (_, (_, stream)) = parse_indirect_stream(&buf).unwrap();
+                        let (_, stream) = parse_indirect_stream(&buf).unwrap();
                         ObjectStream::new(stream)
                     })
                     .unwrap();

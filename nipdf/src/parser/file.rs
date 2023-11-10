@@ -145,7 +145,7 @@ fn parse_xref_stream(buf: &[u8]) -> ParseResult<(XRefSection, Dictionary<'_>)> {
         nom::Err::Error(ParseError::from_error_kind(b"", ErrorKind::Fail))
     }
 
-    let (buf, (_, stream)) = parse_indirect_stream(buf)?;
+    let (buf, stream) = parse_indirect_stream(buf)?;
     let d = stream.as_dict();
     let d = CrossReferenceStreamDict::new(d).map_err(to_parse_error)?;
     assert!(
