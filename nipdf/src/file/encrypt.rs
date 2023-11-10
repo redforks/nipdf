@@ -2,8 +2,8 @@ use arc4::Arc4;
 use md5::{Digest, Md5};
 use nipdf_macro::{pdf_object, TryFromIntObject};
 
-#[derive(TryFromIntObject, Default, PartialEq, Eq, Clone, Copy)]
-enum Algorithm {
+#[derive(TryFromIntObject, Default, Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Algorithm {
     #[default]
     Undocument = 0,
     AES = 1,
@@ -12,15 +12,15 @@ enum Algorithm {
     DefinedInDoc = 4,
 }
 
-#[derive(TryFromIntObject, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
-enum StandardHandlerRevion {
+#[derive(TryFromIntObject, PartialEq, Eq, Debug, Clone, Copy, PartialOrd, Ord)]
+pub enum StandardHandlerRevion {
     V2 = 2,
     V3 = 3,
     V4 = 4,
 }
 
 #[pdf_object(())]
-trait EncryptDictTrait {
+pub trait EncryptDictTrait {
     #[typ("Name")]
     fn filter(&self) -> &str;
 
@@ -36,17 +36,20 @@ trait EncryptDictTrait {
     #[default(40)]
     fn key_length(&self) -> u32;
 
+    #[key("P")]
+    fn permission_flags(&self) -> u32;
+
     #[key("R")]
     #[try_from]
     fn revison(&self) -> StandardHandlerRevion;
 
     /// 32-byte long string.
     #[key("O")]
-    fn owner_password_hash(&self) -> String;
+    fn owner_password_hash(&self) -> Box<[u8]>;
 
     /// 32-byte long string.
     #[key("U")]
-    fn user_password_hash(&self) -> String;
+    fn user_password_hash(&self) -> Box<[u8]>;
 }
 
 const PADDING: [u8; 32] = [
@@ -65,7 +68,7 @@ fn pad_trunc_password(s: &[u8]) -> [u8; 32] {
 }
 
 // algorithm 2
-fn calc_encrypt_key(
+pub fn calc_encrypt_key(
     revion: StandardHandlerRevion,
     key_length: usize,
     user_password: &[u8],
@@ -131,7 +134,7 @@ fn calc_user_hash(
 }
 
 // algorithm 6
-fn authorize_user(
+pub fn authorize_user(
     revion: StandardHandlerRevion,
     key_length: usize,
     user_password: &[u8],

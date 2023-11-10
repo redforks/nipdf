@@ -36,7 +36,7 @@ fn object_resolver() {
     id_offset.insert(2, ObjectPos::Offset(3));
     id_offset.insert(3, ObjectPos::Offset(40));
     let xref_table = XRefTable::new(id_offset);
-    let resolver = ObjectResolver::new(buf, &xref_table);
+    let resolver = ObjectResolver::new(buf, &xref_table, None);
 
     assert_eq!(resolver.resolve(to_non_zero_u32(1)), Ok(&Object::Null));
     assert_eq!(
@@ -78,7 +78,7 @@ fn resolve_container_one_or_more_pdf_object() -> AnyResult<()> {
 endobj
 "#;
     let xref = XRefTable::from_buf(buf);
-    let resolver = ObjectResolver::new(buf, &xref);
+    let resolver = ObjectResolver::new(buf, &xref, None);
     let d = resolver
         .resolve(NonZeroU32::new(1_u32).unwrap())?
         .as_dict()?;
@@ -94,7 +94,7 @@ endobj
 2 0 obj<<>>endobj
 "#;
     let xref = XRefTable::from_buf(buf);
-    let resolver = ObjectResolver::new(buf, &xref);
+    let resolver = ObjectResolver::new(buf, &xref, None);
     let d = resolver
         .resolve(NonZeroU32::new(1_u32).unwrap())?
         .as_dict()?;
@@ -110,7 +110,7 @@ endobj
 3 0 obj<<>>endobj
 "#;
     let xref = XRefTable::from_buf(buf);
-    let resolver = ObjectResolver::new(buf, &xref);
+    let resolver = ObjectResolver::new(buf, &xref, None);
     let d = resolver
         .resolve(NonZeroU32::new(1_u32).unwrap())?
         .as_dict()?;
@@ -128,7 +128,7 @@ fn resolve_one_or_more_pdf_object() {
     // object is dictionary
     let buf = b"1 0 obj <</foo 2 0 R>> endobj";
     let xref = XRefTable::from_buf(buf);
-    let resolver = ObjectResolver::new(buf, &xref);
+    let resolver = ObjectResolver::new(buf, &xref, None);
     let list = resolver
         .resolve_one_or_more_pdf_object::<FooDict>(NonZeroU32::new(1).unwrap())
         .unwrap();
@@ -141,7 +141,7 @@ fn resolve_one_or_more_pdf_object() {
 endstream
 endobj"#;
     let xref = XRefTable::from_buf(buf);
-    let resolver = ObjectResolver::new(buf, &xref);
+    let resolver = ObjectResolver::new(buf, &xref, None);
     let list = resolver
         .resolve_one_or_more_pdf_object::<FooDict>(NonZeroU32::new(1).unwrap())
         .unwrap();
@@ -152,7 +152,7 @@ endobj"#;
     let buf = br#"1 0 obj [2 0 R<<>>] endobj
 2 0 obj<<>>endobj"#;
     let xref = XRefTable::from_buf(buf);
-    let resolver = ObjectResolver::new(buf, &xref);
+    let resolver = ObjectResolver::new(buf, &xref, None);
     let list = resolver
         .resolve_one_or_more_pdf_object::<FooDict>(NonZeroU32::new(1).unwrap())
         .unwrap();
@@ -175,7 +175,7 @@ fn parse_file() {
     p.push("normal");
     p.push("SamplePdf1_12mb_6pages.pdf");
     let buf = std::fs::read(p).unwrap();
-    let f = File::parse(buf).unwrap();
+    let f = File::parse(buf,"", "").unwrap();
     let resolver = f.resolver().unwrap();
     assert_eq!("1.5", f.version(&resolver).unwrap());
 }

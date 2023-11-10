@@ -10,7 +10,7 @@ use nipdf::file::{File, RenderOptionBuilder};
 fn decode_file_page(path: &str, page_no: usize) -> AnyResult<String> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(path);
     let buf = std::fs::read(&path)?;
-    let f = File::parse(buf).unwrap_or_else(|_| panic!("failed to parse {path:?}"));
+    let f = File::parse(buf, "", "").unwrap_or_else(|_| panic!("failed to parse {path:?}"));
     let resolver = f.resolver()?;
     let catalog = f.catalog(&resolver)?;
     let pages = catalog.pages()?;
@@ -50,7 +50,9 @@ fn form() {
 
 #[test]
 fn form_ctm() {
-    assert_ron_snapshot!(&decode_file_page("../../../ICEpower125ASX2_Datasheet_2.0.pdf", 4).unwrap());
+    assert_ron_snapshot!(
+        &decode_file_page("../../../ICEpower125ASX2_Datasheet_2.0.pdf", 4).unwrap()
+    );
 }
 
 #[test]

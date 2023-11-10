@@ -52,7 +52,7 @@ fn axias_coords_try_from() {
 #[test_case(b"1 0 obj<</ShadingType 3/ColorSpace/DeviceGray/Coords[1 1 1 1 1 -1]>>endobj"; "negative end radius")]
 fn build_invalid_radial(buf: &[u8]) -> AnyResult<()> {
     let xref = XRefTable::from_buf(buf);
-    let resolver = ObjectResolver::new(buf, &xref);
+    let resolver = ObjectResolver::new(buf, &xref, None);
     let d: ShadingDict = resolver.resolve_pdf_object(NonZeroU32::new(1).unwrap())?;
     let empty_d = Dictionary::new();
     let resource = ResourceDict::new(None, &empty_d, &resolver)?;

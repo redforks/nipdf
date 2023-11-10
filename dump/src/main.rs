@@ -46,7 +46,7 @@ fn cli() -> Command {
 
 fn open(path: &str) -> AnyResult<File> {
     let buf = std::fs::read(path)?;
-    File::parse(buf)
+    File::parse(buf, "", "")
 }
 
 fn dump_stream(path: &str, id: NonZeroU32, raw: bool, as_png: bool) -> AnyResult<()> {

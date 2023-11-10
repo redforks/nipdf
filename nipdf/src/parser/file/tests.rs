@@ -83,7 +83,7 @@ startxref
 #[test]
 fn read_xref_stream() {
     let buf = read_sample_file("file-structure/xref-stream.pdf");
-    let f = File::parse(buf).unwrap();
+    let f = File::parse(buf, "", "").unwrap();
     let resolver = f.resolver().unwrap();
 
     // assert object in file

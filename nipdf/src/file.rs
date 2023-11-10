@@ -1,7 +1,11 @@
 //! Contains types of PDF file structures.
 
 use crate::{
-    object::{Dictionary, Entry, FrameSet, Object, ObjectValueError, PdfObject, Resolver, Stream},
+    file::encrypt::{calc_encrypt_key, Algorithm, StandardHandlerRevion},
+    object::{
+        Dictionary, Entry, FrameSet, Object, ObjectValueError, PdfObject, Resolver, Stream,
+        TrailerDict,
+    },
     parser::{
         parse_frame_set, parse_header, parse_indirect_object, parse_indirect_stream, parse_object,
         ParseResult,
@@ -20,6 +24,7 @@ mod page;
 pub use page::*;
 
 mod encrypt;
+pub use encrypt::EncryptDict;
 
 #[derive(Debug, Copy, Clone)]
 pub enum ObjectPos {
@@ -238,10 +243,11 @@ pub struct ObjectResolver<'a> {
     buf: &'a [u8],
     xref_table: &'a XRefTable,
     objects: HashMap<NonZeroU32, OnceCell<Object<'a>>>,
+    encript_key: Option<Box<[u8]>>,
 }
 
 impl<'a> ObjectResolver<'a> {
-    pub fn new(buf: &'a [u8], xref_table: &'a XRefTable) -> Self {
+    pub fn new(buf: &'a [u8], xref_table: &'a XRefTable, encript_key: Option<Box<[u8]>>) -> Self {
         let mut objects = HashMap::with_capacity(xref_table.count());
         xref_table.iter_ids().for_each(|id| {
             objects.insert(id, OnceCell::new());
@@ -251,6 +257,7 @@ impl<'a> ObjectResolver<'a> {
             buf,
             xref_table,
             objects,
+            encript_key,
         }
     }
 
@@ -266,6 +273,7 @@ impl<'a> ObjectResolver<'a> {
             buf: b"",
             xref_table,
             objects: HashMap::default(),
+            encript_key: None,
         }
     }
 
@@ -434,6 +442,7 @@ pub struct File {
     head_ver: String,
     data: Vec<u8>,
     xref: XRefTable,
+    encrypt_key: Option<Box<[u8]>>,
 }
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -444,16 +453,80 @@ pub enum FileError {
     MissingRequiredTrailerValue,
 }
 
+/// Open possible encrypt file, return None if not encrypted.
+fn open_encrypt(
+    buf: &[u8],
+    xref: &XRefTable,
+    trailer: Option<&Dictionary>,
+    owner_password: &str,
+    user_password: &str,
+) -> AnyResult<Option<Box<[u8]>>> {
+    let Some(trailer) = trailer else {
+        return Ok(None);
+    };
+
+    let resolver = ObjectResolver::new(buf, xref, None);
+    let trailer = TrailerDict::new(None, trailer, &resolver)?;
+    let encrypt = trailer.encrypt()?;
+    let Some(encrypt) = encrypt else {
+        return Ok(None);
+    };
+
+    assert_eq!(
+        "Standard",
+        encrypt.filter()?,
+        "unsupported security handler"
+    );
+    assert!(
+        encrypt.sub_filter()?.is_none(),
+        "unsupported security handler (SubFilter)"
+    );
+    assert_eq!(Algorithm::AES, encrypt.algorithm()?);
+    assert_eq!(StandardHandlerRevion::V3, encrypt.revison()?);
+
+    let owner_hash = encrypt.owner_password_hash()?;
+    let user_hash = encrypt.user_password_hash()?;
+    let mut owner_hash_arr = [0u8; 32];
+    let mut user_hash_arr = [0u8; 32];
+    owner_hash_arr.copy_from_slice(&owner_hash[..32]);
+    user_hash_arr.copy_from_slice(&user_hash[..32]);
+
+    if encrypt::authorize_user(
+        encrypt.revison()?,
+        encrypt.key_length()? as usize,
+        user_password.as_bytes(),
+        &owner_hash_arr,
+        &user_hash_arr,
+        encrypt.permission_flags()?,
+        &trailer.id()?.unwrap().0,
+    ) {
+        Ok(Some(calc_encrypt_key(
+            encrypt.revison()?,
+            encrypt.key_length()? as usize,
+            user_password.as_bytes(),
+            &owner_hash_arr,
+            encrypt.permission_flags()?,
+            &trailer.id()?.unwrap().0,
+        )))
+    } else {
+        Ok(None)
+    }
+}
+
 impl File {
-    pub fn parse(buf: Vec<u8>) -> AnyResult<Self> {
+    pub fn parse(buf: Vec<u8>, owner_password: &str, user_password: &str) -> AnyResult<Self> {
         let (_, head_ver) = parse_header(&buf).unwrap();
         let (_, frame_set) = parse_frame_set(&buf).unwrap();
-        let trailers: Vec<_> = frame_set.iter().map(|f| &f.trailer).collect();
         let xref = XRefTable::from_frame_set(&frame_set);
-        assert!(
-            !trailers.iter().any(|d| d.contains_key("Encrypt")),
-            "Encrypted file is not supported"
-        );
+
+        let trailers: Vec<_> = frame_set.into_iter().map(|f| f.trailer).collect();
+        let encrypt_key = open_encrypt(
+            &buf,
+            &xref,
+            trailers.iter().filter(|d| d.contains_key("Encrypt")).next(),
+            owner_password,
+            user_password,
+        )?;
 
         let root_id = trailers.iter().find_map(|t| t.get("Root")).unwrap();
         let root_id = root_id.as_ref().unwrap().id().id();
@@ -463,11 +536,16 @@ impl File {
             root_id,
             data: buf,
             xref,
+            encrypt_key,
         })
     }
 
     pub fn resolver(&self) -> AnyResult<ObjectResolver<'_>> {
-        Ok(ObjectResolver::new(&self.data, &self.xref))
+        Ok(ObjectResolver::new(
+            &self.data,
+            &self.xref,
+            self.encrypt_key.clone(),
+        ))
     }
 
     pub fn version(&self, resolver: &ObjectResolver) -> Result<String, ObjectValueError> {
@@ -517,7 +595,7 @@ pub(crate) fn decode_stream<
     f_assert: impl for<'a> FnOnce(&'a Dictionary<'a>, &'a ObjectResolver<'a>) -> AnyResult<()>,
 ) -> AnyResult<Vec<u8>> {
     let buf = read_sample_file(file_path);
-    let f = File::parse(buf)?;
+    let f = File::parse(buf, "", "")?;
     let resolver = f.resolver()?;
     let stream = resolver.resolve(id.try_into()?)?.as_stream()?;
     f_assert(stream.as_dict(), &resolver)?;

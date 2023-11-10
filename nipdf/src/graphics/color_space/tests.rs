@@ -112,7 +112,7 @@ endstream
 endobj
 "#;
     let xref = XRefTable::from_buf(buf);
-    let resolver = ObjectResolver::new(buf, &xref);
+    let resolver = ObjectResolver::new(buf, &xref, None);
     let args = ColorSpaceArgs::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap())?)?;
     let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None)?;
     assert_eq!(ColorSpace::DeviceGray, color_space);
@@ -138,7 +138,7 @@ endobj
         );
         let buf = buf.as_bytes();
         let xref = XRefTable::from_buf(buf);
-        let resolver = ObjectResolver::new(buf, &xref);
+        let resolver = ObjectResolver::new(buf, &xref, None);
         let args = ColorSpaceArgs::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap())?)?;
         let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None)?;
         assert_eq!(exp, color_space);
@@ -173,7 +173,7 @@ endobj
 endobj
 "#;
     let xref = XRefTable::from_buf(buf);
-    let resolver = ObjectResolver::new(buf, &xref);
+    let resolver = ObjectResolver::new(buf, &xref, None);
     let args = ColorSpaceArgs::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap())?)?;
     let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None)?;
     assert_eq!(
@@ -200,7 +200,7 @@ endobj
 #[test_case(b"1 0 obj[/Indexed/DeviceRGB 1<010203040506>]endobj"; "Hex String")]
 fn indexed(buf: &[u8]) -> AnyResult<()> {
     let xref = XRefTable::from_buf(buf);
-    let resolver = ObjectResolver::new(buf, &xref);
+    let resolver = ObjectResolver::new(buf, &xref, None);
     let args = ColorSpaceArgs::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap())?).unwrap();
     let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None).unwrap();
     assert_eq!(
@@ -221,7 +221,7 @@ fn cal_rgb_from_args() {
 endobj
 "#;
     let xref = XRefTable::from_buf(buf);
-    let resolver = ObjectResolver::new(buf, &xref);
+    let resolver = ObjectResolver::new(buf, &xref, None);
     let args = ColorSpaceArgs::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap()).unwrap())
         .unwrap();
     let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None).unwrap();
