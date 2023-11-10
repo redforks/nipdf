@@ -245,6 +245,8 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         Some("required_ref")
     } else if rt == &(parse_quote!(Option<NonZeroU32>)) {
         Some("opt_ref")
+    } else if rt == &(parse_quote!(Box<[u8]>)) {
+        Some("as_byte_string")
     } else {
         None
     }

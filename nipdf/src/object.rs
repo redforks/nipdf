@@ -773,6 +773,12 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
     ) -> Result<O, ObjectValueError> {
         self._resolve_pdf_object(self.d, id)
     }
+
+    pub fn as_byte_string(&self, id: &'static str) -> Result<Box<[u8]>, ObjectValueError> {
+        self.opt_get(id)?
+            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
+            .as_byte_string()
+    }
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
