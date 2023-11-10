@@ -957,6 +957,15 @@ impl<'a> Object<'a> {
         }
     }
 
+    /// Decode Literal string and hex string into bytes.
+    pub fn as_byte_string(&self) -> Result<Box<[u8]>, ObjectValueError> {
+        match self {
+            Object::LiteralString(s) => Ok(s.decode_to_bytes()?.into_boxed_slice()),
+            Object::HexString(s) => Ok(s.decoded()?.into_boxed_slice()),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
+    }
+
     /// iter values of current object recursively, for array recursively iter item values,
     /// for Dictionary iter values (key are ignored), other object types return itself.
     pub fn iter_values(&self) -> Box<dyn Iterator<Item = &'_ Self> + '_> {

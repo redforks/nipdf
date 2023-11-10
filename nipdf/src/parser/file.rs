@@ -2,6 +2,7 @@ use std::{fmt::Display, num::NonZeroU32, ops::RangeFrom, str::from_utf8};
 
 use log::{error, info};
 use memchr::memmem::rfind;
+use nipdf_macro::pdf_object;
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -17,7 +18,7 @@ use nom::{
 
 use crate::{
     function::{Domain, Domains},
-    object::{Dictionary, Entry, Frame, FrameSet, Name, ObjectValueError, XRefSection},
+    object::{Dictionary, Entry, Frame, FrameSet, Name, Object, ObjectValueError, XRefSection},
     parser::{parse_dict, parse_indirect_stream},
 };
 
