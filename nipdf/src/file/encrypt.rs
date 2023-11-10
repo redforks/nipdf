@@ -1,6 +1,9 @@
+use anyhow::Result as AnyResult;
 use arc4::Arc4;
 use md5::{Digest, Md5};
 use nipdf_macro::{pdf_object, TryFromIntObject};
+
+use crate::object::ObjectId;
 
 #[derive(TryFromIntObject, Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Algorithm {
@@ -208,6 +211,21 @@ fn authorize_owner(
         permission_flag,
         doc_id,
     )
+}
+
+/// Append low 3 bytes of object id to the end of key, low 2 bytes of generation
+/// number to the end of key.
+/// Take len(key) + 5 bytes of the MD5 hash of the result as rc4 key.
+/// Use rc4 to decrypt the data.
+pub fn decrypt(key: &[u8], id: ObjectId, data: &mut [u8]) {
+    let n = key.len();
+    let mut k = Vec::with_capacity(n + 5);
+    k.extend_from_slice(key);
+    k.extend_from_slice(&u32::from(id.id()).to_le_bytes()[..3]);
+    k.extend_from_slice(&id.generation().to_le_bytes()[..]);
+    let key = Md5::digest(&k[..]);
+    let mut arc4 = Arc4::with_key(&key[..(n + 5).min(16)]);
+    arc4.encrypt(data);
 }
 
 #[cfg(test)]
