@@ -536,6 +536,10 @@ impl<'a> Stream<'a> {
         Self(dict, data, id)
     }
 
+    pub fn update_dict(&mut self, f: impl FnOnce(&mut Dictionary<'a>)) {
+        f(&mut self.0);
+    }
+
     pub fn as_dict(&self) -> &Dictionary<'a> {
         &self.0
     }

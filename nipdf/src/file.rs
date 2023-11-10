@@ -1,10 +1,10 @@
 //! Contains types of PDF file structures.
 
 use crate::{
-    file::encrypt::{calc_encrypt_key, Algorithm, StandardHandlerRevion},
+    file::encrypt::{calc_encrypt_key, decrypt_with_key, Algorithm, StandardHandlerRevion},
     object::{
-        Dictionary, Entry, FrameSet, Object, ObjectValueError, PdfObject, Resolver, Stream,
-        TrailerDict,
+        Dictionary, Entry, FrameSet, HexString, LiteralString, Object, ObjectId, ObjectValueError,
+        PdfObject, Resolver, Stream, TrailerDict,
     },
     parser::{
         parse_frame_set, parse_header, parse_indirect_object, parse_indirect_stream, parse_object,
@@ -25,6 +25,8 @@ pub use page::*;
 
 pub(crate) mod encrypt;
 pub use encrypt::EncryptDict;
+
+use self::encrypt::decrypt_key;
 
 #[derive(Debug, Copy, Clone)]
 pub enum ObjectPos {
@@ -190,6 +192,7 @@ impl XRefTable {
         &'b self,
         buf: &'a [u8],
         id: NonZeroU32,
+        decrypt_key: Option<&[u8]>,
     ) -> Result<Object<'c>, ObjectValueError> {
         self.resolve_object_buf(buf, id)
             .ok_or(ObjectValueError::ObjectIDNotFound(id))
@@ -198,7 +201,15 @@ impl XRefTable {
                     |buf| {
                         parse_indirect_object(buf)
                             .finish()
-                            .map(|(_, o)| o.take())
+                            .map(|(_, o)| {
+                                let id = o.id();
+                                let o = o.take();
+                                if let Some(key) = decrypt_key {
+                                    decrypt_string(key, id, o)
+                                } else {
+                                    o
+                                }
+                            })
                             .map_err(ObjectValueError::from)
                     },
                     |buf| {
@@ -218,6 +229,43 @@ impl XRefTable {
     pub fn count(&self) -> usize {
         self.id_offset.len()
     }
+}
+
+/// Decrypt HexString/LiteralString nested in object.
+fn decrypt_string<'a>(key: &[u8], id: ObjectId, mut o: Object<'a>) -> Object<'a> {
+    let key = decrypt_key(key, id);
+
+    struct Decryptor(Box<[u8]>);
+
+    impl Decryptor {
+        fn hex_string(&self, s: &mut HexString) {
+            s.update(|s| decrypt_with_key(&self.0, s));
+        }
+
+        fn literal_string(&self, s: &mut LiteralString) {
+            s.update(|s| decrypt_with_key(&self.0, s));
+        }
+
+        fn dict<'a>(&self, d: &mut Dictionary<'a>) {
+            for (_, v) in d.iter_mut() {
+                self.decrypt(v);
+            }
+        }
+
+        fn decrypt<'a>(&self, o: &mut Object<'a>) {
+            match o {
+                Object::HexString(ref mut s) => self.hex_string(s),
+                Object::LiteralString(ref mut s) => self.literal_string(s),
+                Object::Dictionary(ref mut d) => self.dict(d),
+                Object::Array(ref mut arr) => arr.iter_mut().for_each(|o| self.decrypt(o)),
+                Object::Stream(ref mut s) => s.update_dict(|d| self.dict(d)),
+                _ => {}
+            }
+        }
+    }
+
+    Decryptor(key).decrypt(&mut o);
+    o
 }
 
 pub trait DataContainer<'a> {
@@ -296,15 +344,18 @@ impl<'a> ObjectResolver<'a> {
     }
 
     /// Resolve object with id `id`, if object is reference, resolve it recursively.
-    /// TODO: decrypt if Object is string
     pub fn resolve(&self, id: NonZeroU32) -> Result<&Object<'a>, ObjectValueError> {
         self.objects
             .get(&id)
             .ok_or(ObjectValueError::ObjectIDNotFound(id))?
             .get_or_try_init(|| {
-                let mut o = self.xref_table.parse_object(self.buf, id)?;
+                let mut o = self
+                    .xref_table
+                    .parse_object(self.buf, id, self.encript_key())?;
                 while let Object::Reference(id) = o {
-                    o = self.xref_table.parse_object(self.buf, id.id().id())?;
+                    o = self
+                        .xref_table
+                        .parse_object(self.buf, id.id().id(), self.encript_key())?;
                 }
                 Ok(o)
             })

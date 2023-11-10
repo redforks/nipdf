@@ -1240,6 +1240,10 @@ impl LiteralString {
         Self(result.into())
     }
 
+    pub fn update(&mut self, f: impl FnOnce(&mut [u8])) {
+        f(&mut self.0);
+    }
+
     pub fn as_str(&self) -> &str {
         from_utf8(&self.0).unwrap()
     }
@@ -1313,6 +1317,10 @@ impl HexString {
         let s = append_zero_if_odd(&s);
         let s = hex::decode(s).unwrap();
         Self(s.into())
+    }
+
+    pub fn update(&mut self, f: impl FnOnce(&mut [u8])) {
+        f(&mut self.0);
     }
 
     pub fn as_bytes(&self) -> &[u8] {
