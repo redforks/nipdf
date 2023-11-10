@@ -241,6 +241,10 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         Some("required_dict")
     } else if rt == &(parse_quote!(Option<&'b Stream<'a>>)) {
         Some("opt_stream")
+    } else if rt == &(parse_quote!(NonZeroU32)) {
+        Some("required_ref")
+    } else if rt == &(parse_quote!(Option<NonZeroU32>)) {
+        Some("opt_ref")
     } else {
         None
     }
