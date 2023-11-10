@@ -1,7 +1,7 @@
 use super::{Dictionary, Object, ObjectId, ObjectValueError};
 use crate::{
     ccitt::Flags,
-    file::{ObjectResolver, ResourceDict},
+    file::{encrypt::decrypt, ObjectResolver, ResourceDict},
     function::Domains,
     graphics::{
         color_space::{
@@ -18,6 +18,7 @@ use image::{DynamicImage, GrayImage, Luma, RgbImage, Rgba, RgbaImage};
 use jpeg_decoder::PixelFormat;
 use log::error;
 use nipdf_macro::pdf_object;
+use num::complex::ComplexFloat;
 use once_cell::unsync::Lazy;
 use smallvec::SmallVec;
 use std::{
@@ -560,7 +561,14 @@ impl<'a> Stream<'a> {
         &self,
         resolver: &ObjectResolver<'a>,
     ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
-        let mut decoded = FilterDecodedData::Bytes(self.raw(resolver)?.into());
+        let mut raw: Cow<'a, [u8]> = self.raw(resolver)?.into();
+        if let Some(key) = resolver.encript_key() {
+            let mut buf = raw.into_owned();
+            decrypt(&key, self.2, &mut buf);
+            raw = buf.into();
+        }
+
+        let mut decoded = FilterDecodedData::Bytes(raw);
         for (filter_name, params) in self.iter_filter()? {
             decoded = filter(decoded.into_bytes()?, Some(resolver), filter_name, params)?;
         }

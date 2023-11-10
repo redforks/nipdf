@@ -23,7 +23,7 @@ use std::{iter::repeat_with, num::NonZeroU32};
 mod page;
 pub use page::*;
 
-mod encrypt;
+pub(crate) mod encrypt;
 pub use encrypt::EncryptDict;
 
 #[derive(Debug, Copy, Clone)]
@@ -261,6 +261,10 @@ impl<'a> ObjectResolver<'a> {
         }
     }
 
+    pub fn encript_key(&self) -> Option<&[u8]> {
+        self.encript_key.as_deref()
+    }
+
     /// Return total objects count.
     #[allow(dead_code)]
     pub fn n(&self) -> usize {
@@ -292,6 +296,7 @@ impl<'a> ObjectResolver<'a> {
     }
 
     /// Resolve object with id `id`, if object is reference, resolve it recursively.
+    /// TODO: decrypt if Object is string
     pub fn resolve(&self, id: NonZeroU32) -> Result<&Object<'a>, ObjectValueError> {
         self.objects
             .get(&id)
