@@ -209,12 +209,12 @@ where
 /// Resolve data for indexed color space, it may exist in stream or HexString or LiteralString
 fn resolve_index_data(o: &Object, resolver: &ObjectResolver) -> AnyResult<Vec<u8>> {
     Ok(match o {
-        Object::HexString(s) => s.decoded()?,
+        Object::HexString(s) => s.as_bytes().into(),
         Object::LiteralString(s) => s.decode_to_bytes()?,
         Object::Reference(id) => {
             let o = resolver.resolve(id.id().id())?;
             match o {
-                Object::HexString(s) => s.decoded()?,
+                Object::HexString(s) => s.as_bytes().into(),
                 Object::LiteralString(s) => s.decode_to_bytes()?,
                 Object::Stream(s) => s.decode(resolver)?.into_owned(),
                 _ => bail!("Unexpected object type when resolve indexed color space data"),

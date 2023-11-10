@@ -866,7 +866,7 @@ pub enum Object<'a> {
     Integer(i32),
     Number(f32),
     LiteralString(LiteralString<'a>), // including the parentheses
-    HexString(HexString<'a>),
+    HexString(HexString),
     Name(Name<'a>), // with the leading slash
     Dictionary(Dictionary<'a>),
     Array(Array<'a>),
@@ -966,7 +966,7 @@ impl<'a> Object<'a> {
     pub fn as_string(&self) -> Result<String, ObjectValueError> {
         match self {
             Object::LiteralString(s) => Ok(s.decoded()?),
-            Object::HexString(s) => Ok(String::from_utf8(s.decoded()?).unwrap()),
+            Object::HexString(s) => Ok(s.as_str().to_owned()),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
@@ -975,7 +975,7 @@ impl<'a> Object<'a> {
     pub fn as_byte_string(&self) -> Result<Box<[u8]>, ObjectValueError> {
         match self {
             Object::LiteralString(s) => Ok(s.decode_to_bytes()?.into_boxed_slice()),
-            Object::HexString(s) => Ok(s.decoded()?.into_boxed_slice()),
+            Object::HexString(s) => Ok(s.as_bytes().into()),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
@@ -1050,7 +1050,7 @@ impl<'a> Object<'a> {
             Object::HexString(s) => RcDoc::text(
                 from_utf8(&s.0)
                     .map(|s| s.to_owned())
-                    .unwrap_or_else(|_| format!("0X{}", hex::encode(s.decoded().unwrap()))),
+                    .unwrap_or_else(|_| format!("0X{}", hex::encode(s.as_bytes()))),
             ),
             Object::Name(n) => name_to_doc(n),
             Object::Dictionary(d) => dict_to_doc(d),
@@ -1279,14 +1279,14 @@ impl<'a> From<LiteralString<'a>> for Object<'a> {
 pub enum TextString<'a> {
     Text(LiteralString<'a>),
     // maybe CID font
-    HexText(HexString<'a>),
+    HexText(HexString),
 }
 
 impl<'a> TextString<'a> {
     pub fn to_bytes(&self) -> Result<Vec<u8>, ObjectValueError> {
         match self {
             TextString::Text(s) => s.decode_to_bytes(),
-            TextString::HexText(s) => s.decoded(),
+            TextString::HexText(s) => Ok(s.as_bytes().to_owned()),
         }
     }
 }
@@ -1299,35 +1299,10 @@ pub enum TextStringOrNumber<'a> {
 
 /// Decoded PDF literal string object, enclosing '(' and ')' not included.
 #[derive(Eq, PartialEq, Debug, Clone)]
-pub struct HexString<'a>(Cow<'a, [u8]>);
+pub struct HexString(Box<[u8]>);
 
-impl<'a> From<&'a [u8]> for HexString<'a> {
-    fn from(s: &'a [u8]) -> Self {
-        Self::new(s.into())
-    }
-}
-
-impl<'a> From<&'a str> for HexString<'a> {
-    fn from(value: &'a str) -> Self {
-        Self::new(value.as_bytes())
-    }
-}
-
-impl<'a> HexString<'a> {
-    pub fn new(s: &'a [u8]) -> Self {
-        Self(s.into())
-    }
-
-    pub fn as_string(&self) -> Result<String, ObjectValueError> {
-        let buf = self.decoded()?;
-        String::from_utf8(buf).map_err(|_| {
-            error!("invalid hex string: {:?}", self.0);
-            ObjectValueError::InvalidHexString
-        })
-    }
-
-    /// Get decoded binary string.
-    pub fn decoded(&self) -> Result<Vec<u8>, ObjectValueError> {
+impl HexString {
+    pub fn new(s: &[u8]) -> Self {
         fn filter_whitespace(s: &[u8]) -> Cow<[u8]> {
             if s.iter().copied().any(|b| b.is_ascii_whitespace()) {
                 Cow::Owned(
@@ -1340,6 +1315,7 @@ impl<'a> HexString<'a> {
                 Cow::Borrowed(s)
             }
         }
+
         fn append_zero_if_odd(s: &[u8]) -> Cow<[u8]> {
             if s.len() % 2 == 0 {
                 Cow::Borrowed(s)
@@ -1350,17 +1326,26 @@ impl<'a> HexString<'a> {
                 Cow::Owned(v)
             }
         }
-        let s = self.0.as_ref();
+
         debug_assert!(s.starts_with(b"<") && s.ends_with(b">"));
         let s = &s[1..s.len() - 1];
         let s = filter_whitespace(s);
         let s = append_zero_if_odd(&s);
-        hex::decode(s).map_err(|_| ObjectValueError::InvalidHexString)
+        let s = hex::decode(s).unwrap();
+        Self(s.into())
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+
+    pub fn as_str(&self) -> &str {
+        std::str::from_utf8(self.as_bytes()).unwrap()
     }
 }
 
-impl<'a> From<HexString<'a>> for Object<'a> {
-    fn from(value: HexString<'a>) -> Self {
+impl<'a> From<HexString> for Object<'a> {
+    fn from(value: HexString) -> Self {
         Self::HexString(value)
     }
 }

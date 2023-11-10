@@ -30,7 +30,7 @@ fn literal_string_decoded(exp: &str, buf: impl AsRef<[u8]>) {
 #[test_case(b"\x90\x1f\xa0", b"<90 1F\tA>"; "ignore whitespace")]
 fn hex_string_decoded(exp: impl AsRef<[u8]>, buf: impl AsRef<[u8]>) {
     assert_eq!(
-        HexString::new(buf.as_ref()).decoded().unwrap(),
+        HexString::new(buf.as_ref()).as_bytes(),
         exp.as_ref()
     );
 }
@@ -47,7 +47,7 @@ fn dict_get_int(exp: Result<i32, ObjectValueError>, id: &str) {
 }
 
 #[test_case(Object::LiteralString("(foo)".into()), "(foo)"; "literal string")]
-#[test_case(Object::HexString("<901FA3>".into()), "<901FA3>"; "hex string")]
+#[test_case(Object::HexString(HexString::new(b"<901FA3>")), "<901FA3>"; "hex string")]
 #[test_case(Object::Name("foo".into()), "/foo"; "name")]
 fn buf_or_str_to_object<'a>(exp: Object<'a>, s: &'a str) {
     assert_eq!(exp, Object::from(s.as_bytes()));
