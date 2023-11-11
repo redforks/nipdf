@@ -538,7 +538,10 @@ fn open_encrypt(
         "unsupported security handler (SubFilter)"
     );
     assert_eq!(Algorithm::AES, encrypt.algorithm()?);
-    assert_eq!(StandardHandlerRevion::V3, encrypt.revison()?);
+    assert!(
+        StandardHandlerRevion::V3 == encrypt.revison()?
+            || StandardHandlerRevion::V2 == encrypt.revison()?
+    );
 
     let owner_hash = encrypt.owner_password_hash()?;
     let user_hash = encrypt.user_password_hash()?;
