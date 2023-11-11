@@ -87,3 +87,8 @@ fn image_mask_cal_rgb_index_color_space() {
     // image stream processed with Predicator
     assert_ron_snapshot!(&decode_file_page("sample_files/filters/predictor.pdf", 0).unwrap())
 }
+
+#[test]
+fn decrypt_aes_revion3() {
+    assert_ron_snapshot!(&decode_file_page("../../../5176.CFF.pdf", 0).unwrap());
+}
