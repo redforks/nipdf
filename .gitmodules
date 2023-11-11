@@ -1,0 +1,3 @@
+[submodule "nipdf/pdf.js"]
+	path = nipdf/pdf.js
+	url = https://github.com/mozilla/pdf.js
