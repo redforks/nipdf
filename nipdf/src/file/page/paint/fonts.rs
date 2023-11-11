@@ -623,9 +623,10 @@ impl<'c> FontCache<'c> {
         let flags = desc.flags()?;
         if flags & FontDescriptorFlags::SERIF == FontDescriptorFlags::SERIF {
             families.push(Family::Serif);
-        }
-        if flags & FontDescriptorFlags::FIXED_PITCH == FontDescriptorFlags::FIXED_PITCH {
+        } else if flags & FontDescriptorFlags::FIXED_PITCH == FontDescriptorFlags::FIXED_PITCH {
             families.push(Family::Monospace);
+        } else {
+            families.push(Family::SansSerif);
         }
         let style = if flags & FontDescriptorFlags::ITALIC == FontDescriptorFlags::ITALIC {
             fontdb::Style::Italic
