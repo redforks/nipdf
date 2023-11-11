@@ -14,7 +14,7 @@ use winnow::{
 /// The first token is the version of the Type 1 specification that the font
 /// conforms to. The second token is the font name. The third token is the
 /// font version.
-fn parse_header(input: &mut &[u8]) -> PResult<Header> {
+fn header(input: &mut &[u8]) -> PResult<Header> {
     preceded(tag(b"%!"), alt((b"PS-AdobeFont", b"AdobeFont"))).parse_next(input)?;
     let spec_ver = delimited('-', take_till1(':'), b": ").parse_next(input)?;
     let font_name = take_till1(' ').parse_next(input)?;
@@ -28,7 +28,7 @@ fn parse_header(input: &mut &[u8]) -> PResult<Header> {
     })
 }
 
-fn parse_comment(input: &mut &[u8]) -> PResult<()> {
+fn comment(input: &mut &[u8]) -> PResult<()> {
     preceded(
         tag(b"%"),
         take_till0(|c| c == b'\n' || c == b'\r' || c == b'\x0c'),
