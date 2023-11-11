@@ -1,4 +1,7 @@
+use std::str::from_utf8_unchecked;
+
 use super::Header;
+use either::Either;
 use winnow::{
     ascii::line_ending,
     combinator::{alt, delimited, preceded},
@@ -40,6 +43,30 @@ fn comment(input: &mut &[u8]) -> PResult<()> {
 /// 0x0, 0x9, 0x0A, 0x0C, 0x0D, 0x20
 fn is_white_space(b: u8) -> bool {
     b == b' ' || b == b'\t' || b == b'\n' || b == b'\x0C' || b == b'\r' || b == b'\0'
+}
+
+fn int_or_float(input: &mut &[u8]) -> PResult<Either<i32, f32>> {
+    let buf =
+        take_while(1.., ('0'..='9', 'a'..='z', 'A'..='Z', '.', '-', '+', '#')).parse_next(input)?;
+    if let Some(pos) = memchr::memchr(b'#', buf) {
+        let (radix, num) = buf.split_at(pos);
+        let radix = unsafe { from_utf8_unchecked(radix).parse::<u32>().unwrap() };
+        let num = unsafe { i32::from_str_radix(from_utf8_unchecked(&num[1..]), radix).unwrap() };
+        return Ok(Either::Left(num));
+    }
+
+    if memchr::memchr3(b'.', b'e', b'E', buf).is_some() {
+        Ok(Either::Right(unsafe {
+            from_utf8_unchecked(buf).parse::<f32>().unwrap()
+        }))
+    } else {
+        Ok(unsafe {
+            let s = from_utf8_unchecked(buf);
+            s.parse::<i32>()
+                .ok()
+                .map_or_else(|| Either::Right(s.parse::<f32>().unwrap()), Either::Left)
+        })
+    }
 }
 
 #[cfg(test)]
