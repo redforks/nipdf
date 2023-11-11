@@ -139,7 +139,7 @@ fn dump_object(path: &str, id: NonZeroU32) -> AnyResult<()> {
     Ok(())
 }
 
-fn main() -> AnyResult<()> {
+fn main() {
     env_logger::init();
 
     match cli().get_matches().subcommand() {
@@ -174,4 +174,5 @@ fn main() -> AnyResult<()> {
         ),
         _ => todo!(),
     }
+    .unwrap();
 }
