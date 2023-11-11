@@ -22,3 +22,11 @@ fn test_parse_header() {
         parse_header.parse(buf).unwrap()
     );
 }
+
+#[test]
+fn test_parse_comment() {
+    (parse_comment, b'\n').parse(b"% comment\n").unwrap();
+    (parse_comment, b'\n').parse(b"%\n").unwrap();
+    (parse_comment, b"\r\n").parse(b"%\r\n").unwrap();
+    (parse_comment, b'\x0c').parse(b"% end with form feed\x0c").unwrap();
+}
