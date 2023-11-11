@@ -221,7 +221,8 @@ impl From<FontStretch> for fontdb::Stretch {
     }
 }
 
-#[pdf_object("FontDescriptor")]
+// Some file not specify Type field, although according to PDF32000_2008.pdf Type field is required
+#[pdf_object(Some("FontDescriptor"))]
 pub trait FontDescriptorDictTrait {
     #[typ("Name")]
     fn font_name(&self) -> &'b str;
