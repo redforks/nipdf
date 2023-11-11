@@ -246,13 +246,13 @@ fn decrypt_string<'a>(key: &[u8], id: ObjectId, mut o: Object<'a>) -> Object<'a>
             s.update(|s| decrypt_with_key(&self.0, s));
         }
 
-        fn dict<'a>(&self, d: &mut Dictionary<'a>) {
+        fn dict(&self, d: &mut Dictionary<'_>) {
             for (_, v) in d.iter_mut() {
                 self.decrypt(v);
             }
         }
 
-        fn decrypt<'a>(&self, o: &mut Object<'a>) {
+        fn decrypt(&self, o: &mut Object<'_>) {
             match o {
                 Object::HexString(ref mut s) => self.hex_string(s),
                 Object::LiteralString(ref mut s) => self.literal_string(s),
@@ -514,7 +514,7 @@ fn open_encrypt(
     buf: &[u8],
     xref: &XRefTable,
     trailer: Option<&Dictionary>,
-    owner_password: &str,
+    _owner_password: &str,
     user_password: &str,
 ) -> AnyResult<Option<Box<[u8]>>> {
     let Some(trailer) = trailer else {
@@ -537,7 +537,7 @@ fn open_encrypt(
         encrypt.sub_filter()?.is_none(),
         "unsupported security handler (SubFilter)"
     );
-    assert_eq!(Algorithm::AES, encrypt.algorithm()?);
+    assert_eq!(Algorithm::Aes, encrypt.algorithm()?);
     assert!(
         StandardHandlerRevion::V3 == encrypt.revison()?
             || StandardHandlerRevion::V2 == encrypt.revison()?
@@ -582,7 +582,7 @@ impl File {
         let encrypt_key = open_encrypt(
             &buf,
             &xref,
-            trailers.iter().filter(|d| d.contains_key("Encrypt")).next(),
+            trailers.iter().find(|d| d.contains_key("Encrypt")),
             owner_password,
             user_password,
         )?;

@@ -18,7 +18,6 @@ use image::{DynamicImage, GrayImage, Luma, RgbImage, Rgba, RgbaImage};
 use jpeg_decoder::PixelFormat;
 use log::error;
 use nipdf_macro::pdf_object;
-use num::complex::ComplexFloat;
 use once_cell::unsync::Lazy;
 use smallvec::SmallVec;
 use std::{
@@ -568,7 +567,7 @@ impl<'a> Stream<'a> {
         let mut raw: Cow<'a, [u8]> = self.raw(resolver)?.into();
         if let Some(key) = resolver.encript_key() {
             let mut buf = raw.into_owned();
-            decrypt(&key, self.2, &mut buf);
+            decrypt(key, self.2, &mut buf);
             raw = buf.into();
         }
 

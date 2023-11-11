@@ -704,7 +704,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
             }
 
             // Text Showing Operations
-            Operation::ShowText(text) => self.show_text(&text.to_bytes().unwrap()),
+            Operation::ShowText(text) => self.show_text(text.to_bytes().unwrap()),
             Operation::ShowTexts(texts) => self.show_texts(&texts),
 
             // Color Operations
@@ -1364,7 +1364,7 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
     fn show_texts(&mut self, texts: &[TextStringOrNumber]) {
         for t in texts {
             match t {
-                TextStringOrNumber::TextString(s) => self.show_text(&s.to_bytes().unwrap()),
+                TextStringOrNumber::TextString(s) => self.show_text(s.to_bytes().unwrap()),
                 TextStringOrNumber::Number(n) => {
                     self.text_object_mut().move_right(*n);
                 }

@@ -1,8 +1,6 @@
-use anyhow::Result as AnyResult;
 use arc4::Arc4;
 use md5::{Digest, Md5};
 use nipdf_macro::{pdf_object, TryFromIntObject};
-use ouroboros::self_referencing;
 
 use crate::object::ObjectId;
 
@@ -10,8 +8,8 @@ use crate::object::ObjectId;
 pub enum Algorithm {
     #[default]
     Undocument = 0,
-    AES = 1,
-    AESV2 = 2,
+    Aes = 1,
+    AesV2 = 2,
     Unpublished = 3,
     DefinedInDoc = 4,
 }
@@ -67,7 +65,7 @@ const PADDING: [u8; 32] = [
 /// If the password is shorter than 32 bytes, it is padded with bytes
 /// [28 BF 4E 5E 4E 75 8A 41 64 00 4E 56 FF FA 01 08 2E 2E 00 B6 D0 68 3E 80 2F 0C A9 FE 64 53 69 7A]
 fn pad_trunc_password(s: &[u8]) -> [u8; 32] {
-    let mut iter = s.into_iter().copied().chain(PADDING.into_iter()).take(32);
+    let mut iter = s.iter().copied().chain(PADDING).take(32);
     std::array::from_fn(|_| iter.next().unwrap())
 }
 
@@ -82,10 +80,10 @@ pub fn calc_encrypt_key(
 ) -> Box<[u8]> {
     let user_password = pad_trunc_password(user_password);
     let mut md5 = Md5::new();
-    md5.update(&user_password);
-    md5.update(&owner_hash);
-    md5.update(&permission_flags.to_le_bytes());
-    md5.update(&doc_id);
+    md5.update(user_password);
+    md5.update(owner_hash);
+    md5.update(permission_flags.to_le_bytes());
+    md5.update(doc_id);
     // md5.update(&[0xff, 0xff, 0xff, 0xff]);
     let mut hash = md5.finalize();
     let n = key_length / 8;
@@ -121,8 +119,8 @@ fn calc_user_hash(
         r
     } else {
         let mut md5 = Md5::new();
-        md5.update(&PADDING);
-        md5.update(&doc_id);
+        md5.update(PADDING);
+        md5.update(doc_id);
         let mut hash = md5.finalize();
         let mut tmp = key.to_vec();
         for i in 0..=19 {
@@ -132,7 +130,7 @@ fn calc_user_hash(
             Arc4::with_key(&tmp[..]).encrypt(&mut hash);
         }
         let mut r = [0u8; 32];
-        (&mut r[..16]).copy_from_slice(&hash[..]);
+        r[..16].copy_from_slice(&hash[..]);
         r
     }
 }
@@ -169,7 +167,7 @@ fn calc_rc4_key(
     key_length: usize,
     owner_password: &[u8],
 ) -> Box<[u8]> {
-    let mut owner_password = Md5::digest(&pad_trunc_password(owner_password));
+    let mut owner_password = Md5::digest(pad_trunc_password(owner_password));
     if revion > StandardHandlerRevion::V2 {
         for _ in 0..50 {
             owner_password = Md5::digest(&owner_password[..]);
@@ -194,14 +192,13 @@ fn authorize_owner(
         Arc4::with_key(rc4_key).encrypt(&mut decrypt);
     } else {
         let mut tmp = rc4_key.to_vec();
-        for i in 19..=0 {
+        for i in (0..19).rev() {
             for (t, k) in tmp.as_mut_slice().iter_mut().zip(&rc4_key[..]) {
                 *t = *k ^ i;
             }
             Arc4::with_key(&tmp[..]).encrypt(&mut decrypt);
         }
     }
-    dbg!(&decrypt);
 
     authorize_user(
         revion,
