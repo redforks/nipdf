@@ -1044,14 +1044,10 @@ impl<'a> Object<'a> {
             Object::Number(f) => RcDoc::as_string(PrettyNumber(*f)),
             Object::LiteralString(s) => RcDoc::text(
                 from_utf8(&s.0)
-                    .map(|s| s.to_owned())
+                    .map(|s| format!("({})", s))
                     .unwrap_or_else(|_| format!("0x{}", hex::encode(s.as_bytes()))),
             ),
-            Object::HexString(s) => RcDoc::text(
-                from_utf8(&s.0)
-                    .map(|s| s.to_owned())
-                    .unwrap_or_else(|_| format!("0X{}", hex::encode(s.as_bytes()))),
-            ),
+            Object::HexString(s) => RcDoc::text(format!("<{}>", hex::encode(s.as_bytes()))),
             Object::Name(n) => name_to_doc(n),
             Object::Dictionary(d) => dict_to_doc(d),
             Object::Array(a) => RcDoc::text("[")
