@@ -104,4 +104,14 @@ endstream
     assert!(input.len() > 4);
     let stream = o.right().unwrap();
     assert!(stream.1.starts_with(b"blah"));
+
+    // endstream precede with cr
+    let buf = b"<</Length 4>>
+stream
+1234\rendstream
+";
+    let (input, o) = parse_object_and_stream(buf).unwrap();
+    assert_eq!(input, b"\n");
+    let stream = o.right().unwrap();
+    assert_eq!(b"1234", stream.1);
 }
