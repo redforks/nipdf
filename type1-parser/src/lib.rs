@@ -1,14 +1,9 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+mod inner;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+#[derive(Debug, PartialEq)]
+pub struct Header {
+    /// Type font specification version
+    pub spec_ver: String,
+    pub font_name: String,
+    pub font_ver: String,
 }
