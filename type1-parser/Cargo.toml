@@ -10,6 +10,7 @@ winnow = { version = "0.5", features = ["simd"] }
 log = "0.4"
 either = "1.9.0"
 memchr = "2.5.0"
+ascii85 = "0.2.1"
 
 [dev-dependencies]
 test-case = "3.1.0"

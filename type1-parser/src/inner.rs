@@ -197,9 +197,26 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
         terminated(bytes, b'>').parse_next(input)
     }
 
+    fn ascii85(input: &mut &[u8]) -> PResult<Box<[u8]>> {
+        delimited(
+            b'~',
+            take_while(0.., |c| c != b'~').map(|v: &[u8]| {
+                ascii85::decode(unsafe { from_utf8_unchecked(v) })
+                    .unwrap()
+                    .into()
+            }),
+            b"~>",
+        )
+        .parse_next(input)
+    }
+
+    fn hex_or_85(input: &mut &[u8]) -> PResult<Box<[u8]>> {
+        alt((hex_string, ascii85)).parse_next(input)
+    }
+
     dispatch!(any;
         b'(' => literal_string,
-        b'<' => hex_string,
+        b'<' => hex_or_85,
         _ => fail,
     )
     .parse_next(input)

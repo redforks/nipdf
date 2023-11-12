@@ -87,6 +87,8 @@ new line)" => &b"foo\nnew line"[..])]
 #[test_case(b"<a1 >" => &b"\xa1"[..]; "ignore whitespace b")]
 #[test_case(b"< a1 >" => &b"\xa1"[..]; "ignore whitespace c")]
 #[test_case(b"<a1 b>" => &b"\xa1\xb0"[..]; "odd hex length")]
+#[test_case(b"<~~>" => &b""[..]; "empty ascii85")]
+#[test_case(b"<~!!!!!~>" => &b"\0\0\0\0"[..]; "0 ascii85")]
 fn test_string(buf: &[u8]) -> Vec<u8> {
     string.parse(buf).unwrap().to_vec()
 }
