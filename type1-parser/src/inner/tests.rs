@@ -123,3 +123,8 @@ fn test_literal_name<'a>(buf: &'a str, remains: &'a str) -> &'a str {
     )
     .unwrap()
 }
+
+#[test]
+fn test_immediately_evaluated_name() {
+    immediately_evaluated_name.parse(b"//").unwrap();
+}

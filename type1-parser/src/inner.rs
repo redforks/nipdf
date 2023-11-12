@@ -245,7 +245,11 @@ fn executable_name<'a>(input: &mut &'a [u8]) -> PResult<&'a [u8]> {
 }
 
 fn literal_name<'a>(input: &mut &'a [u8]) -> PResult<&'a [u8]> {
-    preceded(tag(b"/"), take_while(.., is_regular_char)).parse_next(input)
+    preceded('/', take_while(.., is_regular_char)).parse_next(input)
+}
+
+fn immediately_evaluated_name(input: &mut &[u8]) -> PResult<()> {
+    b"//".value(()).parse_next(input)
 }
 
 #[cfg(test)]
