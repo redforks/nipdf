@@ -3,7 +3,7 @@ use std::{iter::once, str::from_utf8_unchecked};
 use super::Header;
 use either::Either;
 use winnow::{
-    ascii::{escaped, escaped_transform, line_ending},
+    ascii::{escaped, escaped_transform, hex_digit1, line_ending},
     combinator::{alt, delimited, dispatch, fail, fold_repeat, opt, preceded, terminated},
     stream::{AsChar, Stream},
     token::{any, none_of, tag, take_till0, take_till1, take_while},
@@ -44,6 +44,11 @@ fn comment(input: &mut &[u8]) -> PResult<()> {
 /// 0x0, 0x9, 0x0A, 0x0C, 0x0D, 0x20
 fn is_white_space(b: u8) -> bool {
     b == b' ' || b == b'\t' || b == b'\n' || b == b'\x0C' || b == b'\r' || b == b'\0'
+}
+
+/// Parses one or more white space bytes
+fn white_space<'a>(input: &mut &'a [u8]) -> PResult<&'a [u8]> {
+    take_while(1.., is_white_space).parse_next(input)
 }
 
 /// Matches '\n', '\r', '\r\n'
@@ -161,8 +166,35 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
         terminated(build_string, b')').parse_next(input)
     }
 
+    /// String encoded in hex wrapped in "<>", e.g. <0123456789ABCDEF>
+    /// White space are ignored, if last byte is missing, it is assumed to be 0.
     fn hex_string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
-        todo!()
+        let bytes = fold_repeat(
+            0..,
+            alt((hex_digit1, white_space)),
+            Vec::new,
+            |mut bytes, frag| {
+                if !is_white_space(frag[0]) {
+                    bytes.extend(frag)
+                }
+                bytes
+            },
+        )
+        .map(|mut s| {
+            if s.len() % 2 != 0 {
+                s.push(b'0');
+            }
+
+            let mut bytes = Vec::with_capacity(s.len() / 2);
+            for i in (0..s.len()).step_by(2) {
+                bytes.push(
+                    u8::from_str_radix(unsafe { from_utf8_unchecked(&s[i..i + 2]) }, 16).unwrap(),
+                );
+            }
+            bytes.into()
+        });
+
+        terminated(bytes, b'>').parse_next(input)
     }
 
     dispatch!(any;

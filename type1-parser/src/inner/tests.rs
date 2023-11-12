@@ -79,6 +79,14 @@ new line)" => &b"foo\nnew line"[..])]
 #[test_case(br"(\10a)" => &b"\x08a"[..]; "oct esc 2 bytes long")]
 #[test_case(br"(\700a)" => &b"\xc0a"[..]; "oct exceed 255 trunc extra bits")]
 #[test_case(b"(\\\r)" => &b""[..]; "escaped newline")]
+#[test_case(b"<>" => &b""[..]; "empty hex")]
+#[test_case(b"<a1>" => &b"\xa1"[..]; "hex one")]
+#[test_case(b"<a1b2>" => &b"\xa1\xb2"[..]; "hex two")]
+#[test_case(b"< \t>" => &b""[..]; "ignore whitespace")]
+#[test_case(b"< a1>" => &b"\xa1"[..]; "ignore whitespace a")]
+#[test_case(b"<a1 >" => &b"\xa1"[..]; "ignore whitespace b")]
+#[test_case(b"< a1 >" => &b"\xa1"[..]; "ignore whitespace c")]
+#[test_case(b"<a1 b>" => &b"\xa1\xb0"[..]; "odd hex length")]
 fn test_string(buf: &[u8]) -> Vec<u8> {
     string.parse(buf).unwrap().to_vec()
 }
