@@ -1,4 +1,7 @@
-use std::{iter::once, str::from_utf8_unchecked};
+use std::{
+    iter::once,
+    str::{from_utf8, from_utf8_unchecked},
+};
 
 use super::Header;
 use either::Either;
@@ -67,6 +70,10 @@ fn is_regular_char(b: u8) -> bool {
 /// Parses one or more white space bytes
 fn white_space<'a>(input: &mut &'a [u8]) -> PResult<&'a [u8]> {
     take_while(1.., is_white_space).parse_next(input)
+}
+
+fn white_space_or_comment(input: &mut &[u8]) -> PResult<()> {
+    alt((white_space.value(()), comment)).parse_next(input)
 }
 
 /// Matches '\n', '\r', '\r\n'
@@ -240,16 +247,32 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
     .parse_next(input)
 }
 
-fn executable_name<'a>(input: &mut &'a [u8]) -> PResult<&'a [u8]> {
-    take_while(1.., is_regular_char).parse_next(input)
+fn executable_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str> {
+    take_while(1.., is_regular_char)
+        .map(|s| from_utf8(s).unwrap())
+        .parse_next(input)
 }
 
-fn literal_name<'a>(input: &mut &'a [u8]) -> PResult<&'a [u8]> {
-    preceded('/', take_while(.., is_regular_char)).parse_next(input)
+fn literal_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str> {
+    preceded(
+        '/',
+        take_while(0.., is_regular_char).map(|s| from_utf8(s).unwrap()),
+    )
+    .parse_next(input)
 }
 
 fn immediately_evaluated_name(input: &mut &[u8]) -> PResult<()> {
     b"//".value(()).parse_next(input)
+}
+
+enum Object<'a> {
+    Integer(i32),
+    Real(f32),
+    String(Box<[u8]>),
+    Array(Vec<Object<'a>>),
+    ExecutableName(&'a str),
+    LiteralName(&'a str),
+    ImmediatelyEvaluatedName,
 }
 
 #[cfg(test)]

@@ -101,13 +101,10 @@ fn test_string(buf: &[u8]) -> Vec<u8> {
 #[test_case("a1\t", "\t" => "a1")]
 #[test_case("a1(", "(" => "a1")]
 fn test_executable_name<'a>(buf: &'a str, remains: &'a str) -> &'a str {
-    from_utf8(
-        (executable_name, remains.as_bytes())
-            .parse(buf.as_bytes())
-            .unwrap()
-            .0,
-    )
-    .unwrap()
+    (executable_name, remains.as_bytes())
+        .parse(buf.as_bytes())
+        .unwrap()
+        .0
 }
 
 #[test_case("/(", "(" => ""; "empty")]
@@ -115,13 +112,10 @@ fn test_executable_name<'a>(buf: &'a str, remains: &'a str) -> &'a str {
 #[test_case("/Name/Second", "/Second" => "Name"; "with second")]
 #[test_case("/Name(foo)Bar", "(foo)Bar" => "Name"; "with string")]
 fn test_literal_name<'a>(buf: &'a str, remains: &'a str) -> &'a str {
-    from_utf8(
-        (literal_name, remains.as_bytes())
-            .parse(buf.as_bytes())
-            .unwrap()
-            .0,
-    )
-    .unwrap()
+    (literal_name, remains.as_bytes())
+        .parse(buf.as_bytes())
+        .unwrap()
+        .0
 }
 
 #[test]
