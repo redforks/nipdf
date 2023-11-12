@@ -282,6 +282,7 @@ enum Object<'a> {
     Real(f32),
     String(Box<[u8]>),
     Array(Array<'a>),
+    ExecutableArray(Array<'a>),
     ExecutableName(&'a str),
     LiteralName(&'a str),
     ImmediatelyEvaluatedName,
@@ -337,12 +338,17 @@ fn array<'a>(input: &mut &'a [u8]) -> PResult<Array<'a>> {
     delimited(b'[', repeat(0.., ws_prefixed(object)), ws_prefixed(b']')).parse_next(input)
 }
 
+fn executable_array<'a>(input: &mut &'a [u8]) -> PResult<Array<'a>> {
+    delimited(b'{', repeat(0.., ws_prefixed(object)), ws_prefixed(b'}')).parse_next(input)
+}
+
 fn object<'a>(input: &mut &'a [u8]) -> PResult<Object<'a>> {
     alt((
         int_or_float.map(|v| v.either(Object::Integer, Object::Real)),
         string.map(Object::String),
         literal_name.map(Object::LiteralName),
         array.map(Object::Array),
+        executable_array.map(Object::ExecutableArray),
         executable_name.map(Object::ExecutableName),
         immediately_evaluated_name.map(|_| Object::ImmediatelyEvaluatedName),
     ))
