@@ -7,7 +7,8 @@ use super::Header;
 use either::Either;
 use winnow::{
     ascii::{escaped, escaped_transform, hex_digit1, line_ending},
-    combinator::{alt, delimited, dispatch, fail, fold_repeat, opt, preceded, terminated},
+    combinator::{alt, delimited, dispatch, fail, fold_repeat, opt, preceded, repeat, terminated},
+    error::ContextError,
     stream::{AsChar, Stream},
     token::{any, none_of, tag, take_till0, take_till1, take_while},
     PResult, Parser,
@@ -74,6 +75,14 @@ fn white_space<'a>(input: &mut &'a [u8]) -> PResult<&'a [u8]> {
 
 fn white_space_or_comment(input: &mut &[u8]) -> PResult<()> {
     alt((white_space.value(()), comment)).parse_next(input)
+}
+
+/// Ignore preceded whitespace and/or comments
+fn ws_prefixed<'a, P, O>(p: P) -> impl Parser<&'a [u8], O, ContextError>
+where
+    P: Parser<&'a [u8], O, ContextError>,
+{
+    preceded(repeat::<_, _, (), _, _>(.., white_space_or_comment), p)
 }
 
 /// Matches '\n', '\r', '\r\n'
@@ -265,14 +274,79 @@ fn immediately_evaluated_name(input: &mut &[u8]) -> PResult<()> {
     b"//".value(()).parse_next(input)
 }
 
+type Array<'a> = Vec<Object<'a>>;
+
+#[derive(Debug, PartialEq)]
 enum Object<'a> {
     Integer(i32),
     Real(f32),
     String(Box<[u8]>),
-    Array(Vec<Object<'a>>),
+    Array(Array<'a>),
     ExecutableName(&'a str),
     LiteralName(&'a str),
     ImmediatelyEvaluatedName,
+}
+
+impl From<i32> for Object<'static> {
+    fn from(v: i32) -> Self {
+        Object::Integer(v)
+    }
+}
+
+impl From<f32> for Object<'static> {
+    fn from(v: f32) -> Self {
+        Object::Real(v)
+    }
+}
+
+impl<const N: usize> From<[u8; N]> for Object<'static> {
+    fn from(v: [u8; N]) -> Self {
+        Object::String(v.into())
+    }
+}
+
+impl From<Box<[u8]>> for Object<'static> {
+    fn from(v: Box<[u8]>) -> Self {
+        Object::String(v)
+    }
+}
+
+impl<'a> From<&'a str> for Object<'a> {
+    fn from(v: &'a str) -> Self {
+        Object::LiteralName(v)
+    }
+}
+
+impl<'a> From<Array<'a>> for Object<'a> {
+    fn from(v: Array<'a>) -> Self {
+        Object::Array(v)
+    }
+}
+
+/// Create Array from a list of values that implement Into<Object<'a>> trait
+macro_rules! array {
+    () => {
+        Array::new()
+    };
+    ($($e:expr),*) => {
+        vec![$(Into::<Object<'static>>::into($e)),*]
+    }
+}
+
+fn array<'a>(input: &mut &'a [u8]) -> PResult<Array<'a>> {
+    delimited(b'[', repeat(0.., ws_prefixed(object)), ws_prefixed(b']')).parse_next(input)
+}
+
+fn object<'a>(input: &mut &'a [u8]) -> PResult<Object<'a>> {
+    alt((
+        int_or_float.map(|v| v.either(Object::Integer, Object::Real)),
+        string.map(Object::String),
+        literal_name.map(Object::LiteralName),
+        array.map(Object::Array),
+        executable_name.map(Object::ExecutableName),
+        immediately_evaluated_name.map(|_| Object::ImmediatelyEvaluatedName),
+    ))
+    .parse_next(input)
 }
 
 #[cfg(test)]

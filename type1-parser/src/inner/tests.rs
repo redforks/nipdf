@@ -122,3 +122,10 @@ fn test_literal_name<'a>(buf: &'a str, remains: &'a str) -> &'a str {
 fn test_immediately_evaluated_name() {
     immediately_evaluated_name.parse(b"//").unwrap();
 }
+
+#[test_case("[]"=> array![]; "empty")]
+#[test_case("[ [ ] ]"=> array![array![]]; "nested empty")]
+#[test_case("[ 1 1.5 ($) /foo ]"=> array![1, 1.5, *b"$", "foo"]; "values")]
+fn test_array(buf: &str) -> Array {
+    array.parse(buf.as_bytes()).unwrap()
+}
