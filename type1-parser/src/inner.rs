@@ -46,6 +46,24 @@ fn is_white_space(b: u8) -> bool {
     b == b' ' || b == b'\t' || b == b'\n' || b == b'\x0C' || b == b'\r' || b == b'\0'
 }
 
+fn is_delimiter(b: u8) -> bool {
+    b == b'('
+        || b == b')'
+        || b == b'<'
+        || b == b'>'
+        || b == b'['
+        || b == b']'
+        || b == b'{'
+        || b == b'}'
+        || b == b'/'
+        || b == b'%'
+}
+
+/// not white space and delimiter
+fn is_regular_char(b: u8) -> bool {
+    !is_white_space(b) && !is_delimiter(b)
+}
+
 /// Parses one or more white space bytes
 fn white_space<'a>(input: &mut &'a [u8]) -> PResult<&'a [u8]> {
     take_while(1.., is_white_space).parse_next(input)
@@ -220,6 +238,10 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
         _ => fail,
     )
     .parse_next(input)
+}
+
+fn executable_name<'a>(input: &mut &'a [u8]) -> PResult<&'a [u8]> {
+    take_while(1.., is_regular_char).parse_next(input)
 }
 
 #[cfg(test)]

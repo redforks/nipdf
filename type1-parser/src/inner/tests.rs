@@ -1,3 +1,5 @@
+use std::str::from_utf8;
+
 use super::*;
 use either::{Left, Right};
 use test_case::test_case;
@@ -91,4 +93,19 @@ new line)" => &b"foo\nnew line"[..])]
 #[test_case(b"<~!!!!!~>" => &b"\0\0\0\0"[..]; "0 ascii85")]
 fn test_string(buf: &[u8]) -> Vec<u8> {
     string.parse(buf).unwrap().to_vec()
+}
+
+#[test_case("abc", "" => "abc")]
+#[test_case("$$", "" => "$$")]
+#[test_case("@pattern", "" => "@pattern")]
+#[test_case("a1\t", "\t" => "a1")]
+#[test_case("a1(", "(" => "a1")]
+fn test_executable_name<'a>(buf: &'a str, remains: &'a str) -> &'a str {
+    from_utf8(
+        (executable_name, remains.as_bytes())
+            .parse(buf.as_bytes())
+            .unwrap()
+            .0,
+    )
+    .unwrap()
 }
