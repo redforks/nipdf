@@ -109,3 +109,17 @@ fn test_executable_name<'a>(buf: &'a str, remains: &'a str) -> &'a str {
     )
     .unwrap()
 }
+
+#[test_case("/(", "(" => ""; "empty")]
+#[test_case("/Na$1 ", " " => "Na$1"; "with space")]
+#[test_case("/Name/Second", "/Second" => "Name"; "with second")]
+#[test_case("/Name(foo)Bar", "(foo)Bar" => "Name"; "with string")]
+fn test_literal_name<'a>(buf: &'a str, remains: &'a str) -> &'a str {
+    from_utf8(
+        (literal_name, remains.as_bytes())
+            .parse(buf.as_bytes())
+            .unwrap()
+            .0,
+    )
+    .unwrap()
+}
