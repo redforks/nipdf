@@ -35,6 +35,14 @@ fn test_parse_comment() {
         .unwrap();
 }
 
+#[test_case(b"\n", b"")]
+#[test_case(b"\nfoo", b"foo")]
+#[test_case(b"\r\n\n", b"\n")]
+#[test_case(b"\rfoo", b"foo")]
+fn parse_loose_line_ending(buf: &[u8], remains: &[u8]) {
+    (loose_line_ending, remains).parse(buf).unwrap();
+}
+
 #[test_case(b"1" => Left(1))]
 #[test_case(b"123" => Left(123))]
 #[test_case(b"-98" => Left(-98))]
@@ -56,4 +64,21 @@ fn test_parse_comment() {
 #[test_case(b"36#z" => Left(35))]
 fn test_int_or_float(buf: &[u8]) -> Either<i32, f32> {
     int_or_float.parse(buf).unwrap()
+}
+
+#[test_case(b"()" => &b""[..]; "empty")]
+#[test_case(b"(foo)" => &b"foo"[..])]
+#[test_case(b"(foo
+new line)" => &b"foo\nnew line"[..])]
+#[test_case(b"(&%*<()>)" => &b"&%*<()>"[..]; "nested empty and special symbols")]
+#[test_case(b"((a()))" => &b"(a())"[..]; "(a())")]
+#[test_case(b"((()b))" => &b"(()b)"[..]; "(()b)")]
+#[test_case(b"((a()b))" => &b"(a()b)"[..]; "(a()b)")]
+#[test_case(br"(\n\0234\r)" => &b"\n\x134\r"[..]; "escape")]
+#[test_case(br"(\0a)" => &b"\0a"[..]; "oct esc 1 byte long")]
+#[test_case(br"(\10a)" => &b"\x08a"[..]; "oct esc 2 bytes long")]
+#[test_case(br"(\700a)" => &b"\xc0a"[..]; "oct exceed 255 trunc extra bits")]
+#[test_case(b"(\\\r)" => &b""[..]; "escaped newline")]
+fn test_string(buf: &[u8]) -> Vec<u8> {
+    string.parse(buf).unwrap().to_vec()
 }

@@ -1,11 +1,12 @@
-use std::str::from_utf8_unchecked;
+use std::{iter::once, str::from_utf8_unchecked};
 
 use super::Header;
 use either::Either;
 use winnow::{
-    ascii::line_ending,
-    combinator::{alt, delimited, preceded},
-    token::{tag, take_till0, take_till1, take_while},
+    ascii::{escaped, escaped_transform, line_ending},
+    combinator::{alt, delimited, dispatch, fail, fold_repeat, opt, preceded, terminated},
+    stream::{AsChar, Stream},
+    token::{any, none_of, tag, take_till0, take_till1, take_while},
     PResult, Parser,
 };
 
@@ -45,6 +46,24 @@ fn is_white_space(b: u8) -> bool {
     b == b' ' || b == b'\t' || b == b'\n' || b == b'\x0C' || b == b'\r' || b == b'\0'
 }
 
+/// Matches '\n', '\r', '\r\n'
+fn loose_line_ending(input: &mut &[u8]) -> PResult<()> {
+    match input.get(0) {
+        Some(b'\n') => {
+            input.next_token();
+            Ok(())
+        }
+        Some(b'\r') => {
+            input.next_token();
+            if input.get(0) == Some(&b'\n') {
+                input.next_token();
+            }
+            Ok(())
+        }
+        _ => fail.parse_next(input),
+    }
+}
+
 fn int_or_float(input: &mut &[u8]) -> PResult<Either<i32, f32>> {
     let buf =
         take_while(1.., ('0'..='9', 'a'..='z', 'A'..='Z', '.', '-', '+', '#')).parse_next(input)?;
@@ -67,6 +86,91 @@ fn int_or_float(input: &mut &[u8]) -> PResult<Either<i32, f32>> {
                 .map_or_else(|| Either::Right(s.parse::<f32>().unwrap()), Either::Left)
         })
     }
+}
+
+fn string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
+    enum StringFragment<'a> {
+        Literal(&'a [u8]),
+        EscapedChar(u8),
+        EscapedNewLine,
+        Nested(Box<[u8]>),
+    }
+
+    fn literal_fragment<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>> {
+        let buf = take_till1((b'(', b')', b'\\')).parse_next(input)?;
+        Ok(StringFragment::Literal(buf))
+    }
+
+    fn escaped_char<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>> {
+        fn parse_oct_byte(input: &mut &[u8]) -> PResult<u8> {
+            let buf = take_while(1..=3, |c: u8| c.is_oct_digit()).parse_next(input)?;
+            Ok(unsafe { u16::from_str_radix(from_utf8_unchecked(buf), 8).unwrap() as u8 })
+        }
+
+        let c = preceded(
+            tag(b"\\"),
+            alt((
+                b'n'.value(b'\n'),
+                b'r'.value(b'\r'),
+                b't'.value(b'\t'),
+                b'b'.value(b'\x08'),
+                b'f'.value(b'\x0C'),
+                b'('.value(b'('),
+                b')'.value(b')'),
+                parse_oct_byte,
+            )),
+        )
+        .parse_next(input)?;
+        Ok(StringFragment::EscapedChar(c))
+    }
+
+    fn escaped_newline<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>> {
+        preceded(tag(b"\\"), loose_line_ending).parse_next(input)?;
+        Ok(StringFragment::EscapedNewLine)
+    }
+
+    fn build_string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
+        fold_repeat(0.., fragment, Vec::new, |mut r, frag| {
+            match frag {
+                StringFragment::Literal(s) => r.extend_from_slice(s),
+                StringFragment::EscapedChar(c) => r.push(c),
+                StringFragment::EscapedNewLine => (),
+                StringFragment::Nested(s) => {
+                    r.extend(once(b'(').chain(s.into_iter().copied()).chain(once(b')')))
+                }
+            }
+            r
+        })
+        .parse_next(input)
+        .map(|x| x.into())
+    }
+
+    fn nested<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>> {
+        let frag = delimited(b'(', opt(build_string), b')').parse_next(input)?;
+        Ok(StringFragment::Nested(match frag {
+            Some(s) => s,
+            None => (*b"").into(),
+        }))
+    }
+
+    fn fragment<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>> {
+        alt((literal_fragment, escaped_char, escaped_newline, nested)).parse_next(input)
+    }
+
+    fn literal_string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
+        terminated(build_string, b')').parse_next(input)
+    }
+
+    fn hex_string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
+        todo!()
+    }
+
+    dispatch!(any;
+        b'(' => literal_string,
+        b'<' => hex_string,
+        _ => fail,
+    )
+    .parse_next(input)
 }
 
 #[cfg(test)]
