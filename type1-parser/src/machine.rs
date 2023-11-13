@@ -270,6 +270,12 @@ fn system_dict() -> Dictionary {
         // any -> any any
         "dup" => |m| Ok(m.push(m.top()?.clone())),
 
+        // int array -> array
+        "array" => |m| {
+            let count = m.pop_int()?;
+            Ok(m.push(Array::with_capacity(count as usize)))
+        },
+
         // int dict -> dict
         "dict" => |m| {
             let count = m.pop_int()?;

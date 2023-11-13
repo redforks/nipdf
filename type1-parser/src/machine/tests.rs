@@ -91,3 +91,8 @@ fn test_end() {
         Dictionary::new(),
     ); 
 }
+
+#[test]
+fn test_array() {
+    assert_op("10 array", values![]); 
+}
