@@ -22,6 +22,17 @@ impl Assert for Vec<Box<dyn Assert>> {
     }
 }
 
+struct Stack(Vec<Value>);
+
+impl Assert for Stack {
+    fn assert(&self, m: &Machine) {
+        assert_eq!(m.stack.len(), self.0.len());
+        for (i, v) in self.0.iter().enumerate() {
+            assert_eq!(&m.stack[i], v);
+        }
+    }
+}
+
 macro_rules! asserts {
     ($($e:expr),*) => {
         vec![$(Box::new($e) as Box<dyn Assert>),*]
@@ -58,4 +69,9 @@ fn test_begin() {
         "0 0 dict begin",
         asserts![0, VariableStack(Dictionary::new())],
     );
+}
+
+#[test]
+fn test_dup() {
+    assert_op("2 dup", Stack(values![2, 2]));
 }

@@ -55,7 +55,7 @@ impl std::borrow::Borrow<str> for Key {
             // return a string that will never be a valid name to never select bool key using str
             Key::Bool(_) => "$$bool$$",
             Key::Integer(_) => "$$int$$",
-            Key::Name(n) => dbg!(n.as_str()),
+            Key::Name(n) => n.as_str(),
         }
     }
 }
@@ -135,7 +135,7 @@ impl From<OperatorFn> for Value {
 }
 
 /// Create Array from a list of values that implement Into<Object> trait
-macro_rules! array {
+macro_rules! values {
     () => {
         Array::new()
     };
@@ -143,7 +143,7 @@ macro_rules! array {
         vec![$(Into::<Value>::into($e)),*]
     }
 }
-pub(crate) use array;
+pub(crate) use values;
 
 macro_rules! tokens {
     () => {
@@ -205,6 +205,10 @@ impl Machine {
         self.stack.pop().ok_or(MachineError::StackUnderflow)
     }
 
+    fn top(&self) -> MachineResult<&Value> {
+        self.stack.last().ok_or(MachineError::StackUnderflow)
+    }
+
     fn pop_int(&mut self) -> MachineResult<i32> {
         self.pop().and_then(|v| match v {
             Value::Integer(i) => Ok(i),
@@ -238,6 +242,7 @@ macro_rules! var_dict {
 /// Create the `systemdict`
 fn system_dict() -> Dictionary {
     var_dict!(
+        "dup" => dup,
         "dict" => dict,
         "begin" => begin,
     )
@@ -284,6 +289,14 @@ impl VariableDictStack {
     fn top(&self) -> &Dictionary {
         self.stack.last().unwrap()
     }
+}
+
+// operand stack operators
+
+fn dup(m: &mut Machine) -> MachineResult<()> {
+    let v = m.top()?;
+    m.push(v.clone());
+    Ok(())
 }
 
 // dictionary operators
