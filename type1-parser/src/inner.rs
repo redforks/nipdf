@@ -1,16 +1,17 @@
 use std::{
     iter::once,
+    rc::Rc,
     str::{from_utf8, from_utf8_unchecked},
 };
 
 use super::Header;
 use either::Either;
 use winnow::{
-    ascii::{escaped, escaped_transform, hex_digit1, line_ending},
+    ascii::{hex_digit1, line_ending},
     combinator::{alt, delimited, dispatch, fail, fold_repeat, opt, preceded, repeat, terminated},
     error::ContextError,
     stream::{AsChar, Stream},
-    token::{any, none_of, tag, take_till0, take_till1, take_while},
+    token::{any, tag, take_till0, take_till1, take_while},
     PResult, Parser,
 };
 
@@ -270,57 +271,72 @@ fn literal_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str> {
     .parse_next(input)
 }
 
-fn immediately_evaluated_name(input: &mut &[u8]) -> PResult<()> {
-    b"//".value(()).parse_next(input)
-}
-
-type Array<'a> = Vec<Object<'a>>;
+type Array<'a> = Vec<Value<'a>>;
+type TokenArray<'a> = Vec<Token<'a>>;
 
 #[derive(Debug, PartialEq)]
-enum Object<'a> {
+enum Value<'a> {
     Integer(i32),
     Real(f32),
-    String(Box<[u8]>),
-    Array(Array<'a>),
-    ExecutableArray(Array<'a>),
-    ExecutableName(&'a str),
-    LiteralName(&'a str),
-    ImmediatelyEvaluatedName,
+    String(Rc<[u8]>),
+    Array(Rc<Array<'a>>),
+    Procedure(Rc<TokenArray<'a>>),
+    Name(&'a str),
 }
 
-impl From<i32> for Object<'static> {
+#[derive(Debug, PartialEq)]
+enum Token<'a> {
+    Literal(Value<'a>),
+    /// Name to lookup operation dict to get the actual operator
+    Name(&'a str),
+}
+
+impl From<i32> for Value<'static> {
     fn from(v: i32) -> Self {
-        Object::Integer(v)
+        Value::Integer(v)
     }
 }
 
-impl From<f32> for Object<'static> {
+impl From<f32> for Value<'static> {
     fn from(v: f32) -> Self {
-        Object::Real(v)
+        Value::Real(v)
     }
 }
 
-impl<const N: usize> From<[u8; N]> for Object<'static> {
+impl<const N: usize> From<[u8; N]> for Value<'static> {
     fn from(v: [u8; N]) -> Self {
-        Object::String(v.into())
+        let v: Box<[u8]> = v.into();
+        v.into()
     }
 }
 
-impl From<Box<[u8]>> for Object<'static> {
+impl From<Box<[u8]>> for Value<'static> {
     fn from(v: Box<[u8]>) -> Self {
-        Object::String(v)
+        Value::String(v.into())
     }
 }
 
-impl<'a> From<&'a str> for Object<'a> {
+impl<'a> From<&'a str> for Value<'a> {
     fn from(v: &'a str) -> Self {
-        Object::LiteralName(v)
+        Value::Name(v)
     }
 }
 
-impl<'a> From<Array<'a>> for Object<'a> {
+impl<'a> From<Array<'a>> for Value<'a> {
     fn from(v: Array<'a>) -> Self {
-        Object::Array(v)
+        Value::Array(v.into())
+    }
+}
+
+impl<'a> From<TokenArray<'a>> for Value<'a> {
+    fn from(v: TokenArray<'a>) -> Self {
+        Value::Procedure(v.into())
+    }
+}
+
+impl<'a, T: Into<Value<'a>>> From<T> for Token<'a> {
+    fn from(v: T) -> Self {
+        Token::Literal(v.into())
     }
 }
 
@@ -330,27 +346,32 @@ macro_rules! array {
         Array::new()
     };
     ($($e:expr),*) => {
-        vec![$(Into::<Object<'static>>::into($e)),*]
+        vec![$(Into::<Value<'static>>::into($e)),*]
     }
 }
 
-fn array<'a>(input: &mut &'a [u8]) -> PResult<Array<'a>> {
-    delimited(b'[', repeat(0.., ws_prefixed(object)), ws_prefixed(b']')).parse_next(input)
+macro_rules! tokens {
+    () => {
+        TokenArray::new()
+    };
+    ($($e:expr),*) => {
+        vec![$(Into::<Token<'_>>::into($e)),*]
+    }
 }
 
-fn executable_array<'a>(input: &mut &'a [u8]) -> PResult<Array<'a>> {
-    delimited(b'{', repeat(0.., ws_prefixed(object)), ws_prefixed(b'}')).parse_next(input)
+fn procedure<'a>(input: &mut &'a [u8]) -> PResult<TokenArray<'a>> {
+    delimited(b'{', repeat(0.., ws_prefixed(token)), ws_prefixed(b'}')).parse_next(input)
 }
 
-fn object<'a>(input: &mut &'a [u8]) -> PResult<Object<'a>> {
+fn token<'a>(input: &mut &'a [u8]) -> PResult<Token<'a>> {
     alt((
-        int_or_float.map(|v| v.either(Object::Integer, Object::Real)),
-        string.map(Object::String),
-        literal_name.map(Object::LiteralName),
-        array.map(Object::Array),
-        executable_array.map(Object::ExecutableArray),
-        executable_name.map(Object::ExecutableName),
-        immediately_evaluated_name.map(|_| Object::ImmediatelyEvaluatedName),
+        int_or_float.map(|v| Token::Literal(v.either(Value::Integer, Value::Real))),
+        string.map(|s| Value::String(s.into())).map(Token::Literal),
+        literal_name.map(Value::Name).map(Token::Literal),
+        procedure
+            .map(|a| Value::Procedure(a.into()))
+            .map(Token::Literal),
+        executable_name.map(Token::Name),
     ))
     .parse_next(input)
 }
