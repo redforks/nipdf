@@ -275,7 +275,8 @@ fn literal_name(input: &mut &[u8]) -> PResult<String> {
 type Array = Vec<Value>;
 type TokenArray = Vec<Token>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Educe)]
+#[educe(Debug, PartialEq)]
 enum Value {
     Null,
     Bool(bool),
@@ -286,6 +287,11 @@ enum Value {
     Dictionary(Rc<Dictionary>),
     Procedure(Rc<TokenArray>),
     Name(String),
+    BuiltInOp(
+        #[educe(Debug(ignore))]
+        #[educe(PartialEq(ignore))]
+        Box<dyn Operator>,
+    ),
 }
 
 /// Type of `Dictionary` key. PostScript allows any value to be key except null,
@@ -405,6 +411,88 @@ fn token(input: &mut &[u8]) -> PResult<Token> {
 
 fn name_token(s: impl Into<String>) -> Token {
     Token::Name(s.into())
+}
+
+#[derive(Debug, PartialEq, thiserror::Error)]
+enum MachineError {
+    #[error("stack underflow")]
+    StackUnderflow,
+    #[error("stack overflow")]
+    StackOverflow,
+    #[error("type check error")]
+    TypeCheck,
+    #[error("undefined")]
+    Undefined,
+    #[error("unimplemented")]
+    Unimplemented,
+}
+
+type MachineResult<T> = Result<T, MachineError>;
+
+/// PostScript machine to execute operations.
+struct Machine {
+    variable_stack: VariableDictStack,
+}
+
+/// PostScript operator doing operations on the machine.
+trait Operator {
+    fn exec(&self, machine: &mut Machine) -> MachineResult<()>;
+}
+
+type VariableDict = HashMap<String, Value>;
+
+struct VariableDictStack {
+    stack: Vec<VariableDict>,
+}
+
+/// Create the `systemdict`
+fn system_dict() -> VariableDict {
+    let mut dict = VariableDict::new();
+    // dict.insert("systemdict".to_owned(), Value::Dictionary(Rc::new(dict)));
+    dict
+}
+
+/// Create the `globaldict`
+fn global_dict() -> VariableDict {
+    let mut dict = VariableDict::new();
+    // dict.insert("globaldict".to_owned(), Value::Dictionary(Rc::new(dict)));
+    dict
+}
+
+/// Create the `userdict`
+fn user_dict() -> VariableDict {
+    let mut dict = VariableDict::new();
+    // dict.insert("userdict".to_owned(), Value::Dictionary(Rc::new(dict)));
+    dict
+}
+
+impl VariableDictStack {
+    fn new() -> Self {
+        Self {
+            stack: vec![system_dict(), global_dict(), user_dict()],
+        }
+    }
+
+    fn get_op(&self, name: &str) -> MachineResult<&Value> {
+        self.stack
+            .iter()
+            .find_map(|dict| dict.get(name))
+            .ok_or(MachineError::Undefined)
+    }
+
+    fn push(&mut self, dict: VariableDict) {
+        self.stack.push(dict);
+    }
+
+    fn push_new(&mut self) {
+        self.stack.push(VariableDict::new());
+    }
+
+    /// Pop the top dictionary from the stack. The first 3 dictionaries can not
+    /// be popped, returns None if trying to pop them.
+    fn pop(&mut self) -> Option<VariableDict> {
+        (self.stack.len() > 3).then(|| self.stack.pop()).flatten()
+    }
 }
 
 #[cfg(test)]
