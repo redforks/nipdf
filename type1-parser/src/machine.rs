@@ -1,5 +1,5 @@
 use educe::Educe;
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, hash::Hasher, rc::Rc};
 
 pub type Array = Vec<Value>;
 pub type TokenArray = Vec<Token>;
@@ -7,7 +7,7 @@ pub type TokenArray = Vec<Token>;
 type OperatorFn = fn(&mut Machine) -> MachineResult<()>;
 
 #[derive(Educe)]
-#[educe(Debug, PartialEq)]
+#[educe(Debug, PartialEq, Clone)]
 pub enum Value {
     Null,
     Bool(bool),
@@ -30,22 +30,37 @@ pub enum Value {
 /// But I don't want to implement that, so I will only allow `Bool`, `Integer`,
 /// and `Name`, and convert `String` to `Name` when used as key.
 /// We'll figure it out if encounter other types, it should not happen in practice.
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Key {
     Bool(bool),
     Integer(i32),
     Name(String),
 }
 
-#[derive(Debug, PartialEq, Educe)]
-#[educe(Deref, Default(new))]
-pub struct Dictionary(HashMap<Key, Value>);
-
-impl Dictionary {
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self(HashMap::with_capacity(capacity))
+/// Custom Hash to allow &str to lookup Dictionary,
+/// Key implement Borrow<str> trait, hash(str) should equal to hash(Key::Name)
+impl std::hash::Hash for Key {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Self::Bool(b) => b.hash(state),
+            Self::Integer(i) => i.hash(state),
+            Self::Name(n) => n.hash(state),
+        }
     }
 }
+
+impl std::borrow::Borrow<str> for Key {
+    fn borrow(&self) -> &str {
+        match self {
+            // return a string that will never be a valid name to never select bool key using str
+            Key::Bool(_) => "$$bool$$",
+            Key::Integer(_) => "$$int$$",
+            Key::Name(n) => dbg!(n.as_str()),
+        }
+    }
+}
+
+pub type Dictionary = HashMap<Key, Value>;
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
@@ -125,7 +140,7 @@ macro_rules! array {
         Array::new()
     };
     ($($e:expr),*) => {
-        vec![$(Into::<Value<'static>>::into($e)),*]
+        vec![$(Into::<Value>::into($e)),*]
     }
 }
 pub(crate) use array;
@@ -197,42 +212,47 @@ impl Machine {
         })
     }
 
+    fn pop_dict(&mut self) -> MachineResult<Rc<Dictionary>> {
+        self.pop().and_then(|v| match v {
+            Value::Dictionary(d) => Ok(d),
+            _ => Err(MachineError::TypeCheck),
+        })
+    }
+
     fn push(&mut self, v: impl Into<Value>) {
         self.stack.push(v.into());
     }
 }
 
-type VariableDict = HashMap<String, Value>;
-
 struct VariableDictStack {
-    stack: Vec<VariableDict>,
+    stack: Vec<Dictionary>,
 }
 
 macro_rules! var_dict {
     ($($k:expr => $v:expr),* $(,)?) => {{
         use std::iter::{Iterator, IntoIterator};
-        Iterator::collect(IntoIterator::into_iter([$(($k.to_owned(), $v.into()),)*]))
+        Iterator::collect(IntoIterator::into_iter([$((Key::Name($k.to_owned()), Value::BuiltInOp($v)),)*]))
     }};
 }
 
 /// Create the `systemdict`
-fn system_dict() -> VariableDict {
-    let f: OperatorFn = dict;
+fn system_dict() -> Dictionary {
     var_dict!(
-        "dict" => f
+        "dict" => dict,
+        "begin" => begin,
     )
 }
 
 /// Create the `globaldict`
-fn global_dict() -> VariableDict {
-    let mut dict = VariableDict::new();
+fn global_dict() -> Dictionary {
+    let mut dict = Dictionary::new();
     // dict.insert("globaldict".to_owned(), Value::Dictionary(Rc::new(dict)));
     dict
 }
 
 /// Create the `userdict`
-fn user_dict() -> VariableDict {
-    let mut dict = VariableDict::new();
+fn user_dict() -> Dictionary {
+    let mut dict = Dictionary::new();
     // dict.insert("userdict".to_owned(), Value::Dictionary(Rc::new(dict)));
     dict
 }
@@ -251,18 +271,18 @@ impl VariableDictStack {
             .ok_or(MachineError::Undefined)
     }
 
-    fn push(&mut self, dict: VariableDict) {
+    fn push(&mut self, dict: Dictionary) {
         self.stack.push(dict);
-    }
-
-    fn push_new(&mut self) {
-        self.stack.push(VariableDict::new());
     }
 
     /// Pop the top dictionary from the stack. The first 3 dictionaries can not
     /// be popped, returns None if trying to pop them.
-    fn pop(&mut self) -> Option<VariableDict> {
+    fn pop(&mut self) -> Option<Dictionary> {
         (self.stack.len() > 3).then(|| self.stack.pop()).flatten()
+    }
+
+    fn top(&self) -> &Dictionary {
+        self.stack.last().unwrap()
     }
 }
 
@@ -272,6 +292,13 @@ impl VariableDictStack {
 fn dict(m: &mut Machine) -> MachineResult<()> {
     let count = m.pop_int()?;
     m.push(Dictionary::with_capacity(count as usize));
+    Ok(())
+}
+
+/// dict begin -> -
+fn begin(m: &mut Machine) -> MachineResult<()> {
+    let dict = m.pop_dict()?;
+    m.variable_stack.push(Rc::into_inner(dict).unwrap());
     Ok(())
 }
 
