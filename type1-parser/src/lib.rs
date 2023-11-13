@@ -1,4 +1,5 @@
-mod inner;
+pub(crate) mod machine;
+pub(crate) mod parser;
 
 #[derive(Debug, PartialEq)]
 pub struct Header {
