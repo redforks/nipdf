@@ -88,14 +88,14 @@ where
 
 /// Matches '\n', '\r', '\r\n'
 fn loose_line_ending(input: &mut &[u8]) -> PResult<()> {
-    match input.get(0) {
+    match input.first() {
         Some(b'\n') => {
             input.next_token();
             Ok(())
         }
         Some(b'\r') => {
             input.next_token();
-            if input.get(0) == Some(&b'\n') {
+            if input.first() == Some(&b'\n') {
                 input.next_token();
             }
             Ok(())
@@ -176,7 +176,7 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
                 StringFragment::EscapedChar(c) => r.push(c),
                 StringFragment::EscapedNewLine => (),
                 StringFragment::Nested(s) => {
-                    r.extend(once(b'(').chain(s.into_iter().copied()).chain(once(b')')))
+                    r.extend(once(b'(').chain(s.iter().copied()).chain(once(b')')))
                 }
             }
             r
@@ -257,90 +257,90 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
     .parse_next(input)
 }
 
-fn executable_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str> {
+fn executable_name(input: &mut &[u8]) -> PResult<String> {
     take_while(1.., is_regular_char)
-        .map(|s| from_utf8(s).unwrap())
+        .map(|s| from_utf8(s).unwrap().to_owned())
         .parse_next(input)
 }
 
-fn literal_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str> {
+fn literal_name(input: &mut &[u8]) -> PResult<String> {
     preceded(
         '/',
-        take_while(0.., is_regular_char).map(|s| from_utf8(s).unwrap()),
+        take_while(0.., is_regular_char).map(|s| from_utf8(s).unwrap().to_owned()),
     )
     .parse_next(input)
 }
 
-type Array<'a> = Vec<Value<'a>>;
-type TokenArray<'a> = Vec<Token<'a>>;
+type Array = Vec<Value>;
+type TokenArray = Vec<Token>;
 
 #[derive(Debug, PartialEq)]
-enum Value<'a> {
+enum Value {
     Integer(i32),
     Real(f32),
     String(Rc<[u8]>),
-    Array(Rc<Array<'a>>),
-    Procedure(Rc<TokenArray<'a>>),
-    Name(&'a str),
+    Array(Rc<Array>),
+    Procedure(Rc<TokenArray>),
+    Name(String),
 }
 
 #[derive(Debug, PartialEq)]
-enum Token<'a> {
-    Literal(Value<'a>),
+enum Token {
+    Literal(Value),
     /// Name to lookup operation dict to get the actual operator
-    Name(&'a str),
+    Name(String),
 }
 
-impl From<i32> for Value<'static> {
+impl From<i32> for Value {
     fn from(v: i32) -> Self {
         Value::Integer(v)
     }
 }
 
-impl From<f32> for Value<'static> {
+impl From<f32> for Value {
     fn from(v: f32) -> Self {
         Value::Real(v)
     }
 }
 
-impl<const N: usize> From<[u8; N]> for Value<'static> {
+impl<const N: usize> From<[u8; N]> for Value {
     fn from(v: [u8; N]) -> Self {
         let v: Box<[u8]> = v.into();
         v.into()
     }
 }
 
-impl From<Box<[u8]>> for Value<'static> {
+impl From<Box<[u8]>> for Value {
     fn from(v: Box<[u8]>) -> Self {
         Value::String(v.into())
     }
 }
 
-impl<'a> From<&'a str> for Value<'a> {
-    fn from(v: &'a str) -> Self {
-        Value::Name(v)
+impl From<&str> for Value {
+    fn from(v: &str) -> Self {
+        Value::Name(v.to_owned())
     }
 }
 
-impl<'a> From<Array<'a>> for Value<'a> {
-    fn from(v: Array<'a>) -> Self {
+impl From<Array> for Value {
+    fn from(v: Array) -> Self {
         Value::Array(v.into())
     }
 }
 
-impl<'a> From<TokenArray<'a>> for Value<'a> {
-    fn from(v: TokenArray<'a>) -> Self {
+impl From<TokenArray> for Value {
+    fn from(v: TokenArray) -> Self {
         Value::Procedure(v.into())
     }
 }
 
-impl<'a, T: Into<Value<'a>>> From<T> for Token<'a> {
+impl<T: Into<Value>> From<T> for Token {
     fn from(v: T) -> Self {
         Token::Literal(v.into())
     }
 }
 
-/// Create Array from a list of values that implement Into<Object<'a>> trait
+/// Create Array from a list of values that implement Into<Object> trait
 macro_rules! array {
     () => {
         Array::new()
@@ -355,15 +355,15 @@ macro_rules! tokens {
         TokenArray::new()
     };
     ($($e:expr),*) => {
-        vec![$(Into::<Token<'_>>::into($e)),*]
+        vec![$(Into::<Token>::into($e)),*]
     }
 }
 
-fn procedure<'a>(input: &mut &'a [u8]) -> PResult<TokenArray<'a>> {
+fn procedure(input: &mut &[u8]) -> PResult<TokenArray> {
     delimited(b'{', repeat(0.., ws_prefixed(token)), ws_prefixed(b'}')).parse_next(input)
 }
 
-fn token<'a>(input: &mut &'a [u8]) -> PResult<Token<'a>> {
+fn token(input: &mut &[u8]) -> PResult<Token> {
     alt((
         int_or_float.map(|v| Token::Literal(v.either(Value::Integer, Value::Real))),
         string.map(|s| Value::String(s.into())).map(Token::Literal),
