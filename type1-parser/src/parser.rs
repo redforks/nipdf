@@ -9,9 +9,9 @@ use std::{
 use winnow::{
     ascii::{hex_digit1, line_ending},
     combinator::{alt, delimited, dispatch, fail, fold_repeat, opt, preceded, repeat, terminated},
-    error::ContextError,
+    error::{ContextError, ErrMode},
     stream::{AsChar, Stream},
-    token::{any, tag, take_till0, take_till1, take_while},
+    token::{any, one_of, tag, take_till0, take_till1, take_while},
     PResult, Parser,
 };
 
@@ -79,7 +79,7 @@ fn white_space_or_comment(input: &mut &[u8]) -> PResult<()> {
 }
 
 /// Ignore preceded whitespace and/or comments
-fn ws_prefixed<'a, P, O>(p: P) -> impl Parser<&'a [u8], O, ContextError>
+pub fn ws_prefixed<'a, P, O>(p: P) -> impl Parser<&'a [u8], O, ContextError>
 where
     P: Parser<&'a [u8], O, ContextError>,
 {
@@ -105,25 +105,42 @@ fn loose_line_ending(input: &mut &[u8]) -> PResult<()> {
 }
 
 fn int_or_float(input: &mut &[u8]) -> PResult<Either<i32, f32>> {
-    let buf =
-        take_while(1.., ('0'..='9', 'a'..='z', 'A'..='Z', '.', '-', '+', '#')).parse_next(input)?;
+    let buf = (
+        one_of(('0'..='9', '+', '-')),
+        take_while(0.., ('0'..='9', 'a'..='z', 'A'..='Z', '.', '-', '+', '#')),
+    )
+        .recognize()
+        .parse_next(input)?;
     if let Some(pos) = memchr::memchr(b'#', buf) {
         let (radix, num) = buf.split_at(pos);
-        let radix = unsafe { from_utf8_unchecked(radix).parse::<u32>().unwrap() };
-        let num = unsafe { i32::from_str_radix(from_utf8_unchecked(&num[1..]), radix).unwrap() };
+        let radix = unsafe {
+            from_utf8_unchecked(radix)
+                .parse::<u32>()
+                .map_err(|_| ErrMode::Backtrack(ContextError::new()))?
+        };
+        let num = unsafe {
+            i32::from_str_radix(from_utf8_unchecked(&num[1..]), radix)
+                .map_err(|_| ErrMode::Backtrack(ContextError::new()))?
+        };
         return Ok(Either::Left(num));
     }
 
     if memchr::memchr3(b'.', b'e', b'E', buf).is_some() {
         Ok(Either::Right(unsafe {
-            from_utf8_unchecked(buf).parse::<f32>().unwrap()
+            from_utf8_unchecked(buf)
+                .parse::<f32>()
+                .map_err(|_| ErrMode::Backtrack(ContextError::new()))?
         }))
     } else {
         Ok(unsafe {
             let s = from_utf8_unchecked(buf);
-            s.parse::<i32>()
-                .ok()
-                .map_or_else(|| Either::Right(s.parse::<f32>().unwrap()), Either::Left)
+            match s.parse::<i32>() {
+                Ok(v) => Either::Left(v),
+                Err(_) => Either::Right(
+                    s.parse::<f32>()
+                        .map_err(|_| ErrMode::Backtrack(ContextError::new()))?,
+                ),
+            }
         })
     }
 }
@@ -281,7 +298,7 @@ fn special_name(input: &mut &[u8]) -> PResult<String> {
     Ok(unsafe { from_utf8_unchecked(buf).to_owned() })
 }
 
-fn token(input: &mut &[u8]) -> PResult<Token> {
+pub fn token(input: &mut &[u8]) -> PResult<Token> {
     alt((
         int_or_float.map(|v| Token::Literal(v.either(Value::Integer, Value::Real))),
         string.map(|s| Value::String(s.into())).map(Token::Literal),
@@ -293,10 +310,6 @@ fn token(input: &mut &[u8]) -> PResult<Token> {
         executable_name.map(Token::Name),
     ))
     .parse_next(input)
-}
-
-fn name_token(s: impl Into<String>) -> Token {
-    Token::Name(s.into())
 }
 
 #[cfg(test)]
