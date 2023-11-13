@@ -245,6 +245,7 @@ fn system_dict() -> Dictionary {
         "dup" => dup,
         "dict" => dict,
         "begin" => begin,
+        "readonly" => no_op,
     )
 }
 
@@ -289,6 +290,10 @@ impl VariableDictStack {
     fn top(&self) -> &Dictionary {
         self.stack.last().unwrap()
     }
+}
+
+fn no_op(_: &mut Machine) -> MachineResult<()> {
+    Ok(())
 }
 
 // operand stack operators
