@@ -1,11 +1,12 @@
+use super::Header;
+use educe::Educe;
+use either::Either;
 use std::{
+    collections::HashMap,
     iter::once,
     rc::Rc,
     str::{from_utf8, from_utf8_unchecked},
 };
-
-use super::Header;
-use either::Either;
 use winnow::{
     ascii::{hex_digit1, line_ending},
     combinator::{alt, delimited, dispatch, fail, fold_repeat, opt, preceded, repeat, terminated},
@@ -282,9 +283,26 @@ enum Value {
     Real(f32),
     String(Rc<[u8]>),
     Array(Rc<Array>),
+    Dictionary(Rc<Dictionary>),
     Procedure(Rc<TokenArray>),
     Name(String),
 }
+
+/// Type of `Dictionary` key. PostScript allows any value to be key except null,
+/// String will convert to Name when used as key.
+/// But I don't want to implement that, so I will only allow `Bool`, `Integer`,
+/// and `Name`, and convert `String` to `Name` when used as key.
+/// We'll figure it out if encounter other types, it should not happen in practice.
+#[derive(Debug, PartialEq, Eq, Hash)]
+enum Key {
+    Bool(bool),
+    Integer(i32),
+    Name(String),
+}
+
+#[derive(Debug, PartialEq, Educe)]
+#[educe(Deref)]
+struct Dictionary(HashMap<Key, Value>);
 
 #[derive(Debug, PartialEq)]
 enum Token {
