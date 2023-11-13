@@ -270,6 +270,7 @@ fn system_dict() -> Dictionary {
         "dup" => dup,
         "dict" => dict,
         "begin" => begin,
+        "end" => end,
         "def" => def,
         "currentdict" => current_dict,
         "readonly" => no_op,
@@ -348,6 +349,12 @@ fn dict(m: &mut Machine) -> MachineResult<()> {
 fn begin(m: &mut Machine) -> MachineResult<()> {
     let dict = m.pop_dict()?;
     m.variable_stack.push(dict);
+    Ok(())
+}
+
+/// - end -> -
+fn end(m: &mut Machine) -> MachineResult<()> {
+    m.variable_stack.pop();
     Ok(())
 }
 

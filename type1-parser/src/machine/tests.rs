@@ -83,3 +83,11 @@ fn test_def() {
         Dictionary::from_iter([(Key::Name("foo".to_owned()), 10.into())]),
     );
 }
+
+#[test]
+fn test_end() {
+    assert_op(
+        "0 dict begin 1 dict begin /foo 10 def end currentdict",
+        Dictionary::new(),
+    ); 
+}
