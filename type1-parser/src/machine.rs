@@ -1,5 +1,10 @@
 use educe::Educe;
-use std::{collections::HashMap, hash::Hasher, rc::Rc};
+use std::{
+    cell::{Ref, RefCell, RefMut},
+    collections::HashMap,
+    hash::Hasher,
+    rc::Rc,
+};
 
 pub type Array = Vec<Value>;
 pub type TokenArray = Vec<Token>;
@@ -15,7 +20,7 @@ pub enum Value {
     Real(f32),
     String(Rc<[u8]>),
     Array(Rc<Array>),
-    Dictionary(Rc<Dictionary>),
+    Dictionary(Rc<RefCell<Dictionary>>),
     Procedure(Rc<TokenArray>),
     Name(String),
     BuiltInOp(
@@ -35,6 +40,20 @@ pub enum Key {
     Bool(bool),
     Integer(i32),
     Name(String),
+}
+
+impl TryFrom<Value> for Key {
+    type Error = MachineError;
+
+    fn try_from(v: Value) -> Result<Self, Self::Error> {
+        match v {
+            Value::Bool(b) => Ok(Self::Bool(b)),
+            Value::Integer(i) => Ok(Self::Integer(i)),
+            Value::Name(n) => Ok(Self::Name(n)),
+            Value::String(s) => Ok(Self::Name(String::from_utf8(s.to_vec()).unwrap())),
+            _ => Err(MachineError::TypeCheck),
+        }
+    }
 }
 
 /// Custom Hash to allow &str to lookup Dictionary,
@@ -118,7 +137,13 @@ impl From<TokenArray> for Value {
 
 impl From<Dictionary> for Value {
     fn from(v: Dictionary) -> Self {
-        Value::Dictionary(v.into())
+        Value::Dictionary(Rc::new(RefCell::new(v)))
+    }
+}
+
+impl From<Rc<RefCell<Dictionary>>> for Value {
+    fn from(v: Rc<RefCell<Dictionary>>) -> Self {
+        Value::Dictionary(v)
     }
 }
 
@@ -216,7 +241,7 @@ impl Machine {
         })
     }
 
-    fn pop_dict(&mut self) -> MachineResult<Rc<Dictionary>> {
+    fn pop_dict(&mut self) -> MachineResult<Rc<RefCell<Dictionary>>> {
         self.pop().and_then(|v| match v {
             Value::Dictionary(d) => Ok(d),
             _ => Err(MachineError::TypeCheck),
@@ -229,7 +254,7 @@ impl Machine {
 }
 
 struct VariableDictStack {
-    stack: Vec<Dictionary>,
+    stack: Vec<Rc<RefCell<Dictionary>>>,
 }
 
 macro_rules! var_dict {
@@ -245,6 +270,8 @@ fn system_dict() -> Dictionary {
         "dup" => dup,
         "dict" => dict,
         "begin" => begin,
+        "def" => def,
+        "currentdict" => current_dict,
         "readonly" => no_op,
     )
 }
@@ -266,29 +293,33 @@ fn user_dict() -> Dictionary {
 impl VariableDictStack {
     fn new() -> Self {
         Self {
-            stack: vec![system_dict(), global_dict(), user_dict()],
+            stack: vec![
+                Rc::new(RefCell::new(system_dict())),
+                Rc::new(RefCell::new(global_dict())),
+                Rc::new(RefCell::new(user_dict())),
+            ],
         }
     }
 
-    fn get(&self, name: &str) -> MachineResult<&Value> {
+    fn get(&self, name: &str) -> MachineResult<Value> {
         self.stack
             .iter()
-            .find_map(|dict| dict.get(name))
+            .find_map(|dict| dict.borrow().get(name).map(|v| v.clone()))
             .ok_or(MachineError::Undefined)
     }
 
-    fn push(&mut self, dict: Dictionary) {
+    fn push(&mut self, dict: Rc<RefCell<Dictionary>>) {
         self.stack.push(dict);
     }
 
     /// Pop the top dictionary from the stack. The first 3 dictionaries can not
     /// be popped, returns None if trying to pop them.
-    fn pop(&mut self) -> Option<Dictionary> {
+    fn pop(&mut self) -> Option<Rc<RefCell<Dictionary>>> {
         (self.stack.len() > 3).then(|| self.stack.pop()).flatten()
     }
 
-    fn top(&self) -> &Dictionary {
-        self.stack.last().unwrap()
+    fn top(&self) -> Rc<RefCell<Dictionary>> {
+        self.stack.last().unwrap().clone()
     }
 }
 
@@ -316,7 +347,22 @@ fn dict(m: &mut Machine) -> MachineResult<()> {
 /// dict begin -> -
 fn begin(m: &mut Machine) -> MachineResult<()> {
     let dict = m.pop_dict()?;
-    m.variable_stack.push(Rc::into_inner(dict).unwrap());
+    m.variable_stack.push(dict);
+    Ok(())
+}
+
+/// key value -> - Set key-value to current directory.
+fn def(m: &mut Machine) -> MachineResult<()> {
+    let value = m.pop()?;
+    let key = m.pop()?;
+    let dict = m.variable_stack.top();
+    dict.borrow_mut().insert(key.try_into()?, value);
+    Ok(())
+}
+
+fn current_dict(m: &mut Machine) -> MachineResult<()> {
+    let dict = m.variable_stack.top();
+    m.push(dict.clone());
     Ok(())
 }
 

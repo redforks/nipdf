@@ -45,7 +45,7 @@ struct VariableStack(Dictionary);
 
 impl Assert for VariableStack {
     fn assert(&self, m: &Machine) {
-        assert_eq!(m.variable_stack.top(), &self.0);
+        assert_eq!(&*m.variable_stack.top().borrow(), &self.0);
     }
 }
 
@@ -74,4 +74,12 @@ fn test_begin() {
 #[test]
 fn test_dup() {
     assert_op("2 dup", Stack(values![2, 2]));
+}
+
+#[test]
+fn test_def() {
+    assert_op(
+        "10 dict begin /foo 10 def currentdict",
+        Dictionary::from_iter([(Key::Name("foo".to_owned()), 10.into())]),
+    );
 }
