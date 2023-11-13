@@ -267,13 +267,45 @@ macro_rules! var_dict {
 /// Create the `systemdict`
 fn system_dict() -> Dictionary {
     var_dict!(
-        "dup" => dup,
-        "dict" => dict,
-        "begin" => begin,
-        "end" => end,
-        "def" => def,
-        "currentdict" => current_dict,
-        "readonly" => no_op,
+        // any -> any any
+        "dup" => |m| Ok(m.push(m.top()?.clone())),
+
+        // int dict -> dict
+        "dict" => |m| {
+            let count = m.pop_int()?;
+            Ok(m.push(Dictionary::with_capacity(count as usize)))
+        },
+
+        // dict begin -> -
+        "begin" => |m| {
+            let dict = m.pop_dict()?;
+            m.variable_stack.push(dict);
+            Ok(())
+        },
+
+        // - end -> -
+        "end" => |m| {
+            m.variable_stack.pop();
+            Ok(())
+        },
+
+        // key value -> - Set key-value to current directory.
+        "def" => |m| {
+            let value = m.pop()?;
+            let key = m.pop()?;
+            let dict = m.variable_stack.top();
+            dict.borrow_mut().insert(key.try_into()?, value);
+            Ok(())
+        },
+
+        // push current variable stack to operand stack
+        "currentdict" => |m| {
+            let dict = m.variable_stack.top();
+            m.push(dict.clone());
+            Ok(())
+        },
+
+        "readonly" => |_| Ok(()),
     )
 }
 
@@ -322,55 +354,6 @@ impl VariableDictStack {
     fn top(&self) -> Rc<RefCell<Dictionary>> {
         self.stack.last().unwrap().clone()
     }
-}
-
-fn no_op(_: &mut Machine) -> MachineResult<()> {
-    Ok(())
-}
-
-// operand stack operators
-
-fn dup(m: &mut Machine) -> MachineResult<()> {
-    let v = m.top()?;
-    m.push(v.clone());
-    Ok(())
-}
-
-// dictionary operators
-
-/// int dict -> dict
-fn dict(m: &mut Machine) -> MachineResult<()> {
-    let count = m.pop_int()?;
-    m.push(Dictionary::with_capacity(count as usize));
-    Ok(())
-}
-
-/// dict begin -> -
-fn begin(m: &mut Machine) -> MachineResult<()> {
-    let dict = m.pop_dict()?;
-    m.variable_stack.push(dict);
-    Ok(())
-}
-
-/// - end -> -
-fn end(m: &mut Machine) -> MachineResult<()> {
-    m.variable_stack.pop();
-    Ok(())
-}
-
-/// key value -> - Set key-value to current directory.
-fn def(m: &mut Machine) -> MachineResult<()> {
-    let value = m.pop()?;
-    let key = m.pop()?;
-    let dict = m.variable_stack.top();
-    dict.borrow_mut().insert(key.try_into()?, value);
-    Ok(())
-}
-
-fn current_dict(m: &mut Machine) -> MachineResult<()> {
-    let dict = m.variable_stack.top();
-    m.push(dict.clone());
-    Ok(())
 }
 
 #[cfg(test)]
