@@ -118,7 +118,7 @@ fn test_literal_name<'a>(buf: &'a str, remains: &'a str) -> String {
 
 #[test_case("{}"=> tokens![]; "empty")]
 #[test_case("{ { } }"=> tokens![tokens![]]; "nested empty")]
-#[test_case("{ 1 1.5 ($) /foo }"=> tokens![1, 1.5, *b"$", "foo"]; "values")]
+#[test_case("{ 1 1.5 ($) [/foo] }"=> tokens![1, 1.5, *b"$", name_token("["), "foo", name_token("]")]; "values")]
 fn test_procedure(buf: &str) -> TokenArray {
     procedure.parse(buf.as_bytes()).unwrap()
 }

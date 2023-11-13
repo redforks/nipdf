@@ -276,6 +276,8 @@ type TokenArray = Vec<Token>;
 
 #[derive(Debug, PartialEq)]
 enum Value {
+    Null,
+    Bool(bool),
     Integer(i32),
     Real(f32),
     String(Rc<[u8]>),
@@ -363,17 +365,28 @@ fn procedure(input: &mut &[u8]) -> PResult<TokenArray> {
     delimited(b'{', repeat(0.., ws_prefixed(token)), ws_prefixed(b'}')).parse_next(input)
 }
 
+/// Parses '[', ']', '<<', '>>' and convert them to String.
+fn special_name(input: &mut &[u8]) -> PResult<String> {
+    let buf = take_while(1..=2, (b'[', ']', b"<<", b">>")).parse_next(input)?;
+    Ok(unsafe { from_utf8_unchecked(buf).to_owned() })
+}
+
 fn token(input: &mut &[u8]) -> PResult<Token> {
     alt((
         int_or_float.map(|v| Token::Literal(v.either(Value::Integer, Value::Real))),
         string.map(|s| Value::String(s.into())).map(Token::Literal),
         literal_name.map(Value::Name).map(Token::Literal),
+        special_name.map(Token::Name),
         procedure
             .map(|a| Value::Procedure(a.into()))
             .map(Token::Literal),
         executable_name.map(Token::Name),
     ))
     .parse_next(input)
+}
+
+fn name_token(s: impl Into<String>) -> Token {
+    Token::Name(s.into())
 }
 
 #[cfg(test)]
