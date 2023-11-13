@@ -4,6 +4,8 @@ use std::{collections::HashMap, rc::Rc};
 pub type Array = Vec<Value>;
 pub type TokenArray = Vec<Token>;
 
+type OperatorFn = fn(&mut Machine) -> MachineResult<()>;
+
 #[derive(Educe)]
 #[educe(Debug, PartialEq)]
 pub enum Value {
@@ -19,7 +21,7 @@ pub enum Value {
     BuiltInOp(
         #[educe(Debug(ignore))]
         #[educe(PartialEq(ignore))]
-        Box<dyn Operator>,
+        OperatorFn,
     ),
 }
 
@@ -36,14 +38,24 @@ pub enum Key {
 }
 
 #[derive(Debug, PartialEq, Educe)]
-#[educe(Deref)]
+#[educe(Deref, Default(new))]
 pub struct Dictionary(HashMap<Key, Value>);
+
+impl Dictionary {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(HashMap::with_capacity(capacity))
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
     Literal(Value),
     /// Name to lookup operation dict to get the actual operator
     Name(String),
+}
+
+pub fn name_token(s: impl Into<String>) -> Token {
+    Token::Name(s.into())
 }
 
 impl From<i32> for Value {
@@ -89,9 +101,21 @@ impl From<TokenArray> for Value {
     }
 }
 
+impl From<Dictionary> for Value {
+    fn from(v: Dictionary) -> Self {
+        Value::Dictionary(v.into())
+    }
+}
+
 impl<T: Into<Value>> From<T> for Token {
     fn from(v: T) -> Self {
         Token::Literal(v.into())
+    }
+}
+
+impl From<OperatorFn> for Value {
+    fn from(v: OperatorFn) -> Self {
+        Value::BuiltInOp(v)
     }
 }
 
@@ -135,11 +159,47 @@ pub type MachineResult<T> = Result<T, MachineError>;
 /// PostScript machine to execute operations.
 pub struct Machine {
     variable_stack: VariableDictStack,
+    stack: Vec<Value>,
 }
 
-/// PostScript operator doing operations on the machine.
-pub trait Operator {
-    fn exec(&self, machine: &mut Machine) -> MachineResult<()>;
+impl Machine {
+    pub fn new() -> Self {
+        Self {
+            variable_stack: VariableDictStack::new(),
+            stack: Vec::new(),
+        }
+    }
+
+    pub fn execute(&mut self, tokens: impl IntoIterator<Item = Token>) -> MachineResult<()> {
+        for token in tokens {
+            match token {
+                Token::Literal(v) => self.push(v),
+                Token::Name(name) => {
+                    let v = self.variable_stack.get(&name)?;
+                    match v {
+                        Value::BuiltInOp(op) => op(self)?,
+                        _ => unreachable!(),
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn pop(&mut self) -> MachineResult<Value> {
+        self.stack.pop().ok_or(MachineError::StackUnderflow)
+    }
+
+    fn pop_int(&mut self) -> MachineResult<i32> {
+        self.pop().and_then(|v| match v {
+            Value::Integer(i) => Ok(i),
+            _ => Err(MachineError::TypeCheck),
+        })
+    }
+
+    fn push(&mut self, v: impl Into<Value>) {
+        self.stack.push(v.into());
+    }
 }
 
 type VariableDict = HashMap<String, Value>;
@@ -148,11 +208,19 @@ struct VariableDictStack {
     stack: Vec<VariableDict>,
 }
 
+macro_rules! var_dict {
+    ($($k:expr => $v:expr),* $(,)?) => {{
+        use std::iter::{Iterator, IntoIterator};
+        Iterator::collect(IntoIterator::into_iter([$(($k.to_owned(), $v.into()),)*]))
+    }};
+}
+
 /// Create the `systemdict`
 fn system_dict() -> VariableDict {
-    let mut dict = VariableDict::new();
-    // dict.insert("systemdict".to_owned(), Value::Dictionary(Rc::new(dict)));
-    dict
+    let f: OperatorFn = dict;
+    var_dict!(
+        "dict" => f
+    )
 }
 
 /// Create the `globaldict`
@@ -176,7 +244,7 @@ impl VariableDictStack {
         }
     }
 
-    fn get_op(&self, name: &str) -> MachineResult<&Value> {
+    fn get(&self, name: &str) -> MachineResult<&Value> {
         self.stack
             .iter()
             .find_map(|dict| dict.get(name))
@@ -197,3 +265,15 @@ impl VariableDictStack {
         (self.stack.len() > 3).then(|| self.stack.pop()).flatten()
     }
 }
+
+// dictionary operators
+
+/// int dict -> dict
+fn dict(m: &mut Machine) -> MachineResult<()> {
+    let count = m.pop_int()?;
+    m.push(Dictionary::with_capacity(count as usize));
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests;
