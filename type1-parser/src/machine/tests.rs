@@ -53,8 +53,7 @@ fn assert_op(s: &str, exp_result: impl Assert) {
     let mut it = iterator(s.as_bytes(), ws_prefixed(token));
 
     let mut machine = Machine::new();
-    machine.execute(&mut it).unwrap();
-    assert_eq!(b"", it.finish().unwrap().0);
+    machine.execute(s.as_bytes()).unwrap();
     exp_result.assert(&machine);
 }
 

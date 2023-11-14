@@ -7,6 +7,7 @@ use std::{
     iter::repeat,
     rc::Rc,
 };
+use winnow::{combinator::iterator, Parser};
 
 mod decrypt;
 
@@ -230,6 +231,8 @@ macro_rules! tokens {
 }
 pub(crate) use tokens;
 
+use crate::parser::{token, white_space_or_comment, ws_prefixed};
+
 #[derive(Debug, PartialEq, thiserror::Error)]
 pub enum MachineError {
     #[error("stack underflow")]
@@ -262,11 +265,24 @@ impl Machine {
         }
     }
 
-    pub fn execute(&mut self, tokens: impl IntoIterator<Item = Token>) -> MachineResult<()> {
+    pub fn execute(&mut self, s: &[u8]) -> MachineResult<()> {
         // ensure that the system_dict readonly, it will panic if modify
         // system_dict
         self.variable_stack.lock_system_dict();
 
+        use winnow::combinator::repeat;
+        let mut it = iterator(s, ws_prefixed(token));
+        self.exec(&mut it).unwrap();
+        // assert that remains are all white space or comment
+        let remains = it.finish().unwrap().0;
+        repeat::<_, _, (), _, _>(.., white_space_or_comment)
+            .parse(remains)
+            .unwrap();
+
+        Ok(())
+    }
+
+    fn exec(&mut self, tokens: impl IntoIterator<Item = Token>) -> MachineResult<()> {
         for token in tokens {
             match token {
                 Token::Literal(v) => self.push(v),
@@ -283,7 +299,7 @@ impl Machine {
     }
 
     fn execute_procedure(&mut self, proc: Rc<TokenArray>) -> MachineResult<()> {
-        self.execute(proc.as_ref().iter().cloned())
+        self.exec(proc.as_ref().iter().cloned())
     }
 
     fn pop(&mut self) -> MachineResult<Value> {

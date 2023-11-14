@@ -74,7 +74,7 @@ fn white_space<'a>(input: &mut &'a [u8]) -> PResult<&'a [u8]> {
     take_while(1.., is_white_space).parse_next(input)
 }
 
-fn white_space_or_comment(input: &mut &[u8]) -> PResult<()> {
+pub fn white_space_or_comment(input: &mut &[u8]) -> PResult<()> {
     alt((white_space.value(()), comment)).parse_next(input)
 }
 
