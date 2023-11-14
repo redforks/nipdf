@@ -1,3 +1,4 @@
+use crate::parser::{token as token_parser, white_space_or_comment, ws_prefixed};
 use educe::Educe;
 use either::Either;
 use std::{
@@ -10,6 +11,7 @@ use std::{
 use winnow::{combinator::iterator, Parser};
 
 mod decrypt;
+use decrypt::{decrypt, EEXEC_KEY};
 
 pub type Array = Vec<Value>;
 pub type TokenArray = Vec<Token>;
@@ -231,8 +233,6 @@ macro_rules! tokens {
 }
 pub(crate) use tokens;
 
-use crate::parser::{token, white_space_or_comment, ws_prefixed};
-
 #[derive(Debug, PartialEq, thiserror::Error)]
 pub enum MachineError {
     #[error("stack underflow")]
@@ -280,9 +280,21 @@ impl Machine {
         self.variable_stack.lock_system_dict();
 
         use winnow::combinator::repeat;
-        let mut it = iterator(s, ws_prefixed(token));
-        for token in &mut it {
-            self.exec(token)?;
+        let mut remains;
+        let mut it = iterator(s, ws_prefixed(token_parser));
+        while let Some(token) = (&mut it).next() {
+            match self.exec(token)? {
+                ExecState::Ok => {}
+                ExecState::StartEExec => {
+                    let left = it.finish().unwrap().0;
+                    remains = decrypt(EEXEC_KEY, 4, left);
+                    it = iterator(&remains, ws_prefixed(token_parser));
+                }
+                ExecState::EndEExec => {
+                    let left = it.finish().unwrap().0;
+                    it = iterator(&s[(s.len() - left.len())..], ws_prefixed(token_parser));
+                }
+            }
         }
         // assert that remains are all white space or comment
         let remains = it.finish().unwrap().0;
@@ -293,8 +305,8 @@ impl Machine {
         Ok(())
     }
 
-    fn exec(&mut self, token: Token) -> MachineResult<()> {
-        let state = match token {
+    fn exec(&mut self, token: Token) -> MachineResult<ExecState> {
+        Ok(match token {
             Token::Literal(v) => {
                 self.push(v);
                 ExecState::Ok
@@ -306,13 +318,16 @@ impl Machine {
                     _ => unreachable!(),
                 }
             }
-        };
-        Ok(())
+        })
     }
 
     fn execute_procedure(&mut self, proc: Rc<TokenArray>) -> MachineResult<()> {
         for token in proc.as_ref().iter().cloned() {
-            self.exec(token)?
+            assert_eq!(
+                self.exec(token)?,
+                ExecState::Ok,
+                "procedure should not return StartEExec or EndEExec"
+            );
         }
         Ok(())
     }
