@@ -50,8 +50,6 @@ impl Assert for VariableStack {
 }
 
 fn assert_op(s: &str, exp_result: impl Assert) {
-    let mut it = iterator(s.as_bytes(), ws_prefixed(token));
-
     let mut machine = Machine::new();
     machine.execute(s.as_bytes()).unwrap();
     exp_result.assert(&machine);
@@ -123,4 +121,11 @@ fn test_for() {
 #[test]
 fn test_cleartomark() {
     assert_op("1 2 mark 3 4 5 cleartomark", Stack(values![1, 2]));
+}
+
+#[test]
+fn execute_on_file() {
+    let data = include_bytes!("./cmsy9.pfb");
+    let mut machine = Machine::new();
+    machine.execute(data).unwrap();
 }

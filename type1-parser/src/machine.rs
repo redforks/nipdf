@@ -37,6 +37,8 @@ pub enum Value {
     ),
     /// Mark stack position
     Mark,
+    /// Tells eexec operation that works on current file.
+    CurrentFile,
 }
 
 macro_rules! value_access {
@@ -498,6 +500,10 @@ fn system_dict() -> Dictionary {
             m.push(dict.clone());
             ok()
         },
+        "currentfile" => |m| {
+            m.push(Value::CurrentFile);
+            ok()
+        },
 
         // initial increment limit proc for -
         "for" => |m| {
@@ -510,6 +516,18 @@ fn system_dict() -> Dictionary {
                 m.execute_procedure(proc.clone())?;
             }
             ok()
+        },
+        "eexec" => |m| {
+            assert_eq!(&Value::CurrentFile, m.top()?, "eexec on non-current file not implemented");
+            m.variable_stack.push_system_dict();
+            Ok(ExecState::StartEExec)
+        },
+        // file closefile -
+        "closefile" => |m| {
+            if m.pop()? != Value::CurrentFile {
+                return Err(MachineError::TypeCheck);
+            }
+            Ok(ExecState::EndEExec)
         },
 
         "readonly" => |_| ok(),
@@ -539,6 +557,10 @@ impl VariableDictStack {
                 Rc::new(RefCell::new(user_dict())),
             ],
         }
+    }
+
+    fn push_system_dict(&mut self) {
+        self.stack.push(self.stack[0].clone());
     }
 
     fn get(&self, name: &str) -> MachineResult<Value> {
