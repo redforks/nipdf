@@ -25,6 +25,38 @@ pub enum Value {
     ),
 }
 
+macro_rules! value_access {
+    ($method:ident, $opt_method:ident, $branch:ident, $t: ty) => {
+        #[allow(dead_code)]
+        pub fn $opt_method(&self) -> Option<$t> {
+            match self {
+                Self::$branch(v) => Some(v.clone()),
+                _ => None,
+            }
+        }
+
+        #[allow(dead_code)]
+        pub fn $method(&self) -> MachineResult<$t> {
+            match self {
+                Self::$branch(v) => Ok(v.clone()),
+                _ => Err(MachineError::TypeCheck),
+            }
+        }
+    };
+}
+
+impl Value {
+    value_access!(bool, opt_bool, Bool, bool);
+    value_access!(int, opt_int, Integer, i32);
+    value_access!(real, opt_real, Real, f32);
+    value_access!(string, opt_string, String, Rc<[u8]>);
+    value_access!(array, opt_array, Array, Rc<RefCell<Array>>);
+    value_access!(dict, opt_dict, Dictionary, Rc<RefCell<Dictionary>>);
+    value_access!(procedure, opt_procedure, Procedure, Rc<TokenArray>);
+    value_access!(name, opt_name, Name, Rc<String>);
+    value_access!(built_in_op, opt_built_in_op, BuiltInOp, OperatorFn);
+}
+
 /// Type of `Dictionary` key. PostScript allows any value to be key except null,
 /// String will convert to Name when used as key.
 /// But I don't want to implement that, so I will only allow `Bool`, `Integer`,
