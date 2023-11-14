@@ -106,3 +106,11 @@ fn test_index() {
 fn test_exch() {
     assert_op("3 4 5 exch", Stack(values![3, 5, 4])); 
 }
+
+#[test]
+fn test_put() {
+    assert_op(
+        "10 dict begin /foo 10 def currentdict /foo 20 put currentdict",
+        dict!["foo"=> 20],
+    ); 
+}

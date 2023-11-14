@@ -330,6 +330,16 @@ fn system_dict() -> Dictionary {
             Ok(())
         },
 
+        // dict key value put -
+        // Set key-value to the given dictionary.
+        "put" => |m| {
+            let value = m.pop()?;
+            let key = m.pop()?;
+            let dict = m.pop_dict()?;
+            dict.borrow_mut().insert(key.try_into()?, value);
+            Ok(())
+        },
+
         // push current variable stack to operand stack
         "currentdict" => |m| {
             let dict = m.variable_stack.top();
