@@ -9,7 +9,7 @@ use std::{
     iter::repeat,
     rc::Rc,
 };
-use winnow::{combinator::iterator, Parser};
+use winnow::Parser;
 
 mod decrypt;
 use decrypt::{decrypt, EEXEC_KEY};
@@ -270,8 +270,71 @@ pub enum MachineError {
 
 pub type MachineResult<T> = Result<T, MachineError>;
 
+struct CurrentFile {
+    data: Vec<u8>,
+    remains_pos: usize,
+    decryped: Option<Vec<u8>>,
+    decryped_pos: usize,
+}
+
+impl CurrentFile {
+    pub fn new(data: Vec<u8>) -> Self {
+        Self {
+            data,
+            remains_pos: 0,
+            decryped: None,
+            decryped_pos: 0,
+        }
+    }
+
+    pub fn next_token(&mut self) -> Option<Token> {
+        match self.decryped {
+            Some(ref data) => {
+                let mut buf = &data[self.decryped_pos..];
+                let r = ws_prefixed(token_parser).parse_next(&mut buf).ok();
+                self.decryped_pos = data.len() - buf.len();
+                r
+            }
+            None => {
+                let mut remains = &self.data[self.remains_pos..];
+                let r = ws_prefixed(token_parser).parse_next(&mut remains).ok();
+                self.remains_pos = self.data.len() - remains.len();
+                r
+            }
+        }
+    }
+
+    pub fn start_decrypt(&mut self) {
+        assert!(self.decryped.is_none());
+        let mut remains = &self.data[self.remains_pos..];
+        // trim start white space
+        white_space.parse_next(&mut remains).unwrap();
+        self.decryped = Some(decrypt(EEXEC_KEY, 4, remains));
+        self.remains_pos += 4;
+        self.decryped_pos = 0;
+    }
+
+    pub fn stop_decrypt(&mut self) {
+        assert!(self.decryped.is_some());
+        self.remains_pos += self.decryped_pos;
+        self.decryped = None;
+    }
+
+    /// Check file read complete
+    pub fn finish(&mut self) {
+        use winnow::combinator::repeat;
+
+        let mut remains = &self.data[self.remains_pos..];
+        repeat::<_, _, (), _, _>(.., white_space_or_comment)
+            .parse(&mut remains)
+            .unwrap();
+        self.remains_pos = self.data.len() - remains.len();
+    }
+}
+
 /// PostScript machine to execute operations.
 pub struct Machine {
+    file: Rc<RefCell<CurrentFile>>,
     variable_stack: VariableDictStack,
     stack: Vec<Value>,
 }
@@ -286,42 +349,35 @@ pub enum ExecState {
 }
 
 impl Machine {
-    pub fn new() -> Self {
+    pub fn new(file: Vec<u8>) -> Self {
         Self {
+            file: Rc::new(RefCell::new(CurrentFile::new(file))),
             variable_stack: VariableDictStack::new(),
             stack: Vec::new(),
         }
     }
 
-    pub fn execute(&mut self, s: &[u8]) -> MachineResult<()> {
+    pub fn execute(&mut self) -> MachineResult<()> {
         // ensure that the system_dict readonly, it will panic if modify
         // system_dict
         self.variable_stack.lock_system_dict();
 
-        use winnow::combinator::repeat;
-        let mut remains;
-        let mut it = iterator(s, ws_prefixed(token_parser));
-        while let Some(token) = (&mut it).next() {
+        while let Some(token) = {
+            let mut b = self.file.borrow_mut();
+            b.next_token()
+        } {
             match self.exec(token)? {
                 ExecState::Ok => {}
                 ExecState::StartEExec => {
-                    let mut left = it.finish().unwrap().0;
-                    // trim start white space
-                    white_space.parse_next(&mut left).unwrap();
-                    remains = decrypt(EEXEC_KEY, 4, left);
-                    it = iterator(&remains, ws_prefixed(token_parser));
+                    self.file.borrow_mut().start_decrypt();
                 }
                 ExecState::EndEExec => {
-                    let left = it.finish().unwrap().0;
-                    it = iterator(&s[(s.len() - left.len())..], ws_prefixed(token_parser));
+                    self.file.borrow_mut().stop_decrypt();
                 }
             }
         }
         // assert that remains are all white space or comment
-        let remains = it.finish().unwrap().0;
-        repeat::<_, _, (), _, _>(.., white_space_or_comment)
-            .parse(remains)
-            .unwrap();
+        self.file.borrow_mut().finish();
 
         Ok(())
     }

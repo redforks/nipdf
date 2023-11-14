@@ -49,8 +49,8 @@ impl Assert for VariableStack {
 }
 
 fn assert_op(s: &str, exp_result: impl Assert) {
-    let mut machine = Machine::new();
-    machine.execute(s.as_bytes()).unwrap();
+    let mut machine = Machine::new(s.as_bytes().to_vec());
+    machine.execute().unwrap();
     exp_result.assert(&machine);
 }
 
@@ -135,6 +135,6 @@ fn test_string() {
 #[test]
 fn execute_on_file() {
     let data = include_bytes!("./cmsy9.pfb");
-    let mut machine = Machine::new();
-    machine.execute(data).unwrap();
+    let mut machine = Machine::new(data.to_vec());
+    machine.execute().unwrap();
 }
