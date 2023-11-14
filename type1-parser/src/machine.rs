@@ -14,7 +14,7 @@ mod decrypt;
 pub type Array = Vec<Value>;
 pub type TokenArray = Vec<Token>;
 
-type OperatorFn = fn(&mut Machine) -> MachineResult<()>;
+type OperatorFn = fn(&mut Machine) -> MachineResult<ExecState>;
 
 #[derive(Educe)]
 #[educe(Debug, PartialEq, Clone)]
@@ -257,7 +257,8 @@ pub struct Machine {
     stack: Vec<Value>,
 }
 
-enum ExecState {
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum ExecState {
     Ok,
     // starts decrypt if exec() returns this
     StartEExec,
@@ -293,8 +294,11 @@ impl Machine {
     }
 
     fn exec(&mut self, token: Token) -> MachineResult<()> {
-        match token {
-            Token::Literal(v) => self.push(v),
+        let state = match token {
+            Token::Literal(v) => {
+                self.push(v);
+                ExecState::Ok
+            }
             Token::Name(name) => {
                 let v = self.variable_stack.get(&name)?;
                 match v {
@@ -302,7 +306,7 @@ impl Machine {
                     _ => unreachable!(),
                 }
             }
-        }
+        };
         Ok(())
     }
 
@@ -361,6 +365,10 @@ macro_rules! dict {
 
 /// Create the `systemdict`
 fn system_dict() -> Dictionary {
+    fn ok() -> MachineResult<ExecState> {
+        Ok(ExecState::Ok)
+    }
+
     var_dict!(
         // any1 any2 exch -> any2 any1
         "exch" => |m| {
@@ -368,29 +376,36 @@ fn system_dict() -> Dictionary {
             let b = m.pop()?;
             m.push(a);
             m.push(b);
-            Ok(())
+            ok()
         },
 
         // any -> any any
-        "dup" => |m| Ok(m.push(m.top()?.clone())),
+        "dup" => |m| {
+            m.push(m.top()?.clone());
+            ok()
+        },
 
         // Duplicate stack value at -n position
-        // any(n) ... any0 n index -> anyn ... any0 any(n)
+        // any(n) ... any0 n index -> any(n) ... any0 any(n)
         "index" => |m| {
             let index = m.pop_int()?;
-            Ok(m.push(m.stack.get(m.stack.len() - index as usize - 1)
+            m.push(m.stack.get(m.stack.len() - index as usize - 1)
                 .ok_or(MachineError::StackUnderflow)?
-                .clone()))
+                .clone());
+            ok()
         },
 
         // - mark -> Mark
-        "mark" => |m| Ok(m.push(Value::Mark)),
+        "mark" => |m| {
+            m.push(Value::Mark);
+            ok()
+        },
         // Mark obj1 .. obj(n) cleartomark -> -
         "cleartomark" => |m| {
             while m.pop()
                 .map_err(|e| if e == MachineError::StackUnderflow {MachineError::UnMatchedMark } else {e})?
                  != Value::Mark {}
-            Ok(())
+            ok()
         },
 
         // num1 num2 add sum
@@ -403,32 +418,34 @@ fn system_dict() -> Dictionary {
                 (Either::Left(a), Either::Right(b)) => m.push(a as f32 + b),
                 (Either::Right(a), Either::Left(b)) => m.push(a + b as f32),
             }
-            Ok(())
+            ok()
         },
 
         // int array -> array
         "array" => |m| {
             let count = m.pop_int()?;
-            Ok(m.push(Array::from_iter(repeat(Value::Null).take(count as usize))))
+            m.push(Array::from_iter(repeat(Value::Null).take(count as usize)));
+            ok()
         },
 
         // int dict -> dict
         "dict" => |m| {
             let count = m.pop_int()?;
-            Ok(m.push(Dictionary::with_capacity(count as usize)))
+            m.push(Dictionary::with_capacity(count as usize));
+            ok()
         },
 
         // dict begin -> -
         "begin" => |m| {
             let dict = m.pop_dict()?;
             m.variable_stack.push(dict);
-            Ok(())
+            ok()
         },
 
         // - end -> -
         "end" => |m| {
             m.variable_stack.pop();
-            Ok(())
+            ok()
         },
 
         // key value -> - Set key-value to current directory.
@@ -437,7 +454,7 @@ fn system_dict() -> Dictionary {
             let key = m.pop()?;
             let dict = m.variable_stack.top();
             dict.borrow_mut().insert(key.try_into()?, value);
-            Ok(())
+            ok()
         },
 
         // dict/array key value put -
@@ -457,14 +474,14 @@ fn system_dict() -> Dictionary {
                 }
                 _ => return Err(MachineError::TypeCheck),
             };
-            Ok(())
+            ok()
         },
 
         // push current variable stack to operand stack
         "currentdict" => |m| {
             let dict = m.variable_stack.top();
             m.push(dict.clone());
-            Ok(())
+            ok()
         },
 
         // initial increment limit proc for -
@@ -477,10 +494,10 @@ fn system_dict() -> Dictionary {
                 m.push(i);
                 m.execute_procedure(proc.clone())?;
             }
-            Ok(())
+            ok()
         },
 
-        "readonly" => |_| Ok(()),
+        "readonly" => |_| ok(),
     )
 }
 
