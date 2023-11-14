@@ -106,8 +106,12 @@ fn test_exch() {
 
 #[test]
 fn test_put() {
+    // dict
     assert_op(
         "10 dict begin /foo 10 def currentdict /foo 20 put currentdict",
         dict!["foo"=> 20],
     );
+
+    // array
+    assert_op("2 array dup 1 10 put", values![Value::Null, 10]);
 }

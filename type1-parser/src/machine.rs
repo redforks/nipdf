@@ -357,13 +357,23 @@ fn system_dict() -> Dictionary {
             Ok(())
         },
 
-        // dict key value put -
+        // dict/array key value put -
         // Set key-value to the given dictionary.
         "put" => |m| {
             let value = m.pop()?;
             let key = m.pop()?;
-            let dict = m.pop_dict()?;
-            dict.borrow_mut().insert(key.try_into()?, value);
+            match m.pop()? {
+                Value::Dictionary(dict) => {
+                    dict.borrow_mut().insert(key.try_into()?, value);
+                }
+                Value::Array(array) => {
+                    let index = key.int()?;
+                    let mut array = array.borrow_mut();
+                    array.resize(index as usize + 1, Value::Null);
+                    array[index as usize] = value;
+                }
+                _ => return Err(MachineError::TypeCheck),
+            };
             Ok(())
         },
 
