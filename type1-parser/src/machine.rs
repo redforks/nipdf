@@ -39,7 +39,11 @@ pub enum Value {
     /// Mark stack position
     Mark,
     /// Tells eexec operation that works on current file.
-    CurrentFile,
+    CurrentFile(
+        #[educe(Debug(ignore))]
+        #[educe(PartialEq(ignore))]
+        Rc<RefCell<CurrentFile>>,
+    ),
     /// Tells ] operation that begin of array in stack.
     ArrayMark,
 }
@@ -74,6 +78,12 @@ impl Value {
     value_access!(procedure, opt_procedure, Procedure, Rc<TokenArray>);
     value_access!(name, opt_name, Name, Rc<String>);
     value_access!(built_in_op, opt_built_in_op, BuiltInOp, OperatorFn);
+    value_access!(
+        current_file,
+        opt_current_file,
+        CurrentFile,
+        Rc<RefCell<CurrentFile>>
+    );
 
     pub fn opt_number(&self) -> Option<Either<i32, f32>> {
         match self {
@@ -270,7 +280,7 @@ pub enum MachineError {
 
 pub type MachineResult<T> = Result<T, MachineError>;
 
-struct CurrentFile {
+pub struct CurrentFile {
     data: Vec<u8>,
     remains_pos: usize,
     decryped: Option<Vec<u8>>,
@@ -318,6 +328,23 @@ impl CurrentFile {
         assert!(self.decryped.is_some());
         self.remains_pos += self.decryped_pos;
         self.decryped = None;
+    }
+
+    pub fn read(&mut self, buf: &mut [u8]) -> usize {
+        match self.decryped {
+            Some(ref data) => {
+                let len = buf.len().min(data.len() - self.decryped_pos);
+                buf[..len].copy_from_slice(&data[self.decryped_pos..(self.decryped_pos + len)]);
+                self.decryped_pos += len;
+                len
+            }
+            None => {
+                let len = buf.len().min(self.data.len() - self.remains_pos);
+                buf[..len].copy_from_slice(&self.data[self.remains_pos..(self.remains_pos + len)]);
+                self.remains_pos += len;
+                len
+            }
+        }
     }
 
     /// Check file read complete
@@ -434,6 +461,10 @@ impl Machine {
 
     fn push(&mut self, v: impl Into<Value>) {
         self.stack.push(v.into());
+    }
+
+    fn push_current_file(&mut self) {
+        self.stack.push(Value::CurrentFile(self.file.clone()))
     }
 }
 
@@ -611,11 +642,17 @@ fn system_dict() -> Dictionary {
             ok()
         },
         "currentfile" => |m| {
-            m.push(Value::CurrentFile);
+            m.push_current_file();
             ok()
         },
         "readstring" => |m| {
-            todo!()
+            let s = m.pop()?.string()?;
+            let f = m.pop()?.current_file()?;
+            let mut buf = &mut s.borrow_mut()[..];
+            let eof = f.borrow_mut().read(&mut buf) < buf.len();
+            m.push(s.clone());
+            m.push(eof);
+            ok()
         },
 
         // initial increment limit proc for -
@@ -631,15 +668,18 @@ fn system_dict() -> Dictionary {
             ok()
         },
         "eexec" => |m| {
-            assert_eq!(&Value::CurrentFile, m.top()?, "eexec on non-current file not implemented");
+            assert!(
+                matches!(m.top()?, Value::CurrentFile(_)),
+                "eexec on non-current file not implemented"
+            );
             m.variable_stack.push_system_dict();
             Ok(ExecState::StartEExec)
         },
         // file closefile -
         "closefile" => |m| {
-            if m.pop()? != Value::CurrentFile {
+            let Value::CurrentFile(_) = m.pop()? else {
                 return Err(MachineError::TypeCheck);
-            }
+            };
             Ok(ExecState::EndEExec)
         },
 
