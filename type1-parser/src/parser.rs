@@ -302,11 +302,9 @@ pub fn token(input: &mut &[u8]) -> PResult<Token> {
     alt((
         int_or_float.map(|v| Token::Literal(v.either(Value::Integer, Value::Real))),
         string.map(|s| Value::String(s.into())).map(Token::Literal),
-        literal_name.map(Value::Name).map(Token::Literal),
+        literal_name.map(|s| Token::Literal(Value::Name(s.into()))),
         special_name.map(Token::Name),
-        procedure
-            .map(|a| Value::Procedure(a.into()))
-            .map(Token::Literal),
+        procedure.map(|a| Token::Literal(Value::Procedure(a.into()))),
         executable_name.map(Token::Name),
     ))
     .parse_next(input)

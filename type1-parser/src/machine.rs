@@ -1,11 +1,5 @@
 use educe::Educe;
-use std::{
-    cell::{Ref, RefCell, RefMut},
-    collections::HashMap,
-    hash::Hasher,
-    iter::repeat,
-    rc::Rc,
-};
+use std::{cell::RefCell, collections::HashMap, hash::Hasher, iter::repeat, rc::Rc};
 
 pub type Array = Vec<Value>;
 pub type TokenArray = Vec<Token>;
@@ -23,7 +17,7 @@ pub enum Value {
     Array(Rc<RefCell<Array>>),
     Dictionary(Rc<RefCell<Dictionary>>),
     Procedure(Rc<TokenArray>),
-    Name(String),
+    Name(Rc<String>),
     BuiltInOp(
         #[educe(Debug(ignore))]
         #[educe(PartialEq(ignore))]
@@ -40,7 +34,7 @@ pub enum Value {
 pub enum Key {
     Bool(bool),
     Integer(i32),
-    Name(String),
+    Name(Rc<String>),
 }
 
 impl TryFrom<Value> for Key {
@@ -51,7 +45,7 @@ impl TryFrom<Value> for Key {
             Value::Bool(b) => Ok(Self::Bool(b)),
             Value::Integer(i) => Ok(Self::Integer(i)),
             Value::Name(n) => Ok(Self::Name(n)),
-            Value::String(s) => Ok(Self::Name(String::from_utf8(s.to_vec()).unwrap())),
+            Value::String(s) => Ok(Self::Name(String::from_utf8(s.to_vec()).unwrap().into())),
             _ => Err(MachineError::TypeCheck),
         }
     }
@@ -120,7 +114,7 @@ impl From<Box<[u8]>> for Value {
 
 impl From<&str> for Value {
     fn from(v: &str) -> Self {
-        Value::Name(v.to_owned())
+        Value::Name(v.to_owned().into())
     }
 }
 
@@ -260,7 +254,7 @@ struct VariableDictStack {
 
 macro_rules! var_dict {
     ($($k:expr => $v:expr),* $(,)?) => {
-        std::iter::Iterator::collect(std::iter::IntoIterator::into_iter([$((Key::Name($k.to_owned()), Value::BuiltInOp($v)),)*]))
+        std::iter::Iterator::collect(std::iter::IntoIterator::into_iter([$((Key::Name($k.to_owned().into()), Value::BuiltInOp($v)),)*]))
     };
 }
 
@@ -269,7 +263,7 @@ macro_rules! dict {
         Dictionary::new()
     };
     ($($k:expr => $v:expr),* $(,)?) => {
-        std::iter::Iterator::collect::<Dictionary>(std::iter::IntoIterator::into_iter([$((Key::Name($k.to_owned()), Value::from($v)),)*]))
+        std::iter::Iterator::collect::<Dictionary>(std::iter::IntoIterator::into_iter([$((Key::Name($k.to_owned().into()), Value::from($v)),)*]))
     };
 }
 
