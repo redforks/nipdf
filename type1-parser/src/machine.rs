@@ -3,6 +3,7 @@ use std::{
     cell::{Ref, RefCell, RefMut},
     collections::HashMap,
     hash::Hasher,
+    iter::repeat,
     rc::Rc,
 };
 
@@ -299,7 +300,7 @@ fn system_dict() -> Dictionary {
         // int array -> array
         "array" => |m| {
             let count = m.pop_int()?;
-            Ok(m.push(Array::with_capacity(count as usize)))
+            Ok(m.push(Array::from_iter(repeat(Value::Null).take(count as usize))))
         },
 
         // int dict -> dict

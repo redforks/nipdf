@@ -78,10 +78,7 @@ fn test_dup() {
 
 #[test]
 fn test_def() {
-    assert_op(
-        "10 dict begin /foo 10 def currentdict",
-        dict!["foo"=> 10],
-    );
+    assert_op("10 dict begin /foo 10 def currentdict", dict!["foo"=> 10]);
 }
 
 #[test]
@@ -94,7 +91,7 @@ fn test_end() {
 
 #[test]
 fn test_array() {
-    assert_op("10 array", values![]);
+    assert_op("2 array", values![Value::Null, Value::Null]);
 }
 
 #[test]
@@ -104,7 +101,7 @@ fn test_index() {
 
 #[test]
 fn test_exch() {
-    assert_op("3 4 5 exch", Stack(values![3, 5, 4])); 
+    assert_op("3 4 5 exch", Stack(values![3, 5, 4]));
 }
 
 #[test]
@@ -112,5 +109,5 @@ fn test_put() {
     assert_op(
         "10 dict begin /foo 10 def currentdict /foo 20 put currentdict",
         dict!["foo"=> 20],
-    ); 
+    );
 }
