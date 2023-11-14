@@ -275,10 +275,20 @@ macro_rules! dict {
 /// Create the `systemdict`
 fn system_dict() -> Dictionary {
     var_dict!(
+        // any1 any2 exch -> any2 any1
+        "exch" => |m| {
+            let a = m.pop()?;
+            let b = m.pop()?;
+            m.push(a);
+            m.push(b);
+            Ok(())
+        },
+
         // any -> any any
         "dup" => |m| Ok(m.push(m.top()?.clone())),
 
         // Duplicate stack value at -n position
+        // anyn ... any0 n index -> anyn ... any0 anyn
         "index" => |m| {
             let index = m.pop_int()?;
             Ok(m.push(m.stack.get(m.stack.len() - index as usize - 1)

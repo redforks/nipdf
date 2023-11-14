@@ -101,3 +101,8 @@ fn test_array() {
 fn test_index() {
     assert_op("1 2 3 4 5 3 index", Stack(values![1, 2, 3, 4, 5, 2]));
 }
+
+#[test]
+fn test_exch() {
+    assert_op("3 4 5 exch", Stack(values![3, 5, 4])); 
+}
