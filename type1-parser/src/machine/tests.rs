@@ -80,7 +80,7 @@ fn test_dup() {
 fn test_def() {
     assert_op(
         "10 dict begin /foo 10 def currentdict",
-        Dictionary::from_iter([(Key::Name("foo".to_owned()), 10.into())]),
+        dict!["foo"=> 10],
     );
 }
 
@@ -89,12 +89,12 @@ fn test_end() {
     assert_op(
         "0 dict begin 1 dict begin /foo 10 def end currentdict",
         Dictionary::new(),
-    ); 
+    );
 }
 
 #[test]
 fn test_array() {
-    assert_op("10 array", values![]); 
+    assert_op("10 array", values![]);
 }
 
 #[test]

@@ -258,10 +258,18 @@ struct VariableDictStack {
 }
 
 macro_rules! var_dict {
-    ($($k:expr => $v:expr),* $(,)?) => {{
-        use std::iter::{Iterator, IntoIterator};
-        Iterator::collect(IntoIterator::into_iter([$((Key::Name($k.to_owned()), Value::BuiltInOp($v)),)*]))
-    }};
+    ($($k:expr => $v:expr),* $(,)?) => {
+        std::iter::Iterator::collect(std::iter::IntoIterator::into_iter([$((Key::Name($k.to_owned()), Value::BuiltInOp($v)),)*]))
+    };
+}
+
+macro_rules! dict {
+    () => {
+        Dictionary::new()
+    };
+    ($($k:expr => $v:expr),* $(,)?) => {
+        std::iter::Iterator::collect::<Dictionary>(std::iter::IntoIterator::into_iter([$((Key::Name($k.to_owned()), Value::from($v)),)*]))
+    };
 }
 
 /// Create the `systemdict`
