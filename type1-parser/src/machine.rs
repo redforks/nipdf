@@ -372,6 +372,17 @@ impl CurrentFile {
             .unwrap();
         self.remains_pos = self.data.len() - remains.len();
     }
+
+    pub fn close(&mut self) {
+        match &self.decryped {
+            Some(data) => {
+                self.decryped_pos = data.len();
+            }
+            None => {
+                self.remains_pos = self.data.len();
+            }
+        }
+    }
 }
 
 /// PostScript machine to execute operations.
@@ -725,10 +736,17 @@ fn system_dict() -> Dictionary {
         },
         // file closefile -
         "closefile" => |m| {
-            let Value::CurrentFile(_) = m.pop()? else {
+            let Value::CurrentFile(mut f) = m.pop()? else {
                 return Err(MachineError::TypeCheck);
             };
+            f.borrow_mut().close();
             Ok(ExecState::EndEExec)
+        },
+        "definefont" => |m| {
+            let font = m.pop()?;
+            let _key = m.pop()?;
+            m.push(font);
+            ok()
         },
 
         "readonly" => |_| ok(),
