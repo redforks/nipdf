@@ -123,13 +123,18 @@ fn test_cleartomark() {
 }
 
 #[test]
+fn test_create_array_on_stack() {
+    assert_op("[ 1 2 3 4 5 ]", values![1, 2, 3, 4, 5]);
+}
+
+#[test]
+fn test_string() {
+    assert_op("3 string", *b"\0\0\0");
+}
+
+#[test]
 fn execute_on_file() {
     let data = include_bytes!("./cmsy9.pfb");
     let mut machine = Machine::new();
     machine.execute(data).unwrap();
-}
-
-#[test]
-fn test_create_array_on_stack() {
-    assert_op("[ 1 2 3 4 5 ]", values![1, 2, 3, 4, 5]);
 }

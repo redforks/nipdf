@@ -170,13 +170,13 @@ impl From<f32> for Value {
 
 impl<const N: usize> From<[u8; N]> for Value {
     fn from(v: [u8; N]) -> Self {
-        let v: Box<[u8]> = v.into();
-        v.into()
+        let bytes: Vec<u8> = v.into();
+        bytes.into()
     }
 }
 
-impl From<Box<[u8]>> for Value {
-    fn from(v: Box<[u8]>) -> Self {
+impl From<Vec<u8>> for Value {
+    fn from(v: Vec<u8>) -> Self {
         Value::String(v.into())
     }
 }
@@ -530,6 +530,13 @@ fn system_dict() -> Dictionary {
                 }
                 _ => return Err(MachineError::TypeCheck),
             };
+            ok()
+        },
+
+        // int string -> string
+        "string" => |m| {
+            let count = m.pop_int()?;
+            m.push(vec![0u8; count as usize]);
             ok()
         },
 
