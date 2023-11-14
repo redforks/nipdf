@@ -70,7 +70,7 @@ fn is_regular_char(b: u8) -> bool {
 }
 
 /// Parses one or more white space bytes
-fn white_space<'a>(input: &mut &'a [u8]) -> PResult<&'a [u8]> {
+pub fn white_space<'a>(input: &mut &'a [u8]) -> PResult<&'a [u8]> {
     take_while(1.., is_white_space).parse_next(input)
 }
 

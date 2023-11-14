@@ -1,6 +1,7 @@
-use crate::parser::{token as token_parser, white_space_or_comment, ws_prefixed};
+use crate::parser::{token as token_parser, white_space, white_space_or_comment, ws_prefixed};
 use educe::Educe;
 use either::Either;
+use log::{debug, error};
 use std::{
     cell::{Ref, RefCell},
     collections::HashMap,
@@ -296,7 +297,9 @@ impl Machine {
             match self.exec(token)? {
                 ExecState::Ok => {}
                 ExecState::StartEExec => {
-                    let left = it.finish().unwrap().0;
+                    let mut left = it.finish().unwrap().0;
+                    // trim start white space
+                    white_space.parse_next(&mut left).unwrap();
                     remains = decrypt(EEXEC_KEY, 4, left);
                     it = iterator(&remains, ws_prefixed(token_parser));
                 }
@@ -599,10 +602,16 @@ impl VariableDictStack {
     }
 
     fn get(&self, name: &str) -> MachineResult<Value> {
-        self.stack
+        let r = self
+            .stack
             .iter()
             .find_map(|dict| dict.borrow().get(name).map(|v| v.clone()))
-            .ok_or(MachineError::Undefined)
+            .ok_or(MachineError::Undefined);
+        #[cfg(debug_assertions)]
+        if r.is_err() {
+            error!("name not found: {:?}", name);
+        }
+        r
     }
 
     fn push(&mut self, dict: Rc<RefCell<Dictionary>>) {

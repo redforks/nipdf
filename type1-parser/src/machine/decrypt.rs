@@ -10,7 +10,9 @@ struct Decryptor(u16);
 impl Decryptor {
     fn decrypt(&mut self, b: u8) -> u8 {
         let r = b ^ (self.0 >> 8) as u8;
-        self.0 = (b as u16 + self.0) * C1 + C2;
+        self.0 = ((b as u16).wrapping_add(self.0))
+            .wrapping_mul(C1)
+            .wrapping_add(C2);
         r
     }
 }
@@ -18,7 +20,7 @@ impl Decryptor {
 pub fn decrypt(key: u16, n: usize, buf: &[u8]) -> Vec<u8> {
     // check first 8 bytes of buf to see its format, assert that it is not ascii hex form
     assert!(
-        buf[..8].iter().all(|b| b.is_ascii_hexdigit()),
+        !buf[..8].iter().all(|b| b.is_ascii_hexdigit()),
         "decrypted data in ascii hex form not support"
     );
 
