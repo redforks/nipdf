@@ -147,6 +147,12 @@ pub fn name_token(s: impl Into<String>) -> Token {
     Token::Name(Rc::new(s.into()))
 }
 
+impl From<bool> for Value {
+    fn from(v: bool) -> Self {
+        Value::Bool(v)
+    }
+}
+
 impl From<i32> for Value {
     fn from(v: i32) -> Self {
         Value::Integer(v)
@@ -422,6 +428,17 @@ fn system_dict() -> Dictionary {
             while m.pop()
                 .map_err(|e| if e == MachineError::StackUnderflow {MachineError::UnMatchedMark } else {e})?
                  != Value::Mark {}
+            ok()
+        },
+
+        // - true -> true
+        "true" => |m| {
+            m.push(true);
+            ok()
+        },
+        // - false -> false
+        "false" => |m| {
+            m.push(false);
             ok()
         },
 
