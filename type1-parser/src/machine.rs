@@ -257,6 +257,14 @@ pub struct Machine {
     stack: Vec<Value>,
 }
 
+enum ExecState {
+    Ok,
+    // starts decrypt if exec() returns this
+    StartEExec,
+    // ends decrypt if exec() returns this
+    EndEExec,
+}
+
 impl Machine {
     pub fn new() -> Self {
         Self {
@@ -272,7 +280,9 @@ impl Machine {
 
         use winnow::combinator::repeat;
         let mut it = iterator(s, ws_prefixed(token));
-        self.exec(&mut it).unwrap();
+        for token in &mut it {
+            self.exec(token)?;
+        }
         // assert that remains are all white space or comment
         let remains = it.finish().unwrap().0;
         repeat::<_, _, (), _, _>(.., white_space_or_comment)
@@ -282,16 +292,14 @@ impl Machine {
         Ok(())
     }
 
-    fn exec(&mut self, tokens: impl IntoIterator<Item = Token>) -> MachineResult<()> {
-        for token in tokens {
-            match token {
-                Token::Literal(v) => self.push(v),
-                Token::Name(name) => {
-                    let v = self.variable_stack.get(&name)?;
-                    match v {
-                        Value::BuiltInOp(op) => op(self)?,
-                        _ => unreachable!(),
-                    }
+    fn exec(&mut self, token: Token) -> MachineResult<()> {
+        match token {
+            Token::Literal(v) => self.push(v),
+            Token::Name(name) => {
+                let v = self.variable_stack.get(&name)?;
+                match v {
+                    Value::BuiltInOp(op) => op(self)?,
+                    _ => unreachable!(),
                 }
             }
         }
@@ -299,7 +307,10 @@ impl Machine {
     }
 
     fn execute_procedure(&mut self, proc: Rc<TokenArray>) -> MachineResult<()> {
-        self.exec(proc.as_ref().iter().cloned())
+        for token in proc.as_ref().iter().cloned() {
+            self.exec(token)?
+        }
+        Ok(())
     }
 
     fn pop(&mut self) -> MachineResult<Value> {
