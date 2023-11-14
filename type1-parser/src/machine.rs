@@ -39,6 +39,8 @@ pub enum Value {
     Mark,
     /// Tells eexec operation that works on current file.
     CurrentFile,
+    /// Tells ] operation that begin of array in stack.
+    ArrayMark,
 }
 
 macro_rules! value_access {
@@ -459,6 +461,22 @@ fn system_dict() -> Dictionary {
         "array" => |m| {
             let count = m.pop_int()?;
             m.push(Array::from_iter(repeat(Value::Null).take(count as usize)));
+            ok()
+        },
+        "[" => |m| {
+            m.push(Value::ArrayMark);
+            ok()
+        },
+        "]" => |m| {
+            let mut array = Array::new();
+            loop {
+                match m.pop()? {
+                    Value::ArrayMark => break,
+                    v => array.push(v),
+                }
+            }
+            array.reverse();
+            m.push(array);
             ok()
         },
 

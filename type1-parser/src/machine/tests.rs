@@ -129,3 +129,8 @@ fn execute_on_file() {
     let mut machine = Machine::new();
     machine.execute(data).unwrap();
 }
+
+#[test]
+fn test_create_array_on_stack() {
+    assert_op("[ 1 2 3 4 5 ]", values![1, 2, 3, 4, 5]);
+}
