@@ -20,7 +20,7 @@ pub enum Value {
     Integer(i32),
     Real(f32),
     String(Rc<[u8]>),
-    Array(Rc<Array>),
+    Array(Rc<RefCell<Array>>),
     Dictionary(Rc<RefCell<Dictionary>>),
     Procedure(Rc<TokenArray>),
     Name(String),
@@ -126,7 +126,7 @@ impl From<&str> for Value {
 
 impl From<Array> for Value {
     fn from(v: Array) -> Self {
-        Value::Array(v.into())
+        Value::Array(Rc::new(RefCell::new(v)))
     }
 }
 
