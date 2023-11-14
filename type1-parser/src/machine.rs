@@ -508,6 +508,11 @@ fn system_dict() -> Dictionary {
             m.push(m.top()?.clone());
             ok()
         },
+        // any pop -
+        "pop" => |m| {
+            m.pop()?;
+            ok()
+        },
 
         // Duplicate stack value at -n position
         // any(n) ... any0 n index -> any(n) ... any0 any(n)
