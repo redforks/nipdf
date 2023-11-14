@@ -270,6 +270,14 @@ fn system_dict() -> Dictionary {
         // any -> any any
         "dup" => |m| Ok(m.push(m.top()?.clone())),
 
+        // Duplicate stack value at -n position
+        "index" => |m| {
+            let index = m.pop_int()?;
+            Ok(m.push(m.stack.get(m.stack.len() - index as usize - 1)
+                .ok_or(MachineError::StackUnderflow)?
+                .clone()))
+        },
+
         // int array -> array
         "array" => |m| {
             let count = m.pop_int()?;
