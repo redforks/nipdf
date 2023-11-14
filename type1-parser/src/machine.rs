@@ -1,6 +1,12 @@
 use educe::Educe;
 use either::Either;
-use std::{cell::RefCell, collections::HashMap, hash::Hasher, iter::repeat, rc::Rc};
+use std::{
+    cell::{Ref, RefCell},
+    collections::HashMap,
+    hash::Hasher,
+    iter::repeat,
+    rc::Rc,
+};
 
 pub type Array = Vec<Value>;
 pub type TokenArray = Vec<Token>;
@@ -255,6 +261,10 @@ impl Machine {
     }
 
     pub fn execute(&mut self, tokens: impl IntoIterator<Item = Token>) -> MachineResult<()> {
+        // ensure that the system_dict readonly, it will panic if modify
+        // system_dict
+        self.variable_stack.lock_system_dict();
+
         for token in tokens {
             match token {
                 Token::Literal(v) => self.push(v),
@@ -489,6 +499,10 @@ impl VariableDictStack {
 
     fn top(&self) -> Rc<RefCell<Dictionary>> {
         self.stack.last().unwrap().clone()
+    }
+
+    fn lock_system_dict(&self) -> Ref<Dictionary> {
+        self.stack[0].borrow()
     }
 }
 
