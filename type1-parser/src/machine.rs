@@ -328,13 +328,14 @@ impl Machine {
                 let v = self.variable_stack.get(&name)?;
                 match v {
                     Value::BuiltInOp(op) => op(self)?,
-                    _ => unreachable!(),
+                    Value::Procedure(p) => self.execute_procedure(p)?,
+                    v => unreachable!("{:?}", v),
                 }
             }
         })
     }
 
-    fn execute_procedure(&mut self, proc: Rc<TokenArray>) -> MachineResult<()> {
+    fn execute_procedure(&mut self, proc: Rc<TokenArray>) -> MachineResult<ExecState> {
         for token in proc.as_ref().iter().cloned() {
             assert_eq!(
                 self.exec(token)?,
@@ -342,7 +343,7 @@ impl Machine {
                 "procedure should not return StartEExec or EndEExec"
             );
         }
-        Ok(())
+        Ok(ExecState::Ok)
     }
 
     fn pop(&mut self) -> MachineResult<Value> {
@@ -569,6 +570,7 @@ fn system_dict() -> Dictionary {
         },
 
         "readonly" => |_| ok(),
+        "executeonly" => |_| ok(),
     )
 }
 
