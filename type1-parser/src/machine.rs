@@ -671,7 +671,7 @@ fn system_dict() -> Dictionary {
             let mut buf = &mut s.borrow_mut()[..];
             let eof = f.borrow_mut().read(&mut buf) < buf.len();
             m.push(s.clone());
-            m.push(eof);
+            m.push(!eof);
             ok()
         },
 
@@ -705,6 +705,7 @@ fn system_dict() -> Dictionary {
 
         "readonly" => |_| ok(),
         "executeonly" => |_| ok(),
+        "noaccess" => |_| ok(),
     )
 }
 
