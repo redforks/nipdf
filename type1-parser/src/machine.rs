@@ -314,11 +314,25 @@ impl CurrentFile {
         }
     }
 
+    pub fn skip_white_space(&mut self) {
+        match self.decryped {
+            Some(ref data) => {
+                let mut buf = &data[self.decryped_pos..];
+                white_space.parse_next(&mut buf).unwrap();
+                self.decryped_pos = data.len() - buf.len();
+            }
+            None => {
+                let mut remains = &self.data[self.remains_pos..];
+                white_space.parse_next(&mut remains).unwrap();
+                self.remains_pos = self.data.len() - remains.len();
+            }
+        }
+    }
+
     pub fn start_decrypt(&mut self) {
         assert!(self.decryped.is_none());
-        let mut remains = &self.data[self.remains_pos..];
-        // trim start white space
-        white_space.parse_next(&mut remains).unwrap();
+        self.skip_white_space();
+        let remains = &self.data[self.remains_pos..];
         self.decryped = Some(decrypt(EEXEC_KEY, 4, remains));
         self.remains_pos += 4;
         self.decryped_pos = 0;
@@ -331,6 +345,7 @@ impl CurrentFile {
     }
 
     pub fn read(&mut self, buf: &mut [u8]) -> usize {
+        self.skip_white_space();
         match self.decryped {
             Some(ref data) => {
                 let len = buf.len().min(data.len() - self.decryped_pos);
