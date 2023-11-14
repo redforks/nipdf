@@ -8,6 +8,8 @@ use std::{
     rc::Rc,
 };
 
+mod decrypt;
+
 pub type Array = Vec<Value>;
 pub type TokenArray = Vec<Token>;
 
