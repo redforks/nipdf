@@ -665,6 +665,14 @@ fn system_dict() -> Dictionary {
             };
             ok()
         },
+        "get" => |m| {
+            let key = m.pop()?;
+            let dict = m.pop_dict()?;
+            let key: Key = key.try_into()?;
+            let value = dict.borrow().get(&key).cloned().ok_or(MachineError::Undefined)?;
+            m.push(value);
+            ok()
+        },
 
         // int string -> string
         "string" => |m| {
