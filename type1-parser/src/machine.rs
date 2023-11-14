@@ -1,7 +1,7 @@
 use crate::parser::{token as token_parser, white_space, white_space_or_comment, ws_prefixed};
 use educe::Educe;
 use either::Either;
-use log::{debug, error};
+use log::error;
 use std::{
     cell::{Ref, RefCell},
     collections::HashMap,
@@ -180,6 +180,12 @@ impl<const N: usize> From<[u8; N]> for Value {
 impl From<Vec<u8>> for Value {
     fn from(v: Vec<u8>) -> Self {
         Value::String(Rc::new(RefCell::new(v.into())))
+    }
+}
+
+impl From<Rc<RefCell<Vec<u8>>>> for Value {
+    fn from(v: Rc<RefCell<Vec<u8>>>) -> Self {
+        Value::String(v)
     }
 }
 
@@ -551,6 +557,9 @@ fn system_dict() -> Dictionary {
         "currentfile" => |m| {
             m.push(Value::CurrentFile);
             ok()
+        },
+        "readstring" => |m| {
+            todo!()
         },
 
         // initial increment limit proc for -
