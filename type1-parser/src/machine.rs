@@ -1,4 +1,5 @@
 use educe::Educe;
+use either::Either;
 use std::{cell::RefCell, collections::HashMap, hash::Hasher, iter::repeat, rc::Rc};
 
 pub type Array = Vec<Value>;
@@ -55,6 +56,18 @@ impl Value {
     value_access!(procedure, opt_procedure, Procedure, Rc<TokenArray>);
     value_access!(name, opt_name, Name, Rc<String>);
     value_access!(built_in_op, opt_built_in_op, BuiltInOp, OperatorFn);
+
+    pub fn opt_number(&self) -> Option<Either<i32, f32>> {
+        match self {
+            Self::Integer(i) => Some(Either::Left(*i)),
+            Self::Real(r) => Some(Either::Right(*r)),
+            _ => None,
+        }
+    }
+
+    pub fn number(&self) -> MachineResult<Either<i32, f32>> {
+        self.opt_number().ok_or(MachineError::TypeCheck)
+    }
 }
 
 /// Type of `Dictionary` key. PostScript allows any value to be key except null,
@@ -108,15 +121,15 @@ impl std::borrow::Borrow<str> for Key {
 
 pub type Dictionary = HashMap<Key, Value>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     Literal(Value),
     /// Name to lookup operation dict to get the actual operator
-    Name(String),
+    Name(Rc<String>),
 }
 
 pub fn name_token(s: impl Into<String>) -> Token {
-    Token::Name(s.into())
+    Token::Name(Rc::new(s.into()))
 }
 
 impl From<i32> for Value {
@@ -253,6 +266,10 @@ impl Machine {
         Ok(())
     }
 
+    fn execute_procedure(&mut self, proc: Rc<TokenArray>) -> MachineResult<()> {
+        self.execute(proc.as_ref().iter().cloned())
+    }
+
     fn pop(&mut self) -> MachineResult<Value> {
         self.stack.pop().ok_or(MachineError::StackUnderflow)
     }
@@ -323,6 +340,19 @@ fn system_dict() -> Dictionary {
                 .clone()))
         },
 
+        // num1 num2 add sum
+        "add" => |m| {
+            let a = m.pop()?.number()?;
+            let b = m.pop()?.number()?;
+            match (a, b) {
+                (Either::Left(a), Either::Left(b)) => m.push(a + b),
+                (Either::Right(a), Either::Right(b)) => m.push(a + b),
+                (Either::Left(a), Either::Right(b)) => m.push(a as f32 + b),
+                (Either::Right(a), Either::Left(b)) => m.push(a + b as f32),
+            }
+            Ok(())
+        },
+
         // int array -> array
         "array" => |m| {
             let count = m.pop_int()?;
@@ -381,6 +411,19 @@ fn system_dict() -> Dictionary {
         "currentdict" => |m| {
             let dict = m.variable_stack.top();
             m.push(dict.clone());
+            Ok(())
+        },
+
+        // initial increment limit proc for -
+        "for" => |m| {
+            let proc = m.pop()?.procedure()?;
+            let limit = m.pop_int()?;
+            let increment = m.pop_int()?;
+            let initial = m.pop_int()?;
+            for i in (initial..=limit).into_iter().step_by(increment as usize) {
+                m.push(i);
+                m.execute_procedure(proc.clone())?;
+            }
             Ok(())
         },
 

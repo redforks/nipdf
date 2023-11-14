@@ -303,9 +303,9 @@ pub fn token(input: &mut &[u8]) -> PResult<Token> {
         int_or_float.map(|v| Token::Literal(v.either(Value::Integer, Value::Real))),
         string.map(|s| Value::String(s.into())).map(Token::Literal),
         literal_name.map(|s| Token::Literal(Value::Name(s.into()))),
-        special_name.map(Token::Name),
+        special_name.map(|s| Token::Name(s.into())),
         procedure.map(|a| Token::Literal(Value::Procedure(a.into()))),
-        executable_name.map(Token::Name),
+        executable_name.map(|s| Token::Name(s.into())),
     ))
     .parse_next(input)
 }

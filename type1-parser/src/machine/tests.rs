@@ -115,3 +115,8 @@ fn test_put() {
     // array
     assert_op("2 array dup 1 10 put", values![Value::Null, 10]);
 }
+
+#[test]
+fn test_for() {
+    assert_op("0 1 1 10 {add} for", 55);
+}
