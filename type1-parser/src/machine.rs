@@ -1,7 +1,7 @@
 use crate::parser::{token as token_parser, white_space, white_space_or_comment, ws_prefixed};
 use educe::Educe;
 use either::Either;
-use log::error;
+use log::{debug, error};
 use std::{
     cell::{Ref, RefCell},
     collections::HashMap,
@@ -431,6 +431,7 @@ impl Machine {
                 ExecState::Ok
             }
             Token::Name(name) => {
+                debug!("{}", name);
                 let v = self.variable_stack.get(&name)?;
                 match v {
                     Value::BuiltInOp(op) => op(self)?,
@@ -452,8 +453,21 @@ impl Machine {
         Ok(ExecState::Ok)
     }
 
+    fn dump_stack(&self) {
+        debug!(
+            "stack: {:?}",
+            self.stack
+                .iter()
+                .rev()
+                .map(|v| std::mem::discriminant(v))
+                .collect::<Vec<_>>()
+        );
+    }
+
     fn pop(&mut self) -> MachineResult<Value> {
-        self.stack.pop().ok_or(MachineError::StackUnderflow)
+        let r = self.stack.pop().ok_or(MachineError::StackUnderflow);
+        self.dump_stack();
+        r
     }
 
     fn top(&self) -> MachineResult<&Value> {
@@ -476,10 +490,11 @@ impl Machine {
 
     fn push(&mut self, v: impl Into<Value>) {
         self.stack.push(v.into());
+        self.dump_stack();
     }
 
     fn push_current_file(&mut self) {
-        self.stack.push(Value::CurrentFile(self.file.clone()))
+        self.push(Value::CurrentFile(self.file.clone()))
     }
 }
 
@@ -643,7 +658,10 @@ fn system_dict() -> Dictionary {
                     array.resize(index as usize + 1, Value::Null);
                     array[index as usize] = value;
                 }
-                _ => return Err(MachineError::TypeCheck),
+                v => {
+                    error!("put on non-dict/array: {:?}, key: {:?}, value: {:?}", v, key, value);
+                    return Err(MachineError::TypeCheck);
+                }
             };
             ok()
         },
@@ -668,9 +686,11 @@ fn system_dict() -> Dictionary {
         "readstring" => |m| {
             let s = m.pop()?.string()?;
             let f = m.pop()?.current_file()?;
-            let mut buf = &mut s.borrow_mut()[..];
+            let mut borrow = s.borrow_mut();
+            let mut buf = &mut borrow[..];
             let eof = f.borrow_mut().read(&mut buf) < buf.len();
-            m.push(s.clone());
+            drop(borrow);
+            m.push(s);
             m.push(!eof);
             ok()
         },
@@ -689,7 +709,7 @@ fn system_dict() -> Dictionary {
         },
         "eexec" => |m| {
             assert!(
-                matches!(m.top()?, Value::CurrentFile(_)),
+                matches!(m.pop()?, Value::CurrentFile(_)),
                 "eexec on non-current file not implemented"
             );
             m.variable_stack.push_system_dict();

@@ -136,5 +136,11 @@ fn test_string() {
 fn execute_on_file() {
     let data = include_bytes!("./cmsy9.pfb");
     let mut machine = Machine::new(data.to_vec());
-    machine.execute().unwrap();
+    match machine.execute() {
+        Ok(_) => {}
+        Err(e) => {
+            println!("{}:\n{:?}", e, machine.stack);
+            panic!();
+        }
+    }
 }
