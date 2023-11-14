@@ -26,7 +26,7 @@ pub enum Value {
     Bool(bool),
     Integer(i32),
     Real(f32),
-    String(Rc<[u8]>),
+    String(Rc<RefCell<Vec<u8>>>),
     Array(Rc<RefCell<Array>>),
     Dictionary(Rc<RefCell<Dictionary>>),
     Procedure(Rc<TokenArray>),
@@ -68,7 +68,7 @@ impl Value {
     value_access!(bool, opt_bool, Bool, bool);
     value_access!(int, opt_int, Integer, i32);
     value_access!(real, opt_real, Real, f32);
-    value_access!(string, opt_string, String, Rc<[u8]>);
+    value_access!(string, opt_string, String, Rc<RefCell<Vec<u8>>>);
     value_access!(array, opt_array, Array, Rc<RefCell<Array>>);
     value_access!(dict, opt_dict, Dictionary, Rc<RefCell<Dictionary>>);
     value_access!(procedure, opt_procedure, Procedure, Rc<TokenArray>);
@@ -108,7 +108,9 @@ impl TryFrom<Value> for Key {
             Value::Bool(b) => Ok(Self::Bool(b)),
             Value::Integer(i) => Ok(Self::Integer(i)),
             Value::Name(n) => Ok(Self::Name(n)),
-            Value::String(s) => Ok(Self::Name(String::from_utf8(s.to_vec()).unwrap().into())),
+            Value::String(s) => Ok(Self::Name(
+                String::from_utf8(s.borrow().clone()).unwrap().into(),
+            )),
             _ => Err(MachineError::TypeCheck),
         }
     }
@@ -177,7 +179,7 @@ impl<const N: usize> From<[u8; N]> for Value {
 
 impl From<Vec<u8>> for Value {
     fn from(v: Vec<u8>) -> Self {
-        Value::String(v.into())
+        Value::String(Rc::new(RefCell::new(v.into())))
     }
 }
 

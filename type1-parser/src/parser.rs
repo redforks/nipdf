@@ -301,7 +301,7 @@ fn special_name(input: &mut &[u8]) -> PResult<String> {
 pub fn token(input: &mut &[u8]) -> PResult<Token> {
     alt((
         int_or_float.map(|v| Token::Literal(v.either(Value::Integer, Value::Real))),
-        string.map(|s| Value::String(s.into())).map(Token::Literal),
+        string.map(|s| Token::Literal(Vec::from(s).into())),
         literal_name.map(|s| Token::Literal(Value::Name(s.into()))),
         special_name.map(|s| Token::Name(s.into())),
         procedure.map(|a| Token::Literal(Value::Procedure(a.into()))),
