@@ -24,6 +24,8 @@ pub enum Value {
         #[educe(PartialEq(ignore))]
         OperatorFn,
     ),
+    /// Mark stack position
+    Mark,
 }
 
 macro_rules! value_access {
@@ -232,6 +234,8 @@ pub enum MachineError {
     Undefined,
     #[error("unimplemented")]
     Unimplemented,
+    #[error("unmatched mark")]
+    UnMatchedMark,
 }
 
 pub type MachineResult<T> = Result<T, MachineError>;
@@ -332,12 +336,22 @@ fn system_dict() -> Dictionary {
         "dup" => |m| Ok(m.push(m.top()?.clone())),
 
         // Duplicate stack value at -n position
-        // anyn ... any0 n index -> anyn ... any0 anyn
+        // any(n) ... any0 n index -> anyn ... any0 any(n)
         "index" => |m| {
             let index = m.pop_int()?;
             Ok(m.push(m.stack.get(m.stack.len() - index as usize - 1)
                 .ok_or(MachineError::StackUnderflow)?
                 .clone()))
+        },
+
+        // - mark -> Mark
+        "mark" => |m| Ok(m.push(Value::Mark)),
+        // Mark obj1 .. obj(n) cleartomark -> -
+        "cleartomark" => |m| {
+            while m.pop()
+                .map_err(|e| if e == MachineError::StackUnderflow {MachineError::UnMatchedMark } else {e})?
+                 != Value::Mark {}
+            Ok(())
         },
 
         // num1 num2 add sum

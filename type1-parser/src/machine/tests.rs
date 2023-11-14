@@ -120,3 +120,8 @@ fn test_put() {
 fn test_for() {
     assert_op("0 1 1 10 {add} for", 55);
 }
+
+#[test]
+fn test_cleartomark() {
+    assert_op("1 2 mark 3 4 5 cleartomark", Stack(values![1, 2]));
+}
