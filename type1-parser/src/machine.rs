@@ -31,11 +31,6 @@ pub enum Value {
     Dictionary(Rc<RefCell<Dictionary>>),
     Procedure(Rc<TokenArray>),
     Name(Rc<str>),
-    BuiltInOp(
-        #[educe(Debug(ignore))]
-        #[educe(PartialEq(ignore))]
-        OperatorFn,
-    ),
     /// Tells eexec operation that works on current file.
     CurrentFile(
         #[educe(Debug(ignore))]
@@ -52,7 +47,15 @@ enum RuntimeValue {
     Mark,
     /// Tells ] operation that begin of array in stack.
     ArrayMark,
+    Dictionary(Rc<RefCell<RuntimeDictionary>>),
+    BuiltInOp(
+        #[educe(Debug(ignore))]
+        #[educe(PartialEq(ignore))]
+        OperatorFn,
+    ),
 }
+
+type RuntimeDictionary = HashMap<Key, RuntimeValue>;
 
 macro_rules! value_access {
     ($method:ident, $opt_method:ident, $branch:ident, $t: ty) => {
@@ -94,35 +97,43 @@ macro_rules! value_access {
     };
 }
 
+macro_rules! rt_value_access {
+    ($method:ident, $opt_method:ident, $branch:ident, $t: ty) => {
+        impl RuntimeValue {
+            #[allow(dead_code)]
+            pub fn $opt_method(&self) -> Option<$t> {
+                match self {
+                    Self::$branch(v) => Some(v.clone()),
+                    _ => None,
+                }
+            }
+
+            #[allow(dead_code)]
+            pub fn $method(&self) -> MachineResult<$t> {
+                match self {
+                    Self::$branch(v) => Ok(v.clone()),
+                    _ => Err(MachineError::TypeCheck),
+                }
+            }
+        }
+    };
+}
+
 value_access!(bool, opt_bool, Bool, bool);
 value_access!(int, opt_int, Integer, i32);
 value_access!(real, opt_real, Real, f32);
 value_access!(string, opt_string, String, Rc<RefCell<Vec<u8>>>);
 value_access!(array, opt_array, Array, Rc<RefCell<Array>>);
-value_access!(dict, opt_dict, Dictionary, Rc<RefCell<Dictionary>>);
+rt_value_access!(dict, opt_dict, Dictionary, Rc<RefCell<RuntimeDictionary>>);
 value_access!(procedure, opt_procedure, Procedure, Rc<TokenArray>);
 value_access!(name, opt_name, Name, Rc<str>);
-value_access!(built_in_op, opt_built_in_op, BuiltInOp, OperatorFn);
+rt_value_access!(built_in_op, opt_built_in_op, BuiltInOp, OperatorFn);
 value_access!(
     current_file,
     opt_current_file,
     CurrentFile,
     Rc<RefCell<CurrentFile>>
 );
-
-impl Value {
-    pub fn opt_number(&self) -> Option<Either<i32, f32>> {
-        match self {
-            Self::Integer(i) => Some(Either::Left(*i)),
-            Self::Real(r) => Some(Either::Right(*r)),
-            _ => None,
-        }
-    }
-
-    pub fn number(&self) -> MachineResult<Either<i32, f32>> {
-        self.opt_number().ok_or(MachineError::TypeCheck)
-    }
-}
 
 impl RuntimeValue {
     pub fn opt_number(&self) -> Option<Either<i32, f32>> {
@@ -150,19 +161,25 @@ pub enum Key {
     Name(Rc<str>),
 }
 
-impl TryFrom<Value> for Key {
+impl TryFrom<RuntimeValue> for Key {
     type Error = MachineError;
 
-    fn try_from(v: Value) -> Result<Self, Self::Error> {
+    fn try_from(v: RuntimeValue) -> Result<Self, Self::Error> {
         match v {
-            Value::Bool(b) => Ok(Self::Bool(b)),
-            Value::Integer(i) => Ok(Self::Integer(i)),
-            Value::Name(n) => Ok(Self::Name(n)),
-            Value::String(s) => Ok(Self::Name(
+            RuntimeValue::Value(Value::Bool(b)) => Ok(Self::Bool(b)),
+            RuntimeValue::Value(Value::Integer(i)) => Ok(Self::Integer(i)),
+            RuntimeValue::Value(Value::Name(n)) => Ok(Self::Name(n)),
+            RuntimeValue::Value(Value::String(s)) => Ok(Self::Name(
                 String::from_utf8(s.borrow().clone()).unwrap().into(),
             )),
             _ => Err(MachineError::TypeCheck),
         }
+    }
+}
+
+impl From<TokenArray> for Value {
+    fn from(v: TokenArray) -> Self {
+        Self::Procedure(v.into())
     }
 }
 
@@ -220,23 +237,25 @@ impl TryFrom<RuntimeValue> for Value {
     }
 }
 
-impl From<bool> for Value {
-    fn from(v: bool) -> Self {
-        Value::Bool(v)
-    }
-}
+macro_rules! to_value {
+    ($t:ty, $branch:ident) => {
+        impl From<$t> for Value {
+            fn from(v: $t) -> Self {
+                Self::$branch(v)
+            }
+        }
 
-impl From<i32> for Value {
-    fn from(v: i32) -> Self {
-        Value::Integer(v)
-    }
+        impl From<$t> for RuntimeValue {
+            fn from(v: $t) -> Self {
+                Self::Value(Value::$branch(v))
+            }
+        }
+    };
 }
-
-impl From<f32> for Value {
-    fn from(v: f32) -> Self {
-        Value::Real(v)
-    }
-}
+to_value!(bool, Bool);
+to_value!(i32, Integer);
+to_value!(f32, Real);
+to_value!(Rc<RefCell<Vec<u8>>>, String);
 
 impl<const N: usize> From<[u8; N]> for Value {
     fn from(v: [u8; N]) -> Self {
@@ -245,57 +264,81 @@ impl<const N: usize> From<[u8; N]> for Value {
     }
 }
 
-impl From<Vec<u8>> for Value {
-    fn from(v: Vec<u8>) -> Self {
-        Value::String(Rc::new(RefCell::new(v)))
+impl<const N: usize> From<[u8; N]> for RuntimeValue {
+    fn from(v: [u8; N]) -> Self {
+        let bytes: Vec<u8> = v.into();
+        bytes.into()
     }
 }
 
-impl From<Rc<RefCell<Vec<u8>>>> for Value {
-    fn from(v: Rc<RefCell<Vec<u8>>>) -> Self {
-        Value::String(v)
+impl From<Vec<u8>> for RuntimeValue {
+    fn from(v: Vec<u8>) -> Self {
+        Value::String(Rc::new(RefCell::new(v))).into()
+    }
+}
+
+impl From<Vec<u8>> for Value {
+    fn from(v: Vec<u8>) -> Self {
+        Self::String(Rc::new(RefCell::new(v)))
+    }
+}
+
+impl From<&str> for RuntimeValue {
+    fn from(v: &str) -> Self {
+        Value::Name(v.to_owned().into()).into()
     }
 }
 
 impl From<&str> for Value {
     fn from(v: &str) -> Self {
-        Value::Name(v.to_owned().into())
+        Self::Name(v.to_owned().into())
     }
 }
 
 impl From<Array> for Value {
     fn from(v: Array) -> Self {
-        Value::Array(Rc::new(RefCell::new(v)))
+        Self::Array(Rc::new(RefCell::new(v)))
     }
 }
 
-impl From<TokenArray> for Value {
-    fn from(v: TokenArray) -> Self {
-        Value::Procedure(v.into())
+impl From<Array> for RuntimeValue {
+    fn from(v: Array) -> Self {
+        Value::Array(Rc::new(RefCell::new(v))).into()
     }
 }
 
-impl From<Dictionary> for Value {
-    fn from(v: Dictionary) -> Self {
-        Value::Dictionary(Rc::new(RefCell::new(v)))
+impl From<RuntimeDictionary> for RuntimeValue {
+    fn from(v: RuntimeDictionary) -> Self {
+        RuntimeValue::Dictionary(Rc::new(RefCell::new(v)))
     }
 }
 
-impl From<Rc<RefCell<Dictionary>>> for Value {
-    fn from(v: Rc<RefCell<Dictionary>>) -> Self {
-        Value::Dictionary(v)
+impl From<Rc<RefCell<RuntimeDictionary>>> for RuntimeValue {
+    fn from(v: Rc<RefCell<RuntimeDictionary>>) -> Self {
+        Self::Dictionary(v)
     }
+}
+
+fn into_dict(d: RuntimeDictionary) -> MachineResult<Dictionary> {
+    let mut dict = Dictionary::new();
+    for (k, v) in d {
+        let v = match v {
+            RuntimeValue::Value(v) => v,
+            RuntimeValue::Dictionary(d) => {
+                let d: RuntimeDictionary =
+                    Rc::try_unwrap(d).map_or_else(|d| d.borrow().clone(), |d| d.into_inner());
+                Value::Dictionary(Rc::new(RefCell::new(into_dict(d)?)))
+            }
+            _ => return Err(MachineError::TypeCheck),
+        };
+        dict.insert(k, v);
+    }
+    Ok(dict)
 }
 
 impl<T: Into<Value>> From<T> for Token {
     fn from(v: T) -> Self {
         Token::Literal(v.into())
-    }
-}
-
-impl From<OperatorFn> for Value {
-    fn from(v: OperatorFn) -> Self {
-        Value::BuiltInOp(v)
     }
 }
 
@@ -307,6 +350,16 @@ macro_rules! values {
     };
     ($($e:expr),*) => {
         vec![$(Into::<Value>::into($e)),*]
+    }
+}
+
+#[cfg(test)]
+macro_rules! rt_values {
+    () => {
+        Array::new()
+    };
+    ($($e:expr),*) => {
+        vec![$(Into::<RuntimeValue>::into($e)),*]
     }
 }
 
@@ -485,8 +538,8 @@ impl Machine {
                 debug!("{}", name);
                 let v = self.variable_stack.get(&name)?;
                 match v {
-                    Value::BuiltInOp(op) => op(self)?,
-                    Value::Procedure(p) => self.execute_procedure(p)?,
+                    RuntimeValue::BuiltInOp(op) => op(self)?,
+                    RuntimeValue::Value(Value::Procedure(p)) => self.execute_procedure(p)?,
                     v => unreachable!("{:?}", v),
                 }
             }
@@ -529,12 +582,8 @@ impl Machine {
         self.pop().and_then(|v| v.int())
     }
 
-    fn pop_dict(&mut self) -> MachineResult<Rc<RefCell<Dictionary>>> {
+    fn pop_dict(&mut self) -> MachineResult<Rc<RefCell<RuntimeDictionary>>> {
         self.pop().and_then(|v| v.dict())
-    }
-
-    fn push_value(&mut self, v: impl Into<Value>) {
-        self.push(v.into());
     }
 
     fn push(&mut self, v: impl Into<RuntimeValue>) {
@@ -552,12 +601,12 @@ impl Machine {
 }
 
 struct VariableDictStack {
-    stack: Vec<Rc<RefCell<Dictionary>>>,
+    stack: Vec<Rc<RefCell<RuntimeDictionary>>>,
 }
 
 macro_rules! var_dict {
     ($($k:expr => $v:expr),* $(,)?) => {
-        std::iter::Iterator::collect(std::iter::IntoIterator::into_iter([$((Key::Name($k.to_owned().into()), Value::BuiltInOp($v)),)*]))
+        std::iter::Iterator::collect(std::iter::IntoIterator::into_iter([$((Key::Name($k.to_owned().into()), RuntimeValue::BuiltInOp($v)),)*]))
     };
 }
 
@@ -567,12 +616,12 @@ macro_rules! dict {
         Dictionary::new()
     };
     ($($k:expr => $v:expr),* $(,)?) => {
-        std::iter::Iterator::collect::<Dictionary>(std::iter::IntoIterator::into_iter([$((Key::Name($k.to_owned().into()), Value::from($v)),)*]))
+        std::iter::Iterator::collect::<RuntimeDictionary>(std::iter::IntoIterator::into_iter([$((Key::Name($k.to_owned().into()), RuntimeValue::from($v)),)*]))
     };
 }
 
 /// Create the `systemdict`
-fn system_dict() -> Dictionary {
+fn system_dict() -> RuntimeDictionary {
     fn ok() -> MachineResult<ExecState> {
         Ok(ExecState::Ok)
     }
@@ -623,12 +672,12 @@ fn system_dict() -> Dictionary {
 
         // - true -> true
         "true" => |m| {
-            m.push(RuntimeValue::Value(true.into()));
+            m.push(true);
             ok()
         },
         // - false -> false
         "false" => |m| {
-            m.push(RuntimeValue::Value(false.into()));
+            m.push(false);
             ok()
         },
 
@@ -637,10 +686,10 @@ fn system_dict() -> Dictionary {
             let a = m.pop()?.number()?;
             let b = m.pop()?.number()?;
             match (a, b) {
-                (Either::Left(a), Either::Left(b)) => m.push_value(a + b),
-                (Either::Right(a), Either::Right(b)) => m.push_value(a + b),
-                (Either::Left(a), Either::Right(b)) => m.push_value(a as f32 + b),
-                (Either::Right(a), Either::Left(b)) => m.push_value(a + b as f32),
+                (Either::Left(a), Either::Left(b)) => m.push(a + b),
+                (Either::Right(a), Either::Right(b)) => m.push(a + b),
+                (Either::Left(a), Either::Right(b)) => m.push(a as f32 + b),
+                (Either::Right(a), Either::Left(b)) => m.push(a + b as f32),
             }
             ok()
         },
@@ -648,7 +697,7 @@ fn system_dict() -> Dictionary {
         // int array -> array
         "array" => |m| {
             let count = m.pop_int()?;
-            m.push_value(Array::from_iter(repeat(Value::Null).take(count as usize)));
+            m.push(Array::from_iter(repeat(Value::Null).take(count as usize)));
             ok()
         },
         "[" => |m| {
@@ -665,18 +714,18 @@ fn system_dict() -> Dictionary {
                 }
             }
             array.reverse();
-            m.push_value(array);
+            m.push(array);
             ok()
         },
         "[]" => |m| {
-            m.push_value(Array::new());
+            m.push(Array::new());
             ok()
         },
 
         // int dict -> dict
         "dict" => |m| {
             let count = m.pop_int()?;
-            m.push_value(Dictionary::with_capacity(count as usize));
+            m.push(RuntimeDictionary::with_capacity(count as usize));
             ok()
         },
 
@@ -696,26 +745,26 @@ fn system_dict() -> Dictionary {
         // key value -> - Set key-value to current directory.
         "def" => |m| {
             let value = m.pop()?;
-            let key: Value = m.pop()?.try_into()?;
+            let key = m.pop()?;
             let dict = m.variable_stack.top();
-            dict.borrow_mut().insert(key.try_into()?, value.try_into()?);
+            dict.borrow_mut().insert(key.try_into()?, value);
             ok()
         },
 
         // dict/array key value put -
         // Set key-value to the given dictionary.
         "put" => |m| {
-            let value: Value = m.pop()?.try_into()?;
-            let key: Value = m.pop()?.try_into()?;
-            match m.pop()?.try_into()? {
-                Value::Dictionary(dict) => {
+            let value = m.pop()?;
+            let key = m.pop()?;
+            match m.pop()?{
+                RuntimeValue::Dictionary(dict) => {
                     dict.borrow_mut().insert(key.try_into()?, value);
                 }
-                Value::Array(array) => {
+                RuntimeValue::Value(Value::Array(array)) => {
                     let index = key.int()?;
                     let mut array = array.borrow_mut();
                     array.resize(index as usize + 1, Value::Null);
-                    array[index as usize] = value;
+                    array[index as usize] = value.try_into()?;
                 }
                 v => {
                     error!("put on non-dict/array: {:?}, key: {:?}, value: {:?}", v, key, value);
@@ -725,7 +774,7 @@ fn system_dict() -> Dictionary {
             ok()
         },
         "get" => |m| {
-            let key: Value = m.pop()?.try_into()?;
+            let key = m.pop()?;
             let dict = m.pop_dict()?;
             let key: Key = key.try_into()?;
             let value = dict.borrow().get(&key).cloned().ok_or(MachineError::Undefined)?;
@@ -736,13 +785,13 @@ fn system_dict() -> Dictionary {
         // int string -> string
         "string" => |m| {
             let count = m.pop_int()?;
-            m.push_value(vec![0u8; count as usize]);
+            m.push(vec![0u8; count as usize]);
             ok()
         },
 
         // push current variable stack to operand stack
         "currentdict" => |m| {
-            m.push_value(m.variable_stack.top());
+            m.push(m.variable_stack.top());
             ok()
         },
         "currentfile" => |m| {
@@ -756,8 +805,8 @@ fn system_dict() -> Dictionary {
             let buf = &mut borrow[..];
             let eof = f.borrow_mut().read(buf) < buf.len();
             drop(borrow);
-            m.push_value(s);
-            m.push_value(!eof);
+            m.push(s);
+            m.push(!eof);
             ok()
         },
 
@@ -768,7 +817,7 @@ fn system_dict() -> Dictionary {
             let increment = m.pop_int()?;
             let initial = m.pop_int()?;
             for i in (initial..=limit).step_by(increment as usize) {
-                m.push_value(i);
+                m.push(i);
                 m.execute_procedure(proc.clone())?;
             }
             ok()
@@ -793,7 +842,7 @@ fn system_dict() -> Dictionary {
             let key = m.pop()?;
             let name = key.name()?;
             let name = (*name).to_owned();
-            m.define_font(name, font.dict()?.borrow().clone());
+            m.define_font(name, into_dict(font.dict()?.borrow().clone())?);
             m.push(font);
             ok()
         },
@@ -805,15 +854,13 @@ fn system_dict() -> Dictionary {
 }
 
 /// Create the `globaldict`
-fn global_dict() -> Dictionary {
-    // dict.insert("globaldict".to_owned(), Value::Dictionary(Rc::new(dict)));
-    Dictionary::new()
+fn global_dict() -> RuntimeDictionary {
+    RuntimeDictionary::new()
 }
 
 /// Create the `userdict`
-fn user_dict() -> Dictionary {
-    // dict.insert("userdict".to_owned(), Value::Dictionary(Rc::new(dict)));
-    Dictionary::new()
+fn user_dict() -> RuntimeDictionary {
+    RuntimeDictionary::new()
 }
 
 impl VariableDictStack {
@@ -831,7 +878,7 @@ impl VariableDictStack {
         self.stack.push(self.stack[0].clone());
     }
 
-    fn get(&self, name: &str) -> MachineResult<Value> {
+    fn get(&self, name: &str) -> MachineResult<RuntimeValue> {
         let r = self
             .stack
             .iter()
@@ -844,21 +891,21 @@ impl VariableDictStack {
         r
     }
 
-    fn push(&mut self, dict: Rc<RefCell<Dictionary>>) {
+    fn push(&mut self, dict: Rc<RefCell<RuntimeDictionary>>) {
         self.stack.push(dict);
     }
 
     /// Pop the top dictionary from the stack. The first 3 dictionaries can not
     /// be popped, returns None if trying to pop them.
-    fn pop(&mut self) -> Option<Rc<RefCell<Dictionary>>> {
+    fn pop(&mut self) -> Option<Rc<RefCell<RuntimeDictionary>>> {
         (self.stack.len() > 3).then(|| self.stack.pop()).flatten()
     }
 
-    fn top(&self) -> Rc<RefCell<Dictionary>> {
+    fn top(&self) -> Rc<RefCell<RuntimeDictionary>> {
         self.stack.last().unwrap().clone()
     }
 
-    fn lock_system_dict(&self) -> Ref<Dictionary> {
+    fn lock_system_dict(&self) -> Ref<RuntimeDictionary> {
         self.stack[0].borrow()
     }
 }
