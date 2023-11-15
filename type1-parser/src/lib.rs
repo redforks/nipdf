@@ -1,6 +1,6 @@
 pub(crate) mod machine;
 pub(crate) mod parser;
-use std::{io::BufRead, rc::Rc};
+use std::{rc::Rc};
 
 use machine::{Array, Machine};
 use parser::header;

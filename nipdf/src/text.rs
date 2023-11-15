@@ -344,10 +344,6 @@ pub trait EncodingDictTrait {
 pub struct Encoding256<'a>([Cow<'a, str>; 256]);
 
 impl<'a> Encoding256<'a> {
-    pub fn new(encodings: [Cow<'a, str>; 256]) -> Self {
-        Self(encodings)
-    }
-
     pub fn borrowed(encodings: [&'a str; 256]) -> Self {
         Self(
             encodings

@@ -9,7 +9,7 @@ use std::{
     iter::repeat,
     rc::Rc,
 };
-use winnow::{binary::le_u32, combinator::preceded, error::ContextError, token::any, Parser};
+use winnow::Parser;
 
 mod decrypt;
 use decrypt::{decrypt, EEXEC_KEY};
@@ -158,6 +158,7 @@ pub enum Token {
     Name(Rc<String>),
 }
 
+#[cfg(test)]
 pub fn name_token(s: impl Into<String>) -> Token {
     Token::Name(Rc::new(s.into()))
 }
@@ -189,7 +190,7 @@ impl<const N: usize> From<[u8; N]> for Value {
 
 impl From<Vec<u8>> for Value {
     fn from(v: Vec<u8>) -> Self {
-        Value::String(Rc::new(RefCell::new(v.into())))
+        Value::String(Rc::new(RefCell::new(v)))
     }
 }
 
@@ -242,6 +243,7 @@ impl From<OperatorFn> for Value {
 }
 
 /// Create Array from a list of values that implement Into<Object> trait
+#[cfg(test)]
 macro_rules! values {
     () => {
         Array::new()
@@ -250,8 +252,8 @@ macro_rules! values {
         vec![$(Into::<Value>::into($e)),*]
     }
 }
-pub(crate) use values;
 
+#[cfg(test)]
 macro_rules! tokens {
     () => {
         TokenArray::new()
@@ -260,20 +262,15 @@ macro_rules! tokens {
         vec![$(Into::<Token>::into($e)),*]
     }
 }
-pub(crate) use tokens;
 
 #[derive(Debug, PartialEq, thiserror::Error)]
 pub enum MachineError {
     #[error("stack underflow")]
     StackUnderflow,
-    #[error("stack overflow")]
-    StackOverflow,
     #[error("type check error")]
     TypeCheck,
     #[error("undefined")]
     Undefined,
-    #[error("unimplemented")]
-    Unimplemented,
     #[error("unmatched mark")]
     UnMatchedMark,
 }
@@ -367,9 +364,9 @@ impl CurrentFile {
     pub fn finish(&mut self) {
         use winnow::combinator::repeat;
 
-        let mut remains = &self.data[self.remains_pos..];
+        let remains = &self.data[self.remains_pos..];
         repeat::<_, _, (), _, _>(.., white_space_or_comment)
-            .parse(&mut remains)
+            .parse(remains)
             .unwrap();
         self.remains_pos = self.data.len() - remains.len();
     }
@@ -466,7 +463,7 @@ impl Machine {
             self.stack
                 .iter()
                 .rev()
-                .map(|v| std::mem::discriminant(v))
+                .map(std::mem::discriminant)
                 .collect::<Vec<_>>()
         );
     }
@@ -519,6 +516,7 @@ macro_rules! var_dict {
     };
 }
 
+#[cfg(test)]
 macro_rules! dict {
     () => {
         Dictionary::new()
@@ -710,8 +708,8 @@ fn system_dict() -> Dictionary {
             let s = m.pop()?.string()?;
             let f = m.pop()?.current_file()?;
             let mut borrow = s.borrow_mut();
-            let mut buf = &mut borrow[..];
-            let eof = f.borrow_mut().read(&mut buf) < buf.len();
+            let buf = &mut borrow[..];
+            let eof = f.borrow_mut().read(buf) < buf.len();
             drop(borrow);
             m.push(s);
             m.push(!eof);
@@ -724,7 +722,7 @@ fn system_dict() -> Dictionary {
             let limit = m.pop_int()?;
             let increment = m.pop_int()?;
             let initial = m.pop_int()?;
-            for i in (initial..=limit).into_iter().step_by(increment as usize) {
+            for i in (initial..=limit).step_by(increment as usize) {
                 m.push(i);
                 m.execute_procedure(proc.clone())?;
             }
@@ -740,7 +738,7 @@ fn system_dict() -> Dictionary {
         },
         // file closefile -
         "closefile" => |m| {
-            let Value::CurrentFile(mut f) = m.pop()? else {
+            let Value::CurrentFile(_f) = m.pop()? else {
                 return Err(MachineError::TypeCheck);
             };
             Ok(ExecState::EndEExec)
@@ -763,16 +761,14 @@ fn system_dict() -> Dictionary {
 
 /// Create the `globaldict`
 fn global_dict() -> Dictionary {
-    let mut dict = Dictionary::new();
     // dict.insert("globaldict".to_owned(), Value::Dictionary(Rc::new(dict)));
-    dict
+    Dictionary::new()
 }
 
 /// Create the `userdict`
 fn user_dict() -> Dictionary {
-    let mut dict = Dictionary::new();
     // dict.insert("userdict".to_owned(), Value::Dictionary(Rc::new(dict)));
-    dict
+    Dictionary::new()
 }
 
 impl VariableDictStack {
@@ -794,7 +790,7 @@ impl VariableDictStack {
         let r = self
             .stack
             .iter()
-            .find_map(|dict| dict.borrow().get(name).map(|v| v.clone()))
+            .find_map(|dict| dict.borrow().get(name).cloned())
             .ok_or(MachineError::Undefined);
         #[cfg(debug_assertions)]
         if r.is_err() {
