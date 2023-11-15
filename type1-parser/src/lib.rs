@@ -17,12 +17,12 @@ pub struct Header {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Encoding([Option<String>; 256]);
+pub struct Encoding(pub [Option<String>; 256]);
 
 #[derive(Debug, PartialEq)]
 pub struct Font {
     header: Header,
-    encoding: Encoding,
+    encoding: Option<Encoding>,
 }
 
 fn parse_header(mut data: &[u8]) -> AnyResult<Header> {
@@ -53,7 +53,11 @@ impl Font {
         let fonts = machine.take_fonts();
         assert_eq!(fonts.len(), 1);
         let font = fonts.into_iter().next().unwrap();
-        let encoding = parse_encoding(&font.1["Encoding"].array()?.borrow())?;
+        let encoding = font
+            .1
+            .get("Encoding")
+            .map(|v| parse_encoding(&v.array()?.borrow()))
+            .transpose()?;
 
         Ok(Font { header, encoding })
     }
@@ -62,7 +66,7 @@ impl Font {
         &self.header
     }
 
-    pub fn encoding(&self) -> &Encoding {
-        &self.encoding
+    pub fn encoding(&self) -> Option<&Encoding> {
+        self.encoding.as_ref()
     }
 }
