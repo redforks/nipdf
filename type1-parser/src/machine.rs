@@ -31,12 +31,6 @@ pub enum Value {
     Dictionary(Rc<RefCell<Dictionary>>),
     Procedure(Rc<TokenArray>),
     Name(Rc<str>),
-    /// Tells eexec operation that works on current file.
-    CurrentFile(
-        #[educe(Debug(ignore))]
-        #[educe(PartialEq(ignore))]
-        Rc<RefCell<CurrentFile>>,
-    ),
 }
 
 #[derive(Educe)]
@@ -52,6 +46,12 @@ enum RuntimeValue {
         #[educe(Debug(ignore))]
         #[educe(PartialEq(ignore))]
         OperatorFn,
+    ),
+    /// Tells eexec operation that works on current file.
+    CurrentFile(
+        #[educe(Debug(ignore))]
+        #[educe(PartialEq(ignore))]
+        Rc<RefCell<CurrentFile>>,
     ),
 }
 
@@ -128,7 +128,7 @@ rt_value_access!(dict, opt_dict, Dictionary, Rc<RefCell<RuntimeDictionary>>);
 value_access!(procedure, opt_procedure, Procedure, Rc<TokenArray>);
 value_access!(name, opt_name, Name, Rc<str>);
 rt_value_access!(built_in_op, opt_built_in_op, BuiltInOp, OperatorFn);
-value_access!(
+rt_value_access!(
     current_file,
     opt_current_file,
     CurrentFile,
@@ -377,7 +377,7 @@ pub enum MachineError {
 
 pub type MachineResult<T> = Result<T, MachineError>;
 
-pub struct CurrentFile {
+struct CurrentFile {
     data: Vec<u8>,
     remains_pos: usize,
     decryped: Option<Vec<u8>>,
@@ -592,7 +592,7 @@ impl Machine {
     }
 
     fn push_current_file(&mut self) {
-        self.push(Value::CurrentFile(self.file.clone()))
+        self.push(RuntimeValue::CurrentFile(self.file.clone()))
     }
 
     fn define_font(&mut self, name: String, font: Dictionary) {
@@ -824,7 +824,7 @@ fn system_dict() -> RuntimeDictionary {
         },
         "eexec" => |m| {
             assert!(
-                matches!(m.pop()?, RuntimeValue::Value(Value::CurrentFile(_))),
+                matches!(m.pop()?, RuntimeValue::CurrentFile(_)),
                 "eexec on non-current file not implemented"
             );
             m.variable_stack.push_system_dict();
@@ -832,7 +832,7 @@ fn system_dict() -> RuntimeDictionary {
         },
         // file closefile -
         "closefile" => |m| {
-            let RuntimeValue::Value(Value::CurrentFile(_f)) = m.pop()? else {
+            let RuntimeValue::CurrentFile(_f) = m.pop()? else {
                 return Err(MachineError::TypeCheck);
             };
             Ok(ExecState::EndEExec)
