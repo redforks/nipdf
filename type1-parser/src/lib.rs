@@ -1,6 +1,5 @@
 pub(crate) mod machine;
 pub(crate) mod parser;
-use std::{rc::Rc};
 
 use machine::{Array, Machine};
 use parser::header;
@@ -35,9 +34,7 @@ fn parse_header(mut data: &[u8]) -> AnyResult<Header> {
 fn parse_encoding(arr: &Array) -> AnyResult<Encoding> {
     let mut encoding: [Option<String>; 256] = std::array::from_fn(|_| None);
     for (i, v) in arr.iter().enumerate() {
-        encoding[i] = v
-            .opt_name()
-            .map(|n| Rc::try_unwrap(n).unwrap_or_else(|n| n.as_ref().clone()));
+        encoding[i] = v.opt_name().map(|n| (*n).to_owned())
     }
     Ok(Encoding(encoding))
 }

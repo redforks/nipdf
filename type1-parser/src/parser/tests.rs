@@ -1,7 +1,16 @@
 use super::*;
-use crate::machine::{name_token, tokens};
+use crate::machine::name_token;
 use either::{Left, Right};
 use test_case::test_case;
+
+macro_rules! tokens {
+    () => {
+        TokenArray::new()
+    };
+    ($($e:expr),*) => {
+        vec![$(Into::<Token>::into($e)),*]
+    }
+}
 
 #[test]
 fn test_parse_header() {

@@ -30,7 +30,7 @@ pub enum Value {
     Array(Rc<RefCell<Array>>),
     Dictionary(Rc<RefCell<Dictionary>>),
     Procedure(Rc<TokenArray>),
-    Name(Rc<String>),
+    Name(Rc<str>),
     BuiltInOp(
         #[educe(Debug(ignore))]
         #[educe(PartialEq(ignore))]
@@ -76,7 +76,7 @@ impl Value {
     value_access!(array, opt_array, Array, Rc<RefCell<Array>>);
     value_access!(dict, opt_dict, Dictionary, Rc<RefCell<Dictionary>>);
     value_access!(procedure, opt_procedure, Procedure, Rc<TokenArray>);
-    value_access!(name, opt_name, Name, Rc<String>);
+    value_access!(name, opt_name, Name, Rc<str>);
     value_access!(built_in_op, opt_built_in_op, BuiltInOp, OperatorFn);
     value_access!(
         current_file,
@@ -107,7 +107,7 @@ impl Value {
 pub enum Key {
     Bool(bool),
     Integer(i32),
-    Name(Rc<String>),
+    Name(Rc<str>),
 }
 
 impl TryFrom<Value> for Key {
@@ -144,7 +144,7 @@ impl std::borrow::Borrow<str> for Key {
             // return a string that will never be a valid name to never select bool key using str
             Key::Bool(_) => "$$bool$$",
             Key::Integer(_) => "$$int$$",
-            Key::Name(n) => n.as_str(),
+            Key::Name(n) => n,
         }
     }
 }
@@ -155,12 +155,12 @@ pub type Dictionary = HashMap<Key, Value>;
 pub enum Token {
     Literal(Value),
     /// Name to lookup operation dict to get the actual operator
-    Name(Rc<String>),
+    Name(Rc<str>),
 }
 
 #[cfg(test)]
-pub fn name_token(s: impl Into<String>) -> Token {
-    Token::Name(Rc::new(s.into()))
+pub fn name_token(s: impl Into<Rc<str>>) -> Token {
+    Token::Name(s.into())
 }
 
 impl From<bool> for Value {
@@ -250,16 +250,6 @@ macro_rules! values {
     };
     ($($e:expr),*) => {
         vec![$(Into::<Value>::into($e)),*]
-    }
-}
-
-#[cfg(test)]
-macro_rules! tokens {
-    () => {
-        TokenArray::new()
-    };
-    ($($e:expr),*) => {
-        vec![$(Into::<Token>::into($e)),*]
     }
 }
 
@@ -696,8 +686,7 @@ fn system_dict() -> Dictionary {
 
         // push current variable stack to operand stack
         "currentdict" => |m| {
-            let dict = m.variable_stack.top();
-            m.push(dict.clone());
+            m.push(m.variable_stack.top());
             ok()
         },
         "currentfile" => |m| {
@@ -747,7 +736,7 @@ fn system_dict() -> Dictionary {
             let font = m.pop()?;
             let key = m.pop()?;
             let name = key.name()?;
-            let name = Rc::try_unwrap(name).unwrap_or_else(|name| name.as_ref().clone());
+            let name = (*name).to_owned();
             m.define_font(name, font.dict()?.borrow().clone());
             m.push(font);
             ok()
