@@ -42,8 +42,6 @@ pub enum Value {
         #[educe(PartialEq(ignore))]
         Rc<RefCell<CurrentFile>>,
     ),
-    /// Tells ] operation that begin of array in stack.
-    ArrayMark,
 }
 
 #[derive(Educe)]
@@ -52,6 +50,8 @@ enum RuntimeValue {
     Value(Value),
     /// Mark stack position
     Mark,
+    /// Tells ] operation that begin of array in stack.
+    ArrayMark,
 }
 
 macro_rules! value_access {
@@ -652,14 +652,14 @@ fn system_dict() -> Dictionary {
             ok()
         },
         "[" => |m| {
-            m.push_value(Value::ArrayMark);
+            m.push(RuntimeValue::ArrayMark);
             ok()
         },
         "]" => |m| {
             let mut array = Array::new();
             loop {
                 match m.pop()? {
-                    RuntimeValue::Value(Value::ArrayMark) => break,
+                    RuntimeValue::ArrayMark => break,
                     RuntimeValue::Value(v) => array.push(v),
                     _ => return Err(MachineError::TypeCheck),
                 }
