@@ -645,6 +645,10 @@ fn system_dict() -> Dictionary {
             m.push(array);
             ok()
         },
+        "[]" => |m| {
+            m.push(Array::new());
+            ok()
+        },
 
         // int dict -> dict
         "dict" => |m| {

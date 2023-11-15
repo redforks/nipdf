@@ -133,6 +133,11 @@ fn test_string() {
 }
 
 #[test]
+fn array_literal() {
+    assert_op("[]", values![]); 
+}
+
+#[test]
 fn execute_on_file() {
     let data = include_bytes!("./cmsy9.pfb");
     let mut machine = Machine::new(data.to_vec());
