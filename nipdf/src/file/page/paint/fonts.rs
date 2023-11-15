@@ -183,7 +183,7 @@ impl<'c> Type1FontOp<'c> {
                 info!("scan encoding from cff font. ({})", font_name);
                 let cff_file: CffFile<'c> = CffFile::open(font_data)?;
                 let font: CffFont<'c> = cff_file.iter()?.next().expect("no font in cff?");
-                return Ok(Encoding256::new(font.encodings()?));
+                return Ok(Encoding256::borrowed(font.encodings()?));
             }
             info!("TODO: resolve encoding from type1 font. ({})", font_name);
 
