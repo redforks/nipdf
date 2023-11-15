@@ -340,6 +340,7 @@ impl CurrentFile {
 
     pub fn stop_decrypt(&mut self) {
         assert!(self.decryped.is_some());
+        self.skip_white_space();
         self.remains_pos += self.decryped_pos;
         self.decryped = None;
     }
@@ -371,17 +372,6 @@ impl CurrentFile {
             .parse(&mut remains)
             .unwrap();
         self.remains_pos = self.data.len() - remains.len();
-    }
-
-    pub fn close(&mut self) {
-        match &self.decryped {
-            Some(data) => {
-                self.decryped_pos = data.len();
-            }
-            None => {
-                self.remains_pos = self.data.len();
-            }
-        }
     }
 }
 
@@ -739,12 +729,12 @@ fn system_dict() -> Dictionary {
             let Value::CurrentFile(mut f) = m.pop()? else {
                 return Err(MachineError::TypeCheck);
             };
-            f.borrow_mut().close();
             Ok(ExecState::EndEExec)
         },
         "definefont" => |m| {
             let font = m.pop()?;
-            let _key = m.pop()?;
+            let key = m.pop()?;
+            dbg!(( key, &font));
             m.push(font);
             ok()
         },
