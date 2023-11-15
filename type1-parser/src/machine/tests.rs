@@ -9,7 +9,7 @@ trait Assert {
 impl<V: Into<Value> + Clone> Assert for V {
     fn assert(&self, m: &Machine) {
         assert_eq!(m.stack.len(), 1);
-        assert_eq!(m.stack[0], self.clone().into());
+        assert_eq!(m.stack[0], RuntimeValue::Value(self.clone().into()));
     }
 }
 
@@ -27,7 +27,7 @@ impl Assert for Stack {
     fn assert(&self, m: &Machine) {
         assert_eq!(m.stack.len(), self.0.len());
         for (i, v) in self.0.iter().enumerate() {
-            assert_eq!(&m.stack[i], v);
+            assert_eq!(m.stack[i], RuntimeValue::Value(v.clone()));
         }
     }
 }

@@ -48,47 +48,88 @@ pub enum Value {
     ArrayMark,
 }
 
+#[derive(Educe)]
+#[educe(Debug, PartialEq, Clone)]
+enum RuntimeValue {
+    Value(Value),
+    Other,
+}
+
 macro_rules! value_access {
     ($method:ident, $opt_method:ident, $branch:ident, $t: ty) => {
-        #[allow(dead_code)]
-        pub fn $opt_method(&self) -> Option<$t> {
-            match self {
-                Self::$branch(v) => Some(v.clone()),
-                _ => None,
+        impl Value {
+            #[allow(dead_code)]
+            pub fn $opt_method(&self) -> Option<$t> {
+                match self {
+                    Self::$branch(v) => Some(v.clone()),
+                    _ => None,
+                }
+            }
+
+            #[allow(dead_code)]
+            pub fn $method(&self) -> MachineResult<$t> {
+                match self {
+                    Self::$branch(v) => Ok(v.clone()),
+                    _ => Err(MachineError::TypeCheck),
+                }
             }
         }
 
-        #[allow(dead_code)]
-        pub fn $method(&self) -> MachineResult<$t> {
-            match self {
-                Self::$branch(v) => Ok(v.clone()),
-                _ => Err(MachineError::TypeCheck),
+        impl RuntimeValue {
+            #[allow(dead_code)]
+            pub fn $opt_method(&self) -> Option<$t> {
+                match self {
+                    Self::Value(Value::$branch(v)) => Some(v.clone()),
+                    _ => None,
+                }
+            }
+
+            #[allow(dead_code)]
+            pub fn $method(&self) -> MachineResult<$t> {
+                match self {
+                    Self::Value(Value::$branch(v)) => Ok(v.clone()),
+                    _ => Err(MachineError::TypeCheck),
+                }
             }
         }
     };
 }
 
-impl Value {
-    value_access!(bool, opt_bool, Bool, bool);
-    value_access!(int, opt_int, Integer, i32);
-    value_access!(real, opt_real, Real, f32);
-    value_access!(string, opt_string, String, Rc<RefCell<Vec<u8>>>);
-    value_access!(array, opt_array, Array, Rc<RefCell<Array>>);
-    value_access!(dict, opt_dict, Dictionary, Rc<RefCell<Dictionary>>);
-    value_access!(procedure, opt_procedure, Procedure, Rc<TokenArray>);
-    value_access!(name, opt_name, Name, Rc<str>);
-    value_access!(built_in_op, opt_built_in_op, BuiltInOp, OperatorFn);
-    value_access!(
-        current_file,
-        opt_current_file,
-        CurrentFile,
-        Rc<RefCell<CurrentFile>>
-    );
+value_access!(bool, opt_bool, Bool, bool);
+value_access!(int, opt_int, Integer, i32);
+value_access!(real, opt_real, Real, f32);
+value_access!(string, opt_string, String, Rc<RefCell<Vec<u8>>>);
+value_access!(array, opt_array, Array, Rc<RefCell<Array>>);
+value_access!(dict, opt_dict, Dictionary, Rc<RefCell<Dictionary>>);
+value_access!(procedure, opt_procedure, Procedure, Rc<TokenArray>);
+value_access!(name, opt_name, Name, Rc<str>);
+value_access!(built_in_op, opt_built_in_op, BuiltInOp, OperatorFn);
+value_access!(
+    current_file,
+    opt_current_file,
+    CurrentFile,
+    Rc<RefCell<CurrentFile>>
+);
 
+impl Value {
     pub fn opt_number(&self) -> Option<Either<i32, f32>> {
         match self {
             Self::Integer(i) => Some(Either::Left(*i)),
             Self::Real(r) => Some(Either::Right(*r)),
+            _ => None,
+        }
+    }
+
+    pub fn number(&self) -> MachineResult<Either<i32, f32>> {
+        self.opt_number().ok_or(MachineError::TypeCheck)
+    }
+}
+
+impl RuntimeValue {
+    pub fn opt_number(&self) -> Option<Either<i32, f32>> {
+        match self {
+            Self::Value(Value::Integer(i)) => Some(Either::Left(*i)),
+            Self::Value(Value::Real(r)) => Some(Either::Right(*r)),
             _ => None,
         }
     }
@@ -123,6 +164,12 @@ impl TryFrom<Value> for Key {
             )),
             _ => Err(MachineError::TypeCheck),
         }
+    }
+}
+
+impl From<Value> for RuntimeValue {
+    fn from(v: Value) -> Self {
+        Self::Value(v)
     }
 }
 
@@ -161,6 +208,17 @@ pub enum Token {
 #[cfg(test)]
 pub fn name_token(s: impl Into<Rc<str>>) -> Token {
     Token::Name(s.into())
+}
+
+impl TryFrom<RuntimeValue> for Value {
+    type Error = MachineError;
+
+    fn try_from(v: RuntimeValue) -> Result<Self, Self::Error> {
+        match v {
+            RuntimeValue::Value(v) => Ok(v),
+            _ => Err(MachineError::TypeCheck),
+        }
+    }
 }
 
 impl From<bool> for Value {
@@ -366,7 +424,7 @@ impl CurrentFile {
 pub struct Machine {
     file: Rc<RefCell<CurrentFile>>,
     variable_stack: VariableDictStack,
-    stack: Vec<Value>,
+    stack: Vec<RuntimeValue>,
     fonts: Vec<(String, Dictionary)>,
 }
 
@@ -458,31 +516,29 @@ impl Machine {
         );
     }
 
-    fn pop(&mut self) -> MachineResult<Value> {
+    fn pop(&mut self) -> MachineResult<RuntimeValue> {
         let r = self.stack.pop().ok_or(MachineError::StackUnderflow);
         self.dump_stack();
         r
     }
 
-    fn top(&self) -> MachineResult<&Value> {
+    fn top(&self) -> MachineResult<&RuntimeValue> {
         self.stack.last().ok_or(MachineError::StackUnderflow)
     }
 
     fn pop_int(&mut self) -> MachineResult<i32> {
-        self.pop().and_then(|v| match v {
-            Value::Integer(i) => Ok(i),
-            _ => Err(MachineError::TypeCheck),
-        })
+        self.pop().and_then(|v| v.int())
     }
 
     fn pop_dict(&mut self) -> MachineResult<Rc<RefCell<Dictionary>>> {
-        self.pop().and_then(|v| match v {
-            Value::Dictionary(d) => Ok(d),
-            _ => Err(MachineError::TypeCheck),
-        })
+        self.pop().and_then(|v| v.dict())
     }
 
-    fn push(&mut self, v: impl Into<Value>) {
+    fn push_value(&mut self, v: impl Into<Value>) {
+        self.push(v.into());
+    }
+
+    fn push(&mut self, v: impl Into<RuntimeValue>) {
         self.stack.push(v.into());
         self.dump_stack();
     }
@@ -562,18 +618,18 @@ fn system_dict() -> Dictionary {
         "cleartomark" => |m| {
             while m.pop()
                 .map_err(|e| if e == MachineError::StackUnderflow {MachineError::UnMatchedMark } else {e})?
-                 != Value::Mark {}
+                 != RuntimeValue::Value(Value::Mark) {}
             ok()
         },
 
         // - true -> true
         "true" => |m| {
-            m.push(true);
+            m.push(RuntimeValue::Value(true.into()));
             ok()
         },
         // - false -> false
         "false" => |m| {
-            m.push(false);
+            m.push(RuntimeValue::Value(false.into()));
             ok()
         },
 
@@ -582,10 +638,10 @@ fn system_dict() -> Dictionary {
             let a = m.pop()?.number()?;
             let b = m.pop()?.number()?;
             match (a, b) {
-                (Either::Left(a), Either::Left(b)) => m.push(a + b),
-                (Either::Right(a), Either::Right(b)) => m.push(a + b),
-                (Either::Left(a), Either::Right(b)) => m.push(a as f32 + b),
-                (Either::Right(a), Either::Left(b)) => m.push(a + b as f32),
+                (Either::Left(a), Either::Left(b)) => m.push_value(a + b),
+                (Either::Right(a), Either::Right(b)) => m.push_value(a + b),
+                (Either::Left(a), Either::Right(b)) => m.push_value(a as f32 + b),
+                (Either::Right(a), Either::Left(b)) => m.push_value(a + b as f32),
             }
             ok()
         },
@@ -593,34 +649,35 @@ fn system_dict() -> Dictionary {
         // int array -> array
         "array" => |m| {
             let count = m.pop_int()?;
-            m.push(Array::from_iter(repeat(Value::Null).take(count as usize)));
+            m.push_value(Array::from_iter(repeat(Value::Null).take(count as usize)));
             ok()
         },
         "[" => |m| {
-            m.push(Value::ArrayMark);
+            m.push_value(Value::ArrayMark);
             ok()
         },
         "]" => |m| {
             let mut array = Array::new();
             loop {
                 match m.pop()? {
-                    Value::ArrayMark => break,
-                    v => array.push(v),
+                    RuntimeValue::Value(Value::ArrayMark) => break,
+                    RuntimeValue::Value(v) => array.push(v),
+                    _ => return Err(MachineError::TypeCheck),
                 }
             }
             array.reverse();
-            m.push(array);
+            m.push_value(array);
             ok()
         },
         "[]" => |m| {
-            m.push(Array::new());
+            m.push_value(Array::new());
             ok()
         },
 
         // int dict -> dict
         "dict" => |m| {
             let count = m.pop_int()?;
-            m.push(Dictionary::with_capacity(count as usize));
+            m.push_value(Dictionary::with_capacity(count as usize));
             ok()
         },
 
@@ -640,18 +697,18 @@ fn system_dict() -> Dictionary {
         // key value -> - Set key-value to current directory.
         "def" => |m| {
             let value = m.pop()?;
-            let key = m.pop()?;
+            let key: Value = m.pop()?.try_into()?;
             let dict = m.variable_stack.top();
-            dict.borrow_mut().insert(key.try_into()?, value);
+            dict.borrow_mut().insert(key.try_into()?, value.try_into()?);
             ok()
         },
 
         // dict/array key value put -
         // Set key-value to the given dictionary.
         "put" => |m| {
-            let value = m.pop()?;
-            let key = m.pop()?;
-            match m.pop()? {
+            let value: Value = m.pop()?.try_into()?;
+            let key: Value = m.pop()?.try_into()?;
+            match m.pop()?.try_into()? {
                 Value::Dictionary(dict) => {
                     dict.borrow_mut().insert(key.try_into()?, value);
                 }
@@ -669,7 +726,7 @@ fn system_dict() -> Dictionary {
             ok()
         },
         "get" => |m| {
-            let key = m.pop()?;
+            let key: Value = m.pop()?.try_into()?;
             let dict = m.pop_dict()?;
             let key: Key = key.try_into()?;
             let value = dict.borrow().get(&key).cloned().ok_or(MachineError::Undefined)?;
@@ -680,13 +737,13 @@ fn system_dict() -> Dictionary {
         // int string -> string
         "string" => |m| {
             let count = m.pop_int()?;
-            m.push(vec![0u8; count as usize]);
+            m.push_value(vec![0u8; count as usize]);
             ok()
         },
 
         // push current variable stack to operand stack
         "currentdict" => |m| {
-            m.push(m.variable_stack.top());
+            m.push_value(m.variable_stack.top());
             ok()
         },
         "currentfile" => |m| {
@@ -700,8 +757,8 @@ fn system_dict() -> Dictionary {
             let buf = &mut borrow[..];
             let eof = f.borrow_mut().read(buf) < buf.len();
             drop(borrow);
-            m.push(s);
-            m.push(!eof);
+            m.push_value(s);
+            m.push_value(!eof);
             ok()
         },
 
@@ -712,14 +769,14 @@ fn system_dict() -> Dictionary {
             let increment = m.pop_int()?;
             let initial = m.pop_int()?;
             for i in (initial..=limit).step_by(increment as usize) {
-                m.push(i);
+                m.push_value(i);
                 m.execute_procedure(proc.clone())?;
             }
             ok()
         },
         "eexec" => |m| {
             assert!(
-                matches!(m.pop()?, Value::CurrentFile(_)),
+                matches!(m.pop()?, RuntimeValue::Value(Value::CurrentFile(_))),
                 "eexec on non-current file not implemented"
             );
             m.variable_stack.push_system_dict();
@@ -727,7 +784,7 @@ fn system_dict() -> Dictionary {
         },
         // file closefile -
         "closefile" => |m| {
-            let Value::CurrentFile(_f) = m.pop()? else {
+            let RuntimeValue::Value(Value::CurrentFile(_f)) = m.pop()? else {
                 return Err(MachineError::TypeCheck);
             };
             Ok(ExecState::EndEExec)
