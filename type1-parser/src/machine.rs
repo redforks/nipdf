@@ -28,7 +28,7 @@ pub enum Value {
     Real(f32),
     String(Rc<RefCell<Vec<u8>>>),
     Array(Rc<RefCell<Array>>),
-    Dictionary(Rc<RefCell<Dictionary>>),
+    Dictionary(Dictionary),
     Procedure(Rc<TokenArray>),
     Name(Rc<str>),
 }
@@ -327,7 +327,7 @@ fn into_dict(d: RuntimeDictionary) -> MachineResult<Dictionary> {
             RuntimeValue::Dictionary(d) => {
                 let d: RuntimeDictionary =
                     Rc::try_unwrap(d).map_or_else(|d| d.borrow().clone(), |d| d.into_inner());
-                Value::Dictionary(Rc::new(RefCell::new(into_dict(d)?)))
+                Value::Dictionary(into_dict(d)?)
             }
             _ => return Err(MachineError::TypeCheck),
         };
