@@ -36,8 +36,6 @@ pub enum Value {
         #[educe(PartialEq(ignore))]
         OperatorFn,
     ),
-    /// Mark stack position
-    Mark,
     /// Tells eexec operation that works on current file.
     CurrentFile(
         #[educe(Debug(ignore))]
@@ -52,7 +50,8 @@ pub enum Value {
 #[educe(Debug, PartialEq, Clone)]
 enum RuntimeValue {
     Value(Value),
-    Other,
+    /// Mark stack position
+    Mark,
 }
 
 macro_rules! value_access {
@@ -611,14 +610,14 @@ fn system_dict() -> Dictionary {
 
         // - mark -> Mark
         "mark" => |m| {
-            m.push(Value::Mark);
+            m.push(RuntimeValue::Mark);
             ok()
         },
         // Mark obj1 .. obj(n) cleartomark -> -
         "cleartomark" => |m| {
             while m.pop()
                 .map_err(|e| if e == MachineError::StackUnderflow {MachineError::UnMatchedMark } else {e})?
-                 != RuntimeValue::Value(Value::Mark) {}
+                 != RuntimeValue::Mark {}
             ok()
         },
 
