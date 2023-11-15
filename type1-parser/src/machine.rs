@@ -287,31 +287,10 @@ pub struct CurrentFile {
     decryped_pos: usize,
 }
 
-/// If file is pfb file, remove pfb section bytes
-fn normalize_pfb(mut data: Vec<u8>) -> Vec<u8> {
-    if data.len() < 100 || data[0] != 0x80 {
-        return data;
-    }
-
-    let mut pos = 0;
-    for _ in 0..3 {
-        let section_len = preceded((0x80u8, any), le_u32::<_, ContextError>)
-            .parse(&data[pos..(6 + pos)])
-            .unwrap() as usize;
-        data.drain(pos..(pos + 6));
-        pos += section_len;
-    }
-
-    Parser::<_, _, ContextError>::parse(&mut &b"\x80\x03"[..], &data[pos..]).unwrap();
-    data.drain(pos..);
-
-    data
-}
-
 impl CurrentFile {
     pub fn new(data: Vec<u8>) -> Self {
         Self {
-            data: normalize_pfb(data),
+            data,
             remains_pos: 0,
             decryped: None,
             decryped_pos: 0,

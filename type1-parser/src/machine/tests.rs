@@ -134,25 +134,12 @@ fn test_string() {
 
 #[test]
 fn array_literal() {
-    assert_op("[]", values![]); 
+    assert_op("[]", values![]);
 }
 
 #[test]
 fn execute_on_file() {
     let data = include_bytes!("./cmsy9.pfb");
-    let mut machine = Machine::new(data.to_vec());
-    match machine.execute() {
-        Ok(_) => {}
-        Err(e) => {
-            println!("{}:\n{:?}", e, machine.stack);
-            panic!();
-        }
-    }
-}
-
-#[test]
-fn pfb_file() {
-    let data = include_bytes!("../../../nipdf/fonts/d050000l.pfb");
     let mut machine = Machine::new(data.to_vec());
     match machine.execute() {
         Ok(_) => {}

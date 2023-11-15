@@ -4,7 +4,7 @@ use std::{io::BufRead, rc::Rc};
 
 use machine::{Array, Machine};
 use parser::header;
-use winnow::Parser;
+use winnow::{binary::le_u32, combinator::preceded, error::ContextError, token::any, Parser};
 
 type AnyResult<T> = Result<T, anyhow::Error>;
 
@@ -44,7 +44,7 @@ fn parse_encoding(arr: &Array) -> AnyResult<Encoding> {
 
 impl Font {
     pub fn parse(data: impl Into<Vec<u8>>) -> AnyResult<Self> {
-        let data = data.into();
+        let data = normalize_pfb(data.into());
         let header = parse_header(&data)?;
         assert!(header.spec_ver.starts_with("1."), "Not Type1 font");
 
@@ -68,5 +68,38 @@ impl Font {
 
     pub fn encoding(&self) -> Option<&Encoding> {
         self.encoding.as_ref()
+    }
+}
+
+/// If file is pfb file, remove pfb section bytes
+fn normalize_pfb(mut data: Vec<u8>) -> Vec<u8> {
+    if data.len() < 100 || data[0] != 0x80 {
+        return data;
+    }
+
+    let mut pos = 0;
+    for _ in 0..3 {
+        let section_len = preceded((0x80u8, any), le_u32::<_, ContextError>)
+            .parse(&data[pos..(6 + pos)])
+            .unwrap() as usize;
+        data.drain(pos..(pos + 6));
+        pos += section_len;
+    }
+
+    Parser::<_, _, ContextError>::parse(&mut &b"\x80\x03"[..], &data[pos..]).unwrap();
+    data.drain(pos..);
+
+    data
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_pfb_file() {
+        let data = include_bytes!("../../nipdf/fonts/d050000l.pfb");
+        let font = Font::parse(*data).unwrap();
+        assert_eq!("Dingbats", font.header.font_name);
     }
 }
