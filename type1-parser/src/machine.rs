@@ -380,6 +380,7 @@ pub struct Machine {
     file: Rc<RefCell<CurrentFile>>,
     variable_stack: VariableDictStack,
     stack: Vec<Value>,
+    fonts: Vec<(String, Dictionary)>,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -397,6 +398,7 @@ impl Machine {
             file: Rc::new(RefCell::new(CurrentFile::new(file))),
             variable_stack: VariableDictStack::new(),
             stack: Vec::new(),
+            fonts: vec![],
         }
     }
 
@@ -423,6 +425,10 @@ impl Machine {
         self.file.borrow_mut().finish();
 
         Ok(())
+    }
+
+    pub fn take_fonts(self) -> Vec<(String, Dictionary)> {
+        self.fonts
     }
 
     fn exec(&mut self, token: Token) -> MachineResult<ExecState> {
@@ -496,6 +502,10 @@ impl Machine {
 
     fn push_current_file(&mut self) {
         self.push(Value::CurrentFile(self.file.clone()))
+    }
+
+    fn define_font(&mut self, name: String, font: Dictionary) {
+        self.fonts.push((name, font));
     }
 }
 
@@ -734,7 +744,9 @@ fn system_dict() -> Dictionary {
         "definefont" => |m| {
             let font = m.pop()?;
             let key = m.pop()?;
-            dbg!(( key, &font));
+            let name = key.name()?;
+            let name = Rc::try_unwrap(name).unwrap_or_else(|name| name.as_ref().clone());
+            m.define_font(name, font.dict()?.borrow().clone());
             m.push(font);
             ok()
         },
