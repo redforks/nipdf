@@ -184,8 +184,20 @@ impl<'c> Type1FontOp<'c> {
                 let cff_file: CffFile<'c> = CffFile::open(font_data)?;
                 let font: CffFont<'c> = cff_file.iter()?.next().expect("no font in cff?");
                 return Ok(Encoding256::borrowed(font.encodings()?));
+            } else {
+                info!("scan encoding from type1 font. ({})", font_name);
+                let type1_font = type1_parser::Font::parse(font_data)?;
+                if let Some(encoding) = type1_font.encoding() {
+                    let mut encoding256: [String; 256] =
+                        std::array::from_fn(|_| ".notdef".to_owned());
+                    for (i, name) in encoding.0.iter().enumerate() {
+                        if let Some(n) = name {
+                            encoding256[i] = n.to_owned();
+                        }
+                    }
+                    return Ok(Encoding256::owned(encoding256));
+                }
             }
-            info!("TODO: resolve encoding from type1 font. ({})", font_name);
 
             // if font not embed encoding, use known encoding for the two standard symbol fonts
             match font_name {

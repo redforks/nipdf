@@ -359,6 +359,17 @@ impl<'a> Encoding256<'a> {
         )
     }
 
+    pub fn owned(encodings: [String; 256]) -> Self {
+        Self(
+            encodings
+                .iter()
+                .map(|s| Cow::Owned(s.clone()))
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap(),
+        )
+    }
+
     pub fn decode(&self, ch: u8) -> &str {
         self.0[ch as usize].as_ref()
     }
