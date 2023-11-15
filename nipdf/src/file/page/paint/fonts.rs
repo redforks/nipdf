@@ -225,7 +225,11 @@ impl<'c> Type1FontOp<'c> {
         let encoding = match encoding {
             Some(NameOrDictByRef::Dict(d)) => {
                 let encoding_dict = EncodingDict::new(None, d, font_dict.resolver())?;
-                let r = resolve_by_name(encoding_dict.base_encoding()?)?;
+                let r = resolve_by_name(
+                    encoding_dict
+                        .base_encoding()?
+                        .or_else(|| standard_14_type1_font_encoding(font_name)),
+                )?;
                 if let Some(diff) = encoding_dict.differences()? {
                     r.apply_differences(&diff)
                 } else {
@@ -233,7 +237,7 @@ impl<'c> Type1FontOp<'c> {
                 }
             }
             Some(NameOrDictByRef::Name(name)) => resolve_by_name(Some(name.as_ref()))?,
-            None => resolve_by_name(None)?,
+            None => resolve_by_name(standard_14_type1_font_encoding(font_name))?,
         };
         Ok(Self {
             font_width,
@@ -549,6 +553,27 @@ fn normalize_font_name(name: &str) -> &str {
         "TimesNewRomanPSMT,Italic" => "Times-Italic",
         "ZapfDingbats" => "ZapfDingbats",
         others => others,
+    }
+}
+
+/// If font_name is a standard 14 font, return its Encoding name
+fn standard_14_type1_font_encoding(font_name: &str) -> Option<&'static str> {
+    match normalize_font_name(font_name) {
+        "Courier" => Some("StandardEncoding"),
+        "Courier-Bold" => Some("StandardEncoding"),
+        "Courier-BoldOblique" => Some("StandardEncoding"),
+        "Courier-Oblique" => Some("StandardEncoding"),
+        "Helvetica" => Some("StandardEncoding"),
+        "Helvetica-Bold" => Some("StandardEncoding"),
+        "Helvetica-BoldOblique" => Some("StandardEncoding"),
+        "Helvetica-Oblique" => Some("StandardEncoding"),
+        "Symbol" => Some("Symbol"),
+        "Times-Bold" => Some("StandardEncoding"),
+        "Times-BoldItalic" => Some("StandardEncoding"),
+        "Times-Italic" => Some("StandardEncoding"),
+        "Times-Roman" => Some("StandardEncoding"),
+        "ZapfDingbats" => Some("ZapfDingbats"),
+        _ => None,
     }
 }
 

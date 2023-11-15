@@ -388,6 +388,8 @@ impl Encoding256<'static> {
             "MacExpertEncoding" => Some(Self::MAC_EXPERT),
             "WinAnsiEncoding" => Some(Self::WIN_ANSI),
             "StandardEncoding" => Some(Self::STANDARD),
+            "Symbol" => Some(Self::SYMBOL),
+            "ZapfDingbats" => Some(Self::ZAPFDINGBATS),
             _ => None,
         }
     }
