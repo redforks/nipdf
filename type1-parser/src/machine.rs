@@ -35,13 +35,13 @@ pub enum Value {
 
 #[derive(Educe)]
 #[educe(Debug, PartialEq, Clone)]
-enum RuntimeValue {
+enum RuntimeValue<'a> {
     Value(Value),
     /// Mark stack position
     Mark,
     /// Tells ] operation that begin of array in stack.
     ArrayMark,
-    Dictionary(Rc<RefCell<RuntimeDictionary>>),
+    Dictionary(Rc<RefCell<RuntimeDictionary<'a>>>),
     BuiltInOp(
         #[educe(Debug(ignore))]
         #[educe(PartialEq(ignore))]
@@ -51,11 +51,11 @@ enum RuntimeValue {
     CurrentFile(
         #[educe(Debug(ignore))]
         #[educe(PartialEq(ignore))]
-        Rc<RefCell<CurrentFile>>,
+        Rc<RefCell<CurrentFile<'a>>>,
     ),
 }
 
-type RuntimeDictionary = HashMap<Key, RuntimeValue>;
+type RuntimeDictionary<'a> = HashMap<Key, RuntimeValue<'a>>;
 
 macro_rules! value_access {
     ($method:ident, $opt_method:ident, $branch:ident, $t: ty) => {
@@ -77,7 +77,7 @@ macro_rules! value_access {
             }
         }
 
-        impl RuntimeValue {
+        impl<'a> RuntimeValue<'a> {
             #[allow(dead_code)]
             pub fn $opt_method(&self) -> Option<$t> {
                 match self {
@@ -99,7 +99,7 @@ macro_rules! value_access {
 
 macro_rules! rt_value_access {
     ($method:ident, $opt_method:ident, $branch:ident, $t: ty) => {
-        impl RuntimeValue {
+        impl<'a> RuntimeValue<'a> {
             #[allow(dead_code)]
             pub fn $opt_method(&self) -> Option<$t> {
                 match self {
@@ -124,7 +124,12 @@ value_access!(int, opt_int, Integer, i32);
 value_access!(real, opt_real, Real, f32);
 value_access!(string, opt_string, String, Rc<RefCell<Vec<u8>>>);
 value_access!(array, opt_array, Array, Rc<RefCell<Array>>);
-rt_value_access!(dict, opt_dict, Dictionary, Rc<RefCell<RuntimeDictionary>>);
+rt_value_access!(
+    dict,
+    opt_dict,
+    Dictionary,
+    Rc<RefCell<RuntimeDictionary<'a>>>
+);
 value_access!(procedure, opt_procedure, Procedure, Rc<TokenArray>);
 value_access!(name, opt_name, Name, Rc<str>);
 rt_value_access!(built_in_op, opt_built_in_op, BuiltInOp, OperatorFn);
@@ -132,10 +137,10 @@ rt_value_access!(
     current_file,
     opt_current_file,
     CurrentFile,
-    Rc<RefCell<CurrentFile>>
+    Rc<RefCell<CurrentFile<'a>>>
 );
 
-impl RuntimeValue {
+impl<'a> RuntimeValue<'a> {
     pub fn opt_number(&self) -> Option<Either<i32, f32>> {
         match self {
             Self::Value(Value::Integer(i)) => Some(Either::Left(*i)),
@@ -161,7 +166,7 @@ pub enum Key {
     Name(Rc<str>),
 }
 
-impl TryFrom<RuntimeValue> for Key {
+impl<'a> TryFrom<RuntimeValue<'a>> for Key {
     type Error = MachineError;
 
     fn try_from(v: RuntimeValue) -> Result<Self, Self::Error> {
@@ -183,7 +188,7 @@ impl From<TokenArray> for Value {
     }
 }
 
-impl From<Value> for RuntimeValue {
+impl<'a> From<Value> for RuntimeValue<'a> {
     fn from(v: Value) -> Self {
         Self::Value(v)
     }
@@ -226,7 +231,7 @@ pub fn name_token(s: impl Into<Rc<str>>) -> Token {
     Token::Name(s.into())
 }
 
-impl TryFrom<RuntimeValue> for Value {
+impl<'a> TryFrom<RuntimeValue<'a>> for Value {
     type Error = MachineError;
 
     fn try_from(v: RuntimeValue) -> Result<Self, Self::Error> {
@@ -245,7 +250,7 @@ macro_rules! to_value {
             }
         }
 
-        impl From<$t> for RuntimeValue {
+        impl<'a> From<$t> for RuntimeValue<'a> {
             fn from(v: $t) -> Self {
                 Self::Value(Value::$branch(v))
             }
@@ -264,14 +269,14 @@ impl<const N: usize> From<[u8; N]> for Value {
     }
 }
 
-impl<const N: usize> From<[u8; N]> for RuntimeValue {
+impl<'a, const N: usize> From<[u8; N]> for RuntimeValue<'a> {
     fn from(v: [u8; N]) -> Self {
         let bytes: Vec<u8> = v.into();
         bytes.into()
     }
 }
 
-impl From<Vec<u8>> for RuntimeValue {
+impl<'a> From<Vec<u8>> for RuntimeValue<'a> {
     fn from(v: Vec<u8>) -> Self {
         Value::String(Rc::new(RefCell::new(v))).into()
     }
@@ -283,7 +288,7 @@ impl From<Vec<u8>> for Value {
     }
 }
 
-impl From<&str> for RuntimeValue {
+impl<'a> From<&str> for RuntimeValue<'a> {
     fn from(v: &str) -> Self {
         Value::Name(v.to_owned().into()).into()
     }
@@ -301,20 +306,20 @@ impl From<Array> for Value {
     }
 }
 
-impl From<Array> for RuntimeValue {
+impl<'a> From<Array> for RuntimeValue<'a> {
     fn from(v: Array) -> Self {
         Value::Array(Rc::new(RefCell::new(v))).into()
     }
 }
 
-impl From<RuntimeDictionary> for RuntimeValue {
-    fn from(v: RuntimeDictionary) -> Self {
+impl<'a> From<RuntimeDictionary<'a>> for RuntimeValue<'a> {
+    fn from(v: RuntimeDictionary<'a>) -> Self {
         RuntimeValue::Dictionary(Rc::new(RefCell::new(v)))
     }
 }
 
-impl From<Rc<RefCell<RuntimeDictionary>>> for RuntimeValue {
-    fn from(v: Rc<RefCell<RuntimeDictionary>>) -> Self {
+impl<'a> From<Rc<RefCell<RuntimeDictionary<'a>>>> for RuntimeValue<'a> {
+    fn from(v: Rc<RefCell<RuntimeDictionary<'a>>>) -> Self {
         Self::Dictionary(v)
     }
 }
@@ -377,15 +382,15 @@ pub enum MachineError {
 
 pub type MachineResult<T> = Result<T, MachineError>;
 
-struct CurrentFile {
-    data: Vec<u8>,
+struct CurrentFile<'a> {
+    data: &'a [u8],
     remains_pos: usize,
     decryped: Option<Vec<u8>>,
     decryped_pos: usize,
 }
 
-impl CurrentFile {
-    pub fn new(data: Vec<u8>) -> Self {
+impl<'a> CurrentFile<'a> {
+    pub fn new(data: &'a [u8]) -> Self {
         Self {
             data,
             remains_pos: 0,
@@ -473,10 +478,10 @@ impl CurrentFile {
 }
 
 /// PostScript machine to execute operations.
-pub struct Machine {
-    file: Rc<RefCell<CurrentFile>>,
-    variable_stack: VariableDictStack,
-    stack: Vec<RuntimeValue>,
+pub struct Machine<'a> {
+    file: Rc<RefCell<CurrentFile<'a>>>,
+    variable_stack: VariableDictStack<'a>,
+    stack: Vec<RuntimeValue<'a>>,
     fonts: Vec<(String, Dictionary)>,
 }
 
@@ -489,8 +494,8 @@ pub enum ExecState {
     EndEExec,
 }
 
-impl Machine {
-    pub fn new(file: Vec<u8>) -> Self {
+impl<'a> Machine<'a> {
+    pub fn new(file: &'a [u8]) -> Self {
         Self {
             file: Rc::new(RefCell::new(CurrentFile::new(file))),
             variable_stack: VariableDictStack::new(),
@@ -568,13 +573,13 @@ impl Machine {
         );
     }
 
-    fn pop(&mut self) -> MachineResult<RuntimeValue> {
+    fn pop(&mut self) -> MachineResult<RuntimeValue<'a>> {
         let r = self.stack.pop().ok_or(MachineError::StackUnderflow);
         self.dump_stack();
         r
     }
 
-    fn top(&self) -> MachineResult<&RuntimeValue> {
+    fn top(&self) -> MachineResult<&RuntimeValue<'a>> {
         self.stack.last().ok_or(MachineError::StackUnderflow)
     }
 
@@ -582,11 +587,11 @@ impl Machine {
         self.pop().and_then(|v| v.int())
     }
 
-    fn pop_dict(&mut self) -> MachineResult<Rc<RefCell<RuntimeDictionary>>> {
+    fn pop_dict(&mut self) -> MachineResult<Rc<RefCell<RuntimeDictionary<'a>>>> {
         self.pop().and_then(|v| v.dict())
     }
 
-    fn push(&mut self, v: impl Into<RuntimeValue>) {
+    fn push(&mut self, v: impl Into<RuntimeValue<'a>>) {
         self.stack.push(v.into());
         self.dump_stack();
     }
@@ -600,8 +605,8 @@ impl Machine {
     }
 }
 
-struct VariableDictStack {
-    stack: Vec<Rc<RefCell<RuntimeDictionary>>>,
+struct VariableDictStack<'a> {
+    stack: Vec<Rc<RefCell<RuntimeDictionary<'a>>>>,
 }
 
 macro_rules! var_dict {
@@ -621,7 +626,7 @@ macro_rules! dict {
 }
 
 /// Create the `systemdict`
-fn system_dict() -> RuntimeDictionary {
+fn system_dict<'a>() -> RuntimeDictionary<'a> {
     fn ok() -> MachineResult<ExecState> {
         Ok(ExecState::Ok)
     }
@@ -854,16 +859,16 @@ fn system_dict() -> RuntimeDictionary {
 }
 
 /// Create the `globaldict`
-fn global_dict() -> RuntimeDictionary {
+fn global_dict<'a>() -> RuntimeDictionary<'a> {
     RuntimeDictionary::new()
 }
 
 /// Create the `userdict`
-fn user_dict() -> RuntimeDictionary {
+fn user_dict<'a>() -> RuntimeDictionary<'a> {
     RuntimeDictionary::new()
 }
 
-impl VariableDictStack {
+impl<'a> VariableDictStack<'a> {
     fn new() -> Self {
         Self {
             stack: vec![
@@ -878,7 +883,7 @@ impl VariableDictStack {
         self.stack.push(self.stack[0].clone());
     }
 
-    fn get(&self, name: &str) -> MachineResult<RuntimeValue> {
+    fn get(&self, name: &str) -> MachineResult<RuntimeValue<'a>> {
         let r = self
             .stack
             .iter()
@@ -891,21 +896,21 @@ impl VariableDictStack {
         r
     }
 
-    fn push(&mut self, dict: Rc<RefCell<RuntimeDictionary>>) {
+    fn push(&mut self, dict: Rc<RefCell<RuntimeDictionary<'a>>>) {
         self.stack.push(dict);
     }
 
     /// Pop the top dictionary from the stack. The first 3 dictionaries can not
     /// be popped, returns None if trying to pop them.
-    fn pop(&mut self) -> Option<Rc<RefCell<RuntimeDictionary>>> {
+    fn pop(&mut self) -> Option<Rc<RefCell<RuntimeDictionary<'a>>>> {
         (self.stack.len() > 3).then(|| self.stack.pop()).flatten()
     }
 
-    fn top(&self) -> Rc<RefCell<RuntimeDictionary>> {
+    fn top(&self) -> Rc<RefCell<RuntimeDictionary<'a>>> {
         self.stack.last().unwrap().clone()
     }
 
-    fn lock_system_dict(&self) -> Ref<RuntimeDictionary> {
+    fn lock_system_dict(&self) -> Ref<RuntimeDictionary<'a>> {
         self.stack[0].borrow()
     }
 }

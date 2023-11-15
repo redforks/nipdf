@@ -1,29 +1,29 @@
 use super::*;
 use test_log::test;
 
-trait Assert {
-    fn assert(&self, m: &Machine);
+trait Assert<'a> {
+    fn assert(&self, m: &Machine<'a>);
 }
 
-impl<V: Into<RuntimeValue> + Clone> Assert for V {
-    fn assert(&self, m: &Machine) {
+impl<'a, V: Into<RuntimeValue<'a>> + Clone> Assert<'a> for V {
+    fn assert(&self, m: &Machine<'a>) {
         assert_eq!(m.stack.len(), 1);
         assert_eq!(m.stack[0], self.clone().into());
     }
 }
 
-impl Assert for Vec<Box<dyn Assert>> {
-    fn assert(&self, m: &Machine) {
+impl<'a> Assert<'a> for Vec<Box<dyn Assert<'a>>> {
+    fn assert(&self, m: &Machine<'a>) {
         for a in self {
             a.assert(m);
         }
     }
 }
 
-struct Stack(Vec<RuntimeValue>);
+struct Stack<'a>(Vec<RuntimeValue<'a>>);
 
-impl Assert for Stack {
-    fn assert(&self, m: &Machine) {
+impl<'a> Assert<'a> for Stack<'a> {
+    fn assert(&self, m: &Machine<'a>) {
         assert_eq!(m.stack.len(), self.0.len());
         for (i, v) in self.0.iter().enumerate() {
             assert_eq!(m.stack[i], v.clone());
@@ -39,16 +39,16 @@ macro_rules! asserts {
 
 /// Check Dict stack current top equals to the given value
 #[derive(Clone)]
-struct VariableStack(RuntimeDictionary);
+struct VariableStack<'a>(RuntimeDictionary<'a>);
 
-impl Assert for VariableStack {
-    fn assert(&self, m: &Machine) {
+impl<'a> Assert<'a> for VariableStack<'a> {
+    fn assert(&self, m: &Machine<'a>) {
         assert_eq!(&*m.variable_stack.top().borrow(), &self.0);
     }
 }
 
-fn assert_op(s: &str, exp_result: impl Assert) {
-    let mut machine = Machine::new(s.as_bytes().to_vec());
+fn assert_op<'a>(s: &'a str, exp_result: impl Assert<'a>) {
+    let mut machine = Machine::new(s.as_bytes());
     machine.execute().unwrap();
     exp_result.assert(&machine);
 }
@@ -139,7 +139,7 @@ fn array_literal() {
 #[test]
 fn execute_on_file() {
     let data = include_bytes!("./cmsy9.pfb");
-    let mut machine = Machine::new(data.to_vec());
+    let mut machine = Machine::new(data);
     match machine.execute() {
         Ok(_) => {}
         Err(e) => {

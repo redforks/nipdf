@@ -1,6 +1,8 @@
 pub(crate) mod machine;
 pub(crate) mod parser;
 
+use std::borrow::Cow;
+
 use machine::{Array, Machine};
 use parser::header;
 use winnow::{binary::le_u32, combinator::preceded, error::ContextError, token::any, Parser};
@@ -40,12 +42,12 @@ fn parse_encoding(arr: &Array) -> AnyResult<Encoding> {
 }
 
 impl Font {
-    pub fn parse(data: impl Into<Vec<u8>>) -> AnyResult<Self> {
-        let data = normalize_pfb(data.into());
+    pub fn parse(data: &[u8]) -> AnyResult<Self> {
+        let data = normalize_pfb(data);
         let header = parse_header(&data)?;
         assert!(header.spec_ver.starts_with("1."), "Not Type1 font");
 
-        let mut machine = Machine::new(data);
+        let mut machine = Machine::new(&data);
         machine.execute()?;
         let fonts = machine.take_fonts();
         assert_eq!(fonts.len(), 1);
@@ -69,11 +71,12 @@ impl Font {
 }
 
 /// If file is pfb file, remove pfb section bytes
-fn normalize_pfb(mut data: Vec<u8>) -> Vec<u8> {
+fn normalize_pfb(data: &[u8]) -> Cow<[u8]> {
     if data.len() < 100 || data[0] != 0x80 {
-        return data;
+        return Cow::Borrowed(data);
     }
 
+    let mut data = data.to_vec();
     let mut pos = 0;
     for _ in 0..3 {
         let section_len = preceded((0x80u8, any), le_u32::<_, ContextError>)
@@ -86,7 +89,7 @@ fn normalize_pfb(mut data: Vec<u8>) -> Vec<u8> {
     Parser::<_, _, ContextError>::parse(&mut &b"\x80\x03"[..], &data[pos..]).unwrap();
     data.drain(pos..);
 
-    data
+    data.into()
 }
 
 #[cfg(test)]
@@ -96,7 +99,7 @@ mod tests {
     #[test]
     fn parse_pfb_file() {
         let data = include_bytes!("../../nipdf/fonts/d050000l.pfb");
-        let font = Font::parse(*data).unwrap();
+        let font = Font::parse(data).unwrap();
         assert_eq!("Dingbats", font.header.font_name);
     }
 }
