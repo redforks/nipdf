@@ -810,13 +810,39 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         "eq" => |m| {
             let b = m.pop()?;
             let a = m.pop()?;
-            m.push(compare_object(a, b));
+            m.push(object_eq(a, b));
             ok()
         },
         "ne" => |m| {
             let b = m.pop()?;
             let a = m.pop()?;
-            m.push(!compare_object(a, b));
+            m.push(!object_eq(a, b));
+            ok()
+        },
+        // num1 num2 le -> bool
+        // string1 string2 le -> bool
+        "le" => |m| {
+            let b = m.pop()?;
+            let a = m.pop()?;
+            m.push(!object_gt(&a, &b)? || object_eq(a, b));
+            ok()
+        },
+        "lt" => |m| {
+            let b = m.pop()?;
+            let a = m.pop()?;
+            m.push(!object_gt(&a, &b)? && !object_eq(a, b));
+            ok()
+        },
+        "ge" => |m| {
+            let b = m.pop()?;
+            let a = m.pop()?;
+            m.push(object_gt(&a, &b)? || object_eq(a, b));
+            ok()
+        },
+        "gt" => |m| {
+            let b = m.pop()?;
+            let a = m.pop()?;
+            m.push(object_gt(&a, &b)? && !object_eq(a, b));
             ok()
         },
 
@@ -1093,7 +1119,24 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
     r
 }
 
-fn compare_object<'a>(a: RuntimeValue<'a>, b: RuntimeValue<'a>) -> bool {
+fn object_gt<'a>(a: &RuntimeValue<'a>, b: &RuntimeValue<'a>) -> MachineResult<bool> {
+    Ok(match (a, b) {
+        (RuntimeValue::Value(Value::Integer(a)), RuntimeValue::Value(Value::Integer(b))) => a > b,
+        (RuntimeValue::Value(Value::Real(a)), RuntimeValue::Value(Value::Real(b))) => a > b,
+        (RuntimeValue::Value(Value::Integer(a)), RuntimeValue::Value(Value::Real(b))) => {
+            *a as f32 > *b
+        }
+        (RuntimeValue::Value(Value::Real(a)), RuntimeValue::Value(Value::Integer(b))) => {
+            *a > *b as f32
+        }
+        (RuntimeValue::Value(Value::String(a)), RuntimeValue::Value(Value::String(b))) => {
+            a.borrow().as_slice() > b.borrow().as_slice()
+        }
+        _ => return Err(MachineError::TypeCheck),
+    })
+}
+
+fn object_eq<'a>(a: RuntimeValue<'a>, b: RuntimeValue<'a>) -> bool {
     match (a, b) {
         (RuntimeValue::Value(Value::Integer(a)), RuntimeValue::Value(Value::Real(b))) => {
             a as f32 == b

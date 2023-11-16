@@ -161,6 +161,110 @@ fn ne() {
 }
 
 #[test]
+fn le() {
+    assert_op("4 4 le", true);
+    assert_op("3 4 le", true);
+    assert_op("5 4 le", false);
+
+    assert_op("4.0 4.0 le", true);
+    assert_op("3.0 4.0 le", true);
+    assert_op("5.0 4.0 le", false);
+
+    assert_op("4.0 4 le", true);
+    assert_op("3.0 4 le", true);
+    assert_op("5.0 4 le", false);
+
+    assert_op("4 4.0 le", true);
+    assert_op("3 4.0 le", true);
+    assert_op("5 4.0 le", false);
+
+    assert_op("(4) (4) le", true);
+    assert_op("(3) (4) le", true);
+    assert_op("(5) (4) le", false);
+
+    assert_op("(4) (40) le", true);
+    assert_op("(40) (4) le", false);
+}
+
+#[test]
+fn lt() {
+    assert_op("4 4 lt", false);
+    assert_op("3 4 lt", true);
+    assert_op("5 4 lt", false);
+
+    assert_op("4.0 4.0 lt", false);
+    assert_op("3.0 4.0 lt", true);
+    assert_op("5.0 4.0 lt", false);
+
+    assert_op("4.0 4 lt", false);
+    assert_op("3.0 4 lt", true);
+    assert_op("5.0 4 lt", false);
+
+    assert_op("4 4.0 lt", false);
+    assert_op("3 4.0 lt", true);
+    assert_op("5 4.0 lt", false);
+
+    assert_op("(4) (4) lt", false);
+    assert_op("(3) (4) lt", true);
+    assert_op("(5) (4) lt", false);
+
+    assert_op("(4) (40) lt", true);
+    assert_op("(40) (4) lt", false); 
+}
+
+#[test]
+fn ge() {
+    assert_op("4 4 ge", true);
+    assert_op("3 4 ge", false);
+    assert_op("5 4 ge", true);
+
+    assert_op("4.0 4.0 ge", true);
+    assert_op("3.0 4.0 ge", false);
+    assert_op("5.0 4.0 ge", true);
+
+    assert_op("4.0 4 ge", true);
+    assert_op("3.0 4 ge", false);
+    assert_op("5.0 4 ge", true);
+
+    assert_op("4 4.0 ge", true);
+    assert_op("3 4.0 ge", false);
+    assert_op("5 4.0 ge", true);
+
+    assert_op("(4) (4) ge", true);
+    assert_op("(3) (4) ge", false);
+    assert_op("(5) (4) ge", true);
+
+    assert_op("(4) (40) ge", false);
+    assert_op("(40) (4) ge", true); 
+}
+
+#[test]
+fn gt() {
+    assert_op("4 4 gt", false);
+    assert_op("3 4 gt", false);
+    assert_op("5 4 gt", true);
+
+    assert_op("4.0 4.0 gt", false);
+    assert_op("3.0 4.0 gt", false);
+    assert_op("5.0 4.0 gt", true);
+
+    assert_op("4.0 4 gt", false);
+    assert_op("3.0 4 gt", false);
+    assert_op("5.0 4 gt", true);
+
+    assert_op("4 4.0 gt", false);
+    assert_op("3 4.0 gt", false);
+    assert_op("5 4.0 gt", true);
+
+    assert_op("(4) (4) gt", false);
+    assert_op("(3) (4) gt", false);
+    assert_op("(5) (4) gt", true);
+
+    assert_op("(4) (40) gt", false);
+    assert_op("(40) (4) gt", true);  
+}
+
+#[test]
 fn test_array() {
     assert_op("2 array", values![Value::Null, Value::Null]);
 }
