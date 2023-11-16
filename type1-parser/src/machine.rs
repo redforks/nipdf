@@ -33,7 +33,7 @@ pub enum Value {
     String(Rc<RefCell<Vec<u8>>>),
     Array(Rc<RefCell<Array>>),
     Dictionary(Dictionary),
-    Procedure(Rc<TokenArray>),
+    Procedure(Rc<RefCell<TokenArray>>),
     Name(Rc<str>),
     PredefinedEncoding(PredefinedEncoding),
 }
@@ -148,7 +148,7 @@ rt_value_access!(
     Dictionary,
     Rc<RefCell<RuntimeDictionary<'a>>>
 );
-value_access!(procedure, opt_procedure, Procedure, Rc<TokenArray>);
+value_access!(procedure, opt_procedure, Procedure, Rc<RefCell<TokenArray>>);
 value_access!(name, opt_name, Name, Rc<str>);
 rt_value_access!(built_in_op, opt_built_in_op, BuiltInOp, OperatorFn);
 rt_value_access!(
@@ -202,7 +202,7 @@ impl<'a> TryFrom<RuntimeValue<'a>> for Key {
 
 impl From<TokenArray> for Value {
     fn from(v: TokenArray) -> Self {
-        Self::Procedure(v.into())
+        Self::Procedure(Rc::new(RefCell::new(v)))
     }
 }
 
@@ -242,6 +242,32 @@ pub enum Token {
     Literal(Value),
     /// Name to lookup operation dict to get the actual operator
     Name(Rc<str>),
+}
+
+impl<'a> From<Token> for RuntimeValue<'a> {
+    fn from(v: Token) -> Self {
+        match v {
+            Token::Literal(v) => Self::Value(v),
+            Token::Name(name) => Self::Value(Value::Name(name.into())),
+        }
+    }
+}
+
+impl<'a> TryFrom<RuntimeValue<'a>> for Token {
+    type Error = MachineError;
+
+    fn try_from(v: RuntimeValue) -> Result<Self, Self::Error> {
+        match v {
+            RuntimeValue::Value(Value::Name(n)) => Ok(Self::Name(n)),
+            RuntimeValue::Value(v) => Ok(Self::Literal(v)),
+            RuntimeValue::Dictionary(d) => {
+                let d: RuntimeDictionary =
+                    Rc::try_unwrap(d).map_or_else(|d| d.borrow().clone(), |d| d.into_inner());
+                Ok(Self::Literal(Value::Dictionary(into_dict(d)?)))
+            }
+            _ => Err(MachineError::TypeCheck),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -396,6 +422,10 @@ pub enum MachineError {
     Undefined,
     #[error("unmatched mark")]
     UnMatchedMark,
+    #[error("invalid access")]
+    InvalidAccess,
+    #[error("range check error")]
+    RangeCheck,
 }
 
 pub type MachineResult<T> = Result<T, MachineError>;
@@ -585,8 +615,8 @@ impl<'a> Machine<'a> {
         })
     }
 
-    fn execute_procedure(&mut self, proc: Rc<TokenArray>) -> MachineResult<ExecState> {
-        for token in proc.as_ref().iter().cloned() {
+    fn execute_procedure(&mut self, proc: Rc<RefCell<TokenArray>>) -> MachineResult<ExecState> {
+        for token in proc.borrow().iter().cloned() {
             assert_eq!(
                 self.exec(token)?,
                 ExecState::Ok,
@@ -851,34 +881,84 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             ok()
         },
 
-        // dict/array key value put -
-        // Set key-value to the given dictionary.
+        // array  index put -> -
+        // dict   key   put -> -
+        // string index get -> -
         "put" => |m| {
             let value = m.pop()?;
             let key = m.pop()?;
-            match m.pop()?{
+            match m.pop()? {
                 RuntimeValue::Dictionary(dict) => {
-                    dict.borrow_mut().insert(key.try_into()?, value);
+                    let key: Key = key.try_into()?;
+                    dict.borrow_mut().insert(key, value);
                 }
                 RuntimeValue::Value(Value::Array(array)) => {
                     let index = key.int()?;
                     let mut array = array.borrow_mut();
-                    array.resize(index as usize + 1, Value::Null);
-                    array[index as usize] = value.try_into()?;
+                    let index = index as usize;
+                    if index >= array.len() {
+                        return Err(MachineError::RangeCheck);
+                    }
+                    array[index] = value.try_into()?;
+                }
+                RuntimeValue::Value(Value::String(s)) => {
+                    let index = key.int()?;
+                    let mut s = s.borrow_mut();
+                    let index = index as usize;
+                    if index >= s.len() {
+                        return Err(MachineError::RangeCheck);
+                    }
+                    s[index] = value.int()? as u8;
+                }
+                RuntimeValue::Value(Value::Procedure(arr)) => {
+                    let index = key.int()?;
+                    let mut arr = arr.borrow_mut();
+                    let index = index as usize;
+                    if index >= arr.len() {
+                        return Err(MachineError::RangeCheck);
+                    }
+                    arr[index] = value.try_into()?;
                 }
                 v => {
-                    error!("put on non-dict/array: {:?}, key: {:?}, value: {:?}", v, key, value);
+                    error!("put on non-dict/array/string: {:?}, key: {:?}, value: {:?}", v, key, value);
                     return Err(MachineError::TypeCheck);
                 }
             };
             ok()
         },
+        // array  index get -> any
+        // dict   key   get -> any
+        // string index get -> int
         "get" => |m| {
             let key = m.pop()?;
-            let dict = m.pop()?.dict()?;
-            let key: Key = key.try_into()?;
-            let value = dict.borrow().get(&key).cloned().ok_or(MachineError::Undefined)?;
-            m.push(value);
+            match m.pop()? {
+                RuntimeValue::Dictionary(dict) => {
+                    let key: Key = key.try_into()?;
+                    let v = dict.borrow().get(&key).cloned().ok_or(MachineError::Undefined)?;
+                    m.push(v);
+                }
+                RuntimeValue::Value(Value::Array(array)) => {
+                    let index = key.int()?;
+                    let array = array.borrow();
+                    let v = array.get(index as usize).cloned().ok_or(MachineError::RangeCheck)?;
+                    m.push(v);
+                }
+                RuntimeValue::Value(Value::Procedure(p)) => {
+                    let index = key.int()?;
+                    let v = p.borrow().get(index as usize).cloned().ok_or(MachineError::RangeCheck)?;
+                    m.push(v);
+                }
+                RuntimeValue::Value(Value::String(s)) => {
+                    let index = key.int()?;
+                    let s = s.borrow();
+                    let v = s.get(index as usize).cloned().ok_or(MachineError::RangeCheck)?;
+                    m.push(v as i32);
+                }
+                v => {
+                    error!("get on non-dict/array/string: {:?}, key: {:?}", v, key);
+                    return Err(MachineError::TypeCheck);
+                }
+            };
             ok()
         },
 

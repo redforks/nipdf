@@ -3,7 +3,9 @@ use crate::machine::{Token, TokenArray, Value};
 use super::Header;
 use either::Either;
 use std::{
+    cell::RefCell,
     iter::once,
+    rc::Rc,
     str::{from_utf8, from_utf8_unchecked},
 };
 use winnow::{
@@ -304,7 +306,7 @@ pub fn token(input: &mut &[u8]) -> PResult<Token> {
         string.map(|s| Token::Literal(Vec::from(s).into())),
         literal_name.map(|s| Token::Literal(Value::Name(s.into()))),
         special_name.map(|s| Token::Name(s.into())),
-        procedure.map(|a| Token::Literal(Value::Procedure(a.into()))),
+        procedure.map(|a| Token::Literal(Value::Procedure(Rc::new(RefCell::new(a))))),
         executable_name.map(|s| Token::Name(s.into())),
     ))
     .parse_next(input)

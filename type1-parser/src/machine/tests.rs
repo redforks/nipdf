@@ -153,6 +153,18 @@ fn test_put() {
 }
 
 #[test]
+fn get() {
+    // array
+    assert_op("2 array dup 1 10 put 1 get", 10); 
+    // dict
+    assert_op("10 dict begin /foo 10 def currentdict /foo get", 10);
+    // string
+    assert_op("3 string dup 0 65 put 0 get", 65);
+    // procedure
+    assert_op("{1 2 3} 1 get", 2);
+}
+
+#[test]
 fn test_for() {
     assert_op("0 1 1 10 {add} for", 55);
 }
