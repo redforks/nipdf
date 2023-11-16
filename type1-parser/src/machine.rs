@@ -684,14 +684,14 @@ impl<'a> Machine<'a> {
     }
 
     fn dump_stack(&self) {
-        debug!("{}", {
-            use std::fmt::Write;
-            let mut s = "stack: ".to_owned();
-            for v in self.stack.iter().rev() {
-                write!(&mut s, "{v} ").unwrap();
-            }
-            s
-        });
+        // debug!("{}", {
+        //     use std::fmt::Write;
+        //     let mut s = "stack: ".to_owned();
+        //     for v in self.stack.iter().rev() {
+        //         write!(&mut s, "{v} ").unwrap();
+        //     }
+        //     s
+        // });
     }
 
     fn pop(&mut self) -> MachineResult<RuntimeValue<'a>> {
