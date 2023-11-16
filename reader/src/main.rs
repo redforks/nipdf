@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use anyhow::Result;
 use iced::{
     alignment::Horizontal,
@@ -9,16 +7,20 @@ use iced::{
 };
 use iced::{Element, Settings};
 use iced_aw::{modal, Card};
-
-mod app_state;
-mod view;
 use log::error;
-use std::env;
+use mimalloc::MiMalloc;
+use std::{env, sync::Arc};
 use view::{
     error::ErrorView,
     viewer::{Viewer, ViewerMessage},
     welcome::Welcome,
 };
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
+mod app_state;
+mod view;
 
 const APP_NAME: &str = "nipdf";
 
