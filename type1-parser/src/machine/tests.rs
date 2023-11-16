@@ -73,7 +73,7 @@ fn test_dup() {
 
 #[test]
 fn count() {
-    assert_op("10 2 count", Stack(rt_values![10, 2, 2])); 
+    assert_op("10 2 count", Stack(rt_values![10, 2, 2]));
 }
 
 #[test]
@@ -131,6 +131,36 @@ fn xor() {
 }
 
 #[test]
+fn eq() {
+    assert_op("4 4 eq", true);
+    assert_op("4.0 4 eq", true);
+    assert_op("4 4.0 eq", true);
+    assert_op("(abc) (abc) eq", true);
+    assert_op("(abc) /abc eq", true);
+    assert_op("/abc (abc) eq", true);
+    assert_op("[1 2 3] dup eq", true);
+    assert_op("[1 2 3] [1 2 3] eq", false);
+    assert_op("{} dup eq", true);
+    assert_op("{} {} eq", false);
+    assert_op("1 dict 1 dict eq", false);
+}
+
+#[test]
+fn ne() {
+    assert_op("4 4 ne", false);
+    assert_op("4.0 4 ne", false);
+    assert_op("4 4.0 ne", false);
+    assert_op("(abc) (abc) ne", false);
+    assert_op("(abc) /abc ne", false);
+    assert_op("/abc (abc) ne", false);
+    assert_op("[1 2 3] dup ne", false);
+    assert_op("[1 2 3] [1 2 3] ne", true);
+    assert_op("{} dup ne", false);
+    assert_op("{} {} ne", true);
+    assert_op("1 dict 1 dict ne", true);
+}
+
+#[test]
 fn test_array() {
     assert_op("2 array", values![Value::Null, Value::Null]);
 }
@@ -160,7 +190,7 @@ fn test_put() {
 #[test]
 fn get() {
     // array
-    assert_op("2 array dup 1 10 put 1 get", 10); 
+    assert_op("2 array dup 1 10 put 1 get", 10);
     // dict
     assert_op("10 dict begin /foo 10 def currentdict /foo get", 10);
     // string

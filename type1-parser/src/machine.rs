@@ -807,6 +807,19 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             ok()
         },
 
+        "eq" => |m| {
+            let b = m.pop()?;
+            let a = m.pop()?;
+            m.push(compare_object(a, b));
+            ok()
+        },
+        "ne" => |m| {
+            let b = m.pop()?;
+            let a = m.pop()?;
+            m.push(!compare_object(a, b));
+            ok()
+        },
+
         // num1 num2 add sum
         "add" => |m| {
             let a = m.pop()?.number()?;
@@ -1078,6 +1091,32 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         RuntimeValue::Value(Value::PredefinedEncoding(PredefinedEncoding::Standard)),
     );
     r
+}
+
+fn compare_object<'a>(a: RuntimeValue<'a>, b: RuntimeValue<'a>) -> bool {
+    match (a, b) {
+        (RuntimeValue::Value(Value::Integer(a)), RuntimeValue::Value(Value::Real(b))) => {
+            a as f32 == b
+        }
+        (RuntimeValue::Value(Value::Real(a)), RuntimeValue::Value(Value::Integer(b))) => {
+            a == b as f32
+        }
+        (RuntimeValue::Value(Value::String(a)), RuntimeValue::Value(Value::Name(b))) => {
+            a.borrow().as_slice() == b.as_bytes()
+        }
+        (RuntimeValue::Value(Value::Name(a)), RuntimeValue::Value(Value::String(b))) => {
+            b.borrow().as_slice() == a.as_bytes()
+        }
+        (RuntimeValue::Value(Value::Name(a)), RuntimeValue::Value(Value::Name(b))) => a == b,
+        (RuntimeValue::Value(Value::Array(a)), RuntimeValue::Value(Value::Array(b))) => {
+            Rc::ptr_eq(&a, &b)
+        }
+        (RuntimeValue::Dictionary(a), RuntimeValue::Dictionary(b)) => Rc::ptr_eq(&a, &b),
+        (RuntimeValue::Value(Value::Procedure(a)), RuntimeValue::Value(Value::Procedure(b))) => {
+            Rc::ptr_eq(&a, &b)
+        }
+        (a, b) => a == b,
+    }
 }
 
 /// Create the `globaldict`
