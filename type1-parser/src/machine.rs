@@ -1110,6 +1110,29 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             error!("bind not implemented");
             ok()
         },
+        // any type -> name
+        "type" => |m| {
+            let v = m.pop()?;
+            // TODO: font-type, g-state-type, packed-array-type, save-type
+            m.push(match v {
+                RuntimeValue::Value(Value::Bool(_)) => "booleantype",
+                RuntimeValue::Value(Value::Integer(_)) => "integertype",
+                RuntimeValue::Value(Value::Real(_)) => "realtype",
+                RuntimeValue::Value(Value::String(_)) => "stringtype",
+                RuntimeValue::Value(Value::Name(_)) => "nametype",
+                RuntimeValue::Value(Value::Array(_)) => "arraytype",
+                RuntimeValue::Dictionary(_) => "dicttype",
+                RuntimeValue::Value(Value::Procedure(_)) => "arraytype",
+                RuntimeValue::Value(Value::PredefinedEncoding(_)) => "arraytype",
+                RuntimeValue::CurrentFile(_) => "filetype",
+                RuntimeValue::BuiltInOp(_) => "operatortype",
+                RuntimeValue::Mark => "marktype",
+                RuntimeValue::ArrayMark => "marktype",
+                RuntimeValue::Value(Value::Null) => "nulltype",
+                RuntimeValue::Value(Value::Dictionary(_)) => "dicttype",
+            });
+            ok()
+        },
     );
 
     r.insert(
