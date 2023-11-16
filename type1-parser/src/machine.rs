@@ -8,11 +8,11 @@ use log::{debug, error};
 use std::{
     cell::{Ref, RefCell},
     collections::HashMap,
+    fmt::Display,
     hash::Hasher,
     iter::repeat,
     rc::Rc,
 };
-use strum::IntoStaticStr;
 use winnow::Parser;
 
 mod decrypt;
@@ -23,7 +23,7 @@ pub type TokenArray = Vec<Token>;
 
 type OperatorFn = fn(&mut Machine) -> MachineResult<ExecState>;
 
-#[derive(Educe, IntoStaticStr)]
+#[derive(Educe)]
 #[educe(Debug, PartialEq, Clone)]
 pub enum Value {
     Null,
@@ -60,15 +60,32 @@ enum RuntimeValue<'a> {
     ),
 }
 
-impl<'a, 'b> From<&'a RuntimeValue<'b>> for &'static str {
-    fn from(v: &'a RuntimeValue<'b>) -> Self {
-        match v {
-            RuntimeValue::Value(v) => v.into(),
-            RuntimeValue::Mark => "mark",
-            RuntimeValue::ArrayMark => "array_mark",
-            RuntimeValue::Dictionary(_) => "dict",
-            RuntimeValue::BuiltInOp(_) => "built-in-op",
-            RuntimeValue::CurrentFile(_) => "current-file",
+impl<'b> Display for RuntimeValue<'b> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RuntimeValue::Mark => write!(f, "mark"),
+            RuntimeValue::ArrayMark => write!(f, "array-mark"),
+            RuntimeValue::Dictionary(_) => write!(f, "dict"),
+            RuntimeValue::BuiltInOp(_) => write!(f, "built-in-op"),
+            RuntimeValue::CurrentFile(_) => write!(f, "current-file"),
+            RuntimeValue::Value(v) => match v {
+                Value::Null => write!(f, "null"),
+                Value::Bool(b) => {
+                    if *b {
+                        write!(f, "true")
+                    } else {
+                        write!(f, "false")
+                    }
+                }
+                Value::Integer(i) => write!(f, "{}", i),
+                Value::Real(r) => write!(f, "{}", r),
+                Value::String(_) => write!(f, "string"),
+                Value::Array(_) => write!(f, "array"),
+                Value::Dictionary(_) => write!(f, "dict"),
+                Value::Procedure(_) => write!(f, "procedure"),
+                Value::Name(n) => write!(f, "/{}", n),
+                Value::PredefinedEncoding(_) => write!(f, "encoding"),
+            },
         }
     }
 }
@@ -627,14 +644,14 @@ impl<'a> Machine<'a> {
     }
 
     fn dump_stack(&self) {
-        debug!(
-            "stack: {:?}",
-            self.stack
-                .iter()
-                .rev()
-                .map(|v| -> &'static str { v.into() })
-                .collect::<Vec<_>>()
-        );
+        debug!("{}", {
+            use std::fmt::Write;
+            let mut s = "stack: ".to_owned();
+            for v in self.stack.iter().rev() {
+                write!(&mut s, "{v} ").unwrap();
+            }
+            s
+        });
     }
 
     fn pop(&mut self) -> MachineResult<RuntimeValue<'a>> {
@@ -1082,9 +1099,12 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             Ok(ExecState::StartEExec)
         },
         "exec" => |m| {
-            let proc = m.pop()?.procedure()?;
-            m.execute_procedure(proc)?;
-            ok()
+            let proc = m.pop()?;
+            match proc {
+                RuntimeValue::Value(Value::Procedure(p)) => m.execute_procedure(p),
+                v@RuntimeValue::Dictionary(_) => {m.push(v); ok()}
+                _ => return Err(MachineError::TypeCheck),
+            }
         },
         // file closefile -
         "closefile" => |m| {
@@ -1138,6 +1158,10 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
     r.insert(
         Key::Name("StandardEncoding".to_owned().into()),
         RuntimeValue::Value(Value::PredefinedEncoding(PredefinedEncoding::Standard)),
+    );
+    r.insert(
+        Key::Name("internaldict".to_owned().into()),
+        RuntimeValue::Dictionary(Rc::new(RefCell::new(RuntimeDictionary::new()))),
     );
     r
 }
