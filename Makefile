@@ -26,3 +26,6 @@ clippy:
 
 clippy-fix:
 	cargo clippy --fix -- $(CLIPPY_RULES)
+
+bench:
+	cargo bench --bench page-render -F log/release_max_level_warn

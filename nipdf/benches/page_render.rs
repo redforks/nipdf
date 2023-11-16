@@ -23,15 +23,21 @@ fn render_page(file_path: impl AsRef<std::path::Path>, no: usize) -> AnyResult<t
     Ok(page.render(option)?)
 }
 
-pub fn criterion_benchmark(c: &mut Criterion) {
+pub fn render1(c: &mut Criterion) {
     c.bench_function("page render", |b| {
         b.iter(|| render_page("../../../../ICEpower125ASX2_Datasheet_2.0.pdf", 1).unwrap())
+    });
+}
+
+pub fn render2(c: &mut Criterion) {
+    c.bench_function("page render", |b| {
+        b.iter(|| render_page("../../../../compressed.tracemonkey-pldi-09.pdf", 0).unwrap())
     });
 }
 
 criterion_group! {
   name = benches;
   config = Criterion::default();
-  targets = criterion_benchmark
+  targets = render1, render2
 }
 criterion_main!(benches);
