@@ -729,6 +729,22 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             m.push(len);
             ok()
         },
+        // any1 .. any(n) n copy any1 .. any(n) any1 .. any(n)
+        "copy" => |m| {
+            let count = m.pop()?.int().expect("merge dict/array/string not implemented");
+            let mut items = Vec::new();
+            for _ in 0..count {
+                items.push(m.pop()?);
+            }
+            items.reverse();
+            for item in &items {
+                m.push(item.clone());
+            }
+            for item in items {
+                m.push(item);
+            }
+            ok()
+        },
 
         // Duplicate stack value at -n position
         // any(n) ... any0 n index -> any(n) ... any0 any(n)

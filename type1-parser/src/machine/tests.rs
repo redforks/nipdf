@@ -72,6 +72,11 @@ fn test_dup() {
 }
 
 #[test]
+fn copy() {
+    assert_op("1 2 3 4 5 3 copy", Stack(rt_values![1, 2, 3, 4, 5, 3, 4, 5])); 
+}
+
+#[test]
 fn count() {
     assert_op("10 2 count", Stack(rt_values![10, 2, 2]));
 }
