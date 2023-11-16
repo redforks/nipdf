@@ -85,6 +85,47 @@ fn test_end() {
 }
 
 #[test]
+fn and() {
+    // bool
+    assert_op("true true and", true);
+    assert_op("true false and", false);
+    assert_op("false false and", false);
+    // int
+    assert_op("99 1 and", 1);
+    assert_op("52 7 and", 4);
+}
+
+#[test]
+fn or() {
+    // bool
+    assert_op("true true or", true);
+    assert_op("true false or", true);
+    assert_op("false false or", false);
+    // int
+    assert_op("17 5 or", 21);
+}
+
+#[test]
+fn not() {
+    // bool
+    assert_op("true not", false);
+    assert_op("false not", true);
+    // int
+    assert_op("52 not", -53);
+}
+
+#[test]
+fn xor() {
+    // bool
+    assert_op("true true xor", false);
+    assert_op("true false xor", true);
+    assert_op("false false xor", false);
+    // int
+    assert_op("7 3 xor", 4);
+    assert_op("12 3 xor", 15);
+}
+
+#[test]
 fn test_array() {
     assert_op("2 array", values![Value::Null, Value::Null]);
 }
@@ -119,13 +160,13 @@ fn test_for() {
 #[test]
 fn test_if() {
     assert_op("true {1} if", 1);
-    assert_op("2 false {1} if", 2); 
+    assert_op("2 false {1} if", 2);
 }
 
 #[test]
 fn ifelse() {
     assert_op("true {1} {2} ifelse", 1);
-    assert_op("false {1} {2} ifelse", 2); 
+    assert_op("false {1} {2} ifelse", 2);
 }
 
 #[test]

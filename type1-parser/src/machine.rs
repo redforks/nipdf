@@ -697,6 +697,66 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             ok()
         },
 
+        // bool1 bool2 and -> bool3
+        // int1 int2 and -> int3
+        "and" => |m| {
+            let a = m.pop()?;
+            let b = m.pop()?;
+            match (a, b) {
+                (RuntimeValue::Value(Value::Bool(a)), RuntimeValue::Value(Value::Bool(b))) => {
+                    m.push(a && b)
+                }
+                (RuntimeValue::Value(Value::Integer(a)), RuntimeValue::Value(Value::Integer(b))) => {
+                    m.push(a & b)
+                }
+                _ => return Err(MachineError::TypeCheck),
+            }
+            ok()
+        },
+        // bool1 bool2 or -> bool3
+        // int1 int2 or -> int3
+        "or" => |m| {
+            let a = m.pop()?;
+            let b = m.pop()?;
+            match (a, b) {
+                (RuntimeValue::Value(Value::Bool(a)), RuntimeValue::Value(Value::Bool(b))) => {
+                    m.push(a || b)
+                }
+                (RuntimeValue::Value(Value::Integer(a)), RuntimeValue::Value(Value::Integer(b))) => {
+                    m.push(a | b)
+                }
+                _ => return Err(MachineError::TypeCheck),
+            }
+            ok()
+        },
+        // bool1 not -> bool2
+        // int1 not -> int2
+        "not" => |m| {
+            let v = m.pop()?;
+            match v {
+                RuntimeValue::Value(Value::Bool(b)) => m.push(!b),
+                RuntimeValue::Value(Value::Integer(i)) => m.push(!i),
+                _ => return Err(MachineError::TypeCheck),
+            }
+            ok()
+        },
+        // bool1 bool2 xor -> bool3
+        // int1 int2 xor -> int3
+        "xor" => |m| {
+            let a = m.pop()?;
+            let b = m.pop()?;
+            match (a, b) {
+                (RuntimeValue::Value(Value::Bool(a)), RuntimeValue::Value(Value::Bool(b))) => {
+                    m.push(a ^ b)
+                }
+                (RuntimeValue::Value(Value::Integer(a)), RuntimeValue::Value(Value::Integer(b))) => {
+                    m.push(a ^ b)
+                }
+                _ => return Err(MachineError::TypeCheck),
+            }
+            ok()
+        },
+
         // num1 num2 add sum
         "add" => |m| {
             let a = m.pop()?.number()?;
