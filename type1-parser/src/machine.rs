@@ -587,14 +587,6 @@ impl<'a> Machine<'a> {
         self.stack.last().ok_or(MachineError::StackUnderflow)
     }
 
-    fn pop_int(&mut self) -> MachineResult<i32> {
-        self.pop().and_then(|v| v.int())
-    }
-
-    fn pop_dict(&mut self) -> MachineResult<Rc<RefCell<RuntimeDictionary<'a>>>> {
-        self.pop().and_then(|v| v.dict())
-    }
-
     fn push(&mut self, v: impl Into<RuntimeValue<'a>>) {
         self.stack.push(v.into());
         self.dump_stack();
@@ -658,7 +650,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         // Duplicate stack value at -n position
         // any(n) ... any0 n index -> any(n) ... any0 any(n)
         "index" => |m| {
-            let index = m.pop_int()?;
+            let index = m.pop()?.int()?;
             m.push(m.stack.get(m.stack.len() - index as usize - 1)
                 .ok_or(MachineError::StackUnderflow)?
                 .clone());
@@ -704,7 +696,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
 
         // int array -> array
         "array" => |m| {
-            let count = m.pop_int()?;
+            let count = m.pop()?.int()?;
             m.push(Array::from_iter(repeat(Value::Null).take(count as usize)));
             ok()
         },
@@ -732,14 +724,14 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
 
         // int dict -> dict
         "dict" => |m| {
-            let count = m.pop_int()?;
+            let count = m.pop()?.int()?;
             m.push(RuntimeDictionary::with_capacity(count as usize));
             ok()
         },
 
         // dict begin -> -
         "begin" => |m| {
-            let dict = m.pop_dict()?;
+            let dict = m.pop()?.dict()?;
             m.variable_stack.push(dict);
             ok()
         },
@@ -762,7 +754,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         // dict key known -> bool
         "known" => |m| {
             let key = m.pop()?;
-            let dict = m.pop_dict()?;
+            let dict = m.pop()?.dict()?;
             let key: Key = key.try_into()?;
             let r = dict.borrow().contains_key(&key);
             m.push(r);
@@ -793,7 +785,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         },
         "get" => |m| {
             let key = m.pop()?;
-            let dict = m.pop_dict()?;
+            let dict = m.pop()?.dict()?;
             let key: Key = key.try_into()?;
             let value = dict.borrow().get(&key).cloned().ok_or(MachineError::Undefined)?;
             m.push(value);
@@ -802,7 +794,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
 
         // int string -> string
         "string" => |m| {
-            let count = m.pop_int()?;
+            let count = m.pop()?.int()?;
             m.push(vec![0u8; count as usize]);
             ok()
         },
@@ -831,9 +823,9 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         // initial increment limit proc for -
         "for" => |m| {
             let proc = m.pop()?.procedure()?;
-            let limit = m.pop_int()?;
-            let increment = m.pop_int()?;
-            let initial = m.pop_int()?;
+            let limit = m.pop()?.int()?;
+            let increment = m.pop()?.int()?;
+            let initial = m.pop()?.int()?;
             for i in (initial..=limit).step_by(increment as usize) {
                 m.push(i);
                 m.execute_procedure(proc.clone())?;
