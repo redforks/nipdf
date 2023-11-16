@@ -825,6 +825,10 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             m.push(m.variable_stack.stack[0].clone());
             ok()
         },
+        "userdict" => |m| {
+            m.push(m.variable_stack.stack[2].clone());
+            ok()
+        },
         "currentfile" => |m| {
             m.push_current_file();
             ok()
