@@ -1,4 +1,7 @@
-use crate::parser::{token as token_parser, white_space, white_space_or_comment, ws_prefixed};
+use crate::{
+    parser::{token as token_parser, white_space, white_space_or_comment, ws_prefixed},
+    PredefinedEncoding,
+};
 use educe::Educe;
 use either::Either;
 use log::{debug, error};
@@ -31,6 +34,7 @@ pub enum Value {
     Dictionary(Dictionary),
     Procedure(Rc<TokenArray>),
     Name(Rc<str>),
+    PredefinedEncoding(PredefinedEncoding),
 }
 
 #[derive(Educe)]
@@ -549,6 +553,10 @@ impl<'a> Machine<'a> {
                         self.push(d);
                         ExecState::Ok
                     }
+                    encoding @ RuntimeValue::Value(Value::PredefinedEncoding(_)) => {
+                        self.push(encoding);
+                        ExecState::Ok
+                    }
                     v => unreachable!("{:?}", v),
                 }
             }
@@ -605,7 +613,7 @@ struct VariableDictStack<'a> {
     stack: Vec<Rc<RefCell<RuntimeDictionary<'a>>>>,
 }
 
-macro_rules! var_dict {
+macro_rules! built_in_ops {
     ($($k:expr => $v:expr),* $(,)?) => {
         std::iter::Iterator::collect(std::iter::IntoIterator::into_iter([$((Key::Name($k.to_owned().into()), RuntimeValue::BuiltInOp($v)),)*]))
     };
@@ -613,7 +621,7 @@ macro_rules! var_dict {
 
 macro_rules! dict {
     () => {
-        Dictionary::new()
+        RuntimeDictionary::new()
     };
     ($($k:expr => $v:expr),* $(,)?) => {
         std::iter::Iterator::collect::<RuntimeDictionary>(std::iter::IntoIterator::into_iter([$((Key::Name($k.to_owned().into()), RuntimeValue::from($v)),)*]))
@@ -626,15 +634,15 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         Ok(ExecState::Ok)
     }
 
-    var_dict!(
+    let mut r: RuntimeDictionary<'a> = built_in_ops!(
         // any1 any2 exch -> any2 any1
-        "exch" => |m| {
+        "exch" => (|m| {
             let a = m.pop()?;
             let b = m.pop()?;
             m.push(a);
             m.push(b);
             ok()
-        },
+        }) as OperatorFn,
 
         // any -> any any
         "dup" => |m| {
@@ -868,7 +876,13 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         "readonly" => |_| ok(),
         "executeonly" => |_| ok(),
         "noaccess" => |_| ok(),
-    )
+    );
+
+    r.insert(
+        Key::Name("StandardEncoding".to_owned().into()),
+        RuntimeValue::Value(Value::PredefinedEncoding(PredefinedEncoding::Standard)),
+    );
+    r
 }
 
 /// Create the `globaldict`

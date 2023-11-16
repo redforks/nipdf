@@ -1,7 +1,7 @@
 pub(crate) mod machine;
 pub(crate) mod parser;
 
-use machine::{Array, Machine};
+use machine::{Array, Machine, Value};
 use parser::header;
 use std::borrow::Cow;
 use winnow::{binary::le_u32, combinator::preceded, error::ContextError, token::any, Parser};
@@ -17,7 +17,18 @@ pub struct Header {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Encoding(pub [Option<String>; 256]);
+pub struct EncodingVec(pub [Option<String>; 256]);
+
+#[derive(Debug, PartialEq, Copy, Clone, Eq)]
+pub enum PredefinedEncoding {
+    Standard,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Encoding {
+    Predefined(PredefinedEncoding),
+    Vec(Box<EncodingVec>),
+}
 
 #[derive(Debug, PartialEq)]
 pub struct Font {
@@ -32,12 +43,12 @@ fn parse_header(mut data: &[u8]) -> AnyResult<Header> {
     }
 }
 
-fn parse_encoding(arr: &Array) -> AnyResult<Encoding> {
+fn parse_vec_encoding(arr: &Array) -> AnyResult<Encoding> {
     let mut encoding: [Option<String>; 256] = std::array::from_fn(|_| None);
     for (i, v) in arr.iter().enumerate() {
         encoding[i] = v.opt_name().map(|n| (*n).to_owned())
     }
-    Ok(Encoding(encoding))
+    Ok(Encoding::Vec(Box::new(EncodingVec(encoding))))
 }
 
 impl Font {
@@ -54,7 +65,11 @@ impl Font {
         let encoding = font
             .1
             .get("Encoding")
-            .map(|v| parse_encoding(&v.array()?.borrow()))
+            .map(|v| match v {
+                Value::Array(arr) => parse_vec_encoding(&arr.borrow()),
+                Value::PredefinedEncoding(encoding) => Ok(Encoding::Predefined(*encoding)),
+                _ => anyhow::bail!("Invalid encoding type"),
+            })
             .transpose()?;
 
         Ok(Font { header, encoding })

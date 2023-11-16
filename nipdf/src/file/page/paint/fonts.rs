@@ -20,6 +20,7 @@ use smallvec::SmallVec;
 use std::{borrow::Cow, collections::HashMap, ops::RangeInclusive};
 use tiny_skia::PathBuilder;
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
+use type1_parser::{Encoding, PredefinedEncoding};
 
 /// FontWidth used in Type1 and TrueType fonts
 struct FirstLastFontWidth {
@@ -188,14 +189,19 @@ impl<'c> Type1FontOp<'c> {
                 info!("scan encoding from type1 font. ({})", font_name);
                 let type1_font = type1_parser::Font::parse(font_data)?;
                 if let Some(encoding) = type1_font.encoding() {
-                    let mut encoding256: [String; 256] =
-                        std::array::from_fn(|_| ".notdef".to_owned());
-                    for (i, name) in encoding.0.iter().enumerate() {
-                        if let Some(n) = name {
-                            encoding256[i] = n.to_owned();
+                    return Ok(match encoding {
+                        Encoding::Predefined(PredefinedEncoding::Standard) => Encoding256::STANDARD,
+                        Encoding::Vec(encoding) => {
+                            let mut encoding256: [String; 256] =
+                                std::array::from_fn(|_| ".notdef".to_owned());
+                            for (i, name) in encoding.0.iter().enumerate() {
+                                if let Some(n) = name {
+                                    encoding256[i] = n.to_owned();
+                                }
+                            }
+                            Encoding256::owned(encoding256)
                         }
-                    }
-                    return Ok(Encoding256::owned(encoding256));
+                    });
                 }
             }
 
