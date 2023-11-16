@@ -1,10 +1,9 @@
 pub(crate) mod machine;
 pub(crate) mod parser;
 
-use std::borrow::Cow;
-
 use machine::{Array, Machine};
 use parser::header;
+use std::borrow::Cow;
 use winnow::{binary::le_u32, combinator::preceded, error::ContextError, token::any, Parser};
 
 type AnyResult<T> = Result<T, anyhow::Error>;
@@ -95,6 +94,7 @@ fn normalize_pfb(data: &[u8]) -> Cow<[u8]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use test_log::test;
 
     #[test]
     fn parse_pfb_file() {

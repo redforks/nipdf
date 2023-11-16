@@ -117,6 +117,12 @@ fn test_for() {
 }
 
 #[test]
+fn ifelse() {
+    assert_op("true {1} {2} ifelse", 1);
+    assert_op("false {1} {2} ifelse", 2); 
+}
+
+#[test]
 fn test_cleartomark() {
     assert_op("1 2 mark 3 4 5 cleartomark", Stack(rt_values![1, 2]));
 }
@@ -139,7 +145,7 @@ fn array_literal() {
 #[test]
 fn known() {
     assert_op("1 dict /foo known", false);
-    assert_op("1 dict begin /foo 10 def currentdict end /foo known", true); 
+    assert_op("1 dict begin /foo 10 def currentdict end /foo known", true);
 }
 
 #[test]

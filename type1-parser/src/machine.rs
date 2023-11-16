@@ -840,6 +840,14 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             }
             ok()
         },
+        // bool proc1 proc2 ifelse -> -
+        "ifelse" => |m| {
+            let proc2 = m.pop()?.procedure()?;
+            let proc1 = m.pop()?.procedure()?;
+            let cond = m.pop()?.bool()?;
+            m.execute_procedure(if cond { proc1 } else { proc2 })?;
+            ok()
+        },
         "eexec" => |m| {
             assert!(
                 matches!(m.pop()?, RuntimeValue::CurrentFile(_)),
