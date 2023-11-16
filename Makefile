@@ -24,8 +24,5 @@ CLIPPY_RULES = -W clippy::empty_structs_with_brackets -D clippy::dbg_macro -W cl
 clippy:
 	cargo clippy --all-targets -- $(CLIPPY_RULES)
 
-clippy-fix:
-	cargo clippy --fix -- $(CLIPPY_RULES)
-
 bench:
 	cargo bench --bench page-render -F log/release_max_level_warn
