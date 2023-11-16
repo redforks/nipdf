@@ -117,6 +117,12 @@ fn test_for() {
 }
 
 #[test]
+fn test_if() {
+    assert_op("true {1} if", 1);
+    assert_op("2 false {1} if", 2); 
+}
+
+#[test]
 fn ifelse() {
     assert_op("true {1} {2} ifelse", 1);
     assert_op("false {1} {2} ifelse", 2); 

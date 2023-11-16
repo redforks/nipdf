@@ -853,6 +853,15 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             }
             ok()
         },
+        // bool proc if-> -
+        "if" => |m| {
+            let proc = m.pop()?.procedure()?;
+            let cond = m.pop()?.bool()?;
+            if cond {
+                m.execute_procedure(proc)?;
+            }
+            ok()
+        },
         // bool proc1 proc2 ifelse -> -
         "ifelse" => |m| {
             let proc2 = m.pop()?.procedure()?;
