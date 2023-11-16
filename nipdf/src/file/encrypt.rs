@@ -162,6 +162,7 @@ pub fn authorize_user(
 }
 
 /// algorithm 3 step a to d
+#[allow(dead_code)]
 fn calc_rc4_key(
     revion: StandardHandlerRevion,
     key_length: usize,
@@ -177,6 +178,7 @@ fn calc_rc4_key(
 }
 
 // algorithm 7
+#[allow(dead_code)]
 fn authorize_owner(
     revion: StandardHandlerRevion,
     key_length: usize,

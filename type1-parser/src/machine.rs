@@ -1,6 +1,6 @@
 use crate::{
     parser::{token as token_parser, white_space, white_space_or_comment, ws_prefixed},
-    Encoding, PredefinedEncoding,
+    PredefinedEncoding,
 };
 use educe::Educe;
 use either::Either;
@@ -265,7 +265,7 @@ impl<'a> From<Token> for RuntimeValue<'a> {
     fn from(v: Token) -> Self {
         match v {
             Token::Literal(v) => Self::Value(v),
-            Token::Name(name) => Self::Value(Value::Name(name.into())),
+            Token::Name(name) => Self::Value(Value::Name(name)),
         }
     }
 }
@@ -439,6 +439,7 @@ pub enum MachineError {
     Undefined,
     #[error("unmatched mark")]
     UnMatchedMark,
+    #[allow(dead_code)]
     #[error("invalid access")]
     InvalidAccess,
     #[error("range check error")]
@@ -578,6 +579,7 @@ impl<'a> Machine<'a> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn execute(&mut self) -> MachineResult<()> {
         // ensure that the system_dict readonly, it will panic if modify
         // system_dict
@@ -627,13 +629,13 @@ impl<'a> Machine<'a> {
                     self.file.borrow_mut().stop_decrypt();
                 }
                 ExecState::DefinesEncoding => {
-                    return Ok(self
+                    return self
                         .variable_stack
                         .top()
                         .borrow_mut()
                         .remove("Encoding")
                         .unwrap()
-                        .try_into()?)
+                        .try_into()
                 }
             }
         }
@@ -642,6 +644,7 @@ impl<'a> Machine<'a> {
         Err(MachineError::Undefined)
     }
 
+    #[allow(dead_code)]
     pub fn take_fonts(self) -> Vec<(String, Dictionary)> {
         self.fonts
     }
@@ -986,12 +989,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             let key = m.pop()?;
             let dict = m.variable_stack.top();
             let is_encoding = if let RuntimeValue::Value(Value::Name(ref name)) = key {
-                if name.as_ref() == "Encoding" {
-                    true
-                }
-                else {
-                    false
-                }
+                name.as_ref() == "Encoding"
             } else {
                 false
             };
@@ -1172,7 +1170,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             match proc {
                 RuntimeValue::Value(Value::Procedure(p)) => m.execute_procedure(p),
                 v@RuntimeValue::Dictionary(_) => {m.push(v); ok()}
-                _ => return Err(MachineError::TypeCheck),
+                _ => Err(MachineError::TypeCheck),
             }
         },
         // file closefile -
