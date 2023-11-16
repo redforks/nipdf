@@ -706,6 +706,12 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             m.pop()?;
             ok()
         },
+        // Push counts of items in stack to stack
+        "count" => |m| {
+            let len = m.stack.len() as i32;
+            m.push(len);
+            ok()
+        },
 
         // Duplicate stack value at -n position
         // any(n) ... any0 n index -> any(n) ... any0 any(n)

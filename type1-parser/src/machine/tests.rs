@@ -72,8 +72,13 @@ fn test_dup() {
 }
 
 #[test]
+fn count() {
+    assert_op("10 2 count", Stack(rt_values![10, 2, 2])); 
+}
+
+#[test]
 fn test_def() {
-    assert_op("10 dict begin /foo 10 def currentdict", dict!["foo"=> 10]);
+    assert_op("10 dict begin /foo 10 def currentdict", dict!["foo" => 10]);
 }
 
 #[test]
