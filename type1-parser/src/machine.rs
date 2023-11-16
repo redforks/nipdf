@@ -759,6 +759,16 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             ok()
         },
 
+        // dict key known -> bool
+        "known" => |m| {
+            let key = m.pop()?;
+            let dict = m.pop_dict()?;
+            let key: Key = key.try_into()?;
+            let r = dict.borrow().contains_key(&key);
+            m.push(r);
+            ok()
+        },
+
         // dict/array key value put -
         // Set key-value to the given dictionary.
         "put" => |m| {

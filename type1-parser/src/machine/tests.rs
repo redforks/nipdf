@@ -137,6 +137,12 @@ fn array_literal() {
 }
 
 #[test]
+fn known() {
+    assert_op("1 dict /foo known", false);
+    assert_op("1 dict begin /foo 10 def currentdict end /foo known", true); 
+}
+
+#[test]
 fn execute_on_file() {
     let data = include_bytes!("./cmsy9.pfb");
     let mut machine = Machine::new(data);
