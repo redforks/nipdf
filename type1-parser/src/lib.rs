@@ -115,6 +115,13 @@ mod tests {
     }
 
     #[test]
+    fn parse_pfa_file() {
+        let data = include_bytes!("p052024l.pfa");
+        let font = Font::parse(data).unwrap();
+        assert_eq!("URWPalladioL-BoldItal", font.header.font_name);
+    }
+
+    #[test]
     fn parse_std_14_fonts_file() {
         let files: [&[u8]; 14] = [
             include_bytes!("../../nipdf/fonts/d050000l.pfb"),
