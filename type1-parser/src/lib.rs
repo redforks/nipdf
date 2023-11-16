@@ -102,4 +102,11 @@ mod tests {
         let font = Font::parse(data).unwrap();
         assert_eq!("Dingbats", font.header.font_name);
     }
+
+    #[test]
+    fn parse_pfa_file() {
+        let data = include_bytes!("./p052024l.pfa");
+        let font = Font::parse(data).unwrap();
+        assert_eq!("Dingbats", font.header.font_name);
+    }
 }
