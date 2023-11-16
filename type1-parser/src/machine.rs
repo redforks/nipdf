@@ -545,6 +545,10 @@ impl<'a> Machine<'a> {
                 match v {
                     RuntimeValue::BuiltInOp(op) => op(self)?,
                     RuntimeValue::Value(Value::Procedure(p)) => self.execute_procedure(p)?,
+                    RuntimeValue::Dictionary(d) => {
+                        self.push(d);
+                        ExecState::Ok
+                    }
                     v => unreachable!("{:?}", v),
                 }
             }
@@ -615,7 +619,6 @@ macro_rules! var_dict {
     };
 }
 
-#[cfg(test)]
 macro_rules! dict {
     () => {
         Dictionary::new()
@@ -860,7 +863,9 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
 
 /// Create the `globaldict`
 fn global_dict<'a>() -> RuntimeDictionary<'a> {
-    RuntimeDictionary::new()
+    dict![
+        "FontDirectory" => RuntimeDictionary::new(),
+    ]
 }
 
 /// Create the `userdict`
