@@ -389,6 +389,7 @@ pub type MachineResult<T> = Result<T, MachineError>;
 struct CurrentFile<'a> {
     data: &'a [u8],
     remains_pos: usize,
+    hex_form: bool,
     decryped: Option<Vec<u8>>,
     decryped_pos: usize,
 }
@@ -400,6 +401,7 @@ impl<'a> CurrentFile<'a> {
             remains_pos: 0,
             decryped: None,
             decryped_pos: 0,
+            hex_form: false,
         }
     }
 
@@ -439,7 +441,9 @@ impl<'a> CurrentFile<'a> {
         assert!(self.decryped.is_none());
         self.skip_white_space();
         let remains = &self.data[self.remains_pos..];
-        self.decryped = Some(decrypt(EEXEC_KEY, 4, remains));
+        let decrypted;
+        (self.hex_form, decrypted) = decrypt(EEXEC_KEY, 4, remains);
+        self.decryped = Some(decrypted);
         self.remains_pos += 4;
         self.decryped_pos = 0;
     }
@@ -447,7 +451,7 @@ impl<'a> CurrentFile<'a> {
     pub fn stop_decrypt(&mut self) {
         assert!(self.decryped.is_some());
         self.skip_white_space();
-        self.remains_pos += self.decryped_pos;
+        self.remains_pos += if self.hex_form { self.decryped_pos * 2 } else { self.decryped_pos };
         self.decryped = None;
     }
 

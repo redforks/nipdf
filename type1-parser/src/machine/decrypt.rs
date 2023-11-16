@@ -1,3 +1,5 @@
+use hex::decode;
+
 const C1: u16 = 52845;
 const C2: u16 = 22719;
 
@@ -17,24 +19,33 @@ impl Decryptor {
     }
 }
 
-pub fn decrypt(key: u16, n: usize, buf: &[u8]) -> Vec<u8> {
+/// Returns (true, _) if data in hex form, (false, _) if in binary form.
+pub fn decrypt(key: u16, n: usize, buf: &[u8]) -> (bool, Vec<u8>) {
     // check first 8 bytes of buf to see its format, assert that it is not ascii hex form
-    assert!(
-        !buf[..8].iter().all(|b| b.is_ascii_hexdigit()),
-        "decrypted data in ascii hex form not support"
-    );
-
-    if buf.len() <= n {
-        return vec![];
-    }
+    let decoded_hex;
+    let is_hex;
+    let buf = if buf[..8].iter().all(|b| b.is_ascii_hexdigit()) {
+        is_hex = true;
+        // take slice until non ascii_hexdigit, if in odd number, trunk last digit
+        let n = buf.iter().take_while(|b| b.is_ascii_hexdigit()).count();
+        decoded_hex = decode(&buf[..n / 2 * 2]).unwrap();
+        &decoded_hex[..]
+    } else {
+        is_hex = false;
+        buf
+    };
 
     let mut decryptor = Decryptor(key);
     for b in &buf[..n] {
         decryptor.decrypt(*b);
     }
-    buf[n..]
-        .iter()
-        .cloned()
-        .map(|b| decryptor.decrypt(b))
-        .collect()
+
+    (
+        is_hex,
+        buf[n..]
+            .iter()
+            .cloned()
+            .map(|b| decryptor.decrypt(b))
+            .collect(),
+    )
 }
