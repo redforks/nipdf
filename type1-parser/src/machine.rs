@@ -1036,6 +1036,11 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             m.variable_stack.push_system_dict();
             Ok(ExecState::StartEExec)
         },
+        "exec" => |m| {
+            let proc = m.pop()?.procedure()?;
+            m.execute_procedure(proc)?;
+            ok()
+        },
         // file closefile -
         "closefile" => |m| {
             let RuntimeValue::CurrentFile(_f) = m.pop()? else {
@@ -1056,6 +1061,10 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         "readonly" => |_| ok(),
         "executeonly" => |_| ok(),
         "noaccess" => |_| ok(),
+        "bind" => |_| {
+            error!("bind not implemented");
+            ok()
+        },
     );
 
     r.insert(
