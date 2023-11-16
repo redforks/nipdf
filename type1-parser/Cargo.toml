@@ -15,6 +15,7 @@ educe = "0.4.22"
 thiserror = "1.0"
 anyhow = "1.0"
 hex = "0.4"
+strum = { version = "0.25", features = ["derive"] }
 
 [dev-dependencies]
 test-case = "3.1"

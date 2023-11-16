@@ -12,6 +12,7 @@ use std::{
     iter::repeat,
     rc::Rc,
 };
+use strum::IntoStaticStr;
 use winnow::Parser;
 
 mod decrypt;
@@ -22,7 +23,7 @@ pub type TokenArray = Vec<Token>;
 
 type OperatorFn = fn(&mut Machine) -> MachineResult<ExecState>;
 
-#[derive(Educe)]
+#[derive(Educe, IntoStaticStr)]
 #[educe(Debug, PartialEq, Clone)]
 pub enum Value {
     Null,
@@ -57,6 +58,19 @@ enum RuntimeValue<'a> {
         #[educe(PartialEq(ignore))]
         Rc<RefCell<CurrentFile<'a>>>,
     ),
+}
+
+impl<'a, 'b> From<&'a RuntimeValue<'b>> for &'static str {
+    fn from(v: &'a RuntimeValue<'b>) -> Self {
+        match v {
+            RuntimeValue::Value(v) => v.into(),
+            RuntimeValue::Mark => "mark",
+            RuntimeValue::ArrayMark => "array_mark",
+            RuntimeValue::Dictionary(_) => "dict",
+            RuntimeValue::BuiltInOp(_) => "built-in-op",
+            RuntimeValue::CurrentFile(_) => "current-file",
+        }
+    }
 }
 
 type RuntimeDictionary<'a> = HashMap<Key, RuntimeValue<'a>>;
@@ -588,7 +602,7 @@ impl<'a> Machine<'a> {
             self.stack
                 .iter()
                 .rev()
-                .map(std::mem::discriminant)
+                .map(|v| -> &'static str { v.into() })
                 .collect::<Vec<_>>()
         );
     }
