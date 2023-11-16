@@ -1,17 +1,19 @@
+use anyhow::Result as AnyResult;
+use clap::{arg, Command};
+use image::ImageOutputFormat;
+use mimalloc::MiMalloc;
+use nipdf::{
+    file::{File, RenderOptionBuilder},
+    object::Object,
+};
 use std::{
     collections::HashSet,
     io::{copy, stdout, BufWriter, Cursor},
     num::NonZeroU32,
 };
 
-use anyhow::Result as AnyResult;
-
-use clap::{arg, Command};
-use image::ImageOutputFormat;
-use nipdf::{
-    file::{File, RenderOptionBuilder},
-    object::Object,
-};
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 fn cli() -> Command {
     Command::new("dump-pdf")

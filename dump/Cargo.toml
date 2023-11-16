@@ -14,3 +14,4 @@ image = { version = "0.24.7", default-features = false, features = [
     "png",
     "jpeg",
 ] }
+mimalloc = "0.1"
