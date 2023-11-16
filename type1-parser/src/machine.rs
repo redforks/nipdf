@@ -1,6 +1,6 @@
 use crate::{
     parser::{token as token_parser, white_space, white_space_or_comment, ws_prefixed},
-    PredefinedEncoding,
+    Encoding, PredefinedEncoding,
 };
 use educe::Educe;
 use either::Either;
@@ -565,6 +565,7 @@ pub enum ExecState {
     StartEExec,
     // ends decrypt if exec() returns this
     EndEExec,
+    DefinesEncoding,
 }
 
 impl<'a> Machine<'a> {
@@ -594,12 +595,51 @@ impl<'a> Machine<'a> {
                 ExecState::EndEExec => {
                     self.file.borrow_mut().stop_decrypt();
                 }
+                ExecState::DefinesEncoding => {}
             }
         }
         // assert that remains are all white space or comment
         self.file.borrow_mut().finish();
 
         Ok(())
+    }
+
+    /// Execute the type1 font PostScript until a Encoding defined,
+    /// return the Encoding.
+    pub fn execute_for_encoding(&mut self) -> MachineResult<Value> {
+        // correct implement PostScript machine need too much work,
+        // luckily encoding exist in very beginning
+
+        // ensure that the system_dict readonly, it will panic if modify
+        // system_dict
+        self.variable_stack.lock_system_dict();
+
+        while let Some(token) = {
+            let mut b = self.file.borrow_mut();
+            b.next_token()
+        } {
+            match self.exec(token)? {
+                ExecState::Ok => {}
+                ExecState::StartEExec => {
+                    self.file.borrow_mut().start_decrypt();
+                }
+                ExecState::EndEExec => {
+                    self.file.borrow_mut().stop_decrypt();
+                }
+                ExecState::DefinesEncoding => {
+                    return Ok(self
+                        .variable_stack
+                        .top()
+                        .borrow_mut()
+                        .remove("Encoding")
+                        .unwrap()
+                        .try_into()?)
+                }
+            }
+        }
+        // assert that remains are all white space or comment
+        self.file.borrow_mut().finish();
+        Err(MachineError::Undefined)
     }
 
     pub fn take_fonts(self) -> Vec<(String, Dictionary)> {
@@ -945,7 +985,20 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             let value = m.pop()?;
             let key = m.pop()?;
             let dict = m.variable_stack.top();
+            let is_encoding = if let RuntimeValue::Value(Value::Name(ref name)) = key {
+                if name.as_ref() == "Encoding" {
+                    true
+                }
+                else {
+                    false
+                }
+            } else {
+                false
+            };
             dict.borrow_mut().insert(key.try_into()?, value);
+            if is_encoding {
+                return Ok(ExecState::DefinesEncoding);
+            }
             ok()
         },
 
