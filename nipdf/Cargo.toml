@@ -13,7 +13,7 @@ nom = "7.1.3"
 num = "0.4.0"
 memchr = "2.5.0"
 anyhow = "1.0.71"
-ahash = "0.8.3"
+ahash = { version = "0.8", features = ["no-rng"] }
 flate2 = "1.0.26"
 log = "0.4"
 jpeg-decoder = { version = "0.3.0", default-features = false }
