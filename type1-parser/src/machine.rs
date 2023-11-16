@@ -451,7 +451,11 @@ impl<'a> CurrentFile<'a> {
     pub fn stop_decrypt(&mut self) {
         assert!(self.decryped.is_some());
         self.skip_white_space();
-        self.remains_pos += if self.hex_form { self.decryped_pos * 2 } else { self.decryped_pos };
+        self.remains_pos += if self.hex_form {
+            self.decryped_pos * 2
+        } else {
+            self.decryped_pos
+        };
         self.decryped = None;
     }
 
@@ -814,6 +818,11 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         // push current variable stack to operand stack
         "currentdict" => |m| {
             m.push(m.variable_stack.top());
+            ok()
+        },
+        // push systemdict to operand stack
+        "systemdict" => |m| {
+            m.push(m.variable_stack.stack[0].clone());
             ok()
         },
         "currentfile" => |m| {
