@@ -4,7 +4,9 @@ use anyhow::Result as AnyResult;
 use insta::assert_ron_snapshot;
 use md5::{Digest, Md5};
 use nipdf::file::File;
+use nipdf_test_macro::file_render_test;
 use std::num::NonZeroU32;
+use test_case::test_case;
 
 /// Decode pdf embed image and return the result as Vec<u8>.
 /// The image is specified by ref id.
@@ -25,4 +27,9 @@ fn image_separation_color_space() {
     // test if the image pixels colors transformed correctly
     // image 1297 used in page 488(from zero), page resource image name: Im3
     assert_ron_snapshot!(&decode_image(1297).unwrap());
+}
+
+#[file_render_test]
+fn render(f: &str) {
+    dbg!(f);
 }

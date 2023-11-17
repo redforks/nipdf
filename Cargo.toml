@@ -1,5 +1,5 @@
 [workspace]
-members = ["nipdf", "macro", "dump", "reader", "cff-parser", "type1-parser"]
+members = ["nipdf", "macro", "test-macro", "dump", "reader", "cff-parser", "type1-parser"]
 resolver = "2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -16,4 +16,4 @@ codegen-units = 1
 
 [profile.dev]
 split-debuginfo = "unpacked"
-# opt-level = 1
+opt-level = 1

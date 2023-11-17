@@ -54,6 +54,7 @@ test-log = "0.2.12"
 mockall = "0.11"
 criterion = "0.5"
 hex-literal = "0.4"
+nipdf-test-macro = { path = "../test-macro" }
 
 [[bench]]
 name = "page_render"

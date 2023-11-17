@@ -32,6 +32,7 @@
         "operatortype",
         "Paeth",
         "Parms",
+        "pdfs",
         "PSMT",
         "readstring",
         "realtype",
