@@ -31,4 +31,7 @@ clean-test:
 	rm -f target/tmp/render-test.list target/tmp/*.ok
 
 test:
-	cargo nextest run
+	cargo nextest run --test-threads 8
+
+test-no-fail-fast:
+	cargo nextest run --no-fail-fast --test-threads 8
