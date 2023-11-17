@@ -166,85 +166,112 @@ struct Type1FontOp<'a> {
     encoding: Encoding256<'a>,
 }
 
+fn parse_encoding<'a, 'b, 'c>(
+    font_dict: &'c FontDict<'a, 'b>,
+    is_cff: bool,
+    font_data: &'c [u8],
+) -> AnyResult<Encoding256<'c>> {
+    fn resolve_by_name<'a, 'b, 'c>(
+        font_name: &str,
+        font_dict: &'c FontDict<'a, 'b>,
+        font_data: &'c [u8],
+        is_cff: bool,
+        encoding_name: Option<&str>,
+    ) -> AnyResult<Encoding256<'c>> {
+        if let Some(encoding_name) = encoding_name {
+            return Encoding256::predefined(encoding_name)
+                .ok_or_else(|| anyhow!("Unknown encoding: {}", encoding_name));
+        }
+
+        if is_cff {
+            info!("scan encoding from cff font. ({})", font_name);
+            let cff_file: CffFile<'c> = CffFile::open(font_data)?;
+            let font: CffFont<'c> = cff_file.iter()?.next().expect("no font in cff?");
+            return Ok(Encoding256::borrowed(font.encodings()?));
+        } else {
+            info!("scan encoding from type1 font. ({})", font_name);
+            let type1_font = type1_parser::Font::parse(font_data)?;
+            if let Some(encoding) = type1_font.encoding() {
+                return Ok(match encoding {
+                    Encoding::Predefined(PredefinedEncoding::Standard) => Encoding256::STANDARD,
+                    Encoding::Vec(encoding) => {
+                        let mut encoding256: [String; 256] =
+                            std::array::from_fn(|_| ".notdef".to_owned());
+                        for (i, name) in encoding.0.iter().enumerate() {
+                            if let Some(n) = name {
+                                encoding256[i] = n.to_owned();
+                            }
+                        }
+                        Encoding256::owned(encoding256)
+                    }
+                });
+            }
+        }
+
+        // if font not embed encoding, use known encoding for the two standard symbol fonts
+        match font_name {
+            "Symbol" => {
+                return Ok(Encoding256::SYMBOL);
+            }
+            "ZapfDingbats" => {
+                return Ok(Encoding256::ZAPFDINGBATS);
+            }
+            _ => (),
+        }
+
+        if let Some(desc) = font_dict.font_descriptor()? {
+            if desc.flags()?.contains(FontDescriptorFlags::SYMBOLIC) {
+                panic!("Symbolic font must have encoding, but not found in font file");
+            }
+        }
+
+        Ok(Encoding256::STANDARD)
+    }
+
+    let encoding = font_dict.encoding()?;
+    let font_name = font_dict.font_name()?;
+    match encoding {
+        Some(NameOrDictByRef::Dict(d)) => {
+            let encoding_dict = EncodingDict::new(None, d, font_dict.resolver())?;
+            let r = resolve_by_name(
+                font_name,
+                font_dict,
+                font_data,
+                is_cff,
+                encoding_dict
+                    .base_encoding()?
+                    .or_else(|| standard_14_type1_font_encoding(font_name)),
+            )?;
+            Ok(if let Some(diff) = encoding_dict.differences()? {
+                r.apply_differences(&diff)
+            } else {
+                r
+            })
+        }
+        Some(NameOrDictByRef::Name(name)) => {
+            resolve_by_name(font_name, font_dict, font_data, is_cff, Some(name.as_ref()))
+        }
+        None => resolve_by_name(
+            font_name,
+            font_dict,
+            font_data,
+            is_cff,
+            standard_14_type1_font_encoding(font_name),
+        ),
+    }
+}
+
 impl<'c> Type1FontOp<'c> {
     fn new<'a: 'c, 'b: 'c>(
-        font_dict: Type1FontDict<'a, 'b>,
+        font_dict: &'c FontDict<'a, 'b>,
         font: &'c FontKitFont,
         is_cff: bool,
         font_data: &'c [u8],
     ) -> AnyResult<Self> {
-        let font_name = font_dict.font_name()?;
-        let resolve_by_name = |encoding_name: Option<&str>| -> AnyResult<Encoding256> {
-            if let Some(encoding_name) = encoding_name {
-                return Encoding256::predefined(encoding_name)
-                    .ok_or_else(|| anyhow!("Unknown encoding: {}", encoding_name));
-            }
-
-            if is_cff {
-                info!("scan encoding from cff font. ({})", font_name);
-                let cff_file: CffFile<'c> = CffFile::open(font_data)?;
-                let font: CffFont<'c> = cff_file.iter()?.next().expect("no font in cff?");
-                return Ok(Encoding256::borrowed(font.encodings()?));
-            } else {
-                info!("scan encoding from type1 font. ({})", font_name);
-                let type1_font = type1_parser::Font::parse(font_data)?;
-                if let Some(encoding) = type1_font.encoding() {
-                    return Ok(match encoding {
-                        Encoding::Predefined(PredefinedEncoding::Standard) => Encoding256::STANDARD,
-                        Encoding::Vec(encoding) => {
-                            let mut encoding256: [String; 256] =
-                                std::array::from_fn(|_| ".notdef".to_owned());
-                            for (i, name) in encoding.0.iter().enumerate() {
-                                if let Some(n) = name {
-                                    encoding256[i] = n.to_owned();
-                                }
-                            }
-                            Encoding256::owned(encoding256)
-                        }
-                    });
-                }
-            }
-
-            // if font not embed encoding, use known encoding for the two standard symbol fonts
-            match font_name {
-                "Symbol" => {
-                    return Ok(Encoding256::SYMBOL);
-                }
-                "ZapfDingbats" => {
-                    return Ok(Encoding256::ZAPFDINGBATS);
-                }
-                _ => (),
-            }
-
-            if let Some(desc) = font_dict.font_descriptor()? {
-                if desc.flags()?.contains(FontDescriptorFlags::SYMBOLIC) {
-                    panic!("Symbolic font must have encoding, but not found in font file");
-                }
-            }
-
-            Ok(Encoding256::STANDARD)
-        };
-
-        let font_width = FirstLastFontWidth::from_type1_type(&font_dict)?
+        let font_width = FirstLastFontWidth::from_type1_type(&font_dict.type1()?)?
             .map_or_else(|| Either::Right(FreeTypeFontWidth::new(font)), Either::Left);
-        let encoding = font_dict.encoding()?;
-        let encoding = match encoding {
-            Some(NameOrDictByRef::Dict(d)) => {
-                let encoding_dict = EncodingDict::new(None, d, font_dict.resolver())?;
-                let r = resolve_by_name(
-                    encoding_dict
-                        .base_encoding()?
-                        .or_else(|| standard_14_type1_font_encoding(font_name)),
-                )?;
-                if let Some(diff) = encoding_dict.differences()? {
-                    r.apply_differences(&diff)
-                } else {
-                    r
-                }
-            }
-            Some(NameOrDictByRef::Name(name)) => resolve_by_name(Some(name.as_ref()))?,
-            None => resolve_by_name(standard_14_type1_font_encoding(font_name))?,
-        };
+        let encoding = parse_encoding(font_dict, is_cff, font_data)?;
+
         Ok(Self {
             font_width,
             font,
@@ -307,7 +334,7 @@ impl<'a, 'b> Font for Type1Font<'a, 'b> {
 
     fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
         Ok(Box::new(Type1FontOp::new(
-            self.font_dict.type1()?,
+            &self.font_dict,
             &self.font,
             self.is_cff,
             self.font_data.as_slice(),
@@ -321,7 +348,18 @@ impl<'a, 'b> Font for Type1Font<'a, 'b> {
 
 struct TTFParserFontOp<'a> {
     face: TTFFace<'a>,
+    encoding: Encoding256<'a>,
     units_per_em: u16,
+}
+
+impl<'a> TTFParserFontOp<'a> {
+    pub fn new(font_dict: &'a FontDict, font_data: &'a [u8], face: TTFFace<'a>) -> AnyResult<Self> {
+        Ok(Self {
+            encoding: parse_encoding(font_dict, false, font_data)?,
+            units_per_em: face.units_per_em(),
+            face,
+        })
+    }
 }
 
 impl<'a> FontOp for TTFParserFontOp<'a> {
@@ -330,13 +368,14 @@ impl<'a> FontOp for TTFParserFontOp<'a> {
     }
 
     fn char_to_gid(&self, ch: u32) -> u16 {
-        self.face
-            .glyph_index(unsafe { char::from_u32_unchecked(ch) })
-            .unwrap_or_else(|| {
-                error!("Failed convert char {} to gid", ch);
-                GlyphId(ch as u16)
-            })
-            .0
+        let gid_name = self.encoding.decode(ch as u8);
+        if let Some(r) = self.face.glyph_index_by_name(gid_name) {
+            r.0
+        } else {
+            info!("(TTF) glyph id not found for char: {:?}/{}", ch, gid_name);
+            // .notdef gid is always be 0 for type1 font
+            0
+        }
     }
 
     fn char_width(&self, ch: u32) -> u32 {
@@ -426,10 +465,7 @@ impl<'a, 'b> Font for TTFParserFont<'a, 'b> {
         Ok(match self.font_type() {
             FontType::TrueType | FontType::Type1 => {
                 let face = TTFFace::parse(&self.data, 0)?;
-                Box::new(TTFParserFontOp {
-                    units_per_em: face.units_per_em(),
-                    face,
-                })
+                Box::new(TTFParserFontOp::new(&self.font_dict, &self.data, face)?)
             }
             FontType::Type0 => Box::new(Type0FontOp::new(&self.font_dict.type0()?)?),
             _ => unreachable!(
@@ -713,7 +749,7 @@ impl<'c> FontCache<'c> {
         'b: 'c,
     {
         let f = font.type1()?;
-        let font_name = f.font_name()?;
+        let font_name = font.font_name()?;
         let desc = f.font_descriptor()?;
         let font_data = desc
             .map(|desc| -> AnyResult<_> {

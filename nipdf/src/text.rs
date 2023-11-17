@@ -38,6 +38,12 @@ pub trait FontDictTrait {
 
     #[nested]
     fn font_descriptor(&self) -> Option<FontDescriptorDict<'a, 'b>>;
+
+    #[try_from]
+    fn encoding(&self) -> Option<NameOrDictByRef<'a, 'b>>;
+
+    #[typ("Name")]
+    fn base_font(&self) -> &str;
 }
 
 #[pdf_object(("Font", "Type0"))]
@@ -71,7 +77,7 @@ pub trait Type1FontDictTrait {
     fn to_unicode(&self) -> Option<&'b Stream<'a>>;
 }
 
-impl<'a, 'b> Type1FontDict<'a, 'b> {
+impl<'a, 'b> FontDict<'a, 'b> {
     fn resolve_name(&self) -> anyhow::Result<&str> {
         if let Some(desc) = self.font_descriptor()? {
             return desc.font_name();
