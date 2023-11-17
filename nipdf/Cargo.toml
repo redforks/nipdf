@@ -55,6 +55,7 @@ mockall = "0.11"
 criterion = "0.5"
 hex-literal = "0.4"
 nipdf-test-macro = { path = "../test-macro" }
+reqwest = { version = "0.11", features = ["blocking", "gzip"] }
 
 [[bench]]
 name = "page_render"

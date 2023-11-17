@@ -5,7 +5,8 @@ use hex::ToHex;
 use insta::assert_ron_snapshot;
 use md5::{Digest, Md5};
 use nipdf::file::{File, RenderOptionBuilder};
-use nipdf_test_macro::file_render_test;
+use nipdf_test_macro::pdf_file_test_cases;
+use reqwest::blocking::get as download;
 use std::{
     num::NonZeroU32,
     path::{Path, PathBuf},
@@ -34,8 +35,11 @@ fn image_separation_color_space() {
 }
 
 /// Read pdf file and render each page, to save test time,
-/// touch a file at `$CARGO_TARGET_TMPDIR/(md5(f))` if succeed.
-/// If the file exist, skips the test
+/// touch a flag file at `$CARGO_TARGET_TMPDIR/(md5(f))` if succeed.
+/// If the file exist, skips the test.
+///
+/// If f ends with ".link", file content is a http url, download
+/// that file to `$flag_file.pdf`, skip the download if `$flag_file.pdf` exists.
 #[pdf_file_test_cases]
 fn render(f: &str) -> AnyResult<()> {
     let hash_file: String = Md5::digest(f.as_bytes()).as_slice().encode_hex();
@@ -44,14 +48,44 @@ fn render(f: &str) -> AnyResult<()> {
         return Ok(());
     }
 
-    let path = PathBuf::from(f);
-    let buf = std::fs::read(&path).unwrap();
-    let f = File::parse(buf, "", "").unwrap_or_else(|_| panic!("failed to parse {path:?}"));
-    let resolver = f.resolver().unwrap();
-    let catalog = f.catalog(&resolver)?;
+    let mut file_path = f;
+    let mut pdf_file: PathBuf;
+    if f.ends_with(".link") {
+        pdf_file = hash_file.clone();
+        pdf_file.set_extension("pdf");
+        file_path = pdf_file.to_str().unwrap();
+        if !pdf_file.exists() {
+            let url = std::fs::read_to_string(f)?;
+            let url = url.trim();
+            let mut err = Ok(0u64);
+            dbg!(&url);
+            for url in url.split("http").into_iter().filter(|f| !f.is_empty()) {
+                let url = format!("http{}", url);
+                dbg!(&url);
+                err = download(url).and_then(|mut resp| {
+                    dbg!(&pdf_file);
+                    let mut f = std::fs::File::create(&pdf_file).unwrap();
+                    resp.copy_to(&mut f)
+                });
+                if err.is_ok() {
+                    break;
+                }
+            }
+            if err.is_err() {
+                return Err(err.unwrap_err().into());
+            }
+        }
+    }
+
+    let buf = std::fs::read(file_path).unwrap();
+    let pdf = File::parse(buf, "", "").unwrap_or_else(|_| panic!("failed to parse {f:?}"));
+    let resolver = pdf.resolver().unwrap();
+    let catalog = pdf.catalog(&resolver)?;
     for page in catalog.pages()? {
         let option = RenderOptionBuilder::new().zoom(0.75);
         page.render(option)?;
     }
-    Ok(std::fs::write(&hash_file, "")?)
+    std::fs::write(&hash_file, "")?;
+
+    Ok(())
 }
