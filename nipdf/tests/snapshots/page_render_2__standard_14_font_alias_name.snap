@@ -1,5 +1,0 @@
----
-source: nipdf/tests/page_render_2.rs
-expression: "&decode_file_page(\"../../../code.pdf\", 620).unwrap()"
----
-"516c56382436da481de04fd256a6b5a2"

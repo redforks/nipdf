@@ -1,5 +1,5 @@
 ---
-source: nipdf/tests/page_render_2.rs
+source: nipdf/src/file/render_tests.rs
 expression: "&decode_file_page(\"sample_files/filters/predictor.pdf\", 0).unwrap()"
 ---
 "1dab001388070a79bc98abca08333381"

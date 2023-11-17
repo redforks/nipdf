@@ -663,3 +663,6 @@ pub(crate) fn decode_stream<
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod render_tests;

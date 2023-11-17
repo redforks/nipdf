@@ -1,5 +1,5 @@
 ---
-source: nipdf/tests/page_render_2.rs
+source: nipdf/src/file/render_tests.rs
 expression: "&decode_page(141).unwrap()"
 ---
 "4c931adced0cf124542d4db97004db67"

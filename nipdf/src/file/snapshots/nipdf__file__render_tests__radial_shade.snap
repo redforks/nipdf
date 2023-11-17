@@ -1,5 +1,5 @@
 ---
-source: nipdf/tests/page_render_2.rs
+source: nipdf/src/file/render_tests.rs
 expression: "&decode_file_page(\"sample_files/bizarre/pdfReferenceUpdated.pdf\",\n            809).unwrap()"
 ---
 "f2b4425832904cc03ff96d156088ec94"
