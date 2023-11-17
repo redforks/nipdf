@@ -272,7 +272,7 @@ impl State {
     }
 
     fn concat_ctm(&mut self, ctm: UserToDeviceIndependentSpace) {
-        self.ctm = self.ctm.then(&ctm.with_source());
+        self.ctm = ctm.then(&self.ctm.with_source());
         self.user_to_device = to_device_space(self.height, self.zoom, &self.ctm);
         debug!("ctm to {:?}", self.ctm);
         debug!("user_to_device to {:?}", self.user_to_device);
