@@ -51,7 +51,7 @@ fn form() {
 #[test]
 fn form_ctm() {
     assert_ron_snapshot!(
-        &decode_file_page("../../../ICEpower125ASX2_Datasheet_2.0.pdf", 4).unwrap()
+        &decode_file_page("../../pdf/ICEpower125ASX2_Datasheet_2.0.pdf", 4).unwrap()
     );
 }
 
@@ -65,7 +65,7 @@ fn radial_shade() {
 #[test]
 fn axial_shade() {
     // TODO: find a sample page contains PaintShading("axial-shade") operation
-    assert_ron_snapshot!(&decode_file_page("../../../code.pdf", 619).unwrap())
+    assert_ron_snapshot!(&decode_file_page("../../pdf/code.pdf", 619).unwrap())
 }
 
 #[test]
@@ -78,7 +78,7 @@ fn type0_cid_font() {
 #[test]
 fn standard_14_font_alias_name() {
     // Font name: TimesNewRomanPSMT alias of Times-Roman, see normalize_font_name()
-    assert_ron_snapshot!(&decode_file_page("../../../code.pdf", 620).unwrap())
+    assert_ron_snapshot!(&decode_file_page("../../pdf/code.pdf", 620).unwrap())
 }
 
 #[test]
@@ -90,5 +90,5 @@ fn image_mask_cal_rgb_index_color_space() {
 
 #[test]
 fn decrypt_aes_revion3() {
-    assert_ron_snapshot!(&decode_file_page("../../../5176.CFF.pdf", 0).unwrap());
+    assert_ron_snapshot!(&decode_file_page("../../pdf/5176.CFF.pdf", 0).unwrap());
 }
