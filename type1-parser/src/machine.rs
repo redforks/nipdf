@@ -4,7 +4,7 @@ use crate::{
 };
 use educe::Educe;
 use either::Either;
-use log::{debug, error};
+use log::error;
 use std::{
     cell::{Ref, RefCell},
     collections::HashMap,
@@ -656,7 +656,7 @@ impl<'a> Machine<'a> {
                 ExecState::Ok
             }
             Token::Name(name) => {
-                debug!("{}", name);
+                // debug!("{}", name);
                 let v = self.variable_stack.get(&name)?;
                 match v {
                     RuntimeValue::BuiltInOp(op) => op(self)?,
