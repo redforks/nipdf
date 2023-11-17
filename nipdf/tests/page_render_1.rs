@@ -35,7 +35,7 @@ fn image_separation_color_space() {
 }
 
 /// Read pdf file and render each page, to save test time,
-/// touch a flag file at `$CARGO_TARGET_TMPDIR/(md5(f))` if succeed.
+/// touch a flag file at `$CARGO_TARGET_TMPDIR/(md5(f)).ok` if succeed.
 /// If the file exist, skips the test.
 ///
 /// If f ends with ".link", file content is a http url, download
@@ -43,7 +43,9 @@ fn image_separation_color_space() {
 #[pdf_file_test_cases]
 fn render(f: &str) -> AnyResult<()> {
     let hash_file: String = Md5::digest(f.as_bytes()).as_slice().encode_hex();
-    let hash_file = Path::join(Path::new(env!["CARGO_TARGET_TMPDIR"]), hash_file);
+    let mut hash_file = Path::join(Path::new(env!["CARGO_TARGET_TMPDIR"]), hash_file);
+    hash_file.set_extension("ok");
+    let hash_file = hash_file;
     if hash_file.exists() {
         return Ok(());
     }

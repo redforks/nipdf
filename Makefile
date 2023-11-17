@@ -26,3 +26,9 @@ clippy:
 
 bench:
 	cargo bench --bench page-render -F log/release_max_level_warn
+
+clean-test:
+	rm -f target/tmp/render-test.list target/tmp/*.ok
+
+test:
+	cargo nextest run
