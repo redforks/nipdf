@@ -37,8 +37,8 @@
             "args": [
                 "page",
                 "-f",
-                "../nipdf/sample_files/filters/predictor.pdf",
-                "0",
+                "../nipdf/sample_files/normal/SamplePdf1_12mb_6pages.pdf",
+                "1",
                 "--png"
             ],
             "stopOnEntry": false,
