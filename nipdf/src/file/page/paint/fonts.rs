@@ -176,13 +176,7 @@ fn parse_encoding<'a, 'b, 'c>(
         font_dict: &'c FontDict<'a, 'b>,
         font_data: &'c [u8],
         is_cff: bool,
-        encoding_name: Option<&str>,
     ) -> AnyResult<Encoding256<'c>> {
-        if let Some(encoding_name) = encoding_name {
-            return Encoding256::predefined(encoding_name)
-                .ok_or_else(|| anyhow!("Unknown encoding: {}", encoding_name));
-        }
-
         if is_cff {
             info!("scan encoding from cff font. ({})", font_name);
             let cff_file: CffFile<'c> = CffFile::open(font_data)?;
@@ -230,35 +224,29 @@ fn parse_encoding<'a, 'b, 'c>(
 
     let encoding = font_dict.encoding()?;
     let font_name = font_dict.font_name()?;
-    match encoding {
+    let encoding_dict;
+    let encoding_name = match encoding {
         Some(NameOrDictByRef::Dict(d)) => {
-            let encoding_dict = EncodingDict::new(None, d, font_dict.resolver())?;
-            let r = resolve_by_name(
-                font_name,
-                font_dict,
-                font_data,
-                is_cff,
-                encoding_dict
-                    .base_encoding()?
-                    .or_else(|| standard_14_type1_font_encoding(font_name)),
-            )?;
-            Ok(if let Some(diff) = encoding_dict.differences()? {
-                r.apply_differences(&diff)
-            } else {
-                r
-            })
+            encoding_dict = EncodingDict::new(None, d, font_dict.resolver())?;
+            encoding_dict.base_encoding()?
         }
-        Some(NameOrDictByRef::Name(name)) => {
-            resolve_by_name(font_name, font_dict, font_data, is_cff, Some(name.as_ref()))
-        }
-        None => resolve_by_name(
-            font_name,
-            font_dict,
-            font_data,
-            is_cff,
-            standard_14_type1_font_encoding(font_name),
-        ),
+        Some(NameOrDictByRef::Name(name)) => Some(name.as_ref()),
+        None => None,
+    };
+    let encoding_name = encoding_name.or_else(|| standard_14_type1_font_encoding(font_name));
+    if let Some(encoding_name) = encoding_name {
+        return Encoding256::predefined(encoding_name)
+            .ok_or_else(|| anyhow!("Unknown encoding: {}", encoding_name));
     }
+
+    let mut r = resolve_by_name(font_name, font_dict, font_data, is_cff)?;
+    if let Some(NameOrDictByRef::Dict(d)) = encoding {
+        let encoding_dict = EncodingDict::new(None, d, font_dict.resolver())?;
+        if let Some(diff) = encoding_dict.differences()? {
+            r = r.apply_differences(&diff)
+        }
+    }
+    Ok(r)
 }
 
 impl<'c> Type1FontOp<'c> {
