@@ -19,6 +19,7 @@
         "ffilter",
         "Flate",
         "globaldict",
+        "insta",
         "integertype",
         "internaldict",
         "marktype",
@@ -42,6 +43,7 @@
         "stringtype",
         "systemdict",
         "Tmode",
+        "TMPDIR",
         "Trise",
         "userdict",
         "zapfdingbats"
