@@ -41,6 +41,7 @@ smallvec = "1.11"
 ouroboros = "0.18"
 md-5 = "0.10"
 arc4 = "0.1"
+heck = "0.4"
 
 [dev-dependencies]
 env_logger = "0.10.0"

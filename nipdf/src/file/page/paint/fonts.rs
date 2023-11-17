@@ -12,12 +12,12 @@ use cff_parser::{File as CffFile, Font as CffFont};
 use either::Either;
 use font_kit::loaders::freetype::Font as FontKitFont;
 use fontdb::{Database, Family, Query, Source, Weight};
+use heck::ToTitleCase;
 use log::{error, info, warn};
 use once_cell::sync::Lazy;
 use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
-use smallvec::SmallVec;
-use std::{borrow::Cow, collections::HashMap, ops::RangeInclusive};
+use std::{collections::HashMap, ops::RangeInclusive};
 use tiny_skia::PathBuilder;
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
 use type1_parser::{Encoding, PredefinedEncoding};
@@ -618,28 +618,6 @@ struct FontCacheInner<'c> {
 
 pub struct FontCache<'c>(FontCacheInner<'c>);
 
-/// Split string by capital char.
-fn capital_to_space_separated(s: &str) -> Cow<str> {
-    let mut rv: SmallVec<[&str; 3]> = SmallVec::new();
-    let mut last = 0;
-    for (i, c) in s.char_indices() {
-        if c.is_uppercase() {
-            if i > 0 {
-                rv.push(&s[last..i]);
-            }
-            last = i;
-        }
-    }
-    if last < s.len() {
-        rv.push(&s[last..]);
-    }
-    if rv.len() <= 1 {
-        Cow::Borrowed(s)
-    } else {
-        Cow::Owned(rv.join(" "))
-    }
-}
-
 impl<'c> FontCache<'c> {
     fn load_true_type_font_from_bytes<'a, 'b>(
         font: FontDict<'a, 'b>,
@@ -655,7 +633,7 @@ impl<'c> FontCache<'c> {
     fn load_true_type_from_os(desc: &FontDescriptorDict) -> AnyResult<Vec<u8>> {
         let font_name = desc.font_name()?;
         let font_name = normalize_true_type_font_name(font_name);
-        let font_name = capital_to_space_separated(&font_name);
+        let font_name = font_name.to_title_case();
         let mut families = vec![Family::Name(font_name.as_ref())];
         let family = desc.font_family()?;
         if let Some(family) = &family {
@@ -967,14 +945,6 @@ mod tests {
         assert_eq!(200, font_width.char_width('b' as u32));
         assert_eq!(400, font_width.char_width('d' as u32));
         assert_eq!(15, font_width.char_width('e' as u32));
-    }
-
-    #[test_case("" => "")]
-    #[test_case("foo" => "foo")]
-    #[test_case("Bar" => "Bar")]
-    #[test_case("FooBar" => "Foo Bar")]
-    fn test_split_by_capital(s: &str) -> String {
-        capital_to_space_separated(s).into_owned()
     }
 
     #[test_case("s" => "s"; "no need to normalize")]
