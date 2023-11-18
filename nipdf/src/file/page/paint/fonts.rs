@@ -180,7 +180,7 @@ fn parse_encoding<'a, 'b, 'c>(
             info!("scan encoding from cff font. ({})", font_name);
             let cff_file: CffFile<'c> = CffFile::open(font_data)?;
             let font: CffFont<'c> = cff_file.iter()?.next().expect("no font in cff?");
-            Ok(Some(Encoding256::borrowed(font.encodings()?)))
+            Ok(Some(font.encodings()?))
         } else {
             info!("scan encoding from type1 font. ({})", font_name);
             let type1_font = prescript::Font::parse(font_data)?;
