@@ -9,7 +9,7 @@
 //! File::fonts() returns a iterator of `Font` which is a struct
 //! that provides info for that font, such as encoding, charset, etc.
 
-use prescript::{Encoding256, NOTDEF};
+use prescript::{Encoding, NameRegistry, NOTDEF};
 
 mod inner;
 
@@ -34,17 +34,17 @@ impl<'a> Font<'a> {
         self.name
     }
 
-    pub fn encodings(&self) -> Result<Encoding256<'a>> {
+    pub fn encodings(&self, name_registry: &mut NameRegistry) -> Result<Encoding> {
         let charsets = self.top_dict_data.charsets(self.font_data)?;
         let (encodings, supplements) = self.top_dict_data.encodings(self.font_data)?;
-        let mut r = encodings.build(&charsets, self.top_dict_data.string_index());
+        let mut r = encodings.build(name_registry, &charsets, self.top_dict_data.string_index());
         if let Some(supplements) = supplements {
             for supp in supplements {
-                supp.apply(self.top_dict_data.string_index(), &mut r);
+                supp.apply(name_registry, self.top_dict_data.string_index(), &mut r);
             }
         }
 
-        Ok(Encoding256::borrowed(r))
+        Ok(r)
     }
 }
 

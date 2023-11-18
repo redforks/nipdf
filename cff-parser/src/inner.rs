@@ -14,6 +14,7 @@ use nom::{
     IResult, Parser,
 };
 use paste::paste;
+use prescript::{Encoding, NameRegistry};
 use std::{
     collections::HashMap,
     hash::Hash,
@@ -1142,8 +1143,13 @@ impl EncodingSupplement {
         Self { code, sid }
     }
 
-    pub fn apply<'a>(&self, string_index: StringIndex<'a>, encodings: &mut [&'a str; 256]) {
-        encodings[self.code as usize] = string_index.get(self.sid);
+    pub fn apply<'a>(
+        &self,
+        name_registry: &mut NameRegistry,
+        string_index: StringIndex<'a>,
+        encodings: &mut Encoding,
+    ) {
+        encodings[self.code as usize] = name_registry.get_or_intern(string_index.get(self.sid));
     }
 }
 
@@ -1170,36 +1176,43 @@ pub enum Encodings {
 
 impl Encodings {
     /// build encodings.
-    pub fn build<'a>(&self, charsets: &Charsets, string_index: StringIndex<'a>) -> [&'a str; 256] {
+    pub fn build<'a>(
+        &self,
+        name_registry: &mut NameRegistry,
+        charsets: &Charsets,
+        string_index: StringIndex<'a>,
+    ) -> Encoding {
         match self {
             Self::Format0(codes) => {
-                let mut encodings = [NOTDEF; 256];
+                let notdef = name_registry.get_or_intern_static(NOTDEF);
+                let mut encodings = [notdef; 256];
                 for (i, code) in codes.iter().enumerate() {
                     if let Some(v) = charsets
                         .resolve_sid(i as Gid)
                         .map(|sid| string_index.get(sid))
                     {
-                        encodings[*code as usize] = v;
+                        encodings[*code as usize] = name_registry.get_or_intern(v);
                     }
                 }
-                encodings
+                Encoding::new(encodings)
             }
             Self::Format1(ranges) => {
-                let mut encodings = [NOTDEF; 256];
+                let notdef = name_registry.get_or_intern_static(NOTDEF);
+                let mut encodings = [notdef; 256];
                 for range in ranges {
                     for i in range.first..=range.first + range.n_left {
                         if let Some(v) = charsets
                             .resolve_sid(i as Gid)
                             .map(|sid| string_index.get(sid))
                         {
-                            encodings[i as usize] = v;
+                            encodings[i as usize] = name_registry.get_or_intern(v);
                         }
                     }
                 }
-                encodings
+                Encoding::new(encodings)
             }
-            Self::PredefinedStandard => predefined_encodings::STANDARD,
-            Self::PredefinedExpert => predefined_encodings::EXPERT,
+            Self::PredefinedStandard => predefined_encodings::standard(name_registry),
+            Self::PredefinedExpert => predefined_encodings::expert(name_registry),
         }
     }
 }

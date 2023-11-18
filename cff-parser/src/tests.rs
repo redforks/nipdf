@@ -24,7 +24,8 @@ fn font_encodings() {
     let file = File::open(sample_cff()).unwrap();
     let fonts: Vec<_> = file.iter().unwrap().collect();
     assert_eq!(1, fonts.len());
-    let encodings = fonts[0].encodings().unwrap();
-    assert_eq!(NOTDEF, encodings.decode(0));
-    assert_eq!("space", encodings.decode(32));
+    let mut name_registry = NameRegistry::new();
+    let encodings = fonts[0].encodings(&mut name_registry).unwrap();
+    assert_eq!(NOTDEF, encodings.get_str(&name_registry, 0));
+    assert_eq!("space", encodings.get_str(&name_registry, 32));
 }
