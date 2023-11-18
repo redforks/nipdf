@@ -8,6 +8,9 @@ use winnow::{binary::le_u32, combinator::preceded, error::ContextError, token::a
 
 type AnyResult<T> = Result<T, anyhow::Error>;
 
+/// Symbol for .notdef glyph
+pub const NOTDEF: &str = ".notdef";
+
 #[derive(Debug, PartialEq)]
 pub struct Header {
     /// Type font specification version

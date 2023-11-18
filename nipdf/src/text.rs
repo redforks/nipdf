@@ -5,6 +5,7 @@ use crate::{
 };
 use bitflags::bitflags;
 use nipdf_macro::{pdf_object, TryFromIntObjectForBitflags, TryFromNameObject};
+use prescript::NOTDEF;
 use std::{borrow::Cow, collections::HashMap, convert::AsRef};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, TryFromNameObject)]
@@ -384,8 +385,6 @@ impl<'a> Encoding256<'a> {
         Self(new)
     }
 }
-
-const NOTDEF: &str = ".notdef";
 
 impl Encoding256<'static> {
     pub fn predefined(name: &str) -> Option<Self> {

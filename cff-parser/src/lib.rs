@@ -9,7 +9,8 @@
 //! File::fonts() returns a iterator of `Font` which is a struct
 //! that provides info for that font, such as encoding, charset, etc.
 
-const NOTDEF: &str = ".notdef";
+use prescript::NOTDEF;
+
 mod inner;
 
 pub use inner::{Error, Result};

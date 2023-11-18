@@ -17,7 +17,7 @@ use log::{debug, error, info, warn};
 use once_cell::sync::Lazy;
 use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
-use prescript::{Encoding, PredefinedEncoding};
+use prescript::{Encoding, PredefinedEncoding, NOTDEF};
 use std::{collections::HashMap, ops::RangeInclusive};
 use tiny_skia::PathBuilder;
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
@@ -189,7 +189,7 @@ fn parse_encoding<'a, 'b, 'c>(
                     Encoding::Predefined(PredefinedEncoding::Standard) => Encoding256::STANDARD,
                     Encoding::Vec(encoding) => {
                         let mut encoding256: [String; 256] =
-                            std::array::from_fn(|_| ".notdef".to_owned());
+                            std::array::from_fn(|_| NOTDEF.to_owned());
                         for (i, name) in encoding.0.iter().enumerate() {
                             if let Some(n) = name {
                                 encoding256[i] = n.to_owned();
