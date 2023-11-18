@@ -3,8 +3,11 @@ pub(crate) mod parser;
 
 use machine::{Array, Machine, Value};
 use parser::header;
-use std::borrow::Cow;
+use std::{array::from_fn, borrow::Cow};
 use winnow::{binary::le_u32, combinator::preceded, error::ContextError, token::any, Parser};
+
+mod encoding;
+pub use encoding::Encoding256;
 
 type AnyResult<T> = Result<T, anyhow::Error>;
 
@@ -20,23 +23,41 @@ pub struct Header {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct EncodingVec(pub [Option<String>; 256]);
+struct EncodingVec(pub [Option<String>; 256]);
 
 #[derive(Debug, PartialEq, Copy, Clone, Eq)]
-pub enum PredefinedEncoding {
+enum PredefinedEncoding {
     Standard,
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Encoding {
+enum Encoding {
     Predefined(PredefinedEncoding),
     Vec(Box<EncodingVec>),
+}
+
+impl From<Encoding> for Encoding256<'static> {
+    fn from(encoding: Encoding) -> Self {
+        match encoding {
+            Encoding::Predefined(PredefinedEncoding::Standard) => Encoding256::STANDARD,
+            Encoding::Vec(arr) => {
+                let arr = (*arr).0;
+                let mut encoding: [String; 256] = from_fn(|_| NOTDEF.to_owned());
+                for (i, v) in arr.into_iter().enumerate() {
+                    if let Some(name) = v {
+                        encoding[i] = name;
+                    }
+                }
+                Self::owned(encoding)
+            }
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Font {
     header: Header,
-    encoding: Option<Encoding>,
+    encoding: Option<Encoding256<'static>>,
 }
 
 fn parse_header(mut data: &[u8]) -> AnyResult<Header> {
@@ -70,7 +91,7 @@ impl Font {
 
         Ok(Font {
             header,
-            encoding: Some(encoding),
+            encoding: Some(encoding.into()),
         })
     }
 
@@ -78,7 +99,7 @@ impl Font {
         &self.header
     }
 
-    pub fn encoding(&self) -> Option<&Encoding> {
+    pub fn encoding(&self) -> Option<&Encoding256<'static>> {
         self.encoding.as_ref()
     }
 }

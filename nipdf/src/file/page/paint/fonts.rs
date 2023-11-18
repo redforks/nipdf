@@ -3,8 +3,8 @@ use crate::{
     graphics::{NameOrDictByRef, NameOrStream},
     object::{PdfObject, Stream},
     text::{
-        CIDFontType, CIDFontWidths, Encoding256, EncodingDict, FontDescriptorDict,
-        FontDescriptorFlags, FontDict, FontType, Type0FontDict, Type1FontDict,
+        CIDFontType, CIDFontWidths, EncodingDict, FontDescriptorDict, FontDescriptorFlags,
+        FontDict, FontType, Type0FontDict, Type1FontDict,
     },
 };
 use anyhow::{anyhow, bail, Ok, Result as AnyResult};
@@ -17,7 +17,7 @@ use log::{debug, error, info, warn};
 use once_cell::sync::Lazy;
 use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
-use prescript::{Encoding, PredefinedEncoding, NOTDEF};
+use prescript::Encoding256;
 use std::{collections::HashMap, ops::RangeInclusive};
 use tiny_skia::PathBuilder;
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
@@ -180,28 +180,12 @@ fn parse_encoding<'a, 'b, 'c>(
             info!("scan encoding from cff font. ({})", font_name);
             let cff_file: CffFile<'c> = CffFile::open(font_data)?;
             let font: CffFont<'c> = cff_file.iter()?.next().expect("no font in cff?");
-            return Ok(Some(Encoding256::borrowed(font.encodings()?)));
+            Ok(Some(Encoding256::borrowed(font.encodings()?)))
         } else {
             info!("scan encoding from type1 font. ({})", font_name);
             let type1_font = prescript::Font::parse(font_data)?;
-            if let Some(encoding) = type1_font.encoding() {
-                return Ok(Some(match encoding {
-                    Encoding::Predefined(PredefinedEncoding::Standard) => Encoding256::STANDARD,
-                    Encoding::Vec(encoding) => {
-                        let mut encoding256: [String; 256] =
-                            std::array::from_fn(|_| NOTDEF.to_owned());
-                        for (i, name) in encoding.0.iter().enumerate() {
-                            if let Some(n) = name {
-                                encoding256[i] = n.to_owned();
-                            }
-                        }
-                        Encoding256::owned(encoding256)
-                    }
-                }));
-            }
+            Ok(type1_font.encoding().map(|v| v.clone()))
         }
-
-        Ok(None)
     }
 
     fn guess_by_font_name(font_name: &str) -> Option<Encoding256<'static>> {
@@ -232,7 +216,7 @@ fn parse_encoding<'a, 'b, 'c>(
     if let Some(NameOrDictByRef::Dict(d)) = encoding {
         let encoding_dict = EncodingDict::new(None, d, font_dict.resolver())?;
         if let Some(diff) = encoding_dict.differences()? {
-            r = r.apply_differences(&diff)
+            r = diff.apply_differences(r)
         }
     }
     Ok(r)
