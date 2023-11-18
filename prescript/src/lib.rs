@@ -3,7 +3,7 @@ pub(crate) mod parser;
 
 mod encoding;
 mod type1;
-pub use encoding::Encoding256;
+pub use encoding::Encoding;
 use string_interner::{backend::BucketBackend, symbol::SymbolU16, StringInterner};
 pub use type1::Font;
 
@@ -11,3 +11,8 @@ pub use type1::Font;
 pub const NOTDEF: &str = ".notdef";
 pub type Name = SymbolU16;
 pub type NameRegistry = StringInterner<BucketBackend<Name>>;
+
+#[derive(Debug, PartialEq)]
+pub struct Encoding256<'a> {
+    names: [std::borrow::Cow<'a, str>; 256],
+}

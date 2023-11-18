@@ -1,7 +1,7 @@
-use super::{Encoding256, NOTDEF};
+use super::NOTDEF;
 use crate::{
     machine::{Array, Machine, Value},
-    parser::header,
+    parser::header, Encoding256,
 };
 use anyhow::Result as AnyResult;
 use std::{array::from_fn, borrow::Cow};
@@ -31,19 +31,20 @@ enum Encoding {
 
 impl From<Encoding> for Encoding256<'static> {
     fn from(encoding: Encoding) -> Self {
-        match encoding {
-            Encoding::Predefined(PredefinedEncoding::Standard) => Encoding256::STANDARD,
-            Encoding::Vec(arr) => {
-                let arr = (*arr).0;
-                let mut encoding: [String; 256] = from_fn(|_| NOTDEF.to_owned());
-                for (i, v) in arr.into_iter().enumerate() {
-                    if let Some(name) = v {
-                        encoding[i] = name;
-                    }
-                }
-                Self::owned(encoding)
-            }
-        }
+        todo!()
+        // match encoding {
+        //     Encoding::Predefined(PredefinedEncoding::Standard) => Encoding256::STANDARD,
+        //     Encoding::Vec(arr) => {
+        //         let arr = (*arr).0;
+        //         let mut encoding: [String; 256] = from_fn(|_| NOTDEF.to_owned());
+        //         for (i, v) in arr.into_iter().enumerate() {
+        //             if let Some(name) = v {
+        //                 encoding[i] = name;
+        //             }
+        //         }
+        //         Self::owned(encoding)
+        //     }
+        // }
     }
 }
 
