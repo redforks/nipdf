@@ -3,9 +3,8 @@ use iced::{
     alignment::Horizontal,
     executor, font,
     widget::{text_input, Button, Row, Text},
-    Application, Command, Length, Theme,
+    Application, Command, Element, Length, Settings, Theme,
 };
-use iced::{Element, Settings};
 use iced_aw::{modal, Card};
 use log::error;
 use mimalloc::MiMalloc;
@@ -144,9 +143,9 @@ impl App {
 }
 
 impl Application for App {
-    type Message = AppMessage;
-    type Flags = Option<String>;
     type Executor = executor::Default;
+    type Flags = Option<String>;
+    type Message = AppMessage;
     type Theme = Theme;
 
     fn new(file_path: Self::Flags) -> (Self, Command<Self::Message>) {

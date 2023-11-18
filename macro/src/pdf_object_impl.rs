@@ -1,5 +1,4 @@
 use core::panic;
-
 use either::{Either, Left, Right};
 use proc_macro::TokenStream;
 use proc_macro2::Ident;
@@ -289,7 +288,8 @@ fn get_literal_from_some_call(c: &ExprCall) -> &Expr {
     panic!("expect Some literal")
 }
 
-/// `t` should be literal or `Some(literal)`, return `Left` if `t` is literal, return `Right` if `t` is `Some(literal)
+/// `t` should be literal or `Some(literal)`, return `Left` if `t` is literal, return `Right` if `t`
+/// is `Some(literal)
 fn get_literal_from_possible_some(t: &Expr) -> Either<&Expr, &Expr> {
     if let Expr::Call(ec) = t {
         Either::Right(get_literal_from_some_call(ec))

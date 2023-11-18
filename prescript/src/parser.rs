@@ -1,6 +1,5 @@
-use crate::machine::{Token, TokenArray, Value};
-
 use super::Header;
+use crate::machine::{Token, TokenArray, Value};
 use either::Either;
 use std::{
     cell::RefCell,

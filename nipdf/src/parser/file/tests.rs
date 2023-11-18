@@ -1,6 +1,5 @@
-use crate::file::{read_sample_file, File};
-
 use super::*;
+use crate::file::{read_sample_file, File};
 use insta::assert_debug_snapshot;
 use test_case::test_case;
 
@@ -40,8 +39,9 @@ fn test_parse_xref_table(buf: impl AsRef<[u8]>, name: &str) {
 
 #[test]
 fn test_parse_frame() {
-    assert_debug_snapshot!(parse_frame(
-        b"xref
+    assert_debug_snapshot!(
+        parse_frame(
+            b"xref
 1 2
 0000000000 00000 n
 0000000010 00000 n
@@ -51,14 +51,16 @@ startxref
 1234
 %%EOF
 "
-    )
-    .unwrap());
+        )
+        .unwrap()
+    );
 }
 
 #[test]
 fn test_parse_frame_set() {
-    assert_debug_snapshot!(parse_frame_set(
-        b"%PDF-1.7
+    assert_debug_snapshot!(
+        parse_frame_set(
+            b"%PDF-1.7
 xref
 1 1
 0000000000 00000 n
@@ -76,8 +78,9 @@ startxref
 77
 %%EOF
 "
-    )
-    .unwrap());
+        )
+        .unwrap()
+    );
 }
 
 #[test]

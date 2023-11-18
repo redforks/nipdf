@@ -1,8 +1,7 @@
+use crate::object::ObjectId;
 use arc4::Arc4;
 use md5::{Digest, Md5};
 use nipdf_macro::{pdf_object, TryFromIntObject};
-
-use crate::object::ObjectId;
 
 #[derive(TryFromIntObject, Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Algorithm {
@@ -63,7 +62,8 @@ const PADDING: [u8; 32] = [
 /// Pad or truncate the password to 32 bytes.
 /// If the password is longer than 32 bytes, the extra bytes are ignored.
 /// If the password is shorter than 32 bytes, it is padded with bytes
-/// [28 BF 4E 5E 4E 75 8A 41 64 00 4E 56 FF FA 01 08 2E 2E 00 B6 D0 68 3E 80 2F 0C A9 FE 64 53 69 7A]
+/// [28 BF 4E 5E 4E 75 8A 41 64 00 4E 56 FF FA 01 08 2E 2E 00 B6 D0 68 3E 80 2F 0C A9 FE 64 53 69
+/// 7A]
 fn pad_trunc_password(s: &[u8]) -> [u8; 32] {
     let mut iter = s.iter().copied().chain(PADDING).take(32);
     std::array::from_fn(|_| iter.next().unwrap())

@@ -1,10 +1,9 @@
+use crate::{
+    file::{GraphicsStateParameterDict, Rectangle, ResourceDict},
+    graphics::{shading::ShadingDict, trans::UserToDeviceIndependentSpace},
+};
 use ahash::HashMap;
 use nipdf_macro::{pdf_object, TryFromIntObject};
-
-use crate::file::Rectangle;
-use crate::file::{GraphicsStateParameterDict, ResourceDict};
-use crate::graphics::shading::ShadingDict;
-use crate::graphics::trans::UserToDeviceIndependentSpace;
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromIntObject)]
 pub enum PatternType {

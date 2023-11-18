@@ -1,10 +1,7 @@
-use map_macro::hash_map;
-use nom::number::complete::be_i16;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::Hasher;
-
 use super::*;
-use nom::combinator::opt;
+use map_macro::hash_map;
+use nom::{combinator::opt, number::complete::be_i16};
+use std::{collections::hash_map::DefaultHasher, hash::Hasher};
 use test_case::test_case;
 
 #[test_case(&[0x8b] => 0)]

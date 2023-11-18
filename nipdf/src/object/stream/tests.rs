@@ -1,6 +1,5 @@
-use crate::{file::decode_stream, function::Domain, object::Name};
-
 use super::*;
+use crate::{file::decode_stream, function::Domain, object::Name};
 use test_case::test_case;
 
 #[test_case([] => Ok(vec![]); "empty")]

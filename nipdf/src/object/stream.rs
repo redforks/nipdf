@@ -269,8 +269,9 @@ fn decode_dct<'a>(
         ))),
         PixelFormat::L16 => {
             todo!("Convert to DynamicImage::ImageLuma16")
-            // Problem is jpeg-decoder returns pixels in Vec<u8>, but DynamicImage::ImageLuma16 expect Vec<u16>
-            // I don't known is {little,big}-endian, or native-endian in pixels
+            // Problem is jpeg-decoder returns pixels in Vec<u8>, but DynamicImage::ImageLuma16
+            // expect Vec<u16> I don't known is {little,big}-endian, or native-endian in
+            // pixels
         }
         PixelFormat::RGB24 => Ok(FilterDecodedData::Image(DynamicImage::ImageRgb8(
             RgbImage::from_vec(info.width as u32, info.height as u32, pixels).unwrap(),
@@ -369,6 +370,7 @@ trait CCITTFaxDecodeParamsDictTrait {
 
 impl<'a: 'b, 'b> TryFrom<&CCITTFaxDecodeParamsDict<'a, 'b>> for Flags {
     type Error = anyhow::Error;
+
     fn try_from(params: &CCITTFaxDecodeParamsDict<'a, 'b>) -> Result<Self, Self::Error> {
         assert!(!params.end_of_line()?);
         assert!(params.end_of_block()?);
@@ -584,7 +586,8 @@ impl<'a> Stream<'a> {
         self._decode(resolver).and_then(|v| v.into_bytes())
     }
 
-    /// Decode stream but requires that `Length` field is no ref-id, so no need to use `ObjectResolver`
+    /// Decode stream but requires that `Length` field is no ref-id, so no need to use
+    /// `ObjectResolver`
     pub fn decode_without_resolve_length(&self) -> Result<Cow<'a, [u8]>, ObjectValueError> {
         let mut decoded = FilterDecodedData::Bytes(
             self.1[0..self.0.get("Length").unwrap().as_int().unwrap() as usize].into(),

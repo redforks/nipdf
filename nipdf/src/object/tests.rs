@@ -1,6 +1,5 @@
-use crate::file::{ObjectResolver, XRefTable};
-
 use super::*;
+use crate::file::{ObjectResolver, XRefTable};
 use static_assertions::assert_impl_all;
 use test_case::test_case;
 

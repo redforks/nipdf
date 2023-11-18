@@ -635,7 +635,7 @@ impl<'a> Machine<'a> {
                         .borrow_mut()
                         .remove("Encoding")
                         .unwrap()
-                        .try_into()
+                        .try_into();
                 }
             }
         }

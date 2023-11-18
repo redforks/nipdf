@@ -1,8 +1,4 @@
-use anyhow::Result as AnyResult;
-use educe::Educe;
-use nipdf_macro::{pdf_object, TryFromIntObject};
-use tiny_skia::{GradientStop, LinearGradient, Shader, Transform};
-
+use super::{color_space::ColorSpace, Point};
 use crate::{
     file::{Rectangle, ResourceDict},
     function::{default_domain, Domain, Function, FunctionDict, Type as FunctionType},
@@ -12,8 +8,10 @@ use crate::{
     },
     object::{Object, ObjectValueError, PdfObject},
 };
-
-use super::{color_space::ColorSpace, Point};
+use anyhow::Result as AnyResult;
+use educe::Educe;
+use nipdf_macro::{pdf_object, TryFromIntObject};
+use tiny_skia::{GradientStop, LinearGradient, Shader, Transform};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromIntObject)]
 pub enum ShadingType {

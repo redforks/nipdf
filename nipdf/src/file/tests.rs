@@ -83,9 +83,10 @@ endobj
         .resolve(NonZeroU32::new(1_u32).unwrap())?
         .as_dict()?;
     let d = SchemaDict::new(d, &resolver, ())?;
-    assert!(d
-        .resolve_one_or_more_pdf_object::<FooDict>("foo")?
-        .is_empty());
+    assert!(
+        d.resolve_one_or_more_pdf_object::<FooDict>("foo")?
+            .is_empty()
+    );
 
     // field is dictionary
     let buf = br#"1 0 obj
@@ -175,7 +176,7 @@ fn parse_file() {
     p.push("normal");
     p.push("SamplePdf1_12mb_6pages.pdf");
     let buf = std::fs::read(p).unwrap();
-    let f = File::parse(buf,"", "").unwrap();
+    let f = File::parse(buf, "", "").unwrap();
     let resolver = f.resolver().unwrap();
     assert_eq!("1.5", f.version(&resolver).unwrap());
 }

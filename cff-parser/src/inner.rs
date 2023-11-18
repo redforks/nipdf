@@ -1,13 +1,9 @@
-use std::{
-    collections::HashMap,
-    hash::Hash,
-    ops::{Deref, Range, RangeInclusive},
-    str::from_utf8,
-};
-
 use super::NOTDEF;
 use nom::{
-    bits::{bits, complete::tag as bit_tag, complete::take as bit_take},
+    bits::{
+        bits,
+        complete::{tag as bit_tag, take as bit_take},
+    },
     branch::alt,
     bytes::complete::take,
     combinator::{cond, fail, iterator},
@@ -18,6 +14,12 @@ use nom::{
     IResult, Parser,
 };
 use paste::paste;
+use std::{
+    collections::HashMap,
+    hash::Hash,
+    ops::{Deref, Range, RangeInclusive},
+    str::from_utf8,
+};
 use thiserror::Error as ThisError;
 
 mod predefined_charsets;
@@ -299,6 +301,32 @@ pub struct Operator {
 }
 
 impl Operator {
+    pub const BASE_FONT_BLEND: Self = Self::escaped(23);
+    pub const BASE_FONT_NAME: Self = Self::escaped(22);
+    pub const CHARSETS: Self = Self::new(15);
+    pub const CHARSTRING_TYPE: Self = Self::escaped(6);
+    pub const CHAR_STRINGS: Self = Self::new(17);
+    pub const COPYRIGHT: Self = Self::escaped(0);
+    pub const ENCODINGS: Self = Self::new(16);
+    pub const FAMILY_NAME: Self = Self::new(3);
+    pub const FONT_BBOX: Self = Self::new(5);
+    pub const FONT_MATRIX: Self = Self::escaped(7);
+    pub const FULL_NAME: Self = Self::new(2);
+    pub const IS_FIXED_PITCH: Self = Self::escaped(1);
+    pub const ITALIC_ANGLE: Self = Self::escaped(2);
+    pub const NOTICE: Self = Self::new(1);
+    pub const PAINT_TYPE: Self = Self::escaped(5);
+    pub const POST_SCRIPT: Self = Self::escaped(21);
+    pub const PRIVATE: Self = Self::new(18);
+    pub const STROKE_WIDTH: Self = Self::escaped(8);
+    pub const SYNTHETIC_BASE: Self = Self::escaped(20);
+    pub const UNDERLINE_POSITION: Self = Self::escaped(3);
+    pub const UNDERLINE_THICKNESS: Self = Self::escaped(4);
+    pub const UNIQUE_ID: Self = Self::new(13);
+    pub const VERSION: Self = Self::new(0);
+    pub const WEIGHT: Self = Self::new(4);
+    pub const XUID: Self = Self::new(14);
+
     pub const fn new(tag: u8) -> Self {
         debug_assert!(tag <= 21);
         Self { tag, escape: false }
@@ -307,34 +335,6 @@ impl Operator {
     pub const fn escaped(tag: u8) -> Self {
         Self { tag, escape: true }
     }
-
-    pub const VERSION: Self = Self::new(0);
-    pub const NOTICE: Self = Self::new(1);
-    pub const COPYRIGHT: Self = Self::escaped(0);
-    pub const FULL_NAME: Self = Self::new(2);
-    pub const FAMILY_NAME: Self = Self::new(3);
-    pub const WEIGHT: Self = Self::new(4);
-
-    pub const IS_FIXED_PITCH: Self = Self::escaped(1);
-    pub const ITALIC_ANGLE: Self = Self::escaped(2);
-    pub const UNDERLINE_POSITION: Self = Self::escaped(3);
-    pub const UNDERLINE_THICKNESS: Self = Self::escaped(4);
-
-    pub const PAINT_TYPE: Self = Self::escaped(5);
-    pub const CHARSTRING_TYPE: Self = Self::escaped(6);
-    pub const FONT_MATRIX: Self = Self::escaped(7);
-    pub const UNIQUE_ID: Self = Self::new(13);
-    pub const FONT_BBOX: Self = Self::new(5);
-    pub const STROKE_WIDTH: Self = Self::escaped(8);
-    pub const XUID: Self = Self::new(14);
-    pub const CHARSETS: Self = Self::new(15);
-    pub const ENCODINGS: Self = Self::new(16);
-    pub const CHAR_STRINGS: Self = Self::new(17);
-    pub const PRIVATE: Self = Self::new(18);
-    pub const SYNTHETIC_BASE: Self = Self::escaped(20);
-    pub const POST_SCRIPT: Self = Self::escaped(21);
-    pub const BASE_FONT_NAME: Self = Self::escaped(22);
-    pub const BASE_FONT_BLEND: Self = Self::escaped(23);
 }
 
 /// Operator hash is tag, if escape is true, set high bit.
@@ -478,14 +478,18 @@ macro_rules! access_methods {
 
 impl Dict {
     access_methods!(int, |v| v.int().ok_or(Error::ExpectInt), i32);
+
     access_methods!(real, |v| v.real().ok_or(Error::ExpectReal), f32);
+
     access_methods!(bool, |v| v.bool().ok_or(Error::ExpectBool), bool);
+
     access_methods!(
         int_array,
         |v| v.int_array().ok_or(Error::ExpectIntArray),
         &[i32],
         &'static [i32]
     );
+
     access_methods!(
         real_array,
         |v| v.real_array().ok_or(Error::ExpectRealArray),

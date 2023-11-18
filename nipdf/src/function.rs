@@ -1,11 +1,9 @@
-use anyhow::Result as AnyResult;
-
-use nipdf_macro::{pdf_object, TryFromIntObject};
-use smallvec::{smallvec, SmallVec};
-
 use crate::object::{Object, ObjectValueError};
+use anyhow::Result as AnyResult;
 #[cfg(test)]
 use mockall::automock;
+use nipdf_macro::{pdf_object, TryFromIntObject};
+use smallvec::{smallvec, SmallVec};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Domain<T = f32> {

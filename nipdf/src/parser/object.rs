@@ -1,5 +1,8 @@
-use std::{borrow::Cow, num::NonZeroU32, str::from_utf8, str::FromStr};
-
+use super::{whitespace_or_comment, ws, ws_prefixed, ws_terminated, ParseError, ParseResult};
+use crate::object::{
+    Array, Dictionary, HexString, IndirectObject, LiteralString, Name, Object, ObjectId,
+    ObjectValueError, Reference, Stream,
+};
 use either::Either;
 use nom::{
     branch::alt,
@@ -14,13 +17,11 @@ use nom::{
     number::complete::float,
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
 };
-
-use crate::object::{
-    Array, Dictionary, HexString, IndirectObject, LiteralString, Name, Object, ObjectId,
-    ObjectValueError, Reference, Stream,
+use std::{
+    borrow::Cow,
+    num::NonZeroU32,
+    str::{from_utf8, FromStr},
 };
-
-use super::{whitespace_or_comment, ws, ws_prefixed, ws_terminated, ParseError, ParseResult};
 
 /// Unwrap the result of nom parser to a *normal* result.
 pub fn unwrap_parse_result<'a, T: 'a>(obj: ParseResult<'a, T>) -> Result<T, ParseError<'a>> {

@@ -1,6 +1,5 @@
 use super::*;
 use crate::object::LiteralString;
-
 use test_case::test_case;
 
 #[test_case("w ", "w")]

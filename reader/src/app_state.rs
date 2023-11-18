@@ -1,10 +1,9 @@
 //! Save and restore the application state such as last opened file path, last opened page, etc.
 
-use std::path::PathBuf;
-
 use anyhow::Result;
 use directories_next::ProjectDirs;
 use log::error;
+use std::path::PathBuf;
 
 /// Return the last opened file path. If directory not exists, create it.
 fn last_file_path() -> Result<PathBuf> {

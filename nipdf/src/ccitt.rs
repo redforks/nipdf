@@ -541,8 +541,7 @@ pub fn decode(buf: &[u8], width: u16, rows: Option<usize>, flags: Flags) -> Resu
 #[allow(dead_code)]
 fn write_buf(buf: &[u8], width: usize) {
     // write buf content to /tmp/foo, white as '1', black as '0'
-    use std::fs::File;
-    use std::io::Write;
+    use std::{fs::File, io::Write};
 
     let mut f = File::create("/tmp/foo").unwrap();
     for line in buf.chunks(width) {

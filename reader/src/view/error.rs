@@ -1,11 +1,10 @@
 //! View on application has error
 
+use crate::AppMessage;
 use iced::{
     widget::{button, row, Text},
     Element,
 };
-
-use crate::AppMessage;
 
 /// View on application has error
 pub struct ErrorView(String);

@@ -1,9 +1,8 @@
+use super::*;
 use std::{
     any::{Any, TypeId},
     str::from_utf8,
 };
-
-use super::*;
 use test_case::test_case;
 
 #[test_case("%foo\n" => "\n"; "end with \n")]

@@ -1,9 +1,7 @@
 #![allow(clippy::suboptimal_flops)]
 
 use super::*;
-use euclid::approxeq::ApproxEq;
-use euclid::default::Transform2D as Transform;
-use euclid::{Angle, Point2D};
+use euclid::{approxeq::ApproxEq, default::Transform2D as Transform, Angle, Point2D};
 
 #[test]
 fn to_skia() {

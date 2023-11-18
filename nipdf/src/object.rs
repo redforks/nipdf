@@ -661,8 +661,8 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
         }
     }
 
-    /// Resolve pdf_object from container, if its end value is dictionary, return with one element vec.
-    /// If its end value is array, return all elements in array.
+    /// Resolve pdf_object from container, if its end value is dictionary, return with one element
+    /// vec. If its end value is array, return all elements in array.
     /// If value not exist, return empty vector.
     pub fn resolve_one_or_more_pdf_object<O>(&self, id: &str) -> Result<Vec<O>, ObjectValueError>
     where
@@ -801,9 +801,8 @@ mod xref;
 pub use xref::{Entry as XRefEntry, Section as XRefSection, *};
 
 mod frame;
-pub use frame::*;
-
 use crate::{file::DataContainer, parser};
+pub use frame::*;
 
 #[derive(Clone, PartialEq, Debug, thiserror::Error)]
 pub enum ObjectValueError {

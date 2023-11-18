@@ -24,9 +24,8 @@ mod page;
 pub use page::*;
 
 pub(crate) mod encrypt;
-pub use encrypt::EncryptDict;
-
 use self::encrypt::decrypt_key;
+pub use encrypt::EncryptDict;
 
 #[derive(Debug, Copy, Clone)]
 pub enum ObjectPos {
@@ -55,9 +54,11 @@ struct ObjectStream {
 }
 
 fn parse_object_stream(n: usize, buf: &[u8]) -> ParseResult<ObjectStream> {
-    use nom::character::complete::{space0, space1, u16, u32};
-    use nom::multi::count;
-    use nom::sequence::{separated_pair, terminated};
+    use nom::{
+        character::complete::{space0, space1, u16, u32},
+        multi::count,
+        sequence::{separated_pair, terminated},
+    };
 
     let (buf, nums) = count(terminated(separated_pair(u32, space1, u16), space0), n)(buf)?;
     let offsets = nums.into_iter().map(|(_, n)| n).collect();
@@ -133,8 +134,7 @@ impl XRefTable {
     #[cfg(test)]
     pub fn from_buf(buf: &[u8]) -> Self {
         use crate::parser::{whitespace_or_comment, ws_prefixed};
-        use nom::combinator::all_consuming;
-        use nom::multi::many1;
+        use nom::{combinator::all_consuming, multi::many1};
 
         let (input, objects) = many1(ws_prefixed(parse_indirect_object))(buf).unwrap();
         all_consuming(whitespace_or_comment)(input).unwrap();
@@ -627,9 +627,7 @@ impl File {
 /// `file_path` relate to '~/sample_files/'.
 #[cfg(test)]
 pub(crate) fn read_sample_file(file_path: impl AsRef<std::path::Path>) -> Vec<u8> {
-    use std::fs::File;
-    use std::io::Read;
-    use std::path::Path;
+    use std::{fs::File, io::Read, path::Path};
 
     let file_path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("sample_files")

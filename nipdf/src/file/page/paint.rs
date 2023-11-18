@@ -376,7 +376,8 @@ impl State {
     }
 
     pub fn end_text_object(&mut self) {
-        // if exists text clipping path, intersection to current clipping path using Winding fill rule
+        // if exists text clipping path, intersection to current clipping path using Winding fill
+        // rule
         let p = self.text_object.text_clipping_path.finish();
         if let Some(p) = p {
             let p = p.to_owned();

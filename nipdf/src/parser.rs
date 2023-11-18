@@ -65,8 +65,8 @@ where
     preceded(whitespace_or_comment, inner)
 }
 
-/// A combinator that takes a parser `inner` and produces a parser that also consumes both leading and
-/// trailing whitespace, returning the output of `inner`.
+/// A combinator that takes a parser `inner` and produces a parser that also consumes both leading
+/// and trailing whitespace, returning the output of `inner`.
 fn ws<'a, F, O>(inner: F) -> impl FnMut(&'a [u8]) -> ParseResult<'_, O>
 where
     F: Parser<&'a [u8], O, ParseError<'a>>,

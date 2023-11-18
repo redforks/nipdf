@@ -1,13 +1,15 @@
-use std::{fmt::Display, num::NonZeroU32, ops::RangeFrom, str::from_utf8};
-
+use super::{ws_terminated, FileError, ParseError, ParseResult};
+use crate::{
+    function::{Domain, Domains},
+    object::{Dictionary, Entry, Frame, FrameSet, Name, ObjectValueError, XRefSection},
+    parser::{parse_dict, parse_indirect_stream},
+};
 use log::{error, info};
 use memchr::memmem::rfind;
-
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{char, satisfy},
-    character::complete::{u16, u32},
+    character::complete::{char, satisfy, u16, u32},
     combinator::{complete, map, map_res, recognize},
     error::{context, ErrorKind, ParseError as NomParseError},
     multi::{count, fold_many1, many0},
@@ -15,14 +17,7 @@ use nom::{
     sequence::{preceded, separated_pair, tuple},
     InputIter, InputLength, InputTake, Parser, Slice,
 };
-
-use crate::{
-    function::{Domain, Domains},
-    object::{Dictionary, Entry, Frame, FrameSet, Name, ObjectValueError, XRefSection},
-    parser::{parse_dict, parse_indirect_stream},
-};
-
-use super::{ws_terminated, FileError, ParseError, ParseResult};
+use std::{fmt::Display, num::NonZeroU32, ops::RangeFrom, str::from_utf8};
 
 pub fn parse_header(buf: &[u8]) -> ParseResult<&str> {
     let one_digit = || satisfy(|c| c.is_ascii_digit());

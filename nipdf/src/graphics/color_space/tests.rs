@@ -4,7 +4,6 @@ use crate::{
     function::{FunctionValue, MockFunction},
 };
 use assert_approx_eq::assert_approx_eq;
-
 use mockall::predicate::*;
 use smallvec::smallvec;
 use std::num::NonZeroU32;
@@ -230,7 +229,9 @@ endobj
             white_point: [0.9505, 1.0, 1.089],
             black_point: [0.01, 0.02, 0.03],
             gamma: [1.8, 1.8, 1.8],
-            matrix: [0.4497, 0.2446, 0.0252, 0.3163, 0.672, 0.1412, 0.1845, 0.0833, 0.9227],
+            matrix: [
+                0.4497, 0.2446, 0.0252, 0.3163, 0.672, 0.1412, 0.1845, 0.0833, 0.9227
+            ],
         })),
         color_space
     );

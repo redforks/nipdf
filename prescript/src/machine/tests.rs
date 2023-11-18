@@ -73,7 +73,10 @@ fn test_dup() {
 
 #[test]
 fn copy() {
-    assert_op("1 2 3 4 5 3 copy", Stack(rt_values![1, 2, 3, 4, 5, 3, 4, 5])); 
+    assert_op(
+        "1 2 3 4 5 3 copy",
+        Stack(rt_values![1, 2, 3, 4, 5, 3, 4, 5]),
+    );
 }
 
 #[test]
@@ -214,7 +217,7 @@ fn lt() {
     assert_op("(5) (4) lt", false);
 
     assert_op("(4) (40) lt", true);
-    assert_op("(40) (4) lt", false); 
+    assert_op("(40) (4) lt", false);
 }
 
 #[test]
@@ -240,7 +243,7 @@ fn ge() {
     assert_op("(5) (4) ge", true);
 
     assert_op("(4) (40) ge", false);
-    assert_op("(40) (4) ge", true); 
+    assert_op("(40) (4) ge", true);
 }
 
 #[test]
@@ -266,7 +269,7 @@ fn gt() {
     assert_op("(5) (4) gt", true);
 
     assert_op("(4) (40) gt", false);
-    assert_op("(40) (4) gt", true);  
+    assert_op("(40) (4) gt", true);
 }
 
 #[test]

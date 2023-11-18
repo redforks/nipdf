@@ -1,25 +1,20 @@
+use self::paint::Render;
+pub use self::paint::{RenderOption, RenderOptionBuilder};
+use crate::{
+    graphics::{
+        parse_operations, shading::ShadingDict, trans::FormToUserSpace, ColorArgs, ColorSpaceArgs,
+        LineCapStyle, LineJoinStyle, Operation, PatternDict, Point, RenderingIntent,
+    },
+    object::{Dictionary, Name, Object, ObjectValueError, PdfObject, Stream},
+    text::FontDict,
+};
 use ahash::{HashMap, HashMapExt};
 use educe::Educe;
 use log::error;
 use nipdf_macro::{pdf_object, TryFromNameObject};
 use nom::Finish;
-use tiny_skia::Pixmap;
-
-use crate::{
-    graphics::{
-        parse_operations, shading::ShadingDict, LineCapStyle, LineJoinStyle, Operation,
-        PatternDict, Point, RenderingIntent,
-    },
-    object::{Dictionary, Name, Object, ObjectValueError, PdfObject, Stream},
-    text::FontDict,
-};
-
-use self::paint::Render;
-pub use self::paint::{RenderOption, RenderOptionBuilder};
-
-use crate::graphics::trans::FormToUserSpace;
-use crate::graphics::{ColorArgs, ColorSpaceArgs};
 use std::iter::once;
+use tiny_skia::Pixmap;
 
 mod paint;
 
@@ -74,6 +69,7 @@ impl From<Rectangle> for tiny_skia::Rect {
 /// see PDF 32000-1:2008 7.9.5
 impl<'a> TryFrom<&Object<'a>> for Rectangle {
     type Error = ObjectValueError;
+
     fn try_from(object: &Object<'a>) -> Result<Self, Self::Error> {
         match object {
             Object::Array(arr) => {

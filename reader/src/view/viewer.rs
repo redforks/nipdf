@@ -1,16 +1,11 @@
-#[cfg(feature = "debug")]
-use iced::{alignment, widget::horizontal_rule};
-#[cfg(feature = "debug")]
-use iced_aw::{modal, Card};
-#[cfg(feature = "debug")]
-use std::time::{Duration, Instant};
-
 use crate::{AppMessage, ShardedData};
 use anyhow::Result;
 #[cfg(feature = "debug")]
 use iced::alignment::Horizontal;
 #[cfg(feature = "debug")]
 use iced::widget::{Button, Row, Text};
+#[cfg(feature = "debug")]
+use iced::{alignment, widget::horizontal_rule};
 use iced::{
     widget::{
         button, column, horizontal_space,
@@ -19,16 +14,19 @@ use iced::{
         scrollable::{Direction, Properties},
         text, text_input,
     },
-    Length,
+    Color, Element, Length,
 };
-use iced::{Color, Element};
 #[cfg(feature = "debug")]
 use iced_aw::{
     menu_bar,
     native::helpers::menu_tree,
     native::menu::{ItemHeight, MenuTree},
 };
+#[cfg(feature = "debug")]
+use iced_aw::{modal, Card};
 use nipdf::file::{File as PdfFile, RenderOptionBuilder};
+#[cfg(feature = "debug")]
+use std::time::{Duration, Instant};
 
 #[derive(Clone, Debug, Copy)]
 struct PageNavigator {
@@ -274,9 +272,7 @@ impl Viewer {
         let page_no = page_no.unwrap_or_else(|| self.navi.current_page) as usize;
 
         use nipdf::object::Object;
-        use std::collections::HashSet;
-        use std::io::Write;
-        use std::num::NonZeroU32;
+        use std::{collections::HashSet, io::Write, num::NonZeroU32};
 
         let resolver = self.file.resolver()?;
         let catalog = self.file.catalog(&resolver)?;
@@ -355,8 +351,8 @@ impl Viewer {
     }
 
     /// Run `cargo run -p nipdf-dump -- page -f <current pdf file path> --png <page no>`,
-    /// redirect `stderr` to `/tmp/log` file, Set environment string: `RUST_LOG=debug RUST_BACKTRACE=1`
-    /// Use current page if page_no is None
+    /// redirect `stderr` to `/tmp/log` file, Set environment string: `RUST_LOG=debug
+    /// RUST_BACKTRACE=1` Use current page if page_no is None
     /// Return non-empty string on error
     #[cfg(feature = "debug")]
     fn dump_page_render_log(&self, page_no: Option<u32>) -> Result<String> {
@@ -506,7 +502,8 @@ impl Viewer {
     pub(crate) fn view(&self) -> Element<AppMessage> {
         let main: Element<AppMessage> = column![
             row(vec![
-                // can not use row! macro, it has compile problems because of #[cfg] attribute on some of items
+                // can not use row! macro, it has compile problems because of #[cfg] attribute on
+                // some of items
                 button("Open...").on_press(AppMessage::SelectFile).into(),
                 horizontal_space(16).into(),
                 text_input("Page", &self.cur_page_editing)

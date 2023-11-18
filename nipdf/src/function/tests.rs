@@ -6,7 +6,6 @@ use crate::{
 };
 use mockall::predicate::eq;
 use smallvec::smallvec;
-
 use test_case::test_case;
 
 #[test]

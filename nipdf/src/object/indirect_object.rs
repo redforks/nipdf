@@ -1,6 +1,5 @@
-use std::num::NonZeroU32;
-
 use super::{Object, ObjectId};
+use std::num::NonZeroU32;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct IndirectObject<'a>(ObjectId, Object<'a>);

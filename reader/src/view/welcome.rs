@@ -1,9 +1,10 @@
 //! Welcome view when no file is opened.
 
-use iced::widget::{button, column, container, text};
-use iced::{Element, Length};
-
 use crate::AppMessage;
+use iced::{
+    widget::{button, column, container, text},
+    Element, Length,
+};
 
 /// Welcome view when no file is opened.
 pub struct Welcome;
