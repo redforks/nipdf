@@ -17,10 +17,10 @@ use log::{debug, error, info, warn};
 use once_cell::sync::Lazy;
 use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
+use prescript::{Encoding, PredefinedEncoding};
 use std::{collections::HashMap, ops::RangeInclusive};
 use tiny_skia::PathBuilder;
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
-use type1_parser::{Encoding, PredefinedEncoding};
 
 /// FontWidth used in Type1 and TrueType fonts
 struct FirstLastFontWidth {
@@ -183,7 +183,7 @@ fn parse_encoding<'a, 'b, 'c>(
             return Ok(Some(Encoding256::borrowed(font.encodings()?)));
         } else {
             info!("scan encoding from type1 font. ({})", font_name);
-            let type1_font = type1_parser::Font::parse(font_data)?;
+            let type1_font = prescript::Font::parse(font_data)?;
             if let Some(encoding) = type1_font.encoding() {
                 return Ok(Some(match encoding {
                     Encoding::Predefined(PredefinedEncoding::Standard) => Encoding256::STANDARD,

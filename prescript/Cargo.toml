@@ -1,5 +1,5 @@
 [package]
-name = "type1-parser"
+name = "prescript"
 version = "0.1.0"
 edition = "2021"
 
