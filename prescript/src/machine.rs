@@ -1,6 +1,6 @@
 use crate::{
     parser::{token as token_parser, white_space, white_space_or_comment, ws_prefixed},
-    PredefinedEncoding,
+    type1::PredefinedEncoding,
 };
 use educe::Educe;
 use either::Either;
