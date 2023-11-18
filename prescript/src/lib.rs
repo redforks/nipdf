@@ -11,8 +11,3 @@ pub use type1::Font;
 pub const NOTDEF: &str = ".notdef";
 pub type Name = SymbolU16;
 pub type NameRegistry = StringInterner<BucketBackend<Name>>;
-
-#[derive(Debug, PartialEq)]
-pub struct Encoding256<'a> {
-    names: [std::borrow::Cow<'a, str>; 256],
-}

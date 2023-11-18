@@ -1,7 +1,4 @@
-use crate::{
-    parser::{token as token_parser, white_space, white_space_or_comment, ws_prefixed},
-    type1::PredefinedEncoding,
-};
+use crate::parser::{token as token_parser, white_space, white_space_or_comment, ws_prefixed};
 use educe::Educe;
 use either::Either;
 use log::error;
@@ -35,7 +32,7 @@ pub enum Value {
     Dictionary(Dictionary),
     Procedure(Rc<RefCell<TokenArray>>),
     Name(Rc<str>),
-    PredefinedEncoding(PredefinedEncoding),
+    PredefinedEncoding(String),
 }
 
 #[derive(Educe)]
@@ -1224,7 +1221,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
 
     r.insert(
         Key::Name("StandardEncoding".to_owned().into()),
-        RuntimeValue::Value(Value::PredefinedEncoding(PredefinedEncoding::Standard)),
+        RuntimeValue::Value(Value::PredefinedEncoding("StandardEncoding".to_owned())),
     );
     r.insert(
         Key::Name("internaldict".to_owned().into()),

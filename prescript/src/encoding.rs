@@ -9,12 +9,16 @@ use std::array::from_fn;
 pub struct Encoding([Name; 256]);
 
 impl Encoding {
+    pub fn new(names: [Name; 256]) -> Self {
+        Self(names)
+    }
+
     /// Create from static glyph names.
     pub fn from_statics(registry: &mut NameRegistry, names: [&'static str; 256]) -> Self {
         Self(from_fn(|i| registry.get_or_intern_static(names[i])))
     }
 
-    pub fn new(registry: &mut NameRegistry, names: [&str; 256]) -> Self {
+    pub fn from(registry: &mut NameRegistry, names: [&str; 256]) -> Self {
         Self(from_fn(|i| registry.get_or_intern(names[i])))
     }
 
