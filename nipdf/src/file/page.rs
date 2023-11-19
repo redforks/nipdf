@@ -249,7 +249,7 @@ pub struct Page<'a, 'b> {
     parents_to_root: Vec<PageDict<'a, 'b>>,
 }
 
-impl<'a, 'b> Page<'a, 'b> {
+impl<'a, 'b: 'a> Page<'a, 'b> {
     pub fn id(&self) -> u32 {
         self.d.id().unwrap().get()
     }
@@ -319,7 +319,7 @@ impl<'a, 'b> Page<'a, 'b> {
     pub(crate) fn parse(root: PageDict<'a, 'b>) -> Result<Vec<Self>, ObjectValueError> {
         let mut pages = Vec::new();
         let mut parents = Vec::new();
-        fn handle<'a, 'b, 'c>(
+        fn handle<'a, 'b: 'a, 'c>(
             node: PageDict<'a, 'b>,
             pages: &'c mut Vec<Page<'a, 'b>>,
             parents: &'c mut Vec<PageDict<'a, 'b>>,

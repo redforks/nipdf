@@ -549,7 +549,7 @@ pub struct Render<'a, 'b, 'c> {
     crop: Option<Rectangle>,
 }
 
-impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
+impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
     pub fn new(
         canvas: &'c mut Pixmap,
         option: RenderOption,
@@ -1328,12 +1328,14 @@ impl<'a, 'b, 'c> Render<'a, 'b, 'c> {
         let mut text_clip_path = Path::default();
         let flip_y = to_device_space(state.height, state.zoom, &state.ctm).into_skia();
         for ch in op.decode_chars(text) {
+            let mut name_registry = self.resources.resolver().name_registry_mut();
             let width = font_size.mul_add(
-                op.char_width(ch) as f32 / op.units_per_em() as f32,
+                op.char_width(&mut name_registry, ch) as f32 / op.units_per_em() as f32,
                 char_spacing + if ch == 32 { word_spacing } else { 0.0 },
             );
 
-            let gid = op.char_to_gid(ch);
+            let gid = op.char_to_gid(&mut name_registry, ch);
+            drop(name_registry);
             let path = Self::gen_glyph_path(glyph_render, gid, font_size);
             if !path.is_empty() {
                 let path = path.finish().unwrap();

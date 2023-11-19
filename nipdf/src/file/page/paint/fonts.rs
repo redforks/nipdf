@@ -17,8 +17,8 @@ use log::{debug, error, info, warn};
 use once_cell::sync::Lazy;
 use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
-use prescript::Encoding256;
-use std::{collections::HashMap, ops::RangeInclusive};
+use prescript::{Encoding, NameRegistry};
+use std::{borrow::BorrowMut, collections::HashMap, ops::RangeInclusive};
 use tiny_skia::PathBuilder;
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
 
@@ -160,73 +160,70 @@ pub trait Font {
     fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender + '_>>;
 }
 
-struct Type1FontOp<'a> {
-    font_width: Either<FirstLastFontWidth, FreeTypeFontWidth<'a>>,
-    font: &'a FontKitFont,
-    encoding: Encoding256<'a>,
-}
-
 fn parse_encoding<'a, 'b, 'c>(
+    name_registry: &mut NameRegistry,
     font_dict: &'c FontDict<'a, 'b>,
     is_cff: bool,
     font_data: &'c [u8],
-) -> AnyResult<Encoding256<'c>> {
+) -> AnyResult<Encoding> {
     fn load_from_file<'a, 'b, 'c>(
+        name_registry: &mut NameRegistry,
         font_name: &str,
         font_data: &'c [u8],
         is_cff: bool,
-    ) -> AnyResult<Option<Encoding256<'c>>> {
+    ) -> AnyResult<Option<Encoding>> {
         if is_cff {
             info!("scan encoding from cff font. ({})", font_name);
             let cff_file: CffFile<'c> = CffFile::open(font_data)?;
             let font: CffFont<'c> = cff_file.iter()?.next().expect("no font in cff?");
-            Ok(Some(font.encodings()?))
+            Ok(Some(font.encodings(name_registry)?))
         } else {
             info!("scan encoding from type1 font. ({})", font_name);
-            let type1_font = prescript::Font::parse(font_data)?;
+            let type1_font = prescript::Font::parse(name_registry, font_data)?;
             Ok(type1_font.encoding().map(|v| v.clone()))
         }
     }
 
-    fn guess_by_font_name(font_name: &str) -> Option<Encoding256<'static>> {
+    fn guess_by_font_name(name_registry: &NameRegistry, font_name: &str) -> Option<Encoding> {
         // if font not embed encoding, use known encoding for the two standard symbol fonts
         match font_name {
-            "Symbol" => Some(Encoding256::SYMBOL),
-            "ZapfDingbats" => Some(Encoding256::ZAPFDINGBATS),
+            "Symbol" => Some(Encoding::symbol(name_registry)),
+            "ZapfDingbats" => Some(Encoding::symbol(name_registry)),
             _ => None,
         }
     }
 
-    fn default_encoding(font_dict: &FontDict) -> AnyResult<Encoding256<'static>> {
+    fn default_encoding(name_registry: &NameRegistry, font_dict: &FontDict) -> AnyResult<Encoding> {
         if let Some(desc) = font_dict.font_descriptor()? {
             if desc.flags()?.contains(FontDescriptorFlags::SYMBOLIC) {
                 panic!("Symbolic font must have encoding, but not found in font file");
             }
         }
 
-        Ok(Encoding256::STANDARD)
+        Ok(Encoding::standard(name_registry))
     }
 
     let encoding = font_dict.encoding()?;
     let font_name = font_dict.font_name()?;
-    let mut r = resolve_by_name(&encoding, font_dict, font_name)?
-        .or_else(|| load_from_file(font_name, font_data, is_cff).unwrap())
-        .or_else(|| guess_by_font_name(font_name))
-        .unwrap_or_else(|| default_encoding(font_dict).unwrap());
+    let mut r = resolve_by_name(name_registry, &encoding, font_dict, font_name)?
+        .or_else(|| load_from_file(name_registry, font_name, font_data, is_cff).unwrap())
+        .or_else(|| guess_by_font_name(name_registry, font_name))
+        .unwrap_or_else(|| default_encoding(name_registry, font_dict).unwrap());
     if let Some(NameOrDictByRef::Dict(d)) = encoding {
         let encoding_dict = EncodingDict::new(None, d, font_dict.resolver())?;
         if let Some(diff) = encoding_dict.differences()? {
-            r = diff.apply_differences(r)
+            r = diff.apply_differences(name_registry, r)
         }
     }
     Ok(r)
 }
 
 fn resolve_by_name<'a, 'b, 'c>(
+    name_registry: &NameRegistry,
     encoding: &Option<NameOrDictByRef<'a, 'b>>,
     font_dict: &'c FontDict<'a, 'b>,
     font_name: &str,
-) -> AnyResult<Option<Encoding256<'c>>> {
+) -> AnyResult<Option<Encoding>> {
     let encoding_dict;
     let encoding_name = match encoding {
         Some(NameOrDictByRef::Dict(d)) => {
@@ -238,20 +235,30 @@ fn resolve_by_name<'a, 'b, 'c>(
     };
     let encoding_name = encoding_name.or_else(|| standard_14_type1_font_encoding(font_name));
     encoding_name
-        .map(|n| Encoding256::predefined(n).ok_or_else(|| anyhow!("Unknown encoding: {}", n)))
+        .map(|n| {
+            Encoding::predefined(name_registry, n).ok_or_else(|| anyhow!("Unknown encoding: {}", n))
+        })
         .transpose()
 }
 
-impl<'c> Type1FontOp<'c> {
-    fn new<'a: 'c, 'b: 'c>(
-        font_dict: &'c FontDict<'a, 'b>,
-        font: &'c FontKitFont,
+struct Type1FontOp<'a> {
+    font_width: Either<FirstLastFontWidth, FreeTypeFontWidth<'a>>,
+    font: &'a FontKitFont,
+    encoding: Encoding,
+}
+
+impl<'a> Type1FontOp<'a> {
+    fn new<'b>(
+        font_dict: &FontDict,
+        font: &'a FontKitFont,
         is_cff: bool,
-        font_data: &'c [u8],
+        font_data: &'a [u8],
     ) -> AnyResult<Self> {
         let font_width = FirstLastFontWidth::from_type1_type(&font_dict.type1()?)?
             .map_or_else(|| Either::Right(FreeTypeFontWidth::new(font)), Either::Left);
-        let encoding = parse_encoding(font_dict, is_cff, font_data)?;
+        let resolver = font_dict.resolver();
+        let mut name_registry = resolver.name_registry_mut();
+        let encoding = parse_encoding(name_registry.borrow_mut(), font_dict, is_cff, font_data)?;
 
         Ok(Self {
             font_width,
@@ -262,13 +269,13 @@ impl<'c> Type1FontOp<'c> {
 }
 
 impl<'a> FontOp for Type1FontOp<'a> {
-    fn decode_chars<'b>(&'b self, text: &'b [u8]) -> Vec<u32> {
+    fn decode_chars<'d>(&'d self, text: &'d [u8]) -> Vec<u32> {
         text.iter().map(|v| *v as u32).collect()
     }
 
     /// Use font.glyph_for_char() if encoding is None or encoding.replace() returns None
-    fn char_to_gid(&self, ch: u32) -> u16 {
-        let gid_name = self.encoding.decode(ch as u8);
+    fn char_to_gid(&self, name_registry: &mut NameRegistry, ch: u32) -> u16 {
+        let gid_name = self.encoding.get_str(name_registry, ch as u8);
         if let Some(r) = self.font.glyph_by_name(gid_name) {
             r as u16
         } else {
@@ -278,10 +285,10 @@ impl<'a> FontOp for Type1FontOp<'a> {
         }
     }
 
-    fn char_width(&self, gid: u32) -> u32 {
+    fn char_width(&self, name_registry: &mut NameRegistry, gid: u32) -> u32 {
         self.font_width.as_ref().either(
             |x| x.char_width(gid),
-            |x| x.glyph_width(self.char_to_gid(gid) as u32),
+            |x| x.glyph_width(self.char_to_gid(name_registry, gid) as u32),
         )
     }
 }
@@ -308,7 +315,7 @@ impl<'a, 'b> Type1Font<'a, 'b> {
     }
 }
 
-impl<'a, 'b> Font for Type1Font<'a, 'b> {
+impl<'a, 'b: 'a> Font for Type1Font<'a, 'b> {
     fn font_type(&self) -> FontType {
         FontType::Type1
     }
@@ -329,7 +336,7 @@ impl<'a, 'b> Font for Type1Font<'a, 'b> {
 
 struct TTFParserFontOp<'a> {
     face: TTFFace<'a>,
-    encoding: Option<Encoding256<'a>>,
+    encoding: Option<Encoding>,
     units_per_em: u16,
 }
 
@@ -338,7 +345,12 @@ impl<'a> TTFParserFontOp<'a> {
         let encoding = font_dict.encoding()?;
         let font_name = font_dict.font_name()?;
         Ok(Self {
-            encoding: resolve_by_name(&encoding, font_dict, font_name)?,
+            encoding: resolve_by_name(
+                &font_dict.resolver().name_registry_mut(),
+                &encoding,
+                font_dict,
+                font_name,
+            )?,
             units_per_em: face.units_per_em(),
             face,
         })
@@ -350,13 +362,13 @@ impl<'a> FontOp for TTFParserFontOp<'a> {
         s.iter().map(|v| *v as u32).collect()
     }
 
-    fn char_to_gid(&self, ch: u32) -> u16 {
+    fn char_to_gid(&self, name_registry: &mut NameRegistry, ch: u32) -> u16 {
         self.face
             .glyph_index(unsafe { char::from_u32_unchecked(ch) })
             .map_or_else(
                 || {
                     if let Some(encoding) = &self.encoding {
-                        let gid_name = encoding.decode(ch as u8);
+                        let gid_name = encoding.get_str(name_registry, ch as u8);
                         return self.face.glyph_index_by_name(gid_name).map_or_else(
                             || {
                                 info!(
@@ -377,9 +389,9 @@ impl<'a> FontOp for TTFParserFontOp<'a> {
             )
     }
 
-    fn char_width(&self, ch: u32) -> u32 {
+    fn char_width(&self, name_registry: &mut NameRegistry, ch: u32) -> u32 {
         self.face
-            .glyph_hor_advance(GlyphId(self.char_to_gid(ch)))
+            .glyph_hor_advance(GlyphId(self.char_to_gid(name_registry, ch)))
             .unwrap() as u32
     }
 
@@ -742,7 +754,7 @@ impl<'c> FontCache<'c> {
     /// by TrueType fonts scanned from current OS. Because Type1 fonts are not
     /// supported by swash, and the only crate support Type1 fonts is `font`, which
     /// I am not familiar with.
-    fn load_type1_font<'a, 'b>(font: FontDict<'a, 'b>) -> AnyResult<Type1Font<'a, 'b>>
+    fn load_type1_font<'a, 'b: 'a>(font: FontDict<'a, 'b>) -> AnyResult<Type1Font<'a, 'b>>
     where
         'a: 'c,
         'b: 'c,
@@ -783,6 +795,7 @@ impl<'c> FontCache<'c> {
     where
         'a: 'c,
         'b: 'c,
+        'b: 'a,
     {
         match font.subtype()? {
             FontType::TrueType => {
@@ -838,6 +851,7 @@ impl<'c> FontCache<'c> {
     where
         'a: 'c,
         'b: 'c,
+        'b: 'a,
     {
         let font_res = resource.font()?;
         let mut fonts = HashMap::with_capacity(font_res.len());
@@ -884,9 +898,9 @@ impl<'c> FontCache<'c> {
 pub trait FontOp {
     /// Decode char codes to chars, possible using some encoding
     fn decode_chars(&self, s: &[u8]) -> Vec<u32>;
-    fn char_to_gid(&self, ch: u32) -> u16;
+    fn char_to_gid(&self, name_registry: &mut NameRegistry, ch: u32) -> u16;
     /// Return glyph width for specified char
-    fn char_width(&self, ch: u32) -> u32;
+    fn char_width(&self, name_registry: &mut NameRegistry, ch: u32) -> u32;
     fn units_per_em(&self) -> u16 {
         1000
     }
@@ -927,11 +941,11 @@ impl FontOp for Type0FontOp {
         rv
     }
 
-    fn char_to_gid(&self, ch: u32) -> u16 {
+    fn char_to_gid(&self, name_registry: &mut NameRegistry, ch: u32) -> u16 {
         ch as u16
     }
 
-    fn char_width(&self, ch: u32) -> u32 {
+    fn char_width(&self, name_registry: &mut NameRegistry, ch: u32) -> u32 {
         self.widths.char_width(ch).unwrap_or(self.default_width)
     }
 }
