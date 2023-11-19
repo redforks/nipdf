@@ -33,7 +33,7 @@ impl Encoding {
         registry.resolve(self.get_name(ch)).unwrap()
     }
 
-    pub fn predefined(registry: &mut NameRegistry, name: &str) -> Option<Self> {
+    pub fn predefined(registry: &NameRegistry, name: &str) -> Option<Self> {
         match name {
             "MacRomanEncoding" => Some(Self::mac_roman(registry)),
             "MacExpertEncoding" => Some(Self::mac_expert(registry)),

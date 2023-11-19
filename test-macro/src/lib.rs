@@ -23,7 +23,7 @@ pub fn pdf_file_test_cases(_attr: TokenStream, item: TokenStream) -> TokenStream
         let cache = std::fs::read_to_string(cache_file).unwrap();
         cache
             .lines()
-            .filter_map(|l| (!l.is_empty()).then(|| l.to_owned()))
+            .filter(|&l| (!l.is_empty())).map(|l| l.to_owned())
             .collect()
     } else {
         let dirs = vec!["sample_files", "../../pdf", "pdf.js/test/pdfs"];
@@ -31,7 +31,7 @@ pub fn pdf_file_test_cases(_attr: TokenStream, item: TokenStream) -> TokenStream
         let files = dirs
             .into_iter()
             .cartesian_product(patterns)
-            .map(|(dir, pattern)| {
+            .flat_map(|(dir, pattern)| {
                 let dir: PathBuf = [&var("CARGO_MANIFEST_DIR").unwrap(), dir, pattern]
                     .iter()
                     .collect();
@@ -39,7 +39,6 @@ pub fn pdf_file_test_cases(_attr: TokenStream, item: TokenStream) -> TokenStream
                     .unwrap()
                     .map(|p| p.unwrap().to_str().unwrap().to_owned())
             })
-            .flatten()
             .collect_vec();
         std::fs::write(cache_file, files.join("\n")).unwrap();
         files

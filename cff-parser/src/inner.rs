@@ -1143,10 +1143,10 @@ impl EncodingSupplement {
         Self { code, sid }
     }
 
-    pub fn apply<'a>(
+    pub fn apply(
         &self,
         name_registry: &mut NameRegistry,
-        string_index: StringIndex<'a>,
+        string_index: StringIndex<'_>,
         encodings: &mut Encoding,
     ) {
         encodings[self.code as usize] = name_registry.get_or_intern(string_index.get(self.sid));
@@ -1176,11 +1176,11 @@ pub enum Encodings {
 
 impl Encodings {
     /// build encodings.
-    pub fn build<'a>(
+    pub fn build(
         &self,
         name_registry: &mut NameRegistry,
         charsets: &Charsets,
-        string_index: StringIndex<'a>,
+        string_index: StringIndex<'_>,
     ) -> Encoding {
         match self {
             Self::Format0(codes) => {

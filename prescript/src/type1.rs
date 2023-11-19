@@ -58,7 +58,7 @@ impl Font {
 
         Ok(Font {
             header,
-            encoding: Some(encoding.into()),
+            encoding: Some(encoding),
         })
     }
 
