@@ -61,3 +61,6 @@ reqwest = { version = "0.11", features = ["blocking", "gzip"] }
 [[bench]]
 name = "page_render"
 harness = false
+
+[lints]
+workspace = true

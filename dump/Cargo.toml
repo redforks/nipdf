@@ -15,3 +15,6 @@ image = { version = "0.24.7", default-features = false, features = [
     "jpeg",
 ] }
 mimalloc = "0.1"
+
+[lints]
+workspace = true

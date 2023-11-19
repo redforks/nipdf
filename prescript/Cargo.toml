@@ -25,3 +25,6 @@ string-interner = { version = "0.14", default-features = false, features = [
 test-case = "3.1"
 test-log = "0.2"
 env_logger = "0.10"
+
+[lints]
+workspace = true

@@ -16,3 +16,6 @@ prescript = { path = "../prescript" }
 [dev-dependencies]
 map-macro = "0.2.6"
 test-case = "3.2.1"
+
+[lints]
+workspace = true

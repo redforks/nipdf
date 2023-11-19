@@ -26,3 +26,6 @@ mimalloc = "0.1"
 debug = ["notify-rust", "iced-debug", "nipdf/pretty", "iced_aw/menu"]
 # enable iced debug, hit F12 to toggle iced debug display 
 iced-debug = ["iced/debug"]
+
+[lints]
+workspace = true

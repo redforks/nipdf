@@ -1,5 +1,13 @@
 [workspace]
-members = ["nipdf", "macro", "test-macro", "dump", "reader", "cff-parser", "prescript"]
+members = [
+    "nipdf",
+    "macro",
+    "test-macro",
+    "dump",
+    "reader",
+    "cff-parser",
+    "prescript",
+]
 resolver = "2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -17,3 +25,21 @@ codegen-units = 1
 [profile.dev]
 split-debuginfo = "unpacked"
 opt-level = 1
+
+[workspace.lints.clippy]
+empty_structs_with_brackets = "warn"
+dbg_macro = "deny"
+get_unwrap = "warn"
+if_then_some_else_none = "warn"
+large_include_file = "warn"
+rc_buffer = "warn"
+redundant_type_annotations = "warn"
+verbose_file_reads = "warn"
+collection_is_never_read = "warn"
+debug_assert_with_mut_call = "warn"
+imprecise_flops = "warn"
+manual_clamp = "warn"
+needless_collect = "warn"
+or_fun_call = "warn"
+redundant_clone = "warn"
+suboptimal_flops = "warn"
