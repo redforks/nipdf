@@ -25,13 +25,13 @@ fn render_page(file_path: impl AsRef<std::path::Path>, no: usize) -> AnyResult<t
 
 pub fn render1(c: &mut Criterion) {
     c.bench_function("page render", |b| {
-        b.iter(|| render_page("../../../../ICEpower125ASX2_Datasheet_2.0.pdf", 1).unwrap())
+        b.iter(|| render_page("../../../pdf/ICEpower125ASX2_Datasheet_2.0.pdf", 1).unwrap())
     });
 }
 
 pub fn render2(c: &mut Criterion) {
     c.bench_function("page render", |b| {
-        b.iter(|| render_page("../../../../compressed.tracemonkey-pldi-09.pdf", 0).unwrap())
+        b.iter(|| render_page("../../../pdf/compressed.tracemonkey-pldi-09.pdf", 0).unwrap())
     });
 }
 
