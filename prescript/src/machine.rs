@@ -43,6 +43,8 @@ enum RuntimeValue<'a> {
     Mark,
     /// Tells ] operation that begin of array in stack.
     ArrayMark,
+    /// Tell >> operation that end of dictionary in stack.
+    DictMark,
     Dictionary(Rc<RefCell<RuntimeDictionary<'a>>>),
     BuiltInOp(
         #[educe(Debug(ignore))]
@@ -62,6 +64,7 @@ impl<'b> Display for RuntimeValue<'b> {
         match self {
             RuntimeValue::Mark => write!(f, "mark"),
             RuntimeValue::ArrayMark => write!(f, "array-mark"),
+            RuntimeValue::DictMark => write!(f, "dict-mark"),
             RuntimeValue::Dictionary(_) => write!(f, "dict"),
             RuntimeValue::BuiltInOp(_) => write!(f, "built-in-op"),
             RuntimeValue::CurrentFile(_) => write!(f, "current-file"),
@@ -966,6 +969,24 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             m.push(RuntimeDictionary::with_capacity(count as usize));
             ok()
         },
+        "<<" => |m| {
+            m.push(RuntimeValue::DictMark);
+            ok()
+        },
+        ">>" => |m| {
+            let mut dict = RuntimeDictionary::new();
+            loop {
+                let v = match m.pop()? {
+                    RuntimeValue::DictMark => {
+                        m.push(dict);
+                        return ok();
+                    }
+                    v => v
+                };
+                let key = m.pop()?;
+                dict.insert(key.try_into()?, v);
+            }
+        },
 
         // dict begin -> -
         "begin" => |m| {
@@ -1212,6 +1233,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
                 RuntimeValue::BuiltInOp(_) => "operatortype",
                 RuntimeValue::Mark => "marktype",
                 RuntimeValue::ArrayMark => "marktype",
+                RuntimeValue::DictMark => "marktype",
                 RuntimeValue::Value(Value::Null) => "nulltype",
                 RuntimeValue::Value(Value::Dictionary(_)) => "dicttype",
             });

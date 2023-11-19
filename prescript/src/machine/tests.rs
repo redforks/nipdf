@@ -339,6 +339,12 @@ fn test_create_array_on_stack() {
 }
 
 #[test]
+fn test_create_dict_on_stack() {
+    assert_op("<<>>", dict![]); 
+    assert_op("<< /foo 10/bar<<>> >>", dict!["foo" => 10, "bar" => dict![]]); 
+}
+
+#[test]
 fn test_string() {
     assert_op("3 string", *b"\0\0\0");
 }
