@@ -1,6 +1,10 @@
 use anyhow::Result as AnyResult;
 use criterion::{criterion_group, criterion_main, Criterion};
+use mimalloc::MiMalloc;
 use nipdf::file::{File, RenderOptionBuilder};
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 fn read_sample_file(file_path: impl AsRef<std::path::Path>) -> Vec<u8> {
     use std::path::Path;
