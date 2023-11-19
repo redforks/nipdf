@@ -283,6 +283,7 @@ pub trait ColorSpaceTrait<T> {
 pub struct DeviceGray;
 
 impl<T: ColorComp> ColorSpaceTrait<T> for DeviceGray {
+    #[allow(clippy::missing_asserts_for_indexing)]
     fn to_rgba(&self, color: &[T]) -> [T; 4] {
         [color[0], color[0], color[0], T::max_color()]
     }
@@ -297,6 +298,7 @@ pub struct DeviceRGB;
 
 impl<T: ColorComp> ColorSpaceTrait<T> for DeviceRGB {
     fn to_rgba(&self, color: &[T]) -> [T; 4] {
+        assert!(color.len() > 2);
         [color[0], color[1], color[2], T::max_color()]
     }
 
@@ -314,6 +316,7 @@ where
     f32: ColorCompConvertTo<T>,
 {
     fn to_rgba(&self, color: &[T]) -> [T; 4] {
+        assert!(color.len() > 3);
         let c = color[0].into_color_comp();
         let m = color[1].into_color_comp();
         let y = color[2].into_color_comp();
@@ -543,6 +546,7 @@ where
         // no need to do conversion to rgb, it is already rgb
         // gamma and other settings are used for converting to other color space
         // such as CMYK etc.
+        assert!(color.len() > 3);
         [color[0], color[1], color[2], T::max_color()]
     }
 

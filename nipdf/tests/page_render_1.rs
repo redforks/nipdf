@@ -60,7 +60,7 @@ fn render(f: &str) -> AnyResult<()> {
             let url = std::fs::read_to_string(f)?;
             let url = url.trim();
             let mut err = Ok(0u64);
-            for url in url.split("http").into_iter().filter(|f| !f.is_empty()) {
+            for url in url.split("http").filter(|f| !f.is_empty()) {
                 let url = format!("http{}", url);
                 err = download(url).and_then(|mut resp| {
                     let mut f = std::fs::File::create(&pdf_file).unwrap();

@@ -160,27 +160,27 @@ pub trait Font {
     fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender + '_>>;
 }
 
-fn parse_encoding<'a, 'b, 'c>(
+fn parse_encoding<'c>(
     name_registry: &mut NameRegistry,
-    font_dict: &'c FontDict<'a, 'b>,
+    font_dict: &'c FontDict<'_, '_>,
     is_cff: bool,
     font_data: &'c [u8],
 ) -> AnyResult<Encoding> {
-    fn load_from_file<'a, 'b, 'c>(
+    fn load_from_file<'a>(
         name_registry: &mut NameRegistry,
         font_name: &str,
-        font_data: &'c [u8],
+        font_data: &'a [u8],
         is_cff: bool,
     ) -> AnyResult<Option<Encoding>> {
         if is_cff {
             info!("scan encoding from cff font. ({})", font_name);
-            let cff_file: CffFile<'c> = CffFile::open(font_data)?;
-            let font: CffFont<'c> = cff_file.iter()?.next().expect("no font in cff?");
+            let cff_file: CffFile<'a> = CffFile::open(font_data)?;
+            let font: CffFont<'a> = cff_file.iter()?.next().expect("no font in cff?");
             Ok(Some(font.encodings(name_registry)?))
         } else {
             info!("scan encoding from type1 font. ({})", font_name);
             let type1_font = prescript::Font::parse(name_registry, font_data)?;
-            Ok(type1_font.encoding().map(|v| v.clone()))
+            Ok(type1_font.encoding().cloned())
         }
     }
 
@@ -218,10 +218,10 @@ fn parse_encoding<'a, 'b, 'c>(
     Ok(r)
 }
 
-fn resolve_by_name<'a, 'b, 'c>(
+fn resolve_by_name<'a, 'b>(
     name_registry: &NameRegistry,
     encoding: &Option<NameOrDictByRef<'a, 'b>>,
-    font_dict: &'c FontDict<'a, 'b>,
+    font_dict: &FontDict<'a, 'b>,
     font_name: &str,
 ) -> AnyResult<Option<Encoding>> {
     let encoding_dict;
@@ -248,7 +248,7 @@ struct Type1FontOp<'a> {
 }
 
 impl<'a> Type1FontOp<'a> {
-    fn new<'b>(
+    fn new(
         font_dict: &FontDict,
         font: &'a FontKitFont,
         is_cff: bool,
@@ -941,11 +941,11 @@ impl FontOp for Type0FontOp {
         rv
     }
 
-    fn char_to_gid(&self, name_registry: &mut NameRegistry, ch: u32) -> u16 {
+    fn char_to_gid(&self, _name_registry: &mut NameRegistry, ch: u32) -> u16 {
         ch as u16
     }
 
-    fn char_width(&self, name_registry: &mut NameRegistry, ch: u32) -> u32 {
+    fn char_width(&self, _name_registry: &mut NameRegistry, ch: u32) -> u32 {
         self.widths.char_width(ch).unwrap_or(self.default_width)
     }
 }
