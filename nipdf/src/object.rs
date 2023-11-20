@@ -3,7 +3,7 @@ use ahash::{HashMap, HashMapExt};
 use anyhow::Context;
 use educe::Educe;
 use log::error;
-use prescript::Name;
+use prescript::{name, Name};
 use std::{
     borrow::{Borrow, Cow},
     fmt::{Debug, Display},
