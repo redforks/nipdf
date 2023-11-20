@@ -9,10 +9,10 @@ use test_case::test_case;
 #[test_case(1.0, 2, 3.0, 4.0 => (1.0, 2.0, 3.0, 4.0); "normal")]
 #[test_case(3.0, 4, 1.0, 2.0 => (1.0, 2.0, 3.0, 4.0); "auto reorder")]
 fn rectangle_from_array(
-    x1: impl Into<Object<'static>>,
-    y1: impl Into<Object<'static>>,
-    x2: impl Into<Object<'static>>,
-    y2: impl Into<Object<'static>>,
+    x1: impl Into<Object>,
+    y1: impl Into<Object>,
+    x2: impl Into<Object>,
+    y2: impl Into<Object>,
 ) -> (f32, f32, f32, f32) {
     let arr = Object::Array(vec![x1.into(), y1.into(), x2.into(), y2.into()]);
     let rect = Rectangle::try_from(&arr).unwrap();

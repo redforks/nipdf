@@ -198,7 +198,7 @@ impl XRefTable {
         buf: &'a [u8],
         id: NonZeroU32,
         decrypt_key: Option<&[u8]>,
-    ) -> Result<Object<'c>, ObjectValueError> {
+    ) -> Result<Object, ObjectValueError> {
         self.resolve_object_buf(buf, id)
             .ok_or(ObjectValueError::ObjectIDNotFound(id))
             .and_then(|buf| {
@@ -237,7 +237,7 @@ impl XRefTable {
 }
 
 /// Decrypt HexString/LiteralString nested in object.
-fn decrypt_string<'a>(key: &[u8], id: ObjectId, mut o: Object<'a>) -> Object<'a> {
+fn decrypt_string<'a>(key: &[u8], id: ObjectId, mut o: Object) -> Object {
     let key = decrypt_key(key, id);
 
     struct Decryptor(Box<[u8]>);
@@ -251,13 +251,13 @@ fn decrypt_string<'a>(key: &[u8], id: ObjectId, mut o: Object<'a>) -> Object<'a>
             s.update(|s| decrypt_with_key(&self.0, s));
         }
 
-        fn dict(&self, d: &mut Dictionary<'_>) {
+        fn dict(&self, d: &mut Dictionary) {
             for (_, v) in d.iter_mut() {
                 self.decrypt(v);
             }
         }
 
-        fn decrypt(&self, o: &mut Object<'_>) {
+        fn decrypt(&self, o: &mut Object) {
             match o {
                 Object::HexString(ref mut s) => self.hex_string(s),
                 Object::LiteralString(ref mut s) => self.literal_string(s),
@@ -274,18 +274,18 @@ fn decrypt_string<'a>(key: &[u8], id: ObjectId, mut o: Object<'a>) -> Object<'a>
 }
 
 pub trait DataContainer<'a> {
-    fn get_value(&self, key: Name) -> Option<&Object<'a>>;
+    fn get_value(&self, key: Name) -> Option<&Object>;
 }
 
-impl<'a> DataContainer<'a> for Dictionary<'a> {
-    fn get_value(&self, key: Name) -> Option<&Object<'a>> {
+impl<'a> DataContainer<'a> for Dictionary {
+    fn get_value(&self, key: Name) -> Option<&Object> {
         self.get(&key)
     }
 }
 
 /// Get value from first dictionary that contains `key`.
-impl<'a> DataContainer<'a> for Vec<&Dictionary<'a>> {
-    fn get_value(&self, key: Name) -> Option<&Object<'a>> {
+impl<'a> DataContainer<'a> for Vec<&Dictionary> {
+    fn get_value(&self, key: Name) -> Option<&Object> {
         self.iter().find_map(|d| d.get(&key))
     }
 }
@@ -293,7 +293,7 @@ impl<'a> DataContainer<'a> for Vec<&Dictionary<'a>> {
 pub struct ObjectResolver<'a> {
     buf: &'a [u8],
     xref_table: &'a XRefTable,
-    objects: HashMap<NonZeroU32, OnceCell<Object<'a>>>,
+    objects: HashMap<NonZeroU32, OnceCell<Object>>,
     encript_key: Option<Box<[u8]>>,
 }
 
@@ -316,6 +316,10 @@ impl<'a> ObjectResolver<'a> {
         self.encript_key.as_deref()
     }
 
+    pub fn data(&self) -> &[u8] {
+        self.buf
+    }
+
     /// Return total objects count.
     #[allow(dead_code)]
     pub fn n(&self) -> usize {
@@ -333,7 +337,7 @@ impl<'a> ObjectResolver<'a> {
     }
 
     #[cfg(test)]
-    pub fn setup_object(&mut self, id: u32, v: Object<'a>) {
+    pub fn setup_object(&mut self, id: u32, v: Object) {
         self.objects
             .insert(NonZeroU32::new(id).unwrap(), OnceCell::with_value(v));
     }
@@ -347,7 +351,7 @@ impl<'a> ObjectResolver<'a> {
     }
 
     /// Resolve object with id `id`, if object is reference, resolve it recursively.
-    pub fn resolve(&self, id: NonZeroU32) -> Result<&Object<'a>, ObjectValueError> {
+    pub fn resolve(&self, id: NonZeroU32) -> Result<&Object, ObjectValueError> {
         self.objects
             .get(&id)
             .ok_or(ObjectValueError::ObjectIDNotFound(id))?
@@ -370,7 +374,7 @@ impl<'a> ObjectResolver<'a> {
         &'b self,
         c: &'c C,
         id: Name,
-    ) -> Result<Option<&'c Object<'a>>, ObjectValueError> {
+    ) -> Result<Option<&'c Object>, ObjectValueError> {
         Self::not_found_error_to_opt(self._resolve_container_value(c, id).map(|(_, o)| o))
     }
 
@@ -380,7 +384,7 @@ impl<'a> ObjectResolver<'a> {
         &'b self,
         c: &'c C,
         id: Name,
-    ) -> Result<&'c Object<'a>, ObjectValueError> {
+    ) -> Result<&'c Object, ObjectValueError> {
         self.resolve_required_value(c, id).map(|(_, o)| o)
     }
 
@@ -389,7 +393,7 @@ impl<'a> ObjectResolver<'a> {
         &'b self,
         c: &'c C,
         id: Name,
-    ) -> Result<(Option<NonZeroU32>, &'c Object<'a>), ObjectValueError> {
+    ) -> Result<(Option<NonZeroU32>, &'c Object), ObjectValueError> {
         self._resolve_container_value(c, id.clone()).map_err(|e| {
             error!("{}: {}", e, id);
             e
@@ -400,7 +404,7 @@ impl<'a> ObjectResolver<'a> {
         &'b self,
         c: &'c C,
         id: Name,
-    ) -> Result<(Option<NonZeroU32>, &'c Object<'a>), ObjectValueError> {
+    ) -> Result<(Option<NonZeroU32>, &'c Object), ObjectValueError> {
         let obj = c.get_value(id).ok_or(ObjectValueError::DictKeyNotFound)?;
 
         if let Object::Reference(id) = obj {
@@ -451,14 +455,11 @@ impl<'a> Resolver<'a> for ObjectResolver<'a> {
         &'b self,
         c: &'c C,
         id: Name,
-    ) -> Result<(Option<NonZeroU32>, &'c Object<'a>), ObjectValueError> {
+    ) -> Result<(Option<NonZeroU32>, &'c Object), ObjectValueError> {
         self._resolve_container_value(c, id)
     }
 
-    fn resolve_reference<'b>(
-        &'b self,
-        v: &'b Object<'a>,
-    ) -> Result<&'b Object<'a>, ObjectValueError> {
+    fn resolve_reference<'b>(&'b self, v: &'b Object) -> Result<&'b Object, ObjectValueError> {
         if let Object::Reference(id) = v {
             self.resolve(id.id().id())
         } else {
@@ -654,7 +655,7 @@ pub(crate) fn decode_stream<
 >(
     file_path: impl AsRef<std::path::Path>,
     id: T,
-    f_assert: impl for<'a> FnOnce(&'a Dictionary<'a>, &'a ObjectResolver<'a>) -> AnyResult<()>,
+    f_assert: impl for<'a> FnOnce(&'a Dictionary, &'a ObjectResolver<'a>) -> AnyResult<()>,
 ) -> AnyResult<Vec<u8>> {
     let buf = read_sample_file(file_path);
     let f = File::parse(buf, "", "")?;

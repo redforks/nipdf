@@ -193,7 +193,7 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<Either<Object, (Dictiona
     }
 }
 
-pub fn parse_indirect_object(input: &[u8]) -> ParseResult<'_, IndirectObject<'_>> {
+pub fn parse_indirect_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
     let (input, (id, gen)) = separated_pair(u32, multispace1, u16)(input)?;
     let (input, obj) = preceded(ws(tag(b"obj")), parse_object_and_stream)(input)?;
     let obj = match obj {

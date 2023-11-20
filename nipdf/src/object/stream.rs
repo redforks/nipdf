@@ -26,6 +26,7 @@ use std::{
     borrow::{Borrow, Cow},
     fmt::Display,
     iter::{once, repeat},
+    num::NonZeroU32,
 };
 
 const KEY_FILTER: Name = name!("Filter");
@@ -40,8 +41,12 @@ const FILTER_ASCII85_DECODE: Name = name!("ASCII85Decode");
 const FILTER_RUN_LENGTH_DECODE: Name = name!("RunLengthDecode");
 const FILTER_JPX_DECODE: Name = name!("JPXDecode");
 
+/// Start position and length of stream data in file.
 #[derive(Clone, PartialEq, Debug)]
-pub struct Stream<'a>(Dictionary<'a>, &'a [u8], ObjectId); // NOTE: buf end at the file end
+pub struct BufPos(u32, Option<NonZeroU32>);
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct Stream(Dictionary, BufPos, ObjectId); // NOTE: buf end at the file end
 
 /// error!() log if r is error, returns `Err<ObjectValueError::FilterDecodeError>`
 fn handle_filter_error<V, E: Display>(
@@ -64,7 +69,7 @@ struct LZWDeflateDecodeParams {
 
 impl LZWDeflateDecodeParams {
     pub fn new<'a>(
-        d: &Dictionary<'a>,
+        d: &Dictionary,
         r: Option<&ObjectResolver<'a>>,
     ) -> Result<Self, ObjectValueError> {
         Ok(if let Some(r) = r {
@@ -309,15 +314,15 @@ fn decode_jpx<'a>(
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ImageMask<'a> {
-    Explicit(Stream<'a>),
+pub enum ImageMask {
+    Explicit(Stream),
     ColorKey(Domains),
 }
 
-impl<'a> TryFrom<&Object<'a>> for ImageMask<'a> {
+impl TryFrom<&Object> for ImageMask {
     type Error = ObjectValueError;
 
-    fn try_from(v: &Object<'a>) -> Result<Self, Self::Error> {
+    fn try_from(v: &Object) -> Result<Self, Self::Error> {
         Ok(match v {
             Object::Stream(s) => Self::Explicit(s.clone()),
             Object::Array(_) => {
@@ -335,9 +340,9 @@ pub(crate) trait ImageDictTrait {
     fn height(&self) -> u32;
     fn bits_per_component(&self) -> Option<u8>;
     #[try_from]
-    fn color_space(&self) -> Option<ColorSpaceArgs<'a>>;
+    fn color_space(&self) -> Option<ColorSpaceArgs>;
     #[try_from]
-    fn mask(&self) -> Option<ImageMask<'a>>;
+    fn mask(&self) -> Option<ImageMask>;
     #[try_from]
     fn decode(&self) -> Option<Domains>;
 }
@@ -400,10 +405,10 @@ enum CCITTFGroup {
     Group4,
 }
 
-impl<'a, 'b> TryFrom<&'b Object<'a>> for CCITTFGroup {
+impl<'a, 'b> TryFrom<&'b Object> for CCITTFGroup {
     type Error = ObjectValueError;
 
-    fn try_from(v: &'b Object<'a>) -> Result<Self, Self::Error> {
+    fn try_from(v: &'b Object) -> Result<Self, Self::Error> {
         Ok(match v.as_int()? {
             0 => Self::Group3_1D,
             k @ 1.. => Self::Group3_2D(k),
@@ -432,16 +437,13 @@ impl<'a> FilterDecodedData<'a> {
     }
 }
 
-fn decode_ascii85(
-    buf: &[u8],
-    params: Option<&Dictionary<'_>>,
-) -> Result<Vec<u8>, ObjectValueError> {
+fn decode_ascii85(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, ObjectValueError> {
     assert!(params.is_none());
     use crate::ascii85::decode;
     handle_filter_error(decode(buf), &FILTER_ASCII85_DECODE)
 }
 
-fn decode_run_length(buf: &[u8], params: Option<&Dictionary<'_>>) -> Vec<u8> {
+fn decode_run_length(buf: &[u8], params: Option<&Dictionary>) -> Vec<u8> {
     assert!(params.is_none());
     use crate::run_length::decode;
     decode(buf)
@@ -470,7 +472,7 @@ fn filter<'a: 'b, 'b>(
     buf: Cow<'a, [u8]>,
     resolver: Option<&ObjectResolver<'a>>,
     filter_name: &Name,
-    params: Option<&'b Dictionary<'a>>,
+    params: Option<&'b Dictionary>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     let empty_dict = Lazy::new(Dictionary::new);
     #[allow(clippy::match_ref_pats)]
@@ -541,26 +543,26 @@ fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> AnyResult<
     transform(img, &from, to)
 }
 
-impl<'a> Stream<'a> {
-    pub fn new(dict: Dictionary<'a>, data: &'a [u8], id: ObjectId) -> Self {
+impl<'a> Stream {
+    pub fn new(dict: Dictionary, data: &'a [u8], id: ObjectId) -> Self {
         Self(dict, data, id)
     }
 
-    pub fn update_dict(&mut self, f: impl FnOnce(&mut Dictionary<'a>)) {
+    pub fn update_dict(&mut self, f: impl FnOnce(&mut Dictionary)) {
         f(&mut self.0);
     }
 
-    pub fn as_dict(&self) -> &Dictionary<'a> {
+    pub fn as_dict(&self) -> &Dictionary {
         &self.0
     }
 
-    pub fn take_dict(self) -> Dictionary<'a> {
+    pub fn take_dict(self) -> Dictionary {
         self.0
     }
 
     #[cfg(test)]
-    pub fn buf(&self) -> &[u8] {
-        self.1
+    pub fn buf(&self, file: &[u8]) -> &[u8] {
+        &file[self.1..]
     }
 
     /// Get stream un-decoded raw data.
@@ -568,7 +570,7 @@ impl<'a> Stream<'a> {
         let len = resolver
             .resolve_container_value(&self.0, name!("Length"))?
             .as_int()?;
-        Ok(&self.1[0..len as usize])
+        Ok(&resolver.data()[self.1.0..len as usize])
     }
 
     fn _decode(
@@ -709,7 +711,7 @@ impl<'a> Stream<'a> {
 
     fn iter_filter(
         &self,
-    ) -> Result<impl Iterator<Item = (&Name, Option<&Dictionary<'a>>)>, ObjectValueError> {
+    ) -> Result<impl Iterator<Item = (&Name, Option<&Dictionary>)>, ObjectValueError> {
         if self.0.contains_key(&KEY_FFILTER) {
             return Err(ObjectValueError::ExternalStreamNotSupported);
         }

@@ -6,10 +6,10 @@ use std::num::NonZeroU32;
 /// Document id, two binary string.
 pub struct DocId(pub Box<[u8]>, pub Box<[u8]>);
 
-impl<'a> TryFrom<&Object<'a>> for DocId {
+impl<'a> TryFrom<&Object> for DocId {
     type Error = ObjectValueError;
 
-    fn try_from(o: &Object<'a>) -> Result<Self, Self::Error> {
+    fn try_from(o: &Object) -> Result<Self, Self::Error> {
         let arr = o.as_arr()?;
         if arr.len() != 2 {
             return Err(ObjectValueError::UnexpectedType);
@@ -36,14 +36,14 @@ pub trait TrailerDictTrait {
 
 #[derive(Debug, Clone)]
 /// Frame contains things like xref, trailer, caused by incremental update. See [FrameSet]
-pub struct Frame<'a> {
+pub struct Frame {
     pub xref_pos: u32,
-    pub trailer: Dictionary<'a>,
+    pub trailer: Dictionary,
     pub xref_section: XRefSection,
 }
 
-impl<'a> Frame<'a> {
-    pub fn new(xref_pos: u32, trailer: Dictionary<'a>, xref_section: XRefSection) -> Self {
+impl<'a> Frame {
+    pub fn new(xref_pos: u32, trailer: Dictionary, xref_section: XRefSection) -> Self {
         Self {
             xref_pos,
             trailer,
@@ -52,4 +52,4 @@ impl<'a> Frame<'a> {
     }
 }
 
-pub type FrameSet<'a> = Vec<Frame<'a>>;
+pub type FrameSet<'a> = Vec<Frame>;

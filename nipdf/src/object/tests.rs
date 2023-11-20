@@ -47,7 +47,7 @@ fn dict_get_int(exp: Result<i32, ObjectValueError>, id: &str) {
 #[test_case(Object::LiteralString(LiteralString::new(b"(foo)")), "(foo)"; "literal string")]
 #[test_case(Object::HexString(HexString::new(b"<901FA3>")), "<901FA3>"; "hex string")]
 #[test_case(Object::Name(name!("foo")), "/foo"; "name")]
-fn buf_or_str_to_object<'a>(exp: Object<'a>, s: &'a str) {
+fn buf_or_str_to_object<'a>(exp: Object, s: &'a str) {
     assert_eq!(exp, Object::from(s.as_bytes()));
     assert_eq!(exp, Object::from(s));
 }
@@ -194,7 +194,7 @@ fn schema_ref_id_arr(ids: Option<&[u32]>) -> Vec<u32> {
 #[test_case(Dictionary::new() => "<<>>"; "empty dict")]
 #[test_case([(name!("a"), true.into())].into_iter().collect::<Dictionary>() => "<</a true>>"; "dict with one entry")]
 #[test_case([(name!("a"), true.into()), (name!("b"), false.into())].into_iter().collect::<Dictionary>() => "<</a true /b false>>"; "dict with two entries")]
-fn pretty_print(o: impl Into<Object<'static>>) -> String {
+fn pretty_print(o: impl Into<Object>) -> String {
     let o = o.into();
     let s = o.to_doc().pretty(20).to_string();
     s

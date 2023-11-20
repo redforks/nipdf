@@ -60,14 +60,14 @@ use test_case::test_case;
      "filter not supported"
 )]
 fn test_iter_filter(
-    dict: impl IntoIterator<Item = (&'static Name, Object<'static>)>,
-) -> Result<Vec<(Name, Option<Dictionary<'static>>)>, ObjectValueError> {
-    let dict: Dictionary<'static> = dict
+    dict: impl IntoIterator<Item = (&'static Name, Object)>,
+) -> Result<Vec<(Name, Option<Dictionary>)>, ObjectValueError> {
+    let dict: Dictionary = dict
         .into_iter()
         .map(|(k, v)| (k.clone(), v))
         .collect::<Dictionary>();
     let stream = Stream(dict, &[], ObjectId::empty());
-    let r: Vec<(Name, Option<Dictionary<'static>>)> = stream
+    let r: Vec<(Name, Option<Dictionary>)> = stream
         .iter_filter()?
         .map(|(k, v)| (k.clone(), v.cloned()))
         .collect();

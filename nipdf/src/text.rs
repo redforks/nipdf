@@ -41,7 +41,7 @@ pub trait FontDictTrait {
     fn font_descriptor(&self) -> Option<FontDescriptorDict<'a, 'b>>;
 
     #[try_from]
-    fn encoding(&self) -> Option<NameOrDictByRef<'a, 'b>>;
+    fn encoding(&self) -> Option<NameOrDictByRef<'b>>;
 
     fn base_font(&self) -> &Name;
 }
@@ -51,10 +51,10 @@ pub trait Type0FontDictTrait {
     #[typ("Name")]
     fn base_font(&self) -> &str;
     #[try_from]
-    fn encoding(&self) -> NameOrStream<'a, 'b>;
+    fn encoding(&self) -> NameOrStream<'b>;
     #[nested]
     fn descendant_fonts(&self) -> Vec<CIDFontDict<'a, 'b>>;
-    fn to_unicode(&self) -> Option<&'b Stream<'a>>;
+    fn to_unicode(&self) -> Option<&'b Stream>;
 }
 
 /// For standard 14 fonts, font_descriptor/first_char/last_char/widths may not exist.
@@ -72,8 +72,8 @@ pub trait Type1FontDictTrait {
     #[nested]
     fn font_descriptor(&self) -> Option<FontDescriptorDict<'a, 'b>>;
     #[try_from]
-    fn encoding(&self) -> Option<NameOrDictByRef<'a, 'b>>;
-    fn to_unicode(&self) -> Option<&'b Stream<'a>>;
+    fn encoding(&self) -> Option<NameOrDictByRef<'b>>;
+    fn to_unicode(&self) -> Option<&'b Stream>;
 }
 
 impl<'a, 'b> FontDict<'a, 'b> {
@@ -109,8 +109,8 @@ pub trait TrueTypeFontDictTrait {
     #[nested]
     fn font_descriptor(&self) -> Option<FontDescriptorDict<'a, 'b>>;
     #[try_from]
-    fn encoding(&self) -> Option<NameOrDictByRef<'a, 'b>>;
-    fn to_unicode(&self) -> Option<&'b Stream<'a>>;
+    fn encoding(&self) -> Option<NameOrDictByRef<'b>>;
+    fn to_unicode(&self) -> Option<&'b Stream>;
 }
 
 #[derive(Debug, PartialEq)]
@@ -142,10 +142,10 @@ impl CIDFontWidths {
     }
 }
 
-impl<'a, 'b> TryFrom<&'b Object<'a>> for CIDFontWidths {
+impl<'a, 'b> TryFrom<&'b Object> for CIDFontWidths {
     type Error = ObjectValueError;
 
-    fn try_from(obj: &'b Object<'a>) -> Result<Self, Self::Error> {
+    fn try_from(obj: &'b Object) -> Result<Self, Self::Error> {
         let mut widths = Vec::new();
         let Object::Array(arr) = obj else {
             return Err(Self::Error::UnexpectedType);
@@ -191,7 +191,7 @@ pub trait CIDFontDictTrait {
     #[try_from]
     fn w(&self) -> CIDFontWidths;
     #[try_from]
-    fn cid_to_gid_map(&self) -> Option<NameOrStream<'a, 'b>>;
+    fn cid_to_gid_map(&self) -> Option<NameOrStream<'b>>;
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, TryFromNameObject)]
@@ -269,11 +269,11 @@ pub trait FontDescriptorDictTrait {
     #[or_default]
     fn missing_width(&self) -> u32;
 
-    fn font_file(&self) -> Option<&'b Stream<'a>>;
+    fn font_file(&self) -> Option<&'b Stream>;
 
-    fn font_file2(&self) -> Option<&'b Stream<'a>>;
+    fn font_file2(&self) -> Option<&'b Stream>;
 
-    fn font_file3(&self) -> Option<&'b Stream<'a>>;
+    fn font_file3(&self) -> Option<&'b Stream>;
 
     fn char_set(&self) -> Option<&str>;
 }
@@ -309,10 +309,10 @@ impl<'a> EncodingDifferences<'a> {
 /// Parse Differences field in Encoding object, which is an array of
 /// character code and one or several glyph names. First name is mapped
 /// to character code, second name is mapped to character code + 1, and so on.
-impl<'a, 'b> TryFrom<&'b Object<'a>> for EncodingDifferences<'b> {
+impl<'a, 'b> TryFrom<&'b Object> for EncodingDifferences<'b> {
     type Error = ObjectValueError;
 
-    fn try_from(obj: &'b Object<'a>) -> Result<Self, Self::Error> {
+    fn try_from(obj: &'b Object) -> Result<Self, Self::Error> {
         let mut map = HashMap::new();
         let Object::Array(arr) = obj else {
             return Err(Self::Error::UnexpectedType);

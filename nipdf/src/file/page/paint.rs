@@ -611,7 +611,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         &mut self.current_mut().text_object
     }
 
-    pub(crate) fn exec(&mut self, op: Operation<'_>) {
+    pub(crate) fn exec(&mut self, op: Operation) {
         debug!("handle operation: {:?}", op);
         match op {
             // General Graphics State Operations
@@ -1213,7 +1213,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             "Colored tiling pattern not supported"
         );
 
-        let stream: &Object<'a> = tile.resolver().resolve(tile.id().unwrap())?;
+        let stream: &Object = tile.resolver().resolve(tile.id().unwrap())?;
         let stream = stream.as_stream()?;
         let bytes = stream.decode(tile.resolver())?;
         let (_, ops) = terminated(parse_operations, eof)(bytes.as_ref()).unwrap();

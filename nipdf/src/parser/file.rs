@@ -17,7 +17,6 @@ use nom::{
     sequence::{preceded, separated_pair, tuple},
     InputIter, InputLength, InputTake, Parser, Slice,
 };
-
 use prescript_macro::name;
 use std::{fmt::Display, num::NonZeroU32, ops::RangeFrom, str::from_utf8};
 
@@ -138,7 +137,7 @@ where
 }
 
 /// Parse xref from cross-reference streams
-fn parse_xref_stream(buf: &[u8]) -> ParseResult<(XRefSection, Dictionary<'_>)> {
+fn parse_xref_stream(buf: &[u8]) -> ParseResult<(XRefSection, Dictionary)> {
     fn to_parse_error<E: Display>(e: E) -> nom::Err<ParseError<'static>> {
         error!("should be xref table stream: {}", e);
         nom::Err::Error(ParseError::from_error_kind(b"", ErrorKind::Fail))

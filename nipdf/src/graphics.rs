@@ -23,7 +23,7 @@ pub(crate) use pattern::*;
 
 pub(crate) mod shading;
 
-impl<'a, S, T> TryFrom<&Object<'a>> for Transform2D<f32, S, T> {
+impl<'a, S, T> TryFrom<&Object> for Transform2D<f32, S, T> {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
@@ -104,7 +104,7 @@ impl AsRef<[f32]> for ColorArgs {
 }
 
 impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorArgs {
-    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+    fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
         let mut result = Vec::with_capacity(objects.len());
         while let Some(o) = objects.pop() {
             if let Ok(num) = o.as_number() {
@@ -119,16 +119,16 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorArgs {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub enum ColorSpaceArgs<'a> {
+pub enum ColorSpaceArgs {
     Name(Name),
-    Array(Array<'a>),
+    Array(Array),
     Ref(NonZeroU32),
 }
 
-impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceArgs<'a> {
+impl<'a, 'b> TryFrom<&'b Object> for ColorSpaceArgs {
     type Error = ObjectValueError;
 
-    fn try_from(object: &'b Object<'a>) -> Result<Self, Self::Error> {
+    fn try_from(object: &'b Object) -> Result<Self, Self::Error> {
         match object {
             Object::Name(name) => Ok(Self::Name(name.clone())),
             Object::Array(arr) => Ok(Self::Array(arr.clone())),
@@ -141,8 +141,8 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceArgs<'a> {
     }
 }
 
-impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorSpaceArgs<'a> {
-    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorSpaceArgs {
+    fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
         ColorSpaceArgs::try_from(&o).map_err(|_| ObjectValueError::GraphicsOperationSchemaError)
     }
@@ -156,7 +156,7 @@ trait ICCStreamDictTrait {
 }
 
 impl<'a, 'b, const N: usize> ConvertFromObject<'a, 'b> for [f32; N] {
-    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+    fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
         let mut result = [0.0; N];
         for i in 0..N {
             result[N - 1 - i] = objects.pop().unwrap().as_number()?;
@@ -165,7 +165,7 @@ impl<'a, 'b, const N: usize> ConvertFromObject<'a, 'b> for [f32; N] {
     }
 }
 
-impl<'a> TryFrom<&Object<'a>> for ColorArgs {
+impl<'a> TryFrom<&Object> for ColorArgs {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
@@ -191,7 +191,7 @@ impl<'a> TryFrom<&Object<'a>> for ColorArgs {
 }
 
 impl<'a, 'b, S, T> ConvertFromObject<'a, 'b> for Transform2D<f32, S, T> {
-    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+    fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
         let f = objects.pop().unwrap().as_number()?;
         let e = objects.pop().unwrap().as_number()?;
         let d = objects.pop().unwrap().as_number()?;
@@ -212,21 +212,21 @@ pub enum ColorArgsOrName {
 pub struct NameOfDict(pub Name);
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum NameOrDict<'a> {
+pub enum NameOrDict {
     Name(Name),
-    Dict(Dictionary<'a>),
+    Dict(Dictionary),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum NameOrDictByRef<'a, 'b> {
+pub enum NameOrDictByRef<'b> {
     Name(&'b Name),
-    Dict(&'b Dictionary<'a>),
+    Dict(&'b Dictionary),
 }
 
-impl<'a, 'b> TryFrom<&'b Object<'a>> for NameOrDictByRef<'a, 'b> {
+impl<'a, 'b> TryFrom<&'b Object> for NameOrDictByRef<'b> {
     type Error = ObjectValueError;
 
-    fn try_from(obj: &'b Object<'a>) -> Result<Self, Self::Error> {
+    fn try_from(obj: &'b Object) -> Result<Self, Self::Error> {
         match obj {
             Object::Name(name) => Ok(NameOrDictByRef::Name(name)),
             Object::Dictionary(dict) => Ok(NameOrDictByRef::Dict(dict)),
@@ -236,15 +236,15 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for NameOrDictByRef<'a, 'b> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum NameOrStream<'a, 'b> {
+pub enum NameOrStream<'b> {
     Name(&'b Name),
-    Stream(&'b Stream<'a>),
+    Stream(&'b Stream),
 }
 
-impl<'a, 'b> TryFrom<&'b Object<'a>> for NameOrStream<'a, 'b> {
+impl<'b> TryFrom<&'b Object> for NameOrStream<'b> {
     type Error = ObjectValueError;
 
-    fn try_from(obj: &'b Object<'a>) -> Result<Self, Self::Error> {
+    fn try_from(obj: &'b Object) -> Result<Self, Self::Error> {
         match obj {
             Object::Name(name) => Ok(NameOrStream::Name(name)),
             Object::Stream(stream) => Ok(NameOrStream::Stream(stream)),
@@ -255,7 +255,7 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for NameOrStream<'a, 'b> {
 
 #[derive(Debug, Clone, PartialEq, OperationParser)]
 #[rustfmt::skip]
-pub enum Operation<'a> {
+pub enum Operation {
     // General Graphics State Operations
     #[op_tag("w")]
     SetLineWidth(f32),
@@ -376,9 +376,9 @@ pub enum Operation<'a> {
 
     // Color Operations
     #[op_tag("CS")]
-    SetStrokeColorSpace(ColorSpaceArgs<'a>),
+    SetStrokeColorSpace(ColorSpaceArgs),
     #[op_tag("cs")]
-    SetFillColorSpace(ColorSpaceArgs<'a>),
+    SetFillColorSpace(ColorSpaceArgs),
     #[op_tag("SC")]
     SetStrokeColor(ColorArgs),
     #[op_tag("SCN")]
@@ -420,11 +420,11 @@ pub enum Operation<'a> {
     #[op_tag("MP")]
     DesignateMarkedContentPoint(NameOfDict),
     #[op_tag("DP")]
-    DesignateMarkedContentPointWithProperties(NameOfDict, NameOrDict<'a>),
+    DesignateMarkedContentPointWithProperties(NameOfDict, NameOrDict),
     #[op_tag("BMC")]
     BeginMarkedContent(NameOfDict),
     #[op_tag("BDC")]
-    BeginMarkedContentWithProperties(NameOfDict, NameOrDict<'a>),
+    BeginMarkedContentWithProperties(NameOfDict, NameOrDict),
     #[op_tag("EMC")]
     EndMarkedContent,
 
@@ -439,11 +439,11 @@ pub(crate) trait ConvertFromObject<'a, 'b>
 where
     Self: Sized,
 {
-    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError>;
+    fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError>;
 }
 
 impl<'a, 'b, T: for<'c> ConvertFromObject<'a, 'c>> ConvertFromObject<'a, 'b> for Vec<T> {
-    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+    fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
         let mut arr = objects.pop().unwrap().into_arr()?;
         let mut result = Self::new();
         while !arr.is_empty() {
@@ -455,7 +455,7 @@ impl<'a, 'b, T: for<'c> ConvertFromObject<'a, 'c>> ConvertFromObject<'a, 'b> for
 }
 
 impl<'a, 'b> ConvertFromObject<'a, 'b> for TextString {
-    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+    fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
         match o {
             Object::LiteralString(s) => Ok(TextString::Text(s)),
@@ -466,7 +466,7 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for TextString {
 }
 
 impl<'a, 'b> ConvertFromObject<'a, 'b> for TextStringOrNumber {
-    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+    fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
         match o {
             Object::LiteralString(s) => Ok(TextStringOrNumber::TextString(TextString::Text(s))),
@@ -479,7 +479,7 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for TextStringOrNumber {
 }
 
 impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorArgsOrName {
-    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+    fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
         if let Ok(name) = o.as_name() {
             Ok(ColorArgsOrName::Name(name.clone()))
@@ -491,7 +491,7 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorArgsOrName {
 }
 
 impl<'a, 'b> ConvertFromObject<'a, 'b> for f32 {
-    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+    fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
         o.as_number()
     }
@@ -499,7 +499,7 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for f32 {
 
 /// Convert Object literal string to String
 impl<'a, 'b> ConvertFromObject<'a, 'b> for String {
-    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+    fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
         o.as_text_string().map(|s| s.to_owned())
     }
@@ -507,14 +507,14 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for String {
 
 /// Convert Object::Name to String
 impl<'a, 'b> ConvertFromObject<'a, 'b> for NameOfDict {
-    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+    fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
         o.as_name().map(|s| NameOfDict(s.clone()))
     }
 }
 
-impl<'a, 'b> ConvertFromObject<'a, 'b> for NameOrDict<'a> {
-    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+impl<'a, 'b> ConvertFromObject<'a, 'b> for NameOrDict {
+    fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
         match objects.pop().unwrap() {
             Object::Name(name) => Ok(NameOrDict::Name(name)),
             Object::Dictionary(dict) => Ok(NameOrDict::Dict(dict)),
@@ -524,7 +524,7 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for NameOrDict<'a> {
 }
 
 impl<'a, 'b> ConvertFromObject<'a, 'b> for Point {
-    fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
+    fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
         let y = objects.pop().unwrap().as_number()?;
         let x = objects.pop().unwrap().as_number()?;
         Ok(Self { x, y })
@@ -533,7 +533,7 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for Point {
 
 #[derive(Debug, PartialEq)]
 enum ObjectOrOperator<'a> {
-    Object(Object<'a>),
+    Object(Object),
     Operator(&'a str),
 }
 

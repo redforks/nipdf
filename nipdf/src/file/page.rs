@@ -69,10 +69,10 @@ impl From<Rectangle> for tiny_skia::Rect {
 
 /// Convert from raw array, auto re-order to (left_x, lower_y, right_x, upper_y),
 /// see PDF 32000-1:2008 7.9.5
-impl<'a> TryFrom<&Object<'a>> for Rectangle {
+impl<'a> TryFrom<&Object> for Rectangle {
     type Error = ObjectValueError;
 
-    fn try_from(object: &Object<'a>) -> Result<Self, Self::Error> {
+    fn try_from(object: &Object) -> Result<Self, Self::Error> {
         match object {
             Object::Array(arr) => {
                 let mut iter = arr.iter();
@@ -153,7 +153,7 @@ pub trait XObjectDictTrait {
 }
 
 impl<'a, 'b> XObjectDict<'a, 'b> {
-    fn as_stream(&self) -> Result<&Stream<'a>, ObjectValueError> {
+    fn as_stream(&self) -> Result<&Stream, ObjectValueError> {
         self.d.resolver().resolve(self.id().unwrap())?.as_stream()
     }
 }
@@ -170,25 +170,25 @@ pub trait FormXObjectDictTrait {
     #[nested]
     fn resources(&self) -> Option<ResourceDict<'a, 'b>>;
 
-    fn group(&self) -> Option<&'b Dictionary<'a>>;
+    fn group(&self) -> Option<&'b Dictionary>;
 
     #[key("Ref")]
-    fn ref_dict(&self) -> Option<&'b Dictionary<'a>>;
+    fn ref_dict(&self) -> Option<&'b Dictionary>;
 
-    fn metadata(&self) -> Option<&'b Dictionary<'a>>;
+    fn metadata(&self) -> Option<&'b Dictionary>;
 
-    fn piece_info(&self) -> Option<&'b Dictionary<'a>>;
+    fn piece_info(&self) -> Option<&'b Dictionary>;
 }
 
 /// Wrap type to impl TryFrom<> trait
 #[derive(Educe)]
 #[educe(Deref)]
-pub struct ColorSpaceResources<'a>(HashMap<Name, ColorSpaceArgs<'a>>);
+pub struct ColorSpaceResources(HashMap<Name, ColorSpaceArgs>);
 
-impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceResources<'a> {
+impl<'a, 'b> TryFrom<&'b Object> for ColorSpaceResources {
     type Error = ObjectValueError;
 
-    fn try_from(object: &'b Object<'a>) -> Result<Self, Self::Error> {
+    fn try_from(object: &'b Object) -> Result<Self, Self::Error> {
         let mut map = HashMap::new();
         match object {
             Object::Dictionary(dict) => {
@@ -211,7 +211,7 @@ pub trait ResourceDictTrait {
     #[nested]
     fn ext_g_state(&self) -> HashMap<Name, GraphicsStateParameterDict<'a, 'b>>;
     #[try_from]
-    fn color_space(&self) -> ColorSpaceResources<'a>;
+    fn color_space(&self) -> ColorSpaceResources;
     #[nested]
     fn pattern(&self) -> HashMap<Name, PatternDict<'a, 'b>>;
     #[nested]
@@ -220,7 +220,7 @@ pub trait ResourceDictTrait {
     fn x_object(&self) -> HashMap<Name, XObjectDict<'a, 'b>>;
     #[nested]
     fn font(&self) -> HashMap<Name, FontDict<'a, 'b>>;
-    fn properties(&self) -> Option<&'b Dictionary<'a>>;
+    fn properties(&self) -> Option<&'b Dictionary>;
 }
 
 #[pdf_object(["Pages", "Page"])]
@@ -233,7 +233,7 @@ pub(crate) trait PageDictTrait {
     fn crop_box(&self) -> Option<Rectangle>;
     #[nested]
     fn resources(&self) -> Option<ResourceDict<'a, 'b>>;
-    fn contents(&self) -> Vec<&Stream<'a>>;
+    fn contents(&self) -> Vec<&Stream>;
     #[key("Type")]
     fn type_name(&self) -> &Name;
 }
@@ -370,7 +370,7 @@ impl PageContent {
         Self { bufs }
     }
 
-    pub fn operations(&self) -> Vec<Operation<'_>> {
+    pub fn operations(&self) -> Vec<Operation> {
         let mut r = vec![];
         for buf in &self.bufs {
             let (input, ops) = parse_operations(buf.as_ref()).finish().unwrap();

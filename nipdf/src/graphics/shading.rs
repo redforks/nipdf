@@ -42,7 +42,7 @@ impl Extend {
     }
 }
 
-impl<'a> TryFrom<&Object<'a>> for Extend {
+impl<'a> TryFrom<&Object> for Extend {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
@@ -60,7 +60,7 @@ pub struct AxialCoords {
     pub end: Point,
 }
 
-impl<'a> TryFrom<&Object<'a>> for AxialCoords {
+impl<'a> TryFrom<&Object> for AxialCoords {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
@@ -115,7 +115,7 @@ pub struct RadialCoords {
     pub end: RadialCircle,
 }
 
-impl<'a> TryFrom<&Object<'a>> for RadialCoords {
+impl<'a> TryFrom<&Object> for RadialCoords {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
