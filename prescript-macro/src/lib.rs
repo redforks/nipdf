@@ -23,6 +23,7 @@ pub fn name(item: TokenStream) -> TokenStream {
             tokens.into()
         }
         Err(_) => {
+            eprintln!("unknown static name: {}", &s);
             let tokens = quote::quote! {
                 prescript::__private::right_name(#s)
             };
