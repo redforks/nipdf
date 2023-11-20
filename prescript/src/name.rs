@@ -20,7 +20,7 @@ use built_in_names::BUILT_IN_NAMES;
 
 /// PostScript Name Value
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Name(Either<u16, Box<str>>);
+pub struct Name(pub(crate) Either<u16, Box<str>>);
 
 impl AsRef<str> for Name {
     fn as_ref(&self) -> &str {
@@ -46,6 +46,9 @@ pub fn name(s: &str) -> Name {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // hack to use `name!()` macro
+    use crate as prescript;
+    use prescript_macro::name;
     use static_assertions::assert_eq_size;
 
     #[test]
@@ -63,5 +66,11 @@ mod tests {
     fn as_str() {
         assert_eq!("foo", name("foo").as_ref());
         assert_eq!("for", name("for").as_ref());
+    }
+
+    #[test]
+    fn name_macro() {
+        assert_eq!(name!("foo"), name("foo"));
+        assert_eq!(name!("for"), name("for"));
     }
 }

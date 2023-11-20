@@ -1,3 +1,4 @@
+pub mod __private;
 pub(crate) mod machine;
 pub(crate) mod name;
 pub(crate) mod parser;
