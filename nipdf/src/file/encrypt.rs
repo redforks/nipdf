@@ -2,6 +2,7 @@ use crate::object::ObjectId;
 use arc4::Arc4;
 use md5::{Digest, Md5};
 use nipdf_macro::{pdf_object, TryFromIntObject};
+use prescript::Name;
 
 #[derive(TryFromIntObject, Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Algorithm {
@@ -22,11 +23,9 @@ pub enum StandardHandlerRevion {
 
 #[pdf_object(())]
 pub trait EncryptDictTrait {
-    #[typ("Name")]
-    fn filter(&self) -> &str;
+    fn filter(&self) -> &Name;
 
-    #[typ("Name")]
-    fn sub_filter(&self) -> Option<&str>;
+    fn sub_filter(&self) -> Option<&Name>;
 
     #[or_default]
     #[key("V")]

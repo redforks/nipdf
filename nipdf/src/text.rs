@@ -61,8 +61,7 @@ pub trait Type0FontDictTrait {
 /// they should all exist or not exist. See PDF32000_2008.pdf page 255
 #[pdf_object(("Font", "Type1"))]
 pub trait Type1FontDictTrait {
-    #[typ("Name")]
-    fn base_font(&self) -> &str;
+    fn base_font(&self) -> &Name;
     /// If font is the standard 14 fonts, it may not exist.
     fn first_char(&self) -> Option<u32>;
     /// if font is the standard 14 fonts, it may not exist.
@@ -184,8 +183,7 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for CIDFontWidths {
 pub trait CIDFontDictTrait {
     #[try_from]
     fn subtype(&self) -> CIDFontType;
-    #[typ("Name")]
-    fn base_font(&self) -> &str;
+    fn base_font(&self) -> &Name;
     #[nested]
     fn font_descriptor(&self) -> Option<FontDescriptorDict<'a, 'b>>;
     #[default(1000u32)]
@@ -345,8 +343,7 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for EncodingDifferences<'b> {
 /// Encoding object for Non Type0 and Type3 fonts
 #[pdf_object(Some("Encoding"))]
 pub trait EncodingDictTrait {
-    #[typ("Name")]
-    fn base_encoding(&self) -> Option<&str>;
+    fn base_encoding(&self) -> Option<&Name>;
 
     #[try_from]
     fn differences(&self) -> Option<EncodingDifferences<'b>>;

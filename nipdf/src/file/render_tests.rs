@@ -9,7 +9,7 @@ use std::path::Path;
 fn decode_file_page(path: &str, page_no: usize) -> AnyResult<String> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(path);
     let buf = std::fs::read(&path)?;
-    let f = File::parse(buf, "", "").unwrap_or_else(|_| panic!("failed to parse {path:?}"));
+    let f = File::parse(buf, "", "").unwrap_or_else(|e| panic!("failed to parse {path:?}: \n{e}"));
     let resolver = f.resolver()?;
     let catalog = f.catalog(&resolver)?;
     let pages = catalog.pages()?;

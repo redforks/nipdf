@@ -469,8 +469,7 @@ impl<'a> Resolver<'a> for ObjectResolver<'a> {
 
 #[pdf_object("Catalog")]
 trait CatalogDictTrait {
-    #[typ("Name")]
-    fn version(&self) -> Option<&str>;
+    fn version(&self) -> Option<&Name>;
     #[nested]
     fn pages(&self) -> PageDict<'a, 'b>;
 }
@@ -491,7 +490,7 @@ impl<'a, 'b: 'a> Catalog<'a, 'b> {
         Page::parse(self.d.pages().unwrap())
     }
 
-    pub fn ver(&self) -> Option<&str> {
+    pub fn ver(&self) -> Option<&Name> {
         self.d.version().unwrap()
     }
 }
@@ -532,7 +531,7 @@ fn open_encrypt(
     };
 
     assert_eq!(
-        "Standard",
+        &name!("Standard"),
         encrypt.filter()?,
         "unsupported security handler"
     );
@@ -617,7 +616,7 @@ impl File {
         let catalog = self.catalog(resolver)?;
         Ok(catalog
             .ver()
-            .map(|s| s.to_owned())
+            .map(|s| s.as_ref().to_owned())
             .unwrap_or_else(|| self.head_ver.clone()))
     }
 

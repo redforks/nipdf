@@ -18,6 +18,7 @@ use once_cell::sync::Lazy;
 use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
 use prescript::{name, Encoding, Name};
+use prescript_macro::name;
 use std::{collections::HashMap, ops::RangeInclusive};
 use tiny_skia::PathBuilder;
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
@@ -227,12 +228,14 @@ fn resolve_by_name<'a, 'b>(
             encoding_dict = EncodingDict::new(None, d, font_dict.resolver())?;
             encoding_dict.base_encoding()?
         }
-        Some(NameOrDictByRef::Name(name)) => Some(name.as_ref()),
+        Some(NameOrDictByRef::Name(name)) => Some(*name),
         None => None,
     };
-    let encoding_name = encoding_name.or_else(|| standard_14_type1_font_encoding(font_name));
+    let encoding_name = encoding_name
+        .cloned()
+        .or_else(|| standard_14_type1_font_encoding(&name(font_name)));
     encoding_name
-        .map(|n| Encoding::predefined(name(n)).ok_or_else(|| anyhow!("Unknown encoding: {}", n)))
+        .map(|n| Encoding::predefined(n.clone()).ok_or_else(|| anyhow!("Unknown encoding: {}", n)))
         .transpose()
 }
 
@@ -598,22 +601,22 @@ fn normalize_font_name(name: &str) -> &str {
 }
 
 /// If font_name is a standard 14 font, return its Encoding name
-fn standard_14_type1_font_encoding(font_name: &str) -> Option<&'static str> {
-    match normalize_font_name(font_name) {
-        "Courier" => Some("StandardEncoding"),
-        "Courier-Bold" => Some("StandardEncoding"),
-        "Courier-BoldOblique" => Some("StandardEncoding"),
-        "Courier-Oblique" => Some("StandardEncoding"),
-        "Helvetica" => Some("StandardEncoding"),
-        "Helvetica-Bold" => Some("StandardEncoding"),
-        "Helvetica-BoldOblique" => Some("StandardEncoding"),
-        "Helvetica-Oblique" => Some("StandardEncoding"),
-        "Symbol" => Some("Symbol"),
-        "Times-Bold" => Some("StandardEncoding"),
-        "Times-BoldItalic" => Some("StandardEncoding"),
-        "Times-Italic" => Some("StandardEncoding"),
-        "Times-Roman" => Some("StandardEncoding"),
-        "ZapfDingbats" => Some("ZapfDingbats"),
+fn standard_14_type1_font_encoding(font_name: &Name) -> Option<Name> {
+    match normalize_font_name(font_name.as_ref()) {
+        "Courier" => Some(name!("StandardEncoding")),
+        "Courier-Bold" => Some(name!("StandardEncoding")),
+        "Courier-BoldOblique" => Some(name!("StandardEncoding")),
+        "Courier-Oblique" => Some(name!("StandardEncoding")),
+        "Helvetica" => Some(name!("StandardEncoding")),
+        "Helvetica-Bold" => Some(name!("StandardEncoding")),
+        "Helvetica-BoldOblique" => Some(name!("StandardEncoding")),
+        "Helvetica-Oblique" => Some(name!("StandardEncoding")),
+        "Symbol" => Some(name!("Symbol")),
+        "Times-Bold" => Some(name!("StandardEncoding")),
+        "Times-BoldItalic" => Some(name!("StandardEncoding")),
+        "Times-Italic" => Some(name!("StandardEncoding")),
+        "Times-Roman" => Some(name!("StandardEncoding")),
+        "ZapfDingbats" => Some(name!("ZapfDingbats")),
         _ => None,
     }
 }
