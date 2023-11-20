@@ -17,7 +17,7 @@ use nom::{
     sequence::{preceded, separated_pair, tuple},
     InputIter, InputLength, InputTake, Parser, Slice,
 };
-use prescript::Name;
+
 use prescript_macro::name;
 use std::{fmt::Display, num::NonZeroU32, ops::RangeFrom, str::from_utf8};
 

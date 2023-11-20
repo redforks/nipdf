@@ -24,7 +24,7 @@ use either::Either;
 use image::RgbaImage;
 use log::{debug, info};
 use nom::{combinator::eof, sequence::terminated};
-use prescript::{name, Name};
+use prescript::Name;
 use std::{
     borrow::Cow,
     cell::{Ref, RefCell},

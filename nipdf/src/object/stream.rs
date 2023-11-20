@@ -473,6 +473,7 @@ fn filter<'a: 'b, 'b>(
     params: Option<&'b Dictionary<'a>>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     let empty_dict = Lazy::new(Dictionary::new);
+    #[allow(clippy::match_ref_pats)]
     match filter_name {
         &FILTER_FLATE_DECODE => decode_flate(
             &buf,

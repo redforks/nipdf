@@ -3,7 +3,7 @@ use ahash::{HashMap, HashMapExt};
 use anyhow::Context;
 use educe::Educe;
 use log::error;
-use prescript::{name, Name};
+use prescript::Name;
 use std::{
     borrow::{Borrow, Cow},
     fmt::{Debug, Display},
@@ -1000,7 +1000,7 @@ use pretty::RcDoc;
 #[cfg(feature = "pretty")]
 impl<'a> Object<'a> {
     pub fn to_doc(&self) -> RcDoc {
-        fn name_to_doc<'a>(n: &'a Name) -> RcDoc<'a> {
+        fn name_to_doc(n: &Name) -> RcDoc<'_> {
             RcDoc::text("/").append(RcDoc::text(n.as_ref()))
         }
 

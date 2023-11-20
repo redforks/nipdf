@@ -20,7 +20,7 @@ pub(crate) mod color_space;
 mod pattern;
 pub(crate) mod trans;
 pub(crate) use pattern::*;
-use prescript_macro::name;
+
 pub(crate) mod shading;
 
 impl<'a, S, T> TryFrom<&Object<'a>> for Transform2D<f32, S, T> {
@@ -516,7 +516,7 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for NameOfDict {
 impl<'a, 'b> ConvertFromObject<'a, 'b> for NameOrDict<'a> {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         match objects.pop().unwrap() {
-            Object::Name(name) => Ok(NameOrDict::Name(name.to_owned())),
+            Object::Name(name) => Ok(NameOrDict::Name(name)),
             Object::Dictionary(dict) => Ok(NameOrDict::Dict(dict)),
             _ => Err(ObjectValueError::GraphicsOperationSchemaError),
         }
