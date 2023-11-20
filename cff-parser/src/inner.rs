@@ -1,4 +1,3 @@
-use super::NOTDEF;
 use nom::{
     bits::{
         bits,
@@ -14,7 +13,8 @@ use nom::{
     IResult, Parser,
 };
 use paste::paste;
-use prescript::{Encoding, NameRegistry};
+use prescript::{name, Encoding, Name};
+use prescript_macro::name;
 use std::{
     collections::HashMap,
     hash::Hash,
@@ -28,11 +28,10 @@ mod predefined_encodings;
 
 pub type ParseResult<'a, O> = IResult<&'a [u8], O>;
 
-/// String ID, resolve &str from `StringIndex`.
-type Sid = u16;
-
 /// Glyph ID
 type Gid = u8;
+
+type Sid = u16;
 
 /// Operand, value of Dict
 #[derive(Clone, PartialEq, Debug)]
@@ -821,8 +820,8 @@ const STANDARD_STRINGS: [&str; 391] = [
 /// Dict supports resolve SID to &str
 #[derive(Debug)]
 struct SIDDict<'a> {
-    strings: StringIndex<'a>,
     dict: Dict,
+    strings: StringIndex<'a>,
 }
 
 /// SIDDict deref to Dict, to add Dict access methods.
@@ -838,7 +837,7 @@ impl<'a> SIDDict<'a> {
     fn resolve_sid(&self, v: &Operand) -> Result<&str> {
         v.int()
             .ok_or(Error::ExpectInt)
-            .map(|v| self.strings.get(v as Sid))
+            .map(|v| self.strings.get(v as u16))
     }
 
     pub fn sid(&self, k: Operator) -> Result<&str> {
@@ -861,11 +860,11 @@ impl<'a> SIDDict<'a> {
 pub struct TopDictData<'a>(SIDDict<'a>);
 
 impl<'a> TopDictData<'a> {
-    pub fn new(strings: StringIndex<'a>, dict: Dict) -> Self {
-        Self(SIDDict { strings, dict })
+    pub fn new(dict: Dict, strings: StringIndex<'a>) -> Self {
+        Self(SIDDict { dict, strings })
     }
 
-    pub fn string_index(&self) -> StringIndex<'a> {
+    pub fn string_index(&self) -> StringIndex {
         self.0.strings
     }
 
@@ -1005,7 +1004,7 @@ impl<'a> TopDictIndex<'a> {
     }
 
     pub fn get(&self, idx: usize, strings: StringIndex<'a>) -> Result<TopDictData<'a>> {
-        let parse = parse_dict.map(|v| TopDictData::new(strings, v));
+        let parse = parse_dict.map(|v| TopDictData::new(v, strings));
         self.0.get(idx, parse)
     }
 }
@@ -1132,7 +1131,7 @@ fn parse_charsets(buf: &[u8], n_glyphs: u16) -> ParseResult<Charsets> {
 /// Supplemental data for encoding, replace some char code for a new glyph name.
 /// `code` is char code to replace,
 /// `sid` is SID of glyph name.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct EncodingSupplement {
     code: u8,
     sid: Sid,
@@ -1143,13 +1142,8 @@ impl EncodingSupplement {
         Self { code, sid }
     }
 
-    pub fn apply(
-        &self,
-        name_registry: &mut NameRegistry,
-        string_index: StringIndex<'_>,
-        encodings: &mut Encoding,
-    ) {
-        encodings[self.code as usize] = name_registry.get_or_intern(string_index.get(self.sid));
+    pub fn apply(&self, strings: StringIndex, encodings: &mut Encoding) {
+        encodings[self.code as usize] = name(strings.get(self.sid));
     }
 }
 
@@ -1176,43 +1170,37 @@ pub enum Encodings {
 
 impl Encodings {
     /// build encodings.
-    pub fn build(
-        &self,
-        name_registry: &mut NameRegistry,
-        charsets: &Charsets,
-        string_index: StringIndex<'_>,
-    ) -> Encoding {
+    pub fn build(&self, charsets: &Charsets, string_index: StringIndex<'_>) -> Encoding {
+        const NOTDEF: Name = name!(".notdef");
         match self {
             Self::Format0(codes) => {
-                let notdef = name_registry.get_or_intern_static(NOTDEF);
-                let mut encodings = [notdef; 256];
+                let mut encodings = [NOTDEF; 256];
                 for (i, code) in codes.iter().enumerate() {
                     if let Some(v) = charsets
                         .resolve_sid(i as Gid)
                         .map(|sid| string_index.get(sid))
                     {
-                        encodings[*code as usize] = name_registry.get_or_intern(v);
+                        encodings[*code as usize] = name(v);
                     }
                 }
                 Encoding::new(encodings)
             }
             Self::Format1(ranges) => {
-                let notdef = name_registry.get_or_intern_static(NOTDEF);
-                let mut encodings = [notdef; 256];
+                let mut encodings = [NOTDEF; 256];
                 for range in ranges {
                     for i in range.first..=range.first + range.n_left {
                         if let Some(v) = charsets
                             .resolve_sid(i as Gid)
                             .map(|sid| string_index.get(sid))
                         {
-                            encodings[i as usize] = name_registry.get_or_intern(v);
+                            encodings[i as usize] = name(v);
                         }
                     }
                 }
                 Encoding::new(encodings)
             }
-            Self::PredefinedStandard => predefined_encodings::standard(name_registry),
-            Self::PredefinedExpert => predefined_encodings::expert(name_registry),
+            Self::PredefinedStandard => predefined_encodings::STANDARD,
+            Self::PredefinedExpert => predefined_encodings::EXPERT,
         }
     }
 }

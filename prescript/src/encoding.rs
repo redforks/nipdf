@@ -12,7 +12,7 @@ use std::array::from_fn;
 pub struct Encoding([Name; 256]);
 
 impl Encoding {
-    pub fn new(names: [Name; 256]) -> Self {
+    pub const fn new(names: [Name; 256]) -> Self {
         Self(names)
     }
 

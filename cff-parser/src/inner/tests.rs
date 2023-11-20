@@ -1,6 +1,7 @@
 use super::*;
 use map_macro::hash_map;
 use nom::{combinator::opt, number::complete::be_i16};
+use prescript::NOTDEF;
 use std::{collections::hash_map::DefaultHasher, hash::Hasher};
 use test_case::test_case;
 
@@ -408,27 +409,21 @@ fn parse_encodings_format1() {
     );
 }
 
-fn new_name_registry() -> NameRegistry {
-    let mut r = NameRegistry::new();
-    Encoding::register_glyph_names(&mut r);
-    r
-}
-
 #[test]
 fn encoding_supplement_apply() {
-    let mut encodings: [&str; 256] = [NOTDEF; 256];
-    encodings[100] = "foo";
-    encodings[101] = "bar";
+    const NOTDEF: Name = name!(".notdef");
     let string_index = StringIndex(IndexedData {
         offsets: Offsets::new(OffSize::One, &[1_u8, 3, 6][..]).unwrap(),
         data: b"abcde",
     });
+    let mut encodings: [Name; 256] = [NOTDEF; 256];
+    encodings[100] = name!("foo");
+    encodings[101] = name!("bar");
     let supp = EncodingSupplement::new(100, 10);
-    let mut name_registry = new_name_registry();
-    let mut encodings = Encoding::from(&mut name_registry, encodings);
-    supp.apply(&mut name_registry, string_index, &mut encodings);
-    assert_eq!(encodings.get_str(&name_registry, 100), STANDARD_STRINGS[10]);
-    assert_eq!(encodings.get_str(&name_registry, 101), "bar");
+    let mut encodings = Encoding::new(encodings);
+    supp.apply(string_index, &mut encodings);
+    assert_eq!(encodings.get_str(100), STANDARD_STRINGS[10]);
+    assert_eq!(encodings.get_str(101), "bar");
 }
 
 #[test]
@@ -438,14 +433,13 @@ fn build_encodings_predefined() {
         offsets: Offsets::new(OffSize::One, &[1_u8, 3, 6][..]).unwrap(),
         data: b"abcde",
     });
-    let mut name_registry = new_name_registry();
     assert_eq!(
-        predefined_encodings::standard(&mut name_registry),
-        Encodings::PredefinedStandard.build(&mut name_registry, &charsets, string_index)
+        predefined_encodings::STANDARD,
+        Encodings::PredefinedStandard.build(&charsets, string_index)
     );
     assert_eq!(
-        predefined_encodings::expert(&mut name_registry),
-        Encodings::PredefinedExpert.build(&mut name_registry, &charsets, string_index)
+        predefined_encodings::EXPERT,
+        Encodings::PredefinedExpert.build(&charsets, string_index)
     );
 }
 
@@ -457,12 +451,11 @@ fn build_encodings_format0() {
         data: b"abcde",
     });
     let encodings = Encodings::Format0(vec![1, 0, 2]);
-    let mut name_registry = new_name_registry();
-    let r = encodings.build(&mut name_registry, &charsets, string_index);
-    assert_eq!(r.get_str(&name_registry,0), "space");
-    assert_eq!(r.get_str(&name_registry,1), ".notdef");
-    assert_eq!(r.get_str(&name_registry,2), "exclamsmall");
-    assert_eq!(r.get_str(&name_registry,3), NOTDEF);
+    let r = encodings.build(&charsets, string_index);
+    assert_eq!(r.get_str(0), "space");
+    assert_eq!(r.get_str(1), ".notdef");
+    assert_eq!(r.get_str(2), "exclamsmall");
+    assert_eq!(r.get_str(3), NOTDEF);
 }
 
 #[test]
@@ -473,17 +466,16 @@ fn build_encodings_format1() {
         data: b"abcde",
     });
     let encodings = Encodings::Format1(vec![EncodingRange::new(1, 2), EncodingRange::new(10, 2)]);
-    let mut name_registry = new_name_registry();
-    let r = encodings.build(&mut name_registry, &charsets, string_index);
-    assert_eq!(r.get_str(&name_registry, 0), NOTDEF);
-    assert_eq!(r.get_str(&name_registry, 1), "space");
-    assert_eq!(r.get_str(&name_registry, 2), "exclamsmall");
-    assert_eq!(r.get_str(&name_registry, 3), "Hungarumlautsmall");
-    assert_eq!(r.get_str(&name_registry, 4), NOTDEF);
-    assert_eq!(r.get_str(&name_registry, 10), "twodotenleader");
-    assert_eq!(r.get_str(&name_registry, 11), "onedotenleader");
-    assert_eq!(r.get_str(&name_registry, 12), "comma");
-    assert_eq!(r.get_str(&name_registry, 13), NOTDEF);
+    let r = encodings.build(&charsets, string_index);
+    assert_eq!(r.get_str(0), NOTDEF);
+    assert_eq!(r.get_str(1), "space");
+    assert_eq!(r.get_str(2), "exclamsmall");
+    assert_eq!(r.get_str(3), "Hungarumlautsmall");
+    assert_eq!(r.get_str(4), NOTDEF);
+    assert_eq!(r.get_str(10), "twodotenleader");
+    assert_eq!(r.get_str(11), "onedotenleader");
+    assert_eq!(r.get_str(12), "comma");
+    assert_eq!(r.get_str(13), NOTDEF);
 }
 
 #[test]
