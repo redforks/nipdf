@@ -16,12 +16,20 @@
 use either::Either::{self, Left, Right};
 
 mod built_in_names;
+// Hack to use name!() macro
+use crate as prescript;
 use built_in_names::BUILT_IN_NAMES;
+use prescript_macro::name;
 use std::fmt::{Display, Formatter};
 
 /// PostScript Name Value
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Name(pub(crate) Either<u16, Box<str>>);
+
+/// Special name to match normally won't exist.
+pub const INVALID1: Name = name!("$$invalid1$$");
+/// Special name to match normally won't exist.
+pub const INVALID2: Name = name!("$$invalid2$$");
 
 impl Display for Name {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -53,9 +61,6 @@ pub fn name(s: &str) -> Name {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // hack to use `name!()` macro
-    use crate as prescript;
-    use prescript_macro::name;
     use static_assertions::assert_eq_size;
 
     #[test]

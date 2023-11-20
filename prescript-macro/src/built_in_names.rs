@@ -1,4 +1,6 @@
-pub(crate) static BUILT_IN_NAMES: [&str; 765] = [
+pub(crate) static BUILT_IN_NAMES: [&str; 767] = [
+    "$$invalid1$$",
+    "$$invalid2$$",
     ".notdef",
     "<<",
     ">>",
