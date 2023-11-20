@@ -2,7 +2,7 @@
 use crate::name::*;
 use either::Either;
 
-pub fn left_name(i: u16) -> Name {
+pub const fn left_name(i: u16) -> Name {
     Name(Either::Left(i))
 }
 
