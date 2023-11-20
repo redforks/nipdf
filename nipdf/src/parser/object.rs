@@ -163,12 +163,6 @@ pub fn parse_dict(input: &[u8]) -> ParseResult<Dictionary> {
 }
 
 fn parse_object_and_stream(input: &[u8]) -> ParseResult<Either<Object, (Dictionary, &[u8])>> {
-    // according to pdf standard, after `stream` must have a line ending, allows
-    // '\n', '\r\n', bot not '\r' only.
-    // before `endstream` tag, should have one line ending, not required,
-    // and also allows a single '\r'.
-    let line_ending_or_cr = alt((line_ending, tag(b"\r")));
-
     let (input, o) = parse_object(input)?;
     match o {
         Object::Dictionary(d) => {
@@ -178,13 +172,7 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<Either<Object, (Dictiona
                 line_ending,
             ))(input)?;
             if begin_stream.is_some() {
-                if let Some(Object::Integer(l)) = d.get(&name!("Length")) {
-                    let (input, data) = take(*l as usize)(input)?;
-                    let (input, _) = preceded(opt(line_ending_or_cr), tag(b"endstream"))(input)?;
-                    Ok((input, Either::Right((d, data))))
-                } else {
-                    Ok((input, Either::Right((d, input))))
-                }
+                Ok((input, Either::Right((d, input))))
             } else {
                 Ok((input, Either::Left(Object::Dictionary(d))))
             }
@@ -194,13 +182,14 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<Either<Object, (Dictiona
 }
 
 pub fn parse_indirect_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
+    let input_len = input.len();
     let (input, (id, gen)) = separated_pair(u32, multispace1, u16)(input)?;
     let (input, obj) = preceded(ws(tag(b"obj")), parse_object_and_stream)(input)?;
     let obj = match obj {
         Either::Left(o) => o,
         Either::Right((dict, data)) => Object::Stream(Stream::new(
             dict,
-            data,
+            (input_len - data.len()) as u16,
             ObjectId::new(NonZeroU32::new(id).unwrap(), gen),
         )),
     };

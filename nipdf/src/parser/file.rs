@@ -137,13 +137,13 @@ where
 }
 
 /// Parse xref from cross-reference streams
-fn parse_xref_stream(buf: &[u8]) -> ParseResult<(XRefSection, Dictionary)> {
+fn parse_xref_stream(input: &[u8]) -> ParseResult<(XRefSection, Dictionary)> {
     fn to_parse_error<E: Display>(e: E) -> nom::Err<ParseError<'static>> {
         error!("should be xref table stream: {}", e);
         nom::Err::Error(ParseError::from_error_kind(b"", ErrorKind::Fail))
     }
 
-    let (buf, stream) = parse_indirect_stream(buf)?;
+    let (buf, stream) = parse_indirect_stream(input)?;
     let d = stream.as_dict();
     let d = CrossReferenceStreamDict::new(d).map_err(to_parse_error)?;
     assert!(
@@ -152,7 +152,7 @@ fn parse_xref_stream(buf: &[u8]) -> ParseResult<(XRefSection, Dictionary)> {
     );
 
     let data = stream
-        .decode_without_resolve_length()
+        .decode_without_resolve_length(input)
         .map_err(to_parse_error)?;
     assert_eq!(3, d.w.len());
     let (a, b, c) = (d.w[0], d.w[1], d.w[2]);

@@ -74,7 +74,7 @@ fn parse_object_stream(n: usize, buf: &[u8]) -> ParseResult<ObjectStream> {
 }
 
 impl ObjectStream {
-    pub fn new(stream: Stream) -> Result<Self, ObjectValueError> {
+    pub fn new(stream: Stream, file: &[u8]) -> Result<Self, ObjectValueError> {
         let d = stream.as_dict();
         assert_eq!(&name!("ObjStm"), d.get_name(name!("Type"))?.unwrap());
         let n = d.get_int(name!("N"), 0)? as usize;
@@ -82,7 +82,7 @@ impl ObjectStream {
             !d.contains_key(&name!("Extends")),
             "Extends is not supported"
         );
-        let buf = stream.decode_without_resolve_length()?;
+        let buf = stream.decode_without_resolve_length(file)?;
         parse_object_stream(n, buf.as_ref())
             .map_err(|e| ObjectValueError::ParseError(e.to_string()))
             .map(|(_, r)| r)
@@ -173,11 +173,11 @@ impl XRefTable {
     }
 
     /// Return `buf` start from where `id` is
-    fn resolve_object_buf<'a: 'c, 'b: 'c, 'c>(
+    fn resolve_object_buf<'a, 'b>(
         &'b self,
         buf: &'a [u8],
         id: NonZeroU32,
-    ) -> Option<Either<&'c [u8], &'c [u8]>> {
+    ) -> Option<Either<&'a [u8], &'b [u8]>> {
         self.id_offset.get(&id.into()).map(|entry| match entry {
             ObjectPos::Offset(offset) => Either::Left(&buf[*offset as usize..]),
             ObjectPos::InStream(id, idx) => {
@@ -185,7 +185,7 @@ impl XRefTable {
                     .get_or_try_init(|| {
                         let buf = self.resolve_object_buf(buf, *id).unwrap();
                         let (_, stream) = parse_indirect_stream(&buf).unwrap();
-                        ObjectStream::new(stream)
+                        ObjectStream::new(stream, &buf)
                     })
                     .unwrap();
                 Either::Right(object_stream.get_buf(*idx as usize))
@@ -316,10 +316,6 @@ impl<'a> ObjectResolver<'a> {
         self.encript_key.as_deref()
     }
 
-    pub fn data(&self) -> &[u8] {
-        self.buf
-    }
-
     /// Return total objects count.
     #[allow(dead_code)]
     pub fn n(&self) -> usize {
@@ -366,6 +362,15 @@ impl<'a> ObjectResolver<'a> {
                 }
                 Ok(o)
             })
+    }
+
+    /// Return file data start from stream id indirect object till the file end
+    /// Panic if id not found or not stream
+    pub fn stream_data(&self, id: NonZeroU32) -> &'a [u8] {
+        self.xref_table
+            .resolve_object_buf(self.buf, id)
+            .unwrap()
+            .unwrap_left()
     }
 
     /// Resolve value from data container `c` with key `k`, if value is reference,

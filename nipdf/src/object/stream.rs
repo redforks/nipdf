@@ -26,7 +26,6 @@ use std::{
     borrow::{Borrow, Cow},
     fmt::Display,
     iter::{once, repeat},
-    num::NonZeroU32,
 };
 
 const KEY_FILTER: Name = name!("Filter");
@@ -41,12 +40,9 @@ const FILTER_ASCII85_DECODE: Name = name!("ASCII85Decode");
 const FILTER_RUN_LENGTH_DECODE: Name = name!("RunLengthDecode");
 const FILTER_JPX_DECODE: Name = name!("JPXDecode");
 
-/// Start position and length of stream data in file.
+// 2nd value is offset of stream data from the begin of indirect object
 #[derive(Clone, PartialEq, Debug)]
-pub struct BufPos(u32, Option<NonZeroU32>);
-
-#[derive(Clone, PartialEq, Debug)]
-pub struct Stream(Dictionary, BufPos, ObjectId); // NOTE: buf end at the file end
+pub struct Stream(Dictionary, u16, ObjectId);
 
 /// error!() log if r is error, returns `Err<ObjectValueError::FilterDecodeError>`
 fn handle_filter_error<V, E: Display>(
@@ -543,9 +539,9 @@ fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> AnyResult<
     transform(img, &from, to)
 }
 
-impl<'a> Stream {
-    pub fn new(dict: Dictionary, data: &'a [u8], id: ObjectId) -> Self {
-        Self(dict, data, id)
+impl Stream {
+    pub fn new(dict: Dictionary, stream_pos: u16, id: ObjectId) -> Self {
+        Self(dict, stream_pos, id)
     }
 
     pub fn update_dict(&mut self, f: impl FnOnce(&mut Dictionary)) {
@@ -561,19 +557,22 @@ impl<'a> Stream {
     }
 
     #[cfg(test)]
-    pub fn buf(&self, file: &[u8]) -> &[u8] {
-        &file[self.1..]
+    pub fn buf<'a>(&self, buf: &'a [u8]) -> &'a [u8] {
+        &buf[self.1 as usize..]
     }
 
     /// Get stream un-decoded raw data.
-    pub fn raw(&self, resolver: &ObjectResolver<'a>) -> Result<&'a [u8], ObjectValueError> {
+    /// `buf` start from indirect object, from xref
+    pub fn raw<'a>(&self, resolver: &ObjectResolver<'a>) -> Result<&'a [u8], ObjectValueError> {
         let len = resolver
             .resolve_container_value(&self.0, name!("Length"))?
             .as_int()?;
-        Ok(&resolver.data()[self.1.0..len as usize])
+        let buf = resolver.stream_data(self.2.id());
+        let start = self.1 as usize;
+        Ok(&buf[start..(start + len as usize)])
     }
 
-    fn _decode(
+    fn _decode<'a>(
         &self,
         resolver: &ObjectResolver<'a>,
     ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
@@ -593,23 +592,29 @@ impl<'a> Stream {
 
     /// Decode stream data using filter and parameters in stream dictionary.
     /// `image_to_raw` if the stream is image, convert to RawImage.
-    pub fn decode(&self, resolver: &ObjectResolver<'a>) -> Result<Cow<'a, [u8]>, ObjectValueError> {
+    pub fn decode<'a>(
+        &self,
+        resolver: &ObjectResolver<'a>,
+    ) -> Result<Cow<'a, [u8]>, ObjectValueError> {
         self._decode(resolver).and_then(|v| v.into_bytes())
     }
 
     /// Decode stream but requires that `Length` field is no ref-id, so no need to use
     /// `ObjectResolver`
-    pub fn decode_without_resolve_length(&self) -> Result<Cow<'a, [u8]>, ObjectValueError> {
-        let mut decoded = FilterDecodedData::Bytes(
-            self.1[0..self.0.get(&name!("Length")).unwrap().as_int().unwrap() as usize].into(),
-        );
+    pub fn decode_without_resolve_length<'a>(
+        &self,
+        buf: &'a [u8],
+    ) -> Result<Cow<'a, [u8]>, ObjectValueError> {
+        let length = self.0[&name!("Length")].as_int()?;
+        let start = self.1 as usize;
+        let mut decoded = FilterDecodedData::Bytes(buf[start..start + length as usize].into());
         for (filter_name, params) in self.iter_filter()? {
             decoded = filter(decoded.into_bytes()?, None, filter_name, params)?;
         }
         decoded.into_bytes()
     }
 
-    pub fn decode_image<'b>(
+    pub fn decode_image<'a, 'b>(
         &self,
         resolver: &ObjectResolver<'a>,
         resources: Option<&ResourceDict<'a, 'b>>,

@@ -66,7 +66,7 @@ fn test_iter_filter(
         .into_iter()
         .map(|(k, v)| (k.clone(), v))
         .collect::<Dictionary>();
-    let stream = Stream(dict, &[], ObjectId::empty());
+    let stream = Stream(dict, 0, ObjectId::empty());
     let r: Vec<(Name, Option<Dictionary>)> = stream
         .iter_filter()?
         .map(|(k, v)| (k.clone(), v.cloned()))
@@ -140,7 +140,8 @@ fn image_mask_try_from_object() {
     // ExplicitMask
     let stream = Stream(
         Dictionary::default(),
-        b"0 1 2 3 4 5 6 7 8 9".as_ref(),
+        // b"0 1 2 3 4 5 6 7 8 9".as_ref(),
+        0,
         ObjectId::empty(),
     );
     let o = Object::Stream(stream.clone());
