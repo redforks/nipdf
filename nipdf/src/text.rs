@@ -5,7 +5,7 @@ use crate::{
 };
 use bitflags::bitflags;
 use nipdf_macro::{pdf_object, TryFromIntObjectForBitflags, TryFromNameObject};
-use prescript::{Encoding, NameRegistry};
+use prescript::{name, Encoding};
 use std::{collections::HashMap, convert::AsRef};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, TryFromNameObject)]
@@ -301,13 +301,9 @@ bitflags! {
 pub struct EncodingDifferences<'a>(HashMap<u8, &'a str>);
 
 impl<'a> EncodingDifferences<'a> {
-    pub fn apply_differences(
-        &self,
-        name_registry: &mut NameRegistry,
-        mut encoding: Encoding,
-    ) -> Encoding {
-        for (ch, name) in self.0.iter() {
-            encoding[*ch as usize] = name_registry.get_or_intern(name);
+    pub fn apply_differences(&self, mut encoding: Encoding) -> Encoding {
+        for (ch, n) in self.0.iter() {
+            encoding[*ch as usize] = name(n);
         }
         encoding
     }

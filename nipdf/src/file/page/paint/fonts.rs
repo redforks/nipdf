@@ -17,8 +17,8 @@ use log::{debug, error, info, warn};
 use once_cell::sync::Lazy;
 use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
-use prescript::{Encoding, NameRegistry};
-use std::{borrow::BorrowMut, collections::HashMap, ops::RangeInclusive};
+use prescript::{name, Encoding};
+use std::{collections::HashMap, ops::RangeInclusive};
 use tiny_skia::PathBuilder;
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
 
@@ -161,13 +161,11 @@ pub trait Font {
 }
 
 fn parse_encoding<'c>(
-    name_registry: &mut NameRegistry,
     font_dict: &'c FontDict<'_, '_>,
     is_cff: bool,
     font_data: &'c [u8],
 ) -> AnyResult<Encoding> {
     fn load_from_file<'a>(
-        name_registry: &mut NameRegistry,
         font_name: &str,
         font_data: &'a [u8],
         is_cff: bool,
@@ -176,50 +174,49 @@ fn parse_encoding<'c>(
             info!("scan encoding from cff font. ({})", font_name);
             let cff_file: CffFile<'a> = CffFile::open(font_data)?;
             let font: CffFont<'a> = cff_file.iter()?.next().expect("no font in cff?");
-            Ok(Some(font.encodings(name_registry)?))
+            Ok(Some(font.encodings()?))
         } else {
             info!("scan encoding from type1 font. ({})", font_name);
-            let type1_font = prescript::Font::parse(name_registry, font_data)?;
+            let type1_font = prescript::Font::parse(font_data)?;
             Ok(type1_font.encoding().cloned())
         }
     }
 
-    fn guess_by_font_name(name_registry: &NameRegistry, font_name: &str) -> Option<Encoding> {
+    fn guess_by_font_name(font_name: &str) -> Option<Encoding> {
         // if font not embed encoding, use known encoding for the two standard symbol fonts
         match font_name {
-            "Symbol" => Some(Encoding::symbol(name_registry)),
-            "ZapfDingbats" => Some(Encoding::symbol(name_registry)),
+            "Symbol" => Some(Encoding::SYMBOL),
+            "ZapfDingbats" => Some(Encoding::SYMBOL),
             _ => None,
         }
     }
 
-    fn default_encoding(name_registry: &NameRegistry, font_dict: &FontDict) -> AnyResult<Encoding> {
+    fn default_encoding(font_dict: &FontDict) -> AnyResult<Encoding> {
         if let Some(desc) = font_dict.font_descriptor()? {
             if desc.flags()?.contains(FontDescriptorFlags::SYMBOLIC) {
                 panic!("Symbolic font must have encoding, but not found in font file");
             }
         }
 
-        Ok(Encoding::standard(name_registry))
+        Ok(Encoding::STANDARD)
     }
 
     let encoding = font_dict.encoding()?;
     let font_name = font_dict.font_name()?;
-    let mut r = resolve_by_name(name_registry, &encoding, font_dict, font_name)?
-        .or_else(|| load_from_file(name_registry, font_name, font_data, is_cff).unwrap())
-        .or_else(|| guess_by_font_name(name_registry, font_name))
-        .unwrap_or_else(|| default_encoding(name_registry, font_dict).unwrap());
+    let mut r = resolve_by_name(&encoding, font_dict, font_name)?
+        .or_else(|| load_from_file(font_name, font_data, is_cff).unwrap())
+        .or_else(|| guess_by_font_name(font_name))
+        .unwrap_or_else(|| default_encoding(font_dict).unwrap());
     if let Some(NameOrDictByRef::Dict(d)) = encoding {
         let encoding_dict = EncodingDict::new(None, d, font_dict.resolver())?;
         if let Some(diff) = encoding_dict.differences()? {
-            r = diff.apply_differences(name_registry, r)
+            r = diff.apply_differences(r)
         }
     }
     Ok(r)
 }
 
 fn resolve_by_name<'a, 'b>(
-    name_registry: &NameRegistry,
     encoding: &Option<NameOrDictByRef<'a, 'b>>,
     font_dict: &FontDict<'a, 'b>,
     font_name: &str,
@@ -235,9 +232,7 @@ fn resolve_by_name<'a, 'b>(
     };
     let encoding_name = encoding_name.or_else(|| standard_14_type1_font_encoding(font_name));
     encoding_name
-        .map(|n| {
-            Encoding::predefined(name_registry, n).ok_or_else(|| anyhow!("Unknown encoding: {}", n))
-        })
+        .map(|n| Encoding::predefined(name(n)).ok_or_else(|| anyhow!("Unknown encoding: {}", n)))
         .transpose()
 }
 
@@ -256,9 +251,7 @@ impl<'a> Type1FontOp<'a> {
     ) -> AnyResult<Self> {
         let font_width = FirstLastFontWidth::from_type1_type(&font_dict.type1()?)?
             .map_or_else(|| Either::Right(FreeTypeFontWidth::new(font)), Either::Left);
-        let resolver = font_dict.resolver();
-        let mut name_registry = resolver.name_registry_mut();
-        let encoding = parse_encoding(name_registry.borrow_mut(), font_dict, is_cff, font_data)?;
+        let encoding = parse_encoding(font_dict, is_cff, font_data)?;
 
         Ok(Self {
             font_width,
@@ -274,8 +267,8 @@ impl<'a> FontOp for Type1FontOp<'a> {
     }
 
     /// Use font.glyph_for_char() if encoding is None or encoding.replace() returns None
-    fn char_to_gid(&self, name_registry: &mut NameRegistry, ch: u32) -> u16 {
-        let gid_name = self.encoding.get_str(name_registry, ch as u8);
+    fn char_to_gid(&self, ch: u32) -> u16 {
+        let gid_name = self.encoding.get_str(ch as u8);
         if let Some(r) = self.font.glyph_by_name(gid_name) {
             r as u16
         } else {
@@ -285,10 +278,10 @@ impl<'a> FontOp for Type1FontOp<'a> {
         }
     }
 
-    fn char_width(&self, name_registry: &mut NameRegistry, gid: u32) -> u32 {
+    fn char_width(&self, gid: u32) -> u32 {
         self.font_width.as_ref().either(
             |x| x.char_width(gid),
-            |x| x.glyph_width(self.char_to_gid(name_registry, gid) as u32),
+            |x| x.glyph_width(self.char_to_gid(gid) as u32),
         )
     }
 }
@@ -345,12 +338,7 @@ impl<'a> TTFParserFontOp<'a> {
         let encoding = font_dict.encoding()?;
         let font_name = font_dict.font_name()?;
         Ok(Self {
-            encoding: resolve_by_name(
-                &font_dict.resolver().name_registry_mut(),
-                &encoding,
-                font_dict,
-                font_name,
-            )?,
+            encoding: resolve_by_name(&encoding, font_dict, font_name)?,
             units_per_em: face.units_per_em(),
             face,
         })
@@ -362,13 +350,13 @@ impl<'a> FontOp for TTFParserFontOp<'a> {
         s.iter().map(|v| *v as u32).collect()
     }
 
-    fn char_to_gid(&self, name_registry: &mut NameRegistry, ch: u32) -> u16 {
+    fn char_to_gid(&self, ch: u32) -> u16 {
         self.face
             .glyph_index(unsafe { char::from_u32_unchecked(ch) })
             .map_or_else(
                 || {
                     if let Some(encoding) = &self.encoding {
-                        let gid_name = encoding.get_str(name_registry, ch as u8);
+                        let gid_name = encoding.get_str(ch as u8);
                         return self.face.glyph_index_by_name(gid_name).map_or_else(
                             || {
                                 info!(
@@ -389,9 +377,9 @@ impl<'a> FontOp for TTFParserFontOp<'a> {
             )
     }
 
-    fn char_width(&self, name_registry: &mut NameRegistry, ch: u32) -> u32 {
+    fn char_width(&self, ch: u32) -> u32 {
         self.face
-            .glyph_hor_advance(GlyphId(self.char_to_gid(name_registry, ch)))
+            .glyph_hor_advance(GlyphId(self.char_to_gid(ch)))
             .unwrap() as u32
     }
 
@@ -898,9 +886,9 @@ impl<'c> FontCache<'c> {
 pub trait FontOp {
     /// Decode char codes to chars, possible using some encoding
     fn decode_chars(&self, s: &[u8]) -> Vec<u32>;
-    fn char_to_gid(&self, name_registry: &mut NameRegistry, ch: u32) -> u16;
+    fn char_to_gid(&self, ch: u32) -> u16;
     /// Return glyph width for specified char
-    fn char_width(&self, name_registry: &mut NameRegistry, ch: u32) -> u32;
+    fn char_width(&self, ch: u32) -> u32;
     fn units_per_em(&self) -> u16 {
         1000
     }
@@ -941,11 +929,11 @@ impl FontOp for Type0FontOp {
         rv
     }
 
-    fn char_to_gid(&self, _name_registry: &mut NameRegistry, ch: u32) -> u16 {
+    fn char_to_gid(&self, ch: u32) -> u16 {
         ch as u16
     }
 
-    fn char_width(&self, _name_registry: &mut NameRegistry, ch: u32) -> u32 {
+    fn char_width(&self, ch: u32) -> u32 {
         self.widths.char_width(ch).unwrap_or(self.default_width)
     }
 }

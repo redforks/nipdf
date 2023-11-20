@@ -30,7 +30,7 @@ pub use page::*;
 pub(crate) mod encrypt;
 use self::encrypt::decrypt_key;
 pub use encrypt::EncryptDict;
-use prescript::{Encoding, Name, NameRegistry};
+use prescript::{Encoding, Name};
 
 #[derive(Debug, Copy, Clone)]
 pub enum ObjectPos {
@@ -297,13 +297,6 @@ pub struct ObjectResolver<'a> {
     xref_table: &'a XRefTable,
     objects: HashMap<NonZeroU32, OnceCell<Object<'a>>>,
     encript_key: Option<Box<[u8]>>,
-    name_registry: RefCell<NameRegistry>,
-}
-
-fn new_name_registry() -> NameRegistry {
-    let mut name_registry = NameRegistry::new();
-    Encoding::register_glyph_names(&mut name_registry);
-    name_registry
 }
 
 impl<'a> ObjectResolver<'a> {
@@ -313,14 +306,11 @@ impl<'a> ObjectResolver<'a> {
             objects.insert(id, OnceCell::new());
         });
 
-        let mut name_registry = NameRegistry::new();
-        Encoding::register_glyph_names(&mut name_registry);
         Self {
             buf,
             xref_table,
             objects,
             encript_key,
-            name_registry: RefCell::new(new_name_registry()),
         }
     }
 
@@ -341,7 +331,6 @@ impl<'a> ObjectResolver<'a> {
             xref_table,
             objects: HashMap::default(),
             encript_key: None,
-            name_registry: RefCell::new(new_name_registry()),
         }
     }
 
@@ -349,26 +338,6 @@ impl<'a> ObjectResolver<'a> {
     pub fn setup_object(&mut self, id: u32, v: Object<'a>) {
         self.objects
             .insert(NonZeroU32::new(id).unwrap(), OnceCell::with_value(v));
-    }
-
-    pub fn intern_static_name(&self, name: &'static str) -> Name {
-        self.name_registry.borrow_mut().get_or_intern_static(name)
-    }
-
-    pub fn intern_name(&self, name: &str) -> Name {
-        self.name_registry.borrow_mut().get_or_intern(name)
-    }
-
-    // pub fn resolve_name(&self, name: Name) -> &str {
-    //     self.name_registry.borrow().resolve(name).unwrap()
-    // }
-
-    pub fn name_registry(&self) -> Ref<NameRegistry> {
-        self.name_registry.borrow()
-    }
-
-    pub fn name_registry_mut(&self) -> RefMut<NameRegistry> {
-        self.name_registry.borrow_mut()
     }
 
     pub fn resolve_pdf_object<'b, T: PdfObject<'a, 'b, Self>>(
