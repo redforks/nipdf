@@ -1,8 +1,6 @@
 use crate::{
     graphics::trans::{TextToUserSpace, UserToDeviceIndependentSpace},
-    object::{
-        Array, Dictionary, Name, Object, ObjectValueError, Stream, TextString, TextStringOrNumber,
-    },
+    object::{Array, Dictionary, Object, ObjectValueError, Stream, TextString, TextStringOrNumber},
     parser::{parse_object, whitespace_or_comment, ws_prefixed, ParseError, ParseResult},
 };
 use euclid::Transform2D;
@@ -15,12 +13,14 @@ use nom::{
     error::{ErrorKind, FromExternalError, ParseError as NomParseError},
     Err, Parser,
 };
+use prescript::Name;
 use std::num::NonZeroU32;
 
 pub(crate) mod color_space;
 mod pattern;
 pub(crate) mod trans;
 pub(crate) use pattern::*;
+use prescript_macro::name;
 pub(crate) mod shading;
 
 impl<'a, S, T> TryFrom<&Object<'a>> for Transform2D<f32, S, T> {
@@ -120,7 +120,7 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorArgs {
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum ColorSpaceArgs<'a> {
-    Name(Name<'a>),
+    Name(Name),
     Array(Array<'a>),
     Ref(NonZeroU32),
 }
@@ -205,7 +205,7 @@ impl<'a, 'b, S, T> ConvertFromObject<'a, 'b> for Transform2D<f32, S, T> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ColorArgsOrName {
     Color(ColorArgs),
-    Name(String),
+    Name(Name),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -213,13 +213,13 @@ pub struct NameOfDict(pub String);
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NameOrDict<'a> {
-    Name(Name<'a>),
+    Name(Name),
     Dict(Dictionary<'a>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NameOrDictByRef<'a, 'b> {
-    Name(&'b Name<'a>),
+    Name(&'b Name),
     Dict(&'b Dictionary<'a>),
 }
 
@@ -237,7 +237,7 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for NameOrDictByRef<'a, 'b> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NameOrStream<'a, 'b> {
-    Name(&'b Name<'a>),
+    Name(&'b Name),
     Stream(&'b Stream<'a>),
 }
 
@@ -482,7 +482,7 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for ColorArgsOrName {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
         if let Ok(name) = o.as_name() {
-            Ok(ColorArgsOrName::Name(name.to_owned()))
+            Ok(ColorArgsOrName::Name(name.clone()))
         } else {
             objects.push(o);
             ColorArgs::convert_from_object(objects).map(ColorArgsOrName::Color)

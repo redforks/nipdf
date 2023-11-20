@@ -178,18 +178,14 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         })
     };
 
-    if rt == &(parse_quote! { &str }) || rt == &(parse_quote!(&'b str)) {
-        if get_type().is_some_and(|s| s == "Name") {
-            Some("required_name")
-        } else {
-            Some("required_str")
-        }
+    if rt == &(parse_quote! { &Name }) || rt == &(parse_quote! { &'b Name }) {
+        Some("required_name")
+    } else if rt == &(parse_quote! { &str }) || rt == &(parse_quote!(&'b str)) {
+        Some("required_str")
+    } else if rt == &(parse_quote!(Option<&Name>)) || rt == &(parse_quote!(Option<&'b Name>)) {
+        Some("opt_name")
     } else if rt == &(parse_quote!(Option<&str>)) || rt == &(parse_quote!(Option<&'b str>)) {
-        if get_type().is_some_and(|s| s == "Name") {
-            Some("opt_name")
-        } else {
-            Some("opt_str")
-        }
+        Some("opt_str")
     } else if rt == &(parse_quote!(u32)) {
         Some("required_u32")
     } else if rt == &(parse_quote!(Option<u32>)) {
@@ -380,7 +376,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                         },
                         parse_quote! {
                             crate::object::ValueTypeValidator::new(
-                                crate::object::IntTypeValueGetter::new(#typ_field),
+                                crate::object::IntTypeValueGetter::new(prescript_macro::name!(#typ_field)),
                                 crate::object::EqualTypeValueChecker::new(#lit)
                             )
                         },
@@ -471,14 +467,14 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 parse_quote! {
                     crate::object::ValueTypeValidator<
                         crate::object::NameTypeValueGetter,
-                        crate::object::OneOfTypeValueChecker<&'static str>,
+                        crate::object::OneOfTypeValueChecker<prescript::Name>,
                     >
                 },
                 parse_quote! {
                     crate::object::ValueTypeValidator::new(
-                        crate::object::NameTypeValueGetter::new(#typ_field),
+                        crate::object::NameTypeValueGetter::new(prescript_macro::name!(#typ_field)),
                         crate::object::OneOfTypeValueChecker::new(
-                            vec![ #(#arg),* ]
+                            vec![ #(prescript_macro::name!(#arg)),* ]
                         )
                     )
                 },
@@ -536,27 +532,27 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         let mut method = if let Some(method_name) =
             schema_method_name(rt, &attrs[..]).map(|m| Ident::new(m, name.span()))
         {
-            quote! { self.d.#method_name(#key) }
+            quote! { self.d.#method_name(prescript_macro::name!(#key)) }
         } else if let Some(nested_type) = nested(rt, attrs) {
             gen_option_method(
                 nested_type,
                 &key,
                 |ty| {
                     let type_name = remove_generic(ty);
-                    quote! { self.d.opt_resolve_pdf_object::<#type_name>(#key) }
+                    quote! { self.d.opt_resolve_pdf_object::<#type_name>(prescript_macro::name!(#key)) }
                 },
                 |ty| {
                     if is_vec(ty) {
                         if one_or_more(attrs) {
-                            quote! { self.d.resolve_one_or_more_pdf_object(#key) }
+                            quote! { self.d.resolve_one_or_more_pdf_object(prescript_macro::name!(#key)) }
                         } else {
-                            quote! { self.d.resolve_pdf_object_array(#key) }
+                            quote! { self.d.resolve_pdf_object_array(prescript_macro::name!(#key)) }
                         }
                     } else if is_map(ty) {
-                        quote! { self.d.resolve_pdf_object_map(#key) }
+                        quote! { self.d.resolve_pdf_object_map(prescript_macro::name!(#key)) }
                     } else {
                         let type_name = remove_generic(ty);
-                        quote! { self.d.resolve_pdf_object::<#type_name>(#key) }
+                        quote! { self.d.resolve_pdf_object::<#type_name>(prescript_macro::name!(#key)) }
                     }
                 },
             )
@@ -565,10 +561,10 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 try_from_type,
                 &key,
                 |ty| {
-                    quote! { self.d.opt_object(#key).context(#key)?.map(|d| <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from(d)).transpose() }
+                    quote! { self.d.opt_object(prescript_macro::name!(#key)).context(#key)?.map(|d| <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from(d)).transpose() }
                 },
                 |ty| {
-                    quote! { <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from( self.d.required_object(#key).unwrap()) }
+                    quote! { <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from( self.d.required_object(prescript_macro::name!(#key)).unwrap()) }
                 },
             )
         } else if let Some(rt) = self_as(rt, attrs) {

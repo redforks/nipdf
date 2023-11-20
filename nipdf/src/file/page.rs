@@ -5,7 +5,7 @@ use crate::{
         parse_operations, shading::ShadingDict, trans::FormToUserSpace, ColorArgs, ColorSpaceArgs,
         LineCapStyle, LineJoinStyle, Operation, PatternDict, Point, RenderingIntent,
     },
-    object::{Dictionary, Name, Object, ObjectValueError, PdfObject, Stream},
+    object::{Dictionary, Object, ObjectValueError, PdfObject, Stream},
     text::FontDict,
 };
 use ahash::{HashMap, HashMapExt};
@@ -13,6 +13,8 @@ use educe::Educe;
 use log::error;
 use nipdf_macro::{pdf_object, TryFromNameObject};
 use nom::Finish;
+use prescript::Name;
+use prescript_macro::name;
 use std::iter::once;
 use tiny_skia::Pixmap;
 
@@ -181,7 +183,7 @@ pub trait FormXObjectDictTrait {
 /// Wrap type to impl TryFrom<> trait
 #[derive(Educe)]
 #[educe(Deref)]
-pub struct ColorSpaceResources<'a>(HashMap<Name<'a>, ColorSpaceArgs<'a>>);
+pub struct ColorSpaceResources<'a>(HashMap<Name, ColorSpaceArgs<'a>>);
 
 impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceResources<'a> {
     type Error = ObjectValueError;
@@ -207,17 +209,17 @@ impl<'a, 'b> TryFrom<&'b Object<'a>> for ColorSpaceResources<'a> {
 #[pdf_object(())]
 pub trait ResourceDictTrait {
     #[nested]
-    fn ext_g_state(&self) -> HashMap<String, GraphicsStateParameterDict<'a, 'b>>;
+    fn ext_g_state(&self) -> HashMap<Name, GraphicsStateParameterDict<'a, 'b>>;
     #[try_from]
     fn color_space(&self) -> ColorSpaceResources<'a>;
     #[nested]
-    fn pattern(&self) -> HashMap<String, PatternDict<'a, 'b>>;
+    fn pattern(&self) -> HashMap<Name, PatternDict<'a, 'b>>;
     #[nested]
-    fn shading(&self) -> HashMap<String, ShadingDict<'a, 'b>>;
+    fn shading(&self) -> HashMap<Name, ShadingDict<'a, 'b>>;
     #[nested]
-    fn x_object(&self) -> HashMap<String, XObjectDict<'a, 'b>>;
+    fn x_object(&self) -> HashMap<Name, XObjectDict<'a, 'b>>;
     #[nested]
-    fn font(&self) -> HashMap<String, FontDict<'a, 'b>>;
+    fn font(&self) -> HashMap<Name, FontDict<'a, 'b>>;
     fn properties(&self) -> Option<&'b Dictionary<'a>>;
 }
 
@@ -233,13 +235,12 @@ pub(crate) trait PageDictTrait {
     fn resources(&self) -> Option<ResourceDict<'a, 'b>>;
     fn contents(&self) -> Vec<&Stream<'a>>;
     #[key("Type")]
-    #[typ("Name")]
-    fn type_name(&self) -> &str;
+    fn type_name(&self) -> &Name;
 }
 
 impl<'a, 'b> PageDict<'a, 'b> {
     pub fn is_leaf(&self) -> bool {
-        self.type_name().unwrap() == "Page"
+        self.type_name().unwrap() == &name!("Page")
     }
 }
 

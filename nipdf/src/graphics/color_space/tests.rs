@@ -5,6 +5,7 @@ use crate::{
 };
 use assert_approx_eq::assert_approx_eq;
 use mockall::predicate::*;
+use prescript::name;
 use smallvec::smallvec;
 use std::num::NonZeroU32;
 use test_case::test_case;
@@ -38,7 +39,7 @@ fn cmyk_to_rgb() {
 
 #[test]
 fn convert_color_comp_u8_to_f32() {
-    assert_eq!(0.0f32, 0_u8.into_color_comp());
+    assert_eq!(0.0f32, ColorCompConvertTo::<f32>::into_color_comp(0_u8));
     assert_eq!(1.0f32, 255_u8.into_color_comp());
     assert_approx_eq!(
         0.5f32,
@@ -91,10 +92,10 @@ fn indexed_color_space() {
 #[test_case("DeviceGray" => ColorSpace::DeviceGray)]
 #[test_case("DeviceCMYK" => ColorSpace::DeviceCMYK)]
 #[test_case("Pattern" => ColorSpace::Pattern)]
-fn simple_color_space_from_args(name: &str) -> ColorSpace<f32> {
+fn simple_color_space_from_args(nm: &str) -> ColorSpace<f32> {
     let empty_xref = XRefTable::empty();
     let resolver = ObjectResolver::empty(&empty_xref);
-    ColorSpace::<f32>::from_args(&ColorSpaceArgs::Name(name.into()), &resolver, None).unwrap()
+    ColorSpace::<f32>::from_args(&ColorSpaceArgs::Name(name(nm)), &resolver, None).unwrap()
 }
 
 #[test]

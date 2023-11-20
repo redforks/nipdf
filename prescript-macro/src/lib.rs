@@ -18,14 +18,14 @@ pub fn name(item: TokenStream) -> TokenStream {
         Ok(i) => {
             let i = i as u16;
             let tokens = quote::quote! {
-                prescript::__private::left_name(#i)
+                prescript::Name(either::Either::Left(#i))
             };
             tokens.into()
         }
         Err(_) => {
             eprintln!("unknown static name: {}", &s);
             let tokens = quote::quote! {
-                prescript::__private::right_name(#s)
+                prescript::Name(either::Either::Right(#s.into()))
             };
             tokens.into()
         }

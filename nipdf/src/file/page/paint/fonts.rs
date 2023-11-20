@@ -17,7 +17,7 @@ use log::{debug, error, info, warn};
 use once_cell::sync::Lazy;
 use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
-use prescript::{name, Encoding};
+use prescript::{name, Encoding, Name};
 use std::{collections::HashMap, ops::RangeInclusive};
 use tiny_skia::PathBuilder;
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
@@ -203,9 +203,9 @@ fn parse_encoding<'c>(
 
     let encoding = font_dict.encoding()?;
     let font_name = font_dict.font_name()?;
-    let mut r = resolve_by_name(&encoding, font_dict, font_name)?
-        .or_else(|| load_from_file(font_name, font_data, is_cff).unwrap())
-        .or_else(|| guess_by_font_name(font_name))
+    let mut r = resolve_by_name(&encoding, font_dict, font_name.as_ref())?
+        .or_else(|| load_from_file(font_name.as_ref(), font_data, is_cff).unwrap())
+        .or_else(|| guess_by_font_name(font_name.as_ref()))
         .unwrap_or_else(|| default_encoding(font_dict).unwrap());
     if let Some(NameOrDictByRef::Dict(d)) = encoding {
         let encoding_dict = EncodingDict::new(None, d, font_dict.resolver())?;
@@ -338,7 +338,7 @@ impl<'a> TTFParserFontOp<'a> {
         let encoding = font_dict.encoding()?;
         let font_name = font_dict.font_name()?;
         Ok(Self {
-            encoding: resolve_by_name(&encoding, font_dict, font_name)?,
+            encoding: resolve_by_name(&encoding, font_dict, font_name.as_ref())?,
             units_per_em: face.units_per_em(),
             face,
         })
@@ -642,13 +642,13 @@ fn standard_14_type1_font_data(font_name: &str) -> Option<&'static [u8]> {
 
 #[self_referencing]
 struct FontCacheInner<'c> {
-    fonts: HashMap<String, Box<dyn Font + 'c>>,
+    fonts: HashMap<Name, Box<dyn Font + 'c>>,
     #[borrows(fonts)]
     #[covariant]
-    ops: HashMap<String, Box<dyn FontOp + 'this>>,
+    ops: HashMap<Name, Box<dyn FontOp + 'this>>,
     #[borrows(fonts)]
     #[covariant]
-    renders: HashMap<String, Box<dyn GlyphRender + 'this>>,
+    renders: HashMap<Name, Box<dyn GlyphRender + 'this>>,
 }
 
 pub struct FontCache<'c>(FontCacheInner<'c>);
@@ -667,7 +667,7 @@ impl<'c> FontCache<'c> {
 
     fn load_true_type_from_os(desc: &FontDescriptorDict) -> AnyResult<Vec<u8>> {
         let font_name = desc.font_name()?;
-        let font_name = normalize_true_type_font_name(font_name);
+        let font_name = normalize_true_type_font_name(font_name.as_ref());
         let font_name = font_name.to_title_case();
         let mut families = vec![Family::Name(font_name.as_ref())];
         let family = desc.font_family()?;
@@ -768,7 +768,7 @@ impl<'c> FontCache<'c> {
             Some(s) => (s.0, Self::load_embed_font_bytes(f.resolver(), s.1)?),
             None => (
                 false,
-                if let Some(font_data) = standard_14_type1_font_data(font_name) {
+                if let Some(font_data) = standard_14_type1_font_data(font_name.as_ref()) {
                     font_data.to_owned()
                 } else {
                     bail!("Standard 14 type1 font not found: {}", font_name)
@@ -870,15 +870,15 @@ impl<'c> FontCache<'c> {
         )?))
     }
 
-    pub fn get_font(&self, s: &str) -> Option<&dyn Font> {
+    pub fn get_font(&self, s: &Name) -> Option<&dyn Font> {
         self.0.borrow_fonts().get(s).map(|x| x.as_ref())
     }
 
-    pub fn get_op(&self, s: &str) -> Option<&(dyn FontOp)> {
+    pub fn get_op(&self, s: &Name) -> Option<&(dyn FontOp)> {
         self.0.borrow_ops().get(s).map(|x| x.as_ref())
     }
 
-    pub fn get_glyph_render(&self, s: &str) -> Option<&(dyn GlyphRender)> {
+    pub fn get_glyph_render(&self, s: &Name) -> Option<&(dyn GlyphRender)> {
         self.0.borrow_renders().get(s).map(|x| x.as_ref())
     }
 }

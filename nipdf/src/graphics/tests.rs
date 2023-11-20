@@ -54,7 +54,7 @@ fn test_parse_operations(s: &str) -> Vec<Operation> {
 #[test_case("1 2 3 4 5 6 c" => Operation::AppendBezierCurve(Point::new(1f32, 2f32), Point::new(3f32, 4f32), Point::new(5f32, 6f32)); "c")]
 #[test_case("(foo)Tj" => Operation::ShowText(TextString::Text(LiteralString::new(b"(foo)"))); "Tj")]
 #[test_case("[(foo) 1]TJ" => Operation::ShowTexts(vec![TextStringOrNumber::TextString(TextString::Text(LiteralString::new(b"(foo)"))), TextStringOrNumber::Number(1f32)]); "show texts")]
-#[test_case("/tag /name DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict("tag".into()), NameOrDict::Name("name".into())); "DP with name")]
+#[test_case("/tag /name DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict("tag".into()), NameOrDict::Name(name!("name"))); "DP with name")]
 #[test_case("/tag<<>>DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict("tag".into()), NameOrDict::Dict(Dictionary::new())); "DP with dict")]
 fn test_parse_operation(s: &str) -> Operation {
     let (_, mut result) = parse_operations(s.as_bytes()).unwrap();
@@ -114,7 +114,7 @@ fn test_arr_convert_from_object(v: Vec<Object>) -> Vec<f32> {
 }
 
 #[test_case(vec![1.into()] => ColorArgsOrName::Color(ColorArgs(vec![1.0])); "Color")]
-#[test_case(vec!["/name".into()] => ColorArgsOrName::Name("name".to_owned()); "name")]
+#[test_case(vec!["/name".into()] => ColorArgsOrName::Name(name!("name")); "name")]
 fn color_or_with_pattern_from_object(mut v: Vec<Object>) -> ColorArgsOrName {
     ColorArgsOrName::convert_from_object(&mut v).unwrap()
 }

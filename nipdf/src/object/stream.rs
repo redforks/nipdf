@@ -19,6 +19,8 @@ use jpeg_decoder::PixelFormat;
 use log::error;
 use nipdf_macro::pdf_object;
 use once_cell::unsync::Lazy;
+use prescript::Name;
+use prescript_macro::name;
 use smallvec::SmallVec;
 use std::{
     borrow::{Borrow, Cow},
@@ -26,17 +28,17 @@ use std::{
     iter::{once, repeat},
 };
 
-const KEY_FILTER: &str = "Filter";
-const KEY_FILTER_PARAMS: &str = "DecodeParms";
-const KEY_FFILTER: &str = "FFilter";
+const KEY_FILTER: Name = name!("Filter");
+const KEY_FILTER_PARAMS: Name = name!("DecodeParms");
+const KEY_FFILTER: Name = name!("FFilter");
 
-const FILTER_FLATE_DECODE: &str = "FlateDecode";
-const FILTER_LZW_DECODE: &str = "LZWDecode";
-const FILTER_CCITT_FAX: &str = "CCITTFaxDecode";
-const FILTER_DCT_DECODE: &str = "DCTDecode";
-const FILTER_ASCII85_DECODE: &str = "ASCII85Decode";
-const FILTER_RUN_LENGTH_DECODE: &str = "RunLengthDecode";
-const FILTER_JPX_DECODE: &str = "JPXDecode";
+const FILTER_FLATE_DECODE: Name = name!("FlateDecode");
+const FILTER_LZW_DECODE: Name = name!("LZWDecode");
+const FILTER_CCITT_FAX: Name = name!("CCITTFaxDecode");
+const FILTER_DCT_DECODE: Name = name!("DCTDecode");
+const FILTER_ASCII85_DECODE: Name = name!("ASCII85Decode");
+const FILTER_RUN_LENGTH_DECODE: Name = name!("RunLengthDecode");
+const FILTER_JPX_DECODE: Name = name!("JPXDecode");
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Stream<'a>(Dictionary<'a>, &'a [u8], ObjectId); // NOTE: buf end at the file end
@@ -44,7 +46,7 @@ pub struct Stream<'a>(Dictionary<'a>, &'a [u8], ObjectId); // NOTE: buf end at t
 /// error!() log if r is error, returns `Err<ObjectValueError::FilterDecodeError>`
 fn handle_filter_error<V, E: Display>(
     r: Result<V, E>,
-    filter_name: &str,
+    filter_name: &Name,
 ) -> Result<V, ObjectValueError> {
     r.map_err(|err| {
         error!("Failed to decode stream using {}: {}", filter_name, &err);
@@ -68,28 +70,34 @@ impl LZWDeflateDecodeParams {
         Ok(if let Some(r) = r {
             Self {
                 predictor: r
-                    .opt_resolve_container_value(d, "Predictor")?
+                    .opt_resolve_container_value(d, name!("Predictor"))?
                     .map_or(1, |o| o.as_int().unwrap()),
                 colors: r
-                    .opt_resolve_container_value(d, "Colors")?
+                    .opt_resolve_container_value(d, name!("Colors"))?
                     .map_or(1, |o| o.as_int().unwrap()),
                 bits_per_comonent: r
-                    .opt_resolve_container_value(d, "BitsPerComponent")?
+                    .opt_resolve_container_value(d, name!("BitsPerComponent"))?
                     .map_or(8, |o| o.as_int().unwrap()),
                 columns: r
-                    .opt_resolve_container_value(d, "Columns")?
+                    .opt_resolve_container_value(d, name!("Columns"))?
                     .map_or(1, |o| o.as_int().unwrap()),
                 early_change: r
-                    .opt_resolve_container_value(d, "EarlyChange")?
+                    .opt_resolve_container_value(d, name!("EarlyChange"))?
                     .map_or(1, |o| o.as_int().unwrap()),
             }
         } else {
             Self {
-                predictor: d.get("Predictor").map_or(1, |o| o.as_int().unwrap()),
-                colors: d.get("Colors").map_or(1, |o| o.as_int().unwrap()),
-                bits_per_comonent: d.get("BitsPerComponent").map_or(8, |o| o.as_int().unwrap()),
-                columns: d.get("Columns").map_or(1, |o| o.as_int().unwrap()),
-                early_change: d.get("EarlyChange").map_or(1, |o| o.as_int().unwrap()),
+                predictor: d
+                    .get(&name!("Predictor"))
+                    .map_or(1, |o| o.as_int().unwrap()),
+                colors: d.get(&name!("Colors")).map_or(1, |o| o.as_int().unwrap()),
+                bits_per_comonent: d
+                    .get(&name!("BitsPerComponent"))
+                    .map_or(8, |o| o.as_int().unwrap()),
+                columns: d.get(&name!("Columns")).map_or(1, |o| o.as_int().unwrap()),
+                early_change: d
+                    .get(&name!("EarlyChange"))
+                    .map_or(1, |o| o.as_int().unwrap()),
             }
         })
     }
@@ -242,7 +250,7 @@ fn decode_flate(buf: &[u8], params: LZWDeflateDecodeParams) -> Result<Vec<u8>, O
         decoder
             .read_to_end(&mut r)
             .or_else(|_| DeflateDecoder::new(buf).read_to_end(&mut r)),
-        FILTER_FLATE_DECODE,
+        &FILTER_FLATE_DECODE,
     )?;
 
     predictor_decode(r, &params)
@@ -260,7 +268,7 @@ fn decode_dct<'a>(
 
     use jpeg_decoder::Decoder;
     let mut decoder = Decoder::new(buf.as_ref());
-    let pixels = handle_filter_error(decoder.decode(), FILTER_DCT_DECODE)?;
+    let pixels = handle_filter_error(decoder.decode(), &FILTER_DCT_DECODE)?;
     let info = decoder.info().unwrap();
 
     match info.pixel_format {
@@ -295,8 +303,8 @@ fn decode_jpx<'a>(
     );
 
     use jpeg2k::Image;
-    let img = handle_filter_error(Image::from_bytes(buf.borrow()), FILTER_JPX_DECODE)?;
-    let img = handle_filter_error((&img).try_into(), FILTER_JPX_DECODE)?;
+    let img = handle_filter_error(Image::from_bytes(buf.borrow()), &FILTER_JPX_DECODE)?;
+    let img = handle_filter_error((&img).try_into(), &FILTER_JPX_DECODE)?;
     Ok(FilterDecodedData::Image(img))
 }
 
@@ -430,7 +438,7 @@ fn decode_ascii85(
 ) -> Result<Vec<u8>, ObjectValueError> {
     assert!(params.is_none());
     use crate::ascii85::decode;
-    handle_filter_error(decode(buf), FILTER_ASCII85_DECODE)
+    handle_filter_error(decode(buf), &FILTER_ASCII85_DECODE)
 }
 
 fn decode_run_length(buf: &[u8], params: Option<&Dictionary<'_>>) -> Vec<u8> {
@@ -453,7 +461,7 @@ fn decode_ccitt<'a: 'b, 'b>(
             Some(params.rows().unwrap() as usize),
             (&params).try_into().unwrap(),
         ),
-        FILTER_CCITT_FAX,
+        &FILTER_CCITT_FAX,
     )?;
     Ok(image)
 }
@@ -461,18 +469,18 @@ fn decode_ccitt<'a: 'b, 'b>(
 fn filter<'a: 'b, 'b>(
     buf: Cow<'a, [u8]>,
     resolver: Option<&ObjectResolver<'a>>,
-    filter_name: &str,
+    filter_name: &Name,
     params: Option<&'b Dictionary<'a>>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     let empty_dict = Lazy::new(Dictionary::new);
     match filter_name {
-        FILTER_FLATE_DECODE => decode_flate(
+        &FILTER_FLATE_DECODE => decode_flate(
             &buf,
             LZWDeflateDecodeParams::new(params.unwrap_or_else(|| &*empty_dict), resolver)?,
         )
         .map(FilterDecodedData::bytes),
-        FILTER_DCT_DECODE => decode_dct(buf, params),
-        FILTER_CCITT_FAX => decode_ccitt(
+        &FILTER_DCT_DECODE => decode_dct(buf, params),
+        &FILTER_CCITT_FAX => decode_ccitt(
             &buf,
             CCITTFaxDecodeParamsDict::new(
                 None,
@@ -481,10 +489,10 @@ fn filter<'a: 'b, 'b>(
             )?,
         )
         .map(FilterDecodedData::bytes),
-        FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(FilterDecodedData::bytes),
-        FILTER_RUN_LENGTH_DECODE => Ok(FilterDecodedData::bytes(decode_run_length(&buf, params))),
-        FILTER_JPX_DECODE => decode_jpx(buf, params),
-        FILTER_LZW_DECODE => decode_lzw(
+        &FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(FilterDecodedData::bytes),
+        &FILTER_RUN_LENGTH_DECODE => Ok(FilterDecodedData::bytes(decode_run_length(&buf, params))),
+        &FILTER_JPX_DECODE => decode_jpx(buf, params),
+        &FILTER_LZW_DECODE => decode_lzw(
             &buf,
             LZWDeflateDecodeParams::new(params.unwrap_or_else(|| &*empty_dict), resolver)?,
         )
@@ -557,7 +565,7 @@ impl<'a> Stream<'a> {
     /// Get stream un-decoded raw data.
     pub fn raw(&self, resolver: &ObjectResolver<'a>) -> Result<&'a [u8], ObjectValueError> {
         let len = resolver
-            .resolve_container_value(&self.0, "Length")?
+            .resolve_container_value(&self.0, name!("Length"))?
             .as_int()?;
         Ok(&self.1[0..len as usize])
     }
@@ -590,7 +598,7 @@ impl<'a> Stream<'a> {
     /// `ObjectResolver`
     pub fn decode_without_resolve_length(&self) -> Result<Cow<'a, [u8]>, ObjectValueError> {
         let mut decoded = FilterDecodedData::Bytes(
-            self.1[0..self.0.get("Length").unwrap().as_int().unwrap() as usize].into(),
+            self.1[0..self.0.get(&name!("Length")).unwrap().as_int().unwrap() as usize].into(),
         );
         for (filter_name, params) in self.iter_filter()? {
             decoded = filter(decoded.into_bytes()?, None, filter_name, params)?;
@@ -700,23 +708,23 @@ impl<'a> Stream<'a> {
 
     fn iter_filter(
         &self,
-    ) -> Result<impl Iterator<Item = (&str, Option<&Dictionary<'a>>)>, ObjectValueError> {
-        if self.0.contains_key(KEY_FFILTER) {
+    ) -> Result<impl Iterator<Item = (&Name, Option<&Dictionary<'a>>)>, ObjectValueError> {
+        if self.0.contains_key(&KEY_FFILTER) {
             return Err(ObjectValueError::ExternalStreamNotSupported);
         }
 
-        let filters = self.0.get(KEY_FILTER).map_or_else(
+        let filters = self.0.get(&KEY_FILTER).map_or_else(
             || Ok(vec![]),
             |v| match v {
                 Object::Array(vals) => vals
                     .iter()
                     .map(|v| v.as_name().map_err(|_| ObjectValueError::UnexpectedType))
                     .collect(),
-                Object::Name(n) => Ok(vec![n.as_ref()]),
+                Object::Name(n) => Ok(vec![n]),
                 _ => Err(ObjectValueError::UnexpectedType),
             },
         )?;
-        let params = self.0.get(KEY_FILTER_PARAMS).map_or_else(
+        let params = self.0.get(&KEY_FILTER_PARAMS).map_or_else(
             || Ok(vec![]),
             |v| match v {
                 Object::Null => Ok(vec![]),

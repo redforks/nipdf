@@ -1,5 +1,7 @@
 use super::*;
 use crate::file::{ObjectResolver, XRefTable};
+use prescript::name;
+use prescript_macro::name;
 use static_assertions::assert_impl_all;
 use test_case::test_case;
 
@@ -36,15 +38,15 @@ fn hex_string_decoded(exp: impl AsRef<[u8]>, buf: impl AsRef<[u8]>) {
 #[test_case(Err(ObjectValueError::UnexpectedType), "b"; "id exist, but not int")]
 fn dict_get_int(exp: Result<i32, ObjectValueError>, id: &str) {
     let mut d = Dictionary::default();
-    d.set("a", 1i32);
-    d.set("b", "(2)");
+    d.set(name!("a"), 1i32);
+    d.set(name!("b"), "(2)");
 
-    assert_eq!(exp, d.get_int(id, 10));
+    assert_eq!(exp, d.get_int(name(id), 10));
 }
 
 #[test_case(Object::LiteralString(LiteralString::new(b"(foo)")), "(foo)"; "literal string")]
 #[test_case(Object::HexString(HexString::new(b"<901FA3>")), "<901FA3>"; "hex string")]
-#[test_case(Object::Name("foo".into()), "/foo"; "name")]
+#[test_case(Object::Name(name!("foo")), "/foo"; "name")]
 fn buf_or_str_to_object<'a>(exp: Object<'a>, s: &'a str) {
     assert_eq!(exp, Object::from(s.as_bytes()));
     assert_eq!(exp, Object::from(s));
@@ -53,68 +55,80 @@ fn buf_or_str_to_object<'a>(exp: Object<'a>, s: &'a str) {
 #[test]
 fn dict_get_bool() {
     let mut d = Dictionary::default();
-    d.set("a", true);
-    d.set("b", true);
-    d.set("c", 1i32);
+    d.set(name!("a"), true);
+    d.set(name!("b"), true);
+    d.set(name!("c"), 1i32);
 
-    assert_eq!(Ok(true), d.get_bool("a", false));
-    assert_eq!(Ok(true), d.get_bool("b", true));
+    assert_eq!(Ok(true), d.get_bool(name!("a"), false));
+    assert_eq!(Ok(true), d.get_bool(name!("b"), true));
     assert_eq!(
         Err(ObjectValueError::UnexpectedType),
-        d.get_bool("c", false)
+        d.get_bool(name!("c"), false)
     );
-    assert_eq!(Ok(false), d.get_bool("d", false));
+    assert_eq!(Ok(false), d.get_bool(name!("d"), false));
 }
 
 #[test]
 fn dict_get_name_or() {
     let mut d = Dictionary::default();
-    d.set("a", "/foo");
-    d.set("b", "/bar");
-    d.set("c", 1i32);
+    d.set(name!("a"), "/foo");
+    d.set(name!("b"), "/bar");
+    d.set(name!("c"), 1i32);
 
-    assert_eq!(Ok("foo"), d.get_name_or("a", "default"));
-    assert_eq!(Ok("bar"), d.get_name_or("b", "default"));
+    assert_eq!(
+        Ok(&name!("foo")),
+        d.get_name_or(name!("a"), &name!("default"))
+    );
+    assert_eq!(
+        Ok(&name!("bar")),
+        d.get_name_or(name!("b"), &name!("default"))
+    );
     assert_eq!(
         Err(ObjectValueError::UnexpectedType),
-        d.get_name_or("c", "default")
+        d.get_name_or(name!("c"), &name!("default"))
     );
-    assert_eq!(Ok("default"), d.get_name_or("d", "default"));
+    assert_eq!(
+        Ok(&name!("default")),
+        d.get_name_or(name!("d"), &name!("default"))
+    );
 }
 
 #[test]
 fn dict_get_name() {
     let mut d = Dictionary::default();
-    d.set("a", "/foo");
-    d.set("b", "/bar");
-    d.set("c", 1i32);
+    d.set(name!("a"), "/foo");
+    d.set(name!("b"), "/bar");
+    d.set(name!("c"), 1i32);
 
-    assert_eq!(Ok(Some("foo")), d.get_name("a"));
-    assert_eq!(Ok(Some("bar")), d.get_name("b"));
-    assert_eq!(Err(ObjectValueError::UnexpectedType), d.get_name("c"));
-    assert_eq!(Ok(None), d.get_name("d"));
+    assert_eq!(Ok(Some(&name!("foo"))), d.get_name(name!("a")));
+    assert_eq!(Ok(Some(&name!("bar"))), d.get_name(name!("b")));
+    assert_eq!(
+        Err(ObjectValueError::UnexpectedType),
+        d.get_name(name!("c"))
+    );
+    assert_eq!(Ok(None), d.get_name(name!("d")));
 }
 
 #[test]
 fn equal_schema_type_validator() {
-    let checker = EqualTypeValueChecker::new("Page");
+    let checker = EqualTypeValueChecker::new(name!("Page"));
     assert!(!checker.check(None));
-    assert!(!checker.check(Some("blah")));
-    assert!(checker.check(Some("Page")));
+    assert!(!checker.check(Some(&name!("blah"))));
+    assert!(checker.check(Some(&name!("Page"))));
 }
 
 #[test]
 fn value_type_validator() {
     let validator = ValueTypeValidator::new(
-        NameTypeValueGetter::new("Type"),
-        EqualTypeValueChecker::new("Page") as EqualTypeValueChecker<&str>,
+        NameTypeValueGetter::new(name!("Type")),
+        EqualTypeValueChecker::new(name!("Page")) as EqualTypeValueChecker<Name>,
     );
     assert_impl_all!(
-        ValueTypeValidator<NameTypeValueGetter, EqualTypeValueChecker<&str>>: TypeValidator
+        ValueTypeValidator<NameTypeValueGetter, EqualTypeValueChecker<Name>>: TypeValidator
     );
 
     let mut d = Dictionary::default();
-    d.set("a", "/foo");
+    d.set(name!("a"), "/foo");
 
     assert_eq!(
         Err(ObjectValueError::DictSchemaUnExpectedType(
@@ -126,24 +140,24 @@ fn value_type_validator() {
 
 #[test]
 fn option_value_type_validator() {
-    let checker = EqualTypeValueChecker::new("Page").option();
-    assert_impl_all!(OptionTypeValueChecker<EqualTypeValueChecker<&str>>: TypeValueCheck<str>);
+    let checker = EqualTypeValueChecker::new(name!("Page")).option();
+    assert_impl_all!(OptionTypeValueChecker<EqualTypeValueChecker<Name>>: TypeValueCheck<Name>);
 
     assert!(checker.check(None));
-    assert!(!checker.check(Some("blah")));
-    assert!(checker.check(Some("Page")));
+    assert!(!checker.check(Some(&name!("blah"))));
+    assert!(checker.check(Some(&name!("Page"))));
 }
 
 #[test]
 fn one_of_type_value_checker() {
-    let checker = OneOfTypeValueChecker::new(vec!["Page", "Pages"]);
-    let schema_type = <OneOfTypeValueChecker<&str> as TypeValueCheck<str>>::schema_type(&checker);
+    let checker = OneOfTypeValueChecker::new(vec![name!("Page"), name!("Pages")]);
+    let schema_type = <OneOfTypeValueChecker<Name> as TypeValueCheck<Name>>::schema_type(&checker);
     assert_eq!("Page|Pages", &schema_type);
 
-    assert!(!checker.check(None::<&str>));
-    assert!(!checker.check(Some(&"blah")));
-    assert!(checker.check(Some(&"Page")));
-    assert!(checker.check(Some(&"Pages")));
+    assert!(!checker.check(None::<&Name>));
+    assert!(!checker.check(Some(&name!("blah"))));
+    assert!(checker.check(Some(&name!("Page"))));
+    assert!(checker.check(Some(&name!("Pages"))));
 }
 
 #[test_case(None => Vec::<u32>::new())]
@@ -153,12 +167,12 @@ fn schema_ref_id_arr(ids: Option<&[u32]>) -> Vec<u32> {
     let mut d = Dictionary::new();
     if let Some(ids) = ids {
         let ids: Array = ids.iter().map(|id| Object::new_ref(*id)).collect();
-        d.insert("ids".into(), ids.into());
+        d.insert(name!("ids"), ids.into());
     }
     let xref = XRefTable::empty();
     let resolver = ObjectResolver::empty(&xref);
     let d = SchemaDict::new(&d, &resolver, ()).unwrap();
-    d.ref_id_arr("ids")
+    d.ref_id_arr(name!("ids"))
         .unwrap()
         .into_iter()
         .map(|id| id.get())

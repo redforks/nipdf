@@ -1,7 +1,7 @@
 use super::{ws_terminated, FileError, ParseError, ParseResult};
 use crate::{
     function::{Domain, Domains},
-    object::{Dictionary, Entry, Frame, FrameSet, Name, ObjectValueError, XRefSection},
+    object::{Dictionary, Entry, Frame, FrameSet, ObjectValueError, XRefSection},
     parser::{parse_dict, parse_indirect_stream},
 };
 use log::{error, info};
@@ -17,6 +17,8 @@ use nom::{
     sequence::{preceded, separated_pair, tuple},
     InputIter, InputLength, InputTake, Parser, Slice,
 };
+use prescript::Name;
+use prescript_macro::name;
 use std::{fmt::Display, num::NonZeroU32, ops::RangeFrom, str::from_utf8};
 
 pub fn parse_header(buf: &[u8]) -> ParseResult<&str> {
@@ -91,16 +93,18 @@ struct CrossReferenceStreamDict {
 impl CrossReferenceStreamDict {
     pub fn new(d: &Dictionary) -> Result<Self, ObjectValueError> {
         let size = d
-            .get("Size")
+            .get(&name!("Size"))
             .ok_or(ObjectValueError::DictKeyNotFound)?
             .as_int()? as u32;
-        let index = d.get("Index").map(|o| Domains::<u32>::try_from(o).unwrap());
+        let index = d
+            .get(&name!("Index"))
+            .map(|o| Domains::<u32>::try_from(o).unwrap());
         let prev = d
-            .get("Prev")
+            .get(&name!("Prev"))
             .map(|o| o.as_int().map(|v| v as u32))
             .transpose()?;
         let w = d
-            .get("W")
+            .get(&name!("W"))
             .ok_or(ObjectValueError::DictKeyNotFound)?
             .as_arr()?
             .iter()
@@ -241,7 +245,7 @@ pub fn parse_frame_set(input: &[u8]) -> ParseResult<FrameSet> {
     fn get_prev(frame: &Frame) -> Option<i32> {
         frame
             .trailer
-            .get(&Name::borrowed("Prev"))
+            .get(&name!("Prev"))
             .map(|o| o.as_int().unwrap())
     }
 

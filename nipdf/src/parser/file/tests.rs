@@ -91,13 +91,13 @@ fn read_xref_stream() {
 
     // assert object in file
     assert_eq!(
-        "Catalog",
+        &name!("Catalog"),
         resolver
             .resolve(NonZeroU32::new(1u32).unwrap())
             .unwrap()
             .as_dict()
             .unwrap()
-            .get("Type")
+            .get(&name!("Type"))
             .unwrap()
             .as_name()
             .unwrap()
@@ -111,7 +111,7 @@ fn read_xref_stream() {
             .unwrap()
             .as_dict()
             .unwrap()
-            .get("Count")
+            .get(&name!("Count"))
             .unwrap()
             .as_int()
             .unwrap()

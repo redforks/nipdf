@@ -18,10 +18,9 @@ use log::error;
 use nipdf_macro::pdf_object;
 use nom::Finish;
 use once_cell::unsync::OnceCell;
-use std::{
-    iter::repeat_with,
-    num::NonZeroU32,
-};
+use prescript::Name;
+use prescript_macro::name;
+use std::{iter::repeat_with, num::NonZeroU32};
 
 mod page;
 pub use page::*;
@@ -29,7 +28,6 @@ pub use page::*;
 pub(crate) mod encrypt;
 use self::encrypt::decrypt_key;
 pub use encrypt::EncryptDict;
-
 
 #[derive(Debug, Copy, Clone)]
 pub enum ObjectPos {
@@ -78,9 +76,12 @@ fn parse_object_stream(n: usize, buf: &[u8]) -> ParseResult<ObjectStream> {
 impl ObjectStream {
     pub fn new(stream: Stream) -> Result<Self, ObjectValueError> {
         let d = stream.as_dict();
-        assert_eq!("ObjStm", d.get_name("Type")?.unwrap());
-        let n = d.get_int("N", 0)? as usize;
-        assert!(!d.contains_key("Extends"), "Extends is not supported");
+        assert_eq!(&name!("ObjStm"), d.get_name(name!("Type"))?.unwrap());
+        let n = d.get_int(name!("N"), 0)? as usize;
+        assert!(
+            !d.contains_key(&name!("Extends")),
+            "Extends is not supported"
+        );
         let buf = stream.decode_without_resolve_length()?;
         parse_object_stream(n, buf.as_ref())
             .map_err(|e| ObjectValueError::ParseError(e.to_string()))
@@ -273,21 +274,19 @@ fn decrypt_string<'a>(key: &[u8], id: ObjectId, mut o: Object<'a>) -> Object<'a>
 }
 
 pub trait DataContainer<'a> {
-    fn get_value(&self, key: &str) -> Option<&Object<'a>>;
+    fn get_value(&self, key: Name) -> Option<&Object<'a>>;
 }
 
 impl<'a> DataContainer<'a> for Dictionary<'a> {
-    fn get_value(&self, key: &str) -> Option<&Object<'a>> {
-        debug_assert!(!key.starts_with('/'));
-        self.get(key)
+    fn get_value(&self, key: Name) -> Option<&Object<'a>> {
+        self.get(&key)
     }
 }
 
 /// Get value from first dictionary that contains `key`.
 impl<'a> DataContainer<'a> for Vec<&Dictionary<'a>> {
-    fn get_value(&self, key: &str) -> Option<&Object<'a>> {
-        debug_assert!(!key.starts_with('/'));
-        self.iter().find_map(|d| d.get(key))
+    fn get_value(&self, key: Name) -> Option<&Object<'a>> {
+        self.iter().find_map(|d| d.get(&key))
     }
 }
 
@@ -370,7 +369,7 @@ impl<'a> ObjectResolver<'a> {
     pub fn opt_resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
         &'b self,
         c: &'c C,
-        id: &str,
+        id: Name,
     ) -> Result<Option<&'c Object<'a>>, ObjectValueError> {
         Self::not_found_error_to_opt(self._resolve_container_value(c, id).map(|(_, o)| o))
     }
@@ -380,7 +379,7 @@ impl<'a> ObjectResolver<'a> {
     pub fn resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
         &'b self,
         c: &'c C,
-        id: &str,
+        id: Name,
     ) -> Result<&'c Object<'a>, ObjectValueError> {
         self.resolve_required_value(c, id).map(|(_, o)| o)
     }
@@ -389,9 +388,9 @@ impl<'a> ObjectResolver<'a> {
     fn resolve_required_value<'b: 'c, 'c, C: DataContainer<'a>>(
         &'b self,
         c: &'c C,
-        id: &str,
+        id: Name,
     ) -> Result<(Option<NonZeroU32>, &'c Object<'a>), ObjectValueError> {
-        self._resolve_container_value(c, id).map_err(|e| {
+        self._resolve_container_value(c, id.clone()).map_err(|e| {
             error!("{}: {}", e, id);
             e
         })
@@ -400,7 +399,7 @@ impl<'a> ObjectResolver<'a> {
     fn _resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
         &'b self,
         c: &'c C,
-        id: &str,
+        id: Name,
     ) -> Result<(Option<NonZeroU32>, &'c Object<'a>), ObjectValueError> {
         let obj = c.get_value(id).ok_or(ObjectValueError::DictKeyNotFound)?;
 
@@ -451,7 +450,7 @@ impl<'a> Resolver<'a> for ObjectResolver<'a> {
     fn do_resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
         &'b self,
         c: &'c C,
-        id: &str,
+        id: Name,
     ) -> Result<(Option<NonZeroU32>, &'c Object<'a>), ObjectValueError> {
         self._resolve_container_value(c, id)
     }
@@ -586,12 +585,12 @@ impl File {
         let encrypt_key = open_encrypt(
             &buf,
             &xref,
-            trailers.iter().find(|d| d.contains_key("Encrypt")),
+            trailers.iter().find(|d| d.contains_key(&name!("Encrypt"))),
             owner_password,
             user_password,
         )?;
 
-        let root_id = trailers.iter().find_map(|t| t.get("Root")).unwrap();
+        let root_id = trailers.iter().find_map(|t| t.get(&name!("Root"))).unwrap();
         let root_id = root_id.as_ref().unwrap().id().id();
 
         Ok(Self {

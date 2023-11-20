@@ -1,6 +1,6 @@
 use super::{whitespace_or_comment, ws, ws_prefixed, ws_terminated, ParseError, ParseResult};
 use crate::object::{
-    Array, Dictionary, HexString, IndirectObject, LiteralString, Name, Object, ObjectId,
+    Array, Dictionary, HexString, IndirectObject, LiteralString, Object, ObjectId,
     ObjectValueError, Reference, Stream,
 };
 use either::Either;
@@ -17,6 +17,8 @@ use nom::{
     number::complete::float,
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
 };
+use prescript::Name;
+use prescript_macro::name;
 use std::{
     borrow::Cow,
     num::NonZeroU32,
@@ -137,7 +139,7 @@ fn parse_name(input: &[u8]) -> ParseResult<Name> {
     ))(input)?;
     let name = normalize_name(buf)
         .map_err(|e| nom::Err::Error(ParseError::from_external_error(input, ErrorKind::Fail, e)))
-        .map(Name)?;
+        .map(|s| prescript::name(&s))?;
     Ok((input, name))
 }
 
@@ -176,7 +178,7 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<Either<Object, (Dictiona
                 line_ending,
             ))(input)?;
             if begin_stream.is_some() {
-                if let Some(Object::Integer(l)) = d.get("Length") {
+                if let Some(Object::Integer(l)) = d.get(&name!("Length")) {
                     let (input, data) = take(*l as usize)(input)?;
                     let (input, _) = preceded(opt(line_ending_or_cr), tag(b"endstream"))(input)?;
                     Ok((input, Either::Right((d, data))))

@@ -58,12 +58,14 @@ fn object_resolver_resolve_container_value() {
     let resolver = ObjectResolver::empty(&xref);
 
     assert_eq!(
-        resolver.do_resolve_container_value(&dict, "a").unwrap(),
+        resolver
+            .do_resolve_container_value(&dict, name!("a"))
+            .unwrap(),
         (None, &Object::Integer(1))
     );
     assert_eq!(
         Err(ObjectValueError::DictKeyNotFound),
-        resolver.resolve_container_value(&dict, "b")
+        resolver.resolve_container_value(&dict, name!("b"))
     );
 }
 
@@ -84,7 +86,7 @@ endobj
         .as_dict()?;
     let d = SchemaDict::new(d, &resolver, ())?;
     assert!(
-        d.resolve_one_or_more_pdf_object::<FooDict>("foo")?
+        d.resolve_one_or_more_pdf_object::<FooDict>(name!("foo"))?
             .is_empty()
     );
 
@@ -100,7 +102,7 @@ endobj
         .resolve(NonZeroU32::new(1_u32).unwrap())?
         .as_dict()?;
     let d = SchemaDict::new(d, &resolver, ())?;
-    let list = d.resolve_one_or_more_pdf_object::<FooDict>("foo")?;
+    let list = d.resolve_one_or_more_pdf_object::<FooDict>(name!("foo"))?;
     assert_eq!(list.len(), 1);
     assert_eq!(Some(NonZeroU32::new(2).unwrap()), list[0].id());
 
@@ -116,7 +118,7 @@ endobj
         .resolve(NonZeroU32::new(1_u32).unwrap())?
         .as_dict()?;
     let d = SchemaDict::new(d, &resolver, ())?;
-    let list = d.resolve_one_or_more_pdf_object::<FooDict>("foo")?;
+    let list = d.resolve_one_or_more_pdf_object::<FooDict>(name!("foo"))?;
     assert_eq!(list.len(), 2);
     assert_eq!(None, list[0].id());
     assert_eq!(Some(NonZeroU32::new(3).unwrap()), list[1].id());

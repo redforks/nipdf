@@ -1,7 +1,9 @@
 //! object mod contains data structure map to low level pdf objects
 use ahash::{HashMap, HashMapExt};
+use anyhow::Context;
 use educe::Educe;
 use log::error;
+use prescript::{name, Name};
 use std::{
     borrow::{Borrow, Cow},
     fmt::{Debug, Display},
@@ -9,19 +11,19 @@ use std::{
     num::NonZeroU32,
     str::from_utf8,
 };
+
 mod indirect_object;
 pub use indirect_object::IndirectObject;
 mod stream;
 pub use stream::*;
 pub type Array<'a> = Vec<Object<'a>>;
-use anyhow::Context;
 
 #[derive(PartialEq, Debug, Clone, Default, Educe)]
 #[educe(Deref, DerefMut)]
-pub struct Dictionary<'a>(HashMap<Name<'a>, Object<'a>>);
+pub struct Dictionary<'a>(HashMap<Name, Object<'a>>);
 
-impl<'a> FromIterator<(Name<'a>, Object<'a>)> for Dictionary<'a> {
-    fn from_iter<T: IntoIterator<Item = (Name<'a>, Object<'a>)>>(iter: T) -> Self {
+impl<'a> FromIterator<(Name, Object<'a>)> for Dictionary<'a> {
+    fn from_iter<T: IntoIterator<Item = (Name, Object<'a>)>>(iter: T) -> Self {
         Self(iter.into_iter().collect())
     }
 }
@@ -31,30 +33,30 @@ impl<'a> Dictionary<'a> {
         Self(HashMap::default())
     }
 
-    pub fn get_opt_int_ref(&self, id: &str) -> Result<Option<&i32>, ObjectValueError> {
+    pub fn get_opt_int_ref(&self, id: Name) -> Result<Option<&i32>, ObjectValueError> {
         self.0
-            .get(id)
+            .get(&id)
             .map_or(Ok(None), |o| o.as_int_ref().map(Some))
     }
 
-    pub fn get_int(&self, id: &str, default: i32) -> Result<i32, ObjectValueError> {
-        self.0.get(id).map_or(Ok(default), |o| o.as_int())
+    pub fn get_int(&self, id: Name, default: i32) -> Result<i32, ObjectValueError> {
+        self.0.get(&id).map_or(Ok(default), |o| o.as_int())
     }
 
-    pub fn get_bool(&self, id: &str, default: bool) -> Result<bool, ObjectValueError> {
-        self.0.get(id).map_or(Ok(default), |o| o.as_bool())
+    pub fn get_bool(&self, id: Name, default: bool) -> Result<bool, ObjectValueError> {
+        self.0.get(&id).map_or(Ok(default), |o| o.as_bool())
     }
 
-    pub fn set(&mut self, id: impl Into<Name<'a>>, value: impl Into<Object<'a>>) {
-        self.0.insert(id.into(), value.into());
+    pub fn set(&mut self, id: Name, value: impl Into<Object<'a>>) {
+        self.0.insert(id, value.into());
     }
 
-    pub fn get_name(&self, id: &str) -> Result<Option<&str>, ObjectValueError> {
-        self.0.get(id).map_or(Ok(None), |o| o.as_name().map(Some))
+    pub fn get_name(&self, id: Name) -> Result<Option<&Name>, ObjectValueError> {
+        self.0.get(&id).map_or(Ok(None), |o| o.as_name().map(Some))
     }
 
-    pub fn get_name_or(&self, id: &str, default: &'static str) -> Result<&str, ObjectValueError> {
-        self.0.get(id).map_or(Ok(default), |o| o.as_name())
+    pub fn get_name_or(&self, id: Name, default: &'static Name) -> Result<&Name, ObjectValueError> {
+        self.0.get(&id).map_or(Ok(default), |o| o.as_name())
     }
 }
 
@@ -64,17 +66,17 @@ pub trait TypeValueGetter {
     /// Return None if type value is not exist
     fn get<'a>(&self, d: &'a Dictionary) -> Result<Option<&'a Self::Value>, ObjectValueError>;
     /// Type field name
-    fn field(&self) -> &'static str;
+    fn field(&self) -> &Name;
 }
 
 /// Implement `TypeValueGetter` returns i32 value
 #[derive(Debug, Clone)]
 pub struct IntTypeValueGetter {
-    field: &'static str,
+    field: Name,
 }
 
 impl IntTypeValueGetter {
-    pub fn new(field: &'static str) -> Self {
+    pub fn new(field: Name) -> Self {
         Self { field }
     }
 }
@@ -83,35 +85,35 @@ impl TypeValueGetter for IntTypeValueGetter {
     type Value = i32;
 
     fn get<'a>(&self, d: &'a Dictionary) -> Result<Option<&'a Self::Value>, ObjectValueError> {
-        d.get_opt_int_ref(self.field)
+        d.get_opt_int_ref(self.field.clone())
     }
 
-    fn field(&self) -> &'static str {
-        self.field
+    fn field(&self) -> &Name {
+        &self.field
     }
 }
 
 /// Implement `TypeValueGetter` returns str value
 #[derive(Debug, Clone)]
 pub struct NameTypeValueGetter {
-    field: &'static str,
+    field: Name,
 }
 
 impl NameTypeValueGetter {
-    pub fn new(field: &'static str) -> Self {
+    pub fn new(field: Name) -> Self {
         Self { field }
     }
 }
 
 impl TypeValueGetter for NameTypeValueGetter {
-    type Value = str;
+    type Value = Name;
 
     fn get<'a>(&self, d: &'a Dictionary) -> Result<Option<&'a Self::Value>, ObjectValueError> {
-        d.get_name(self.field)
+        d.get_name(self.field.clone())
     }
 
-    fn field(&self) -> &'static str {
-        self.field
+    fn field(&self) -> &Name {
+        &self.field
     }
 }
 
@@ -139,13 +141,13 @@ impl<R: Debug + Clone> EqualTypeValueChecker<R> {
     }
 }
 
-impl<R: Borrow<str> + Debug + Clone> TypeValueCheck<str> for EqualTypeValueChecker<R> {
+impl TypeValueCheck<Name> for EqualTypeValueChecker<Name> {
     fn schema_type(&self) -> Cow<str> {
-        Cow::Borrowed(self.value.borrow())
+        Cow::Borrowed(self.value.as_ref())
     }
 
-    fn check(&self, v: Option<&str>) -> bool {
-        v.map_or(false, |v| v == self.value.borrow())
+    fn check(&self, v: Option<&Name>) -> bool {
+        v.map_or(false, |v| v == &self.value)
     }
 }
 
@@ -307,7 +309,7 @@ pub trait Resolver<'a> {
     fn do_resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
         &'b self,
         c: &'c C,
-        id: &str,
+        id: Name,
     ) -> Result<(Option<NonZeroU32>, &'c Object<'a>), ObjectValueError>;
 }
 
@@ -326,7 +328,7 @@ impl<'a> Resolver<'a> for () {
     fn do_resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
         &'b self,
         c: &'c C,
-        id: &str,
+        id: Name,
     ) -> Result<(Option<NonZeroU32>, &'c Object<'a>), ObjectValueError> {
         c.get_value(id)
             .map(|o| {
@@ -397,7 +399,7 @@ impl<'a, 'b, T: TypeValidator, R> SchemaDict<'a, 'b, T, R> {
 impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
     fn _opt_resolve_container_value(
         &self,
-        id: &str,
+        id: Name,
     ) -> Result<Option<(Option<NonZeroU32>, &'b Object<'a>)>, ObjectValueError> {
         self.r
             .do_resolve_container_value(self.d, id)
@@ -410,7 +412,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
             })
     }
 
-    fn opt_resolve_value(&self, id: &str) -> Result<Option<&'b Object<'a>>, ObjectValueError> {
+    fn opt_resolve_value(&self, id: Name) -> Result<Option<&'b Object<'a>>, ObjectValueError> {
         self.r
             .do_resolve_container_value(self.d, id)
             .map(|(_, o)| o)
@@ -425,131 +427,133 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
 
     fn resolve_required_value(
         &self,
-        id: &str,
+        id: Name,
     ) -> Result<(Option<NonZeroU32>, &'b Object<'a>), ObjectValueError> {
-        self.r.do_resolve_container_value(self.d, id).map_err(|e| {
-            error!("{}: {}", e, id);
-            e
-        })
+        self.r
+            .do_resolve_container_value(self.d, id.clone())
+            .map_err(|e| {
+                error!("{}: {}", e, id);
+                e
+            })
     }
 
-    fn resolve_container_value(&self, id: &str) -> Result<&'b Object<'a>, ObjectValueError> {
+    fn resolve_container_value(&self, id: Name) -> Result<&'b Object<'a>, ObjectValueError> {
         self.resolve_required_value(id).map(|(_, o)| o)
     }
 
-    fn opt_get(&self, id: &'static str) -> Result<Option<&'b Object<'a>>, ObjectValueError> {
+    fn opt_get(&self, id: Name) -> Result<Option<&'b Object<'a>>, ObjectValueError> {
         self.opt_resolve_value(id)
     }
 
-    pub fn opt_name(&self, id: &'static str) -> Result<Option<&'b str>, ObjectValueError> {
+    pub fn opt_name(&self, id: Name) -> Result<Option<&Name>, ObjectValueError> {
         self.opt_get(id)?
             .map_or(Ok(None), |o| o.as_name().map(Some))
     }
 
-    pub fn required_name(&self, id: &'static str) -> Result<&'b str, ObjectValueError> {
-        self.opt_get(id)?
-            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
+    pub fn required_name(&self, id: Name) -> Result<&Name, ObjectValueError> {
+        self.opt_get(id.clone())?
+            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id.clone()))?
             .as_name()
     }
 
-    pub fn required_int(&self, id: &'static str) -> Result<i32, ObjectValueError> {
-        self.opt_get(id)?
-            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
+    pub fn required_int(&self, id: Name) -> Result<i32, ObjectValueError> {
+        self.opt_get(id.clone())?
+            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id.clone()))?
             .as_int()
     }
 
-    pub fn opt_int(&self, id: &'static str) -> Result<Option<i32>, ObjectValueError> {
+    pub fn opt_int(&self, id: Name) -> Result<Option<i32>, ObjectValueError> {
         self.opt_get(id)?.map_or(Ok(None), |o| o.as_int().map(Some))
     }
 
-    pub fn opt_bool(&self, id: &'static str) -> Result<Option<bool>, ObjectValueError> {
+    pub fn opt_bool(&self, id: Name) -> Result<Option<bool>, ObjectValueError> {
         self.opt_get(id)?
             .map_or(Ok(None), |o| o.as_bool().map(Some))
     }
 
-    pub fn required_bool(&self, id: &'static str) -> Result<bool, ObjectValueError> {
-        self.opt_get(id)?
-            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
+    pub fn required_bool(&self, id: Name) -> Result<bool, ObjectValueError> {
+        self.opt_get(id.clone())?
+            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id.clone()))?
             .as_bool()
     }
 
-    pub fn bool_or(&self, id: &'static str, default: bool) -> Result<bool, ObjectValueError> {
+    pub fn bool_or(&self, id: Name, default: bool) -> Result<bool, ObjectValueError> {
         self.opt_bool(id).map(|b| b.unwrap_or(default))
     }
 
-    pub fn opt_u16(&self, id: &'static str) -> Result<Option<u16>, ObjectValueError> {
+    pub fn opt_u16(&self, id: Name) -> Result<Option<u16>, ObjectValueError> {
         self.opt_int(id).map(|i| i.map(|i| i as u16))
     }
 
-    pub fn required_u16(&self, id: &'static str) -> Result<u16, ObjectValueError> {
+    pub fn required_u16(&self, id: Name) -> Result<u16, ObjectValueError> {
         self.required_int(id).map(|i| i as u16)
     }
 
-    pub fn opt_u32(&self, id: &'static str) -> Result<Option<u32>, ObjectValueError> {
+    pub fn opt_u32(&self, id: Name) -> Result<Option<u32>, ObjectValueError> {
         self.opt_int(id).map(|i| {
             // i32 as u32 as a no-op, so it is safe to use `as` operator.
             i.map(|i| i as u32)
         })
     }
 
-    pub fn required_u32(&self, id: &'static str) -> Result<u32, ObjectValueError> {
+    pub fn required_u32(&self, id: Name) -> Result<u32, ObjectValueError> {
         // i32 as u32 as a no-op, so it is safe to use `as` operator.
         self.required_int(id).map(|i| i as u32)
     }
 
-    pub fn u32_or(&self, id: &'static str, default: u32) -> Result<u32, ObjectValueError> {
+    pub fn u32_or(&self, id: Name, default: u32) -> Result<u32, ObjectValueError> {
         self.opt_u32(id).map(|i| i.unwrap_or(default))
     }
 
-    pub fn opt_u8(&self, id: &'static str) -> Result<Option<u8>, ObjectValueError> {
+    pub fn opt_u8(&self, id: Name) -> Result<Option<u8>, ObjectValueError> {
         self.opt_int(id).map(|i| i.map(|i| i as u8))
     }
 
-    pub fn required_u8(&self, id: &'static str) -> Result<u8, ObjectValueError> {
+    pub fn required_u8(&self, id: Name) -> Result<u8, ObjectValueError> {
         self.required_int(id).map(|i| i as u8)
     }
 
-    pub fn u8_or(&self, id: &'static str, default: u8) -> Result<u8, ObjectValueError> {
+    pub fn u8_or(&self, id: Name, default: u8) -> Result<u8, ObjectValueError> {
         self.opt_u8(id).map(|i| i.unwrap_or(default))
     }
 
-    pub fn opt_f32(&self, id: &'static str) -> Result<Option<f32>, ObjectValueError> {
+    pub fn opt_f32(&self, id: Name) -> Result<Option<f32>, ObjectValueError> {
         self.opt_get(id)?
             .map_or(Ok(None), |o| o.as_number().map(Some))
     }
 
-    pub fn required_f32(&self, id: &'static str) -> Result<f32, ObjectValueError> {
-        self.opt_get(id)?
+    pub fn required_f32(&self, id: Name) -> Result<f32, ObjectValueError> {
+        self.opt_get(id.clone())?
             .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_number()
     }
 
-    pub fn f32_or(&self, id: &'static str, default: f32) -> Result<f32, ObjectValueError> {
+    pub fn f32_or(&self, id: Name, default: f32) -> Result<f32, ObjectValueError> {
         self.opt_f32(id).map(|i| i.unwrap_or(default))
     }
 
-    pub fn opt_object(&self, id: &'static str) -> Result<Option<&'b Object<'a>>, ObjectValueError> {
+    pub fn opt_object(&self, id: Name) -> Result<Option<&'b Object<'a>>, ObjectValueError> {
         self.opt_get(id)
     }
 
-    pub fn required_object(&self, id: &'static str) -> Result<&'b Object<'a>, ObjectValueError> {
-        self.opt_object(id)?
+    pub fn required_object(&self, id: Name) -> Result<&'b Object<'a>, ObjectValueError> {
+        self.opt_object(id.clone())?
             .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))
     }
 
     /// Return empty vec if not exist, error if not array
-    pub fn u32_arr(&self, id: &'static str) -> Result<Vec<u32>, ObjectValueError> {
+    pub fn u32_arr(&self, id: Name) -> Result<Vec<u32>, ObjectValueError> {
         self.opt_arr_map(id, |o| o.as_int().map(|i| i as u32))
             .map(|o| o.unwrap_or_default())
     }
 
     /// Return empty vec if not exist, error if not array
-    pub fn f32_arr(&self, id: &'static str) -> Result<Vec<f32>, ObjectValueError> {
+    pub fn f32_arr(&self, id: Name) -> Result<Vec<f32>, ObjectValueError> {
         self.opt_arr_map(id, |o| o.as_number())
             .map(|o| o.unwrap_or_default())
     }
 
-    pub fn opt_f32_arr(&self, id: &'static str) -> Result<Option<Vec<f32>>, ObjectValueError> {
+    pub fn opt_f32_arr(&self, id: Name) -> Result<Option<Vec<f32>>, ObjectValueError> {
         self.opt_arr_map(id, |o| o.as_number())
             .map(|o| o.unwrap_or_default())
             .map(Some)
@@ -557,10 +561,10 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
 
     pub fn required_arr_map<V>(
         &self,
-        id: &'static str,
+        id: Name,
         f: impl Fn(&Object) -> Result<V, ObjectValueError>,
     ) -> Result<Vec<V>, ObjectValueError> {
-        self.opt_get(id)?
+        self.opt_get(id.clone())?
             .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_arr()?
             .iter()
@@ -570,7 +574,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
 
     pub fn opt_arr_map<V>(
         &self,
-        id: &'static str,
+        id: Name,
         f: impl Fn(&Object) -> Result<V, ObjectValueError>,
     ) -> Result<Option<Vec<V>>, ObjectValueError> {
         self.opt_get(id)?
@@ -579,13 +583,13 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
             .transpose()
     }
 
-    pub fn opt_arr(&self, id: &'static str) -> Result<Option<&'b Array<'a>>, ObjectValueError> {
+    pub fn opt_arr(&self, id: Name) -> Result<Option<&'b Array<'a>>, ObjectValueError> {
         self.opt_get(id)?.map_or(Ok(None), |o| o.as_arr().map(Some))
     }
 
     pub fn opt_single_or_arr_stream(
         &self,
-        id: &'static str,
+        id: Name,
     ) -> Result<Vec<&'b Stream<'a>>, ObjectValueError> {
         let resolver = self.resolver();
         match self.resolve_container_value(id)? {
@@ -597,58 +601,55 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
         }
     }
 
-    pub fn opt_dict(
-        &self,
-        id: &'static str,
-    ) -> Result<Option<&'b Dictionary<'a>>, ObjectValueError> {
+    pub fn opt_dict(&self, id: Name) -> Result<Option<&'b Dictionary<'a>>, ObjectValueError> {
         self.opt_get(id)?
             .map_or(Ok(None), |o| o.as_dict().map(Some))
     }
 
-    pub fn required_dict(&self, id: &'static str) -> Result<&'b Dictionary<'a>, ObjectValueError> {
-        self.opt_dict(id).and_then(|o| {
+    pub fn required_dict(&self, id: Name) -> Result<&'b Dictionary<'a>, ObjectValueError> {
+        self.opt_dict(id.clone()).and_then(|o| {
             o.ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))
         })
     }
 
-    pub fn required_ref(&self, id: &'static str) -> Result<NonZeroU32, ObjectValueError> {
+    pub fn required_ref(&self, id: Name) -> Result<NonZeroU32, ObjectValueError> {
         self.d
-            .get(id)
+            .get(&id.clone())
             .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_ref()
             .map(|r| r.id().id())
     }
 
-    pub fn opt_ref(&self, id: &'static str) -> Result<Option<NonZeroU32>, ObjectValueError> {
+    pub fn opt_ref(&self, id: Name) -> Result<Option<NonZeroU32>, ObjectValueError> {
         self.d
-            .get(id)
+            .get(&id)
             .map_or(Ok(None), |o| o.as_ref().map(|r| Some(r.id().id())))
     }
 
-    pub fn ref_id_arr(&self, id: &'static str) -> Result<Vec<NonZeroU32>, ObjectValueError> {
+    pub fn ref_id_arr(&self, id: Name) -> Result<Vec<NonZeroU32>, ObjectValueError> {
         self.opt_arr_map(id, |o| o.as_ref().map(|r| r.id().id()))
             .map(|o| o.unwrap_or_default())
     }
 
-    pub fn opt_stream(&self, id: &'static str) -> Result<Option<&'b Stream<'a>>, ObjectValueError> {
+    pub fn opt_stream(&self, id: Name) -> Result<Option<&'b Stream<'a>>, ObjectValueError> {
         self.opt_get(id)?
             .map_or(Ok(None), |o| o.as_stream().map(Some))
     }
 
-    pub fn opt_str(&self, id: &'static str) -> Result<Option<&str>, ObjectValueError> {
+    pub fn opt_str(&self, id: Name) -> Result<Option<&str>, ObjectValueError> {
         self.opt_get(id)?
             .map_or(Ok(None), |o| o.as_string().map(Some))
     }
 
-    pub fn required_str(&self, id: &'static str) -> Result<&str, ObjectValueError> {
-        self.opt_get(id)?
+    pub fn required_str(&self, id: Name) -> Result<&str, ObjectValueError> {
+        self.opt_get(id.clone())?
             .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_string()
     }
 
     pub fn opt_resolve_pdf_object<'s, O: PdfObject<'a, 'b, R>>(
         &self,
-        id: &str,
+        id: Name,
     ) -> Result<Option<O>, ObjectValueError> {
         if let Some((id, obj)) = self._opt_resolve_container_value(id)? {
             match obj {
@@ -664,7 +665,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
     /// Resolve pdf_object from container, if its end value is dictionary, return with one element
     /// vec. If its end value is array, return all elements in array.
     /// If value not exist, return empty vector.
-    pub fn resolve_one_or_more_pdf_object<O>(&self, id: &str) -> Result<Vec<O>, ObjectValueError>
+    pub fn resolve_one_or_more_pdf_object<O>(&self, id: Name) -> Result<Vec<O>, ObjectValueError>
     where
         O: PdfObject<'a, 'b, R>,
     {
@@ -694,7 +695,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
     /// Resolve root pdf_objects from data container `c` with key `k`, if value is reference,
     /// resolve it recursively. Return empty vector if object is not found.
     /// The raw value should be an array of references.
-    pub fn resolve_pdf_object_array<O>(&self, id: &str) -> Result<Vec<O>, ObjectValueError>
+    pub fn resolve_pdf_object_array<O>(&self, id: Name) -> Result<Vec<O>, ObjectValueError>
     where
         O: PdfObject<'a, 'b, R>,
     {
@@ -720,7 +721,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
     /// Resolve pdf object from data container `c` with key `k`, if value is reference,
     /// resolve it recursively. Return empty Map if object is not found.
     /// The raw value should be a dictionary, that key is Name and value is Dictionary.
-    pub fn resolve_pdf_object_map<O>(&self, id: &str) -> anyhow::Result<HashMap<String, O>>
+    pub fn resolve_pdf_object_map<O>(&self, id: Name) -> anyhow::Result<HashMap<Name, O>>
     where
         O: PdfObject<'a, 'b, R>,
     {
@@ -731,10 +732,8 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
                 let dict = dict.as_dict().context("Value not dict")?;
                 let mut res = HashMap::with_capacity(dict.len());
                 for k in dict.keys() {
-                    let obj: O = self
-                        ._resolve_pdf_object(dict, k.as_ref())
-                        .with_context(|| format!("Key: {}", k.as_ref()))?;
-                    res.insert(k.as_ref().to_owned(), obj);
+                    let obj: O = self._resolve_pdf_object(dict, k.clone())?;
+                    res.insert(k.clone(), obj);
                 }
                 Ok(res)
             },
@@ -744,7 +743,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
     fn _resolve_pdf_object<O: PdfObject<'a, 'b, R>>(
         &self,
         d: &'b Dictionary<'a>,
-        id: &str,
+        id: Name,
     ) -> Result<O, ObjectValueError> {
         let (id, obj) = self.r.do_resolve_container_value(d, id)?;
         let obj = match obj {
@@ -757,13 +756,13 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'a, 'b, T, R> {
 
     pub fn resolve_pdf_object<O: PdfObject<'a, 'b, R>>(
         &self,
-        id: &str,
+        id: Name,
     ) -> Result<O, ObjectValueError> {
         self._resolve_pdf_object(self.d, id)
     }
 
-    pub fn as_byte_string(&self, id: &'static str) -> Result<&[u8], ObjectValueError> {
-        self.opt_get(id)?
+    pub fn as_byte_string(&self, id: Name) -> Result<&[u8], ObjectValueError> {
+        self.opt_get(id.clone())?
             .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
             .as_byte_string()
     }
@@ -833,7 +832,7 @@ pub enum ObjectValueError {
     #[error("Unexpected dict schema type, schema: {0}")]
     DictSchemaUnExpectedType(String),
     #[error("Dict schema error, schema: {0}, key: {1}")]
-    DictSchemaError(String, &'static str),
+    DictSchemaError(String, Name),
     #[error("Graphics operation schema error")]
     GraphicsOperationSchemaError,
     #[error("Dict key not found")]
@@ -852,9 +851,9 @@ pub enum Object<'a> {
     Bool(bool),
     Integer(i32),
     Number(f32),
-    LiteralString(LiteralString), // including the parentheses
+    LiteralString(LiteralString),
     HexString(HexString),
-    Name(Name<'a>), // with the leading slash
+    Name(Name),
     Dictionary(Dictionary<'a>),
     Array(Array<'a>),
     Stream(Stream<'a>),
@@ -899,9 +898,9 @@ impl<'a> Object<'a> {
 
     /// If value is a Name, return its normalized name, return error if
     /// value is not Name..
-    pub fn as_name(&self) -> Result<&str, ObjectValueError> {
+    pub fn as_name(&self) -> Result<&Name, ObjectValueError> {
         match self {
-            Object::Name(n) => Ok(n.as_ref()),
+            Object::Name(n) => Ok(n),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
@@ -1089,8 +1088,8 @@ impl<'a> From<Dictionary<'a>> for Object<'a> {
     }
 }
 
-impl<'a> From<Name<'a>> for Object<'a> {
-    fn from(value: Name<'a>) -> Self {
+impl<'a> From<Name> for Object<'a> {
+    fn from(value: Name) -> Self {
         Self::Name(value)
     }
 }
@@ -1105,7 +1104,7 @@ impl<'a> From<&'a [u8]> for Object<'a> {
         match value[0] {
             b'(' => Self::LiteralString(LiteralString::new(value)),
             b'<' => Self::HexString(HexString::new(value)),
-            b'/' => Self::Name(from_utf8(&value[1..]).unwrap().into()),
+            b'/' => Self::Name(name(from_utf8(&value[1..]).unwrap())),
             _ => panic!("invalid object"),
         }
     }
@@ -1318,40 +1317,6 @@ impl HexString {
 impl<'a> From<HexString> for Object<'a> {
     fn from(value: HexString) -> Self {
         Self::HexString(value)
-    }
-}
-
-/// A PDF name object, preceding '/' not included.
-#[derive(Eq, PartialEq, Hash, Debug, Clone, PartialOrd, Ord)]
-pub struct Name<'a>(pub Cow<'a, str>);
-
-impl<'a> Borrow<str> for Name<'a> {
-    fn borrow(&self) -> &str {
-        self.0.borrow()
-    }
-}
-
-impl<'a> From<&'a str> for Name<'a> {
-    fn from(value: &'a str) -> Self {
-        Self(Cow::Borrowed(value))
-    }
-}
-
-impl<'a> Name<'a> {
-    pub fn borrowed(v: &'a str) -> Self {
-        debug_assert!(!v.starts_with('/'));
-        Self(Cow::Borrowed(v))
-    }
-
-    pub fn owned(v: String) -> Self {
-        debug_assert!(!v.starts_with('/'));
-        Self(Cow::Owned(v))
-    }
-}
-
-impl<'a> AsRef<str> for Name<'a> {
-    fn as_ref(&self) -> &str {
-        self.0.as_ref()
     }
 }
 

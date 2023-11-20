@@ -24,6 +24,7 @@ use either::Either;
 use image::RgbaImage;
 use log::{debug, info};
 use nom::{combinator::eof, sequence::terminated};
+use prescript::{name, Name};
 use std::{
     borrow::Cow,
     cell::{Ref, RefCell},
@@ -625,7 +626,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             Operation::SetFlatness(flatness) => self.current_mut().set_flatness(flatness),
             Operation::SetGraphicsStateParameters(nm) => {
                 let res = self.resources.ext_g_state().unwrap();
-                let res = res.get(&nm.0).expect("ExtGState not found");
+                let res = res.get(&name(&nm.0)).expect("ExtGState not found");
                 self.current_mut().set_graphics_state(res);
             }
 
@@ -997,9 +998,9 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
     }
 
     /// Paints the specified XObject. Only XObjectType::Image supported
-    fn paint_x_object(&mut self, name: &NameOfDict) -> AnyResult<()> {
+    fn paint_x_object(&mut self, nm: &NameOfDict) -> AnyResult<()> {
         let x_objects = self.resources.x_object()?;
-        let x_object = &x_objects[&name.0];
+        let x_object = &x_objects[&name(&nm.0)];
 
         match x_object.subtype()? {
             XObjectType::Image => self.paint_image_x_object(x_object),
@@ -1121,9 +1122,9 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         Ok(())
     }
 
-    fn paint_shading(&mut self, name: NameOfDict) -> AnyResult<()> {
+    fn paint_shading(&mut self, nm: NameOfDict) -> AnyResult<()> {
         let shading = self.resources.shading()?;
-        let shading = &shading[&name.0];
+        let shading = &shading[&name(&nm.0)];
         match build_shading(shading, self.resources)? {
             Some(Shading::Radial(radial)) => self.paint_radial(&radial),
             Some(Shading::Axial(axial)) => self.paint_axial(axial),
@@ -1153,7 +1154,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         match color_or_name {
             ColorArgsOrName::Name(name) => {
                 let pattern = self.resources.pattern()?;
-                let pattern = &pattern[name.as_str()];
+                let pattern = &pattern[name];
                 match pattern.pattern_type()? {
                     PatternType::Tiling => self.set_tiling_pattern(pattern.tiling_pattern()?),
                     PatternType::Shading => self.set_shading_pattern(pattern.shading_pattern()?),
@@ -1384,7 +1385,7 @@ struct TextObject {
     matrix: TextToUserSpace,
     line_matrix: TextToUserSpace,
     font_size: f32,
-    font_name: Option<String>,
+    font_name: Option<Name>,
     text_clipping_path: Path,
 
     char_spacing: f32,              // Tc
@@ -1420,9 +1421,9 @@ impl TextObject {
         self.line_matrix = TextToUserSpace::identity();
     }
 
-    fn set_font(&mut self, name: &NameOfDict, size: f32) {
+    fn set_font(&mut self, nm: &NameOfDict, size: f32) {
         self.font_size = size;
-        self.font_name = Some(name.0.to_owned());
+        self.font_name = Some(name(&nm.0));
     }
 
     fn move_text_position(&mut self, p: Point) {

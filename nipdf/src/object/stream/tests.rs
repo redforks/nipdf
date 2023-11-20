@@ -1,74 +1,75 @@
 use super::*;
 use crate::{file::decode_stream, function::Domain, object::Name};
+use prescript::name;
 use test_case::test_case;
 
 #[test_case([] => Ok(vec![]); "empty")]
 #[test_case(
-    [(KEY_FILTER, 1.into())] => matches Err(ObjectValueError::UnexpectedType);
+    [(&KEY_FILTER, 1.into())] => matches Err(ObjectValueError::UnexpectedType);
     "incorrect filter type"
 )]
 #[test_case(
-    [(KEY_FILTER, Object::Array(vec![1.into()]))] => matches Err(_);
+    [(&KEY_FILTER, Object::Array(vec![1.into()]))] => matches Err(_);
     "filter is array but item not name"
 )]
 #[test_case(
-    [(KEY_FILTER, Name::borrowed(FILTER_FLATE_DECODE).into())] =>
-    Ok(vec![(FILTER_FLATE_DECODE.to_owned(), None)]);
+    [(&KEY_FILTER, FILTER_FLATE_DECODE.clone().into())] =>
+    Ok(vec![(FILTER_FLATE_DECODE.clone(), None)]);
      "one filter"
 )]
 #[test_case(
-    [(KEY_FILTER, Name::borrowed(FILTER_FLATE_DECODE).into()),
-     (KEY_FILTER_PARAMS, Object::Null)] =>
-    Ok(vec![(FILTER_FLATE_DECODE.to_owned(), None)]);
+    [(&KEY_FILTER, FILTER_FLATE_DECODE.clone().into()),
+     (&KEY_FILTER_PARAMS, Object::Null)] =>
+    Ok(vec![(FILTER_FLATE_DECODE.clone(), None)]);
      "one filter with null params"
 )]
 #[test_case(
-    [(KEY_FILTER, Name::borrowed(FILTER_FLATE_DECODE).into()),
-     (KEY_FILTER_PARAMS, Object::Array(vec![Object::Null]))] =>
-    Ok(vec![(FILTER_FLATE_DECODE.to_owned(), None)]);
+    [(&KEY_FILTER, FILTER_FLATE_DECODE.clone().into()),
+     (&KEY_FILTER_PARAMS, Object::Array(vec![Object::Null]))] =>
+    Ok(vec![(FILTER_FLATE_DECODE.clone(), None)]);
      "one filter with null params in array"
 )]
 #[test_case(
-    [(KEY_FILTER, Name::borrowed(FILTER_FLATE_DECODE).into()),
-     (KEY_FILTER_PARAMS, Object::Dictionary(Dictionary::default()))] =>
-    Ok(vec![(FILTER_FLATE_DECODE.to_owned(), Some(Dictionary::default()))]);
+    [(&KEY_FILTER, FILTER_FLATE_DECODE.clone().into()),
+     (&KEY_FILTER_PARAMS, Object::Dictionary(Dictionary::default()))] =>
+    Ok(vec![(FILTER_FLATE_DECODE.clone(), Some(Dictionary::default()))]);
      "one filter with dictionary params"
 )]
 #[test_case(
-    [(KEY_FILTER, vec![
-        Name::borrowed(FILTER_FLATE_DECODE).into(),
-        Name::borrowed(FILTER_DCT_DECODE).into(),
+    [(&KEY_FILTER, vec![
+        FILTER_FLATE_DECODE.clone().into(),
+        FILTER_DCT_DECODE.clone().into(),
     ].into())] =>
-    Ok(vec![(FILTER_FLATE_DECODE.to_owned(), None),
-            (FILTER_DCT_DECODE.to_owned(), None)]);
+    Ok(vec![(FILTER_FLATE_DECODE.clone(), None),
+            (FILTER_DCT_DECODE.clone(), None)]);
      "two filters no params"
 )]
 #[test_case(
-    [(KEY_FILTER, vec![
-        Name::borrowed(FILTER_FLATE_DECODE).into(),
-        Name::borrowed(FILTER_DCT_DECODE).into(),
+    [(&KEY_FILTER, vec![
+        FILTER_FLATE_DECODE.clone().into(),
+        FILTER_DCT_DECODE.clone().into(),
     ].into()),
-    (KEY_FILTER_PARAMS, Dictionary::default().into())] =>
-    Ok(vec![(FILTER_FLATE_DECODE.to_owned(), Some(Dictionary::default())),
-            (FILTER_DCT_DECODE.to_owned(), None)]);
+    (&KEY_FILTER_PARAMS, Dictionary::default().into())] =>
+    Ok(vec![(FILTER_FLATE_DECODE.clone(), Some(Dictionary::default())),
+            (FILTER_DCT_DECODE.clone(), None)]);
      "two filters with null params"
 )]
 #[test_case(
-    [(KEY_FFILTER, Name::borrowed(FILTER_FLATE_DECODE).into())] =>
+    [(&KEY_FFILTER, FILTER_FLATE_DECODE.clone().into())] =>
     Err(ObjectValueError::ExternalStreamNotSupported);
      "filter not supported"
 )]
 fn test_iter_filter(
-    dict: impl IntoIterator<Item = (&'static str, Object<'static>)>,
-) -> Result<Vec<(String, Option<Dictionary<'static>>)>, ObjectValueError> {
+    dict: impl IntoIterator<Item = (&'static Name, Object<'static>)>,
+) -> Result<Vec<(Name, Option<Dictionary<'static>>)>, ObjectValueError> {
     let dict: Dictionary<'static> = dict
         .into_iter()
-        .map(|(k, v)| (Name::borrowed(k), v))
+        .map(|(k, v)| (k.clone(), v))
         .collect::<Dictionary>();
     let stream = Stream(dict, &[], ObjectId::empty());
-    let r: Vec<(String, Option<Dictionary<'static>>)> = stream
+    let r: Vec<(Name, Option<Dictionary<'static>>)> = stream
         .iter_filter()?
-        .map(|(k, v)| (k.to_owned(), v.cloned()))
+        .map(|(k, v)| (k.clone(), v.cloned()))
         .collect();
     Ok(r)
 }
@@ -85,11 +86,11 @@ fn test_paeth(a: u8, b: u8, c: u8) -> u8 {
 fn predictor_8bit() {
     insta::assert_debug_snapshot!(
         &decode_stream("filters/predictor.pdf", 7u32, |d, resolver| {
-            let params = d.get("DecodeParms").unwrap().as_dict()?;
+            let params = d.get(&name!("DecodeParms")).unwrap().as_dict()?;
             assert_eq!(
                 15,
                 resolver
-                    .resolve_container_value(params, "Predictor")?
+                    .resolve_container_value(params, name!("Predictor"))?
                     .as_int()?
             );
             Ok(())
@@ -102,11 +103,11 @@ fn predictor_8bit() {
 fn predictor_24bit() {
     insta::assert_debug_snapshot!(
         &decode_stream("color-space/cal-rgb.pdf", 6u32, |d, resolver| {
-            let params = d.get("DecodeParms").unwrap().as_dict()?;
+            let params = d.get(&name!("DecodeParms")).unwrap().as_dict()?;
             assert_eq!(
                 15,
                 resolver
-                    .resolve_container_value(params, "Predictor")?
+                    .resolve_container_value(params, name!("Predictor"))?
                     .as_int()?
             );
             Ok(())

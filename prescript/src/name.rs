@@ -23,8 +23,16 @@ use prescript_macro::name;
 use std::fmt::{Display, Formatter};
 
 /// PostScript Name Value
+/// Important: Always use name function and macro create Name, don't create
+/// Name directly. The internal structure exposed for pattern match combined with `name!` macro:
+///
+/// match name {
+///   name!("foo") => { ... }
+///   name!("bar") => { ...}
+///   _ => { ... }
+/// }  
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Name(pub(crate) Either<u16, Box<str>>);
+pub struct Name(pub Either<u16, Box<str>>);
 
 /// Special name to match normally won't exist.
 pub static INVALID1: Name = name!("$$invalid1$$");

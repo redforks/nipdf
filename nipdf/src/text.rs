@@ -5,7 +5,7 @@ use crate::{
 };
 use bitflags::bitflags;
 use nipdf_macro::{pdf_object, TryFromIntObjectForBitflags, TryFromNameObject};
-use prescript::{name, Encoding};
+use prescript::{name, Encoding, Name};
 use std::{collections::HashMap, convert::AsRef};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, TryFromNameObject)]
@@ -43,8 +43,7 @@ pub trait FontDictTrait {
     #[try_from]
     fn encoding(&self) -> Option<NameOrDictByRef<'a, 'b>>;
 
-    #[typ("Name")]
-    fn base_font(&self) -> &str;
+    fn base_font(&self) -> &Name;
 }
 
 #[pdf_object(("Font", "Type0"))]
@@ -79,23 +78,24 @@ pub trait Type1FontDictTrait {
 }
 
 impl<'a, 'b> FontDict<'a, 'b> {
-    fn resolve_name(&self) -> anyhow::Result<&str> {
+    fn resolve_name(&self) -> anyhow::Result<Name> {
         if let Some(desc) = self.font_descriptor()? {
-            return desc.font_name();
+            return desc.font_name().map(|v| v.clone());
         }
 
-        self.base_font()
+        self.base_font().map(|v| v.clone())
     }
 
-    pub fn font_name(&self) -> anyhow::Result<&str> {
+    pub fn font_name(&self) -> anyhow::Result<String> {
         let r = self.resolve_name()?;
+        let r = r.as_ref();
 
         // if font is subset, the name will prefixed with a tag,
         // which is a string of 6 uppercase letters, followed by a plus sign (+).
         if r.len() > 7 && r.as_bytes()[6] == b'+' {
-            Ok(&r[7..])
+            Ok(r[7..].to_owned())
         } else {
-            Ok(r)
+            Ok(r.to_owned())
         }
     }
 }
@@ -228,8 +228,7 @@ impl From<FontStretch> for fontdb::Stretch {
 // Some file not specify Type field, although according to PDF32000_2008.pdf Type field is required
 #[pdf_object(Some("FontDescriptor"))]
 pub trait FontDescriptorDictTrait {
-    #[typ("Name")]
-    fn font_name(&self) -> &'b str;
+    fn font_name(&self) -> &Name;
 
     fn font_family(&self) -> Option<&str>;
 

@@ -18,7 +18,7 @@ pub fn try_from_name_object(input: TokenStream) -> TokenStream {
         .map(|branch| -> proc_macro2::TokenStream {
             let b = &branch.ident;
             let lit = b.to_string();
-            parse_quote!( #lit => Ok(#t::#b))
+            parse_quote!( prescript_macro::name!(#lit) => Ok(#t::#b))
         });
     let tokens = quote! {
         impl<'a, 'b> TryFrom<&'b crate::object::Object<'a>> for #t {
