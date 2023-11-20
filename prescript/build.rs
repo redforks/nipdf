@@ -16,6 +16,7 @@ fn main() {
         .filter(|w| !w.is_empty() && !w.starts_with('#'))
         .collect();
     names.sort_unstable();
+    names.dedup();
     let p = Path::join(
         Path::new(env!("CARGO_MANIFEST_DIR")),
         "src/name/built_in_names.rs",
