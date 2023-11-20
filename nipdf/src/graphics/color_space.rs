@@ -546,7 +546,7 @@ where
         // no need to do conversion to rgb, it is already rgb
         // gamma and other settings are used for converting to other color space
         // such as CMYK etc.
-        assert!(color.len() > 3);
+        assert!(color.len() > 2);
         [color[0], color[1], color[2], T::max_color()]
     }
 
