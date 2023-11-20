@@ -1,11 +1,12 @@
-use super::NOTDEF;
+use crate as prescript;
 use crate::{
     machine::{Array, Machine, Value},
     parser::header,
-    Encoding, NameRegistry,
+    Encoding,
 };
 use anyhow::Result as AnyResult;
-use std::borrow::Cow;
+use prescript_macro::name;
+use std::{array::from_fn, borrow::Cow};
 use winnow::{binary::le_u32, combinator::preceded, error::ContextError, token::any, Parser};
 
 #[derive(Debug, PartialEq)]
@@ -29,19 +30,16 @@ fn parse_header(mut data: &[u8]) -> AnyResult<Header> {
     }
 }
 
-fn parse_vec_encoding(name_registry: &mut NameRegistry, arr: &Array) -> Encoding {
-    let no_def = name_registry.get_or_intern(NOTDEF);
-    let mut names = [no_def; 256];
+fn parse_vec_encoding(arr: &Array) -> Encoding {
+    let mut names = from_fn(|_| name!(".notdef"));
     for (i, v) in arr.iter().enumerate() {
-        if let Some(name) = v.opt_name() {
-            names[i] = name_registry.get_or_intern(&name);
-        }
+        names[i] = v.name().unwrap();
     }
     Encoding::new(names)
 }
 
 impl Font {
-    pub fn parse(name_registry: &mut NameRegistry, data: &[u8]) -> AnyResult<Self> {
+    pub fn parse(data: &[u8]) -> AnyResult<Self> {
         let data = normalize_pfb(data);
         let header = parse_header(&data)?;
         assert!(header.spec_ver.starts_with("1."), "Not Type1 font");
@@ -49,10 +47,8 @@ impl Font {
         let mut machine = Machine::new(&data);
         let encoding = machine.execute_for_encoding()?;
         let encoding = match encoding {
-            Value::Array(arr) => parse_vec_encoding(name_registry, &arr.borrow()),
-            Value::PredefinedEncoding(encoding) => {
-                Encoding::predefined(name_registry, encoding.as_ref()).unwrap()
-            }
+            Value::Array(arr) => parse_vec_encoding(&arr.borrow()),
+            Value::PredefinedEncoding(encoding) => Encoding::predefined(encoding).unwrap(),
             _ => anyhow::bail!("Invalid encoding type"),
         };
 
@@ -101,18 +97,14 @@ mod tests {
     #[test]
     fn parse_pfb_file() {
         let data = include_bytes!("../../nipdf/fonts/d050000l.pfb");
-        let mut name_registry = NameRegistry::new();
-        Encoding::register_glyph_names(&mut name_registry);
-        let font = Font::parse(&mut name_registry, data).unwrap();
+        let font = Font::parse(data).unwrap();
         assert_eq!("Dingbats", font.header.font_name);
     }
 
     #[test]
     fn parse_pfa_file() {
         let data = include_bytes!("p052024l.pfa");
-        let mut name_registry = NameRegistry::new();
-        Encoding::register_glyph_names(&mut name_registry);
-        let font = Font::parse(&mut name_registry, data).unwrap();
+        let font = Font::parse(data).unwrap();
         assert_eq!("URWPalladioL-BoldItal", font.header.font_name);
     }
 
@@ -150,10 +142,8 @@ mod tests {
             "NimbusMonL-BoldObli",
             "StandardSymL",
         ];
-        let mut name_registry = NameRegistry::new();
-        Encoding::register_glyph_names(&mut name_registry);
         for (f, name) in files.into_iter().zip(file_names) {
-            let font = Font::parse(&mut name_registry, f).unwrap();
+            let font = Font::parse(f).unwrap();
             assert_eq!(name, font.header.font_name);
         }
     }

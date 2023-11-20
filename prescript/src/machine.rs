@@ -2,7 +2,7 @@ use crate as prescript;
 use crate::{
     name,
     parser::{token as token_parser, white_space, white_space_or_comment, ws_prefixed},
-    Name2, INVALID1, INVALID2,
+    Name, INVALID1, INVALID2,
 };
 use educe::Educe;
 use either::Either;
@@ -38,8 +38,8 @@ pub enum Value {
     Array(Rc<RefCell<Array>>),
     Dictionary(Dictionary),
     Procedure(Rc<RefCell<TokenArray>>),
-    Name(Name2),
-    PredefinedEncoding(Name2),
+    Name(Name),
+    PredefinedEncoding(Name),
 }
 
 #[derive(Educe)]
@@ -97,8 +97,8 @@ impl<'b> Display for RuntimeValue<'b> {
     }
 }
 
-impl<'a> From<Name2> for RuntimeValue<'a> {
-    fn from(v: Name2) -> Self {
+impl<'a> From<Name> for RuntimeValue<'a> {
+    fn from(v: Name) -> Self {
         Self::Value(Value::Name(v))
     }
 }
@@ -179,7 +179,7 @@ rt_value_access!(
     Rc<RefCell<RuntimeDictionary<'a>>>
 );
 value_access!(procedure, opt_procedure, Procedure, Rc<RefCell<TokenArray>>);
-value_access!(name, opt_name, Name, Name2);
+value_access!(name, opt_name, Name, Name);
 rt_value_access!(built_in_op, opt_built_in_op, BuiltInOp, OperatorFn);
 rt_value_access!(
     current_file,
@@ -211,7 +211,7 @@ impl<'a> RuntimeValue<'a> {
 pub enum Key {
     Bool(bool),
     Integer(i32),
-    Name(Name2),
+    Name(Name),
 }
 
 impl<'a> TryFrom<RuntimeValue<'a>> for Key {
@@ -254,8 +254,8 @@ impl std::hash::Hash for Key {
     }
 }
 
-impl std::borrow::Borrow<Name2> for Key {
-    fn borrow(&self) -> &Name2 {
+impl std::borrow::Borrow<Name> for Key {
+    fn borrow(&self) -> &Name {
         match self {
             // return a string that will never be a valid name to never select bool key using str
             Key::Bool(_) => &INVALID1,
@@ -271,7 +271,7 @@ pub type Dictionary = HashMap<Key, Value>;
 pub enum Token {
     Literal(Value),
     /// Name to lookup operation dict to get the actual operator
-    Name(Name2),
+    Name(Name),
 }
 
 impl<'a> From<Token> for RuntimeValue<'a> {
@@ -1334,7 +1334,7 @@ impl<'a> VariableDictStack<'a> {
         self.stack.push(self.stack[0].clone());
     }
 
-    fn get(&self, name: &Name2) -> MachineResult<RuntimeValue<'a>> {
+    fn get(&self, name: &Name) -> MachineResult<RuntimeValue<'a>> {
         let r = self
             .stack
             .iter()

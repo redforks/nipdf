@@ -1,4 +1,4 @@
-pub(crate) static BUILT_IN_NAMES: [&str; 782] = [
+pub(crate) static BUILT_IN_NAMES: [&str; 787] = [
     "$$invalid1$$",
     "$$invalid2$$",
     ".notdef",
@@ -88,6 +88,8 @@ pub(crate) static BUILT_IN_NAMES: [&str; 782] = [
     "Lslashsmall",
     "Lsmall",
     "M",
+    "MacExpertEncoding",
+    "MacRomanEncoding",
     "Macronsmall",
     "Msmall",
     "Mu",
@@ -134,6 +136,7 @@ pub(crate) static BUILT_IN_NAMES: [&str; 782] = [
     "Sigma",
     "Ssmall",
     "StandardEncoding",
+    "Symbol",
     "T",
     "Tau",
     "Theta",
@@ -156,6 +159,7 @@ pub(crate) static BUILT_IN_NAMES: [&str; 782] = [
     "V",
     "Vsmall",
     "W",
+    "WinAnsiEncoding",
     "Wsmall",
     "X",
     "Xi",
@@ -167,6 +171,7 @@ pub(crate) static BUILT_IN_NAMES: [&str; 782] = [
     "Ydieresissmall",
     "Ysmall",
     "Z",
+    "ZapfDingbats",
     "Zcaron",
     "Zcaronsmall",
     "Zeta",
