@@ -278,16 +278,16 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
     .parse_next(input)
 }
 
-fn executable_name(input: &mut &[u8]) -> PResult<String> {
+fn executable_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str> {
     take_while(1.., is_regular_char)
-        .map(|s| from_utf8(s).unwrap().to_owned())
+        .map(|s| from_utf8(s).unwrap())
         .parse_next(input)
 }
 
-fn literal_name(input: &mut &[u8]) -> PResult<String> {
+fn literal_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str> {
     preceded(
         '/',
-        take_while(0.., is_regular_char).map(|s| from_utf8(s).unwrap().to_owned()),
+        take_while(0.., is_regular_char).map(|s| from_utf8(s).unwrap()),
     )
     .parse_next(input)
 }
@@ -297,19 +297,19 @@ fn procedure(input: &mut &[u8]) -> PResult<TokenArray> {
 }
 
 /// Parses '[', ']', '<<', '>>' and convert them to String.
-fn special_name(input: &mut &[u8]) -> PResult<String> {
+fn special_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str> {
     let buf = take_while(1..=2, (b'[', ']', b"<<", b">>")).parse_next(input)?;
-    Ok(unsafe { from_utf8_unchecked(buf).to_owned() })
+    Ok(unsafe { from_utf8_unchecked(buf) })
 }
 
 pub fn token(input: &mut &[u8]) -> PResult<Token> {
     alt((
         int_or_float.map(|v| Token::Literal(v.either(Value::Integer, Value::Real))),
         string.map(|s| Token::Literal(Vec::from(s).into())),
-        literal_name.map(|s| Token::Literal(Value::Name(name(&*s)))),
-        special_name.map(|s| Token::Name(name(&*s))),
+        literal_name.map(|s| Token::Literal(Value::Name(name(s)))),
+        special_name.map(|s| Token::Name(name(s))),
         procedure.map(|a| Token::Literal(Value::Procedure(Rc::new(RefCell::new(a))))),
-        executable_name.map(|s| Token::Name(name(&*s))),
+        executable_name.map(|s| Token::Name(name(s))),
     ))
     .parse_next(input)
 }
