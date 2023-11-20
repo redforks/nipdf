@@ -19,7 +19,6 @@ use nipdf_macro::pdf_object;
 use nom::Finish;
 use once_cell::unsync::OnceCell;
 use std::{
-    cell::{Ref, RefCell, RefMut},
     iter::repeat_with,
     num::NonZeroU32,
 };
@@ -30,7 +29,7 @@ pub use page::*;
 pub(crate) mod encrypt;
 use self::encrypt::decrypt_key;
 pub use encrypt::EncryptDict;
-use prescript::{Encoding, Name};
+
 
 #[derive(Debug, Copy, Clone)]
 pub enum ObjectPos {

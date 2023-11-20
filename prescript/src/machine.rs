@@ -223,7 +223,7 @@ impl<'a> TryFrom<RuntimeValue<'a>> for Key {
             RuntimeValue::Value(Value::Integer(i)) => Ok(Self::Integer(i)),
             RuntimeValue::Value(Value::Name(n)) => Ok(Self::Name(n)),
             RuntimeValue::Value(Value::String(s)) => {
-                Ok(Self::Name(name(from_utf8(&*s.borrow()).unwrap())))
+                Ok(Self::Name(name(from_utf8(&s.borrow()).unwrap())))
             }
             _ => Err(MachineError::TypeCheck),
         }
@@ -260,7 +260,7 @@ impl std::borrow::Borrow<Name> for Key {
             // return a string that will never be a valid name to never select bool key using str
             Key::Bool(_) => &INVALID1,
             Key::Integer(_) => &INVALID2,
-            Key::Name(n) => &n,
+            Key::Name(n) => n,
         }
     }
 }
@@ -1254,11 +1254,11 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
     );
 
     r.insert(
-        Key::Name(name!("StandardEncoding").into()),
+        Key::Name(name!("StandardEncoding")),
         RuntimeValue::Value(Value::PredefinedEncoding(name!("StandardEncoding"))),
     );
     r.insert(
-        Key::Name(name!("internaldict").to_owned().into()),
+        Key::Name(name!("internaldict")),
         RuntimeValue::Dictionary(Rc::new(RefCell::new(RuntimeDictionary::new()))),
     );
     r

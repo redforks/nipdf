@@ -70,8 +70,8 @@ fn render(f: &str) -> AnyResult<()> {
                     break;
                 }
             }
-            if err.is_err() {
-                return Err(err.unwrap_err().into());
+            if let Err(err) = err {
+                return Err(err.into());
             }
         }
     }
