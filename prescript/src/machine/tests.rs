@@ -86,7 +86,10 @@ fn count() {
 
 #[test]
 fn test_def() {
-    assert_op("10 dict begin /foo 10 def currentdict", dict!["foo" => 10]);
+    assert_op(
+        "10 dict begin /foo 10 def currentdict",
+        dict![name!("foo") => 10],
+    );
 }
 
 #[test]
@@ -292,7 +295,7 @@ fn test_put() {
     // dict
     assert_op(
         "10 dict begin /foo 10 def currentdict /foo 20 put currentdict",
-        dict!["foo"=> 20],
+        dict![name!("foo") => 20],
     );
 
     // array
@@ -340,8 +343,11 @@ fn test_create_array_on_stack() {
 
 #[test]
 fn test_create_dict_on_stack() {
-    assert_op("<<>>", dict![]); 
-    assert_op("<< /foo 10/bar<<>> >>", dict!["foo" => 10, "bar" => dict![]]); 
+    assert_op("<<>>", dict![]);
+    assert_op(
+        "<< /foo 10/bar<<>> >>",
+        dict![name!("foo") => 10, name!("bar") => dict![]],
+    );
 }
 
 #[test]

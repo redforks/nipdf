@@ -1296,6 +1296,21 @@ a191
 .notdef
 
 # postscript common operators
+arraytype
+booleantype
+dicttype
+Encoding
+filetype
+FontDirectory
+integertype
+internaldict
+marktype
+nametype
+nulltype
+operatortype
+realtype
+StandardEncoding
+stringtype
 exch
 dup
 pop

@@ -1,5 +1,6 @@
 use crate::{
     machine::{Token, TokenArray, Value},
+    name,
     type1::Header,
 };
 use either::Either;
@@ -305,10 +306,10 @@ pub fn token(input: &mut &[u8]) -> PResult<Token> {
     alt((
         int_or_float.map(|v| Token::Literal(v.either(Value::Integer, Value::Real))),
         string.map(|s| Token::Literal(Vec::from(s).into())),
-        literal_name.map(|s| Token::Literal(Value::Name(s.into()))),
-        special_name.map(|s| Token::Name(s.into())),
+        literal_name.map(|s| Token::Literal(Value::Name(name(&*s)))),
+        special_name.map(|s| Token::Name(name(&*s))),
         procedure.map(|a| Token::Literal(Value::Procedure(Rc::new(RefCell::new(a))))),
-        executable_name.map(|s| Token::Name(s.into())),
+        executable_name.map(|s| Token::Name(name(&*s))),
     ))
     .parse_next(input)
 }

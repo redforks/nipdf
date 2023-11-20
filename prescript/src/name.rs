@@ -27,9 +27,9 @@ use std::fmt::{Display, Formatter};
 pub struct Name(pub(crate) Either<u16, Box<str>>);
 
 /// Special name to match normally won't exist.
-pub const INVALID1: Name = name!("$$invalid1$$");
+pub static INVALID1: Name = name!("$$invalid1$$");
 /// Special name to match normally won't exist.
-pub const INVALID2: Name = name!("$$invalid2$$");
+pub static INVALID2: Name = name!("$$invalid2$$");
 
 impl Display for Name {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

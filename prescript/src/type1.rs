@@ -51,7 +51,7 @@ impl Font {
         let encoding = match encoding {
             Value::Array(arr) => parse_vec_encoding(name_registry, &arr.borrow()),
             Value::PredefinedEncoding(encoding) => {
-                Encoding::predefined(name_registry, &encoding).unwrap()
+                Encoding::predefined(name_registry, encoding.as_ref()).unwrap()
             }
             _ => anyhow::bail!("Invalid encoding type"),
         };

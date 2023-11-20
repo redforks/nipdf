@@ -1,7 +1,13 @@
-use crate::parser::{token as token_parser, white_space, white_space_or_comment, ws_prefixed};
+use crate as prescript;
+use crate::{
+    name,
+    parser::{token as token_parser, white_space, white_space_or_comment, ws_prefixed},
+    Name2, INVALID1, INVALID2,
+};
 use educe::Educe;
 use either::Either;
 use log::error;
+use prescript_macro::name;
 use std::{
     cell::{Ref, RefCell},
     collections::HashMap,
@@ -9,6 +15,7 @@ use std::{
     hash::Hasher,
     iter::repeat,
     rc::Rc,
+    str::from_utf8,
 };
 use winnow::Parser;
 
@@ -31,8 +38,8 @@ pub enum Value {
     Array(Rc<RefCell<Array>>),
     Dictionary(Dictionary),
     Procedure(Rc<RefCell<TokenArray>>),
-    Name(Rc<str>),
-    PredefinedEncoding(String),
+    Name(Name2),
+    PredefinedEncoding(Name2),
 }
 
 #[derive(Educe)]
@@ -87,6 +94,12 @@ impl<'b> Display for RuntimeValue<'b> {
                 Value::PredefinedEncoding(_) => write!(f, "encoding"),
             },
         }
+    }
+}
+
+impl<'a> From<Name2> for RuntimeValue<'a> {
+    fn from(v: Name2) -> Self {
+        Self::Value(Value::Name(v))
     }
 }
 
@@ -166,7 +179,7 @@ rt_value_access!(
     Rc<RefCell<RuntimeDictionary<'a>>>
 );
 value_access!(procedure, opt_procedure, Procedure, Rc<RefCell<TokenArray>>);
-value_access!(name, opt_name, Name, Rc<str>);
+value_access!(name, opt_name, Name, Name2);
 rt_value_access!(built_in_op, opt_built_in_op, BuiltInOp, OperatorFn);
 rt_value_access!(
     current_file,
@@ -198,7 +211,7 @@ impl<'a> RuntimeValue<'a> {
 pub enum Key {
     Bool(bool),
     Integer(i32),
-    Name(Rc<str>),
+    Name(Name2),
 }
 
 impl<'a> TryFrom<RuntimeValue<'a>> for Key {
@@ -209,9 +222,9 @@ impl<'a> TryFrom<RuntimeValue<'a>> for Key {
             RuntimeValue::Value(Value::Bool(b)) => Ok(Self::Bool(b)),
             RuntimeValue::Value(Value::Integer(i)) => Ok(Self::Integer(i)),
             RuntimeValue::Value(Value::Name(n)) => Ok(Self::Name(n)),
-            RuntimeValue::Value(Value::String(s)) => Ok(Self::Name(
-                String::from_utf8(s.borrow().clone()).unwrap().into(),
-            )),
+            RuntimeValue::Value(Value::String(s)) => {
+                Ok(Self::Name(name(from_utf8(&*s.borrow()).unwrap())))
+            }
             _ => Err(MachineError::TypeCheck),
         }
     }
@@ -241,13 +254,13 @@ impl std::hash::Hash for Key {
     }
 }
 
-impl std::borrow::Borrow<str> for Key {
-    fn borrow(&self) -> &str {
+impl std::borrow::Borrow<Name2> for Key {
+    fn borrow(&self) -> &Name2 {
         match self {
             // return a string that will never be a valid name to never select bool key using str
-            Key::Bool(_) => "$$bool$$",
-            Key::Integer(_) => "$$int$$",
-            Key::Name(n) => n,
+            Key::Bool(_) => &INVALID1,
+            Key::Integer(_) => &INVALID2,
+            Key::Name(n) => &n,
         }
     }
 }
@@ -258,7 +271,7 @@ pub type Dictionary = HashMap<Key, Value>;
 pub enum Token {
     Literal(Value),
     /// Name to lookup operation dict to get the actual operator
-    Name(Rc<str>),
+    Name(Name2),
 }
 
 impl<'a> From<Token> for RuntimeValue<'a> {
@@ -288,8 +301,8 @@ impl<'a> TryFrom<RuntimeValue<'a>> for Token {
 }
 
 #[cfg(test)]
-pub fn name_token(s: impl Into<Rc<str>>) -> Token {
-    Token::Name(s.into())
+pub fn name_token(s: &str) -> Token {
+    Token::Name(name(s))
 }
 
 impl<'a> TryFrom<RuntimeValue<'a>> for Value {
@@ -351,13 +364,13 @@ impl From<Vec<u8>> for Value {
 
 impl<'a> From<&str> for RuntimeValue<'a> {
     fn from(v: &str) -> Self {
-        Value::Name(v.to_owned().into()).into()
+        Value::from(v).into()
     }
 }
 
 impl From<&str> for Value {
     fn from(v: &str) -> Self {
-        Self::Name(v.to_owned().into())
+        Self::Name(name(v))
     }
 }
 
@@ -633,7 +646,7 @@ impl<'a> Machine<'a> {
                         .variable_stack
                         .top()
                         .borrow_mut()
-                        .remove("Encoding")
+                        .remove(&name!("Encoding"))
                         .unwrap()
                         .try_into();
                 }
@@ -727,7 +740,7 @@ struct VariableDictStack<'a> {
 
 macro_rules! built_in_ops {
     ($($k:expr => $v:expr),* $(,)?) => {
-        std::iter::Iterator::collect(std::iter::IntoIterator::into_iter([$((Key::Name($k.to_owned().into()), RuntimeValue::BuiltInOp($v)),)*]))
+        std::iter::Iterator::collect(std::iter::IntoIterator::into_iter([$((Key::Name($k), RuntimeValue::BuiltInOp($v)),)*]))
     };
 }
 
@@ -736,7 +749,7 @@ macro_rules! dict {
         RuntimeDictionary::new()
     };
     ($($k:expr => $v:expr),* $(,)?) => {
-        std::iter::Iterator::collect::<RuntimeDictionary>(std::iter::IntoIterator::into_iter([$((Key::Name($k.to_owned().into()), RuntimeValue::from($v)),)*]))
+        std::iter::Iterator::collect::<RuntimeDictionary>(std::iter::IntoIterator::into_iter([$((Key::Name($k), RuntimeValue::from($v)),)*]))
     };
 }
 
@@ -748,7 +761,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
 
     let mut r: RuntimeDictionary<'a> = built_in_ops!(
         // any1 any2 exch -> any2 any1
-        "exch" => (|m| {
+        name!("exch") => (|m| {
             let a = m.pop()?;
             let b = m.pop()?;
             m.push(a);
@@ -757,23 +770,23 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         }) as OperatorFn,
 
         // any -> any any
-        "dup" => |m| {
+        name!("dup") => |m| {
             m.push(m.top()?.clone());
             ok()
         },
         // any pop -
-        "pop" => |m| {
+        name!("pop") => |m| {
             m.pop()?;
             ok()
         },
         // Push counts of items in stack to stack
-        "count" => |m| {
+        name!("count") => |m| {
             let len = m.stack.len() as i32;
             m.push(len);
             ok()
         },
         // any1 .. any(n) n copy any1 .. any(n) any1 .. any(n)
-        "copy" => |m| {
+        name!("copy") => |m| {
             let count = m.pop()?.int().expect("merge dict/array/string not implemented");
             let mut items = Vec::new();
             for _ in 0..count {
@@ -791,7 +804,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
 
         // Duplicate stack value at -n position
         // any(n) ... any0 n index -> any(n) ... any0 any(n)
-        "index" => |m| {
+        name!("index") => |m| {
             let index = m.pop()?.int()?;
             m.push(m.stack.get(m.stack.len() - index as usize - 1)
                 .ok_or(MachineError::StackUnderflow)?
@@ -800,12 +813,12 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         },
 
         // - mark -> Mark
-        "mark" => |m| {
+        name!("mark") => |m| {
             m.push(RuntimeValue::Mark);
             ok()
         },
         // Mark obj1 .. obj(n) cleartomark -> -
-        "cleartomark" => |m| {
+        name!("cleartomark") => |m| {
             while m.pop()
                 .map_err(|e| if e == MachineError::StackUnderflow {MachineError::UnMatchedMark } else {e})?
                  != RuntimeValue::Mark {}
@@ -813,19 +826,19 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         },
 
         // - true -> true
-        "true" => |m| {
+        name!("true") => |m| {
             m.push(true);
             ok()
         },
         // - false -> false
-        "false" => |m| {
+        name!("false") => |m| {
             m.push(false);
             ok()
         },
 
         // bool1 bool2 and -> bool3
         // int1 int2 and -> int3
-        "and" => |m| {
+        name!("and") => |m| {
             let a = m.pop()?;
             let b = m.pop()?;
             match (a, b) {
@@ -841,7 +854,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         },
         // bool1 bool2 or -> bool3
         // int1 int2 or -> int3
-        "or" => |m| {
+        name!("or") => |m| {
             let a = m.pop()?;
             let b = m.pop()?;
             match (a, b) {
@@ -857,7 +870,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         },
         // bool1 not -> bool2
         // int1 not -> int2
-        "not" => |m| {
+        name!("not") => |m| {
             let v = m.pop()?;
             match v {
                 RuntimeValue::Value(Value::Bool(b)) => m.push(!b),
@@ -868,7 +881,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         },
         // bool1 bool2 xor -> bool3
         // int1 int2 xor -> int3
-        "xor" => |m| {
+        name!("xor") => |m| {
             let a = m.pop()?;
             let b = m.pop()?;
             match (a, b) {
@@ -883,13 +896,13 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             ok()
         },
 
-        "eq" => |m| {
+        name!("eq") => |m| {
             let b = m.pop()?;
             let a = m.pop()?;
             m.push(object_eq(a, b));
             ok()
         },
-        "ne" => |m| {
+        name!("ne") => |m| {
             let b = m.pop()?;
             let a = m.pop()?;
             m.push(!object_eq(a, b));
@@ -897,25 +910,25 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         },
         // num1 num2 le -> bool
         // string1 string2 le -> bool
-        "le" => |m| {
+        name!("le") => |m| {
             let b = m.pop()?;
             let a = m.pop()?;
             m.push(!object_gt(&a, &b)? || object_eq(a, b));
             ok()
         },
-        "lt" => |m| {
+        name!("lt") => |m| {
             let b = m.pop()?;
             let a = m.pop()?;
             m.push(!object_gt(&a, &b)? && !object_eq(a, b));
             ok()
         },
-        "ge" => |m| {
+        name!("ge") => |m| {
             let b = m.pop()?;
             let a = m.pop()?;
             m.push(object_gt(&a, &b)? || object_eq(a, b));
             ok()
         },
-        "gt" => |m| {
+        name!("gt") => |m| {
             let b = m.pop()?;
             let a = m.pop()?;
             m.push(object_gt(&a, &b)? && !object_eq(a, b));
@@ -923,7 +936,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         },
 
         // num1 num2 add sum
-        "add" => |m| {
+        name!("add") => |m| {
             let a = m.pop()?.number()?;
             let b = m.pop()?.number()?;
             match (a, b) {
@@ -936,16 +949,16 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         },
 
         // int array -> array
-        "array" => |m| {
+        name!("array") => |m| {
             let count = m.pop()?.int()?;
             m.push(Array::from_iter(repeat(Value::Null).take(count as usize)));
             ok()
         },
-        "[" => |m| {
+        name!("[") => |m| {
             m.push(RuntimeValue::ArrayMark);
             ok()
         },
-        "]" => |m| {
+        name!("]") => |m| {
             let mut array = Array::new();
             loop {
                 match m.pop()? {
@@ -958,22 +971,22 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             m.push(array);
             ok()
         },
-        "[]" => |m| {
+        name!("[]") => |m| {
             m.push(Array::new());
             ok()
         },
 
         // int dict -> dict
-        "dict" => |m| {
+        name!("dict") => |m| {
             let count = m.pop()?.int()?;
             m.push(RuntimeDictionary::with_capacity(count as usize));
             ok()
         },
-        "<<" => |m| {
+        name!("<<") => |m| {
             m.push(RuntimeValue::DictMark);
             ok()
         },
-        ">>" => |m| {
+        name!(">>") => |m| {
             let mut dict = RuntimeDictionary::new();
             loop {
                 let v = match m.pop()? {
@@ -989,20 +1002,20 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         },
 
         // dict begin -> -
-        "begin" => |m| {
+        name!("begin") => |m| {
             let dict = m.pop()?.dict()?;
             m.variable_stack.push(dict);
             ok()
         },
 
         // - end -> -
-        "end" => |m| {
+        name!("end") => |m| {
             m.variable_stack.pop();
             ok()
         },
 
         // key value -> - Set key-value to current directory.
-        "def" => |m| {
+        name!("def") => |m| {
             let value = m.pop()?;
             let key = m.pop()?;
             let dict = m.variable_stack.top();
@@ -1019,7 +1032,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         },
 
         // dict key known -> bool
-        "known" => |m| {
+        name!("known") => |m| {
             let key = m.pop()?;
             let dict = m.pop()?.dict()?;
             let key: Key = key.try_into()?;
@@ -1031,7 +1044,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         // array  index put -> -
         // dict   key   put -> -
         // string index get -> -
-        "put" => |m| {
+        name!("put") => |m| {
             let value = m.pop()?;
             let key = m.pop()?;
             match m.pop()? {
@@ -1076,7 +1089,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         // array  index get -> any
         // dict   key   get -> any
         // string index get -> int
-        "get" => |m| {
+        name!("get") => |m| {
             let key = m.pop()?;
             match m.pop()? {
                 RuntimeValue::Dictionary(dict) => {
@@ -1110,31 +1123,31 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         },
 
         // int string -> string
-        "string" => |m| {
+        name!("string") => |m| {
             let count = m.pop()?.int()?;
             m.push(vec![0u8; count as usize]);
             ok()
         },
 
         // push current variable stack to operand stack
-        "currentdict" => |m| {
+        name!("currentdict") => |m| {
             m.push(m.variable_stack.top());
             ok()
         },
         // push systemdict to operand stack
-        "systemdict" => |m| {
+        name!("systemdict") => |m| {
             m.push(m.variable_stack.stack[0].clone());
             ok()
         },
-        "userdict" => |m| {
+        name!("userdict") => |m| {
             m.push(m.variable_stack.stack[2].clone());
             ok()
         },
-        "currentfile" => |m| {
+        name!("currentfile") => |m| {
             m.push_current_file();
             ok()
         },
-        "readstring" => |m| {
+        name!("readstring") => |m| {
             let s = m.pop()?.string()?;
             let f = m.pop()?.current_file()?;
             let mut borrow = s.borrow_mut();
@@ -1147,7 +1160,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         },
 
         // initial increment limit proc for -
-        "for" => |m| {
+        name!("for") => |m| {
             let proc = m.pop()?.procedure()?;
             let limit = m.pop()?.int()?;
             let increment = m.pop()?.int()?;
@@ -1159,7 +1172,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             ok()
         },
         // bool proc if-> -
-        "if" => |m| {
+        name!("if") => |m| {
             let proc = m.pop()?.procedure()?;
             let cond = m.pop()?.bool()?;
             if cond {
@@ -1168,14 +1181,14 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             ok()
         },
         // bool proc1 proc2 ifelse -> -
-        "ifelse" => |m| {
+        name!("ifelse") => |m| {
             let proc2 = m.pop()?.procedure()?;
             let proc1 = m.pop()?.procedure()?;
             let cond = m.pop()?.bool()?;
             m.execute_procedure(if cond { proc1 } else { proc2 })?;
             ok()
         },
-        "eexec" => |m| {
+        name!("eexec") => |m| {
             assert!(
                 matches!(m.pop()?, RuntimeValue::CurrentFile(_)),
                 "eexec on non-current file not implemented"
@@ -1183,7 +1196,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             m.variable_stack.push_system_dict();
             Ok(ExecState::StartEExec)
         },
-        "exec" => |m| {
+        name!("exec") => |m| {
             let proc = m.pop()?;
             match proc {
                 RuntimeValue::Value(Value::Procedure(p)) => m.execute_procedure(p),
@@ -1192,61 +1205,60 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             }
         },
         // file closefile -
-        "closefile" => |m| {
+        name!("closefile") => |m| {
             let RuntimeValue::CurrentFile(_f) = m.pop()? else {
                 return Err(MachineError::TypeCheck);
             };
             Ok(ExecState::EndEExec)
         },
-        "definefont" => |m| {
+        name!("definefont") => |m| {
             let font = m.pop()?;
             let key = m.pop()?;
             let name = key.name()?;
-            let name = (*name).to_owned();
-            m.define_font(name, into_dict(font.dict()?.borrow().clone())?);
+            m.define_font(name.as_ref().to_owned(), into_dict(font.dict()?.borrow().clone())?);
             m.push(font);
             ok()
         },
 
-        "readonly" => |_| ok(),
-        "executeonly" => |_| ok(),
-        "noaccess" => |_| ok(),
-        "bind" => |_| {
+        name!("readonly") => |_| ok(),
+        name!("executeonly") => |_| ok(),
+        name!("noaccess") => |_| ok(),
+        name!("bind") => |_| {
             error!("bind not implemented");
             ok()
         },
         // any type -> name
-        "type" => |m| {
+        name!("type") => |m| {
             let v = m.pop()?;
             // TODO: font-type, g-state-type, packed-array-type, save-type
             m.push(match v {
-                RuntimeValue::Value(Value::Bool(_)) => "booleantype",
-                RuntimeValue::Value(Value::Integer(_)) => "integertype",
-                RuntimeValue::Value(Value::Real(_)) => "realtype",
-                RuntimeValue::Value(Value::String(_)) => "stringtype",
-                RuntimeValue::Value(Value::Name(_)) => "nametype",
-                RuntimeValue::Value(Value::Array(_)) => "arraytype",
-                RuntimeValue::Dictionary(_) => "dicttype",
-                RuntimeValue::Value(Value::Procedure(_)) => "arraytype",
-                RuntimeValue::Value(Value::PredefinedEncoding(_)) => "arraytype",
-                RuntimeValue::CurrentFile(_) => "filetype",
-                RuntimeValue::BuiltInOp(_) => "operatortype",
-                RuntimeValue::Mark => "marktype",
-                RuntimeValue::ArrayMark => "marktype",
-                RuntimeValue::DictMark => "marktype",
-                RuntimeValue::Value(Value::Null) => "nulltype",
-                RuntimeValue::Value(Value::Dictionary(_)) => "dicttype",
+                RuntimeValue::Value(Value::Bool(_)) => name!("booleantype"),
+                RuntimeValue::Value(Value::Integer(_)) => name!("integertype"),
+                RuntimeValue::Value(Value::Real(_)) => name!("realtype"),
+                RuntimeValue::Value(Value::String(_)) => name!("stringtype"),
+                RuntimeValue::Value(Value::Name(_)) => name!("nametype"),
+                RuntimeValue::Value(Value::Array(_)) => name!("arraytype"),
+                RuntimeValue::Dictionary(_) => name!("dicttype"),
+                RuntimeValue::Value(Value::Procedure(_)) => name!("arraytype"),
+                RuntimeValue::Value(Value::PredefinedEncoding(_)) => name!("arraytype"),
+                RuntimeValue::CurrentFile(_) => name!("filetype"),
+                RuntimeValue::BuiltInOp(_) => name!("operatortype"),
+                RuntimeValue::Mark => name!("marktype"),
+                RuntimeValue::ArrayMark => name!("marktype"),
+                RuntimeValue::DictMark => name!("marktype"),
+                RuntimeValue::Value(Value::Null) => name!("nulltype"),
+                RuntimeValue::Value(Value::Dictionary(_)) => name!("dicttype"),
             });
             ok()
         },
     );
 
     r.insert(
-        Key::Name("StandardEncoding".to_owned().into()),
-        RuntimeValue::Value(Value::PredefinedEncoding("StandardEncoding".to_owned())),
+        Key::Name(name!("StandardEncoding").into()),
+        RuntimeValue::Value(Value::PredefinedEncoding(name!("StandardEncoding"))),
     );
     r.insert(
-        Key::Name("internaldict".to_owned().into()),
+        Key::Name(name!("internaldict").to_owned().into()),
         RuntimeValue::Dictionary(Rc::new(RefCell::new(RuntimeDictionary::new()))),
     );
     r
@@ -1278,10 +1290,10 @@ fn object_eq<'a>(a: RuntimeValue<'a>, b: RuntimeValue<'a>) -> bool {
             a == b as f32
         }
         (RuntimeValue::Value(Value::String(a)), RuntimeValue::Value(Value::Name(b))) => {
-            a.borrow().as_slice() == b.as_bytes()
+            a.borrow().as_slice() == b.as_ref().as_bytes()
         }
         (RuntimeValue::Value(Value::Name(a)), RuntimeValue::Value(Value::String(b))) => {
-            b.borrow().as_slice() == a.as_bytes()
+            b.borrow().as_slice() == a.as_ref().as_bytes()
         }
         (RuntimeValue::Value(Value::Name(a)), RuntimeValue::Value(Value::Name(b))) => a == b,
         (RuntimeValue::Value(Value::Array(a)), RuntimeValue::Value(Value::Array(b))) => {
@@ -1298,7 +1310,7 @@ fn object_eq<'a>(a: RuntimeValue<'a>, b: RuntimeValue<'a>) -> bool {
 /// Create the `globaldict`
 fn global_dict<'a>() -> RuntimeDictionary<'a> {
     dict![
-        "FontDirectory" => RuntimeDictionary::new(),
+        name!("FontDirectory") => RuntimeDictionary::new(),
     ]
 }
 
@@ -1322,7 +1334,7 @@ impl<'a> VariableDictStack<'a> {
         self.stack.push(self.stack[0].clone());
     }
 
-    fn get(&self, name: &str) -> MachineResult<RuntimeValue<'a>> {
+    fn get(&self, name: &Name2) -> MachineResult<RuntimeValue<'a>> {
         let r = self
             .stack
             .iter()
