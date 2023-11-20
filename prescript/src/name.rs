@@ -17,10 +17,17 @@ use either::Either::{self, Left, Right};
 
 mod built_in_names;
 use built_in_names::BUILT_IN_NAMES;
+use std::fmt::{Display, Formatter};
 
 /// PostScript Name Value
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Name(pub(crate) Either<u16, Box<str>>);
+
+impl Display for Name {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "/{}", self.as_ref())
+    }
+}
 
 impl AsRef<str> for Name {
     fn as_ref(&self) -> &str {
@@ -72,5 +79,11 @@ mod tests {
     fn name_macro() {
         assert_eq!(name!("foo"), name("foo"));
         assert_eq!(name!("for"), name("for"));
+    }
+
+    #[test]
+    fn display() {
+        assert_eq!(format!("{}", name!("foo")), "/foo");
+        assert_eq!(format!("{}", name!("for")), "/for");
     }
 }
