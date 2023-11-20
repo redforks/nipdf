@@ -6,16 +6,8 @@ expression: parse_dict(buf.as_ref()).unwrap()
     [],
     Dictionary(
         {
-            Name(
-                Left(
-                    303,
-                ),
-            ): Name(
-                Name(
-                    Left(
-                        53,
-                    ),
-                ),
+            name!(Type): Name(
+                name!(Catalog),
             ),
         },
     ),

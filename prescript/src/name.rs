@@ -31,8 +31,14 @@ use std::fmt::{Display, Formatter};
 ///   name!("bar") => { ...}
 ///   _ => { ... }
 /// }  
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Name(pub Either<u16, Box<str>>);
+
+impl std::fmt::Debug for Name {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "name!({})", self.as_ref())
+    }
+}
 
 /// Special name to match normally won't exist.
 pub static INVALID1: Name = name!("$$invalid1$$");

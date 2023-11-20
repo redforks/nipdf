@@ -9,11 +9,7 @@ expression: "parse_frame_set(b\"%PDF-1.7\nxref\n1 1\n0000000000 00000 n\ntrailer
             xref_pos: 77,
             trailer: Dictionary(
                 {
-                    Name(
-                        Left(
-                            249,
-                        ),
-                    ): Integer(
+                    name!(Prev): Integer(
                         9,
                     ),
                 },
@@ -35,11 +31,7 @@ expression: "parse_frame_set(b\"%PDF-1.7\nxref\n1 1\n0000000000 00000 n\ntrailer
             xref_pos: 9,
             trailer: Dictionary(
                 {
-                    Name(
-                        Left(
-                            280,
-                        ),
-                    ): Integer(
+                    name!(Size): Integer(
                         1,
                     ),
                 },

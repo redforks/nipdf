@@ -6,16 +6,8 @@ expression: parse_dict(buf.as_ref()).unwrap()
     [],
     Dictionary(
         {
-            Name(
-                Right(
-                    "",
-                ),
-            ): Name(
-                Name(
-                    Right(
-                        "id",
-                    ),
-                ),
+            name!(): Name(
+                name!(id),
             ),
         },
     ),

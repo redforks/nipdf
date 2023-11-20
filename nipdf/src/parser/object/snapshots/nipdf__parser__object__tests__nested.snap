@@ -6,11 +6,7 @@ expression: parse_dict(buf.as_ref()).unwrap()
     [],
     Dictionary(
         {
-            Name(
-                Right(
-                    "Inner",
-                ),
-            ): Dictionary(
+            name!(Inner): Dictionary(
                 Dictionary(
                     {},
                 ),
