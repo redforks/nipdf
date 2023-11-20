@@ -6,7 +6,7 @@ use crate::object::{
 use either::Either;
 use nom::{
     branch::alt,
-    bytes::complete::{escaped, is_not, tag, take, take_till, take_while},
+    bytes::complete::{escaped, is_not, tag, take_till, take_while},
     character::{
         complete::{anychar, line_ending, multispace1, u16, u32},
         is_hex_digit,
@@ -18,7 +18,7 @@ use nom::{
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
 };
 use prescript::Name;
-use prescript_macro::name;
+
 use std::{
     borrow::Cow,
     num::NonZeroU32,

@@ -26,7 +26,7 @@ pub fn default_domain() -> Domain {
     Domain::new(0.0, 1.0)
 }
 
-impl<'a> TryFrom<&Object> for Domain<f32> {
+impl TryFrom<&Object> for Domain<f32> {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
@@ -38,7 +38,7 @@ impl<'a> TryFrom<&Object> for Domain<f32> {
     }
 }
 
-impl<'a> TryFrom<&Object> for Domain<u32> {
+impl TryFrom<&Object> for Domain<u32> {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
@@ -53,7 +53,7 @@ impl<'a> TryFrom<&Object> for Domain<u32> {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Domains<T = f32>(pub Vec<Domain<T>>);
 
-impl<'a, T> TryFrom<&Object> for Domains<T>
+impl<T> TryFrom<&Object> for Domains<T>
 where
     Domain<T>: for<'b> TryFrom<&'b Object, Error = ObjectValueError>,
 {

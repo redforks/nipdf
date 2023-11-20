@@ -217,9 +217,9 @@ fn parse_encoding<'c>(
     Ok(r)
 }
 
-fn resolve_by_name<'a, 'b>(
+fn resolve_by_name<'b>(
     encoding: &Option<NameOrDictByRef<'b>>,
-    font_dict: &FontDict<'a, 'b>,
+    font_dict: &FontDict<'_, 'b>,
     font_name: &str,
 ) -> AnyResult<Option<Encoding>> {
     let encoding_dict;
@@ -716,7 +716,7 @@ impl<'c> FontCache<'c> {
         }
     }
 
-    fn load_embed_font_bytes<'a>(resolver: &ObjectResolver<'a>, s: &Stream) -> AnyResult<Vec<u8>> {
+    fn load_embed_font_bytes(resolver: &ObjectResolver<'_>, s: &Stream) -> AnyResult<Vec<u8>> {
         Ok(s.decode(resolver)?.into_owned())
     }
 

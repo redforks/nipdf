@@ -142,7 +142,7 @@ impl CIDFontWidths {
     }
 }
 
-impl<'a, 'b> TryFrom<&'b Object> for CIDFontWidths {
+impl<'b> TryFrom<&'b Object> for CIDFontWidths {
     type Error = ObjectValueError;
 
     fn try_from(obj: &'b Object) -> Result<Self, Self::Error> {
@@ -309,7 +309,7 @@ impl<'a> EncodingDifferences<'a> {
 /// Parse Differences field in Encoding object, which is an array of
 /// character code and one or several glyph names. First name is mapped
 /// to character code, second name is mapped to character code + 1, and so on.
-impl<'a, 'b> TryFrom<&'b Object> for EncodingDifferences<'b> {
+impl<'b> TryFrom<&'b Object> for EncodingDifferences<'b> {
     type Error = ObjectValueError;
 
     fn try_from(obj: &'b Object) -> Result<Self, Self::Error> {

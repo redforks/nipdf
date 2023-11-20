@@ -237,7 +237,7 @@ impl XRefTable {
 }
 
 /// Decrypt HexString/LiteralString nested in object.
-fn decrypt_string<'a>(key: &[u8], id: ObjectId, mut o: Object) -> Object {
+fn decrypt_string(key: &[u8], id: ObjectId, mut o: Object) -> Object {
     let key = decrypt_key(key, id);
 
     struct Decryptor(Box<[u8]>);
@@ -273,18 +273,18 @@ fn decrypt_string<'a>(key: &[u8], id: ObjectId, mut o: Object) -> Object {
     o
 }
 
-pub trait DataContainer<'a> {
+pub trait DataContainer {
     fn get_value(&self, key: Name) -> Option<&Object>;
 }
 
-impl<'a> DataContainer<'a> for Dictionary {
+impl DataContainer for Dictionary {
     fn get_value(&self, key: Name) -> Option<&Object> {
         self.get(&key)
     }
 }
 
 /// Get value from first dictionary that contains `key`.
-impl<'a> DataContainer<'a> for Vec<&Dictionary> {
+impl DataContainer for Vec<&Dictionary> {
     fn get_value(&self, key: Name) -> Option<&Object> {
         self.iter().find_map(|d| d.get(&key))
     }
@@ -375,7 +375,7 @@ impl<'a> ObjectResolver<'a> {
 
     /// Resolve value from data container `c` with key `k`, if value is reference,
     /// resolve it recursively. Return `None` if object is not found.
-    pub fn opt_resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
+    pub fn opt_resolve_container_value<'b: 'c, 'c, C: DataContainer>(
         &'b self,
         c: &'c C,
         id: Name,
@@ -385,7 +385,7 @@ impl<'a> ObjectResolver<'a> {
 
     /// Resolve value from data container `c` with key `k`, if value is reference,
     /// resolve it recursively.
-    pub fn resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
+    pub fn resolve_container_value<'b: 'c, 'c, C: DataContainer>(
         &'b self,
         c: &'c C,
         id: Name,
@@ -394,7 +394,7 @@ impl<'a> ObjectResolver<'a> {
     }
 
     /// Like _resolve_container_value(), but error logs if value not exist
-    fn resolve_required_value<'b: 'c, 'c, C: DataContainer<'a>>(
+    fn resolve_required_value<'b: 'c, 'c, C: DataContainer>(
         &'b self,
         c: &'c C,
         id: Name,
@@ -405,7 +405,7 @@ impl<'a> ObjectResolver<'a> {
         })
     }
 
-    fn _resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
+    fn _resolve_container_value<'b: 'c, 'c, C: DataContainer>(
         &'b self,
         c: &'c C,
         id: Name,
@@ -456,7 +456,7 @@ impl<'a> ObjectResolver<'a> {
 }
 
 impl<'a> Resolver<'a> for ObjectResolver<'a> {
-    fn do_resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
+    fn do_resolve_container_value<'b: 'c, 'c, C: DataContainer>(
         &'b self,
         c: &'c C,
         id: Name,

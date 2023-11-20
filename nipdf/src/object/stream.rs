@@ -64,10 +64,7 @@ struct LZWDeflateDecodeParams {
 }
 
 impl LZWDeflateDecodeParams {
-    pub fn new<'a>(
-        d: &Dictionary,
-        r: Option<&ObjectResolver<'a>>,
-    ) -> Result<Self, ObjectValueError> {
+    pub fn new(d: &Dictionary, r: Option<&ObjectResolver<'_>>) -> Result<Self, ObjectValueError> {
         Ok(if let Some(r) = r {
             Self {
                 predictor: r
@@ -401,7 +398,7 @@ enum CCITTFGroup {
     Group4,
 }
 
-impl<'a, 'b> TryFrom<&'b Object> for CCITTFGroup {
+impl<'b> TryFrom<&'b Object> for CCITTFGroup {
     type Error = ObjectValueError;
 
     fn try_from(v: &'b Object) -> Result<Self, Self::Error> {
@@ -614,10 +611,10 @@ impl Stream {
         decoded.into_bytes()
     }
 
-    pub fn decode_image<'a, 'b>(
+    pub fn decode_image<'a>(
         &self,
         resolver: &ObjectResolver<'a>,
-        resources: Option<&ResourceDict<'a, 'b>>,
+        resources: Option<&ResourceDict<'a, '_>>,
     ) -> Result<DynamicImage, ObjectValueError> {
         let decoded = self._decode(resolver)?;
         let img_dict = ImageDict::new(None, &self.0, resolver)?;

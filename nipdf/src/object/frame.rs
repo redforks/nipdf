@@ -6,7 +6,7 @@ use std::num::NonZeroU32;
 /// Document id, two binary string.
 pub struct DocId(pub Box<[u8]>, pub Box<[u8]>);
 
-impl<'a> TryFrom<&Object> for DocId {
+impl TryFrom<&Object> for DocId {
     type Error = ObjectValueError;
 
     fn try_from(o: &Object) -> Result<Self, Self::Error> {
@@ -42,7 +42,7 @@ pub struct Frame {
     pub xref_section: XRefSection,
 }
 
-impl<'a> Frame {
+impl Frame {
     pub fn new(xref_pos: u32, trailer: Dictionary, xref_section: XRefSection) -> Self {
         Self {
             xref_pos,

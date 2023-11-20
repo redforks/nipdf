@@ -69,7 +69,7 @@ impl From<Rectangle> for tiny_skia::Rect {
 
 /// Convert from raw array, auto re-order to (left_x, lower_y, right_x, upper_y),
 /// see PDF 32000-1:2008 7.9.5
-impl<'a> TryFrom<&Object> for Rectangle {
+impl TryFrom<&Object> for Rectangle {
     type Error = ObjectValueError;
 
     fn try_from(object: &Object) -> Result<Self, Self::Error> {
@@ -185,7 +185,7 @@ pub trait FormXObjectDictTrait {
 #[educe(Deref)]
 pub struct ColorSpaceResources(HashMap<Name, ColorSpaceArgs>);
 
-impl<'a, 'b> TryFrom<&'b Object> for ColorSpaceResources {
+impl<'b> TryFrom<&'b Object> for ColorSpaceResources {
     type Error = ObjectValueError;
 
     fn try_from(object: &'b Object) -> Result<Self, Self::Error> {

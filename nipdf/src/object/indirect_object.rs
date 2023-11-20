@@ -4,7 +4,7 @@ use std::num::NonZeroU32;
 #[derive(Debug, Clone, PartialEq)]
 pub struct IndirectObject(ObjectId, Object);
 
-impl<'a> IndirectObject {
+impl IndirectObject {
     pub fn new(id: NonZeroU32, generation: u16, object: Object) -> Self {
         Self(ObjectId::new(id, generation), object)
     }

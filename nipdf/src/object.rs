@@ -3,7 +3,7 @@ use ahash::{HashMap, HashMapExt};
 use anyhow::Context;
 use educe::Educe;
 use log::error;
-use prescript::{name, Name};
+use prescript::Name;
 use std::{
     borrow::{Borrow, Cow},
     fmt::{Debug, Display},
@@ -22,13 +22,13 @@ pub type Array = Vec<Object>;
 #[educe(Deref, DerefMut)]
 pub struct Dictionary(HashMap<Name, Object>);
 
-impl<'a> FromIterator<(Name, Object)> for Dictionary {
+impl FromIterator<(Name, Object)> for Dictionary {
     fn from_iter<T: IntoIterator<Item = (Name, Object)>>(iter: T) -> Self {
         Self(iter.into_iter().collect())
     }
 }
 
-impl<'a> Dictionary {
+impl Dictionary {
     pub fn new() -> Self {
         Self(HashMap::default())
     }
@@ -303,7 +303,7 @@ where
 pub trait Resolver<'a> {
     fn resolve_reference<'b>(&'b self, v: &'b Object) -> Result<&'b Object, ObjectValueError>;
 
-    fn do_resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
+    fn do_resolve_container_value<'b: 'c, 'c, C: DataContainer>(
         &'b self,
         c: &'c C,
         id: Name,
@@ -319,7 +319,7 @@ impl<'a> Resolver<'a> for () {
         Ok(v)
     }
 
-    fn do_resolve_container_value<'b: 'c, 'c, C: DataContainer<'a>>(
+    fn do_resolve_container_value<'b: 'c, 'c, C: DataContainer>(
         &'b self,
         c: &'c C,
         id: Name,
@@ -367,7 +367,7 @@ pub struct SchemaDict<'b, T: Clone + Debug, R> {
     r: &'b R,
 }
 
-impl<'a, 'b, T: TypeValidator, R> SchemaDict<'b, T, R> {
+impl<'b, T: TypeValidator, R> SchemaDict<'b, T, R> {
     pub fn new(d: &'b Dictionary, r: &'b R, t: T) -> Result<Self, ObjectValueError> {
         t.valid(d)?;
         Ok(Self { t, d, r })
@@ -857,7 +857,7 @@ impl Object {
     }
 }
 
-impl<'a> Object {
+impl Object {
     pub fn as_int(&self) -> Result<i32, ObjectValueError> {
         match self {
             Object::Integer(i) => Ok(*i),
@@ -969,7 +969,7 @@ impl<'a> Object {
     }
 }
 
-impl<'a, const N: usize> TryFrom<&Object> for [f32; N] {
+impl<const N: usize> TryFrom<&Object> for [f32; N] {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
@@ -989,13 +989,13 @@ impl<'a, const N: usize> TryFrom<&Object> for [f32; N] {
 use pretty::RcDoc;
 
 #[cfg(feature = "pretty")]
-impl<'a> Object {
+impl Object {
     pub fn to_doc(&self) -> RcDoc {
         fn name_to_doc(n: &Name) -> RcDoc<'_> {
             RcDoc::text("/").append(RcDoc::text(n.as_ref()))
         }
 
-        fn dict_to_doc<'a>(d: &'a Dictionary) -> RcDoc<'a> {
+        fn dict_to_doc(d: &Dictionary) -> RcDoc<'_> {
             let mut keys = d.keys().collect::<Vec<_>>();
             keys.sort();
             RcDoc::text("<<")
@@ -1055,31 +1055,31 @@ impl Display for PrettyNumber {
     }
 }
 
-impl<'a> From<Stream> for Object {
+impl From<Stream> for Object {
     fn from(value: Stream) -> Self {
         Self::Stream(value)
     }
 }
 
-impl<'a> From<Array> for Object {
+impl From<Array> for Object {
     fn from(value: Array) -> Self {
         Self::Array(value)
     }
 }
 
-impl<'a> From<Reference> for Object {
+impl From<Reference> for Object {
     fn from(value: Reference) -> Self {
         Self::Reference(value)
     }
 }
 
-impl<'a> From<Dictionary> for Object {
+impl From<Dictionary> for Object {
     fn from(value: Dictionary) -> Self {
         Self::Dictionary(value)
     }
 }
 
-impl<'a> From<Name> for Object {
+impl From<Name> for Object {
     fn from(value: Name) -> Self {
         Self::Name(value)
     }
@@ -1111,19 +1111,19 @@ impl<'a> From<&'a str> for Object {
     }
 }
 
-impl<'a> From<f32> for Object {
+impl From<f32> for Object {
     fn from(value: f32) -> Self {
         Self::Number(value)
     }
 }
 
-impl<'a> From<i32> for Object {
+impl From<i32> for Object {
     fn from(value: i32) -> Self {
         Self::Integer(value)
     }
 }
 
-impl<'a> From<bool> for Object {
+impl From<bool> for Object {
     fn from(value: bool) -> Self {
         Self::Bool(value)
     }
@@ -1305,7 +1305,7 @@ impl HexString {
     }
 }
 
-impl<'a> From<HexString> for Object {
+impl From<HexString> for Object {
     fn from(value: HexString) -> Self {
         Self::HexString(value)
     }
@@ -1330,7 +1330,7 @@ impl Reference {
 }
 
 #[cfg(test)]
-impl<'a> From<u32> for Object {
+impl From<u32> for Object {
     fn from(value: u32) -> Self {
         Self::Reference(Reference::new_u32(value, 0))
     }

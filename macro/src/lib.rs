@@ -21,7 +21,7 @@ pub fn try_from_name_object(input: TokenStream) -> TokenStream {
             parse_quote!( prescript_macro::name!(#lit) => Ok(#t::#b))
         });
     let tokens = quote! {
-        impl<'a, 'b> TryFrom<&'b crate::object::Object> for #t {
+        impl<'b> TryFrom<&'b crate::object::Object> for #t {
             type Error = crate::object::ObjectValueError;
             fn try_from(object: &'b crate::object::Object) -> Result<Self, Self::Error> {
                 match object.as_name()? {
@@ -31,7 +31,7 @@ pub fn try_from_name_object(input: TokenStream) -> TokenStream {
             }
         }
 
-        impl<'a, 'b> crate::graphics::ConvertFromObject<'a, 'b> for #t {
+        impl<'b> crate::graphics::ConvertFromObject<'b> for #t {
             fn convert_from_object(objects: &'b mut Vec<crate::object::Object>) -> Result<Self, crate::object::ObjectValueError> {
                 let o = objects.pop().unwrap();
                 #t::try_from(&o).map_err(|_| crate::object::ObjectValueError::GraphicsOperationSchemaError)
@@ -66,7 +66,7 @@ pub fn try_from_int_object(input: TokenStream) -> TokenStream {
             parse_quote!( #digit=> Ok(#t::#b))
         });
     let tokens = quote! {
-        impl<'a, 'b> TryFrom<&'b crate::object::Object> for #t {
+        impl<'b> TryFrom<&'b crate::object::Object> for #t {
             type Error = crate::object::ObjectValueError;
             fn try_from(object: &'b crate::object::Object) -> Result<Self, Self::Error> {
                 let n = object.as_int()?;
@@ -77,7 +77,7 @@ pub fn try_from_int_object(input: TokenStream) -> TokenStream {
             }
         }
 
-        impl<'a, 'b> crate::graphics::ConvertFromObject<'a, 'b> for #t {
+        impl<'b> crate::graphics::ConvertFromObject<'b> for #t {
             fn convert_from_object(objects: &'b mut Vec<crate::object::Object>) -> Result<Self, crate::object::ObjectValueError> {
                 let o = objects.pop().unwrap();
                 #t::try_from(&o).map_err(|_| crate::object::ObjectValueError::GraphicsOperationSchemaError)
@@ -94,7 +94,7 @@ pub fn try_from_int_object_for_bitflags(input: TokenStream) -> TokenStream {
     let t = parse_macro_input!(input as ItemStruct);
     let t = t.ident;
     let tokens = quote! {
-        impl<'a> TryFrom<&crate::object::Object> for #t {
+        impl TryFrom<&crate::object::Object> for #t {
             type Error = crate::object::ObjectValueError;
 
             fn try_from(object: &crate::object::Object) -> Result<Self, Self::Error> {
@@ -187,7 +187,7 @@ pub fn graphics_operation_parser(input: TokenStream) -> TokenStream {
     // }));
 
     let tokens = quote! {
-        fn create_operation<'a>(op: &str, operands: &mut Vec<crate::object::Object>) -> Result<Option<Operation>, crate::object::ObjectValueError> {
+        fn create_operation(op: &str, operands: &mut Vec<crate::object::Object>) -> Result<Option<Operation>, crate::object::ObjectValueError> {
             Ok(match op {
                 #( #arms, )*
                 _ => None,
