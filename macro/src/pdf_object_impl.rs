@@ -357,13 +357,13 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                         parse_quote! {
                             crate::object::ValueTypeValidator<
                                 crate::object::NameTypeValueGetter,
-                                crate::object::EqualTypeValueChecker<&'static str>
+                                crate::object::EqualTypeValueChecker<prescript::Name>
                             >
                         },
                         parse_quote! {
                             crate::object::ValueTypeValidator::new(
-                                crate::object::NameTypeValueGetter::new(#typ_field),
-                                crate::object::EqualTypeValueChecker::new(#lit)
+                                crate::object::NameTypeValueGetter::new(prescript_macro::name!(#typ_field)),
+                                crate::object::EqualTypeValueChecker::new(prescript_macro::name!(#lit))
                             )
                         },
                     )
@@ -412,12 +412,12 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             ));
             let typ_field = type_field(def.attrs.as_slice()).unwrap_or_else(|| "Type".to_owned());
             let checker = t.map_either(
-                    |t| -> Expr {parse_quote!{<crate::object::EqualTypeValueChecker<&'static str> as crate::object::TypeValueCheck<_>>::option(crate::object::EqualTypeValueChecker::new(#t))}},
-                    |t|-> Expr {parse_quote!{crate::object::EqualTypeValueChecker::new(#t)} },
+                    |t| -> Expr {parse_quote!{<crate::object::EqualTypeValueChecker<prescript::Name> as crate::object::TypeValueCheck<_>>::option(crate::object::EqualTypeValueChecker::new(prescript_macro::name!(#t)))}},
+                    |t| -> Expr {parse_quote!{crate::object::EqualTypeValueChecker::new(prescript_macro::name!(#t))} },
                 ).into_inner();
             let checker_type = t.map_either(
-                    |_| -> Type {parse_quote!{crate::object::OptionTypeValueChecker<crate::object::EqualTypeValueChecker<&'static str>>}},
-                    |_|-> Type {parse_quote!{crate::object::EqualTypeValueChecker<&'static str>}},
+                    |_| -> Type {parse_quote!{crate::object::OptionTypeValueChecker<crate::object::EqualTypeValueChecker<prescript::Name>>}},
+                    |_| -> Type {parse_quote!{crate::object::EqualTypeValueChecker<prescript::Name>}},
                 ).into_inner();
             (
                 parse_quote! {
@@ -428,19 +428,19 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                         >,
                         crate::object::ValueTypeValidator<
                             crate::object::NameTypeValueGetter,
-                            crate::object::EqualTypeValueChecker<&'static str>
+                            crate::object::EqualTypeValueChecker<prescript::Name>
                         >
                     >
                 },
                 parse_quote! {
                     crate::object::AndValueTypeValidator::new(
                         crate::object::ValueTypeValidator::new(
-                            crate::object::NameTypeValueGetter::new(#typ_field),
+                            crate::object::NameTypeValueGetter::new(prescript_macro::name!(#typ_field)),
                             #checker,
                         ),
                         crate::object::ValueTypeValidator::new(
-                            crate::object::NameTypeValueGetter::new("Subtype"),
-                            crate::object::EqualTypeValueChecker::new(#st)
+                            crate::object::NameTypeValueGetter::new(prescript_macro::name!("Subtype")),
+                            crate::object::EqualTypeValueChecker::new(prescript_macro::name!(#st))
                         ),
                     )
                 },
@@ -492,13 +492,13 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 parse_quote! {
                     crate::object::ValueTypeValidator<
                         crate::object::NameTypeValueGetter,
-                        crate::object::OptionTypeValueChecker<crate::object::EqualTypeValueChecker<&'static str>>
+                        crate::object::OptionTypeValueChecker<crate::object::EqualTypeValueChecker<prescript::Name>>
                     >
                 },
                 parse_quote! {
                     crate::object::ValueTypeValidator::new(
-                        crate::object::NameTypeValueGetter::new(#typ_field),
-                        <crate::object::EqualTypeValueChecker<&'static str> as crate::object::TypeValueCheck<_>>::option(crate::object::EqualTypeValueChecker::new(#literal)),
+                        crate::object::NameTypeValueGetter::new(prescript_macro::name!(#typ_field)),
+                        <crate::object::EqualTypeValueChecker<prescript::Name> as crate::object::TypeValueCheck<_>>::option(crate::object::EqualTypeValueChecker::new(prescript_macro::name!(#literal))),
                     )
                 },
             )
