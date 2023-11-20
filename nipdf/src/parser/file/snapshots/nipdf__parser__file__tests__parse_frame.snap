@@ -30,7 +30,9 @@ expression: "parse_frame(b\"xref\n1 2\n0000000000 00000 n\n0000000010 00000 n\nt
         Dictionary(
             {
                 Name(
-                    "Size",
+                    Left(
+                        272,
+                    ),
                 ): Integer(
                     1,
                 ),

@@ -626,7 +626,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             Operation::SetFlatness(flatness) => self.current_mut().set_flatness(flatness),
             Operation::SetGraphicsStateParameters(nm) => {
                 let res = self.resources.ext_g_state().unwrap();
-                let res = res.get(&name(&nm.0)).expect("ExtGState not found");
+                let res = res.get(&nm.0).expect("ExtGState not found");
                 self.current_mut().set_graphics_state(res);
             }
 
@@ -686,7 +686,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                 self.text_object_mut().set_horizontal_scaling(scale);
             }
             Operation::SetLeading(leading) => self.text_object_mut().set_leading(leading),
-            Operation::SetFont(name, size) => self.text_object_mut().set_font(&name, size),
+            Operation::SetFont(name, size) => self.text_object_mut().set_font(name, size),
             Operation::SetTextRenderingMode(mode) => {
                 self.text_object_mut().set_text_rendering_mode(mode);
             }
@@ -1000,7 +1000,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
     /// Paints the specified XObject. Only XObjectType::Image supported
     fn paint_x_object(&mut self, nm: &NameOfDict) -> AnyResult<()> {
         let x_objects = self.resources.x_object()?;
-        let x_object = &x_objects[&name(&nm.0)];
+        let x_object = &x_objects[&nm.0];
 
         match x_object.subtype()? {
             XObjectType::Image => self.paint_image_x_object(x_object),
@@ -1124,7 +1124,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
     fn paint_shading(&mut self, nm: NameOfDict) -> AnyResult<()> {
         let shading = self.resources.shading()?;
-        let shading = &shading[&name(&nm.0)];
+        let shading = &shading[&nm.0];
         match build_shading(shading, self.resources)? {
             Some(Shading::Radial(radial)) => self.paint_radial(&radial),
             Some(Shading::Axial(axial)) => self.paint_axial(axial),
@@ -1421,9 +1421,9 @@ impl TextObject {
         self.line_matrix = TextToUserSpace::identity();
     }
 
-    fn set_font(&mut self, nm: &NameOfDict, size: f32) {
+    fn set_font(&mut self, nm: NameOfDict, size: f32) {
         self.font_size = size;
-        self.font_name = Some(name(&nm.0));
+        self.font_name = Some(nm.0);
     }
 
     fn move_text_position(&mut self, p: Point) {

@@ -132,7 +132,7 @@ fn value_type_validator() {
 
     assert_eq!(
         Err(ObjectValueError::DictSchemaUnExpectedType(
-            "Type: Page".into()
+            "/Type: /Page".into()
         )),
         validator.valid(&d)
     );
@@ -152,7 +152,7 @@ fn option_value_type_validator() {
 fn one_of_type_value_checker() {
     let checker = OneOfTypeValueChecker::new(vec![name!("Page"), name!("Pages")]);
     let schema_type = <OneOfTypeValueChecker<Name> as TypeValueCheck<Name>>::schema_type(&checker);
-    assert_eq!("Page|Pages", &schema_type);
+    assert_eq!("/Page|/Pages", &schema_type);
 
     assert!(!checker.check(None::<&Name>));
     assert!(!checker.check(Some(&name!("blah"))));

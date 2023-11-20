@@ -209,7 +209,7 @@ pub enum ColorArgsOrName {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct NameOfDict(pub String);
+pub struct NameOfDict(pub Name);
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NameOrDict<'a> {
@@ -509,7 +509,7 @@ impl<'a, 'b> ConvertFromObject<'a, 'b> for String {
 impl<'a, 'b> ConvertFromObject<'a, 'b> for NameOfDict {
     fn convert_from_object(objects: &'b mut Vec<Object<'a>>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
-        o.as_name().map(|s| NameOfDict(s.to_string()))
+        o.as_name().map(|s| NameOfDict(s.clone()))
     }
 }
 

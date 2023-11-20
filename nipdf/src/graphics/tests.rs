@@ -32,7 +32,7 @@ fn parse_operator_succeed(s: &str, op: &str) {
         Operation::ModifyCTM(UserToDeviceIndependentSpace::new(
             296f32, 0f32, 0f32, 295f32, 0f32, 0f32
         )),
-        Operation::PaintXObject(NameOfDict("Image80".into())),
+        Operation::PaintXObject(NameOfDict(name!("Image80"))),
         Operation::RestoreGraphicsState
     ];
     "cm and Do"
@@ -50,12 +50,12 @@ fn test_parse_operations(s: &str) -> Vec<Operation> {
     UserToDeviceIndependentSpace::new(296f32, 0f32, 0f32, 295f32, 0f32, 0f32)
 ); "cm")]
 #[test_case("[1 2] 0.5 d" => Operation::SetDashPattern(vec![1f32, 2f32], 0.5f32); "dash-pattern")]
-#[test_case("/stateName gs" => Operation::SetGraphicsStateParameters(NameOfDict("stateName".into())); "gs")]
+#[test_case("/stateName gs" => Operation::SetGraphicsStateParameters(NameOfDict(name!("stateName"))); "gs")]
 #[test_case("1 2 3 4 5 6 c" => Operation::AppendBezierCurve(Point::new(1f32, 2f32), Point::new(3f32, 4f32), Point::new(5f32, 6f32)); "c")]
 #[test_case("(foo)Tj" => Operation::ShowText(TextString::Text(LiteralString::new(b"(foo)"))); "Tj")]
 #[test_case("[(foo) 1]TJ" => Operation::ShowTexts(vec![TextStringOrNumber::TextString(TextString::Text(LiteralString::new(b"(foo)"))), TextStringOrNumber::Number(1f32)]); "show texts")]
-#[test_case("/tag /name DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict("tag".into()), NameOrDict::Name(name!("name"))); "DP with name")]
-#[test_case("/tag<<>>DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict("tag".into()), NameOrDict::Dict(Dictionary::new())); "DP with dict")]
+#[test_case("/tag /name DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict(name!("tag")), NameOrDict::Name(name!("name"))); "DP with name")]
+#[test_case("/tag<<>>DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict(name!("tag")), NameOrDict::Dict(Dictionary::new())); "DP with dict")]
 fn test_parse_operation(s: &str) -> Operation {
     let (_, mut result) = parse_operations(s.as_bytes()).unwrap();
     assert_eq!(1, result.len());

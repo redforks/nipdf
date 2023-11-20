@@ -7,10 +7,14 @@ expression: parse_dict(buf.as_ref()).unwrap()
     Dictionary(
         {
             Name(
-                "id",
+                Right(
+                    "id",
+                ),
             ): Name(
                 Name(
-                    "Value",
+                    Right(
+                        "Value",
+                    ),
                 ),
             ),
         },
