@@ -1,2 +1,9 @@
-#[rustfmt::skip]
-pub const BUILT_IN_NAMES: [&str; 7] = ["<<", ">>", "[", "]", "for", "if", ".notdef"];
+pub(crate) static BUILT_IN_NAMES: [&str; 7] = [
+    ".notdef",
+    "<<",
+    ">>",
+    "[",
+    "]",
+    "for",
+    "if",
+];

@@ -1,0 +1,12 @@
+# type1 predefined encodings
+.notdef
+
+# postscript common operators
+[
+]
+<<
+>>
+for
+if
+
+# cff predefined encodings
