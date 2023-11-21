@@ -46,7 +46,7 @@ impl TryFrom<&Object> for Extend {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.as_arr()?;
+        let arr = obj.arr()?;
         if arr.len() != 2 {
             return Err(ObjectValueError::UnexpectedType);
         }
@@ -64,7 +64,7 @@ impl TryFrom<&Object> for AxialCoords {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.as_arr()?;
+        let arr = obj.arr()?;
         if arr.len() != 4 {
             return Err(ObjectValueError::UnexpectedType);
         }
@@ -119,7 +119,7 @@ impl TryFrom<&Object> for RadialCoords {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.as_arr()?;
+        let arr = obj.arr()?;
         if arr.len() != 6 {
             return Err(ObjectValueError::UnexpectedType);
         }

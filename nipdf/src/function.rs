@@ -30,7 +30,7 @@ impl TryFrom<&Object> for Domain<f32> {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.as_arr()?;
+        let arr = obj.arr()?;
         if arr.len() != 2 {
             return Err(ObjectValueError::UnexpectedType);
         }
@@ -42,7 +42,7 @@ impl TryFrom<&Object> for Domain<u32> {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.as_arr()?;
+        let arr = obj.arr()?;
         if arr.len() != 2 {
             return Err(ObjectValueError::UnexpectedType);
         }
@@ -60,7 +60,7 @@ where
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.as_arr()?;
+        let arr = obj.arr()?;
         let mut domains = Vec::with_capacity(arr.len() / 2);
         assert!(arr.len() % 2 == 0);
         arr.chunks_exact(2)

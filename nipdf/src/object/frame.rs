@@ -10,7 +10,7 @@ impl TryFrom<&Object> for DocId {
     type Error = ObjectValueError;
 
     fn try_from(o: &Object) -> Result<Self, Self::Error> {
-        let arr = o.as_arr()?;
+        let arr = o.arr()?;
         if arr.len() != 2 {
             return Err(ObjectValueError::UnexpectedType);
         }

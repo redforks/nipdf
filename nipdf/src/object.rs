@@ -546,7 +546,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
     ) -> Result<Vec<V>, ObjectValueError> {
         self.opt_get(id.clone())?
             .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
-            .as_arr()?
+            .arr()?
             .iter()
             .map(f)
             .collect()
@@ -558,13 +558,13 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
         f: impl Fn(&Object) -> Result<V, ObjectValueError>,
     ) -> Result<Option<Vec<V>>, ObjectValueError> {
         self.opt_get(id)?
-            .map_or(Ok(None), |o| o.as_arr().map(Some))?
+            .map_or(Ok(None), |o| o.arr().map(Some))?
             .map(|arr| arr.iter().map(f).collect())
             .transpose()
     }
 
     pub fn opt_arr(&self, id: Name) -> Result<Option<&'b Array>, ObjectValueError> {
-        self.opt_get(id)?.map_or(Ok(None), |o| o.as_arr().map(Some))
+        self.opt_get(id)?.map_or(Ok(None), |o| o.arr().map(Some))
     }
 
     pub fn opt_single_or_arr_stream(&self, id: Name) -> Result<Vec<&'b Stream>, ObjectValueError> {
@@ -679,7 +679,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
         arr.map_or_else(
             || Ok(vec![]),
             |arr| {
-                let arr = arr.as_arr()?;
+                let arr = arr.arr()?;
                 let mut res = Vec::with_capacity(arr.len());
                 for obj in arr {
                     let dict = self.r.resolve_reference(obj)?;
@@ -940,13 +940,6 @@ impl Object {
         }
     }
 
-    pub fn as_arr(&self) -> Result<&Array, ObjectValueError> {
-        match self {
-            Object::Array(a) => Ok(a),
-            _ => Err(ObjectValueError::UnexpectedType),
-        }
-    }
-
     pub fn into_arr(self) -> Result<Array, ObjectValueError> {
         match self {
             Object::Array(a) => Ok(a),
@@ -1002,7 +995,7 @@ impl<const N: usize> TryFrom<&Object> for [f32; N] {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.as_arr()?;
+        let arr = obj.arr()?;
         if arr.len() != N {
             return Err(ObjectValueError::UnexpectedType);
         }

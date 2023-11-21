@@ -27,7 +27,7 @@ impl<S, T> TryFrom<&Object> for Transform2D<f32, S, T> {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.as_arr()?;
+        let arr = obj.arr()?;
         if arr.len() != 6 {
             return Err(ObjectValueError::UnexpectedType);
         }

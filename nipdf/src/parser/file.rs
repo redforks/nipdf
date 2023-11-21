@@ -105,7 +105,7 @@ impl CrossReferenceStreamDict {
         let w = d
             .get(&name!("W"))
             .ok_or(ObjectValueError::DictKeyNotFound)?
-            .as_arr()?
+            .arr()?
             .iter()
             .map(|o| o.int().map(|v| v as u32))
             .collect::<Result<Vec<_>, _>>()?;
