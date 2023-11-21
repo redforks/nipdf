@@ -1171,7 +1171,7 @@ impl From<bool> for Object {
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct LiteralString(Box<[u8]>);
+pub struct LiteralString(Rc<[u8]>);
 
 impl LiteralString {
     pub fn new(s: &[u8]) -> Self {
@@ -1255,7 +1255,14 @@ impl LiteralString {
     }
 
     pub fn update(&mut self, f: impl FnOnce(&mut [u8])) {
-        f(&mut self.0);
+        match Rc::get_mut(&mut self.0) {
+            Some(buf) => f(buf),
+            None => {
+                let mut buf = self.0.as_ref().to_vec();
+                f(&mut buf);
+                self.0 = buf.into();
+            }
+        }
     }
 
     pub fn as_str(&self) -> &str {
