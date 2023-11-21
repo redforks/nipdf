@@ -14,7 +14,7 @@ use nom::{
     Err, Parser,
 };
 use prescript::Name;
-use std::num::NonZeroU32;
+use std::{num::NonZeroU32, rc::Rc};
 
 pub(crate) mod color_space;
 mod pattern;
@@ -121,7 +121,7 @@ impl<'b> ConvertFromObject<'b> for ColorArgs {
 #[derive(Clone, PartialEq, Debug)]
 pub enum ColorSpaceArgs {
     Name(Name),
-    Array(Array),
+    Array(Rc<Array>),
     Ref(NonZeroU32),
 }
 
@@ -444,7 +444,7 @@ where
 
 impl<'b, T: for<'c> ConvertFromObject<'c>> ConvertFromObject<'b> for Vec<T> {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
-        let mut arr = objects.pop().unwrap().into_arr()?;
+        let mut arr = Rc::into_inner(objects.pop().unwrap().into_arr()?).unwrap();
         let mut result = Self::new();
         while !arr.is_empty() {
             result.push(T::convert_from_object(&mut arr)?);

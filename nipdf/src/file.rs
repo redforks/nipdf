@@ -20,7 +20,7 @@ use nom::Finish;
 use once_cell::unsync::OnceCell;
 use prescript::Name;
 use prescript_macro::name;
-use std::{iter::repeat_with, num::NonZeroU32};
+use std::{iter::repeat_with, num::NonZeroU32, rc::Rc};
 
 mod page;
 pub use page::*;
@@ -262,7 +262,10 @@ fn decrypt_string(key: &[u8], id: ObjectId, mut o: Object) -> Object {
                 Object::HexString(ref mut s) => self.hex_string(s),
                 Object::LiteralString(ref mut s) => self.literal_string(s),
                 Object::Dictionary(ref mut d) => self.dict(d),
-                Object::Array(ref mut arr) => arr.iter_mut().for_each(|o| self.decrypt(o)),
+                Object::Array(ref mut arr) => Rc::get_mut(arr)
+                    .unwrap()
+                    .iter_mut()
+                    .for_each(|o| self.decrypt(o)),
                 Object::Stream(ref mut s) => s.update_dict(|d| self.dict(d)),
                 _ => {}
             }
@@ -431,7 +434,7 @@ impl<'a> ObjectResolver<'a> {
             Object::Stream(s) => Ok(vec![T::new(Some(id), s.as_dict(), self)?]),
             Object::Array(arr) => {
                 let mut res = Vec::with_capacity(arr.len());
-                for obj in arr {
+                for obj in arr.iter() {
                     let dict = self.resolve_reference(obj)?;
                     res.push(T::new(
                         obj.reference().ok().map(|id| id.id().id()),

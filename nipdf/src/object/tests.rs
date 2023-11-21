@@ -135,7 +135,7 @@ fn pretty_print(o: impl Into<Object>) -> String {
 #[test]
 fn f32_arr_try_from_object() {
     let arr = vec![1.0f32.into(), 2.0f32.into()];
-    let o = Object::Array(arr);
+    let o = Object::Array(Rc::new(arr));
     let arr2: [f32; 2] = (&o).try_into().unwrap();
     assert_eq!([1.0f32, 2.0f32], arr2);
 }

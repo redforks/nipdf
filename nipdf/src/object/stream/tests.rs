@@ -1,6 +1,7 @@
 use super::*;
 use crate::{file::decode_stream, function::Domain, object::Name};
 use test_case::test_case;
+use std::rc::Rc;
 
 #[test_case([] => Ok(vec![]); "empty")]
 #[test_case(
@@ -8,7 +9,7 @@ use test_case::test_case;
     "incorrect filter type"
 )]
 #[test_case(
-    [(&KEY_FILTER, Object::Array(vec![1.into()]))] => matches Err(_);
+    [(&KEY_FILTER, Object::Array(Rc::new(vec![1.into()])))] => matches Err(_);
     "filter is array but item not name"
 )]
 #[test_case(
@@ -24,7 +25,7 @@ use test_case::test_case;
 )]
 #[test_case(
     [(&KEY_FILTER, FILTER_FLATE_DECODE.clone().into()),
-     (&KEY_FILTER_PARAMS, Object::Array(vec![Object::Null]))] =>
+     (&KEY_FILTER_PARAMS, Object::Array(Rc::new(vec![Object::Null])))] =>
     Ok(vec![(FILTER_FLATE_DECODE.clone(), None)]);
      "one filter with null params in array"
 )]
@@ -120,11 +121,12 @@ fn image_mask_try_from_object() {
     // ColorKeyMask
     #[rustfmt::skip]
     let o = Object::Array(
+        Rc::new(
         vec![
             0.into(), 1.into(), // domain 1
             0.1.into(), 0.9.into(), // domain 2
             0.2.into(), 0.8.into(), // domain 3
-        ],
+        ]),
     );
     let mask = ImageMask::try_from(&o).unwrap();
     assert_eq!(

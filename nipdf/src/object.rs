@@ -10,6 +10,7 @@ use std::{
     fmt::{Debug, Display},
     iter::Peekable,
     num::NonZeroU32,
+    rc::Rc,
     str::from_utf8,
 };
 
@@ -663,7 +664,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
                 Object::Stream(s) => Ok(vec![O::new(id, s.as_dict(), self.r)?]),
                 Object::Array(arr) => {
                     let mut res = Vec::with_capacity(arr.len());
-                    for obj in arr {
+                    for obj in arr.iter() {
                         let dict = self.r.resolve_reference(obj)?;
                         res.push(O::new(
                             obj.reference().ok().map(|id| id.id().id()),
@@ -843,7 +844,7 @@ pub enum Object {
     HexString(HexString),
     Name(Name),
     Dictionary(Dictionary),
-    Array(Array),
+    Array(Rc<Array>),
     Stream(Stream),
     Reference(Reference),
 }
@@ -956,7 +957,7 @@ impl Object {
         }
     }
 
-    pub fn into_arr(self) -> Result<Array, ObjectValueError> {
+    pub fn into_arr(self) -> Result<Rc<Array>, ObjectValueError> {
         match self {
             Object::Array(a) => Ok(a),
             _ => Err(ObjectValueError::UnexpectedType),
@@ -1095,7 +1096,7 @@ impl From<Stream> for Object {
 
 impl From<Array> for Object {
     fn from(value: Array) -> Self {
-        Self::Array(value)
+        Self::Array(Rc::new(value))
     }
 }
 

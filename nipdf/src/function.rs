@@ -53,10 +53,7 @@ impl TryFrom<&Object> for Domain<u32> {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Domains<T = f32>(pub Vec<Domain<T>>);
 
-impl<T> TryFrom<&Object> for Domains<T>
-where
-    Domain<T>: for<'b> TryFrom<&'b Object, Error = ObjectValueError>,
-{
+impl TryFrom<&Object> for Domains<f32> {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
@@ -64,7 +61,9 @@ where
         let mut domains = Vec::with_capacity(arr.len() / 2);
         assert!(arr.len() % 2 == 0);
         arr.chunks_exact(2)
-            .map(|chunk| Domain::try_from(&Object::Array(chunk.to_vec())))
+            .map(|chunk| {
+                Ok::<_, ObjectValueError>(Domain::new(chunk[0].as_number()?, chunk[1].as_number()?))
+            })
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
             .for_each(|domain| domains.push(domain));
@@ -72,6 +71,26 @@ where
     }
 }
 
+impl TryFrom<&Object> for Domains<u32> {
+    type Error = ObjectValueError;
+
+    fn try_from(obj: &Object) -> Result<Self, Self::Error> {
+        let arr = obj.arr()?;
+        let mut domains = Vec::with_capacity(arr.len() / 2);
+        assert!(arr.len() % 2 == 0);
+        arr.chunks_exact(2)
+            .map(|chunk| {
+                Ok::<_, ObjectValueError>(Domain::new(
+                    chunk[0].int()? as u32,
+                    chunk[1].int()? as u32,
+                ))
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .for_each(|domain| domains.push(domain));
+        Ok(Self(domains))
+    }
+}
 impl Domains {
     /// Function input argument count
     pub fn n(&self) -> usize {

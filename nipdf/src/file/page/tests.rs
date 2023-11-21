@@ -3,7 +3,7 @@ use crate::{
     file::{ObjectResolver, XRefTable},
     object::{Array, Object},
 };
-use std::num::NonZeroU32;
+use std::{num::NonZeroU32, rc::Rc};
 use test_case::test_case;
 
 #[test_case(1.0, 2, 3.0, 4.0 => (1.0, 2.0, 3.0, 4.0); "normal")]
@@ -14,7 +14,7 @@ fn rectangle_from_array(
     x2: impl Into<Object>,
     y2: impl Into<Object>,
 ) -> (f32, f32, f32, f32) {
-    let arr = Object::Array(vec![x1.into(), y1.into(), x2.into(), y2.into()]);
+    let arr = Object::Array(Rc::new(vec![x1.into(), y1.into(), x2.into(), y2.into()]));
     let rect = Rectangle::try_from(&arr).unwrap();
     (rect.left_x, rect.lower_y, rect.right_x, rect.upper_y)
 }
@@ -56,7 +56,9 @@ fn parse_page_tree(root_id: u32, tree: Vec<(u32, Vec<u32>)>) -> Vec<u32> {
         );
         dict.insert(
             name!("Kids"),
-            Object::Array(kids.into_iter().map(Object::new_ref).collect::<Array>()),
+            Object::Array(Rc::new(
+                kids.into_iter().map(Object::new_ref).collect::<Array>(),
+            )),
         );
         resolver.setup_object(id, Object::Dictionary(dict));
     }
