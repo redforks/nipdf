@@ -1214,7 +1214,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         );
 
         let stream: &Object = tile.resolver().resolve(tile.id().unwrap())?;
-        let stream = stream.as_stream()?;
+        let stream = stream.stream()?;
         let bytes = stream.decode(tile.resolver())?;
         let (_, ops) = terminated(parse_operations, eof)(bytes.as_ref()).unwrap();
         let b_box = tile.b_box()?;

@@ -665,7 +665,7 @@ pub(crate) fn decode_stream<
     let buf = read_sample_file(file_path);
     let f = File::parse(buf, "", "")?;
     let resolver = f.resolver()?;
-    let stream = resolver.resolve(id.try_into()?)?.as_stream()?;
+    let stream = resolver.resolve(id.try_into()?)?.stream()?;
     f_assert(stream.as_dict(), &resolver)?;
     Ok(stream.decode(&resolver)?.into_owned())
 }

@@ -353,7 +353,7 @@ impl<'a, 'b> SampledFunctionDict<'a, 'b> {
         assert_eq!(InterpolationOrder::Linear, self.order()?);
         let size = self.size()?;
         let resolver = self.d.resolver();
-        let stream = resolver.resolve(self.id.unwrap())?.as_stream()?;
+        let stream = resolver.resolve(self.id.unwrap())?.stream()?;
         let sample_data = stream.decode(resolver)?;
         let signature = f.signature()?;
         assert!(sample_data.len() >= size[0] as usize * signature.n_returns().unwrap());

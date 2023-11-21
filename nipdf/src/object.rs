@@ -572,9 +572,9 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
         match self.resolve_container_value(id)? {
             Object::Array(arr) => arr
                 .iter()
-                .map(|o| resolver.resolve_reference(o)?.as_stream())
+                .map(|o| resolver.resolve_reference(o)?.stream())
                 .collect(),
-            o => resolver.resolve_reference(o)?.as_stream().map(|o| vec![o]),
+            o => resolver.resolve_reference(o)?.stream().map(|o| vec![o]),
         }
     }
 
@@ -609,8 +609,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
     }
 
     pub fn opt_stream(&self, id: Name) -> Result<Option<&'b Stream>, ObjectValueError> {
-        self.opt_get(id)?
-            .map_or(Ok(None), |o| o.as_stream().map(Some))
+        self.opt_get(id)?.map_or(Ok(None), |o| o.stream().map(Some))
     }
 
     pub fn opt_str(&self, id: Name) -> Result<Option<&str>, ObjectValueError> {
@@ -937,13 +936,6 @@ impl Object {
         match self {
             Object::Dictionary(d) => Ok(d),
             Object::Stream(s) => Ok(s.as_dict()),
-            _ => Err(ObjectValueError::UnexpectedType),
-        }
-    }
-
-    pub fn as_stream(&self) -> Result<&Stream, ObjectValueError> {
-        match self {
-            Object::Stream(s) => Ok(s),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }

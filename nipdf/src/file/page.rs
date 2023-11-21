@@ -154,7 +154,7 @@ pub trait XObjectDictTrait {
 
 impl<'a, 'b> XObjectDict<'a, 'b> {
     fn as_stream(&self) -> Result<&Stream, ObjectValueError> {
-        self.d.resolver().resolve(self.id().unwrap())?.as_stream()
+        self.d.resolver().resolve(self.id().unwrap())?.stream()
     }
 }
 

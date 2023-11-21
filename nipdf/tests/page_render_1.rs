@@ -21,7 +21,7 @@ fn decode_image(id: u32) -> AnyResult<String> {
     let f = File::parse(buf, "", "").unwrap_or_else(|_| panic!("failed to parse {path:?}"));
     let resolver = f.resolver()?;
     let obj = resolver.resolve(NonZeroU32::new(id).unwrap())?;
-    let image = obj.as_stream()?.decode_image(&resolver, None)?;
+    let image = obj.stream()?.decode_image(&resolver, None)?;
     let hash = Md5::digest(image.into_bytes());
     Ok(hex::encode(hash))
 }
