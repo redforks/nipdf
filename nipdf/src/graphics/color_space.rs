@@ -149,7 +149,7 @@ where
             ColorSpaceArgs::Array(arr) => match arr[0].name()? {
                 name!("ICCBased") => {
                     debug_assert_eq!(2, arr.len());
-                    let id = arr[1].as_ref()?;
+                    let id = arr[1].reference()?;
                     let d: ICCStreamDict = resolver.resolve_pdf_object(id.id().id())?;
                     match d.alternate()?.as_ref() {
                         Some(args) => Self::from_args(args, resolver, resources),
@@ -165,7 +165,7 @@ where
                     debug_assert_eq!(4, arr.len());
                     let alternate = ColorSpaceArgs::try_from(&arr[2])?;
                     let functions: Vec<FunctionDict> =
-                        resolver.resolve_one_or_more_pdf_object(arr[3].as_ref()?.id().id())?;
+                        resolver.resolve_one_or_more_pdf_object(arr[3].reference()?.id().id())?;
                     let functions: Result<Vec<_>, _> =
                         functions.into_iter().map(|f| f.func()).collect();
                     let function = NFunc::new_box(functions?)?;

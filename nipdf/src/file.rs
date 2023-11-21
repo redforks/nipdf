@@ -434,7 +434,7 @@ impl<'a> ObjectResolver<'a> {
                 for obj in arr {
                     let dict = self.resolve_reference(obj)?;
                     res.push(T::new(
-                        obj.as_ref().ok().map(|id| id.id().id()),
+                        obj.reference().ok().map(|id| id.id().id()),
                         dict.as_dict()?,
                         self,
                     )?);
@@ -596,7 +596,7 @@ impl File {
         )?;
 
         let root_id = trailers.iter().find_map(|t| t.get(&name!("Root"))).unwrap();
-        let root_id = root_id.as_ref().unwrap().id().id();
+        let root_id = root_id.reference().unwrap().id().id();
 
         Ok(Self {
             head_ver: head_ver.to_owned(),

@@ -593,18 +593,18 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
         self.d
             .get(&id.clone())
             .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id))?
-            .as_ref()
+            .reference()
             .map(|r| r.id().id())
     }
 
     pub fn opt_ref(&self, id: Name) -> Result<Option<NonZeroU32>, ObjectValueError> {
         self.d
             .get(&id)
-            .map_or(Ok(None), |o| o.as_ref().map(|r| Some(r.id().id())))
+            .map_or(Ok(None), |o| o.reference().map(|r| Some(r.id().id())))
     }
 
     pub fn ref_id_arr(&self, id: Name) -> Result<Vec<NonZeroU32>, ObjectValueError> {
-        self.opt_arr_map(id, |o| o.as_ref().map(|r| r.id().id()))
+        self.opt_arr_map(id, |o| o.reference().map(|r| r.id().id()))
             .map(|o| o.unwrap_or_default())
     }
 
@@ -656,7 +656,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
                     for obj in arr {
                         let dict = self.r.resolve_reference(obj)?;
                         res.push(O::new(
-                            obj.as_ref().ok().map(|id| id.id().id()),
+                            obj.reference().ok().map(|id| id.id().id()),
                             dict.as_dict()?,
                             self.r,
                         )?);
@@ -684,7 +684,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
                 for obj in arr {
                     let dict = self.r.resolve_reference(obj)?;
                     res.push(O::new(
-                        obj.as_ref().ok().map(|id| id.id().id()),
+                        obj.reference().ok().map(|id| id.id().id()),
                         dict.as_dict()?,
                         self.r,
                     )?);
@@ -943,13 +943,6 @@ impl Object {
     pub fn into_arr(self) -> Result<Array, ObjectValueError> {
         match self {
             Object::Array(a) => Ok(a),
-            _ => Err(ObjectValueError::UnexpectedType),
-        }
-    }
-
-    pub fn as_ref(&self) -> Result<&Reference, ObjectValueError> {
-        match self {
-            Object::Reference(r) => Ok(r),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
