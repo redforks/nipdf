@@ -77,7 +77,7 @@ impl ObjectStream {
     pub fn new(stream: Stream, file: &[u8]) -> Result<Self, ObjectValueError> {
         let d = stream.as_dict();
         assert_eq!(name!("ObjStm"), d[&name!("Type")].name()?);
-        let n = d.get_int(name!("N"), 0)? as usize;
+        let n = d.get(&name!("N")).map_or(Ok(0), |v| v.int())? as usize;
         assert!(
             !d.contains_key(&name!("Extends")),
             "Extends is not supported"

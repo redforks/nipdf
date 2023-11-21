@@ -33,17 +33,6 @@ fn hex_string_decoded(exp: impl AsRef<[u8]>, buf: impl AsRef<[u8]>) {
     assert_eq!(HexString::new(buf.as_ref()).as_bytes(), exp.as_ref());
 }
 
-#[test_case(Ok(10), "unknown"; "not exist use default value")]
-#[test_case(Ok(1), "a"; "id exist, and is int")]
-#[test_case(Err(ObjectValueError::UnexpectedType), "b"; "id exist, but not int")]
-fn dict_get_int(exp: Result<i32, ObjectValueError>, id: &str) {
-    let mut d = Dictionary::default();
-    d.set(name!("a"), 1i32);
-    d.set(name!("b"), "(2)");
-
-    assert_eq!(exp, d.get_int(name(id), 10));
-}
-
 #[test_case(Object::LiteralString(LiteralString::new(b"(foo)")), "(foo)"; "literal string")]
 #[test_case(Object::HexString(HexString::new(b"<901FA3>")), "<901FA3>"; "hex string")]
 #[test_case(Object::Name(name!("foo")), "/foo"; "name")]

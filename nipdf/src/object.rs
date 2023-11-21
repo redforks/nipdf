@@ -33,10 +33,6 @@ impl Dictionary {
         Self(HashMap::default())
     }
 
-    pub fn get_int(&self, id: Name, default: i32) -> Result<i32, ObjectValueError> {
-        self.0.get(&id).map_or(Ok(default), |o| o.int())
-    }
-
     pub fn set(&mut self, id: Name, value: impl Into<Object>) {
         self.0.insert(id, value.into());
     }
