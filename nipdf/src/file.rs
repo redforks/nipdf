@@ -257,7 +257,7 @@ fn decrypt_string(key: &[u8], id: ObjectId, mut o: Object) -> Object {
             }
         }
 
-        fn arr(&self, arr: &mut Rc<Array>) {
+        fn arr(&self, arr: &mut Array) {
             match Rc::get_mut(arr) {
                 Some(r) => {
                     for o in r.iter_mut() {
@@ -271,7 +271,8 @@ fn decrypt_string(key: &[u8], id: ObjectId, mut o: Object) -> Object {
                         self.decrypt(&mut o);
                         r.push(o);
                     }
-                    *arr = Rc::new(r);
+                    let r: Rc<[Object]> = r.into();
+                    *arr = r.into();
                 }
             }
         }

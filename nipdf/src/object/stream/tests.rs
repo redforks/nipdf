@@ -9,7 +9,7 @@ use test_case::test_case;
     "incorrect filter type"
 )]
 #[test_case(
-    [(&KEY_FILTER, Object::Array(Rc::new(vec![1.into()])))] => matches Err(_);
+    [(&KEY_FILTER, Object::Array(vec![1.into()].into()))] => matches Err(_);
     "filter is array but item not name"
 )]
 #[test_case(
@@ -25,7 +25,7 @@ use test_case::test_case;
 )]
 #[test_case(
     [(&KEY_FILTER, FILTER_FLATE_DECODE.clone().into()),
-     (&KEY_FILTER_PARAMS, Object::Array(Rc::new(vec![Object::Null])))] =>
+     (&KEY_FILTER_PARAMS, Object::Array(vec![Object::Null].into()))] =>
     Ok(vec![(FILTER_FLATE_DECODE.clone(), None)]);
      "one filter with null params in array"
 )]
@@ -45,10 +45,10 @@ use test_case::test_case;
      "two filters no params"
 )]
 #[test_case(
-    [(&KEY_FILTER, vec![
+    [(&KEY_FILTER, Object::Array(vec![
         FILTER_FLATE_DECODE.clone().into(),
         FILTER_DCT_DECODE.clone().into(),
-    ].into()),
+    ].into())),
     (&KEY_FILTER_PARAMS, Dictionary::default().into())] =>
     Ok(vec![(FILTER_FLATE_DECODE.clone(), Some(Dictionary::default())),
             (FILTER_DCT_DECODE.clone(), None)]);
@@ -121,12 +121,11 @@ fn image_mask_try_from_object() {
     // ColorKeyMask
     #[rustfmt::skip]
     let o = Object::Array(
-        Rc::new(
         vec![
             0.into(), 1.into(), // domain 1
             0.1.into(), 0.9.into(), // domain 2
             0.2.into(), 0.8.into(), // domain 3
-        ]),
+        ].into(),
     );
     let mask = ImageMask::try_from(&o).unwrap();
     assert_eq!(

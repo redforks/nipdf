@@ -18,7 +18,7 @@ mod indirect_object;
 pub use indirect_object::IndirectObject;
 mod stream;
 pub use stream::*;
-pub type Array = Vec<Object>;
+pub type Array = Rc<[Object]>;
 
 #[derive(PartialEq, Debug, Clone, Default, Educe)]
 #[educe(Deref, DerefMut)]
@@ -700,7 +700,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
             |arr| {
                 let arr = arr.arr()?;
                 let mut res = Vec::with_capacity(arr.len());
-                for obj in arr {
+                for obj in arr.iter() {
                     let dict = self.r.resolve_reference(obj)?;
                     res.push(O::new(
                         obj.reference().ok().map(|id| id.id().id()),
@@ -852,7 +852,7 @@ pub enum Object {
     HexString(HexString),
     Name(Name),
     Dictionary(Dictionary),
-    Array(Rc<Array>),
+    Array(Array),
     Stream(Rc<Stream>),
     Reference(Reference),
 }
@@ -931,6 +931,12 @@ ref_value_access!(arr, Array, &Array);
 ref_value_access!(stream, Stream, &Stream);
 copy_value_access!(reference, Reference, Reference);
 
+impl From<Vec<Object>> for Object {
+    fn from(v: Vec<Object>) -> Self {
+        Self::Array(v.into())
+    }
+}
+
 impl Object {
     pub fn new_ref(id: u32) -> Self {
         Self::Reference(Reference::new_u32(id, 0))
@@ -965,7 +971,7 @@ impl Object {
         }
     }
 
-    pub fn into_arr(self) -> Result<Rc<Array>, ObjectValueError> {
+    pub fn into_arr(self) -> Result<Array, ObjectValueError> {
         match self {
             Object::Array(a) => Ok(a),
             _ => Err(ObjectValueError::UnexpectedType),
@@ -1104,7 +1110,7 @@ impl From<Stream> for Object {
 
 impl From<Array> for Object {
     fn from(value: Array) -> Self {
-        Self::Array(Rc::new(value))
+        Self::Array(value)
     }
 }
 

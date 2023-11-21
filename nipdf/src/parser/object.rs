@@ -73,7 +73,7 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<Object> {
         map(parse_name, Object::Name),
         parse_quoted_string,
         map(parse_dict, Object::Dictionary),
-        map(parse_array, |arr| Object::Array(Rc::new(arr))),
+        map(parse_array, |arr| Object::Array(arr)),
         parse_hex_string,
         null,
         true_parser,
@@ -145,11 +145,13 @@ fn parse_name(input: &[u8]) -> ParseResult<Name> {
 }
 
 pub fn parse_array(input: &[u8]) -> ParseResult<Array> {
-    delimited(
+    let (input, arr) = delimited(
         ws(tag(b"[")),
         many0(ws(parse_object)),
         ws_terminated(tag(b"]")),
-    )(input)
+    )(input)?;
+
+    Ok((input, arr.into()))
 }
 
 pub fn parse_dict(input: &[u8]) -> ParseResult<Dictionary> {

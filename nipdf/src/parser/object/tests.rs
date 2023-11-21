@@ -38,10 +38,13 @@ fn test_parse_simple_objects(exp: impl Into<Object>, buf: &'static str) {
 #[test_case(vec![], "[]"; "empty array")]
 #[test_case(vec![], "[ \t]"; "empty array 2")]
 #[test_case(vec![Object::Null], "[null]"; "array with null")]
-#[test_case(vec![Object::Array(Rc::new(vec![Object::Null]))], "[[null]]"; "nested array with null")]
+#[test_case(vec![Object::Array(vec![Object::Null].into())], "[[null]]"; "nested array with null")]
 #[test_case(vec![name!("foo").into()], "[/foo]"; "name value")]
 fn test_parse_array(exp: Vec<Object>, buf: &'static str) {
-    assert_eq!((b"".as_slice(), exp), parse_array(buf.as_bytes()).unwrap());
+    assert_eq!(
+        (b"".as_slice(), exp.into()),
+        parse_array(buf.as_bytes()).unwrap()
+    );
 }
 
 #[test_case(b"<< >>", "empty dict")]

@@ -108,7 +108,7 @@ fn test_parse_line_cap_style(v: i32) -> LineCapStyle {
 #[test_case(vec![1f32.into()] => vec![1f32]; "one")]
 #[test_case(vec![1f32.into(), 2f32.into()] => vec![1f32, 2f32]; "two")]
 fn test_arr_convert_from_object(v: Vec<Object>) -> Vec<f32> {
-    let mut outer = vec![Object::Array(Rc::new(v))];
+    let mut outer = vec![Object::Array(v.into())];
     let act = Vec::<f32>::convert_from_object(&mut outer).unwrap();
     assert!(outer.is_empty());
     act
@@ -124,7 +124,7 @@ fn color_or_with_pattern_from_object(mut v: Vec<Object>) -> ColorArgsOrName {
 fn transform_try_from_array() {
     use euclid::default::Transform2D;
     let arr = vec![1.into(), 2.into(), 3.into(), 4.into(), 5.into(), 6.into()];
-    let o = Object::Array(Rc::new(arr));
+    let o = arr.into();
     let act = Transform2D::try_from(&o).unwrap();
     assert_eq!(act, Transform2D::new(1f32, 2f32, 3f32, 4f32, 5f32, 6f32));
 }

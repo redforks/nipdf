@@ -14,7 +14,7 @@ fn rectangle_from_array(
     x2: impl Into<Object>,
     y2: impl Into<Object>,
 ) -> (f32, f32, f32, f32) {
-    let arr = Object::Array(Rc::new(vec![x1.into(), y1.into(), x2.into(), y2.into()]));
+    let arr = vec![x1.into(), y1.into(), x2.into(), y2.into()].into();
     let rect = Rectangle::try_from(&arr).unwrap();
     (rect.left_x, rect.lower_y, rect.right_x, rect.upper_y)
 }
@@ -52,13 +52,16 @@ fn parse_page_tree(root_id: u32, tree: Vec<(u32, Vec<u32>)>) -> Vec<u32> {
         );
         dict.insert(
             name!("MediaBox"),
-            vec![0.0.into(), 0.0.into(), 0.0.into(), 0.0.into()].into(),
+            Object::Array(vec![0.0.into(), 0.0.into(), 0.0.into(), 0.0.into()].into()),
         );
         dict.insert(
             name!("Kids"),
-            Object::Array(Rc::new(
-                kids.into_iter().map(Object::new_ref).collect::<Array>(),
-            )),
+            Object::Array(
+                kids.into_iter()
+                    .map(Object::new_ref)
+                    .collect::<Array>()
+                    .into(),
+            ),
         );
         resolver.setup_object(id, Object::Dictionary(dict));
     }
