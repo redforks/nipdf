@@ -40,7 +40,7 @@ impl Dictionary {
     }
 
     pub fn get_int(&self, id: Name, default: i32) -> Result<i32, ObjectValueError> {
-        self.0.get(&id).map_or(Ok(default), |o| o.as_int())
+        self.0.get(&id).map_or(Ok(default), |o| o.int())
     }
 
     pub fn get_bool(&self, id: Name, default: bool) -> Result<bool, ObjectValueError> {
@@ -453,11 +453,11 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
     pub fn required_int(&self, id: Name) -> Result<i32, ObjectValueError> {
         self.opt_get(id.clone())?
             .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id.clone()))?
-            .as_int()
+            .int()
     }
 
     pub fn opt_int(&self, id: Name) -> Result<Option<i32>, ObjectValueError> {
-        self.opt_get(id)?.map_or(Ok(None), |o| o.as_int().map(Some))
+        self.opt_get(id)?.map_or(Ok(None), |o| o.int().map(Some))
     }
 
     pub fn opt_bool(&self, id: Name) -> Result<Option<bool>, ObjectValueError> {
@@ -537,7 +537,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
 
     /// Return empty vec if not exist, error if not array
     pub fn u32_arr(&self, id: Name) -> Result<Vec<u32>, ObjectValueError> {
-        self.opt_arr_map(id, |o| o.as_int().map(|i| i as u32))
+        self.opt_arr_map(id, |o| o.int().map(|i| i as u32))
             .map(|o| o.unwrap_or_default())
     }
 
@@ -941,13 +941,6 @@ impl Object {
         match Option::<U>::from(self) {
             Some(v) => Either::Left(v),
             None => Either::Right(Option::<V>::from(self).expect("not either of")),
-        }
-    }
-
-    pub fn as_int(&self) -> Result<i32, ObjectValueError> {
-        match self {
-            Object::Integer(i) => Ok(*i),
-            _ => Err(ObjectValueError::UnexpectedType),
         }
     }
 

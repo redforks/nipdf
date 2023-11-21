@@ -114,7 +114,7 @@ fn read_xref_stream() {
             .unwrap()
             .get(&name!("Count"))
             .unwrap()
-            .as_int()
+            .int()
             .unwrap()
     );
 }

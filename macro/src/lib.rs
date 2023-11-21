@@ -69,7 +69,7 @@ pub fn try_from_int_object(input: TokenStream) -> TokenStream {
         impl<'b> TryFrom<&'b crate::object::Object> for #t {
             type Error = crate::object::ObjectValueError;
             fn try_from(object: &'b crate::object::Object) -> Result<Self, Self::Error> {
-                let n = object.as_int()?;
+                let n = object.int()?;
                 match n {
                     #( #arms, )*
                     _ => Err(crate::object::ObjectValueError::GraphicsOperationSchemaError),
@@ -98,7 +98,7 @@ pub fn try_from_int_object_for_bitflags(input: TokenStream) -> TokenStream {
             type Error = crate::object::ObjectValueError;
 
             fn try_from(object: &crate::object::Object) -> Result<Self, Self::Error> {
-                let n = object.as_int()?;
+                let n = object.int()?;
                 Ok(<#t as bitflags::Flags>::from_bits(n as u32).unwrap())
             }
         }

@@ -153,13 +153,13 @@ impl<'b> TryFrom<&'b Object> for CIDFontWidths {
 
         let mut iter = arr.iter();
         while let Some(first) = iter.next() {
-            let first = first.as_int()?;
+            let first = first.int()?;
             let second = iter.next().ok_or(Self::Error::UnexpectedType)?;
             match second {
                 Object::Array(arr) => {
                     let mut width = Vec::with_capacity(arr.len());
                     for num in arr.iter() {
-                        let num = num.as_int()? as u16;
+                        let num = num.int()? as u16;
                         width.push(num);
                     }
                     widths.push(CIDFontWidthGroup::NConsecutive((first as u32, width)));
@@ -169,7 +169,7 @@ impl<'b> TryFrom<&'b Object> for CIDFontWidths {
                     widths.push(CIDFontWidthGroup::FirstLast {
                         first: first as u32,
                         last: *last as u32,
-                        width: width.as_int()? as u16,
+                        width: width.int()? as u16,
                     });
                 }
                 _ => return Err(Self::Error::UnexpectedType),
@@ -323,7 +323,7 @@ impl<'b> TryFrom<&'b Object> for EncodingDifferences<'b> {
             return Ok(EncodingDifferences(map));
         };
 
-        let mut code = o.as_int()?;
+        let mut code = o.int()?;
         for o in iter {
             match o {
                 Object::Name(name) => {

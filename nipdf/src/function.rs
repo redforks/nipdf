@@ -46,7 +46,7 @@ impl TryFrom<&Object> for Domain<u32> {
         if arr.len() != 2 {
             return Err(ObjectValueError::UnexpectedType);
         }
-        Ok(Self::new(arr[0].as_int()? as u32, arr[1].as_int()? as u32))
+        Ok(Self::new(arr[0].int()? as u32, arr[1].int()? as u32))
     }
 }
 

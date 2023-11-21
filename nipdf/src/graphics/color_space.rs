@@ -179,7 +179,7 @@ where
                     debug_assert_eq!(4, arr.len());
                     let base = ColorSpaceArgs::try_from(&arr[1])?;
                     let base: ColorSpace<T> = Self::from_args(&base, resolver, resources)?;
-                    let hival = arr[2].as_int()?;
+                    let hival = arr[2].int()?;
                     let data = resolve_index_data(&arr[3], resolver)?;
                     assert!(data.len() >= (hival + 1) as usize * base.components());
                     Ok(Self::Indexed(Box::new(IndexedColorSpace { base, data })))

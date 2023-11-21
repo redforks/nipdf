@@ -90,7 +90,7 @@ fn predictor_8bit() {
                 15,
                 resolver
                     .resolve_container_value(params, name!("Predictor"))?
-                    .as_int()?
+                    .int()?
             );
             Ok(())
         })
@@ -107,7 +107,7 @@ fn predictor_24bit() {
                 15,
                 resolver
                     .resolve_container_value(params, name!("Predictor"))?
-                    .as_int()?
+                    .int()?
             );
             Ok(())
         })

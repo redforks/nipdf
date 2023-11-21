@@ -91,33 +91,29 @@ impl LZWDeflateDecodeParams {
             Self {
                 predictor: r
                     .opt_resolve_container_value(d, name!("Predictor"))?
-                    .map_or(1, |o| o.as_int().unwrap()),
+                    .map_or(1, |o| o.int().unwrap()),
                 colors: r
                     .opt_resolve_container_value(d, name!("Colors"))?
-                    .map_or(1, |o| o.as_int().unwrap()),
+                    .map_or(1, |o| o.int().unwrap()),
                 bits_per_comonent: r
                     .opt_resolve_container_value(d, name!("BitsPerComponent"))?
-                    .map_or(8, |o| o.as_int().unwrap()),
+                    .map_or(8, |o| o.int().unwrap()),
                 columns: r
                     .opt_resolve_container_value(d, name!("Columns"))?
-                    .map_or(1, |o| o.as_int().unwrap()),
+                    .map_or(1, |o| o.int().unwrap()),
                 early_change: r
                     .opt_resolve_container_value(d, name!("EarlyChange"))?
-                    .map_or(1, |o| o.as_int().unwrap()),
+                    .map_or(1, |o| o.int().unwrap()),
             }
         } else {
             Self {
-                predictor: d
-                    .get(&name!("Predictor"))
-                    .map_or(1, |o| o.as_int().unwrap()),
-                colors: d.get(&name!("Colors")).map_or(1, |o| o.as_int().unwrap()),
+                predictor: d.get(&name!("Predictor")).map_or(1, |o| o.int().unwrap()),
+                colors: d.get(&name!("Colors")).map_or(1, |o| o.int().unwrap()),
                 bits_per_comonent: d
                     .get(&name!("BitsPerComponent"))
-                    .map_or(8, |o| o.as_int().unwrap()),
-                columns: d.get(&name!("Columns")).map_or(1, |o| o.as_int().unwrap()),
-                early_change: d
-                    .get(&name!("EarlyChange"))
-                    .map_or(1, |o| o.as_int().unwrap()),
+                    .map_or(8, |o| o.int().unwrap()),
+                columns: d.get(&name!("Columns")).map_or(1, |o| o.int().unwrap()),
+                early_change: d.get(&name!("EarlyChange")).map_or(1, |o| o.int().unwrap()),
             }
         })
     }
@@ -424,7 +420,7 @@ impl<'b> TryFrom<&'b Object> for CCITTFGroup {
     type Error = ObjectValueError;
 
     fn try_from(v: &'b Object) -> Result<Self, Self::Error> {
-        Ok(match v.as_int()? {
+        Ok(match v.int()? {
             0 => Self::Group3_1D,
             k @ 1.. => Self::Group3_2D(k),
             ..=-1 => Self::Group4,
@@ -627,7 +623,7 @@ impl Stream {
             match (l, resolver) {
                 (Object::Integer(l), _) => Ok(*l as u32),
                 (Object::Reference(id), Some(resolver)) => {
-                    Ok(resolver.resolve(id.id().id())?.as_int()? as u32)
+                    Ok(resolver.resolve(id.id().id())?.int()? as u32)
                 }
                 _ => Err(ObjectValueError::UnexpectedType),
             }

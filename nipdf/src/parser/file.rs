@@ -94,20 +94,20 @@ impl CrossReferenceStreamDict {
         let size = d
             .get(&name!("Size"))
             .ok_or(ObjectValueError::DictKeyNotFound)?
-            .as_int()? as u32;
+            .int()? as u32;
         let index = d
             .get(&name!("Index"))
             .map(|o| Domains::<u32>::try_from(o).unwrap());
         let prev = d
             .get(&name!("Prev"))
-            .map(|o| o.as_int().map(|v| v as u32))
+            .map(|o| o.int().map(|v| v as u32))
             .transpose()?;
         let w = d
             .get(&name!("W"))
             .ok_or(ObjectValueError::DictKeyNotFound)?
             .as_arr()?
             .iter()
-            .map(|o| o.as_int().map(|v| v as u32))
+            .map(|o| o.int().map(|v| v as u32))
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Self {
@@ -242,10 +242,7 @@ fn parse_frame(buf: &[u8]) -> ParseResult<(Dictionary, XRefSection)> {
 
 pub fn parse_frame_set(input: &[u8]) -> ParseResult<FrameSet> {
     fn get_prev(frame: &Frame) -> Option<i32> {
-        frame
-            .trailer
-            .get(&name!("Prev"))
-            .map(|o| o.as_int().unwrap())
+        frame.trailer.get(&name!("Prev")).map(|o| o.int().unwrap())
     }
 
     let mut frames = Vec::new();
