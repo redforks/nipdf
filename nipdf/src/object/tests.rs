@@ -53,22 +53,6 @@ fn buf_or_str_to_object<'a>(exp: Object, s: &'a str) {
 }
 
 #[test]
-fn dict_get_bool() {
-    let mut d = Dictionary::default();
-    d.set(name!("a"), true);
-    d.set(name!("b"), true);
-    d.set(name!("c"), 1i32);
-
-    assert_eq!(Ok(true), d.get_bool(name!("a"), false));
-    assert_eq!(Ok(true), d.get_bool(name!("b"), true));
-    assert_eq!(
-        Err(ObjectValueError::UnexpectedType),
-        d.get_bool(name!("c"), false)
-    );
-    assert_eq!(Ok(false), d.get_bool(name!("d"), false));
-}
-
-#[test]
 fn dict_get_name() {
     let mut d = Dictionary::default();
     d.set(name!("a"), "/foo");

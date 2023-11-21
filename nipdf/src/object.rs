@@ -37,10 +37,6 @@ impl Dictionary {
         self.0.get(&id).map_or(Ok(default), |o| o.int())
     }
 
-    pub fn get_bool(&self, id: Name, default: bool) -> Result<bool, ObjectValueError> {
-        self.0.get(&id).map_or(Ok(default), |o| o.bool())
-    }
-
     pub fn set(&mut self, id: Name, value: impl Into<Object>) {
         self.0.insert(id, value.into());
     }
