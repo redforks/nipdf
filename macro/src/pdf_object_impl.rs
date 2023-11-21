@@ -207,7 +207,7 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
     } else if rt == &(parse_quote!(Option<bool>)) {
         Some("opt_bool")
     } else if rt == &(parse_quote!(bool)) {
-        Some("required_bool")
+        Some("bool")
     } else if rt == &(parse_quote!(Vec<&Stream>)) {
         Some("opt_single_or_arr_stream")
     } else if rt == &(parse_quote!(Vec<u32>)) {

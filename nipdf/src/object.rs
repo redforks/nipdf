@@ -367,7 +367,54 @@ impl<'b, T: TypeValidator, R> SchemaDict<'b, T, R> {
     }
 }
 
+macro_rules! schema_access {
+    ($method:ident, $t:ty) => {
+        paste! {
+            pub fn $method(&self, id: Name) -> Result<$t, ObjectValueError> {
+                self.required::<$t>(id)
+            }
+
+            pub fn [<opt_ $method>](&self, id: Name) -> Result<Option<$t>, ObjectValueError> {
+                self.opt::<$t>(id)
+            }
+
+            pub fn [<$method _or>](&self, id: Name, v: $t) -> Result<$t, ObjectValueError> {
+                self.or_default(id, v)
+            }
+        }
+    };
+}
+
 impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
+    schema_access!(bool, bool);
+
+    pub fn required<V: for<'d> TryFrom<&'d Object, Error = ObjectValueError>>(
+        &self,
+        id: Name,
+    ) -> Result<V, ObjectValueError> {
+        self.dict().get(&id).map_or_else(
+            || Err(ObjectValueError::DictKeyNotFound),
+            |o| o.try_into().map_err(ObjectValueError::from),
+        )
+    }
+
+    pub fn opt<V: for<'d> TryFrom<&'d Object, Error = ObjectValueError>>(
+        &self,
+        id: Name,
+    ) -> Result<Option<V>, ObjectValueError> {
+        self.dict().get(&id).map_or(Ok(None), |o| {
+            o.try_into().map(Some).map_err(ObjectValueError::from)
+        })
+    }
+
+    pub fn or_default<V: for<'d> TryFrom<&'d Object, Error = ObjectValueError>>(
+        &self,
+        id: Name,
+        default: V,
+    ) -> Result<V, ObjectValueError> {
+        self.opt(id).map(|o| o.unwrap_or(default))
+    }
+
     fn _opt_resolve_container_value(
         &self,
         id: Name,
@@ -434,20 +481,6 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
 
     pub fn opt_int(&self, id: Name) -> Result<Option<i32>, ObjectValueError> {
         self.opt_get(id)?.map_or(Ok(None), |o| o.int().map(Some))
-    }
-
-    pub fn opt_bool(&self, id: Name) -> Result<Option<bool>, ObjectValueError> {
-        self.opt_get(id)?.map_or(Ok(None), |o| o.bool().map(Some))
-    }
-
-    pub fn required_bool(&self, id: Name) -> Result<bool, ObjectValueError> {
-        self.opt_get(id.clone())?
-            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id.clone()))?
-            .bool()
-    }
-
-    pub fn bool_or(&self, id: Name, default: bool) -> Result<bool, ObjectValueError> {
-        self.opt_bool(id).map(|b| b.unwrap_or(default))
     }
 
     pub fn opt_u16(&self, id: Name) -> Result<Option<u16>, ObjectValueError> {
