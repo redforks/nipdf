@@ -23,7 +23,7 @@ pub enum StandardHandlerRevion {
 
 #[pdf_object(())]
 pub trait EncryptDictTrait {
-    fn filter(&self) -> &Name;
+    fn filter(&self) -> Name;
 
     fn sub_filter(&self) -> Option<Name>;
 

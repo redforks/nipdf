@@ -431,10 +431,10 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
         self.opt_get(id)?.map_or(Ok(None), |o| o.name().map(Some))
     }
 
-    pub fn required_name(&self, id: Name) -> Result<&Name, ObjectValueError> {
+    pub fn required_name(&self, id: Name) -> Result<Name, ObjectValueError> {
         self.opt_get(id.clone())?
             .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id.clone()))?
-            .as_name()
+            .name()
     }
 
     pub fn required_int(&self, id: Name) -> Result<i32, ObjectValueError> {

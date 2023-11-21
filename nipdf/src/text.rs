@@ -43,7 +43,7 @@ pub trait FontDictTrait {
     #[try_from]
     fn encoding(&self) -> Option<NameOrDictByRef<'b>>;
 
-    fn base_font(&self) -> &Name;
+    fn base_font(&self) -> Name;
 }
 
 #[pdf_object(("Font", "Type0"))]
@@ -61,7 +61,7 @@ pub trait Type0FontDictTrait {
 /// they should all exist or not exist. See PDF32000_2008.pdf page 255
 #[pdf_object(("Font", "Type1"))]
 pub trait Type1FontDictTrait {
-    fn base_font(&self) -> &Name;
+    fn base_font(&self) -> Name;
     /// If font is the standard 14 fonts, it may not exist.
     fn first_char(&self) -> Option<u32>;
     /// if font is the standard 14 fonts, it may not exist.
@@ -183,7 +183,7 @@ impl<'b> TryFrom<&'b Object> for CIDFontWidths {
 pub trait CIDFontDictTrait {
     #[try_from]
     fn subtype(&self) -> CIDFontType;
-    fn base_font(&self) -> &Name;
+    fn base_font(&self) -> Name;
     #[nested]
     fn font_descriptor(&self) -> Option<FontDescriptorDict<'a, 'b>>;
     #[default(1000u32)]
@@ -226,7 +226,7 @@ impl From<FontStretch> for fontdb::Stretch {
 // Some file not specify Type field, although according to PDF32000_2008.pdf Type field is required
 #[pdf_object(Some("FontDescriptor"))]
 pub trait FontDescriptorDictTrait {
-    fn font_name(&self) -> &Name;
+    fn font_name(&self) -> Name;
 
     fn font_family(&self) -> Option<&str>;
 

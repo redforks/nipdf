@@ -178,7 +178,7 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         })
     };
 
-    if rt == &(parse_quote! { &Name }) || rt == &(parse_quote! { &'b Name }) {
+    if rt == &(parse_quote! { Name }) {
         Some("required_name")
     } else if rt == &(parse_quote! { &str }) || rt == &(parse_quote!(&'b str)) {
         Some("required_str")

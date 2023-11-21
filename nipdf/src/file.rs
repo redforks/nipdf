@@ -537,7 +537,7 @@ fn open_encrypt(
     };
 
     assert_eq!(
-        &name!("Standard"),
+        name!("Standard"),
         encrypt.filter()?,
         "unsupported security handler"
     );
