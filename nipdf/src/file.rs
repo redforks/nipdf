@@ -20,7 +20,7 @@ use nom::Finish;
 use once_cell::unsync::OnceCell;
 use prescript::Name;
 use prescript_macro::name;
-use std::{iter::repeat_with, num::NonZeroU32};
+use std::{iter::repeat_with, num::NonZeroU32, rc::Rc};
 
 mod page;
 pub use page::*;
@@ -237,57 +237,72 @@ impl XRefTable {
 }
 
 /// Decrypt HexString/LiteralString nested in object.
-fn decrypt_string(key: &[u8], id: ObjectId, o: Object) -> Object {
+fn decrypt_string(key: &[u8], id: ObjectId, mut o: Object) -> Object {
     let key = decrypt_key(key, id);
 
     struct Decryptor(Box<[u8]>);
 
     impl Decryptor {
-        fn hex_string(&self, mut s: HexString) -> HexString {
+        fn hex_string(&self, s: &mut HexString) {
             s.update(|s| decrypt_with_key(&self.0, s));
-            s
         }
 
-        fn literal_string(&self, mut s: LiteralString) -> LiteralString {
+        fn literal_string(&self, s: &mut LiteralString) {
             s.update(|s| decrypt_with_key(&self.0, s));
-            s
         }
 
-        fn dict(&self, d: Dictionary) -> Dictionary {
-            let mut r = Dictionary::with_capacity(d.len());
-            for (k, v) in d.into_inner() {
-                r.insert(k, self.decrypt(v));
+        fn dict(&self, dict: &mut Dictionary) {
+            for (_, v) in dict.iter_mut() {
+                self.decrypt(v);
             }
-            r
         }
 
-        fn arr(&self, arr: &Array) -> Array {
-            let mut r = Vec::with_capacity(arr.len());
-            for o in arr.iter() {
-                r.push(self.decrypt(o.clone()));
+        fn arr(&self, arr: &mut Rc<Array>) {
+            match Rc::get_mut(arr) {
+                Some(r) => {
+                    for o in r.iter_mut() {
+                        self.decrypt(o);
+                    }
+                }
+                None => {
+                    let mut r = Vec::with_capacity(arr.len());
+                    for o in arr.iter() {
+                        let mut o = o.clone();
+                        self.decrypt(&mut o);
+                        r.push(o);
+                    }
+                    *arr = Rc::new(r);
+                }
             }
-            r
         }
 
-        fn stream(&self, stream: Stream) -> Stream {
-            let (dict, buf_pos, id) = stream.take();
-            let dict = self.dict(dict);
-            Stream::new(dict, buf_pos, id)
+        fn stream(&self, stream: &mut Rc<Stream>) {
+            match Rc::get_mut(stream) {
+                Some(s) => {
+                    self.dict(&mut s.0);
+                }
+                None => {
+                    let mut d = stream.as_dict().clone();
+                    self.dict(&mut d);
+                    *stream = Rc::new(Stream::new(d, stream.1.clone(), stream.2.clone()));
+                }
+            }
         }
 
-        fn decrypt(&self, o: Object) -> Object {
+        fn decrypt(&self, o: &mut Object) {
             match o {
-                Object::HexString(s) => self.hex_string(s).into(),
-                Object::LiteralString(s) => self.literal_string(s).into(),
-                Object::Dictionary(d) => self.dict(d).into(),
-                Object::Array(arr) => self.arr(&arr).into(),
-                Object::Stream(s) => self.stream((*s).clone()).into(),
-                _ => o,
+                Object::HexString(s) => self.hex_string(s),
+                Object::LiteralString(s) => self.literal_string(s),
+                Object::Dictionary(d) => self.dict(d),
+                Object::Array(arr) => self.arr(arr),
+                Object::Stream(s) => self.stream(s),
+                _ => {}
             }
         }
     }
 
-    Decryptor(key).decrypt(o)
+    Decryptor(key).decrypt(&mut o);
+    o
 }
 
 pub trait DataContainer {

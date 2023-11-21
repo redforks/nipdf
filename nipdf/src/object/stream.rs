@@ -65,7 +65,11 @@ impl BufPos {
 
 // 2nd value is offset of stream data from the begin of indirect object
 #[derive(Clone, PartialEq, Debug)]
-pub struct Stream(Dictionary, BufPos, ObjectId);
+pub struct Stream(
+    pub(crate) Dictionary,
+    pub(crate) BufPos,
+    pub(crate) ObjectId,
+);
 
 /// error!() log if r is error, returns `Err<ObjectValueError::FilterDecodeError>`
 fn handle_filter_error<V, E: Display>(
@@ -570,10 +574,6 @@ impl Stream {
 
     pub fn take_dict(self) -> Dictionary {
         self.0
-    }
-
-    pub fn take(self) -> (Dictionary, BufPos, ObjectId) {
-        (self.0, self.1, self.2)
     }
 
     #[cfg(test)]
