@@ -35,8 +35,16 @@ impl Dictionary {
         Self(HashMap::default())
     }
 
+    pub fn with_capacity(n: usize) -> Self {
+        Self(HashMap::with_capacity(n))
+    }
+
     pub fn set(&mut self, id: Name, value: impl Into<Object>) {
         self.0.insert(id, value.into());
+    }
+
+    pub fn into_inner(self) -> HashMap<Name, Object> {
+        self.0
     }
 }
 
@@ -845,7 +853,7 @@ pub enum Object {
     Name(Name),
     Dictionary(Dictionary),
     Array(Rc<Array>),
-    Stream(Stream),
+    Stream(Rc<Stream>),
     Reference(Reference),
 }
 
@@ -1090,7 +1098,7 @@ impl Display for PrettyNumber {
 
 impl From<Stream> for Object {
     fn from(value: Stream) -> Self {
-        Self::Stream(value)
+        Self::Stream(Rc::new(value))
     }
 }
 

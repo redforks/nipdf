@@ -28,6 +28,7 @@ use std::{
     iter::{once, repeat},
     num::NonZeroU32,
     ops::Range,
+    rc::Rc,
 };
 
 const KEY_FILTER: Name = name!("Filter");
@@ -326,7 +327,7 @@ fn decode_jpx<'a>(
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ImageMask {
-    Explicit(Stream),
+    Explicit(Rc<Stream>),
     ColorKey(Domains),
 }
 
@@ -569,6 +570,10 @@ impl Stream {
 
     pub fn take_dict(self) -> Dictionary {
         self.0
+    }
+
+    pub fn take(self) -> (Dictionary, BufPos, ObjectId) {
+        (self.0, self.1, self.2)
     }
 
     #[cfg(test)]

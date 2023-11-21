@@ -1,7 +1,7 @@
 use super::*;
 use crate::{file::decode_stream, function::Domain, object::Name};
-use test_case::test_case;
 use std::rc::Rc;
+use test_case::test_case;
 
 #[test_case([] => Ok(vec![]); "empty")]
 #[test_case(
@@ -139,12 +139,12 @@ fn image_mask_try_from_object() {
     );
 
     // ExplicitMask
-    let stream = Stream(
+    let stream = Rc::new(Stream(
         Dictionary::default(),
         // b"0 1 2 3 4 5 6 7 8 9".as_ref(),
         BufPos::new(0, None),
         ObjectId::empty(),
-    );
+    ));
     let o = Object::Stream(stream.clone());
     let mask = ImageMask::try_from(&o).unwrap();
     assert_eq!(mask, ImageMask::Explicit(stream));

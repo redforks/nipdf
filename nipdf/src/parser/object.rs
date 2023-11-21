@@ -207,11 +207,11 @@ pub fn parse_indirect_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
     let (input, obj) = parse_object_and_stream(input)?;
     let obj = match obj {
         Either::Left(o) => o,
-        Either::Right((dict, start, length)) => Object::Stream(Stream::new(
+        Either::Right((dict, start, length)) => Object::Stream(Rc::new(Stream::new(
             dict,
             BufPos::new(offset as u16 + start, length),
             ObjectId::new(NonZeroU32::new(id).unwrap(), gen),
-        )),
+        ))),
     };
     let (input, _) = opt(ws_prefixed(tag("endobj")))(input)?;
     Ok((
@@ -230,7 +230,7 @@ pub fn parse_indirect_stream(input: &[u8]) -> ParseResult<Stream> {
             ErrorKind::Fail,
         )));
     };
-    Ok((input, s))
+    Ok((input, Rc::into_inner(s).unwrap()))
 }
 
 fn parse_reference(input: &[u8]) -> ParseResult<Reference> {
