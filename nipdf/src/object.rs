@@ -1304,7 +1304,7 @@ pub enum TextStringOrNumber {
 
 /// Decoded PDF literal string object, enclosing '(' and ')' not included.
 #[derive(Eq, PartialEq, Debug, Clone)]
-pub struct HexString(Box<[u8]>);
+pub struct HexString(Rc<[u8]>);
 
 impl HexString {
     pub fn new(s: &[u8]) -> Self {
@@ -1341,7 +1341,14 @@ impl HexString {
     }
 
     pub fn update(&mut self, f: impl FnOnce(&mut [u8])) {
-        f(&mut self.0);
+        match Rc::get_mut(&mut self.0) {
+            Some(buf) => f(buf),
+            None => {
+                let mut buf = self.0.as_ref().to_vec();
+                f(&mut buf);
+                self.0 = buf.into();
+            }
+        }
     }
 
     pub fn as_bytes(&self) -> &[u8] {
