@@ -179,7 +179,7 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
     };
 
     if rt == &(parse_quote! { Name }) {
-        Some("required_name")
+        Some("name")
     } else if rt == &(parse_quote! { &str }) || rt == &(parse_quote!(&'b str)) {
         Some("required_str")
     } else if rt == &(parse_quote!(Option<Name>)) {
@@ -195,7 +195,7 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
     } else if rt == &(parse_quote!(Option<u16>)) {
         Some("opt_u16")
     } else if rt == &(parse_quote!(i32)) {
-        Some("required_int")
+        Some("int")
     } else if rt == &(parse_quote!(Option<i32>)) {
         Some("opt_int")
     } else if rt == &(parse_quote!(f32)) {

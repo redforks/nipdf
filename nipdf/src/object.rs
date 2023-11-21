@@ -388,6 +388,10 @@ macro_rules! schema_access {
 impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
     schema_access!(bool, bool);
 
+    schema_access!(int, i32);
+
+    schema_access!(name, Name);
+
     pub fn required<V: for<'d> TryFrom<&'d Object, Error = ObjectValueError>>(
         &self,
         id: Name,
@@ -463,32 +467,12 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
         self.opt_resolve_value(id)
     }
 
-    pub fn opt_name(&self, id: Name) -> Result<Option<Name>, ObjectValueError> {
-        self.opt_get(id)?.map_or(Ok(None), |o| o.name().map(Some))
-    }
-
-    pub fn required_name(&self, id: Name) -> Result<Name, ObjectValueError> {
-        self.opt_get(id.clone())?
-            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id.clone()))?
-            .name()
-    }
-
-    pub fn required_int(&self, id: Name) -> Result<i32, ObjectValueError> {
-        self.opt_get(id.clone())?
-            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id.clone()))?
-            .int()
-    }
-
-    pub fn opt_int(&self, id: Name) -> Result<Option<i32>, ObjectValueError> {
-        self.opt_get(id)?.map_or(Ok(None), |o| o.int().map(Some))
-    }
-
     pub fn opt_u16(&self, id: Name) -> Result<Option<u16>, ObjectValueError> {
         self.opt_int(id).map(|i| i.map(|i| i as u16))
     }
 
     pub fn required_u16(&self, id: Name) -> Result<u16, ObjectValueError> {
-        self.required_int(id).map(|i| i as u16)
+        self.int(id).map(|i| i as u16)
     }
 
     pub fn opt_u32(&self, id: Name) -> Result<Option<u32>, ObjectValueError> {
@@ -500,7 +484,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
 
     pub fn required_u32(&self, id: Name) -> Result<u32, ObjectValueError> {
         // i32 as u32 as a no-op, so it is safe to use `as` operator.
-        self.required_int(id).map(|i| i as u32)
+        self.int(id).map(|i| i as u32)
     }
 
     pub fn u32_or(&self, id: Name, default: u32) -> Result<u32, ObjectValueError> {
@@ -512,7 +496,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
     }
 
     pub fn required_u8(&self, id: Name) -> Result<u8, ObjectValueError> {
-        self.required_int(id).map(|i| i as u8)
+        self.int(id).map(|i| i as u8)
     }
 
     pub fn u8_or(&self, id: Name, default: u8) -> Result<u8, ObjectValueError> {
