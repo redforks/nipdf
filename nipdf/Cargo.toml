@@ -43,6 +43,7 @@ ouroboros = "0.18"
 md-5 = "0.10"
 arc4 = "0.1"
 heck = "0.4"
+paste = "1.0"
 
 [dev-dependencies]
 env_logger = "0.10.0"

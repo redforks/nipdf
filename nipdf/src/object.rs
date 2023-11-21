@@ -3,6 +3,7 @@ use ahash::{HashMap, HashMapExt};
 use anyhow::Context;
 use educe::Educe;
 use log::error;
+use paste::paste;
 use prescript::Name;
 use std::{
     borrow::{Borrow, Cow},
@@ -827,21 +828,23 @@ pub enum Object {
 }
 
 macro_rules! copy_value_access {
-    ($method:ident, $opt_method:ident, $branch:ident, $t:ty) => {
+    ($method:ident, $branch:ident, $t:ty) => {
         impl Object {
-            /// Return None if value not specific type.
-            pub fn $opt_method(&self) -> Option<$t> {
-                match self {
-                    Self::$branch(v) => Some(v.clone()),
-                    _ => None,
+            paste! {
+                /// Return None if value not specific type.
+                pub fn [<opt_ $method>](&self) -> Option<$t> {
+                    match self {
+                        Self::$branch(v) => Some(v.clone()),
+                        _ => None,
+                    }
                 }
-            }
 
-            /// Return `ObjectValueError::UnexpectedType` if value not expected type.
-            pub fn $method(&self) -> Result<$t, ObjectValueError> {
-                match self {
-                    Self::$branch(v) => Ok(v.clone()),
-                    _ => Err(ObjectValueError::UnexpectedType),
+                /// Return `ObjectValueError::UnexpectedType` if value not expected type.
+                pub fn $method(&self) -> Result<$t, ObjectValueError> {
+                    match self {
+                        Self::$branch(v) => Ok(v.clone()),
+                        _ => Err(ObjectValueError::UnexpectedType),
+                    }
                 }
             }
         }
@@ -855,44 +858,48 @@ macro_rules! copy_value_access {
         }
 
         impl From<&Object> for Option<$t> {
-            fn from(value: &Object) -> Self {
-                value.$opt_method()
+            paste! {
+                fn from(value: &Object) -> Self {
+                    value.[<opt_ $method>]()
+                }
             }
         }
     };
 }
 macro_rules! ref_value_access {
-    ($method:ident, $opt_method:ident, $branch:ident, $t:ty) => {
+    ($method:ident, $branch:ident, $t:ty) => {
         impl Object {
-            /// Return None if value not specific type.
-            pub fn $opt_method(&self) -> Option<$t> {
-                match self {
-                    Self::$branch(v) => Some(&v),
-                    _ => None,
+            paste! {
+                /// Return None if value not specific type.
+                pub fn [<opt_ $method>](&self) -> Option<$t> {
+                    match self {
+                        Self::$branch(v) => Some(&v),
+                        _ => None,
+                    }
                 }
-            }
 
-            /// Return `ObjectValueError::UnexpectedType` if value not expected type.
-            pub fn $method(&self) -> Result<$t, ObjectValueError> {
-                match self {
-                    Self::$branch(v) => Ok(&v),
-                    _ => Err(ObjectValueError::UnexpectedType),
+                /// Return `ObjectValueError::UnexpectedType` if value not expected type.
+                pub fn $method(&self) -> Result<$t, ObjectValueError> {
+                    match self {
+                        Self::$branch(v) => Ok(&v),
+                        _ => Err(ObjectValueError::UnexpectedType),
+                    }
                 }
             }
         }
     };
 }
 
-copy_value_access!(bool, opt_bool, Bool, bool);
-copy_value_access!(int, opt_int, Integer, i32);
-copy_value_access!(real, opt_real, Number, f32);
-ref_value_access!(literal_str, opt_literal_str, LiteralString, &LiteralString);
-ref_value_access!(hex_str, opt_hex_str, HexString, &HexString);
-copy_value_access!(name, opt_name, Name, Name);
-ref_value_access!(dict, opt_dict, Dictionary, &Dictionary);
-ref_value_access!(arr, opt_arr, Array, &Array);
-ref_value_access!(stream, opt_stream, Stream, &Stream);
-copy_value_access!(reference, opt_reference, Reference, Reference);
+copy_value_access!(bool, Bool, bool);
+copy_value_access!(int, Integer, i32);
+copy_value_access!(real, Number, f32);
+ref_value_access!(literal_str, LiteralString, &LiteralString);
+ref_value_access!(hex_str, HexString, &HexString);
+copy_value_access!(name, Name, Name);
+ref_value_access!(dict, Dictionary, &Dictionary);
+ref_value_access!(arr, Array, &Array);
+ref_value_access!(stream, Stream, &Stream);
+copy_value_access!(reference, Reference, Reference);
 
 impl Object {
     pub fn new_ref(id: u32) -> Self {
