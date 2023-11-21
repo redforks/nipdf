@@ -182,7 +182,7 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         Some("required_name")
     } else if rt == &(parse_quote! { &str }) || rt == &(parse_quote!(&'b str)) {
         Some("required_str")
-    } else if rt == &(parse_quote!(Option<&Name>)) || rt == &(parse_quote!(Option<&'b Name>)) {
+    } else if rt == &(parse_quote!(Option<Name>)) {
         Some("opt_name")
     } else if rt == &(parse_quote!(Option<&str>)) || rt == &(parse_quote!(Option<&'b str>)) {
         Some("opt_str")

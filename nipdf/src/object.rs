@@ -427,9 +427,8 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
         self.opt_resolve_value(id)
     }
 
-    pub fn opt_name(&self, id: Name) -> Result<Option<&Name>, ObjectValueError> {
-        self.opt_get(id)?
-            .map_or(Ok(None), |o| o.as_name().map(Some))
+    pub fn opt_name(&self, id: Name) -> Result<Option<Name>, ObjectValueError> {
+        self.opt_get(id)?.map_or(Ok(None), |o| o.name().map(Some))
     }
 
     pub fn required_name(&self, id: Name) -> Result<&Name, ObjectValueError> {

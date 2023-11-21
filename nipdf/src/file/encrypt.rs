@@ -25,7 +25,7 @@ pub enum StandardHandlerRevion {
 pub trait EncryptDictTrait {
     fn filter(&self) -> &Name;
 
-    fn sub_filter(&self) -> Option<&Name>;
+    fn sub_filter(&self) -> Option<Name>;
 
     #[or_default]
     #[key("V")]

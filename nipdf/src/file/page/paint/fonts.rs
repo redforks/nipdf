@@ -228,12 +228,10 @@ fn resolve_by_name<'b>(
             encoding_dict = EncodingDict::new(None, d, font_dict.resolver())?;
             encoding_dict.base_encoding()?
         }
-        Some(NameOrDictByRef::Name(name)) => Some(*name),
+        Some(NameOrDictByRef::Name(name)) => Some((*name).clone()),
         None => None,
     };
-    let encoding_name = encoding_name
-        .cloned()
-        .or_else(|| standard_14_type1_font_encoding(&name(font_name)));
+    let encoding_name = encoding_name.or_else(|| standard_14_type1_font_encoding(&name(font_name)));
     encoding_name
         .map(|n| Encoding::predefined(n.clone()).ok_or_else(|| anyhow!("Unknown encoding: {}", n)))
         .transpose()

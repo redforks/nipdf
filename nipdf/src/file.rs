@@ -475,7 +475,7 @@ impl<'a> Resolver<'a> for ObjectResolver<'a> {
 
 #[pdf_object("Catalog")]
 trait CatalogDictTrait {
-    fn version(&self) -> Option<&Name>;
+    fn version(&self) -> Option<Name>;
     #[nested]
     fn pages(&self) -> PageDict<'a, 'b>;
 }
@@ -496,7 +496,7 @@ impl<'a, 'b: 'a> Catalog<'a, 'b> {
         Page::parse(self.d.pages().unwrap())
     }
 
-    pub fn ver(&self) -> Option<&Name> {
+    pub fn ver(&self) -> Option<Name> {
         self.d.version().unwrap()
     }
 }

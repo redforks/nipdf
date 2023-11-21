@@ -343,7 +343,7 @@ impl<'b> TryFrom<&'b Object> for EncodingDifferences<'b> {
 /// Encoding object for Non Type0 and Type3 fonts
 #[pdf_object(Some("Encoding"))]
 pub trait EncodingDictTrait {
-    fn base_encoding(&self) -> Option<&Name>;
+    fn base_encoding(&self) -> Option<Name>;
 
     #[try_from]
     fn differences(&self) -> Option<EncodingDifferences<'b>>;
