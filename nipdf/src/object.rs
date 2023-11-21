@@ -817,7 +817,7 @@ pub enum ObjectValueError {
     #[error("Stream is not bytes")]
     StreamIsNotBytes,
     #[error("Stream length not defined")]
-StreamLengthNotDefined,
+    StreamLengthNotDefined,
     #[error("Object not found by id {0}")]
     ObjectIDNotFound(NonZeroU32),
     #[error("Parse error: {0}")]
@@ -853,13 +853,97 @@ pub enum Object {
     Reference(Reference),
 }
 
+macro_rules! copy_value_access {
+    ($method:ident, $opt_method:ident, $branch:ident, $t:ty) => {
+        impl Object {
+            /// Return None if value not specific type.
+            pub fn $opt_method(&self) -> Option<$t> {
+                match self {
+                    Self::$branch(v) => Some(v.clone()),
+                    _ => None,
+                }
+            }
+
+            /// Return `ObjectValueError::UnexpectedType` if value not expected type.
+            pub fn $method(&self) -> Result<$t, ObjectValueError> {
+                match self {
+                    Self::$branch(v) => Ok(v.clone()),
+                    _ => Err(ObjectValueError::UnexpectedType),
+                }
+            }
+        }
+
+        impl TryFrom<Object> for $t {
+            type Error = ObjectValueError;
+
+            fn try_from(value: Object) -> Result<Self, Self::Error> {
+                value.$method()
+            }
+        }
+
+        impl From<&Object> for Option<$t> {
+            fn from(value: &Object) -> Self {
+                value.$opt_method()
+            }
+        }
+    };
+}
+macro_rules! ref_value_access {
+    ($method:ident, $opt_method:ident, $branch:ident, $t:ty) => {
+        impl Object {
+            /// Return None if value not specific type.
+            pub fn $opt_method(&self) -> Option<$t> {
+                match self {
+                    Self::$branch(v) => Some(&v),
+                    _ => None,
+                }
+            }
+
+            /// Return `ObjectValueError::UnexpectedType` if value not expected type.
+            pub fn $method(&self) -> Result<$t, ObjectValueError> {
+                match self {
+                    Self::$branch(v) => Ok(&v),
+                    _ => Err(ObjectValueError::UnexpectedType),
+                }
+            }
+        }
+    };
+}
+
+copy_value_access!(bool, opt_bool, Bool, bool);
+copy_value_access!(int, opt_int, Integer, i32);
+copy_value_access!(number, opt_number, Number, f32);
+ref_value_access!(literal_str, opt_literal_str, LiteralString, &LiteralString);
+ref_value_access!(hex_str, opt_hex_str, HexString, &HexString);
+copy_value_access!(name, opt_name, Name, Name);
+ref_value_access!(dict, opt_dict, Dictionary, &Dictionary);
+ref_value_access!(arr, opt_arr, Array, &Array);
+ref_value_access!(stream, opt_stream, Stream, &Stream);
+copy_value_access!(reference, opt_reference, Reference, Reference);
+
 impl Object {
     pub fn new_ref(id: u32) -> Self {
         Self::Reference(Reference::new_u32(id, 0))
     }
-}
 
-impl Object {
+    pub fn is_null(&self) -> bool {
+        matches!(self, Self::Null)
+    }
+
+    /// Return either type value. Panic if value is not either type.
+    pub fn either<'a, U, V>(&'a self) -> Either<U, V>
+    where
+        U: Clone,
+        V: Clone + From<Self>,
+        Option<U>: From<&'a Self>,
+        Option<V>: From<&'a Self>,
+    {
+        match Option::<U>::from(self) {
+            Some(v) => Either::Left(v),
+            None => Either::Right(Option::<V>::from(self).expect("not either of")),
+        }
+    }
+
     pub fn as_int(&self) -> Result<i32, ObjectValueError> {
         match self {
             Object::Integer(i) => Ok(*i),
@@ -987,6 +1071,7 @@ impl<const N: usize> TryFrom<&Object> for [f32; N] {
     }
 }
 
+use either::Either;
 #[cfg(feature = "pretty")]
 use pretty::RcDoc;
 
