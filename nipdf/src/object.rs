@@ -44,7 +44,7 @@ impl Dictionary {
     }
 
     pub fn get_bool(&self, id: Name, default: bool) -> Result<bool, ObjectValueError> {
-        self.0.get(&id).map_or(Ok(default), |o| o.as_bool())
+        self.0.get(&id).map_or(Ok(default), |o| o.bool())
     }
 
     pub fn set(&mut self, id: Name, value: impl Into<Object>) {
@@ -461,14 +461,13 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
     }
 
     pub fn opt_bool(&self, id: Name) -> Result<Option<bool>, ObjectValueError> {
-        self.opt_get(id)?
-            .map_or(Ok(None), |o| o.as_bool().map(Some))
+        self.opt_get(id)?.map_or(Ok(None), |o| o.bool().map(Some))
     }
 
     pub fn required_bool(&self, id: Name) -> Result<bool, ObjectValueError> {
         self.opt_get(id.clone())?
             .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id.clone()))?
-            .as_bool()
+            .bool()
     }
 
     pub fn bool_or(&self, id: Name, default: bool) -> Result<bool, ObjectValueError> {
@@ -947,13 +946,6 @@ impl Object {
     pub fn as_int_ref(&self) -> Result<&i32, ObjectValueError> {
         match self {
             Object::Integer(i) => Ok(i),
-            _ => Err(ObjectValueError::UnexpectedType),
-        }
-    }
-
-    pub fn as_bool(&self) -> Result<bool, ObjectValueError> {
-        match self {
-            Object::Bool(b) => Ok(*b),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }

@@ -50,7 +50,7 @@ impl TryFrom<&Object> for Extend {
         if arr.len() != 2 {
             return Err(ObjectValueError::UnexpectedType);
         }
-        Ok(Self(arr[0].as_bool()?, arr[1].as_bool()?))
+        Ok(Self(arr[0].bool()?, arr[1].bool()?))
     }
 }
 
