@@ -69,39 +69,14 @@ fn dict_get_bool() {
 }
 
 #[test]
-fn dict_get_name_or() {
-    let mut d = Dictionary::default();
-    d.set(name!("a"), "/foo");
-    d.set(name!("b"), "/bar");
-    d.set(name!("c"), 1i32);
-
-    assert_eq!(
-        Ok(&name!("foo")),
-        d.get_name_or(name!("a"), &name!("default"))
-    );
-    assert_eq!(
-        Ok(&name!("bar")),
-        d.get_name_or(name!("b"), &name!("default"))
-    );
-    assert_eq!(
-        Err(ObjectValueError::UnexpectedType),
-        d.get_name_or(name!("c"), &name!("default"))
-    );
-    assert_eq!(
-        Ok(&name!("default")),
-        d.get_name_or(name!("d"), &name!("default"))
-    );
-}
-
-#[test]
 fn dict_get_name() {
     let mut d = Dictionary::default();
     d.set(name!("a"), "/foo");
     d.set(name!("b"), "/bar");
     d.set(name!("c"), 1i32);
 
-    assert_eq!(Ok(Some(&name!("foo"))), d.get_name(name!("a")));
-    assert_eq!(Ok(Some(&name!("bar"))), d.get_name(name!("b")));
+    assert_eq!(Ok(Some(name!("foo"))), d.get_name(name!("a")));
+    assert_eq!(Ok(Some(name!("bar"))), d.get_name(name!("b")));
     assert_eq!(
         Err(ObjectValueError::UnexpectedType),
         d.get_name(name!("c"))
@@ -113,8 +88,8 @@ fn dict_get_name() {
 fn equal_schema_type_validator() {
     let checker = EqualTypeValueChecker::new(name!("Page"));
     assert!(!checker.check(None));
-    assert!(!checker.check(Some(&name!("blah"))));
-    assert!(checker.check(Some(&name!("Page"))));
+    assert!(!checker.check(Some(name!("blah"))));
+    assert!(checker.check(Some(name!("Page"))));
 }
 
 #[test]
@@ -144,8 +119,8 @@ fn option_value_type_validator() {
     assert_impl_all!(OptionTypeValueChecker<EqualTypeValueChecker<Name>>: TypeValueCheck<Name>);
 
     assert!(checker.check(None));
-    assert!(!checker.check(Some(&name!("blah"))));
-    assert!(checker.check(Some(&name!("Page"))));
+    assert!(!checker.check(Some(name!("blah"))));
+    assert!(checker.check(Some(name!("Page"))));
 }
 
 #[test]
@@ -154,10 +129,10 @@ fn one_of_type_value_checker() {
     let schema_type = <OneOfTypeValueChecker<Name> as TypeValueCheck<Name>>::schema_type(&checker);
     assert_eq!("/Page|/Pages", &schema_type);
 
-    assert!(!checker.check(None::<&Name>));
-    assert!(!checker.check(Some(&name!("blah"))));
-    assert!(checker.check(Some(&name!("Page"))));
-    assert!(checker.check(Some(&name!("Pages"))));
+    assert!(!checker.check(None::<Name>));
+    assert!(!checker.check(Some(name!("blah"))));
+    assert!(checker.check(Some(name!("Page"))));
+    assert!(checker.check(Some(name!("Pages"))));
 }
 
 #[test_case(None => Vec::<u32>::new())]

@@ -33,12 +33,6 @@ impl Dictionary {
         Self(HashMap::default())
     }
 
-    pub fn get_opt_int_ref(&self, id: Name) -> Result<Option<&i32>, ObjectValueError> {
-        self.0
-            .get(&id)
-            .map_or(Ok(None), |o| o.as_int_ref().map(Some))
-    }
-
     pub fn get_int(&self, id: Name, default: i32) -> Result<i32, ObjectValueError> {
         self.0.get(&id).map_or(Ok(default), |o| o.int())
     }
@@ -51,20 +45,16 @@ impl Dictionary {
         self.0.insert(id, value.into());
     }
 
-    pub fn get_name(&self, id: Name) -> Result<Option<&Name>, ObjectValueError> {
-        self.0.get(&id).map_or(Ok(None), |o| o.as_name().map(Some))
-    }
-
-    pub fn get_name_or(&self, id: Name, default: &'static Name) -> Result<&Name, ObjectValueError> {
-        self.0.get(&id).map_or(Ok(default), |o| o.as_name())
+    pub fn get_name(&self, id: Name) -> Result<Option<Name>, ObjectValueError> {
+        self.0.get(&id).map_or(Ok(None), |o| o.name().map(Some))
     }
 }
 
 /// Get type value from Dictionary.
 pub trait TypeValueGetter {
-    type Value: ?Sized;
+    type Value;
     /// Return None if type value is not exist
-    fn get<'a>(&self, d: &'a Dictionary) -> Result<Option<&'a Self::Value>, ObjectValueError>;
+    fn get(&self, d: &Dictionary) -> Result<Option<Self::Value>, ObjectValueError>;
     /// Type field name
     fn field(&self) -> &Name;
 }
@@ -84,8 +74,8 @@ impl IntTypeValueGetter {
 impl TypeValueGetter for IntTypeValueGetter {
     type Value = i32;
 
-    fn get<'a>(&self, d: &'a Dictionary) -> Result<Option<&'a Self::Value>, ObjectValueError> {
-        d.get_opt_int_ref(self.field.clone())
+    fn get<'a>(&self, d: &'a Dictionary) -> Result<Option<i32>, ObjectValueError> {
+        d.get(&self.field).map_or(Ok(None), |o| o.int().map(Some))
     }
 
     fn field(&self) -> &Name {
@@ -108,7 +98,7 @@ impl NameTypeValueGetter {
 impl TypeValueGetter for NameTypeValueGetter {
     type Value = Name;
 
-    fn get<'a>(&self, d: &'a Dictionary) -> Result<Option<&'a Self::Value>, ObjectValueError> {
+    fn get<'a>(&self, d: &'a Dictionary) -> Result<Option<Name>, ObjectValueError> {
         d.get_name(self.field.clone())
     }
 
@@ -117,9 +107,9 @@ impl TypeValueGetter for NameTypeValueGetter {
     }
 }
 
-pub trait TypeValueCheck<V: ?Sized>: Clone + Debug {
+pub trait TypeValueCheck<V>: Clone + Debug {
     fn schema_type(&self) -> Cow<str>;
-    fn check(&self, v: Option<&V>) -> bool;
+    fn check(&self, v: Option<V>) -> bool;
 
     /// Convert current checker to `OptionTypeValueChecker`, return `true` if value is `None`.
     fn option(self) -> OptionTypeValueChecker<Self>
@@ -146,8 +136,8 @@ impl TypeValueCheck<Name> for EqualTypeValueChecker<Name> {
         Cow::Borrowed(self.value.as_ref())
     }
 
-    fn check(&self, v: Option<&Name>) -> bool {
-        v.map_or(false, |v| v == &self.value)
+    fn check(&self, v: Option<Name>) -> bool {
+        v.map_or(false, |v| v == self.value)
     }
 }
 
@@ -156,8 +146,8 @@ impl TypeValueCheck<i32> for EqualTypeValueChecker<i32> {
         Cow::Owned(self.value.to_string())
     }
 
-    fn check(&self, v: Option<&i32>) -> bool {
-        v.map_or(false, |v| *v == self.value)
+    fn check(&self, v: Option<i32>) -> bool {
+        v.map_or(false, |v| v == self.value)
     }
 }
 
@@ -165,14 +155,14 @@ impl TypeValueCheck<i32> for EqualTypeValueChecker<i32> {
 #[derive(Clone, Debug)]
 pub struct OptionTypeValueChecker<Inner: Sized + Clone + Debug>(pub Inner);
 
-impl<Inner: TypeValueCheck<V> + Clone + Debug, V: ?Sized> TypeValueCheck<V>
+impl<Inner: TypeValueCheck<V> + Clone + Debug, V> TypeValueCheck<V>
     for OptionTypeValueChecker<Inner>
 {
     fn schema_type(&self) -> Cow<str> {
         self.0.schema_type()
     }
 
-    fn check(&self, v: Option<&V>) -> bool {
+    fn check(&self, v: Option<V>) -> bool {
         v.map_or(true, |v| self.0.check(Some(v)))
     }
 }
@@ -190,9 +180,7 @@ impl<R: Clone + Debug> OneOfTypeValueChecker<R> {
     }
 }
 
-impl<V: Display + ?Sized + PartialEq, R: Borrow<V> + Clone + Debug> TypeValueCheck<V>
-    for OneOfTypeValueChecker<R>
-{
+impl<V: Display + PartialEq + Clone + Debug> TypeValueCheck<V> for OneOfTypeValueChecker<V> {
     fn schema_type(&self) -> Cow<str> {
         Cow::Owned(
             self.values
@@ -203,8 +191,8 @@ impl<V: Display + ?Sized + PartialEq, R: Borrow<V> + Clone + Debug> TypeValueChe
         )
     }
 
-    fn check(&self, v: Option<&V>) -> bool {
-        v.map_or(false, |v| self.values.iter().any(|r| v == r.borrow()))
+    fn check(&self, v: Option<V>) -> bool {
+        v.map_or(false, |v| self.values.iter().any(|r| &v == r))
     }
 }
 
@@ -247,7 +235,7 @@ impl<G: Debug + Clone, C: Debug + Clone> ValueTypeValidator<G, C> {
     }
 }
 
-impl<G, C, V: ?Sized> TypeValidator for ValueTypeValidator<G, C>
+impl<G, C, V> TypeValidator for ValueTypeValidator<G, C>
 where
     G: TypeValueGetter<Value = V> + Debug + Clone,
     C: TypeValueCheck<V> + Debug + Clone,
@@ -938,13 +926,6 @@ impl Object {
         match U::try_from(self) {
             Ok(u) => Ok(Either::Left(u)),
             Err(_) => V::try_from(self).map(Either::Right),
-        }
-    }
-
-    pub fn as_int_ref(&self) -> Result<&i32, ObjectValueError> {
-        match self {
-            Object::Integer(i) => Ok(i),
-            _ => Err(ObjectValueError::UnexpectedType),
         }
     }
 
