@@ -40,10 +40,6 @@ impl Dictionary {
     pub fn set(&mut self, id: Name, value: impl Into<Object>) {
         self.0.insert(id, value.into());
     }
-
-    pub fn get_name(&self, id: Name) -> Result<Option<Name>, ObjectValueError> {
-        self.0.get(&id).map_or(Ok(None), |o| o.name().map(Some))
-    }
 }
 
 /// Get type value from Dictionary.
@@ -95,7 +91,7 @@ impl TypeValueGetter for NameTypeValueGetter {
     type Value = Name;
 
     fn get<'a>(&self, d: &'a Dictionary) -> Result<Option<Name>, ObjectValueError> {
-        d.get_name(self.field.clone())
+        d.get(&self.field).map(|v| v.name()).transpose()
     }
 
     fn field(&self) -> &Name {

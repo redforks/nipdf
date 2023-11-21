@@ -76,7 +76,7 @@ fn parse_object_stream(n: usize, buf: &[u8]) -> ParseResult<ObjectStream> {
 impl ObjectStream {
     pub fn new(stream: Stream, file: &[u8]) -> Result<Self, ObjectValueError> {
         let d = stream.as_dict();
-        assert_eq!(name!("ObjStm"), d.get_name(name!("Type"))?.unwrap());
+        assert_eq!(name!("ObjStm"), d[&name!("Type")].name()?);
         let n = d.get_int(name!("N"), 0)? as usize;
         assert!(
             !d.contains_key(&name!("Extends")),

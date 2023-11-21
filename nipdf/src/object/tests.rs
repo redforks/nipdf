@@ -53,22 +53,6 @@ fn buf_or_str_to_object<'a>(exp: Object, s: &'a str) {
 }
 
 #[test]
-fn dict_get_name() {
-    let mut d = Dictionary::default();
-    d.set(name!("a"), "/foo");
-    d.set(name!("b"), "/bar");
-    d.set(name!("c"), 1i32);
-
-    assert_eq!(Ok(Some(name!("foo"))), d.get_name(name!("a")));
-    assert_eq!(Ok(Some(name!("bar"))), d.get_name(name!("b")));
-    assert_eq!(
-        Err(ObjectValueError::UnexpectedType),
-        d.get_name(name!("c"))
-    );
-    assert_eq!(Ok(None), d.get_name(name!("d")));
-}
-
-#[test]
 fn equal_schema_type_validator() {
     let checker = EqualTypeValueChecker::new(name!("Page"));
     assert!(!checker.check(None));
