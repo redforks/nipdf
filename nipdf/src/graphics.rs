@@ -481,7 +481,7 @@ impl<'b> ConvertFromObject<'b> for TextStringOrNumber {
 impl<'b> ConvertFromObject<'b> for ColorArgsOrName {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
-        if let Ok(name) = o.as_name() {
+        if let Ok(name) = o.name() {
             Ok(ColorArgsOrName::Name(name.clone()))
         } else {
             objects.push(o);
@@ -509,7 +509,7 @@ impl<'b> ConvertFromObject<'b> for String {
 impl<'b> ConvertFromObject<'b> for NameOfDict {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
-        o.as_name().map(|s| NameOfDict(s.clone()))
+        o.name().map(NameOfDict)
     }
 }
 

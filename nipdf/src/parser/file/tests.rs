@@ -92,7 +92,7 @@ fn read_xref_stream() {
 
     // assert object in file
     assert_eq!(
-        &name!("Catalog"),
+        name!("Catalog"),
         resolver
             .resolve(NonZeroU32::new(1u32).unwrap())
             .unwrap()
@@ -100,7 +100,7 @@ fn read_xref_stream() {
             .unwrap()
             .get(&name!("Type"))
             .unwrap()
-            .as_name()
+            .name()
             .unwrap()
     );
 

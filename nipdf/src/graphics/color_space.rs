@@ -146,7 +146,7 @@ where
                     Self::from_args(args, resolver, resources)
                 }
             },
-            ColorSpaceArgs::Array(arr) => match arr[0].as_name()? {
+            ColorSpaceArgs::Array(arr) => match arr[0].name()? {
                 name!("ICCBased") => {
                     debug_assert_eq!(2, arr.len());
                     let id = arr[1].as_ref()?;

@@ -24,7 +24,7 @@ pub fn try_from_name_object(input: TokenStream) -> TokenStream {
         impl<'b> TryFrom<&'b crate::object::Object> for #t {
             type Error = crate::object::ObjectValueError;
             fn try_from(object: &'b crate::object::Object) -> Result<Self, Self::Error> {
-                match object.as_name()? {
+                match object.name()? {
                     #( #arms, )*
                     _ => Err(crate::object::ObjectValueError::GraphicsOperationSchemaError),
                 }

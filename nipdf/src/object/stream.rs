@@ -596,7 +596,7 @@ impl Stream {
 
         let mut decoded = FilterDecodedData::Bytes(raw);
         for (filter_name, params) in self.iter_filter()? {
-            decoded = filter(decoded.into_bytes()?, Some(resolver), filter_name, params)?;
+            decoded = filter(decoded.into_bytes()?, Some(resolver), &filter_name, params)?;
         }
         Ok(decoded)
     }
@@ -638,7 +638,7 @@ impl Stream {
     ) -> Result<Cow<'a, [u8]>, ObjectValueError> {
         let mut decoded = FilterDecodedData::Bytes(buf[self.buf_range(None)?].into());
         for (filter_name, params) in self.iter_filter()? {
-            decoded = filter(decoded.into_bytes()?, None, filter_name, params)?;
+            decoded = filter(decoded.into_bytes()?, None, &filter_name, params)?;
         }
         decoded.into_bytes()
     }
@@ -745,7 +745,7 @@ impl Stream {
 
     fn iter_filter(
         &self,
-    ) -> Result<impl Iterator<Item = (&Name, Option<&Dictionary>)>, ObjectValueError> {
+    ) -> Result<impl Iterator<Item = (Name, Option<&Dictionary>)>, ObjectValueError> {
         if self.0.contains_key(&KEY_FFILTER) {
             return Err(ObjectValueError::ExternalStreamNotSupported);
         }
@@ -755,9 +755,9 @@ impl Stream {
             |v| match v {
                 Object::Array(vals) => vals
                     .iter()
-                    .map(|v| v.as_name().map_err(|_| ObjectValueError::UnexpectedType))
+                    .map(|v| v.name().map_err(|_| ObjectValueError::UnexpectedType))
                     .collect(),
-                Object::Name(n) => Ok(vec![n]),
+                Object::Name(n) => Ok(vec![n.clone()]),
                 _ => Err(ObjectValueError::UnexpectedType),
             },
         )?;

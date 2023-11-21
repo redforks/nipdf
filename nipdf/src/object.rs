@@ -933,15 +933,6 @@ impl Object {
             .map(|v| v.map_either(|v| v, |v| v as f32).into_inner())
     }
 
-    /// If value is a Name, return its normalized name, return error if
-    /// value is not Name..
-    pub fn as_name(&self) -> Result<&Name, ObjectValueError> {
-        match self {
-            Object::Name(n) => Ok(n),
-            _ => Err(ObjectValueError::UnexpectedType),
-        }
-    }
-
     pub fn as_dict(&self) -> Result<&Dictionary, ObjectValueError> {
         match self {
             Object::Dictionary(d) => Ok(d),
