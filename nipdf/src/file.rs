@@ -252,9 +252,11 @@ fn decrypt_string(key: &[u8], id: ObjectId, mut o: Object) -> Object {
         }
 
         fn dict(&self, dict: &mut Dictionary) {
-            for (_, v) in dict.iter_mut() {
-                self.decrypt(v);
-            }
+            dict.update(|d| {
+                for (_, v) in d.iter_mut() {
+                    self.decrypt(v);
+                }
+            })
         }
 
         fn arr(&self, arr: &mut Array) {
@@ -278,16 +280,8 @@ fn decrypt_string(key: &[u8], id: ObjectId, mut o: Object) -> Object {
         }
 
         fn stream(&self, stream: &mut Rc<Stream>) {
-            match Rc::get_mut(stream) {
-                Some(s) => {
-                    self.dict(&mut s.0);
-                }
-                None => {
-                    let mut d = stream.as_dict().clone();
-                    self.dict(&mut d);
-                    *stream = Rc::new(Stream::new(d, stream.1.clone(), stream.2.clone()));
-                }
-            }
+            let stream = Rc::make_mut(stream);
+            self.dict(&mut stream.0);
         }
 
         fn decrypt(&self, o: &mut Object) {

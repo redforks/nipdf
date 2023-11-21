@@ -59,8 +59,9 @@ fn value_type_validator() {
         ValueTypeValidator<NameTypeValueGetter, EqualTypeValueChecker<Name>>: TypeValidator
     );
 
-    let mut d = Dictionary::default();
-    d.set(name!("a"), "/foo");
+    let mut d = HashMap::new();
+    d.insert(name!("a"), "/foo".into());
+    let d = Dictionary::from(d);
 
     assert_eq!(
         Err(ObjectValueError::DictSchemaUnExpectedType(
@@ -96,13 +97,14 @@ fn one_of_type_value_checker() {
 #[test_case(Some(&[]) => Vec::<u32>::new())]
 #[test_case(Some(&[1, 2]) => vec![1, 2])]
 fn schema_ref_id_arr(ids: Option<&[u32]>) -> Vec<u32> {
-    let mut d = Dictionary::new();
+    let mut d = HashMap::new();
     if let Some(ids) = ids {
         let ids: Array = ids.iter().map(|id| Object::new_ref(*id)).collect();
         d.insert(name!("ids"), ids.into());
     }
     let xref = XRefTable::empty();
     let resolver = ObjectResolver::empty(&xref);
+    let d = Dictionary::from(d);
     let d = SchemaDict::new(&d, &resolver, ()).unwrap();
     d.ref_id_arr(name!("ids"))
         .unwrap()

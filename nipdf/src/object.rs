@@ -22,29 +22,29 @@ pub type Array = Rc<[Object]>;
 
 #[derive(PartialEq, Debug, Clone, Default, Educe)]
 #[educe(Deref, DerefMut)]
-pub struct Dictionary(HashMap<Name, Object>);
+pub struct Dictionary(Rc<HashMap<Name, Object>>);
 
 impl FromIterator<(Name, Object)> for Dictionary {
     fn from_iter<T: IntoIterator<Item = (Name, Object)>>(iter: T) -> Self {
-        Self(iter.into_iter().collect())
+        Self(Rc::new(iter.into_iter().collect()))
     }
 }
 
 impl Dictionary {
     pub fn new() -> Self {
-        Self(HashMap::default())
+        Self(Rc::new(HashMap::default()))
+    }
+
+    pub fn from(d: HashMap<Name, Object>) -> Self {
+        Self(Rc::new(d))
     }
 
     pub fn with_capacity(n: usize) -> Self {
-        Self(HashMap::with_capacity(n))
+        Self(Rc::new(HashMap::with_capacity(n)))
     }
 
-    pub fn set(&mut self, id: Name, value: impl Into<Object>) {
-        self.0.insert(id, value.into());
-    }
-
-    pub fn into_inner(self) -> HashMap<Name, Object> {
-        self.0
+    pub fn update(&mut self, f: impl FnOnce(&mut HashMap<Name, Object>)) {
+        f(Rc::make_mut(&mut self.0))
     }
 }
 

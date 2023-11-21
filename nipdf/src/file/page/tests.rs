@@ -45,7 +45,7 @@ fn parse_page_tree(root_id: u32, tree: Vec<(u32, Vec<u32>)>) -> Vec<u32> {
     let xref = XRefTable::empty();
     let mut resolver = ObjectResolver::empty(&xref);
     for (id, kids) in tree {
-        let mut dict = Dictionary::new();
+        let mut dict = HashMap::new();
         dict.insert(
             name!("Type"),
             (if kids.is_empty() { "/Page" } else { "/Pages" }).into(),
@@ -63,7 +63,7 @@ fn parse_page_tree(root_id: u32, tree: Vec<(u32, Vec<u32>)>) -> Vec<u32> {
                     .into(),
             ),
         );
-        resolver.setup_object(id, Object::Dictionary(dict));
+        resolver.setup_object(id, Object::Dictionary(Dictionary::from(dict)));
     }
 
     let pages = Page::parse(
