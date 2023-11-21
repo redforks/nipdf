@@ -379,7 +379,7 @@ macro_rules! schema_access {
             }
 
             pub fn [<$method _or>](&self, id: Name, v: $t) -> Result<$t, ObjectValueError> {
-                self.or_default(id, v)
+                self.or(id, v)
             }
         }
     };
@@ -396,22 +396,26 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
         &self,
         id: Name,
     ) -> Result<V, ObjectValueError> {
-        self.dict().get(&id).map_or_else(
-            || Err(ObjectValueError::DictKeyNotFound),
-            |o| o.try_into().map_err(ObjectValueError::from),
-        )
+        let v = self.dict().get(&id);
+        v.map_or(Err(ObjectValueError::DictKeyNotFound), |v| {
+            let v = self.r.resolve_reference(v)?;
+            v.try_into()
+        })
     }
 
     pub fn opt<V: for<'d> TryFrom<&'d Object, Error = ObjectValueError>>(
         &self,
         id: Name,
     ) -> Result<Option<V>, ObjectValueError> {
-        self.dict().get(&id).map_or(Ok(None), |o| {
-            o.try_into().map(Some).map_err(ObjectValueError::from)
+        let v = self.dict().get(&id);
+        v.map(|v| {
+            let v = self.r.resolve_reference(v)?;
+            v.try_into()
         })
+        .transpose()
     }
 
-    pub fn or_default<V: for<'d> TryFrom<&'d Object, Error = ObjectValueError>>(
+    pub fn or<V: for<'d> TryFrom<&'d Object, Error = ObjectValueError>>(
         &self,
         id: Name,
         default: V,
