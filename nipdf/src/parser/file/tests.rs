@@ -2,6 +2,7 @@ use super::*;
 use crate::file::{read_sample_file, File};
 use insta::assert_debug_snapshot;
 use test_case::test_case;
+use test_log::test;
 
 #[test]
 fn parse_file_header() {

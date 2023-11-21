@@ -1,6 +1,5 @@
 use super::*;
 use crate::{file::decode_stream, function::Domain, object::Name};
-use prescript::name;
 use test_case::test_case;
 
 #[test_case([] => Ok(vec![]); "empty")]
@@ -66,7 +65,7 @@ fn test_iter_filter(
         .into_iter()
         .map(|(k, v)| (k.clone(), v))
         .collect::<Dictionary>();
-    let stream = Stream(dict, 0, ObjectId::empty());
+    let stream = Stream(dict, BufPos::new(0, None), ObjectId::empty());
     let r: Vec<(Name, Option<Dictionary>)> = stream
         .iter_filter()?
         .map(|(k, v)| (k.clone(), v.cloned()))
@@ -141,7 +140,7 @@ fn image_mask_try_from_object() {
     let stream = Stream(
         Dictionary::default(),
         // b"0 1 2 3 4 5 6 7 8 9".as_ref(),
-        0,
+        BufPos::new(0, None),
         ObjectId::empty(),
     );
     let o = Object::Stream(stream.clone());

@@ -406,7 +406,7 @@ impl Function for ExponentialInterpolationFunction {
         let c1 = &self.c1;
         let n = self.n;
         let r = (0..c0.len())
-            .map(|i| x.powf(n).mul_add(c1[i] - c0[i], c0[i])) // x.powf(n) * (c1[i] - c0[i]) + c0[i]
+            .map(|i| x.powf(n).mul_add(c1[i] - c0[i], c0[i]))
             .collect();
         Ok(self.signature.clip_returns(r))
     }

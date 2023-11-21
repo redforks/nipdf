@@ -1,6 +1,6 @@
 use super::{whitespace_or_comment, ws, ws_prefixed, ws_terminated, ParseError, ParseResult};
 use crate::object::{
-    Array, Dictionary, HexString, IndirectObject, LiteralString, Object, ObjectId,
+    Array, BufPos, Dictionary, HexString, IndirectObject, LiteralString, Object, ObjectId,
     ObjectValueError, Reference, Stream,
 };
 use either::Either;
@@ -18,7 +18,7 @@ use nom::{
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
 };
 use prescript::Name;
-
+use prescript_macro::name;
 use std::{
     borrow::Cow,
     num::NonZeroU32,
@@ -162,34 +162,53 @@ pub fn parse_dict(input: &[u8]) -> ParseResult<Dictionary> {
     )(input)
 }
 
-fn parse_object_and_stream(input: &[u8]) -> ParseResult<Either<Object, (Dictionary, &[u8])>> {
-    let (input, o) = parse_object(input)?;
+fn parse_object_and_stream(
+    input: &[u8],
+) -> ParseResult<Either<Object, (Dictionary, u16, Option<NonZeroU32>)>> {
+    let input_len = input.len();
+    let (data, o) = parse_object(input)?;
     match o {
         Object::Dictionary(d) => {
-            let (input, begin_stream) = opt(delimited(
+            let (mut data, begin_stream) = opt(delimited(
                 whitespace_or_comment,
                 tag(b"stream"),
                 line_ending,
-            ))(input)?;
+            ))(data)?;
             if begin_stream.is_some() {
-                Ok((input, Either::Right((d, input))))
+                let start = input_len - data.len();
+                let length = match d.get(&name!("Length")) {
+                    Some(Object::Integer(l)) => Some(*l as u32),
+                    _ => None,
+                };
+                if let Some(length) = length {
+                    data = &data[length as usize..];
+                    let end_of_line = alt((line_ending, tag(b"\r")));
+                    (data, _) = opt(end_of_line)(data)?;
+                    (data, _) = tag(b"endstream")(data)?;
+                }
+                Ok((
+                    data,
+                    Either::Right((d, start as u16, length.and_then(NonZeroU32::new))),
+                ))
             } else {
-                Ok((input, Either::Left(Object::Dictionary(d))))
+                Ok((data, Either::Left(Object::Dictionary(d))))
             }
         }
-        _ => Ok((input, Either::Left(o))),
+        _ => Ok((data, Either::Left(o))),
     }
 }
 
 pub fn parse_indirect_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
     let input_len = input.len();
     let (input, (id, gen)) = separated_pair(u32, multispace1, u16)(input)?;
-    let (input, obj) = preceded(ws(tag(b"obj")), parse_object_and_stream)(input)?;
+    let (input, _) = ws(tag(b"obj"))(input)?;
+    let offset = input_len - input.len();
+    let (input, obj) = parse_object_and_stream(input)?;
     let obj = match obj {
         Either::Left(o) => o,
-        Either::Right((dict, data)) => Object::Stream(Stream::new(
+        Either::Right((dict, start, length)) => Object::Stream(Stream::new(
             dict,
-            (input_len - data.len()) as u16,
+            BufPos::new(offset as u16 + start, length),
             ObjectId::new(NonZeroU32::new(id).unwrap(), gen),
         )),
     };

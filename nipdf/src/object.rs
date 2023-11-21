@@ -816,6 +816,8 @@ pub enum ObjectValueError {
     StreamNotImage,
     #[error("Stream is not bytes")]
     StreamIsNotBytes,
+    #[error("Stream length not defined")]
+StreamLengthNotDefined,
     #[error("Object not found by id {0}")]
     ObjectIDNotFound(NonZeroU32),
     #[error("Parse error: {0}")]
@@ -1095,7 +1097,7 @@ impl<'a> From<&'a [u8]> for Object {
         match value[0] {
             b'(' => Self::LiteralString(LiteralString::new(value)),
             b'<' => Self::HexString(HexString::new(value)),
-            b'/' => Self::Name(name(from_utf8(&value[1..]).unwrap())),
+            b'/' => Self::Name(prescript::name(from_utf8(&value[1..]).unwrap())),
             _ => panic!("invalid object"),
         }
     }

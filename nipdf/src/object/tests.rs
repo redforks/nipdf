@@ -132,7 +132,7 @@ fn value_type_validator() {
 
     assert_eq!(
         Err(ObjectValueError::DictSchemaUnExpectedType(
-            "/Type: /Page".into()
+            "/Type: Page".into()
         )),
         validator.valid(&d)
     );
