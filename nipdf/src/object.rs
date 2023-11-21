@@ -872,10 +872,10 @@ macro_rules! copy_value_access {
             }
         }
 
-        impl TryFrom<Object> for $t {
+        impl TryFrom<&Object> for $t {
             type Error = ObjectValueError;
 
-            fn try_from(value: Object) -> Result<Self, Self::Error> {
+            fn try_from(value: &Object) -> Result<Self, Self::Error> {
                 value.$method()
             }
         }
@@ -911,7 +911,7 @@ macro_rules! ref_value_access {
 
 copy_value_access!(bool, opt_bool, Bool, bool);
 copy_value_access!(int, opt_int, Integer, i32);
-copy_value_access!(number, opt_number, Number, f32);
+copy_value_access!(real, opt_real, Number, f32);
 ref_value_access!(literal_str, opt_literal_str, LiteralString, &LiteralString);
 ref_value_access!(hex_str, opt_hex_str, HexString, &HexString);
 copy_value_access!(name, opt_name, Name, Name);
@@ -930,16 +930,14 @@ impl Object {
     }
 
     /// Return either type value. Panic if value is not either type.
-    pub fn either<'a, U, V>(&'a self) -> Either<U, V>
+    pub fn either<'a, U, V>(&'a self) -> Result<Either<U, V>, ObjectValueError>
     where
-        U: Clone,
-        V: Clone + From<Self>,
-        Option<U>: From<&'a Self>,
-        Option<V>: From<&'a Self>,
+        U: Clone + TryFrom<&'a Self, Error = ObjectValueError>,
+        V: Clone + TryFrom<&'a Self, Error = ObjectValueError>,
     {
-        match Option::<U>::from(self) {
-            Some(v) => Either::Left(v),
-            None => Either::Right(Option::<V>::from(self).expect("not either of")),
+        match U::try_from(self) {
+            Ok(u) => Ok(Either::Left(u)),
+            Err(_) => V::try_from(self).map(Either::Right),
         }
     }
 
@@ -951,11 +949,8 @@ impl Object {
     }
 
     pub fn as_number(&self) -> Result<f32, ObjectValueError> {
-        match self {
-            Object::Number(f) => Ok(*f),
-            Object::Integer(v) => Ok(*v as f32),
-            _ => Err(ObjectValueError::UnexpectedType),
-        }
+        self.either::<f32, i32>()
+            .map(|v| v.map_either(|v| v, |v| v as f32).into_inner())
     }
 
     /// If value is a Name, return its normalized name, return error if
