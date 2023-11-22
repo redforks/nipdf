@@ -31,8 +31,17 @@ use std::fmt::{Display, Formatter};
 ///   name!("bar") => { ...}
 ///   _ => { ... }
 /// }  
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd)]
 pub struct Name(pub Either<u16, Box<str>>);
+
+impl std::hash::Hash for Name {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Name(Left(i)) => i.hash(state),
+            Name(Right(s)) => s.hash(state),
+        }
+    }
+}
 
 impl std::fmt::Debug for Name {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
