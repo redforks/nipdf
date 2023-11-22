@@ -2037,6 +2037,7 @@ SA
 Shading
 ShadingType
 Size
+SM
 SMask
 StemH
 StemV
@@ -2070,3 +2071,6 @@ Times-BoldItalic
 Times-Italic
 Times-Roman
 ZapfDingbats
+op
+OP
+OPM

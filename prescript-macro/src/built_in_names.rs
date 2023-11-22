@@ -1,4 +1,4 @@
-pub(crate) static BUILT_IN_NAMES: [&str; 965] = [
+pub(crate) static BUILT_IN_NAMES: [&str; 969] = [
     "$$invalid1$$",
     "$$invalid2$$",
     ".notdef",
@@ -218,6 +218,8 @@ pub(crate) static BUILT_IN_NAMES: [&str; 965] = [
     "O",
     "OE",
     "OEsmall",
+    "OP",
+    "OPM",
     "Oacute",
     "Oacutesmall",
     "ObjStm",
@@ -269,6 +271,7 @@ pub(crate) static BUILT_IN_NAMES: [&str; 965] = [
     "RunLengthDecode",
     "S",
     "SA",
+    "SM",
     "SMask",
     "Saturation",
     "Scaron",
@@ -815,6 +818,7 @@ pub(crate) static BUILT_IN_NAMES: [&str; 965] = [
     "onequarter",
     "onesuperior",
     "onethird",
+    "op",
     "operatortype",
     "or",
     "ordfeminine",

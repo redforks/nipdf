@@ -1020,7 +1020,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             let key = m.pop()?;
             let dict = m.variable_stack.top();
             let is_encoding = if let RuntimeValue::Value(Value::Name(ref name)) = key {
-                name.as_ref() == "Encoding"
+                name == &name!("Encoding")
             } else {
                 false
             };
