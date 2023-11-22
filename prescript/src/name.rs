@@ -31,7 +31,7 @@ use std::fmt::{Display, Formatter};
 ///   name!("bar") => { ...}
 ///   _ => { ... }
 /// }  
-#[derive(Clone, PartialEq, Eq, PartialOrd)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Name(pub Either<u16, Box<str>>);
 
 impl std::hash::Hash for Name {
