@@ -373,21 +373,14 @@ impl<'a> ObjectResolver<'a> {
         T::new(Some(id), obj, self)
     }
 
-    /// Resolve object with id `id`, if object is reference, resolve it recursively.
+    /// Resolve object with id `id`.
     pub fn resolve(&self, id: NonZeroU32) -> Result<&Object, ObjectValueError> {
         self.objects
             .get(&id)
             .ok_or(ObjectValueError::ObjectIDNotFound(id))?
             .get_or_try_init(|| {
-                let mut o = self
-                    .xref_table
-                    .parse_object(self.buf, id, self.encript_key())?;
-                while let Object::Reference(id) = o {
-                    o = self
-                        .xref_table
-                        .parse_object(self.buf, id.id().id(), self.encript_key())?;
-                }
-                Ok(o)
+                self.xref_table
+                    .parse_object(self.buf, id, self.encript_key())
             })
     }
 

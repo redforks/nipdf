@@ -43,10 +43,6 @@ fn object_resolver() {
         resolver.resolve(to_non_zero_u32(2)),
         Ok(&Object::Integer(5))
     );
-    assert_eq!(
-        resolver.resolve(to_non_zero_u32(3)),
-        Ok(&Object::Integer(5))
-    );
     assert_eq!(resolver.resolve(to_non_zero_u32(1)), Ok(&Object::Null));
 }
 
