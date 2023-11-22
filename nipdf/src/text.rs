@@ -79,10 +79,10 @@ pub trait Type1FontDictTrait {
 impl<'a, 'b> FontDict<'a, 'b> {
     fn resolve_name(&self) -> anyhow::Result<Name> {
         if let Some(desc) = self.font_descriptor()? {
-            return desc.font_name().map(|v| v.clone());
+            return desc.font_name();
         }
 
-        self.base_font().map(|v| v.clone())
+        self.base_font()
     }
 
     pub fn font_name(&self) -> anyhow::Result<String> {

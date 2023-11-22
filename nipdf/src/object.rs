@@ -72,7 +72,7 @@ impl IntTypeValueGetter {
 impl TypeValueGetter for IntTypeValueGetter {
     type Value = i32;
 
-    fn get<'a>(&self, d: &'a Dictionary) -> Result<Option<i32>, ObjectValueError> {
+    fn get(&self, d: &Dictionary) -> Result<Option<i32>, ObjectValueError> {
         d.get(&self.field).map_or(Ok(None), |o| o.int().map(Some))
     }
 
@@ -96,7 +96,7 @@ impl NameTypeValueGetter {
 impl TypeValueGetter for NameTypeValueGetter {
     type Value = Name;
 
-    fn get<'a>(&self, d: &'a Dictionary) -> Result<Option<Name>, ObjectValueError> {
+    fn get(&self, d: &Dictionary) -> Result<Option<Name>, ObjectValueError> {
         d.get(&self.field).map(|v| v.name()).transpose()
     }
 

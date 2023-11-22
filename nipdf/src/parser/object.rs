@@ -73,7 +73,7 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<Object> {
         map(parse_name, Object::Name),
         parse_quoted_string,
         map(parse_dict, Object::Dictionary),
-        map(parse_array, |arr| Object::Array(arr)),
+        map(parse_array, Object::Array),
         parse_hex_string,
         null,
         true_parser,
@@ -165,9 +165,9 @@ pub fn parse_dict(input: &[u8]) -> ParseResult<Dictionary> {
     )(input)
 }
 
-fn parse_object_and_stream(
-    input: &[u8],
-) -> ParseResult<Either<Object, (Dictionary, u16, Option<NonZeroU32>)>> {
+type StreamParts = (Dictionary, u16, Option<NonZeroU32>);
+
+fn parse_object_and_stream(input: &[u8]) -> ParseResult<Either<Object, StreamParts>> {
     let input_len = input.len();
     let (data, o) = parse_object(input)?;
     match o {

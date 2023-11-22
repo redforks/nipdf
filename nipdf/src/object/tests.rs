@@ -1,6 +1,6 @@
 use super::*;
 use crate::file::{ObjectResolver, XRefTable};
-use prescript::name;
+
 use prescript_macro::name;
 use static_assertions::assert_impl_all;
 use test_case::test_case;
@@ -36,7 +36,7 @@ fn hex_string_decoded(exp: impl AsRef<[u8]>, buf: impl AsRef<[u8]>) {
 #[test_case(Object::LiteralString(LiteralString::new(b"(foo)")), "(foo)"; "literal string")]
 #[test_case(Object::HexString(HexString::new(b"<901FA3>")), "<901FA3>"; "hex string")]
 #[test_case(Object::Name(name!("foo")), "/foo"; "name")]
-fn buf_or_str_to_object<'a>(exp: Object, s: &'a str) {
+fn buf_or_str_to_object(exp: Object, s: &str) {
     assert_eq!(exp, Object::from(s.as_bytes()));
     assert_eq!(exp, Object::from(s));
 }

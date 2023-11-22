@@ -482,7 +482,7 @@ impl<'b> ConvertFromObject<'b> for ColorArgsOrName {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
         let o = objects.pop().unwrap();
         if let Ok(name) = o.name() {
-            Ok(ColorArgsOrName::Name(name.clone()))
+            Ok(ColorArgsOrName::Name(name))
         } else {
             objects.push(o);
             ColorArgs::convert_from_object(objects).map(ColorArgsOrName::Color)

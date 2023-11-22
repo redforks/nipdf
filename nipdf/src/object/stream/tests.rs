@@ -69,7 +69,7 @@ fn test_iter_filter(
     let stream = Stream(dict, BufPos::new(0, None), ObjectId::empty());
     let r: Vec<(Name, Option<Dictionary>)> = stream
         .iter_filter()?
-        .map(|(k, v)| (k.clone(), v.cloned()))
+        .map(|(k, v)| (k, v.cloned()))
         .collect();
     Ok(r)
 }

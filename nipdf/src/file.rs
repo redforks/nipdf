@@ -274,7 +274,7 @@ fn decrypt_string(key: &[u8], id: ObjectId, mut o: Object) -> Object {
                         r.push(o);
                     }
                     let r: Rc<[Object]> = r.into();
-                    *arr = r.into();
+                    *arr = r;
                 }
             }
         }

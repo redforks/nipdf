@@ -3,7 +3,7 @@ use crate::{
     file::{ObjectResolver, XRefTable},
     object::{Array, Object},
 };
-use std::{num::NonZeroU32, rc::Rc};
+use std::{num::NonZeroU32};
 use test_case::test_case;
 
 #[test_case(1.0, 2, 3.0, 4.0 => (1.0, 2.0, 3.0, 4.0); "normal")]
@@ -59,8 +59,7 @@ fn parse_page_tree(root_id: u32, tree: Vec<(u32, Vec<u32>)>) -> Vec<u32> {
             Object::Array(
                 kids.into_iter()
                     .map(Object::new_ref)
-                    .collect::<Array>()
-                    .into(),
+                    .collect::<Array>(),
             ),
         );
         resolver.setup_object(id, Object::Dictionary(Dictionary::from(dict)));
