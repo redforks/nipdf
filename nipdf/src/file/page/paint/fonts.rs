@@ -19,7 +19,11 @@ use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
 use prescript::{name, Encoding, Name};
 use prescript_macro::name;
-use std::{collections::HashMap, ops::RangeInclusive};
+use std::{
+    collections::HashMap,
+    ops::RangeInclusive,
+    str::{from_utf8, from_utf8_unchecked},
+};
 use tiny_skia::PathBuilder;
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
 
@@ -356,21 +360,33 @@ impl<'a> FontOp for TTFParserFontOp<'a> {
             .glyph_index(unsafe { char::from_u32_unchecked(ch) })
             .map_or_else(
                 || {
-                    if let Some(encoding) = &self.encoding {
-                        let gid_name = encoding.get_str(ch as u8);
-                        return self.face.glyph_index_by_name(gid_name).map_or_else(
-                            || {
-                                info!(
-                                    "(TTF) glyph id not found by char and by glyph name: {}/{}",
-                                    ch, &gid_name
-                                );
-                                // .notdef gid is always be 0 for type1 font
-                                0
-                            },
-                            |v| v.0,
-                        );
+                    // face.glyph_index() ignore subtable.is_unicode() returns false,
+                    // TrimmedTableMapping .is_unicode() returned false.
+                    //
+                    // ```
+                    //   pub fn glyph_index(&self, code_point: char) -> Option<GlyphId> {
+                    //     for subtable in self.tables.cmap?.subtables {
+                    //       if !subtable.is_unicode() {
+                    //         continue;
+                    //       }
+                    //
+                    //       if let Some(id) = subtable.glyph_index(u32::from(code_point)) {
+                    //         return Some(id);
+                    //       }
+                    //     }
+                    //     None
+                    //  }
+                    // `
+                    if let Some(cmap) = self.face.tables().cmap {
+                        for subtable in cmap.subtables {
+                            if let Some(id) = subtable.glyph_index(ch) {
+                                return id.0;
+                            }
+                        }
+                        warn!("(TTF) glyph id not found from cmap: {}", ch);
                     }
-                    debug!("(TTF) glyph id not found for char: {}", ch);
+
+                    warn!("(TTF) glyph id not found for char: {}", ch);
                     // .notdef gid is always be 0 for type1 font
                     0
                 },
