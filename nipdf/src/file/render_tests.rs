@@ -91,3 +91,12 @@ fn image_mask_cal_rgb_index_color_space() {
 fn decrypt_aes_revion3() {
     assert_ron_snapshot!(&decode_file_page("../../pdf/5176.CFF.pdf", 0).unwrap());
 }
+
+#[test]
+fn ttf_font_cmap_trimmed_table_mapping() {
+    // font used in graph, its cmap table uses format TrimmedTableMapping
+    // that ttf-parser glyph_index() don't work, see `TTFParserFontOp::char_to_gid()`
+    assert_ron_snapshot!(
+        &decode_file_page("pdf.js/web/compressed.tracemonkey-pldi-09.pdf", 9).unwrap()
+    )
+}
