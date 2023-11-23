@@ -6,7 +6,7 @@ use crate::{
 };
 use educe::Educe;
 use either::Either;
-use log::error;
+use log::{error, debug};
 use prescript_macro::name;
 use std::{
     cell::{Ref, RefCell},
@@ -21,6 +21,7 @@ use winnow::Parser;
 
 mod decrypt;
 use decrypt::{decrypt, EEXEC_KEY};
+mod cidinit;
 
 pub type Array = Vec<Value>;
 pub type TokenArray = Vec<Token>;
@@ -669,7 +670,7 @@ impl<'a> Machine<'a> {
                 ExecState::Ok
             }
             Token::Name(name) => {
-                // debug!("{}", name);
+                debug!("{}", name);
                 let v = self.variable_stack.get(&name)?;
                 match v {
                     RuntimeValue::BuiltInOp(op) => op(self)?,
@@ -700,14 +701,14 @@ impl<'a> Machine<'a> {
     }
 
     fn dump_stack(&self) {
-        // debug!("{}", {
-        //     use std::fmt::Write;
-        //     let mut s = "stack: ".to_owned();
-        //     for v in self.stack.iter().rev() {
-        //         write!(&mut s, "{v} ").unwrap();
-        //     }
-        //     s
-        // });
+        debug!("{}", {
+            use std::fmt::Write;
+            let mut s = "stack: ".to_owned();
+            for v in self.stack.iter().rev() {
+                write!(&mut s, "{v} ").unwrap();
+            }
+            s
+        });
     }
 
     fn pop(&mut self) -> MachineResult<RuntimeValue<'a>> {
@@ -753,12 +754,12 @@ macro_rules! dict {
     };
 }
 
+fn ok() -> MachineResult<ExecState> {
+    Ok(ExecState::Ok)
+}
+
 /// Create the `systemdict`
 fn system_dict<'a>() -> RuntimeDictionary<'a> {
-    fn ok() -> MachineResult<ExecState> {
-        Ok(ExecState::Ok)
-    }
-
     let mut r: RuntimeDictionary<'a> = built_in_ops!(
         // any1 any2 exch -> any2 any1
         name!("exch") => (|m| {
@@ -1251,6 +1252,18 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             });
             ok()
         },
+
+        // key category findresource - instance
+        name!("findresource") => |m| {
+            let category = m.pop()?.name()?;
+            let key = m.pop()?.name()?;
+            assert_eq!(key.as_ref(), "CIDInit");
+            assert_eq!(category.as_ref(), "ProcSet");
+            let cid_init = Rc::new(RefCell::new(cidinit::cid_init_dict()));
+            m.variable_stack.push(cid_init.clone());
+            m.push(cid_init);
+            ok()
+        }
     );
 
     r.insert(

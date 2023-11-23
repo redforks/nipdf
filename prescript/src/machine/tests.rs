@@ -378,3 +378,19 @@ fn execute_on_file() {
         }
     }
 }
+
+#[test]
+fn to_unicode_cmap() {
+    // note: cmap file support not complete!
+    // Stub implementation of operations let this specific test pass.
+    // kept the code for the time when parse cmap and ToUnicode needed.
+    let data = include_bytes!("./to-unicode-cmap");
+    let mut machine = Machine::new(data);
+    match machine.execute() {
+        Ok(_) => {}
+        Err(e) => {
+            println!("{}:\n{:?}", e, machine.stack);
+            panic!();
+        }
+    }
+}
