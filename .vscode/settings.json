@@ -1,8 +1,8 @@
 {
     "cSpell.words": [
         "arraytype",
-        "bitflags",
         "begincmap",
+        "bitflags",
         "bolditalic",
         "boldoblique",
         "booleantype",
@@ -50,6 +50,8 @@
         "skia",
         "startxref",
         "stringtype",
+        "subtable",
+        "subtables",
         "systemdict",
         "Tmode",
         "TMPDIR",

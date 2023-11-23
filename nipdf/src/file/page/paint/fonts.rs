@@ -13,17 +13,13 @@ use either::Either;
 use font_kit::loaders::freetype::Font as FontKitFont;
 use fontdb::{Database, Family, Query, Source, Weight};
 use heck::ToTitleCase;
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 use once_cell::sync::Lazy;
 use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
 use prescript::{name, Encoding, Name};
 use prescript_macro::name;
-use std::{
-    collections::HashMap,
-    ops::RangeInclusive,
-    str::{from_utf8, from_utf8_unchecked},
-};
+use std::{collections::HashMap, ops::RangeInclusive};
 use tiny_skia::PathBuilder;
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
 
@@ -334,16 +330,12 @@ impl<'a, 'b: 'a> Font for Type1Font<'a, 'b> {
 
 struct TTFParserFontOp<'a> {
     face: TTFFace<'a>,
-    encoding: Option<Encoding>,
     units_per_em: u16,
 }
 
 impl<'a> TTFParserFontOp<'a> {
-    pub fn new(font_dict: &'a FontDict, face: TTFFace<'a>) -> AnyResult<Self> {
-        let encoding = font_dict.encoding()?;
-        let font_name = font_dict.font_name()?;
+    pub fn new(face: TTFFace<'a>) -> AnyResult<Self> {
         Ok(Self {
-            encoding: resolve_by_name(&encoding, font_dict, font_name.as_ref())?,
             units_per_em: face.units_per_em(),
             face,
         })
@@ -481,7 +473,7 @@ impl<'a, 'b> Font for TTFParserFont<'a, 'b> {
         Ok(match self.font_type() {
             FontType::TrueType | FontType::Type1 => {
                 let face = TTFFace::parse(&self.data, 0)?;
-                Box::new(TTFParserFontOp::new(&self.font_dict, face)?)
+                Box::new(TTFParserFontOp::new(face)?)
             }
             FontType::Type0 => Box::new(Type0FontOp::new(&self.font_dict.type0()?)?),
             _ => unreachable!(
