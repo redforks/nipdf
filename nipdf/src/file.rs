@@ -365,6 +365,21 @@ impl<'a> ObjectResolver<'a> {
             .insert(NonZeroU32::new(id).unwrap(), OnceCell::with_value(v));
     }
 
+    pub fn resolve_pdf_object2<'b, T: PdfObject<'a, 'b, ()>>(
+        &'b self,
+        o: &'b Object,
+    ) -> Result<T, ObjectValueError> {
+        let mut id = None;
+        let obj = match o {
+            Object::Reference(ref_id) => {
+                id = Some(ref_id.id().id());
+                self.resolve(ref_id.id().id())?.as_dict()?
+            }
+            _ => o.as_dict()?,
+        };
+        T::new(id, obj, &())
+    }
+
     pub fn resolve_pdf_object<'b, T: PdfObject<'a, 'b, Self>>(
         &'b self,
         id: NonZeroU32,

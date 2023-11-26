@@ -3,7 +3,7 @@ use crate::{
     file::{ObjectResolver, ResourceDict},
     function::{Function, FunctionDict, NFunc},
     graphics::ICCStreamDict,
-    object::{Object, PdfObject},
+    object::Object,
 };
 use anyhow::{anyhow, bail, Result as AnyResult};
 use nipdf_macro::pdf_object;
@@ -186,7 +186,8 @@ where
                 }
                 name!("CalRGB") => {
                     assert_eq!(2, arr.len());
-                    let dict = CalRGBDict::new(None, arr[1].as_dict()?, &())?;
+                    let dict: CalRGBDict = resolver.resolve_pdf_object2(&arr[1])?;
+                    // let dict = CalRGBDict::new(None, arr[1].as_dict()?, &())?;
                     let gamma = dict.gamma()?;
                     let matrix = dict.matrix()?;
                     let black_point = dict.black_point()?;
