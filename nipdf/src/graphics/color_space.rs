@@ -105,7 +105,7 @@ pub enum ColorSpace<T = f32> {
     DeviceGray,
     DeviceRGB,
     DeviceCMYK,
-    Pattern,
+    Pattern(Box<PatternColorSpace<T>>),
     Indexed(Box<IndexedColorSpace<T>>),
     Separation(Box<SeparationColorSpace<T>>),
     CalRGB(Box<CalRGBColorSpace>),
@@ -137,7 +137,7 @@ where
                 name!("DeviceGray") => Ok(Self::DeviceGray),
                 name!("DeviceRGB") => Ok(Self::DeviceRGB),
                 name!("DeviceCMYK") => Ok(Self::DeviceCMYK),
-                name!("Pattern") => Ok(Self::Pattern),
+                name!("Pattern") => Ok(Self::Pattern(Box::new(PatternColorSpace(None)))),
                 _ => {
                     let color_spaces = resources.unwrap().color_space()?;
                     let args = color_spaces
@@ -235,7 +235,7 @@ where
             Self::DeviceGray => DeviceGray.to_rgba(color),
             Self::DeviceRGB => DeviceRGB.to_rgba(color),
             Self::DeviceCMYK => DeviceCMYK.to_rgba(color),
-            Self::Pattern => PatternColorSpace.to_rgba(color),
+            Self::Pattern(pattern) => pattern.to_rgba(color),
             Self::Indexed(indexed) => indexed.to_rgba(color),
             Self::Separation(sep) => sep.as_ref().to_rgba(color),
             Self::CalRGB(cal_rgb) => cal_rgb.to_rgba(color),
@@ -248,7 +248,7 @@ where
             Self::DeviceGray => ColorSpaceTrait::<T>::components(&DeviceGray),
             Self::DeviceRGB => ColorSpaceTrait::<T>::components(&DeviceRGB),
             Self::DeviceCMYK => ColorSpaceTrait::<T>::components(&DeviceCMYK),
-            Self::Pattern => ColorSpaceTrait::<T>::components(&PatternColorSpace),
+            Self::Pattern(pattern) => pattern.components(),
             Self::Indexed(indexed) => indexed.components(),
             Self::Separation(sep) => sep.as_ref().components(),
             Self::CalRGB(cal_rgb) => cal_rgb.components(),
@@ -389,10 +389,11 @@ where
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct PatternColorSpace;
+/// Pattern color space may contains a color space for uncolored pattern.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PatternColorSpace<T>(Option<ColorSpace<T>>);
 
-impl<T> ColorSpaceTrait<T> for PatternColorSpace {
+impl<T> ColorSpaceTrait<T> for PatternColorSpace<T> {
     fn to_rgba(&self, _color: &[T]) -> [T; 4] {
         unreachable!("PatternColorSpace.to_rgba() should not be called")
     }

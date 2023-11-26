@@ -91,7 +91,7 @@ fn indexed_color_space() {
 #[test_case("DeviceRGB" => ColorSpace::DeviceRGB)]
 #[test_case("DeviceGray" => ColorSpace::DeviceGray)]
 #[test_case("DeviceCMYK" => ColorSpace::DeviceCMYK)]
-#[test_case("Pattern" => ColorSpace::Pattern)]
+#[test_case("Pattern" => ColorSpace::Pattern(Box::new(PatternColorSpace(None))))]
 fn simple_color_space_from_args(nm: &str) -> ColorSpace<f32> {
     let empty_xref = XRefTable::empty();
     let resolver = ObjectResolver::empty(&empty_xref);
