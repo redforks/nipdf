@@ -42,15 +42,32 @@ impl<S, T> TryFrom<&Object> for Transform2D<f32, S, T> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Point {
     pub x: f32,
     pub y: f32,
 }
 
+impl<U> From<Point> for euclid::Point2D<f32, U> {
+    fn from(p: Point) -> Self {
+        Self::new(p.x, p.y)
+    }
+}
+
 impl Point {
     pub fn new(x: f32, y: f32) -> Self {
         Self { x, y }
+    }
+
+    pub fn distance(self, b: Self) -> f32 {
+        (self.x - b.x).hypot(self.y - b.y)
+    }
+
+    pub fn x_y_distance(self, b: Self) -> Self {
+        Self {
+            x: self.x - b.x,
+            y: self.y - b.y,
+        }
     }
 }
 

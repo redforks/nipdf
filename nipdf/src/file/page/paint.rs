@@ -7,7 +7,7 @@ use crate::{
     graphics::{
         color_space::{self, ColorSpace, ColorSpaceTrait},
         parse_operations,
-        shading::{build_shading, Axial, Extend, Radial, Shading},
+        shading::{build_shading, Axial, Extend, Radial, SelfDrawnAxial, Shading},
         trans::{
             image_to_device_space, move_text_space_pos, move_text_space_right, to_device_space,
             ImageToDeviceSpace, IntoSkiaTransform, TextToUserSpace, UserToDeviceIndependentSpace,
@@ -40,6 +40,7 @@ use tiny_skia::{
 };
 
 mod fonts;
+use euclid::default::{Length, Point2D, Vector2D};
 use fonts::*;
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -1029,6 +1030,93 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         Ok(())
     }
 
+    /// Paint axial shading, by draw lines vertically to the axial line,
+    /// using color calculated by shading function.
+    fn paint_self_draw_axial(&mut self, axial: SelfDrawnAxial) -> AnyResult<()> {
+        // TODO: paint extend area
+
+        let state = self.stack.last().unwrap();
+        let ctm = to_device_space(self.height as f32, self.zoom, &state.ctm)
+            .with_source()
+            .with_destination();
+        let p0 = Point2D::new(axial.start.x, axial.start.y);
+        let p1 = Point2D::new(axial.end.x, axial.end.y);
+        let p0 = ctm.transform_point(p0);
+        let p1 = ctm.transform_point(p1);
+        let x_y_distance: Vector2D<f32> = p1 - p0;
+        let dx = x_y_distance.x;
+        let dy = x_y_distance.y;
+        let mul = 1.0 / x_y_distance.square_length();
+        let m = -1.0 / (dy / dx);
+        let (x_min, x_max) = if let Some(b_box) = axial.b_box {
+            (b_box.left_x * self.zoom, b_box.right_x * self.zoom)
+        } else {
+            (0f32, self.width as f32 * self.zoom)
+        };
+
+        let color_space = &axial.color_space;
+        let mut paint = Paint::default();
+        let mut path = Path::default();
+        let mask = state.get_mask();
+
+        let mut paint_line =
+            |t: f32, p1: Point, p2: Point, p3: Point, p4: Point| -> AnyResult<()> {
+                let c = axial.function.call(&[t][..])?;
+                let c = color_space.to_rgba(c.as_slice());
+                let c = SkiaColor::from_rgba(c[0], c[1], c[2], c[3]).unwrap();
+                paint.set_color(c);
+                path.move_to(p1);
+                path.line_to(p2);
+                path.line_to(p4);
+                path.line_to(p3);
+                path.close_path();
+                if let Some(path) = path.finish() {
+                    self.canvas.fill_path(
+                        path,
+                        &paint,
+                        FillRule::Winding,
+                        Transform::identity(),
+                        mask.as_deref(),
+                    );
+                }
+                path.reset();
+                Ok(())
+            };
+
+        let t0 = Length::new(axial.domain.start);
+        let t1 = Length::new(axial.domain.end);
+
+        let perpendicular_line = |t: f32| -> (f32, Point, Point) {
+            let p = p0.lerp(p1, t);
+            let mut x = dx.mul_add(p.x - p0.x, dy * (p.y - p0.y));
+            x *= mul;
+            let t = t0.lerp(t1, x).0;
+
+            if !m.is_normal() || m.abs() < 0.0001 {
+                let p1 = Point::new(x_min, p.y);
+                let p2 = Point::new(x_max, p.y);
+                (t, p1, p2)
+            } else {
+                let p1 = Point::new(x_min, m.mul_add(-p.x - x_min, p.y));
+                let p2 = Point::new(x_max, m.mul_add(-p.x - x_max, p.y));
+                (t, p1, p2)
+            }
+        };
+
+        let (_, mut p1, mut p2) = perpendicular_line(t0.0);
+        let (_, p3, _) = perpendicular_line(t1.0);
+        let steps = ((p3.x - p1.x).abs().max(p3.y - p1.y).ceil() as usize).max(256);
+        for i in 1..steps {
+            let (t, p3, p4) = perpendicular_line(i as f32 / steps as f32);
+
+            paint_line(t, p1, p2, p3, p4)?;
+            p1 = p3;
+            p2 = p4;
+        }
+
+        Ok(())
+    }
+
     fn paint_radial(&mut self, radial: &Radial) -> AnyResult<()> {
         let Domain { start: t0, end: t1 } = radial.domain;
         let Point { x: x0, y: y0 } = radial.start.point;
@@ -1131,6 +1219,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         match build_shading(shading, self.resources)? {
             Some(Shading::Radial(radial)) => self.paint_radial(&radial),
             Some(Shading::Axial(axial)) => self.paint_axial(axial),
+            Some(Shading::SelfDrawnAxial(axial)) => self.paint_self_draw_axial(axial),
             None => Ok(()),
         }
     }

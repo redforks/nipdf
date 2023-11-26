@@ -10,6 +10,7 @@ use crate::{
 };
 use anyhow::Result as AnyResult;
 use educe::Educe;
+use either::Either;
 use nipdf_macro::{pdf_object, TryFromIntObject};
 use tiny_skia::{GradientStop, LinearGradient, Shader, Transform};
 
@@ -231,20 +232,40 @@ fn build_linear_gradient_stops(
     }
 }
 
-fn build_axial(d: &AxialShadingDict) -> AnyResult<Option<Axial>> {
-    let AxialCoords { start, end } = d.coords()?;
+fn build_axial(
+    d: &ShadingDict,
+    resources: &ResourceDict,
+) -> AnyResult<Option<Either<Axial, SelfDrawnAxial>>> {
+    let axial = d.axial()?;
+    let AxialCoords { start, end } = axial.coords()?;
     if start == end {
         return Ok(None);
     }
 
-    let stops = build_linear_gradient_stops(d.domain()?, d.function()?)?;
-    Ok(Some(Axial {
+    let function = axial.function()?;
+    if function[0].function_type()? == FunctionType::Sampled {
+        let color_space = d.color_space()?;
+        let color_space =
+            ColorSpace::from_args(&color_space, resources.resolver(), Some(resources))?;
+        return Ok(Some(Either::Right(SelfDrawnAxial {
+            start,
+            end,
+            extend: axial.extend()?,
+            b_box: axial.b_box()?,
+            function: function[0].func()?,
+            domain: axial.domain()?,
+            color_space,
+        })));
+    }
+
+    let stops = build_linear_gradient_stops(axial.domain()?, function)?;
+    Ok(Some(Either::Left(Axial {
         start,
         end,
-        extend: d.extend()?,
+        extend: axial.extend()?,
         stops,
-        b_box: d.b_box()?,
-    }))
+        b_box: axial.b_box()?,
+    })))
 }
 
 #[derive(PartialEq, Debug)]
@@ -269,6 +290,17 @@ impl Axial {
     }
 }
 
+/// Axial shading that drawn using function, not through gradient.
+pub struct SelfDrawnAxial {
+    pub start: Point,
+    pub end: Point,
+    pub extend: Extend,
+    pub b_box: Option<Rectangle>,
+    pub function: Box<dyn Function>,
+    pub domain: Domain,
+    pub color_space: ColorSpace,
+}
+
 #[derive(Educe)]
 #[educe(PartialEq, Debug)]
 pub struct Radial {
@@ -285,6 +317,7 @@ pub struct Radial {
 pub enum Shading {
     Axial(Axial),
     Radial(Radial),
+    SelfDrawnAxial(SelfDrawnAxial),
 }
 
 /// Return None if shading is not need to be rendered, such as Axial start point == end point.
@@ -293,7 +326,10 @@ pub fn build_shading<'a, 'b>(
     resources: &ResourceDict<'a, 'b>,
 ) -> AnyResult<Option<Shading>> {
     Ok(match d.shading_type()? {
-        ShadingType::Axial => build_axial(&d.axial()?)?.map(Shading::Axial),
+        ShadingType::Axial => build_axial(d, resources)?.map(|e| match e {
+            Either::Left(axial) => Shading::Axial(axial),
+            Either::Right(self_drawn_axial) => Shading::SelfDrawnAxial(self_drawn_axial),
+        }),
         ShadingType::Radial => build_radial(d, resources)?.map(Shading::Radial),
         t => todo!("{:?}", t),
     })

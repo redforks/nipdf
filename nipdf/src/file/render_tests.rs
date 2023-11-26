@@ -100,3 +100,10 @@ fn ttf_font_cmap_trimmed_table_mapping() {
         &decode_file_page("pdf.js/web/compressed.tracemonkey-pldi-09.pdf", 9).unwrap()
     )
 }
+
+#[test]
+fn axial_shade_with_sample_function() {
+    assert_ron_snapshot!(
+        &decode_file_page("pdf.js/web/compressed.tracemonkey-pldi-09.pdf", 10).unwrap()
+    )
+}

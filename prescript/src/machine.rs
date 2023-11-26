@@ -6,7 +6,7 @@ use crate::{
 };
 use educe::Educe;
 use either::Either;
-use log::{debug, error};
+use log::{error};
 use prescript_macro::name;
 use std::{
     cell::{Ref, RefCell},
