@@ -148,7 +148,7 @@ where
             },
             ColorSpaceArgs::Array(arr) => match arr[0].name()? {
                 name!("ICCBased") => {
-                    debug_assert_eq!(2, arr.len());
+                    assert_eq!(2, arr.len());
                     let id = arr[1].reference()?;
                     let d: ICCStreamDict = resolver.resolve_pdf_object(id.id().id())?;
                     match d.alternate()?.as_ref() {
@@ -162,7 +162,7 @@ where
                     }
                 }
                 name!("Separation") => {
-                    debug_assert_eq!(4, arr.len());
+                    assert_eq!(4, arr.len());
                     let alternate = ColorSpaceArgs::try_from(&arr[2])?;
                     let functions: Vec<FunctionDict> =
                         resolver.resolve_one_or_more_pdf_object(arr[3].reference()?.id().id())?;
@@ -176,7 +176,7 @@ where
                     })))
                 }
                 name!("Indexed") => {
-                    debug_assert_eq!(4, arr.len());
+                    assert_eq!(4, arr.len());
                     let base = ColorSpaceArgs::try_from(&arr[1])?;
                     let base: ColorSpace<T> = Self::from_args(&base, resolver, resources)?;
                     let hival = arr[2].int()?;
@@ -185,7 +185,7 @@ where
                     Ok(Self::Indexed(Box::new(IndexedColorSpace { base, data })))
                 }
                 name!("CalRGB") => {
-                    debug_assert_eq!(2, arr.len());
+                    assert_eq!(2, arr.len());
                     let dict = CalRGBDict::new(None, arr[1].as_dict()?, &())?;
                     let gamma = dict.gamma()?;
                     let matrix = dict.matrix()?;
