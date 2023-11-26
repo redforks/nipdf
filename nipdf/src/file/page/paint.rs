@@ -1239,6 +1239,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                 self.current_mut().set_stroke_color(color);
                 Ok(())
             }
+            _ => todo!(),
         }
     }
 
@@ -1262,6 +1263,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                 self.current_mut().set_fill_color(color);
                 Ok(())
             }
+            _ => todo!(),
         }
     }
 
