@@ -6,7 +6,7 @@ use crate::{
 };
 use educe::Educe;
 use either::Either;
-use log::{error, debug};
+use log::{debug, error};
 use prescript_macro::name;
 use std::{
     cell::{Ref, RefCell},
@@ -670,7 +670,7 @@ impl<'a> Machine<'a> {
                 ExecState::Ok
             }
             Token::Name(name) => {
-                debug!("{}", name);
+                // debug!("{}", name);
                 let v = self.variable_stack.get(&name)?;
                 match v {
                     RuntimeValue::BuiltInOp(op) => op(self)?,
@@ -701,14 +701,14 @@ impl<'a> Machine<'a> {
     }
 
     fn dump_stack(&self) {
-        debug!("{}", {
-            use std::fmt::Write;
-            let mut s = "stack: ".to_owned();
-            for v in self.stack.iter().rev() {
-                write!(&mut s, "{v} ").unwrap();
-            }
-            s
-        });
+        // debug!("{}", {
+        //     use std::fmt::Write;
+        //     let mut s = "stack: ".to_owned();
+        //     for v in self.stack.iter().rev() {
+        //         write!(&mut s, "{v} ").unwrap();
+        //     }
+        //     s
+        // });
     }
 
     fn pop(&mut self) -> MachineResult<RuntimeValue<'a>> {
