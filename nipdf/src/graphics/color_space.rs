@@ -199,6 +199,12 @@ where
                         white_point,
                     })))
                 }
+                name!("Pattern") => {
+                    assert_eq!(2, arr.len());
+                    let base = ColorSpaceArgs::try_from(&arr[1])?;
+                    let base: ColorSpace<T> = Self::from_args(&base, resolver, resources)?;
+                    Ok(Self::Pattern(Box::new(PatternColorSpace(Some(base)))))
+                }
                 s => todo!("ColorSpace::from_args() {} color space", s),
             },
         }

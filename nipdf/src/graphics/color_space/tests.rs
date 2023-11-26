@@ -239,6 +239,23 @@ endobj
 }
 
 #[test]
+fn pattern_with_cs_from_args() {
+    let buf = br#"1 0 obj
+[/Pattern /DeviceRGB]
+endobj
+"#;
+    let xref = XRefTable::from_buf(buf);
+    let resolver = ObjectResolver::new(buf, &xref, None);
+    let args = ColorSpaceArgs::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap()).unwrap())
+        .unwrap();
+    let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None).unwrap();
+    assert_eq!(
+        ColorSpace::Pattern(Box::new(PatternColorSpace(Some(ColorSpace::DeviceRGB)))),
+        color_space
+    );
+}
+
+#[test]
 fn cal_rgb_color_space() {
     let cs = CalRGBColorSpace {
         white_point: [0.9505, 1.0, 1.089],
