@@ -8,11 +8,12 @@ use prescript::Name;
 use std::{
     borrow::{Borrow, Cow},
     fmt::{Debug, Display},
-    iter::Peekable,
+    iter::{repeat, Peekable},
     num::NonZeroU32,
     rc::Rc,
     str::from_utf8,
 };
+use tinyvec::TinyVec;
 
 mod indirect_object;
 pub use indirect_object::IndirectObject;
@@ -1034,6 +1035,7 @@ impl<const N: usize> TryFrom<&Object> for [f32; N] {
 use either::Either;
 #[cfg(feature = "pretty")]
 use pretty::RcDoc;
+use static_assertions::assert_eq_size;
 
 #[cfg(feature = "pretty")]
 impl Object {
@@ -1177,7 +1179,7 @@ impl From<bool> for Object {
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct LiteralString(Rc<[u8]>);
+pub struct LiteralString(InnerString);
 
 impl LiteralString {
     pub fn new(s: &[u8]) -> Self {
@@ -1218,7 +1220,7 @@ impl LiteralString {
         }
 
         let s = &s[1..s.len() - 1];
-        let mut result: Vec<u8> = Vec::with_capacity(s.len());
+        let mut result: InnerString = InnerString::with_capacity(s.len());
         let mut iter = s.iter().copied().peekable();
 
         // TODO: use exist buf if no escape, or newline to normalize
@@ -1257,18 +1259,11 @@ impl LiteralString {
             }
         }
 
-        Self(result.into())
+        Self(result)
     }
 
     pub fn update(&mut self, f: impl FnOnce(&mut [u8])) {
-        match Rc::get_mut(&mut self.0) {
-            Some(buf) => f(buf),
-            None => {
-                let mut buf = self.0.as_ref().to_vec();
-                f(&mut buf);
-                self.0 = buf.into();
-            }
-        }
+        f(self.0.as_mut_slice());
     }
 
     pub fn as_str(&self) -> &str {
@@ -1308,53 +1303,37 @@ pub enum TextStringOrNumber {
     Number(f32),
 }
 
+type InnerString = TinyVec<[u8; 14]>;
+
 /// Decoded PDF literal string object, enclosing '(' and ')' not included.
 #[derive(Eq, PartialEq, Debug, Clone)]
-pub struct HexString(Rc<[u8]>);
+pub struct HexString(InnerString);
+assert_eq_size!(HexString, TinyVec<[u8; 14]>, (u64, u64, u64));
 
 impl HexString {
     pub fn new(s: &[u8]) -> Self {
-        fn filter_whitespace(s: &[u8]) -> Cow<[u8]> {
-            if s.iter().copied().any(|b| b.is_ascii_whitespace()) {
-                Cow::Owned(
-                    s.iter()
-                        .copied()
-                        .filter(|b| !b.is_ascii_whitespace())
-                        .collect::<Vec<_>>(),
-                )
-            } else {
-                Cow::Borrowed(s)
-            }
+        fn filter_whitespace(s: &mut InnerString) {
+            s.retain(|b| !b.is_ascii_whitespace());
         }
 
-        fn append_zero_if_odd(s: &[u8]) -> Cow<[u8]> {
-            if s.len() % 2 == 0 {
-                Cow::Borrowed(s)
-            } else {
-                let mut v = Vec::with_capacity(s.len() + 1);
-                v.extend_from_slice(s);
-                v.push(b'0');
-                Cow::Owned(v)
+        fn append_zero_if_odd(s: &mut InnerString) {
+            if s.len() % 2 != 0 {
+                s.push(b'0');
             }
         }
 
         debug_assert!(s.starts_with(b"<") && s.ends_with(b">"));
-        let s = &s[1..s.len() - 1];
-        let s = filter_whitespace(s);
-        let s = append_zero_if_odd(&s);
-        let s = hex::decode(s).unwrap();
-        Self(s.into())
+        let mut s: InnerString = s[1..s.len() - 1].into();
+        filter_whitespace(&mut s);
+        append_zero_if_odd(&mut s);
+        assert!(s.len() % 2 == 0);
+        let mut r: InnerString = repeat(0u8).take(s.len() / 2).collect();
+        hex::decode_to_slice(s, r.as_mut_slice()).unwrap();
+        Self(r)
     }
 
     pub fn update(&mut self, f: impl FnOnce(&mut [u8])) {
-        match Rc::get_mut(&mut self.0) {
-            Some(buf) => f(buf),
-            None => {
-                let mut buf = self.0.as_ref().to_vec();
-                f(&mut buf);
-                self.0 = buf.into();
-            }
-        }
+        f(self.0.as_mut_slice());
     }
 
     pub fn as_bytes(&self) -> &[u8] {
