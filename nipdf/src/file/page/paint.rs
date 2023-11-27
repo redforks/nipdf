@@ -256,19 +256,6 @@ impl State {
         info!("not implemented: render intent: {}", intent);
     }
 
-    fn set_color_args(color_state: &mut ColorState, args: ColorArgs) {
-        let color = color_state.color_space.to_skia_color(args.as_ref());
-        color_state.paint = PaintCreator::Color(color);
-    }
-
-    fn set_stroke_color_args(&mut self, args: ColorArgs) {
-        Self::set_color_args(&mut self.stroke_state, args);
-    }
-
-    fn set_fill_color_args(&mut self, args: ColorArgs) {
-        Self::set_color_args(&mut self.fill_state, args);
-    }
-
     fn concat_ctm(&mut self, ctm: UserToDeviceIndependentSpace) {
         self.ctm = ctm.then(&self.ctm.with_source());
         self.user_to_device = to_device_space(self.height, self.zoom, &self.ctm);
@@ -734,7 +721,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                     ColorSpace::from_args(&args, self.resources.resolver(), Some(self.resources))
                         .unwrap()
             }
-            Operation::SetStrokeColor(args) => self.current_mut().set_stroke_color_args(args),
+            Operation::SetStrokeColor(args) => self.set_color_args(Self::stroke_color_state, args),
             Operation::SetStrokeGray(color) => {
                 self.set_color_and_space(Self::stroke_color_state, ColorSpace::DeviceGray, &color)
             }
@@ -747,7 +734,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             Operation::SetStrokeColorOrWithPattern(color_or_name) => self
                 .set_color_or_pattern(Self::stroke_color_state, &color_or_name)
                 .unwrap(),
-            Operation::SetFillColor(args) => self.current_mut().set_fill_color_args(args),
+            Operation::SetFillColor(args) => self.set_color_args(Self::fill_color_state, args),
             Operation::SetFillGray(color) => {
                 self.set_color_and_space(Self::fill_color_state, ColorSpace::DeviceGray, &color)
             }
@@ -778,6 +765,16 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
             _ => todo!("{:?}", op),
         }
+    }
+
+    fn set_color_args(
+        &mut self,
+        mut get_state: impl FnMut(&mut Self) -> &mut ColorState,
+        args: ColorArgs,
+    ) {
+        let state = get_state(self);
+        let color = state.color_space.to_skia_color(args.as_ref());
+        state.paint = PaintCreator::Color(color);
     }
 
     fn set_color_and_space(
