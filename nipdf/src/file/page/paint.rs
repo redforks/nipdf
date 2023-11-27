@@ -1240,7 +1240,9 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                     PatternType::Tiling => {
                         self.set_tiling_pattern(Left(pattern.tiling_pattern()?), color)
                     }
-                    PatternType::Shading => todo!(),
+                    PatternType::Shading => {
+                        self.set_shading_pattern(Left(pattern.shading_pattern()?))
+                    }
                 }
             }
             ColorArgsOrName::Color(args) => {
@@ -1266,7 +1268,9 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                     PatternType::Tiling => {
                         self.set_tiling_pattern(Right(pattern.tiling_pattern()?), None)
                     }
-                    PatternType::Shading => self.set_shading_pattern(pattern.shading_pattern()?),
+                    PatternType::Shading => {
+                        self.set_shading_pattern(Right(pattern.shading_pattern()?))
+                    }
                 }
             }
             ColorArgsOrName::Color(args) => {
@@ -1282,7 +1286,13 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         }
     }
 
-    fn set_shading_pattern(&mut self, pattern: ShadingPatternDict<'a, 'b>) -> AnyResult<()> {
+    /// `pattern` left for stroke, right for fill
+    fn set_shading_pattern(
+        &mut self,
+        pattern: Either<ShadingPatternDict<'a, 'b>, ShadingPatternDict<'a, 'b>>,
+    ) -> AnyResult<()> {
+        let is_stroke = pattern.is_left();
+        let pattern = pattern.into_inner();
         assert_eq!(
             pattern.matrix()?,
             UserToDeviceIndependentSpace::default(),
@@ -1305,10 +1315,17 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             None => return Ok(()),
             _ => todo!(),
         };
-        self.stack.last_mut().unwrap().fill_paint = PaintCreator::Gradient(Paint {
-            shader,
-            ..Default::default()
-        });
+        if is_stroke {
+            self.stack.last_mut().unwrap().stroke_paint = PaintCreator::Gradient(Paint {
+                shader,
+                ..Default::default()
+            });
+        } else {
+            self.stack.last_mut().unwrap().fill_paint = PaintCreator::Gradient(Paint {
+                shader,
+                ..Default::default()
+            });
+        }
         Ok(())
     }
 
