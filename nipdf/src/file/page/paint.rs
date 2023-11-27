@@ -5,7 +5,7 @@ use crate::{
     },
     function::Domain,
     graphics::{
-        color_space::{self, ColorSpace, ColorSpaceTrait},
+        color_space::{ColorSpace, ColorSpaceTrait},
         parse_operations,
         shading::{build_shading, Axial, Extend, Radial, SelfDrawnAxial, Shading},
         trans::{
@@ -164,6 +164,21 @@ impl<const N: usize> MaskCache<N> {
     }
 }
 
+#[derive(Debug, Clone, Educe)]
+#[educe(Default)]
+struct ColorState {
+    #[educe(Default(expression = "PaintCreator::Color(SkiaColor::BLACK)"))]
+    paint: PaintCreator,
+    #[educe(Default(expression = "ColorSpace::DeviceRGB"))]
+    color_space: ColorSpace<f32>,
+}
+
+impl ColorState {
+    pub fn set_color(&mut self, color: SkiaColor) {
+        self.paint = PaintCreator::Color(color);
+    }
+}
+
 #[derive(Debug, Clone)]
 struct State {
     width: f32,
@@ -173,14 +188,12 @@ struct State {
     ctm: UserToDeviceIndependentSpace,
     /// ctm with flip_y and zoom
     user_to_device: UserToDeviceSpace,
-    fill_paint: PaintCreator,
-    stroke_paint: PaintCreator,
     stroke: Stroke,
     mask: Option<MaskEntry>,
     mask_cache: Rc<RefCell<MaskCache<4>>>,
-    fill_color_space: ColorSpace<f32>,
-    stroke_color_space: ColorSpace<f32>,
     text_object: TextObject,
+    stroke_state: ColorState,
+    fill_state: ColorState,
 }
 
 impl State {
@@ -192,14 +205,12 @@ impl State {
             height: option.height as f32,
             user_to_device: UserToDeviceSpace::identity(),
             ctm: UserToDeviceIndependentSpace::identity(),
-            fill_paint: PaintCreator::Color(SkiaColor::BLACK),
-            stroke_paint: PaintCreator::Color(SkiaColor::BLACK),
             stroke: Stroke::default(),
             mask: None,
             mask_cache: Rc::new(RefCell::new(MaskCache::new())),
-            fill_color_space: ColorSpace::DeviceRGB,
-            stroke_color_space: ColorSpace::DeviceRGB,
             text_object: TextObject::new(),
+            stroke_state: ColorState::default(),
+            fill_state: ColorState::default(),
         };
 
         r.reset_ctm(UserToDeviceIndependentSpace::identity());
@@ -245,34 +256,6 @@ impl State {
         info!("not implemented: render intent: {}", intent);
     }
 
-    fn set_stroke_color_and_space(&mut self, cs: ColorSpace<f32>, color: &[f32]) {
-        self.set_color(Left(cs.to_skia_color(color)));
-        self.stroke_color_space = cs;
-    }
-
-    fn set_stroke_color_args(&mut self, args: ColorArgs) {
-        let color = self.stroke_color_space.to_skia_color(args.as_ref());
-        self.set_color(Left(color));
-    }
-
-    fn set_fill_color_and_space(&mut self, cs: ColorSpace<f32>, color: &[f32]) {
-        self.set_color(Either::Right(cs.to_skia_color(color)));
-        self.fill_color_space = cs;
-    }
-
-    /// `color`: left for stroke, right for fill
-    fn set_color(&mut self, color: Either<SkiaColor, SkiaColor>) {
-        match color {
-            Left(c) => self.stroke_paint = PaintCreator::Color(c),
-            Right(c) => self.fill_paint = PaintCreator::Color(c),
-        }
-    }
-
-    fn set_fill_color_args(&mut self, args: ColorArgs) {
-        let color = self.fill_color_space.to_skia_color(args.as_ref());
-        self.set_color(Either::Right(color));
-    }
-
     fn concat_ctm(&mut self, ctm: UserToDeviceIndependentSpace) {
         self.ctm = ctm.then(&self.ctm.with_source());
         self.user_to_device = to_device_space(self.height, self.zoom, &self.ctm);
@@ -281,11 +264,11 @@ impl State {
     }
 
     fn get_fill_paint(&self) -> Cow<'_, Paint<'_>> {
-        self.fill_paint.create()
+        self.fill_state.paint.create()
     }
 
     fn get_stroke_paint(&self) -> Cow<'_, Paint<'_>> {
-        self.stroke_paint.create()
+        self.stroke_state.paint.create()
     }
 
     fn get_stroke(&self) -> &Stroke {
@@ -729,41 +712,41 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
             // Color Operations
             Operation::SetStrokeColorSpace(args) => {
-                self.current_mut().stroke_color_space =
+                self.current_mut().stroke_state.color_space =
                     ColorSpace::from_args(&args, self.resources.resolver(), Some(self.resources))
                         .unwrap()
             }
             Operation::SetFillColorSpace(args) => {
-                self.current_mut().fill_color_space =
+                self.current_mut().fill_state.color_space =
                     ColorSpace::from_args(&args, self.resources.resolver(), Some(self.resources))
                         .unwrap()
             }
-            Operation::SetStrokeColor(args) => self.current_mut().set_stroke_color_args(args),
-            Operation::SetStrokeGray(color) => self
-                .current_mut()
-                .set_stroke_color_and_space(ColorSpace::DeviceGray, &color),
-            Operation::SetStrokeCMYK(color) => self
-                .current_mut()
-                .set_stroke_color_and_space(ColorSpace::DeviceCMYK, &color),
-            Operation::SetStrokeRGB(color) => self
-                .current_mut()
-                .set_color(Left(color_space::DeviceRGB.to_skia_color(&color))),
-            Operation::SetStrokeColorOrWithPattern(color_or_name) => {
-                self.set_stroke_color_or_pattern(&color_or_name).unwrap()
+            Operation::SetStrokeColor(args) => self.set_color_args(Self::stroke_color_state, args),
+            Operation::SetStrokeGray(color) => {
+                self.set_color_and_space(Self::stroke_color_state, ColorSpace::DeviceGray, &color)
             }
-            Operation::SetFillColor(args) => self.current_mut().set_fill_color_args(args),
-            Operation::SetFillGray(color) => self
-                .current_mut()
-                .set_fill_color_and_space(ColorSpace::DeviceGray, &color),
-            Operation::SetFillCMYK(color) => self
-                .current_mut()
-                .set_fill_color_and_space(ColorSpace::DeviceCMYK, &color),
-            Operation::SetFillRGB(color) => self
-                .current_mut()
-                .set_fill_color_and_space(ColorSpace::DeviceRGB, &color),
-            Operation::SetFillColorOrWithPattern(color_or_name) => {
-                self.set_fill_color_or_pattern(&color_or_name).unwrap()
+            Operation::SetStrokeCMYK(color) => {
+                self.set_color_and_space(Self::stroke_color_state, ColorSpace::DeviceCMYK, &color)
             }
+            Operation::SetStrokeRGB(color) => {
+                self.set_color_and_space(Self::stroke_color_state, ColorSpace::DeviceRGB, &color)
+            }
+            Operation::SetStrokeColorOrWithPattern(color_or_name) => self
+                .set_color_or_pattern(Self::stroke_color_state, &color_or_name)
+                .unwrap(),
+            Operation::SetFillColor(args) => self.set_color_args(Self::fill_color_state, args),
+            Operation::SetFillGray(color) => {
+                self.set_color_and_space(Self::fill_color_state, ColorSpace::DeviceGray, &color)
+            }
+            Operation::SetFillCMYK(color) => {
+                self.set_color_and_space(Self::fill_color_state, ColorSpace::DeviceCMYK, &color)
+            }
+            Operation::SetFillRGB(color) => {
+                self.set_color_and_space(Self::fill_color_state, ColorSpace::DeviceRGB, &color)
+            }
+            Operation::SetFillColorOrWithPattern(color_or_name) => self
+                .set_color_or_pattern(Self::fill_color_state, &color_or_name)
+                .unwrap(),
 
             // Shading Operation
             Operation::PaintShading(name) => self.paint_shading(name).unwrap(),
@@ -782,6 +765,27 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
             _ => todo!("{:?}", op),
         }
+    }
+
+    fn set_color_args(
+        &mut self,
+        mut get_state: impl FnMut(&mut Self) -> &mut ColorState,
+        args: ColorArgs,
+    ) {
+        let state = get_state(self);
+        let color = state.color_space.to_skia_color(args.as_ref());
+        state.paint = PaintCreator::Color(color);
+    }
+
+    fn set_color_and_space(
+        &mut self,
+        mut get_state: impl FnMut(&mut Self) -> &mut ColorState,
+        cs: ColorSpace<f32>,
+        color: &[f32],
+    ) {
+        let state = get_state(self);
+        state.paint = PaintCreator::Color(cs.to_skia_color(color));
+        state.color_space = cs;
     }
 
     fn stroke(&mut self) {
@@ -1238,75 +1242,51 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         }
     }
 
-    fn set_stroke_color_or_pattern(&mut self, color_or_name: &ColorArgsOrName) -> AnyResult<()> {
-        match color_or_name {
-            ColorArgsOrName::Name((name, color_args)) => {
-                let color = color_args.as_ref().map(|args| {
-                    self.stack
-                        .last()
-                        .unwrap()
-                        .stroke_color_space
-                        .to_skia_color(args.as_ref())
-                });
-                let pattern = self.resources.pattern()?;
-                let pattern = &pattern[name];
-                match pattern.pattern_type()? {
-                    PatternType::Tiling => {
-                        self.set_tiling_pattern(Left(pattern.tiling_pattern()?), color)
-                    }
-                    PatternType::Shading => {
-                        self.set_shading_pattern(Left(pattern.shading_pattern()?))
-                    }
-                }
-            }
-            ColorArgsOrName::Color(args) => {
-                let color = self
-                    .stack
-                    .last()
-                    .unwrap()
-                    .fill_color_space
-                    .to_skia_color(args.as_ref());
-                self.current_mut().set_color(Left(color));
-                Ok(())
-            }
-        }
+    fn fill_color_state(&mut self) -> &mut ColorState {
+        &mut self.current_mut().fill_state
     }
 
-    fn set_fill_color_or_pattern(&mut self, color_or_name: &ColorArgsOrName) -> AnyResult<()> {
-        match color_or_name {
-            ColorArgsOrName::Name((name, color_args)) => {
-                assert!(color_args.is_none());
-                let pattern = self.resources.pattern()?;
-                let pattern = &pattern[name];
-                match pattern.pattern_type()? {
-                    PatternType::Tiling => {
-                        self.set_tiling_pattern(Right(pattern.tiling_pattern()?), None)
-                    }
-                    PatternType::Shading => {
-                        self.set_shading_pattern(Right(pattern.shading_pattern()?))
-                    }
-                }
-            }
-            ColorArgsOrName::Color(args) => {
-                let color = self
-                    .stack
-                    .last()
-                    .unwrap()
-                    .fill_color_space
-                    .to_skia_color(args.as_ref());
-                self.current_mut().set_color(Right(color));
-                Ok(())
-            }
-        }
+    fn stroke_color_state(&mut self) -> &mut ColorState {
+        &mut self.current_mut().stroke_state
     }
 
-    /// `pattern` left for stroke, right for fill
-    fn set_shading_pattern(
+    fn set_color_or_pattern(
         &mut self,
-        pattern: Either<ShadingPatternDict<'a, 'b>, ShadingPatternDict<'a, 'b>>,
+        mut get_state: impl FnMut(&mut Self) -> &mut ColorState,
+        color_or_name: &ColorArgsOrName,
     ) -> AnyResult<()> {
-        let is_stroke = pattern.is_left();
-        let pattern = pattern.into_inner();
+        match color_or_name {
+            ColorArgsOrName::Name((name, color_args)) => {
+                let color = color_args
+                    .as_ref()
+                    .map(|args| get_state(self).color_space.to_skia_color(args.as_ref()));
+                let pattern = self.resources.pattern()?;
+                let pattern = &pattern[name];
+                match pattern.pattern_type()? {
+                    PatternType::Tiling => {
+                        Self::tiling_pattern(get_state(self), pattern.tiling_pattern()?, color)
+                    }
+                    PatternType::Shading => {
+                        if let Some(paint) = self.shading_pattern(pattern.shading_pattern()?)? {
+                            get_state(self).paint = paint;
+                        }
+                        Ok(())
+                    }
+                }
+            }
+            ColorArgsOrName::Color(args) => {
+                let state = get_state(self);
+                let color = state.color_space.to_skia_color(args.as_ref());
+                state.set_color(color);
+                Ok(())
+            }
+        }
+    }
+
+    fn shading_pattern(
+        &mut self,
+        pattern: ShadingPatternDict<'a, 'b>,
+    ) -> AnyResult<Option<PaintCreator>> {
         assert_eq!(
             pattern.matrix()?,
             UserToDeviceIndependentSpace::default(),
@@ -1326,35 +1306,23 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                 assert_eq!(Extend::new(true, true), axial.extend);
                 axial.into_skia()
             }
-            None => return Ok(()),
+            None => return Ok(None),
             _ => todo!(),
         };
-        if is_stroke {
-            self.stack.last_mut().unwrap().stroke_paint = PaintCreator::Gradient(Paint {
-                shader,
-                ..Default::default()
-            });
-        } else {
-            self.stack.last_mut().unwrap().fill_paint = PaintCreator::Gradient(Paint {
-                shader,
-                ..Default::default()
-            });
-        }
-        Ok(())
+        Ok(Some(PaintCreator::Gradient(Paint {
+            shader,
+            ..Default::default()
+        })))
     }
 
-    /// `tile`: left for stroke paint, right for fill paint
-    fn set_tiling_pattern(
-        &mut self,
-        tile: Either<TilingPatternDict<'a, 'b>, TilingPatternDict<'a, 'b>>,
+    fn tiling_pattern(
+        color_state: &mut ColorState,
+        tile: TilingPatternDict<'a, 'b>,
         color: Option<SkiaColor>,
     ) -> AnyResult<()>
     where
         'a: 'b,
     {
-        let is_stroke = tile.is_left();
-        let tile = tile.into_inner();
-
         let stream: &Object = tile.resolver().resolve(tile.id().unwrap())?;
         let stream = stream.stream()?;
         let bytes = stream.decode(tile.resolver())?;
@@ -1372,17 +1340,11 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let mut render = Render::new(&mut canvas, option, &resources);
         if let Some(color) = color {
             // set color used for paint matrix image
-            render.stack.last_mut().unwrap().set_color(Right(color));
+            color_state.set_color(color);
         }
         ops.into_iter().for_each(|op| render.exec(op));
         drop(render);
-        if is_stroke {
-            self.stack.last_mut().unwrap().stroke_paint =
-                PaintCreator::Tile((canvas, tile.matrix()?));
-        } else {
-            self.stack.last_mut().unwrap().fill_paint =
-                PaintCreator::Tile((canvas, tile.matrix()?));
-        }
+        color_state.paint = PaintCreator::Tile((canvas, tile.matrix()?));
         Ok(())
     }
 
