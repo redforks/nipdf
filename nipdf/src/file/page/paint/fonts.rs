@@ -18,7 +18,6 @@ use once_cell::sync::Lazy;
 use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
 use prescript::{name, Encoding, Name};
-use prescript_macro::name;
 use std::{collections::HashMap, ops::RangeInclusive};
 use tiny_skia::PathBuilder;
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
@@ -608,7 +607,7 @@ fn normalize_font_name(name: &str) -> &str {
 
 /// If font_name is a standard 14 font, return its Encoding name
 fn standard_14_type1_font_encoding(font_name: &Name) -> Option<Name> {
-    match normalize_font_name(font_name.as_ref()) {
+    match normalize_font_name(font_name) {
         "Courier" => Some(name!("StandardEncoding")),
         "Courier-Bold" => Some(name!("StandardEncoding")),
         "Courier-BoldOblique" => Some(name!("StandardEncoding")),
@@ -676,7 +675,7 @@ impl<'c> FontCache<'c> {
 
     fn load_true_type_from_os(desc: &FontDescriptorDict) -> AnyResult<Vec<u8>> {
         let font_name = desc.font_name()?;
-        let font_name = normalize_true_type_font_name(font_name.as_ref());
+        let font_name = normalize_true_type_font_name(&font_name);
         let font_name = font_name.to_title_case();
         let mut families = vec![Family::Name(font_name.as_ref())];
         let family = desc.font_family()?;
@@ -908,8 +907,7 @@ struct Type0FontOp {
 impl Type0FontOp {
     fn new(font: &Type0FontDict) -> AnyResult<Self> {
         if let NameOrStream::Name(ref encoding) = font.encoding()? {
-            assert_eq!(encoding.as_ref(), "Identity-H");
-            // assert_eq!(encoding.as_ref(), CIDFontEncoding::IdentityH.as_ref());
+            assert_eq!(&**encoding, "Identity-H");
         } else {
             todo!("Only IdentityH encoding supported");
         }

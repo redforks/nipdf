@@ -18,13 +18,13 @@ pub fn try_from_name_object(input: TokenStream) -> TokenStream {
         .map(|branch| -> proc_macro2::TokenStream {
             let b = &branch.ident;
             let lit = b.to_string();
-            parse_quote!( prescript_macro::name!(#lit) => Ok(#t::#b))
+            parse_quote!(#lit => Ok(#t::#b))
         });
     let tokens = quote! {
         impl<'b> TryFrom<&'b crate::object::Object> for #t {
             type Error = crate::object::ObjectValueError;
             fn try_from(object: &'b crate::object::Object) -> Result<Self, Self::Error> {
-                match object.name()? {
+                match object.name()?.as_str() {
                     #( #arms, )*
                     _ => Err(crate::object::ObjectValueError::GraphicsOperationSchemaError),
                 }

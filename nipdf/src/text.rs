@@ -6,7 +6,7 @@ use crate::{
 use bitflags::bitflags;
 use nipdf_macro::{pdf_object, TryFromIntObjectForBitflags, TryFromNameObject};
 use prescript::{name, Encoding, Name};
-use std::{collections::HashMap, convert::AsRef};
+use std::collections::HashMap;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, TryFromNameObject)]
 pub enum FontType {
@@ -94,7 +94,7 @@ impl<'a, 'b> FontDict<'a, 'b> {
         if r.len() > 7 && r.as_bytes()[6] == b'+' {
             Ok(r[7..].to_owned())
         } else {
-            Ok(r.to_owned())
+            Ok(r[..].to_owned())
         }
     }
 }
@@ -327,7 +327,7 @@ impl<'b> TryFrom<&'b Object> for EncodingDifferences<'b> {
         for o in iter {
             match o {
                 Object::Name(name) => {
-                    map.insert(code as u8, name.as_ref());
+                    map.insert(code as u8, name.as_str());
                     code += 1;
                 }
                 Object::Integer(num) => {

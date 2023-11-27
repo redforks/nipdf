@@ -27,7 +27,7 @@ expression: parse_trailer(buf).unwrap()
     ],
     Dictionary(
         {
-            name!(Size): Integer(
+            "Size": Integer(
                 1,
             ),
         },

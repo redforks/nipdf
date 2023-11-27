@@ -131,7 +131,7 @@ impl<R: Debug + Clone> EqualTypeValueChecker<R> {
 
 impl TypeValueCheck<Name> for EqualTypeValueChecker<Name> {
     fn schema_type(&self) -> Cow<str> {
-        Cow::Borrowed(self.value.as_ref())
+        Cow::Borrowed(self.value.as_str())
     }
 
     fn check(&self, v: Option<Name>) -> bool {
@@ -1039,7 +1039,7 @@ use pretty::RcDoc;
 impl Object {
     pub fn to_doc(&self) -> RcDoc {
         fn name_to_doc(n: &Name) -> RcDoc<'_> {
-            RcDoc::text("/").append(RcDoc::text(n.as_ref()))
+            RcDoc::text("/").append(RcDoc::text(n.as_str()))
         }
 
         fn dict_to_doc(d: &Dictionary) -> RcDoc<'_> {

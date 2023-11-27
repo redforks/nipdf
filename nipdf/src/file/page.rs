@@ -14,8 +14,7 @@ use image::RgbaImage;
 use log::error;
 use nipdf_macro::{pdf_object, TryFromNameObject};
 use nom::Finish;
-use prescript::Name;
-use prescript_macro::name;
+use prescript::{name, Name};
 use std::iter::once;
 
 mod paint;

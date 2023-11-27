@@ -7,7 +7,6 @@ use crate::{
 };
 use anyhow::{anyhow, bail, Result as AnyResult};
 use nipdf_macro::pdf_object;
-use prescript_macro::name;
 use std::rc::Rc;
 
 /// Color component composes a color.
@@ -133,11 +132,11 @@ where
                 let args = ColorSpaceArgs::try_from(obj)?;
                 Self::from_args(&args, resolver, resources)
             }
-            ColorSpaceArgs::Name(name) => match name {
-                name!("DeviceGray") => Ok(Self::DeviceGray),
-                name!("DeviceRGB") => Ok(Self::DeviceRGB),
-                name!("DeviceCMYK") => Ok(Self::DeviceCMYK),
-                name!("Pattern") => Ok(Self::Pattern(Box::new(PatternColorSpace(None)))),
+            ColorSpaceArgs::Name(name) => match name.as_str() {
+                "DeviceGray" => Ok(Self::DeviceGray),
+                "DeviceRGB" => Ok(Self::DeviceRGB),
+                "DeviceCMYK" => Ok(Self::DeviceCMYK),
+                "Pattern" => Ok(Self::Pattern(Box::new(PatternColorSpace(None)))),
                 _ => {
                     let color_spaces = resources.unwrap().color_space()?;
                     let args = color_spaces
@@ -146,8 +145,8 @@ where
                     Self::from_args(args, resolver, resources)
                 }
             },
-            ColorSpaceArgs::Array(arr) => match arr[0].name()? {
-                name!("ICCBased") => {
+            ColorSpaceArgs::Array(arr) => match arr[0].name()?.as_str() {
+                "ICCBased" => {
                     assert_eq!(2, arr.len());
                     let id = arr[1].reference()?;
                     let d: ICCStreamDict = resolver.resolve_pdf_object(id.id().id())?;
@@ -161,7 +160,7 @@ where
                         },
                     }
                 }
-                name!("Separation") => {
+                "Separation" => {
                     assert_eq!(4, arr.len());
                     let alternate = ColorSpaceArgs::try_from(&arr[2])?;
                     let functions: Vec<FunctionDict> =
@@ -175,7 +174,7 @@ where
                         f: Rc::new(function),
                     })))
                 }
-                name!("Indexed") => {
+                "Indexed" => {
                     assert_eq!(4, arr.len());
                     let base = ColorSpaceArgs::try_from(&arr[1])?;
                     let base: ColorSpace<T> = Self::from_args(&base, resolver, resources)?;
@@ -184,7 +183,7 @@ where
                     assert!(data.len() >= (hival + 1) as usize * base.components());
                     Ok(Self::Indexed(Box::new(IndexedColorSpace { base, data })))
                 }
-                name!("CalRGB") => {
+                "CalRGB" => {
                     assert_eq!(2, arr.len());
                     let dict: CalRGBDict = resolver.resolve_pdf_object2(&arr[1])?;
                     // let dict = CalRGBDict::new(None, arr[1].as_dict()?, &())?;
@@ -199,7 +198,7 @@ where
                         white_point,
                     })))
                 }
-                name!("Pattern") => {
+                "Pattern" => {
                     assert_eq!(2, arr.len());
                     let base = ColorSpaceArgs::try_from(&arr[1])?;
                     let base: ColorSpace<T> = Self::from_args(&base, resolver, resources)?;

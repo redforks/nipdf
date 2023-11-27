@@ -19,8 +19,7 @@ use jpeg_decoder::PixelFormat;
 use log::error;
 use nipdf_macro::pdf_object;
 use once_cell::unsync::Lazy;
-use prescript::Name;
-use prescript_macro::name;
+use prescript::{name, Name};
 use smallvec::SmallVec;
 use std::{
     borrow::{Borrow, Cow},
@@ -36,12 +35,20 @@ const KEY_FILTER_PARAMS: Name = name!("DecodeParms");
 const KEY_FFILTER: Name = name!("FFilter");
 
 const FILTER_FLATE_DECODE: Name = name!("FlateDecode");
-const FILTER_LZW_DECODE: Name = name!("LZWDecode");
+// const FILTER_LZW_DECODE: Name = name!("LZWDecode");
 const FILTER_CCITT_FAX: Name = name!("CCITTFaxDecode");
 const FILTER_DCT_DECODE: Name = name!("DCTDecode");
 const FILTER_ASCII85_DECODE: Name = name!("ASCII85Decode");
-const FILTER_RUN_LENGTH_DECODE: Name = name!("RunLengthDecode");
+// const FILTER_RUN_LENGTH_DECODE: Name = name!("RunLengthDecode");
 const FILTER_JPX_DECODE: Name = name!("JPXDecode");
+
+const S_FILTER_FLATE_DECODE: &str = "FlateDecode";
+const S_FILTER_LZW_DECODE: &str = "LZWDecode";
+const S_FILTER_CCITT_FAX: &str = "CCITTFaxDecode";
+const S_FILTER_DCT_DECODE: &str = "DCTDecode";
+const S_FILTER_ASCII85_DECODE: &str = "ASCII85Decode";
+const S_FILTER_RUN_LENGTH_DECODE: &str = "RunLengthDecode";
+const S_FILTER_JPX_DECODE: &str = "JPXDecode";
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct BufPos {
@@ -492,14 +499,14 @@ fn filter<'a: 'b, 'b>(
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     let empty_dict = Lazy::new(Dictionary::new);
     #[allow(clippy::match_ref_pats)]
-    match filter_name {
-        &FILTER_FLATE_DECODE => decode_flate(
+    match filter_name.as_str() {
+        S_FILTER_FLATE_DECODE => decode_flate(
             &buf,
             LZWDeflateDecodeParams::new(params.unwrap_or_else(|| &*empty_dict), resolver)?,
         )
         .map(FilterDecodedData::bytes),
-        &FILTER_DCT_DECODE => decode_dct(buf, params),
-        &FILTER_CCITT_FAX => decode_ccitt(
+        S_FILTER_DCT_DECODE => decode_dct(buf, params),
+        S_FILTER_CCITT_FAX => decode_ccitt(
             &buf,
             CCITTFaxDecodeParamsDict::new(
                 None,
@@ -508,10 +515,10 @@ fn filter<'a: 'b, 'b>(
             )?,
         )
         .map(FilterDecodedData::bytes),
-        &FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(FilterDecodedData::bytes),
-        &FILTER_RUN_LENGTH_DECODE => Ok(FilterDecodedData::bytes(decode_run_length(&buf, params))),
-        &FILTER_JPX_DECODE => decode_jpx(buf, params),
-        &FILTER_LZW_DECODE => decode_lzw(
+        S_FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(FilterDecodedData::bytes),
+        S_FILTER_RUN_LENGTH_DECODE => Ok(FilterDecodedData::bytes(decode_run_length(&buf, params))),
+        S_FILTER_JPX_DECODE => decode_jpx(buf, params),
+        S_FILTER_LZW_DECODE => decode_lzw(
             &buf,
             LZWDeflateDecodeParams::new(params.unwrap_or_else(|| &*empty_dict), resolver)?,
         )

@@ -17,7 +17,7 @@ use nom::{
     sequence::{preceded, separated_pair, tuple},
     InputIter, InputLength, InputTake, Parser, Slice,
 };
-use prescript_macro::name;
+use prescript::name;
 use std::{fmt::Display, num::NonZeroU32, ops::RangeFrom, str::from_utf8};
 
 pub fn parse_header(buf: &[u8]) -> ParseResult<&str> {
