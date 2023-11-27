@@ -5,7 +5,7 @@ use crate::{
     },
     function::Domain,
     graphics::{
-        color_space::{self, ColorSpace, ColorSpaceTrait},
+        color_space::{ColorSpace, ColorSpaceTrait},
         parse_operations,
         shading::{build_shading, Axial, Extend, Radial, SelfDrawnAxial, Shading},
         trans::{
@@ -256,19 +256,6 @@ impl State {
         info!("not implemented: render intent: {}", intent);
     }
 
-    fn set_color_and_space(color_state: &mut ColorState, cs: ColorSpace<f32>, color: &[f32]) {
-        color_state.paint = PaintCreator::Color(cs.to_skia_color(color));
-        color_state.color_space = cs;
-    }
-
-    fn set_stroke_color_and_space(&mut self, cs: ColorSpace<f32>, color: &[f32]) {
-        Self::set_color_and_space(&mut self.stroke_state, cs, color);
-    }
-
-    fn set_fill_color_and_space(&mut self, cs: ColorSpace<f32>, color: &[f32]) {
-        Self::set_color_and_space(&mut self.fill_state, cs, color);
-    }
-
     fn set_color_args(color_state: &mut ColorState, args: ColorArgs) {
         let color = color_state.color_space.to_skia_color(args.as_ref());
         color_state.paint = PaintCreator::Color(color);
@@ -280,14 +267,6 @@ impl State {
 
     fn set_fill_color_args(&mut self, args: ColorArgs) {
         Self::set_color_args(&mut self.fill_state, args);
-    }
-
-    /// `color`: left for stroke, right for fill
-    fn set_color(&mut self, color: Either<SkiaColor, SkiaColor>) {
-        match color {
-            Left(c) => self.stroke_state.paint = PaintCreator::Color(c),
-            Right(c) => self.fill_state.paint = PaintCreator::Color(c),
-        }
     }
 
     fn concat_ctm(&mut self, ctm: UserToDeviceIndependentSpace) {
@@ -756,28 +735,28 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                         .unwrap()
             }
             Operation::SetStrokeColor(args) => self.current_mut().set_stroke_color_args(args),
-            Operation::SetStrokeGray(color) => self
-                .current_mut()
-                .set_stroke_color_and_space(ColorSpace::DeviceGray, &color),
-            Operation::SetStrokeCMYK(color) => self
-                .current_mut()
-                .set_stroke_color_and_space(ColorSpace::DeviceCMYK, &color),
-            Operation::SetStrokeRGB(color) => self
-                .current_mut()
-                .set_color(Left(color_space::DeviceRGB.to_skia_color(&color))),
+            Operation::SetStrokeGray(color) => {
+                self.set_color_and_space(Self::stroke_color_state, ColorSpace::DeviceGray, &color)
+            }
+            Operation::SetStrokeCMYK(color) => {
+                self.set_color_and_space(Self::stroke_color_state, ColorSpace::DeviceCMYK, &color)
+            }
+            Operation::SetStrokeRGB(color) => {
+                self.set_color_and_space(Self::stroke_color_state, ColorSpace::DeviceRGB, &color)
+            }
             Operation::SetStrokeColorOrWithPattern(color_or_name) => self
                 .set_color_or_pattern(Self::stroke_color_state, &color_or_name)
                 .unwrap(),
             Operation::SetFillColor(args) => self.current_mut().set_fill_color_args(args),
-            Operation::SetFillGray(color) => self
-                .current_mut()
-                .set_fill_color_and_space(ColorSpace::DeviceGray, &color),
-            Operation::SetFillCMYK(color) => self
-                .current_mut()
-                .set_fill_color_and_space(ColorSpace::DeviceCMYK, &color),
-            Operation::SetFillRGB(color) => self
-                .current_mut()
-                .set_fill_color_and_space(ColorSpace::DeviceRGB, &color),
+            Operation::SetFillGray(color) => {
+                self.set_color_and_space(Self::fill_color_state, ColorSpace::DeviceGray, &color)
+            }
+            Operation::SetFillCMYK(color) => {
+                self.set_color_and_space(Self::fill_color_state, ColorSpace::DeviceCMYK, &color)
+            }
+            Operation::SetFillRGB(color) => {
+                self.set_color_and_space(Self::fill_color_state, ColorSpace::DeviceRGB, &color)
+            }
             Operation::SetFillColorOrWithPattern(color_or_name) => self
                 .set_color_or_pattern(Self::fill_color_state, &color_or_name)
                 .unwrap(),
@@ -799,6 +778,17 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
             _ => todo!("{:?}", op),
         }
+    }
+
+    fn set_color_and_space(
+        &mut self,
+        mut get_state: impl FnMut(&mut Self) -> &mut ColorState,
+        cs: ColorSpace<f32>,
+        color: &[f32],
+    ) {
+        let state = get_state(self);
+        state.paint = PaintCreator::Color(cs.to_skia_color(color));
+        state.color_space = cs;
     }
 
     fn stroke(&mut self) {
