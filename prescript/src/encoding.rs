@@ -1,7 +1,5 @@
 use super::{name, Name};
-use crate as prescript;
 use educe::Educe;
-use prescript_macro::name;
 use std::array::from_fn;
 
 /// Encoding for Type1 and other font types except Type0, which allows
@@ -26,7 +24,7 @@ impl Encoding {
 
     /// Get glyph name for char code.
     pub fn get_str(&self, ch: u8) -> &str {
-        self.0[ch as usize].as_ref()
+        self.0[ch as usize].as_str()
     }
 
     pub fn predefined(name: Name) -> Option<Self> {
