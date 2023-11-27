@@ -399,13 +399,22 @@ where
 #[derive(Debug, Clone, PartialEq)]
 pub struct PatternColorSpace<T>(Option<ColorSpace<T>>);
 
-impl<T> ColorSpaceTrait<T> for PatternColorSpace<T> {
-    fn to_rgba(&self, _color: &[T]) -> [T; 4] {
-        unreachable!("PatternColorSpace.to_rgba() should not be called")
+impl<T> ColorSpaceTrait<T> for PatternColorSpace<T>
+where
+    T: ColorComp + ColorCompConvertTo<f32> + 'static,
+    T: ColorCompConvertTo<u8>,
+    f32: ColorCompConvertTo<T>,
+    u8: ColorCompConvertTo<T>,
+{
+    fn to_rgba(&self, color: &[T]) -> [T; 4] {
+        self.0
+            .as_ref()
+            .expect("Pattern CS base CS not set")
+            .to_rgba(color)
     }
 
     fn components(&self) -> usize {
-        0
+        self.0.as_ref().map_or(0, |cs| cs.components())
     }
 }
 

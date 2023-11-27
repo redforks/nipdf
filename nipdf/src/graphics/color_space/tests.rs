@@ -268,3 +268,22 @@ fn cal_rgb_color_space() {
 
     assert_eq!(cs.to_rgba(&[0., 1.0, 0.5]), [0., 1.0, 0.5, 1.0]);
 }
+
+#[test]
+#[should_panic(expected = "Pattern CS base CS not set")]
+fn pattern_no_base_panic_to_rgba() {
+    let cs = PatternColorSpace::<f32>(None);
+    cs.to_rgba(&[1.0, 0., 0., 0.]);
+}
+
+#[test]
+fn pattern_color_space() {
+    // no base color space
+    let cs = PatternColorSpace::<f32>(None);
+    assert_eq!(0, cs.components());
+
+    // has base color space
+    let cs = PatternColorSpace::<f32>(Some(ColorSpace::DeviceRGB));
+    assert_eq!(3, cs.components());
+    assert_eq!(cs.to_rgba(&[1.0, 0., 0., 0.]), [1.0, 0., 0., 1.]);
+}
