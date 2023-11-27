@@ -17,8 +17,7 @@ use nom::{
     number::complete::float,
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
 };
-use prescript::Name;
-use prescript_macro::name;
+use prescript::{name, Name};
 use std::{
     borrow::Cow,
     num::NonZeroU32,

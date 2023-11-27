@@ -18,8 +18,7 @@ use log::error;
 use nipdf_macro::pdf_object;
 use nom::Finish;
 use once_cell::unsync::OnceCell;
-use prescript::Name;
-use prescript_macro::name;
+use prescript::{name, Name};
 use std::{iter::repeat_with, num::NonZeroU32, rc::Rc};
 
 mod page;
@@ -657,7 +656,7 @@ impl File {
         let catalog = self.catalog(resolver)?;
         Ok(catalog
             .ver()
-            .map(|s| s.as_ref().to_owned())
+            .map(|s| s.into_string())
             .unwrap_or_else(|| self.head_ver.clone()))
     }
 

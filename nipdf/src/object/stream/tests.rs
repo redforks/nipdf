@@ -1,42 +1,43 @@
 use super::*;
 use crate::{file::decode_stream, function::Domain, object::Name};
+use prescript::name;
 use std::rc::Rc;
 use test_case::test_case;
 
 #[test_case([] => Ok(vec![]); "empty")]
 #[test_case(
-    [(&KEY_FILTER, 1.into())] => matches Err(ObjectValueError::UnexpectedType);
+    [(KEY_FILTER, 1.into())] => matches Err(ObjectValueError::UnexpectedType);
     "incorrect filter type"
 )]
 #[test_case(
-    [(&KEY_FILTER, Object::Array(vec![1.into()].into()))] => matches Err(_);
+    [(KEY_FILTER, Object::Array(vec![1.into()].into()))] => matches Err(_);
     "filter is array but item not name"
 )]
 #[test_case(
-    [(&KEY_FILTER, FILTER_FLATE_DECODE.clone().into())] =>
+    [(KEY_FILTER, FILTER_FLATE_DECODE.clone().into())] =>
     Ok(vec![(FILTER_FLATE_DECODE.clone(), None)]);
      "one filter"
 )]
 #[test_case(
-    [(&KEY_FILTER, FILTER_FLATE_DECODE.clone().into()),
-     (&KEY_FILTER_PARAMS, Object::Null)] =>
+    [(KEY_FILTER, FILTER_FLATE_DECODE.clone().into()),
+     (KEY_FILTER_PARAMS, Object::Null)] =>
     Ok(vec![(FILTER_FLATE_DECODE.clone(), None)]);
      "one filter with null params"
 )]
 #[test_case(
-    [(&KEY_FILTER, FILTER_FLATE_DECODE.clone().into()),
-     (&KEY_FILTER_PARAMS, Object::Array(vec![Object::Null].into()))] =>
+    [(KEY_FILTER, FILTER_FLATE_DECODE.clone().into()),
+     (KEY_FILTER_PARAMS, Object::Array(vec![Object::Null].into()))] =>
     Ok(vec![(FILTER_FLATE_DECODE.clone(), None)]);
      "one filter with null params in array"
 )]
 #[test_case(
-    [(&KEY_FILTER, FILTER_FLATE_DECODE.clone().into()),
-     (&KEY_FILTER_PARAMS, Object::Dictionary(Dictionary::default()))] =>
+    [(KEY_FILTER, FILTER_FLATE_DECODE.clone().into()),
+     (KEY_FILTER_PARAMS, Object::Dictionary(Dictionary::default()))] =>
     Ok(vec![(FILTER_FLATE_DECODE.clone(), Some(Dictionary::default()))]);
      "one filter with dictionary params"
 )]
 #[test_case(
-    [(&KEY_FILTER, vec![
+    [(KEY_FILTER, vec![
         FILTER_FLATE_DECODE.clone().into(),
         FILTER_DCT_DECODE.clone().into(),
     ].into())] =>
@@ -45,22 +46,22 @@ use test_case::test_case;
      "two filters no params"
 )]
 #[test_case(
-    [(&KEY_FILTER, Object::Array(vec![
+    [(KEY_FILTER, Object::Array(vec![
         FILTER_FLATE_DECODE.clone().into(),
         FILTER_DCT_DECODE.clone().into(),
     ].into())),
-    (&KEY_FILTER_PARAMS, Dictionary::default().into())] =>
+    (KEY_FILTER_PARAMS, Dictionary::default().into())] =>
     Ok(vec![(FILTER_FLATE_DECODE.clone(), Some(Dictionary::default())),
             (FILTER_DCT_DECODE.clone(), None)]);
      "two filters with null params"
 )]
 #[test_case(
-    [(&KEY_FFILTER, FILTER_FLATE_DECODE.clone().into())] =>
+    [(KEY_FFILTER, FILTER_FLATE_DECODE.clone().into())] =>
     Err(ObjectValueError::ExternalStreamNotSupported);
      "filter not supported"
 )]
 fn test_iter_filter(
-    dict: impl IntoIterator<Item = (&'static Name, Object)>,
+    dict: impl IntoIterator<Item = (Name, Object)>,
 ) -> Result<Vec<(Name, Option<Dictionary>)>, ObjectValueError> {
     let dict: Dictionary = dict
         .into_iter()

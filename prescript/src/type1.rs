@@ -1,11 +1,10 @@
-use crate as prescript;
 use crate::{
     machine::{Array, Machine, Value},
+    name,
     parser::header,
     Encoding,
 };
 use anyhow::Result as AnyResult;
-use prescript_macro::name;
 use std::{array::from_fn, borrow::Cow};
 use winnow::{binary::le_u32, combinator::preceded, error::ContextError, token::any, Parser};
 

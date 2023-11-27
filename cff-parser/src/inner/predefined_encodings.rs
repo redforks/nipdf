@@ -1,5 +1,4 @@
-use prescript::Encoding;
-use prescript_macro::name;
+use prescript::{name, Encoding};
 
 pub const STANDARD: Encoding = Encoding::new([
     name!(".notdef"),

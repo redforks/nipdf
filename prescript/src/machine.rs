@@ -1,4 +1,3 @@
-use crate as prescript;
 use crate::{
     name,
     parser::{token as token_parser, white_space, white_space_or_comment, ws_prefixed},
@@ -6,8 +5,6 @@ use crate::{
 };
 use educe::Educe;
 use either::Either;
-use log::{error};
-use prescript_macro::name;
 use std::{
     cell::{Ref, RefCell},
     collections::HashMap,
@@ -21,6 +18,7 @@ use winnow::Parser;
 
 mod decrypt;
 use decrypt::{decrypt, EEXEC_KEY};
+use log::error;
 mod cidinit;
 
 pub type Array = Vec<Value>;
@@ -1216,7 +1214,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             let font = m.pop()?;
             let key = m.pop()?;
             let name = key.name()?;
-            m.define_font(name.as_ref().to_owned(), into_dict(font.dict()?.borrow().clone())?);
+            m.define_font(name.as_str().to_owned(), into_dict(font.dict()?.borrow().clone())?);
             m.push(font);
             ok()
         },

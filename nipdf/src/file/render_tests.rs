@@ -15,7 +15,7 @@ fn decode_file_page(path: &str, page_no: usize) -> AnyResult<String> {
     let pages = catalog.pages()?;
     let page = &pages[page_no];
     let option = RenderOptionBuilder::new().zoom(1.5);
-    let bytes = page.render(option)?.take();
+    let bytes = page.render(option)?.into_vec();
     let hash = Md5::digest(&bytes[..]);
     Ok(hex::encode(hash))
 }

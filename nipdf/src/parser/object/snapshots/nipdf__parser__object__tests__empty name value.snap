@@ -6,8 +6,8 @@ expression: parse_dict(buf.as_ref()).unwrap()
     [],
     Dictionary(
         {
-            name!(id): Name(
-                name!(),
+            "id": Name(
+                "",
             ),
         },
     ),

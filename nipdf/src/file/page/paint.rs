@@ -25,7 +25,6 @@ use image::{GenericImage, RgbaImage};
 use log::{debug, info};
 use nom::{combinator::eof, sequence::terminated};
 use prescript::Name;
-use prescript_macro::name;
 use std::{
     borrow::Cow,
     cell::{Ref, RefCell},
@@ -303,22 +302,20 @@ impl State {
 
     fn set_graphics_state(&mut self, res: &GraphicsStateParameterDict) {
         for key in res.d.dict().keys() {
-            match key {
-                &name!("LW") => self.set_line_width(res.line_width().unwrap().unwrap()),
-                &name!("LC") => self.set_line_cap(res.line_cap().unwrap().unwrap()),
-                &name!("LJ") => self.set_line_join(res.line_join().unwrap().unwrap()),
-                &name!("ML") => self.set_miter_limit(res.miter_limit().unwrap().unwrap()),
-                &name!("RI") => self.set_render_intent(res.rendering_intent().unwrap().unwrap()),
-                &name!("TK") => {
-                    self.set_text_knockout_flag(res.text_knockout_flag().unwrap().unwrap())
-                }
-                &name!("FL") => self.set_flatness(res.flatness().unwrap().unwrap()),
-                &name!("Type") => (),
-                &name!("SM") => debug!("ExtGState key: SM (smoothness tolerance) not implemented"),
-                k @ (&name!("OPM") | &name!("op") | &name!("OP")) => {
+            match key.as_str() {
+                "LW" => self.set_line_width(res.line_width().unwrap().unwrap()),
+                "LC" => self.set_line_cap(res.line_cap().unwrap().unwrap()),
+                "LJ" => self.set_line_join(res.line_join().unwrap().unwrap()),
+                "ML" => self.set_miter_limit(res.miter_limit().unwrap().unwrap()),
+                "RI" => self.set_render_intent(res.rendering_intent().unwrap().unwrap()),
+                "TK" => self.set_text_knockout_flag(res.text_knockout_flag().unwrap().unwrap()),
+                "FL" => self.set_flatness(res.flatness().unwrap().unwrap()),
+                "Type" => (),
+                "SM" => debug!("ExtGState key: SM (smoothness tolerance) not implemented"),
+                k @ ("OPM" | "op" | "OP") => {
                     debug!("ExtGState key {k} is for Overprint, which is not supported")
                 }
-                &name!("SA") => {
+                "SA" => {
                     debug!("Unknown or unsupported ExtGState key: SA (automatic stroke adjustment)")
                 }
                 _ => info!("Unknown or unsupported ExtGState key: {}", key.as_ref()),
