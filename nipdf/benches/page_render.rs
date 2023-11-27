@@ -1,5 +1,6 @@
 use anyhow::Result as AnyResult;
 use criterion::{criterion_group, criterion_main, Criterion};
+use image::RgbaImage;
 use mimalloc::MiMalloc;
 use nipdf::file::{File, RenderOptionBuilder};
 
@@ -17,7 +18,7 @@ fn read_sample_file(file_path: impl AsRef<std::path::Path>) -> Vec<u8> {
 
 /// Render specific page of pdf file.
 /// `file_path` relative to '~/sample_files/'.
-fn render_page(file_path: impl AsRef<std::path::Path>, no: usize) -> AnyResult<tiny_skia::Pixmap> {
+fn render_page(file_path: impl AsRef<std::path::Path>, no: usize) -> AnyResult<RgbaImage> {
     let buf = read_sample_file(file_path);
     let f = File::parse(buf, "", "")?;
     let resolver = f.resolver()?;
