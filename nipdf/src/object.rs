@@ -13,7 +13,7 @@ use std::{
     rc::Rc,
     str::from_utf8,
 };
-use tinyvec::{tiny_vec, TinyVec};
+use tinyvec::TinyVec;
 
 mod indirect_object;
 pub use indirect_object::IndirectObject;
@@ -1179,7 +1179,7 @@ impl From<bool> for Object {
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct LiteralString(Rc<[u8]>);
+pub struct LiteralString(InnerString);
 
 impl LiteralString {
     pub fn new(s: &[u8]) -> Self {
@@ -1220,7 +1220,7 @@ impl LiteralString {
         }
 
         let s = &s[1..s.len() - 1];
-        let mut result: Vec<u8> = Vec::with_capacity(s.len());
+        let mut result: InnerString = InnerString::with_capacity(s.len());
         let mut iter = s.iter().copied().peekable();
 
         // TODO: use exist buf if no escape, or newline to normalize
@@ -1259,18 +1259,11 @@ impl LiteralString {
             }
         }
 
-        Self(result.into())
+        Self(result)
     }
 
     pub fn update(&mut self, f: impl FnOnce(&mut [u8])) {
-        match Rc::get_mut(&mut self.0) {
-            Some(buf) => f(buf),
-            None => {
-                let mut buf = self.0.as_ref().to_vec();
-                f(&mut buf);
-                self.0 = buf.into();
-            }
-        }
+        f(self.0.as_mut_slice());
     }
 
     pub fn as_str(&self) -> &str {
