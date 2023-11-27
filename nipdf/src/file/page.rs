@@ -10,13 +10,13 @@ use crate::{
 };
 use ahash::{HashMap, HashMapExt};
 use educe::Educe;
+use image::RgbaImage;
 use log::error;
 use nipdf_macro::{pdf_object, TryFromNameObject};
 use nom::Finish;
 use prescript::Name;
 use prescript_macro::name;
 use std::iter::once;
-use tiny_skia::Pixmap;
 
 mod paint;
 
@@ -58,6 +58,15 @@ impl Rectangle {
 
     pub fn right_upper(&self) -> Point {
         Point::new(self.right_x, self.upper_y)
+    }
+
+    pub fn zoom(&self, v: f32) -> Self {
+        Self::from_lbrt(
+            self.left_x * v,
+            self.lower_y * v,
+            self.right_x * v,
+            self.upper_y * v,
+        )
     }
 }
 
@@ -291,7 +300,7 @@ impl<'a, 'b: 'a> Page<'a, 'b> {
         option: RenderOptionBuilder,
         steps: Option<usize>,
         no_crop: bool,
-    ) -> Result<Pixmap, ObjectValueError> {
+    ) -> Result<RgbaImage, ObjectValueError> {
         let media_box = self.media_box();
         let crop_box = self.crop_box();
         let option = option
@@ -303,17 +312,18 @@ impl<'a, 'b: 'a> Page<'a, 'b> {
         let ops = content.operations();
         let resource = self.resources();
         let mut canvas = option.create_canvas();
-        let mut renderer = Render::new(&mut canvas, option, &resource);
+        let mut renderer = Render::new(&mut canvas, option.clone(), &resource);
         if let Some(steps) = steps {
             ops.into_iter().take(steps).for_each(|op| renderer.exec(op));
         } else {
             ops.into_iter().for_each(|op| renderer.exec(op));
         };
         drop(renderer);
-        Ok(canvas)
+        let r = option.to_image(canvas);
+        Ok(r)
     }
 
-    pub fn render(&self, option: RenderOptionBuilder) -> Result<Pixmap, ObjectValueError> {
+    pub fn render(&self, option: RenderOptionBuilder) -> Result<RgbaImage, ObjectValueError> {
         self.render_steps(option, None, false)
     }
 

@@ -219,11 +219,11 @@ impl Viewer {
         let pages = catalog.pages()?;
         let page = &pages[no as usize];
         let option = RenderOptionBuilder::new().zoom(self.zoom);
-        let page = page.render(option)?;
+        let image = page.render(option)?;
         self.page = Page {
-            width: page.width(),
-            height: page.height(),
-            data: ShardedData(page.take().into()),
+            width: image.width(),
+            height: image.height(),
+            data: ShardedData(image.into_vec().into()),
         };
         self.navi = PageNavigator {
             current_page: no,

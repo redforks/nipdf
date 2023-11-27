@@ -102,12 +102,14 @@ fn dump_page(
     } else if to_png {
         let page_no = page_no.expect("page number is required");
         let page = &catalog.pages()?[page_no as usize];
-        let pixmap = page.render_steps(
+        let image = page.render_steps(
             RenderOptionBuilder::new().zoom(zoom.unwrap_or(1.75)),
             steps,
             no_crop,
         )?;
-        let buf = pixmap.encode_png()?;
+        let mut buf = vec![];
+        let mut cursor = Cursor::new(&mut buf);
+        image.write_to(&mut cursor, ImageOutputFormat::Png)?;
         copy(&mut &buf[..], &mut BufWriter::new(&mut stdout()))?;
     } else if let Some(page_no) = page_no {
         let page = &catalog.pages()?[page_no as usize];

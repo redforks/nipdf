@@ -21,7 +21,7 @@ use crate::{
 use anyhow::{Ok, Result as AnyResult};
 use educe::Educe;
 use either::Either::{self, Left, Right};
-use image::RgbaImage;
+use image::{GenericImage, RgbaImage};
 use log::{debug, info};
 use nom::{combinator::eof, sequence::terminated};
 use prescript::Name;
@@ -465,7 +465,7 @@ impl Path {
 }
 
 /// Option for Render
-#[derive(Debug, Educe)]
+#[derive(Debug, Educe, Clone)]
 #[educe(Default)]
 pub struct RenderOption {
     /// zoom level default to 1.0
@@ -496,6 +496,23 @@ impl RenderOption {
 
     pub fn canvas_height(&self) -> u32 {
         (self.height as f32 * self.zoom) as u32
+    }
+
+    /// Convert canvas to image, crop if crop option not None
+    pub fn to_image(&self, canvas: Pixmap) -> RgbaImage {
+        let mut r = RgbaImage::from_raw(canvas.width(), canvas.height(), canvas.take()).unwrap();
+        if let Some(crop) = self.crop {
+            let crop = crop.zoom(self.zoom);
+            let sub_image = r.sub_image(
+                crop.left_x as u32,
+                r.height() as u32 - crop.upper_y as u32,
+                crop.width() as u32,
+                crop.height() as u32,
+            );
+            sub_image.to_image()
+        } else {
+            r
+        }
     }
 }
 
