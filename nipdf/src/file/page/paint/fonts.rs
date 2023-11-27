@@ -606,7 +606,7 @@ fn normalize_font_name(name: &str) -> &str {
 }
 
 /// If font_name is a standard 14 font, return its Encoding name
-fn standard_14_type1_font_encoding(font_name: &Name) -> Option<Name> {
+fn standard_14_type1_font_encoding(font_name: &str) -> Option<Name> {
     match normalize_font_name(font_name) {
         "Courier" => Some(name!("StandardEncoding")),
         "Courier-Bold" => Some(name!("StandardEncoding")),
