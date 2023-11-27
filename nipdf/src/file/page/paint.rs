@@ -164,6 +164,15 @@ impl<const N: usize> MaskCache<N> {
     }
 }
 
+#[derive(Debug, Clone, Educe)]
+#[educe(Default)]
+struct ColorState {
+    #[educe(Default(expression = "PaintCreator::Color(SkiaColor::BLACK)"))]
+    paint: PaintCreator,
+    #[educe(Default(expression = "ColorSpace::DeviceRGB"))]
+    color_space: ColorSpace<f32>,
+}
+
 #[derive(Debug, Clone)]
 struct State {
     width: f32,
@@ -173,14 +182,12 @@ struct State {
     ctm: UserToDeviceIndependentSpace,
     /// ctm with flip_y and zoom
     user_to_device: UserToDeviceSpace,
-    fill_paint: PaintCreator,
-    stroke_paint: PaintCreator,
     stroke: Stroke,
     mask: Option<MaskEntry>,
     mask_cache: Rc<RefCell<MaskCache<4>>>,
-    fill_color_space: ColorSpace<f32>,
-    stroke_color_space: ColorSpace<f32>,
     text_object: TextObject,
+    stroke_state: ColorState,
+    fill_state: ColorState,
 }
 
 impl State {
@@ -192,14 +199,12 @@ impl State {
             height: option.height as f32,
             user_to_device: UserToDeviceSpace::identity(),
             ctm: UserToDeviceIndependentSpace::identity(),
-            fill_paint: PaintCreator::Color(SkiaColor::BLACK),
-            stroke_paint: PaintCreator::Color(SkiaColor::BLACK),
             stroke: Stroke::default(),
             mask: None,
             mask_cache: Rc::new(RefCell::new(MaskCache::new())),
-            fill_color_space: ColorSpace::DeviceRGB,
-            stroke_color_space: ColorSpace::DeviceRGB,
             text_object: TextObject::new(),
+            stroke_state: ColorState::default(),
+            fill_state: ColorState::default(),
         };
 
         r.reset_ctm(UserToDeviceIndependentSpace::identity());
@@ -247,29 +252,29 @@ impl State {
 
     fn set_stroke_color_and_space(&mut self, cs: ColorSpace<f32>, color: &[f32]) {
         self.set_color(Left(cs.to_skia_color(color)));
-        self.stroke_color_space = cs;
+        self.stroke_state.color_space = cs;
     }
 
     fn set_stroke_color_args(&mut self, args: ColorArgs) {
-        let color = self.stroke_color_space.to_skia_color(args.as_ref());
+        let color = self.stroke_state.color_space.to_skia_color(args.as_ref());
         self.set_color(Left(color));
     }
 
     fn set_fill_color_and_space(&mut self, cs: ColorSpace<f32>, color: &[f32]) {
         self.set_color(Either::Right(cs.to_skia_color(color)));
-        self.fill_color_space = cs;
+        self.fill_state.color_space = cs;
     }
 
     /// `color`: left for stroke, right for fill
     fn set_color(&mut self, color: Either<SkiaColor, SkiaColor>) {
         match color {
-            Left(c) => self.stroke_paint = PaintCreator::Color(c),
-            Right(c) => self.fill_paint = PaintCreator::Color(c),
+            Left(c) => self.stroke_state.paint = PaintCreator::Color(c),
+            Right(c) => self.fill_state.paint = PaintCreator::Color(c),
         }
     }
 
     fn set_fill_color_args(&mut self, args: ColorArgs) {
-        let color = self.fill_color_space.to_skia_color(args.as_ref());
+        let color = self.fill_state.color_space.to_skia_color(args.as_ref());
         self.set_color(Either::Right(color));
     }
 
@@ -281,11 +286,11 @@ impl State {
     }
 
     fn get_fill_paint(&self) -> Cow<'_, Paint<'_>> {
-        self.fill_paint.create()
+        self.fill_state.paint.create()
     }
 
     fn get_stroke_paint(&self) -> Cow<'_, Paint<'_>> {
-        self.stroke_paint.create()
+        self.stroke_state.paint.create()
     }
 
     fn get_stroke(&self) -> &Stroke {
@@ -729,12 +734,12 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
             // Color Operations
             Operation::SetStrokeColorSpace(args) => {
-                self.current_mut().stroke_color_space =
+                self.current_mut().stroke_state.color_space =
                     ColorSpace::from_args(&args, self.resources.resolver(), Some(self.resources))
                         .unwrap()
             }
             Operation::SetFillColorSpace(args) => {
-                self.current_mut().fill_color_space =
+                self.current_mut().fill_state.color_space =
                     ColorSpace::from_args(&args, self.resources.resolver(), Some(self.resources))
                         .unwrap()
             }
@@ -1245,7 +1250,8 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                     self.stack
                         .last()
                         .unwrap()
-                        .stroke_color_space
+                        .stroke_state
+                        .color_space
                         .to_skia_color(args.as_ref())
                 });
                 let pattern = self.resources.pattern()?;
@@ -1264,7 +1270,8 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                     .stack
                     .last()
                     .unwrap()
-                    .fill_color_space
+                    .fill_state
+                    .color_space
                     .to_skia_color(args.as_ref());
                 self.current_mut().set_color(Left(color));
                 Ok(())
@@ -1292,7 +1299,8 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                     .stack
                     .last()
                     .unwrap()
-                    .fill_color_space
+                    .fill_state
+                    .color_space
                     .to_skia_color(args.as_ref());
                 self.current_mut().set_color(Right(color));
                 Ok(())
@@ -1330,12 +1338,12 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             _ => todo!(),
         };
         if is_stroke {
-            self.stack.last_mut().unwrap().stroke_paint = PaintCreator::Gradient(Paint {
+            self.stack.last_mut().unwrap().stroke_state.paint = PaintCreator::Gradient(Paint {
                 shader,
                 ..Default::default()
             });
         } else {
-            self.stack.last_mut().unwrap().fill_paint = PaintCreator::Gradient(Paint {
+            self.stack.last_mut().unwrap().fill_state.paint = PaintCreator::Gradient(Paint {
                 shader,
                 ..Default::default()
             });
@@ -1377,10 +1385,10 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         ops.into_iter().for_each(|op| render.exec(op));
         drop(render);
         if is_stroke {
-            self.stack.last_mut().unwrap().stroke_paint =
+            self.stack.last_mut().unwrap().stroke_state.paint =
                 PaintCreator::Tile((canvas, tile.matrix()?));
         } else {
-            self.stack.last_mut().unwrap().fill_paint =
+            self.stack.last_mut().unwrap().fill_state.paint =
                 PaintCreator::Tile((canvas, tile.matrix()?));
         }
         Ok(())
