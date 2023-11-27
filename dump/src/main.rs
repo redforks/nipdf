@@ -35,6 +35,7 @@ fn cli() -> Command {
                 .arg(arg!(--id "display page object ID"))
                 .arg(arg!(--png "Render page to PNG"))
                 .arg(arg!(--zoom [zoom] "Zoom factor for PNG rendering, default: 1.75"))
+                .arg(arg!(--"no-crop" "Do not apply CropBox"))
                 .arg(arg!(--steps <steps> "Stop render after <steps> graphic steps"))
                 .arg(arg!([page_no] "page number (start from zero) to dump")),
         )
@@ -86,6 +87,7 @@ fn dump_page(
     to_png: bool,
     steps: Option<usize>,
     zoom: Option<f32>,
+    no_crop: bool,
 ) -> AnyResult<()> {
     let f = open(path)?;
     let resolver = f.resolver()?;
@@ -100,8 +102,11 @@ fn dump_page(
     } else if to_png {
         let page_no = page_no.expect("page number is required");
         let page = &catalog.pages()?[page_no as usize];
-        let pixmap =
-            page.render_steps(RenderOptionBuilder::new().zoom(zoom.unwrap_or(1.75)), steps)?;
+        let pixmap = page.render_steps(
+            RenderOptionBuilder::new().zoom(zoom.unwrap_or(1.75)),
+            steps,
+            no_crop,
+        )?;
         let buf = pixmap.encode_png()?;
         copy(&mut &buf[..], &mut BufWriter::new(&mut stdout()))?;
     } else if let Some(page_no) = page_no {
@@ -166,6 +171,10 @@ fn main() {
                 .get_one::<String>("steps")
                 .and_then(|s| s.parse().ok()),
             sub_m.get_one::<String>("zoom").and_then(|s| s.parse().ok()),
+            sub_m
+                .get_one::<bool>("no-crop")
+                .copied()
+                .unwrap_or_default(),
         ),
         Some(("object", sub_m)) => dump_object(
             sub_m.get_one::<String>("filename").unwrap(),
