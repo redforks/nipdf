@@ -1226,8 +1226,22 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
     fn set_stroke_color_or_pattern(&mut self, color_or_name: &ColorArgsOrName) -> AnyResult<()> {
         match color_or_name {
-            ColorArgsOrName::Name(name) => {
-                todo!("set_stroke_color_or_pattern: {:?}", name);
+            ColorArgsOrName::Name((name, color_args)) => {
+                let color = color_args.as_ref().map(|args| {
+                    self.stack
+                        .last()
+                        .unwrap()
+                        .stroke_color_space
+                        .to_skia_color(args.as_ref())
+                });
+                let pattern = self.resources.pattern()?;
+                let pattern = &pattern[name];
+                match pattern.pattern_type()? {
+                    PatternType::Tiling => {
+                        self.set_tiling_pattern(Either::Left(pattern.tiling_pattern()?), color)
+                    }
+                    PatternType::Shading => todo!(),
+                }
             }
             ColorArgsOrName::Color(args) => {
                 let color = self
@@ -1249,7 +1263,9 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                 let pattern = self.resources.pattern()?;
                 let pattern = &pattern[name];
                 match pattern.pattern_type()? {
-                    PatternType::Tiling => self.set_tiling_pattern(pattern.tiling_pattern()?),
+                    PatternType::Tiling => {
+                        self.set_tiling_pattern(Either::Right(pattern.tiling_pattern()?), None)
+                    }
                     PatternType::Shading => self.set_shading_pattern(pattern.shading_pattern()?),
                 }
             }
@@ -1296,15 +1312,17 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         Ok(())
     }
 
-    fn set_tiling_pattern(&mut self, tile: TilingPatternDict<'a, 'b>) -> AnyResult<()>
+    /// `tile`: left for stroke paint, right for fill paint
+    fn set_tiling_pattern(
+        &mut self,
+        tile: Either<TilingPatternDict<'a, 'b>, TilingPatternDict<'a, 'b>>,
+        color: Option<SkiaColor>,
+    ) -> AnyResult<()>
     where
         'a: 'b,
     {
-        assert_eq!(
-            tile.paint_type()?,
-            TilingPaintType::Uncolored,
-            "Colored tiling pattern not supported"
-        );
+        let is_stroke = tile.is_left();
+        let tile = tile.into_inner();
 
         let stream: &Object = tile.resolver().resolve(tile.id().unwrap())?;
         let stream = stream.stream()?;
@@ -1321,9 +1339,19 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             .build();
         let mut canvas = option.create_canvas();
         let mut render = Render::new(&mut canvas, option, &resources);
+        if let Some(color) = color {
+            // set color used for paint matrix image
+            render.stack.last_mut().unwrap().set_fill_color(color);
+        }
         ops.into_iter().for_each(|op| render.exec(op));
         drop(render);
-        self.stack.last_mut().unwrap().fill_paint = PaintCreator::Tile((canvas, tile.matrix()?));
+        if is_stroke {
+            self.stack.last_mut().unwrap().stroke_paint =
+                PaintCreator::Tile((canvas, tile.matrix()?));
+        } else {
+            self.stack.last_mut().unwrap().fill_paint =
+                PaintCreator::Tile((canvas, tile.matrix()?));
+        }
         Ok(())
     }
 

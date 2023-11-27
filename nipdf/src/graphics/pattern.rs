@@ -26,8 +26,8 @@ pub trait PatternDictTrait {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, TryFromIntObject)]
 pub enum TilingPaintType {
-    Uncolored = 1,
-    Colored = 2,
+    Colored = 1,
+    Uncolored = 2,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, TryFromIntObject)]
