@@ -43,13 +43,14 @@ md-5 = "0.10"
 arc4 = "0.1"
 heck = "0.4"
 paste = "1.0"
+tinyvec = { version = "1.6", features = ["rustc_1_57"] }
+static_assertions = "1.1.0"
 
 [dev-dependencies]
 env_logger = "0.10.0"
 glob = "0.3.1"
 hex = "0.4"
 insta = { version = "1.29.0", features = ["ron"] }
-static_assertions = "1.1.0"
 assert_approx_eq = "1.1"
 test-case = "3.1.0"
 test-log = "0.2.12"
