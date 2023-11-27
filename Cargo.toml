@@ -7,7 +7,6 @@ members = [
     "reader",
     "cff-parser",
     "prescript",
-    "prescript-macro",
 ]
 resolver = "2"
 
