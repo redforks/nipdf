@@ -115,8 +115,8 @@ fn test_arr_convert_from_object(v: Vec<Object>) -> Vec<f32> {
 }
 
 #[test_case(vec![1.into()] => ColorArgsOrName::Color(ColorArgs(vec![1.0])); "Color")]
-#[test_case(vec!["/name".into()] => ColorArgsOrName::Name(name!("name")); "name")]
-#[test_case(vec![1f32.into(), 2f32.into(), 3f32.into(), "/p1".into()] => ColorArgsOrName::NameAndColor((ColorArgs(vec![1f32, 2., 3.]), name!("p1"))); "SCN for uncolored pattern")]
+#[test_case(vec!["/name".into()] => ColorArgsOrName::Name((name!("name"), None)); "name")]
+#[test_case(vec![1f32.into(), 2f32.into(), 3f32.into(), "/p1".into()] => ColorArgsOrName::Name((name!("p1"), Some(ColorArgs(vec![1f32, 2., 3.])))); "SCN for uncolored pattern")]
 fn color_or_with_pattern_from_object(mut v: Vec<Object>) -> ColorArgsOrName {
     ColorArgsOrName::convert_from_object(&mut v).unwrap()
 }

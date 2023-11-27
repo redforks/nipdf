@@ -1239,13 +1239,13 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                 self.current_mut().set_stroke_color(color);
                 Ok(())
             }
-            _ => todo!(),
         }
     }
 
     fn set_fill_color_or_pattern(&mut self, color_or_name: &ColorArgsOrName) -> AnyResult<()> {
         match color_or_name {
-            ColorArgsOrName::Name(name) => {
+            ColorArgsOrName::Name((name, color_args)) => {
+                assert!(color_args.is_none());
                 let pattern = self.resources.pattern()?;
                 let pattern = &pattern[name];
                 match pattern.pattern_type()? {
@@ -1263,7 +1263,6 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                 self.current_mut().set_fill_color(color);
                 Ok(())
             }
-            _ => todo!(),
         }
     }
 

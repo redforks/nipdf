@@ -222,8 +222,7 @@ impl<'b, S, T> ConvertFromObject<'b> for Transform2D<f32, S, T> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ColorArgsOrName {
     Color(ColorArgs),
-    Name(Name),
-    NameAndColor((ColorArgs, Name)),
+    Name((Name, Option<ColorArgs>)),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -501,10 +500,10 @@ impl<'b> ConvertFromObject<'b> for ColorArgsOrName {
         let o = objects.pop().unwrap();
         if let Ok(name) = o.name() {
             if objects.is_empty() {
-                Ok(ColorArgsOrName::Name(name))
+                Ok(ColorArgsOrName::Name((name, None)))
             } else {
                 let args = ColorArgs::convert_from_object(objects)?;
-                Ok(ColorArgsOrName::NameAndColor((args, name)))
+                Ok(ColorArgsOrName::Name((name, Some(args))))
             }
         } else {
             objects.push(o);
