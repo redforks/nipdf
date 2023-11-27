@@ -14,13 +14,13 @@ use crate::{
             UserToDeviceSpace,
         },
         ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, PatternType, Point,
-        RenderingIntent, ShadingPatternDict, TextRenderingMode, TilingPaintType, TilingPatternDict,
+        RenderingIntent, ShadingPatternDict, TextRenderingMode, TilingPatternDict,
     },
     object::{Object, PdfObject, TextStringOrNumber},
 };
 use anyhow::{Ok, Result as AnyResult};
 use educe::Educe;
-use either::Either;
+use either::Either::{self, Left, Right};
 use image::RgbaImage;
 use log::{debug, info};
 use nom::{combinator::eof, sequence::terminated};
@@ -71,7 +71,7 @@ impl From<Point> for SkiaPoint {
 
 #[derive(Debug, Clone)]
 enum PaintCreator {
-    Color(tiny_skia::Color),
+    Color(SkiaColor),
     Gradient(Paint<'static>),
     Tile((Pixmap, UserToDeviceIndependentSpace)),
 }
@@ -193,8 +193,8 @@ impl State {
             height: option.height as f32,
             user_to_device: UserToDeviceSpace::identity(),
             ctm: UserToDeviceIndependentSpace::identity(),
-            fill_paint: PaintCreator::Color(tiny_skia::Color::BLACK),
-            stroke_paint: PaintCreator::Color(tiny_skia::Color::BLACK),
+            fill_paint: PaintCreator::Color(SkiaColor::BLACK),
+            stroke_paint: PaintCreator::Color(SkiaColor::BLACK),
             stroke: Stroke::default(),
             mask: None,
             mask_cache: Rc::new(RefCell::new(MaskCache::new())),
@@ -247,31 +247,31 @@ impl State {
     }
 
     fn set_stroke_color_and_space(&mut self, cs: ColorSpace<f32>, color: &[f32]) {
-        self.set_stroke_color(cs.to_skia_color(color));
+        self.set_color(Left(cs.to_skia_color(color)));
         self.stroke_color_space = cs;
-    }
-
-    fn set_stroke_color(&mut self, color: tiny_skia::Color) {
-        self.stroke_paint = PaintCreator::Color(color);
     }
 
     fn set_stroke_color_args(&mut self, args: ColorArgs) {
         let color = self.stroke_color_space.to_skia_color(args.as_ref());
-        self.set_stroke_color(color);
+        self.set_color(Left(color));
     }
 
     fn set_fill_color_and_space(&mut self, cs: ColorSpace<f32>, color: &[f32]) {
-        self.set_fill_color(cs.to_skia_color(color));
+        self.set_color(Either::Right(cs.to_skia_color(color)));
         self.fill_color_space = cs;
     }
 
-    fn set_fill_color(&mut self, color: tiny_skia::Color) {
-        self.fill_paint = PaintCreator::Color(color);
+    /// `color`: left for stroke, right for fill
+    fn set_color(&mut self, color: Either<SkiaColor, SkiaColor>) {
+        match color {
+            Left(c) => self.stroke_paint = PaintCreator::Color(c),
+            Right(c) => self.fill_paint = PaintCreator::Color(c),
+        }
     }
 
     fn set_fill_color_args(&mut self, args: ColorArgs) {
         let color = self.fill_color_space.to_skia_color(args.as_ref());
-        self.set_fill_color(color);
+        self.set_color(Either::Right(color));
     }
 
     fn concat_ctm(&mut self, ctm: UserToDeviceIndependentSpace) {
@@ -437,26 +437,26 @@ impl Path {
 
     /// Build path and clear the path builder, return None if path is empty
     pub fn finish(&mut self) -> Option<&SkiaPath> {
-        if let Either::Left(_) = self.path {
-            let temp = Either::Left(PathBuilder::new());
+        if let Left(_) = self.path {
+            let temp = Left(PathBuilder::new());
             let pb = std::mem::replace(&mut self.path, temp).left().unwrap();
             if let Some(p) = pb.finish() {
-                self.path = Either::Right(p);
+                self.path = Right(p);
             } else {
                 debug!("empty or invalid path");
             }
         }
 
         match &self.path {
-            Either::Left(_) => None,
-            Either::Right(p) => Some(p),
+            Left(_) => None,
+            Right(p) => Some(p),
         }
     }
 
     pub fn reset(&mut self) {
-        let temp = Either::Left(PathBuilder::new());
+        let temp = Left(PathBuilder::new());
         let p = std::mem::replace(&mut self.path, temp);
-        self.path = p.right_and_then(|p| Either::Left(p.clear()));
+        self.path = p.right_and_then(|p| Left(p.clear()));
     }
 
     pub fn clear(&mut self) {
@@ -733,7 +733,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                 .set_stroke_color_and_space(ColorSpace::DeviceCMYK, &color),
             Operation::SetStrokeRGB(color) => self
                 .current_mut()
-                .set_stroke_color(color_space::DeviceRGB.to_skia_color(&color)),
+                .set_color(Left(color_space::DeviceRGB.to_skia_color(&color))),
             Operation::SetStrokeColorOrWithPattern(color_or_name) => {
                 self.set_stroke_color_or_pattern(&color_or_name).unwrap()
             }
@@ -1238,7 +1238,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                 let pattern = &pattern[name];
                 match pattern.pattern_type()? {
                     PatternType::Tiling => {
-                        self.set_tiling_pattern(Either::Left(pattern.tiling_pattern()?), color)
+                        self.set_tiling_pattern(Left(pattern.tiling_pattern()?), color)
                     }
                     PatternType::Shading => todo!(),
                 }
@@ -1250,7 +1250,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                     .unwrap()
                     .fill_color_space
                     .to_skia_color(args.as_ref());
-                self.current_mut().set_stroke_color(color);
+                self.current_mut().set_color(Left(color));
                 Ok(())
             }
         }
@@ -1264,7 +1264,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                 let pattern = &pattern[name];
                 match pattern.pattern_type()? {
                     PatternType::Tiling => {
-                        self.set_tiling_pattern(Either::Right(pattern.tiling_pattern()?), None)
+                        self.set_tiling_pattern(Right(pattern.tiling_pattern()?), None)
                     }
                     PatternType::Shading => self.set_shading_pattern(pattern.shading_pattern()?),
                 }
@@ -1276,7 +1276,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                     .unwrap()
                     .fill_color_space
                     .to_skia_color(args.as_ref());
-                self.current_mut().set_fill_color(color);
+                self.current_mut().set_color(Right(color));
                 Ok(())
             }
         }
@@ -1341,7 +1341,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let mut render = Render::new(&mut canvas, option, &resources);
         if let Some(color) = color {
             // set color used for paint matrix image
-            render.stack.last_mut().unwrap().set_fill_color(color);
+            render.stack.last_mut().unwrap().set_color(Right(color));
         }
         ops.into_iter().for_each(|op| render.exec(op));
         drop(render);
