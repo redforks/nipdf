@@ -1,7 +1,7 @@
 use crate::{
     name,
     parser::{token as token_parser, white_space, white_space_or_comment, ws_prefixed},
-    Name, INVALID1, INVALID2,
+    Name,
 };
 use educe::Educe;
 use either::Either;
@@ -252,6 +252,9 @@ impl std::hash::Hash for Key {
         }
     }
 }
+
+static INVALID1: Name = Name::from_static("$$invalid1$$");
+static INVALID2: Name = Name::from_static("$$invalid2$$");
 
 impl std::borrow::Borrow<Name> for Key {
     fn borrow(&self) -> &Name {
