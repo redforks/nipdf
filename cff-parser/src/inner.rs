@@ -14,7 +14,6 @@ use nom::{
 };
 use paste::paste;
 use prescript::{name, Encoding, Name};
-use prescript_macro::name;
 use std::{
     collections::HashMap,
     hash::Hash,
