@@ -1,7 +1,7 @@
 use super::{Dictionary, Object, ObjectId, ObjectValueError};
 use crate::{
     ccitt::Flags,
-    file::{encrypt::decrypt, ObjectResolver, ResourceDict},
+    file::{encrypt::Rc4Decryptor, ObjectResolver, ResourceDict},
     function::Domains,
     graphics::{
         color_space::{
@@ -602,7 +602,7 @@ impl Stream {
         let mut raw: Cow<'a, [u8]> = self.raw(resolver)?.into();
         if let Some(key) = resolver.encript_key() {
             let mut buf = raw.into_owned();
-            decrypt(key, self.2, &mut buf);
+            Rc4Decryptor::new(key, self.2).decrypt(&mut buf);
             raw = buf.into();
         }
 

@@ -1,7 +1,7 @@
 //! Contains types of PDF file structures.
 
 use crate::{
-    file::encrypt::{calc_encrypt_key, decrypt_with_key, Algorithm, StandardHandlerRevion},
+    file::encrypt::{calc_encrypt_key, Algorithm, Rc4Decryptor, StandardHandlerRevion},
     object::{
         Array, Dictionary, Entry, FrameSet, HexString, LiteralString, Object, ObjectId,
         ObjectValueError, PdfObject, Resolver, Stream, TrailerDict,
@@ -25,7 +25,6 @@ mod page;
 pub use page::*;
 
 pub(crate) mod encrypt;
-use self::encrypt::decrypt_key;
 pub use encrypt::EncryptDict;
 
 #[derive(Debug, Copy, Clone)]
@@ -237,17 +236,15 @@ impl XRefTable {
 
 /// Decrypt HexString/LiteralString nested in object.
 fn decrypt_string(key: &[u8], id: ObjectId, mut o: Object) -> Object {
-    let key = decrypt_key(key, id);
-
-    struct Decryptor(Box<[u8]>);
+    struct Decryptor(Rc4Decryptor);
 
     impl Decryptor {
         fn hex_string(&self, s: &mut HexString) {
-            s.update(|s| decrypt_with_key(&self.0, s));
+            s.update(|s| self.0.decrypt(s));
         }
 
         fn literal_string(&self, s: &mut LiteralString) {
-            s.update(|s| decrypt_with_key(&self.0, s));
+            s.update(|s| self.0.decrypt(s));
         }
 
         fn dict(&self, dict: &mut Dictionary) {
@@ -295,7 +292,7 @@ fn decrypt_string(key: &[u8], id: ObjectId, mut o: Object) -> Object {
         }
     }
 
-    Decryptor(key).decrypt(&mut o);
+    Decryptor(Rc4Decryptor::new(key, id)).decrypt(&mut o);
     o
 }
 

@@ -212,27 +212,22 @@ fn authorize_owner(
     )
 }
 
-/// Append low 3 bytes of object id to the end of key, low 2 bytes of generation
-/// number to the end of key.
-/// Take len(key) + 5 bytes of the MD5 hash of the result as rc4 key.
-/// Use rc4 to decrypt the data.
-pub fn decrypt(key: &[u8], id: ObjectId, data: &mut [u8]) {
-    let key = decrypt_key(key, id);
-    Arc4::with_key(&key).encrypt(data);
-}
+pub struct Rc4Decryptor(Box<[u8]>);
 
-pub fn decrypt_key(key: &[u8], id: ObjectId) -> Box<[u8]> {
-    let n = key.len();
-    let mut k = Vec::with_capacity(n + 5);
-    k.extend_from_slice(key);
-    k.extend_from_slice(&u32::from(id.id()).to_le_bytes()[..3]);
-    k.extend_from_slice(&id.generation().to_le_bytes()[..]);
-    let key = Md5::digest(&k[..]);
-    key[..(n + 5).min(16)].into()
-}
+impl Rc4Decryptor {
+    pub fn new(key: &[u8], id: ObjectId) -> Self {
+        let n = key.len();
+        let mut k = Vec::with_capacity(n + 5);
+        k.extend_from_slice(key);
+        k.extend_from_slice(&u32::from(id.id()).to_le_bytes()[..3]);
+        k.extend_from_slice(&id.generation().to_le_bytes()[..]);
+        let key = Md5::digest(&k[..]);
+        Self(key[..(n + 5).min(16)].into())
+    }
 
-pub fn decrypt_with_key(key: &[u8], data: &mut [u8]) {
-    Arc4::with_key(key).encrypt(data);
+    pub fn decrypt(&self, data: &mut [u8]) {
+        Arc4::with_key(&self.0).encrypt(data);
+    }
 }
 
 #[cfg(test)]
