@@ -9,8 +9,8 @@ use tinyvec::{Array, ArrayVec, TinyVec};
 pub enum Algorithm {
     #[default]
     Undocument = 0,
-    Aes = 1,
-    AesV2 = 2,
+    Key40 = 1,
+    Key40AndMore = 2,
     Unpublished = 3,
     DefinedInDoc = 4,
 }
@@ -228,6 +228,7 @@ where
     A: Array<Item = u8>,
 {
     fn drain(&mut self, range: std::ops::Range<usize>) -> ArrayVec<[u8; 16]> {
+        dbg!(self.len());
         self.drain(range).collect()
     }
 
@@ -238,6 +239,7 @@ where
 
 impl VecLike for Vec<u8> {
     fn drain(&mut self, range: std::ops::Range<usize>) -> ArrayVec<[u8; 16]> {
+        dbg!(self.len());
         self.drain(range).collect()
     }
 

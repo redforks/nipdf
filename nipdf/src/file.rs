@@ -298,11 +298,8 @@ fn decrypt_string(encrypt_info: &EncryptInfo, id: ObjectId, mut o: Object) -> Ob
     }
 
     match encrypt_info.algorithm {
-        Algorithm::Aes => {
+        Algorithm::Key40 | Algorithm::Key40AndMore => {
             Decryptor::new(Rc4Decryptor::new(&encrypt_info.encript_key, id)).decrypt(&mut o);
-        }
-        Algorithm::AesV2 => {
-            Decryptor::new(AesDecryptor::new(&encrypt_info.encript_key, id)).decrypt(&mut o);
         }
         _ => todo!(),
     }

@@ -606,11 +606,8 @@ impl Stream {
         if let Some(encrypt_info) = resolver.encript_info() {
             let mut buf = raw.into_owned();
             match encrypt_info.algorithm {
-                Algorithm::Aes => {
+                Algorithm::Key40 | Algorithm::Key40AndMore => {
                     Rc4Decryptor::new(&encrypt_info.encript_key, self.2).decrypt(&mut buf);
-                }
-                Algorithm::AesV2 => {
-                    AesDecryptor::new(&encrypt_info.encript_key, self.2).decrypt(&mut buf);
                 }
                 _ => todo!(),
             }
