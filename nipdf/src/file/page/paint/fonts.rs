@@ -906,8 +906,8 @@ struct Type0FontOp {
 
 impl Type0FontOp {
     fn new(font: &Type0FontDict) -> AnyResult<Self> {
-        if let NameOrStream::Name(ref encoding) = font.encoding()? {
-            assert_eq!(&**encoding, "Identity-H");
+        if let NameOrStream::Name(encoding) = font.encoding()? {
+            assert_eq!(encoding, "Identity-H");
         } else {
             todo!("Only IdentityH encoding supported");
         }

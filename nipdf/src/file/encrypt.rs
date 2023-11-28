@@ -1,15 +1,11 @@
 use crate::object::ObjectId;
 use arc4::Arc4;
 use md5::{
-    digest::{
-        generic_array::GenericArray,
-        typenum::{Unsigned, U16},
-    },
     Digest, Md5,
 };
 use nipdf_macro::{pdf_object, TryFromIntObject};
 use prescript::Name;
-use tinyvec::{tiny_vec, ArrayVec, TinyVec};
+use tinyvec::{ArrayVec, TinyVec};
 
 #[derive(TryFromIntObject, Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Algorithm {
@@ -234,7 +230,7 @@ impl Rc4Decryptor {
     }
 
     pub fn decrypt(&self, data: &mut [u8]) {
-        Arc4::with_key(&*self.0).encrypt(data);
+        Arc4::with_key(&self.0).encrypt(data);
     }
 }
 
