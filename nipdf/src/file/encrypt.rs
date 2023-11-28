@@ -265,7 +265,7 @@ impl Decryptor for Rc4Decryptor {
     }
 }
 
-struct AesDecryptor(ArrayVec<[u8; 16]>);
+pub struct AesDecryptor(ArrayVec<[u8; 16]>);
 
 impl Decryptor for AesDecryptor {
     fn new(key: &[u8], id: ObjectId) -> Self {

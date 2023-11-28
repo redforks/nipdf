@@ -2,7 +2,7 @@ use super::{Dictionary, Object, ObjectId, ObjectValueError};
 use crate::{
     ccitt::Flags,
     file::{
-        encrypt::{Decryptor, Rc4Decryptor},
+        encrypt::{AesDecryptor, Algorithm, Decryptor, Rc4Decryptor},
         ObjectResolver, ResourceDict,
     },
     function::Domains,
@@ -603,9 +603,17 @@ impl Stream {
         resolver: &ObjectResolver<'a>,
     ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
         let mut raw: Cow<'a, [u8]> = self.raw(resolver)?.into();
-        if let Some(key) = resolver.encript_key() {
+        if let Some(encrypt_info) = resolver.encript_info() {
             let mut buf = raw.into_owned();
-            Rc4Decryptor::new(key, self.2).decrypt(&mut buf);
+            match encrypt_info.algorithm {
+                Algorithm::Aes => {
+                    Rc4Decryptor::new(&encrypt_info.encript_key, self.2).decrypt(&mut buf);
+                }
+                Algorithm::AesV2 => {
+                    AesDecryptor::new(&encrypt_info.encript_key, self.2).decrypt(&mut buf);
+                }
+                _ => todo!(),
+            }
             raw = buf.into();
         }
 

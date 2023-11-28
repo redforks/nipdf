@@ -25,6 +25,7 @@ mod page;
 pub use page::*;
 
 pub(crate) mod encrypt;
+use self::encrypt::AesDecryptor;
 pub use encrypt::EncryptDict;
 
 #[derive(Debug, Copy, Clone)]
@@ -195,7 +196,7 @@ impl XRefTable {
         &'b self,
         buf: &'a [u8],
         id: NonZeroU32,
-        decrypt_key: Option<&[u8]>,
+        encrypt_info: Option<&EncryptInfo>,
     ) -> Result<Object, ObjectValueError> {
         self.resolve_object_buf(buf, id)
             .ok_or(ObjectValueError::ObjectIDNotFound(id))
@@ -207,8 +208,8 @@ impl XRefTable {
                             .map(|(_, o)| {
                                 let id = o.id();
                                 let o = o.take();
-                                if let Some(key) = decrypt_key {
-                                    decrypt_string(key, id, o)
+                                if let Some(encrypt_info) = encrypt_info {
+                                    decrypt_string(encrypt_info, id, o)
                                 } else {
                                     o
                                 }
@@ -235,10 +236,14 @@ impl XRefTable {
 }
 
 /// Decrypt HexString/LiteralString nested in object.
-fn decrypt_string(key: &[u8], id: ObjectId, mut o: Object) -> Object {
-    struct Decryptor(Rc4Decryptor);
+fn decrypt_string(encrypt_info: &EncryptInfo, id: ObjectId, mut o: Object) -> Object {
+    struct Decryptor<T>(T);
 
-    impl Decryptor {
+    impl<T: crate::file::Decryptor> Decryptor<T> {
+        pub fn new(decryptor: T) -> Self {
+            Self(decryptor)
+        }
+
         fn hex_string(&self, s: &mut HexString) {
             self.0.decrypt(&mut s.0);
         }
@@ -292,7 +297,15 @@ fn decrypt_string(key: &[u8], id: ObjectId, mut o: Object) -> Object {
         }
     }
 
-    Decryptor(Rc4Decryptor::new(key, id)).decrypt(&mut o);
+    match encrypt_info.algorithm {
+        Algorithm::Aes => {
+            Decryptor::new(Rc4Decryptor::new(&encrypt_info.encript_key, id)).decrypt(&mut o);
+        }
+        Algorithm::AesV2 => {
+            Decryptor::new(AesDecryptor::new(&encrypt_info.encript_key, id)).decrypt(&mut o);
+        }
+        _ => todo!(),
+    }
     o
 }
 
@@ -313,15 +326,34 @@ impl DataContainer for Vec<&Dictionary> {
     }
 }
 
+#[derive(Clone)]
+pub struct EncryptInfo {
+    pub encript_key: Box<[u8]>,
+    pub algorithm: Algorithm,
+}
+
+impl EncryptInfo {
+    pub fn new(encript_key: Box<[u8]>, algorithm: Algorithm) -> Self {
+        Self {
+            encript_key,
+            algorithm,
+        }
+    }
+}
+
 pub struct ObjectResolver<'a> {
     buf: &'a [u8],
     xref_table: &'a XRefTable,
     objects: HashMap<NonZeroU32, OnceCell<Object>>,
-    encript_key: Option<Box<[u8]>>,
+    encript_info: Option<EncryptInfo>,
 }
 
 impl<'a> ObjectResolver<'a> {
-    pub fn new(buf: &'a [u8], xref_table: &'a XRefTable, encript_key: Option<Box<[u8]>>) -> Self {
+    pub fn new(
+        buf: &'a [u8],
+        xref_table: &'a XRefTable,
+        encript_info: Option<EncryptInfo>,
+    ) -> Self {
         let mut objects = HashMap::with_capacity(xref_table.count());
         xref_table.iter_ids().for_each(|id| {
             objects.insert(id, OnceCell::new());
@@ -331,12 +363,12 @@ impl<'a> ObjectResolver<'a> {
             buf,
             xref_table,
             objects,
-            encript_key,
+            encript_info,
         }
     }
 
-    pub fn encript_key(&self) -> Option<&[u8]> {
-        self.encript_key.as_deref()
+    pub fn encript_info(&self) -> Option<&EncryptInfo> {
+        self.encript_info.as_ref()
     }
 
     /// Return total objects count.
@@ -351,7 +383,7 @@ impl<'a> ObjectResolver<'a> {
             buf: b"",
             xref_table,
             objects: HashMap::default(),
-            encript_key: None,
+            encript_info: None,
         }
     }
 
@@ -391,7 +423,7 @@ impl<'a> ObjectResolver<'a> {
             .ok_or(ObjectValueError::ObjectIDNotFound(id))?
             .get_or_try_init(|| {
                 self.xref_table
-                    .parse_object(self.buf, id, self.encript_key())
+                    .parse_object(self.buf, id, self.encript_info())
             })
     }
 
@@ -537,7 +569,7 @@ pub struct File {
     head_ver: String,
     data: Vec<u8>,
     xref: XRefTable,
-    encrypt_key: Option<Box<[u8]>>,
+    encrypt_info: Option<EncryptInfo>,
 }
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -555,7 +587,7 @@ fn open_encrypt(
     trailer: Option<&Dictionary>,
     _owner_password: &str,
     user_password: &str,
-) -> AnyResult<Option<Box<[u8]>>> {
+) -> AnyResult<Option<EncryptInfo>> {
     let Some(trailer) = trailer else {
         return Ok(None);
     };
@@ -576,7 +608,6 @@ fn open_encrypt(
         encrypt.sub_filter()?.is_none(),
         "unsupported security handler (SubFilter)"
     );
-    assert_eq!(Algorithm::Aes, encrypt.algorithm()?);
     assert!(
         StandardHandlerRevion::V3 == encrypt.revison()?
             || StandardHandlerRevion::V2 == encrypt.revison()?
@@ -598,14 +629,15 @@ fn open_encrypt(
         encrypt.permission_flags()?,
         &trailer.id()?.unwrap().0,
     ) {
-        Ok(Some(calc_encrypt_key(
+        let key = calc_encrypt_key(
             encrypt.revison()?,
             encrypt.key_length()? as usize,
             user_password.as_bytes(),
             &owner_hash_arr,
             encrypt.permission_flags()?,
             &trailer.id()?.unwrap().0,
-        )))
+        );
+        Ok(Some(EncryptInfo::new(key, encrypt.algorithm()?)))
     } else {
         Ok(None)
     }
@@ -634,7 +666,7 @@ impl File {
             root_id,
             data: buf,
             xref,
-            encrypt_key,
+            encrypt_info: encrypt_key,
         })
     }
 
@@ -642,7 +674,7 @@ impl File {
         Ok(ObjectResolver::new(
             &self.data,
             &self.xref,
-            self.encrypt_key.clone(),
+            self.encrypt_info.clone(),
         ))
     }
 
