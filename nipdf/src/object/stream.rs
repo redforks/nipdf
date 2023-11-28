@@ -1,7 +1,10 @@
 use super::{Dictionary, Object, ObjectId, ObjectValueError};
 use crate::{
     ccitt::Flags,
-    file::{encrypt::Rc4Decryptor, ObjectResolver, ResourceDict},
+    file::{
+        encrypt::{Decryptor, Rc4Decryptor},
+        ObjectResolver, ResourceDict,
+    },
     function::Domains,
     graphics::{
         color_space::{

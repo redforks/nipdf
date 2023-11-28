@@ -45,6 +45,8 @@ heck = "0.4"
 paste = "1.0"
 tinyvec = { version = "1.6", features = ["rustc_1_57"] }
 static_assertions = "1.1.0"
+aes = "0.8.3"
+cbc = "0.1.2"
 
 [dev-dependencies]
 env_logger = "0.10.0"

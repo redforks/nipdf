@@ -1179,7 +1179,7 @@ impl From<bool> for Object {
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct LiteralString(InnerString);
+pub struct LiteralString(pub(crate) InnerString);
 
 impl LiteralString {
     pub fn new(s: &[u8]) -> Self {
@@ -1303,11 +1303,11 @@ pub enum TextStringOrNumber {
     Number(f32),
 }
 
-type InnerString = TinyVec<[u8; 14]>;
+pub(crate) type InnerString = TinyVec<[u8; 14]>;
 
 /// Decoded PDF literal string object, enclosing '(' and ')' not included.
 #[derive(Eq, PartialEq, Debug, Clone)]
-pub struct HexString(InnerString);
+pub struct HexString(pub(crate) InnerString);
 assert_eq_size!(HexString, TinyVec<[u8; 14]>, (u64, u64, u64));
 
 impl HexString {

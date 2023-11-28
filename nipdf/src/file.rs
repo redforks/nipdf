@@ -1,7 +1,7 @@
 //! Contains types of PDF file structures.
 
 use crate::{
-    file::encrypt::{calc_encrypt_key, Algorithm, Rc4Decryptor, StandardHandlerRevion},
+    file::encrypt::{calc_encrypt_key, Algorithm, Decryptor, Rc4Decryptor, StandardHandlerRevion},
     object::{
         Array, Dictionary, Entry, FrameSet, HexString, LiteralString, Object, ObjectId,
         ObjectValueError, PdfObject, Resolver, Stream, TrailerDict,
@@ -240,11 +240,11 @@ fn decrypt_string(key: &[u8], id: ObjectId, mut o: Object) -> Object {
 
     impl Decryptor {
         fn hex_string(&self, s: &mut HexString) {
-            s.update(|s| self.0.decrypt(s));
+            self.0.decrypt(&mut s.0);
         }
 
         fn literal_string(&self, s: &mut LiteralString) {
-            s.update(|s| self.0.decrypt(s));
+            self.0.decrypt(&mut s.0);
         }
 
         fn dict(&self, dict: &mut Dictionary) {
