@@ -1,8 +1,15 @@
 use crate::object::ObjectId;
 use arc4::Arc4;
-use md5::{Digest, Md5};
+use md5::{
+    digest::{
+        generic_array::GenericArray,
+        typenum::{Unsigned, U16},
+    },
+    Digest, Md5,
+};
 use nipdf_macro::{pdf_object, TryFromIntObject};
 use prescript::Name;
+use tinyvec::{tiny_vec, ArrayVec, TinyVec};
 
 #[derive(TryFromIntObject, Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Algorithm {
@@ -212,21 +219,22 @@ fn authorize_owner(
     )
 }
 
-pub struct Rc4Decryptor(Box<[u8]>);
+pub struct Rc4Decryptor(ArrayVec<[u8; 16]>);
 
 impl Rc4Decryptor {
     pub fn new(key: &[u8], id: ObjectId) -> Self {
         let n = key.len();
-        let mut k = Vec::with_capacity(n + 5);
+        let mut k = TinyVec::<[u8; 16 + 5]>::with_capacity(n + 5);
         k.extend_from_slice(key);
         k.extend_from_slice(&u32::from(id.id()).to_le_bytes()[..3]);
         k.extend_from_slice(&id.generation().to_le_bytes()[..]);
         let key = Md5::digest(&k[..]);
-        Self(key[..(n + 5).min(16)].into())
+        let key = key.into_iter().take((n + 5).min(16)).collect();
+        Self(key)
     }
 
     pub fn decrypt(&self, data: &mut [u8]) {
-        Arc4::with_key(&self.0).encrypt(data);
+        Arc4::with_key(&*self.0).encrypt(data);
     }
 }
 
