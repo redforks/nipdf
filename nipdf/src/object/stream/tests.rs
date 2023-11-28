@@ -14,49 +14,49 @@ use test_case::test_case;
     "filter is array but item not name"
 )]
 #[test_case(
-    [(KEY_FILTER, FILTER_FLATE_DECODE.clone().into())] =>
-    Ok(vec![(FILTER_FLATE_DECODE.clone(), None)]);
+    [(KEY_FILTER, FILTER_FLATE_DECODE.into())] =>
+    Ok(vec![(FILTER_FLATE_DECODE, None)]);
      "one filter"
 )]
 #[test_case(
-    [(KEY_FILTER, FILTER_FLATE_DECODE.clone().into()),
+    [(KEY_FILTER, FILTER_FLATE_DECODE.into()),
      (KEY_FILTER_PARAMS, Object::Null)] =>
-    Ok(vec![(FILTER_FLATE_DECODE.clone(), None)]);
+    Ok(vec![(FILTER_FLATE_DECODE, None)]);
      "one filter with null params"
 )]
 #[test_case(
-    [(KEY_FILTER, FILTER_FLATE_DECODE.clone().into()),
+    [(KEY_FILTER, FILTER_FLATE_DECODE.into()),
      (KEY_FILTER_PARAMS, Object::Array(vec![Object::Null].into()))] =>
-    Ok(vec![(FILTER_FLATE_DECODE.clone(), None)]);
+    Ok(vec![(FILTER_FLATE_DECODE, None)]);
      "one filter with null params in array"
 )]
 #[test_case(
-    [(KEY_FILTER, FILTER_FLATE_DECODE.clone().into()),
+    [(KEY_FILTER, FILTER_FLATE_DECODE.into()),
      (KEY_FILTER_PARAMS, Object::Dictionary(Dictionary::default()))] =>
-    Ok(vec![(FILTER_FLATE_DECODE.clone(), Some(Dictionary::default()))]);
+    Ok(vec![(FILTER_FLATE_DECODE, Some(Dictionary::default()))]);
      "one filter with dictionary params"
 )]
 #[test_case(
     [(KEY_FILTER, vec![
-        FILTER_FLATE_DECODE.clone().into(),
-        FILTER_DCT_DECODE.clone().into(),
+        FILTER_FLATE_DECODE.into(),
+        FILTER_DCT_DECODE.into(),
     ].into())] =>
-    Ok(vec![(FILTER_FLATE_DECODE.clone(), None),
-            (FILTER_DCT_DECODE.clone(), None)]);
+    Ok(vec![(FILTER_FLATE_DECODE, None),
+            (FILTER_DCT_DECODE, None)]);
      "two filters no params"
 )]
 #[test_case(
     [(KEY_FILTER, Object::Array(vec![
-        FILTER_FLATE_DECODE.clone().into(),
-        FILTER_DCT_DECODE.clone().into(),
+        FILTER_FLATE_DECODE.into(),
+        FILTER_DCT_DECODE.into(),
     ].into())),
     (KEY_FILTER_PARAMS, Dictionary::default().into())] =>
-    Ok(vec![(FILTER_FLATE_DECODE.clone(), Some(Dictionary::default())),
-            (FILTER_DCT_DECODE.clone(), None)]);
+    Ok(vec![(FILTER_FLATE_DECODE, Some(Dictionary::default())),
+            (FILTER_DCT_DECODE, None)]);
      "two filters with null params"
 )]
 #[test_case(
-    [(KEY_FFILTER, FILTER_FLATE_DECODE.clone().into())] =>
+    [(KEY_FFILTER, FILTER_FLATE_DECODE.into())] =>
     Err(ObjectValueError::ExternalStreamNotSupported);
      "filter not supported"
 )]
@@ -65,7 +65,7 @@ fn test_iter_filter(
 ) -> Result<Vec<(Name, Option<Dictionary>)>, ObjectValueError> {
     let dict: Dictionary = dict
         .into_iter()
-        .map(|(k, v)| (k.clone(), v))
+        .map(|(k, v)| (k, v))
         .collect::<Dictionary>();
     let stream = Stream(dict, BufPos::new(0, None), ObjectId::empty());
     let r: Vec<(Name, Option<Dictionary>)> = stream

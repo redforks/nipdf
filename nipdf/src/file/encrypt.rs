@@ -3,13 +3,14 @@ use arc4::Arc4;
 use md5::{Digest, Md5};
 use nipdf_macro::{pdf_object, TryFromIntObject};
 use prescript::Name;
+use tinyvec::{Array, ArrayVec, TinyVec};
 
 #[derive(TryFromIntObject, Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Algorithm {
     #[default]
     Undocument = 0,
-    Aes = 1,
-    AesV2 = 2,
+    Key40 = 1,
+    Key40AndMore = 2,
     Unpublished = 3,
     DefinedInDoc = 4,
 }
@@ -212,27 +213,90 @@ fn authorize_owner(
     )
 }
 
-/// Append low 3 bytes of object id to the end of key, low 2 bytes of generation
-/// number to the end of key.
-/// Take len(key) + 5 bytes of the MD5 hash of the result as rc4 key.
-/// Use rc4 to decrypt the data.
-pub fn decrypt(key: &[u8], id: ObjectId, data: &mut [u8]) {
-    let key = decrypt_key(key, id);
-    Arc4::with_key(&key).encrypt(data);
+pub trait VecLike {
+    fn drain(&mut self, range: std::ops::Range<usize>) -> ArrayVec<[u8; 16]>;
+    fn as_mut_slice(&mut self) -> &mut [u8];
 }
 
-pub fn decrypt_key(key: &[u8], id: ObjectId) -> Box<[u8]> {
-    let n = key.len();
-    let mut k = Vec::with_capacity(n + 5);
-    k.extend_from_slice(key);
-    k.extend_from_slice(&u32::from(id.id()).to_le_bytes()[..3]);
-    k.extend_from_slice(&id.generation().to_le_bytes()[..]);
-    let key = Md5::digest(&k[..]);
-    key[..(n + 5).min(16)].into()
+pub trait Decryptor {
+    fn new(key: &[u8], id: ObjectId) -> Self;
+    fn decrypt<V: VecLike>(&self, data: &mut V);
 }
 
-pub fn decrypt_with_key(key: &[u8], data: &mut [u8]) {
-    Arc4::with_key(key).encrypt(data);
+impl<A> VecLike for TinyVec<A>
+where
+    A: Array<Item = u8>,
+{
+    fn drain(&mut self, range: std::ops::Range<usize>) -> ArrayVec<[u8; 16]> {
+        dbg!(self.len());
+        self.drain(range).collect()
+    }
+
+    fn as_mut_slice(&mut self) -> &mut [u8] {
+        self.as_mut_slice()
+    }
+}
+
+impl VecLike for Vec<u8> {
+    fn drain(&mut self, range: std::ops::Range<usize>) -> ArrayVec<[u8; 16]> {
+        dbg!(self.len());
+        self.drain(range).collect()
+    }
+
+    fn as_mut_slice(&mut self) -> &mut [u8] {
+        self.as_mut_slice()
+    }
+}
+
+pub struct Rc4Decryptor(ArrayVec<[u8; 16]>);
+
+impl Decryptor for Rc4Decryptor {
+    fn new(key: &[u8], id: ObjectId) -> Self {
+        let n = key.len();
+        let mut k = TinyVec::<[u8; 16 + 5]>::with_capacity(n + 5);
+        k.extend_from_slice(key);
+        k.extend_from_slice(&u32::from(id.id()).to_le_bytes()[..3]);
+        k.extend_from_slice(&id.generation().to_le_bytes()[..]);
+        let key = Md5::digest(&k[..]);
+        let key = key.into_iter().take((n + 5).min(16)).collect();
+        Self(key)
+    }
+
+    fn decrypt<V: VecLike>(&self, data: &mut V) {
+        Arc4::with_key(&self.0).encrypt(data.as_mut_slice());
+    }
+}
+
+pub struct AesDecryptor(ArrayVec<[u8; 16]>);
+
+impl Decryptor for AesDecryptor {
+    fn new(key: &[u8], id: ObjectId) -> Self {
+        let n = key.len();
+        let mut k = TinyVec::<[u8; 16 + 5 + 4]>::with_capacity(n + 5 + 4);
+        k.extend_from_slice(key);
+        k.extend_from_slice(&u32::from(id.id()).to_le_bytes()[..3]);
+        k.extend_from_slice(&id.generation().to_le_bytes()[..]);
+        k.extend_from_slice(b"sAlT");
+        let key = Md5::digest(&k[..]);
+        let key = key.into_iter().take((n + 5).min(16)).collect();
+        Self(key)
+    }
+
+    /// Decode data using aes, work in cbc mode,block size is 16 or Aes128.
+    /// the initialization vector is a 16-byte random  number that is stored as the first 16 bytes
+    /// of the encrypted data.
+    /// Pad the data using the PKCS#5 padding scheme.
+    fn decrypt<V: VecLike>(&self, data: &mut V) {
+        use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
+        type Aes128CbcDec = cbc::Decryptor<aes::Aes128>;
+
+        let iv_data = data.drain(0..16);
+        let mut iv = [0u8; 16];
+        iv.copy_from_slice(&iv_data[..]);
+        Aes128CbcDec::new(self.0.as_ref().into(), &iv.into())
+            .decrypt_padded_mut::<Pkcs7>(data.as_mut_slice())
+            .unwrap();
+    }
 }
 
 #[cfg(test)]
