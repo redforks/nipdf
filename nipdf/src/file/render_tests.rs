@@ -107,3 +107,11 @@ fn axial_shade_with_sample_function() {
         &decode_file_page("pdf.js/web/compressed.tracemonkey-pldi-09.pdf", 10).unwrap()
     )
 }
+
+#[test]
+fn rotate_n_encrypt_alg2() {
+    // page rotate
+    // encrypt algorithm 2 (Algorithm::Key40AndMore)
+    // todo: ForceBold font flag should render glyph bolder
+    assert_ron_snapshot!(&decode_file_page("../../pdf/avr-1507-owners-manual-en.pdf", 10).unwrap())
+}

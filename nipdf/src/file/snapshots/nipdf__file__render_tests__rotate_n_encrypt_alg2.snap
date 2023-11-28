@@ -1,0 +1,5 @@
+---
+source: nipdf/src/file/render_tests.rs
+expression: "&decode_file_page(\"../../pdf/avr-1507-owners-manual-en.pdf\", 10).unwrap()"
+---
+"9a539fb033ecc1410db4901c685eb34f"

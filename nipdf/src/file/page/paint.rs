@@ -459,6 +459,7 @@ pub struct RenderOption {
     background_color: SkiaColor,
     /// Initial state, used in paint_x_form to pass parent state to form Render.
     state: Option<State>,
+    rotate: i32,
 }
 
 impl RenderOption {
@@ -481,7 +482,7 @@ impl RenderOption {
     /// Convert canvas to image, crop if crop option not None
     pub fn to_image(&self, canvas: Pixmap) -> RgbaImage {
         let mut r = RgbaImage::from_raw(canvas.width(), canvas.height(), canvas.take()).unwrap();
-        if let Some(crop) = self.crop {
+        let mut r = if let Some(crop) = self.crop {
             let crop = crop.zoom(self.zoom);
             let sub_image = r.sub_image(
                 crop.left_x as u32,
@@ -492,6 +493,17 @@ impl RenderOption {
             sub_image.to_image()
         } else {
             r
+        };
+
+        match self.rotate % 360 {
+            0 => r,
+            90 | -270 => image::imageops::rotate90(&r),
+            180 => {
+                image::imageops::rotate180_in_place(&mut r);
+                r
+            }
+            270 | -90 => image::imageops::rotate270(&r),
+            v => unreachable!("invalid rotation: {}", v), // rotation must be multiple of 90
         }
     }
 }
@@ -523,6 +535,11 @@ impl RenderOptionBuilder {
 
     pub fn background_color(mut self, color: SkiaColor) -> Self {
         self.0.background_color = color;
+        self
+    }
+
+    pub fn rotate(mut self, rotate: i32) -> Self {
+        self.0.rotate = rotate;
         self
     }
 

@@ -228,7 +228,6 @@ where
     A: Array<Item = u8>,
 {
     fn drain(&mut self, range: std::ops::Range<usize>) -> ArrayVec<[u8; 16]> {
-        dbg!(self.len());
         self.drain(range).collect()
     }
 
@@ -239,7 +238,6 @@ where
 
 impl VecLike for Vec<u8> {
     fn drain(&mut self, range: std::ops::Range<usize>) -> ArrayVec<[u8; 16]> {
-        dbg!(self.len());
         self.drain(range).collect()
     }
 
