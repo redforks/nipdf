@@ -244,6 +244,8 @@ pub(crate) trait PageDictTrait {
     fn contents(&self) -> Vec<&Stream>;
     #[key("Type")]
     fn type_name(&self) -> Name;
+    #[or_default]
+    fn rotate(&self) -> i32;
 }
 
 impl<'a, 'b> PageDict<'a, 'b> {
@@ -306,6 +308,7 @@ impl<'a, 'b: 'a> Page<'a, 'b> {
             .width(media_box.width() as u32)
             .height(media_box.height() as u32)
             .crop((!no_crop && need_crop(crop_box, media_box)).then(|| crop_box.unwrap()))
+            .rotate(self.d.rotate().unwrap())
             .build();
         let content = self.content()?;
         let ops = content.operations();

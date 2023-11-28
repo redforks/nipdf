@@ -2,7 +2,7 @@ use super::{Dictionary, Object, ObjectId, ObjectValueError};
 use crate::{
     ccitt::Flags,
     file::{
-        encrypt::{AesDecryptor, Algorithm, Decryptor, Rc4Decryptor},
+        encrypt::{Algorithm, Decryptor, Rc4Decryptor},
         ObjectResolver, ResourceDict,
     },
     function::Domains,

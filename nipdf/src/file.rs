@@ -25,7 +25,7 @@ mod page;
 pub use page::*;
 
 pub(crate) mod encrypt;
-use self::encrypt::AesDecryptor;
+
 pub use encrypt::EncryptDict;
 
 #[derive(Debug, Copy, Clone)]
