@@ -7,7 +7,7 @@ use crate::{
     graphics::{
         color_space::{ColorSpace, ColorSpaceTrait},
         parse_operations,
-        shading::{build_shading, Axial, Extend, Radial, SelfDrawnAxial, Shading},
+        shading::{build_shading, Axial, Extend, Radial, Shading},
         trans::{
             image_to_device_space, move_text_space_pos, move_text_space_right, to_device_space,
             ImageToDeviceSpace, IntoSkiaTransform, TextToUserSpace, UserToDeviceIndependentSpace,
@@ -39,7 +39,6 @@ use tiny_skia::{
 };
 
 mod fonts;
-use euclid::default::{Length, Point2D, Vector2D};
 use fonts::*;
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -327,20 +326,17 @@ impl State {
             rule,
             new_mask,
         ));
-        // let mut mask = self.mask.take().unwrap_or_else(|| self.new_mask());
-        // let transform = if flip_y {
-        //     self.user_to_device.into_skia()
-        // } else {
-        //     Transform::identity()
-        // };
-        // mask.intersect_path(path, rule, true, transform);
         // use std::sync::atomic::{AtomicU32, Ordering};
         // static mut IDX: std::sync::atomic::AtomicU32 = AtomicU32::new(0);
-        // mask.save_png(format!("/tmp/mask-{:?}.png", unsafe {
-        //     IDX.fetch_add(1, Ordering::Relaxed)
-        // }))
-        // .unwrap();
-        // self.mask = Some(mask);
+        // if let Some(mask) = &self.mask {
+        //     dbg!(&mask.0);
+        //     mask.1
+        //         .borrow()
+        //         .save_png(format!("/tmp/mask-{:?}.png", unsafe {
+        //             IDX.fetch_add(1, Ordering::Relaxed)
+        //         }))
+        //         .unwrap();
+        // }
     }
 
     /// Apply current path to mask. Create mask if None, otherwise intersect with current path,
@@ -1050,105 +1046,31 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
     fn paint_axial(&mut self, axial: Axial) -> Result<(), anyhow::Error> {
         let b_box = axial.b_box;
-        let rect = b_box
-            .unwrap_or_else(|| Rectangle::from_xywh(0., 0., self.width as f32, self.height as f32))
-            .into();
-        let shader = axial.into_skia();
+
+        let state = self.stack.last().unwrap();
+        let ctm = to_device_space(self.height as f32, self.zoom, &state.ctm).into_skia();
+        let (shader_ctm, fill_ctm, rect) = if let Some(b_box) = b_box {
+            (Transform::identity(), ctm, b_box)
+        } else {
+            (
+                ctm,
+                Transform::identity(),
+                Rectangle::from_xywh(
+                    0.,
+                    0.,
+                    self.device_width() as f32,
+                    self.device_height() as f32,
+                ),
+            )
+        };
+
+        let shader = axial.into_skia(shader_ctm);
         let paint = Paint {
             shader,
             ..Default::default()
         };
-        let state = self.stack.last().unwrap();
-        let ctm = to_device_space(self.height as f32, self.zoom, &state.ctm).into_skia();
         self.canvas
-            .fill_rect(rect, &paint, ctm, state.get_mask().as_deref());
-        Ok(())
-    }
-
-    /// Paint axial shading, by draw lines vertically to the axial line,
-    /// using color calculated by shading function.
-    fn paint_self_draw_axial(&mut self, axial: SelfDrawnAxial) -> AnyResult<()> {
-        // TODO: paint extend area
-
-        let state = self.stack.last().unwrap();
-        let ctm = to_device_space(self.height as f32, self.zoom, &state.ctm)
-            .with_source()
-            .with_destination();
-        let p0 = Point2D::new(axial.start.x, axial.start.y);
-        let p1 = Point2D::new(axial.end.x, axial.end.y);
-        let p0 = ctm.transform_point(p0);
-        let p1 = ctm.transform_point(p1);
-        let x_y_distance: Vector2D<f32> = p1 - p0;
-        let dx = x_y_distance.x;
-        let dy = x_y_distance.y;
-        let mul = 1.0 / x_y_distance.square_length();
-        let m = -1.0 / (dy / dx);
-        let (x_min, x_max) = if let Some(b_box) = axial.b_box {
-            (b_box.left_x * self.zoom, b_box.right_x * self.zoom)
-        } else {
-            (0f32, self.width as f32 * self.zoom)
-        };
-
-        let color_space = &axial.color_space;
-        let mut paint = Paint::default();
-        let mut path = Path::default();
-        let mask = state.get_mask();
-
-        let mut paint_line =
-            |t: f32, p1: Point, p2: Point, p3: Point, p4: Point| -> AnyResult<()> {
-                let c = axial.function.call(&[t][..])?;
-                let c = color_space.to_rgba(c.as_slice());
-                let c = SkiaColor::from_rgba(c[0], c[1], c[2], c[3]).unwrap();
-                paint.set_color(c);
-                path.move_to(p1);
-                path.line_to(p2);
-                path.line_to(p4);
-                path.line_to(p3);
-                path.close_path();
-                if let Some(path) = path.finish() {
-                    self.canvas.fill_path(
-                        path,
-                        &paint,
-                        FillRule::Winding,
-                        Transform::identity(),
-                        mask.as_deref(),
-                    );
-                }
-                path.reset();
-                Ok(())
-            };
-
-        let t0 = Length::new(axial.domain.start);
-        let t1 = Length::new(axial.domain.end);
-
-        let perpendicular_line = |t: f32| -> (f32, Point, Point) {
-            let p = p0.lerp(p1, t);
-            let mut x = dx.mul_add(p.x - p0.x, dy * (p.y - p0.y));
-            x *= mul;
-            let t = t0.lerp(t1, x).0;
-
-            if !m.is_normal() || m.abs() < 0.0001 {
-                let p1 = Point::new(x_min, p.y);
-                let p2 = Point::new(x_max, p.y);
-                (t, p1, p2)
-            } else {
-                let p1 = Point::new(x_min, m.mul_add(-p.x - x_min, p.y));
-                let p2 = Point::new(x_max, m.mul_add(-p.x - x_max, p.y));
-                (t, p1, p2)
-            }
-        };
-
-        let (_, mut p1, mut p2) = perpendicular_line(t0.0);
-        let (_, p3, _) = perpendicular_line(t1.0);
-        let steps = ((p3.x - p1.x).abs().max(p3.y - p1.y).ceil() as usize).max(256);
-        for i in 1..steps {
-            let (t, p3, p4) = perpendicular_line(i as f32 / steps as f32);
-
-            paint_line(t, p1, p2, p3, p4)?;
-            p1 = p3;
-            p2 = p4;
-        }
-
+            .fill_rect(rect.into(), &paint, fill_ctm, state.get_mask().as_deref());
         Ok(())
     }
 
@@ -1254,7 +1176,6 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         match build_shading(shading, self.resources)? {
             Some(Shading::Radial(radial)) => self.paint_radial(&radial),
             Some(Shading::Axial(axial)) => self.paint_axial(axial),
-            Some(Shading::SelfDrawnAxial(axial)) => self.paint_self_draw_axial(axial),
             None => Ok(()),
         }
     }
@@ -1321,7 +1242,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let shader = match build_shading(&shading, self.resources)? {
             Some(Shading::Axial(axial)) => {
                 assert_eq!(Extend::new(true, true), axial.extend);
-                axial.into_skia()
+                axial.into_skia(Transform::identity())
             }
             None => return Ok(None),
             _ => todo!(),

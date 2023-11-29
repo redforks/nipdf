@@ -330,6 +330,13 @@ pub struct SampledFunction {
     samples: Vec<u8>,
 }
 
+impl SampledFunction {
+    pub fn samples(&self) -> usize {
+        // NOTE: assume bits_per_sample is 8
+        self.samples.len() / self.signature.n_returns().unwrap()
+    }
+}
+
 impl Function for SampledFunction {
     fn inner_call(&self, args: SmallVec<[f32; 4]>) -> AnyResult<FunctionValue> {
         let mut idx = 0;

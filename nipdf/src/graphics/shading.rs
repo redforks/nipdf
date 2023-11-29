@@ -2,15 +2,11 @@ use super::{color_space::ColorSpace, Point};
 use crate::{
     file::{Rectangle, ResourceDict},
     function::{default_domain, Domain, Function, FunctionDict, Type as FunctionType},
-    graphics::{
-        color_space::{self, ColorSpaceTrait, DeviceCMYK, DeviceGray, DeviceRGB},
-        ColorArgs, ColorSpaceArgs,
-    },
+    graphics::{color_space::ColorSpaceTrait, ColorArgs, ColorSpaceArgs},
     object::{Object, ObjectValueError, PdfObject},
 };
 use anyhow::Result as AnyResult;
 use educe::Educe;
-use either::Either;
 use nipdf_macro::{pdf_object, TryFromIntObject};
 use tiny_skia::{GradientStop, LinearGradient, Shader, Transform};
 
@@ -221,16 +217,29 @@ fn build_linear_gradient_stops(
             stops.push(create_stop(cs, &f.func()?, domain.end)?);
             Ok(stops)
         }
+        FunctionType::Sampled => {
+            let sf = f.sampled()?;
+            let sff = sf.func()?;
+            let t0 = euclid::default::Length::new(domain.start);
+            let t1 = euclid::default::Length::new(domain.end);
+            let len = sff.samples().min(256);
+            let mut stops = Vec::with_capacity(len);
+            for i in 0..=(len - 1) {
+                stops.push(create_stop(
+                    cs,
+                    &sff,
+                    t0.lerp(t1, i as f32 / (len - 1) as f32).0,
+                )?);
+            }
+            Ok(stops)
+        }
         _ => {
             todo!("Unsupported function type: {:?}", f.function_type()?);
         }
     }
 }
 
-fn build_axial(
-    d: &ShadingDict,
-    resources: &ResourceDict,
-) -> AnyResult<Option<Either<Axial, SelfDrawnAxial>>> {
+fn build_axial(d: &ShadingDict, resources: &ResourceDict) -> AnyResult<Option<Axial>> {
     let axial = d.axial()?;
     let AxialCoords { start, end } = axial.coords()?;
     if start == end {
@@ -240,29 +249,15 @@ fn build_axial(
     let color_space = d.color_space()?;
     let color_space = ColorSpace::from_args(&color_space, resources.resolver(), Some(resources))?;
     let function = axial.function()?;
-    if function[0].function_type()? == FunctionType::Sampled {
-        let color_space = d.color_space()?;
-        let color_space =
-            ColorSpace::from_args(&color_space, resources.resolver(), Some(resources))?;
-        return Ok(Some(Either::Right(SelfDrawnAxial {
-            start,
-            end,
-            extend: axial.extend()?,
-            b_box: axial.b_box()?,
-            function: function[0].func()?,
-            domain: axial.domain()?,
-            color_space,
-        })));
-    }
 
     let stops = build_linear_gradient_stops(&color_space, axial.domain()?, function)?;
-    Ok(Some(Either::Left(Axial {
+    Ok(Some(Axial {
         start,
         end,
         extend: axial.extend()?,
         stops,
         b_box: axial.b_box()?,
-    })))
+    }))
 }
 
 #[derive(PartialEq, Debug)]
@@ -275,27 +270,16 @@ pub struct Axial {
 }
 
 impl Axial {
-    pub fn into_skia(self) -> Shader<'static> {
+    pub fn into_skia(self, transform: Transform) -> Shader<'static> {
         LinearGradient::new(
             self.start.into(),
             self.end.into(),
             self.stops,
             tiny_skia::SpreadMode::Pad,
-            Transform::identity(),
+            transform,
         )
         .unwrap()
     }
-}
-
-/// Axial shading that drawn using function, not through gradient.
-pub struct SelfDrawnAxial {
-    pub start: Point,
-    pub end: Point,
-    pub extend: Extend,
-    pub b_box: Option<Rectangle>,
-    pub function: Box<dyn Function>,
-    pub domain: Domain,
-    pub color_space: ColorSpace,
 }
 
 #[derive(Educe)]
@@ -314,7 +298,6 @@ pub struct Radial {
 pub enum Shading {
     Axial(Axial),
     Radial(Radial),
-    SelfDrawnAxial(SelfDrawnAxial),
 }
 
 /// Return None if shading is not need to be rendered, such as Axial start point == end point.
@@ -323,10 +306,7 @@ pub fn build_shading<'a, 'b>(
     resources: &ResourceDict<'a, 'b>,
 ) -> AnyResult<Option<Shading>> {
     Ok(match d.shading_type()? {
-        ShadingType::Axial => build_axial(d, resources)?.map(|e| match e {
-            Either::Left(axial) => Shading::Axial(axial),
-            Either::Right(self_drawn_axial) => Shading::SelfDrawnAxial(self_drawn_axial),
-        }),
+        ShadingType::Axial => build_axial(d, resources)?.map(Shading::Axial),
         ShadingType::Radial => build_radial(d, resources)?.map(Shading::Radial),
         t => todo!("{:?}", t),
     })
