@@ -1064,13 +1064,14 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             )
         };
 
-        let shader = axial.into_skia(shader_ctm);
-        let paint = Paint {
-            shader,
-            ..Default::default()
-        };
-        self.canvas
-            .fill_rect(rect.into(), &paint, fill_ctm, state.get_mask().as_deref());
+        if let Some(shader) = axial.into_skia(shader_ctm) {
+            let paint = Paint {
+                shader,
+                ..Default::default()
+            };
+            self.canvas
+                .fill_rect(rect.into(), &paint, fill_ctm, state.get_mask().as_deref());
+        }
         Ok(())
     }
 
@@ -1225,12 +1226,26 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         &mut self,
         pattern: ShadingPatternDict<'a, 'b>,
     ) -> AnyResult<Option<PaintCreator>> {
-        assert_eq!(
-            pattern.matrix()?,
-            UserToDeviceIndependentSpace::default(),
-            "matrix not supported"
-        );
-        assert!(pattern.ext_g_state()?.is_none(), "ExtGState not supported");
+        struct RestoreState<F>(Option<F>)
+        where
+            F: FnOnce();
+        impl<F> Drop for RestoreState<F>
+        where
+            F: FnOnce(),
+        {
+            fn drop(&mut self) {
+                self.0.take().map(|f| f());
+            }
+        }
+
+        let resources = self.resources;
+        let _restore = if let Some(ext_g_state) = pattern.ext_g_state()? {
+            self.push();
+            self.current_mut().set_graphics_state(&ext_g_state);
+            Some(RestoreState(Some(|| self.pop())))
+        } else {
+            None
+        };
 
         let shading = pattern.shading()?;
         assert!(shading.b_box()?.is_none(), "TODO: support BBox of shading");
@@ -1239,18 +1254,23 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             "TODO: support Background of shading, paint background before shading"
         );
 
-        let shader = match build_shading(&shading, self.resources)? {
-            Some(Shading::Axial(axial)) => {
-                assert_eq!(Extend::new(true, true), axial.extend);
-                axial.into_skia(Transform::identity())
-            }
-            None => return Ok(None),
-            _ => todo!(),
-        };
-        Ok(Some(PaintCreator::Gradient(Paint {
-            shader,
-            ..Default::default()
-        })))
+        Ok(
+            if let Some(shader) = match build_shading(&shading, resources)? {
+                Some(Shading::Axial(axial)) => {
+                    assert_eq!(Extend::new(true, true), axial.extend);
+                    axial.into_skia(pattern.matrix()?.into_skia())
+                }
+                Some(Shading::Radial(radial)) => radial.into_skia(pattern.matrix()?.into_skia()),
+                None => return Ok(None),
+            } {
+                Some(PaintCreator::Gradient(Paint {
+                    shader,
+                    ..Default::default()
+                }))
+            } else {
+                None
+            },
+        )
     }
 
     fn tiling_pattern(

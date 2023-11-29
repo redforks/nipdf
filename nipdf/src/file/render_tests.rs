@@ -115,3 +115,10 @@ fn rotate_n_encrypt_alg2() {
     // todo: ForceBold font flag should render glyph bolder
     assert_ron_snapshot!(&decode_file_page("../../pdf/avr-1507-owners-manual-en.pdf", 10).unwrap())
 }
+
+#[test]
+fn radius_pattern() {
+    // todo: tiny_skia not support end radius, the page has both start and end radius rendered
+    // incorrectly
+    assert_ron_snapshot!(&decode_file_page("sample_files/bizarre/PDF32000_2008.pdf", 745).unwrap())
+}

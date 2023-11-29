@@ -8,7 +8,7 @@ use crate::{
 use anyhow::Result as AnyResult;
 use educe::Educe;
 use nipdf_macro::{pdf_object, TryFromIntObject};
-use tiny_skia::{GradientStop, LinearGradient, Shader, Transform};
+use tiny_skia::{GradientStop, LinearGradient, RadialGradient, Shader, Transform};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromIntObject)]
 pub enum ShadingType {
@@ -270,7 +270,7 @@ pub struct Axial {
 }
 
 impl Axial {
-    pub fn into_skia(self, transform: Transform) -> Shader<'static> {
+    pub fn into_skia(self, transform: Transform) -> Option<Shader<'static>> {
         LinearGradient::new(
             self.start.into(),
             self.end.into(),
@@ -278,7 +278,6 @@ impl Axial {
             tiny_skia::SpreadMode::Pad,
             transform,
         )
-        .unwrap()
     }
 }
 
@@ -293,6 +292,20 @@ pub struct Radial {
     pub domain: Domain,
     pub extend: Extend,
     pub color_space: ColorSpace,
+    stops: Vec<GradientStop>,
+}
+
+impl Radial {
+    pub fn into_skia(self, transform: Transform) -> Option<Shader<'static>> {
+        RadialGradient::new(
+            self.start.point.into(),
+            self.end.point.into(),
+            self.start.r.max(self.end.r),
+            self.stops,
+            tiny_skia::SpreadMode::Pad,
+            transform,
+        )
+    }
 }
 
 pub enum Shading {
@@ -329,6 +342,7 @@ fn build_radial<'a, 'b>(
     let domain = d.domain()?;
     let extend = d.extend()?;
     Ok(Some(Radial {
+        stops: build_linear_gradient_stops(&color_space, d.domain()?, d.function()?)?,
         color_space,
         start,
         end,
