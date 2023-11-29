@@ -3,7 +3,7 @@ use crate::{
     file::{Rectangle, ResourceDict},
     function::{default_domain, Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
-        color_space::{ColorSpaceTrait, DeviceCMYK, DeviceGray, DeviceRGB},
+        color_space::{self, ColorSpaceTrait, DeviceCMYK, DeviceGray, DeviceRGB},
         ColorArgs, ColorSpaceArgs,
     },
     object::{Object, ObjectValueError, PdfObject},
@@ -187,21 +187,16 @@ pub trait ShadingDictTrait {
 }
 
 fn build_linear_gradient_stops(
+    cs: &ColorSpace,
     domain: Domain,
     mut f: Vec<FunctionDict>,
 ) -> AnyResult<Vec<GradientStop>> {
     assert!(f.len() == 1, "todo: support functions");
 
     let f = f.pop().unwrap();
-    fn create_stop<F: Function>(f: &F, x: f32) -> AnyResult<GradientStop> {
+    fn create_stop<F: Function>(cs: &ColorSpace, f: &F, x: f32) -> AnyResult<GradientStop> {
         let rv = f.call(&[x])?;
-        // TODO: use current color space to check array length, and convert to skia color
-        let color = match rv.len() {
-            1 => DeviceGray.to_skia_color(&rv),
-            3 => DeviceRGB.to_skia_color(&rv),
-            4 => DeviceCMYK.to_skia_color(&rv),
-            _ => unreachable!(),
-        };
+        let color = cs.to_skia_color(&rv);
         Ok(GradientStop::new(x, color))
     }
 
@@ -211,19 +206,19 @@ fn build_linear_gradient_stops(
             let eff = ef.func()?;
             assert_eq!(ef.n()?, 1f32, "Only linear gradient function supported");
             Ok(vec![
-                create_stop(&eff, domain.start)?,
-                create_stop(&eff, domain.end)?,
+                create_stop(cs, &eff, domain.start)?,
+                create_stop(cs, &eff, domain.end)?,
             ])
         }
         FunctionType::Stitching => {
             let sf = f.stitch()?;
             let sff = sf.func()?;
             let mut stops = Vec::with_capacity(sf.functions()?.len() + 1);
-            stops.push(create_stop(&sff, domain.start)?);
+            stops.push(create_stop(cs, &sff, domain.start)?);
             for t in sf.bounds()?.iter() {
-                stops.push(create_stop(&sff, *t)?);
+                stops.push(create_stop(cs, &sff, *t)?);
             }
-            stops.push(create_stop(&f.func()?, domain.end)?);
+            stops.push(create_stop(cs, &f.func()?, domain.end)?);
             Ok(stops)
         }
         _ => {
@@ -242,6 +237,8 @@ fn build_axial(
         return Ok(None);
     }
 
+    let color_space = d.color_space()?;
+    let color_space = ColorSpace::from_args(&color_space, resources.resolver(), Some(resources))?;
     let function = axial.function()?;
     if function[0].function_type()? == FunctionType::Sampled {
         let color_space = d.color_space()?;
@@ -258,7 +255,7 @@ fn build_axial(
         })));
     }
 
-    let stops = build_linear_gradient_stops(axial.domain()?, function)?;
+    let stops = build_linear_gradient_stops(&color_space, axial.domain()?, function)?;
     Ok(Some(Either::Left(Axial {
         start,
         end,
