@@ -1309,7 +1309,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             UserToDeviceIndependentSpace::default(),
             "matrix not supported"
         );
-        assert!(pattern.ext_g_state()?.is_empty(), "ExtGState not supported");
+        assert!(pattern.ext_g_state()?.is_none(), "ExtGState not supported");
 
         let shading = pattern.shading()?;
         assert!(shading.b_box()?.is_none(), "TODO: support BBox of shading");

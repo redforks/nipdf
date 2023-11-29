@@ -2,9 +2,7 @@ use crate::{
     file::{GraphicsStateParameterDict, Rectangle, ResourceDict},
     graphics::{shading::ShadingDict, trans::UserToDeviceIndependentSpace},
 };
-use ahash::HashMap;
 use nipdf_macro::{pdf_object, TryFromIntObject};
-use prescript::Name;
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromIntObject)]
 pub enum PatternType {
@@ -72,5 +70,5 @@ pub trait ShadingPatternDictTrait {
     fn matrix(&self) -> UserToDeviceIndependentSpace;
 
     #[nested]
-    fn ext_g_state() -> HashMap<Name, GraphicsStateParameterDict<'a, 'b>>;
+    fn ext_g_state() -> Option<GraphicsStateParameterDict<'a, 'b>>;
 }
