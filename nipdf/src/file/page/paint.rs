@@ -166,6 +166,9 @@ impl<const N: usize> MaskCache<N> {
 #[derive(Debug, Clone, Educe)]
 #[educe(Default)]
 struct ColorState {
+    // apply before `self.paint` if not null
+    background_paint: Option<PaintCreator>,
+
     #[educe(Default(expression = "PaintCreator::Color(SkiaColor::BLACK)"))]
     paint: PaintCreator,
     #[educe(Default(expression = "ColorSpace::DeviceRGB"))]
@@ -174,7 +177,42 @@ struct ColorState {
 
 impl ColorState {
     pub fn set_color(&mut self, color: SkiaColor) {
-        self.paint = PaintCreator::Color(color);
+        self.set_paint(PaintCreator::Color(color), None);
+    }
+
+    pub fn set_paint(&mut self, paint: PaintCreator, background_color: Option<SkiaColor>) {
+        self.background_paint = background_color.map(PaintCreator::Color);
+        self.paint = paint;
+    }
+
+    /// If background_paint not null, stroke using it before use self.paint
+    pub fn stroke(
+        &self,
+        canvas: &mut Pixmap,
+        path: &SkiaPath,
+        stroke: &Stroke,
+        transform: Transform,
+        mask: Option<&Mask>,
+    ) {
+        if let Some(paint) = &self.background_paint {
+            canvas.stroke_path(path, &paint.create(), stroke, transform, mask);
+        }
+        canvas.stroke_path(path, &self.paint.create(), stroke, transform, mask);
+    }
+
+    /// If background_paint not null, fill using it before use self.paint
+    pub fn fill(
+        &self,
+        canvas: &mut Pixmap,
+        path: &SkiaPath,
+        fill_rule: FillRule,
+        transform: Transform,
+        mask: Option<&Mask>,
+    ) {
+        if let Some(paint) = &self.background_paint {
+            canvas.fill_path(path, &paint.create(), fill_rule, transform, mask);
+        }
+        canvas.fill_path(path, &self.paint.create(), fill_rule, transform, mask);
     }
 }
 
@@ -787,7 +825,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
     ) {
         let state = get_state(self);
         let color = state.color_space.to_skia_color(args.as_ref());
-        state.paint = PaintCreator::Color(color);
+        state.set_color(color);
     }
 
     fn set_color_and_space(
@@ -797,20 +835,17 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         color: &[f32],
     ) {
         let state = get_state(self);
-        state.paint = PaintCreator::Color(cs.to_skia_color(color));
+        state.set_color(cs.to_skia_color(color));
         state.color_space = cs;
     }
 
     fn stroke(&mut self) {
         if let Some(p) = self.path.finish() {
             let state = self.stack.last().unwrap();
-            let paint = state.get_stroke_paint();
             let stroke = state.get_stroke();
-            debug!("stroke: {:?} {:?}", &paint, stroke);
-            debug!("stroke: {:?}", p);
-            self.canvas.stroke_path(
+            state.stroke_state.stroke(
+                self.canvas,
                 p,
-                &paint,
                 stroke,
                 state.user_to_device.into_skia(),
                 state.get_mask().as_deref(),
@@ -836,11 +871,10 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
     fn _fill(&mut self, fill_rule: FillRule, reset_path: bool) {
         let state = self.stack.last().unwrap();
-        let paint = state.get_fill_paint();
         if let Some(p) = self.path.finish() {
-            self.canvas.fill_path(
+            state.fill_state.fill(
+                self.canvas,
                 p,
-                &paint,
                 fill_rule,
                 state.user_to_device.into_skia(),
                 state.get_mask().as_deref(),
@@ -1206,8 +1240,11 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                         Self::tiling_pattern(get_state(self), pattern.tiling_pattern()?, color)
                     }
                     PatternType::Shading => {
-                        if let Some(paint) = self.shading_pattern(pattern.shading_pattern()?)? {
-                            get_state(self).paint = paint;
+                        if let Some((paint, background_color)) =
+                            self.shading_pattern(pattern.shading_pattern()?)?
+                        {
+                            let color_state = get_state(self);
+                            color_state.set_paint(paint, background_color);
                         }
                         Ok(())
                     }
@@ -1225,7 +1262,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
     fn shading_pattern(
         &mut self,
         pattern: ShadingPatternDict<'a, 'b>,
-    ) -> AnyResult<Option<PaintCreator>> {
+    ) -> AnyResult<Option<(PaintCreator, Option<SkiaColor>)>> {
         struct RestoreState<F>(Option<F>)
         where
             F: FnOnce();
@@ -1248,11 +1285,14 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         };
 
         let shading = pattern.shading()?;
-        assert!(shading.b_box()?.is_none(), "TODO: support BBox of shading");
-        assert!(
-            shading.background()?.is_none(),
-            "TODO: support Background of shading, paint background before shading"
-        );
+        // assert!(shading.b_box()?.is_none(), "TODO: support BBox of shading");
+        let background_color = if let Some(args) = shading.background()? {
+            let cs = shading.color_space()?;
+            let cs = ColorSpace::from_args(&cs, resources.resolver(), Some(resources)).unwrap();
+            Some(cs.to_skia_color(args.as_ref()))
+        } else {
+            None
+        };
 
         Ok(
             if let Some(shader) = match build_shading(&shading, resources)? {
@@ -1263,10 +1303,13 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                 Some(Shading::Radial(radial)) => radial.into_skia(pattern.matrix()?.into_skia()),
                 None => return Ok(None),
             } {
-                Some(PaintCreator::Gradient(Paint {
-                    shader,
-                    ..Default::default()
-                }))
+                Some((
+                    PaintCreator::Gradient(Paint {
+                        shader,
+                        ..Default::default()
+                    }),
+                    background_color,
+                ))
             } else {
                 None
             },

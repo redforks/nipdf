@@ -129,3 +129,12 @@ fn todo_glyph_encoding_problem() {
     // wrong glyph index
     assert_ron_snapshot!(&decode_file_page("sample_files/bizarre/PDF32000_2008.pdf", 159).unwrap())
 }
+
+#[test]
+fn todo_radius_patten_without_extension() {
+    // todo: tiny_skia shader, RadialGradient and LinearGradient
+    // SpreadMode no support of no extension, apply a mask can fix, but complex
+    //
+    // and tests background color of shading dict
+    assert_ron_snapshot!(&decode_file_page("sample_files/bizarre/PDF32000_2008.pdf", 746).unwrap())
+}
