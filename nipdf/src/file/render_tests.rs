@@ -109,7 +109,7 @@ fn axial_shade_with_sample_function() {
 }
 
 #[test]
-fn rotate_n_encrypt_alg2() {
+fn todo_rotate_n_encrypt_alg2() {
     // page rotate
     // encrypt algorithm 2 (Algorithm::Key40AndMore)
     // todo: ForceBold font flag should render glyph bolder
@@ -117,8 +117,15 @@ fn rotate_n_encrypt_alg2() {
 }
 
 #[test]
-fn radius_pattern() {
+fn todo_radius_pattern() {
     // todo: tiny_skia not support end radius, the page has both start and end radius rendered
     // incorrectly
     assert_ron_snapshot!(&decode_file_page("sample_files/bizarre/PDF32000_2008.pdf", 745).unwrap())
+}
+
+#[test]
+fn todo_glyph_encoding_problem() {
+    // todo: incorrect bullet glyph rendered, possible because ttf-parser glyph_index() returned
+    // wrong glyph index
+    assert_ron_snapshot!(&decode_file_page("sample_files/bizarre/PDF32000_2008.pdf", 159).unwrap())
 }
