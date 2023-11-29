@@ -176,6 +176,11 @@ struct ColorState {
 }
 
 impl ColorState {
+    pub fn set_color_args(&mut self, color_args: impl AsRef<[f32]>) {
+        let color = self.color_space.to_skia_color(color_args.as_ref());
+        self.set_color(color);
+    }
+
     pub fn set_color(&mut self, color: SkiaColor) {
         self.set_paint(PaintCreator::Color(color), None);
     }
@@ -824,8 +829,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         args: ColorArgs,
     ) {
         let state = get_state(self);
-        let color = state.color_space.to_skia_color(args.as_ref());
-        state.set_color(color);
+        state.set_color_args(&args);
     }
 
     fn set_color_and_space(
@@ -835,8 +839,8 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         color: &[f32],
     ) {
         let state = get_state(self);
-        state.set_color(cs.to_skia_color(color));
         state.color_space = cs;
+        state.set_color_args(color);
     }
 
     fn stroke(&mut self) {
@@ -1252,8 +1256,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             }
             ColorArgsOrName::Color(args) => {
                 let state = get_state(self);
-                let color = state.color_space.to_skia_color(args.as_ref());
-                state.set_color(color);
+                state.set_color_args(&args);
                 Ok(())
             }
         }
