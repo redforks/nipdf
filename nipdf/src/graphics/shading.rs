@@ -7,6 +7,7 @@ use crate::{
 };
 use anyhow::Result as AnyResult;
 use educe::Educe;
+use log::error;
 use nipdf_macro::{pdf_object, TryFromIntObject};
 use tiny_skia::{GradientStop, LinearGradient, RadialGradient, Shader, Transform};
 
@@ -321,7 +322,10 @@ pub fn build_shading<'a, 'b>(
     Ok(match d.shading_type()? {
         ShadingType::Axial => build_axial(d, resources)?.map(Shading::Axial),
         ShadingType::Radial => build_radial(d, resources)?.map(Shading::Radial),
-        t => todo!("{:?}", t),
+        t => {
+            error!("Shading not implemented: {:?}", t);
+            None
+        }
     })
 }
 

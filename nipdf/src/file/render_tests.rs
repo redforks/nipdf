@@ -138,3 +138,9 @@ fn todo_radius_patten_without_extension() {
     // and tests background color of shading dict
     assert_ron_snapshot!(&decode_file_page("sample_files/bizarre/PDF32000_2008.pdf", 746).unwrap())
 }
+
+#[test]
+fn todo_coons_patch_mesh_shading() {
+    // ShadingType::CoonsPatchMesh not implemented
+    assert_ron_snapshot!(&decode_file_page("sample_files/bizarre/PDF32000_2008.pdf", 747).unwrap())
+}
