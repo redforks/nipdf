@@ -10,8 +10,8 @@ use crate::{
         shading::{build_shading, Axial, Extend, Radial, Shading},
         trans::{
             image_to_device_space, move_text_space_pos, move_text_space_right, to_device_space,
-            ImageToDeviceSpace, IntoSkiaTransform, TextToUserSpace, UserToDeviceIndependentSpace,
-            UserToDeviceSpace,
+            ImageToDeviceSpace, IntoSkiaTransform, TextToUserSpace, UserToDeviceSpace,
+            UserToLogicDeviceSpace,
         },
         ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, PatternType, Point,
         RenderingIntent, ShadingPatternDict, TextRenderingMode, TilingPatternDict,
@@ -71,7 +71,7 @@ impl From<Point> for SkiaPoint {
 enum PaintCreator {
     Color(SkiaColor),
     Gradient(Paint<'static>),
-    Tile((Pixmap, UserToDeviceIndependentSpace)),
+    Tile((Pixmap, UserToLogicDeviceSpace)),
 }
 
 impl PaintCreator {
@@ -227,7 +227,7 @@ struct State {
     height: f32,
     zoom: f32,
     /// ctm get from pdf file
-    ctm: UserToDeviceIndependentSpace,
+    ctm: UserToLogicDeviceSpace,
     /// ctm with flip_y and zoom
     user_to_device: UserToDeviceSpace,
     stroke: Stroke,
@@ -246,7 +246,7 @@ impl State {
             width: option.width as f32,
             height: option.height as f32,
             user_to_device: UserToDeviceSpace::identity(),
-            ctm: UserToDeviceIndependentSpace::identity(),
+            ctm: UserToLogicDeviceSpace::identity(),
             stroke: Stroke::default(),
             mask: None,
             mask_cache: Rc::new(RefCell::new(MaskCache::new())),
@@ -255,7 +255,7 @@ impl State {
             fill_state: ColorState::default(),
         };
 
-        r.reset_ctm(UserToDeviceIndependentSpace::identity());
+        r.reset_ctm(UserToLogicDeviceSpace::identity());
         r.set_line_cap(LineCapStyle::default());
         r.set_line_join(LineJoinStyle::default());
         r.set_miter_limit(10.0);
@@ -265,7 +265,7 @@ impl State {
         r
     }
 
-    fn reset_ctm(&mut self, ctm: UserToDeviceIndependentSpace) {
+    fn reset_ctm(&mut self, ctm: UserToLogicDeviceSpace) {
         self.ctm = ctm;
         self.user_to_device = to_device_space(self.height, self.zoom, &self.ctm);
     }
@@ -298,7 +298,7 @@ impl State {
         info!("not implemented: render intent: {}", intent);
     }
 
-    fn concat_ctm(&mut self, ctm: UserToDeviceIndependentSpace) {
+    fn concat_ctm(&mut self, ctm: UserToLogicDeviceSpace) {
         self.ctm = ctm.then(&self.ctm.with_source());
         self.user_to_device = to_device_space(self.height, self.zoom, &self.ctm);
         debug!("ctm to {:?}", self.ctm);
@@ -1274,7 +1274,9 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             F: FnOnce(),
         {
             fn drop(&mut self) {
-                if let Some(f) = self.0.take() { f() }
+                if let Some(f) = self.0.take() {
+                    f()
+                }
             }
         }
 
@@ -1297,22 +1299,23 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             None
         };
 
-        Ok(
-            match build_shading(&shading, resources)? {
-                Some(Shading::Axial(axial)) => {
-                    assert_eq!(Extend::new(true, true), axial.extend);
-                    axial.into_skia(pattern.matrix()?.into_skia())
-                }
-                Some(Shading::Radial(radial)) => radial.into_skia(pattern.matrix()?.into_skia()),
-                None => return Ok(None),
-            }.map(|shader| (
-                    PaintCreator::Gradient(Paint {
-                        shader,
-                        ..Default::default()
-                    }),
-                    background_color,
-                )),
-        )
+        Ok(match build_shading(&shading, resources)? {
+            Some(Shading::Axial(axial)) => {
+                assert_eq!(Extend::new(true, true), axial.extend);
+                axial.into_skia(pattern.matrix()?.into_skia())
+            }
+            Some(Shading::Radial(radial)) => radial.into_skia(pattern.matrix()?.into_skia()),
+            None => return Ok(None),
+        }
+        .map(|shader| {
+            (
+                PaintCreator::Gradient(Paint {
+                    shader,
+                    ..Default::default()
+                }),
+                background_color,
+            )
+        }))
     }
 
     fn tiling_pattern(

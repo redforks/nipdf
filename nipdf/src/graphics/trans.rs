@@ -6,13 +6,12 @@ use euclid::Transform2D;
 pub enum UserSpace {}
 /// Coordinate space between UserSpace and DeviceSpace,
 /// `ctm` from pdf file, convert User space to Device independent space.
-pub enum DeviceIndependentSpace {}
+pub enum LogicDeviceSpace {}
 pub enum DeviceSpace {}
-// pub enum TextSpace;
 pub enum ImageSpace {}
 pub enum TextSpace {}
 pub enum FormSpace {}
-pub type UserToDeviceIndependentSpace = Transform2D<f32, UserSpace, DeviceIndependentSpace>;
+pub type UserToLogicDeviceSpace = Transform2D<f32, UserSpace, LogicDeviceSpace>;
 // pub enum PatternSpace;
 pub type UserToDeviceSpace = Transform2D<f32, UserSpace, DeviceSpace>;
 pub type ImageToUserSpace = Transform2D<f32, ImageSpace, UserSpace>;
@@ -34,14 +33,14 @@ impl<S, D> IntoSkiaTransform for Transform2D<f32, S, D> {
 /// Return a transform convert space to device space.
 /// Flip y-axis and apply zoom, because pdf use left-bottom as origin.
 pub fn to_device_space<S>(
-    device_independent_height: f32,
+    logic_device_height: f32,
     zoom: f32,
-    to_device_independent: &Transform2D<f32, S, DeviceIndependentSpace>,
+    to_logic_device: &Transform2D<f32, S, LogicDeviceSpace>,
 ) -> Transform2D<f32, S, DeviceSpace> {
-    to_device_independent
+    to_logic_device
         .with_destination()
         .then_scale(zoom, -zoom)
-        .then_translate((0.0, device_independent_height * zoom).into())
+        .then_translate((0.0, logic_device_height * zoom).into())
 }
 
 /// Return a transform from image space to user space.
@@ -53,12 +52,12 @@ pub fn image_to_user_space(img_w: u32, img_h: u32) -> ImageToUserSpace {
 pub fn image_to_device_space(
     img_w: u32,
     img_h: u32,
-    device_independent_height: f32,
+    logic_device_height: f32,
     zoom: f32,
-    ctm: &UserToDeviceIndependentSpace,
+    ctm: &UserToLogicDeviceSpace,
 ) -> ImageToDeviceSpace {
     let user = image_to_user_space(img_w, img_h).then(ctm);
-    to_device_space(device_independent_height, zoom, &user)
+    to_device_space(logic_device_height, zoom, &user)
 }
 
 /// Adjust transform moves text space to right.

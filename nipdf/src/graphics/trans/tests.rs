@@ -95,7 +95,7 @@ fn test_image_to_device_space() {
         1352,
         648.,
         1.,
-        &UserToDeviceIndependentSpace::new(531.0, 0.0, 0.0, 648.0, 0.0, 0.0),
+        &UserToLogicDeviceSpace::new(531.0, 0.0, 0.0, 648.0, 0.0, 0.0),
     ));
     f((0., 0.), (0., 0.));
     f((1107., 0.), (531., 0.));
@@ -106,7 +106,7 @@ fn test_image_to_device_space() {
         512,
         842.,
         1.5,
-        &UserToDeviceIndependentSpace::new(383.9, 0.0, 0.0, 383.9, 105.7, 401.5),
+        &UserToLogicDeviceSpace::new(383.9, 0.0, 0.0, 383.9, 105.7, 401.5),
     );
     let f = new_assert(r);
     f((0., 0.), (105.7 * 1.5, (842. - (401.5 + 383.9)) * 1.5));

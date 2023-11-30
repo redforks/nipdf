@@ -1,5 +1,5 @@
 use crate::{
-    graphics::trans::{TextToUserSpace, UserToDeviceIndependentSpace},
+    graphics::trans::{TextToUserSpace, UserToLogicDeviceSpace},
     object::{Array, Dictionary, Object, ObjectValueError, Stream, TextString, TextStringOrNumber},
     parser::{parse_object, whitespace_or_comment, ws_prefixed, ParseError, ParseResult},
 };
@@ -297,7 +297,7 @@ pub enum Operation {
     #[op_tag("Q")]
     RestoreGraphicsState,
     #[op_tag("cm")]
-    ModifyCTM(UserToDeviceIndependentSpace),
+    ModifyCTM(UserToLogicDeviceSpace),
 
     // Path Construction Operations
     #[op_tag("m")]
