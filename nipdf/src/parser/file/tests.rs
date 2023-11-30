@@ -1,5 +1,5 @@
 use super::*;
-use crate::file::{read_sample_file, File};
+use crate::file::open_test_file;
 use insta::assert_debug_snapshot;
 use test_case::test_case;
 use test_log::test;
@@ -86,8 +86,7 @@ startxref
 
 #[test]
 fn read_xref_stream() {
-    let buf = read_sample_file("file-structure/xref-stream.pdf");
-    let f = File::parse(buf, "", "").unwrap();
+    let f = open_test_file("sample_files/file-structure/xref-stream.pdf");
     let resolver = f.resolver().unwrap();
 
     // assert object in file

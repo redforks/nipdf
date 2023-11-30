@@ -1,15 +1,13 @@
 //! Test page render result using `insta` to ensure that the rendering result is not changed.
 //! This file checks file pdfreference1.0.pdf
-use crate::file::{File, RenderOptionBuilder};
+use super::open_test_file;
+use crate::file::RenderOptionBuilder;
 use anyhow::Result as AnyResult;
 use insta::assert_ron_snapshot;
 use md5::{Digest, Md5};
-use std::path::Path;
 
 fn decode_file_page(path: &str, page_no: usize) -> AnyResult<String> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(path);
-    let buf = std::fs::read(&path)?;
-    let f = File::parse(buf, "", "").unwrap_or_else(|e| panic!("failed to parse {path:?}: \n{e}"));
+    let f = open_test_file(path);
     let resolver = f.resolver()?;
     let catalog = f.catalog(&resolver)?;
     let pages = catalog.pages()?;

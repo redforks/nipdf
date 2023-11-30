@@ -86,7 +86,7 @@ fn test_paeth(a: u8, b: u8, c: u8) -> u8 {
 #[test]
 fn predictor_8bit() {
     insta::assert_debug_snapshot!(
-        &decode_stream("filters/predictor.pdf", 7u32, |d, resolver| {
+        &decode_stream("sample_files/filters/predictor.pdf", 7u32, |d, resolver| {
             let params = d.get(&name!("DecodeParms")).unwrap().as_dict()?;
             assert_eq!(
                 15,
@@ -103,7 +103,7 @@ fn predictor_8bit() {
 #[test]
 fn predictor_24bit() {
     insta::assert_debug_snapshot!(
-        &decode_stream("color-space/cal-rgb.pdf", 6u32, |d, resolver| {
+        &decode_stream("sample_files/color-space/cal-rgb.pdf", 6u32, |d, resolver| {
             let params = d.get(&name!("DecodeParms")).unwrap().as_dict()?;
             assert_eq!(
                 15,

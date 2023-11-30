@@ -694,24 +694,7 @@ impl File {
     }
 }
 
-/// Read sample file content, panic on any error.
-/// `file_path` relate to '~/sample_files/'.
-#[cfg(test)]
-pub(crate) fn read_sample_file(file_path: impl AsRef<std::path::Path>) -> Vec<u8> {
-    use std::{fs::File, io::Read, path::Path};
-
-    let file_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("sample_files")
-        .join(file_path);
-    let mut buf = Vec::new();
-    File::open(file_path)
-        .unwrap()
-        .read_to_end(&mut buf)
-        .unwrap();
-    buf
-}
-
-/// Decode stream for testing. `file_path` relate to '~/sample_files/'.
+/// Decode stream for testing. `file_path` relate to current crate directory.
 /// `f_assert` called with `Dictionary` of stream to do some test on it.
 #[cfg(test)]
 pub(crate) fn decode_stream<
@@ -722,12 +705,19 @@ pub(crate) fn decode_stream<
     id: T,
     f_assert: impl for<'a> FnOnce(&'a Dictionary, &'a ObjectResolver<'a>) -> AnyResult<()>,
 ) -> AnyResult<Vec<u8>> {
-    let buf = read_sample_file(file_path);
-    let f = File::parse(buf, "", "")?;
+    let f = open_test_file(file_path);
     let resolver = f.resolver()?;
     let stream = resolver.resolve(id.try_into()?)?.stream()?;
     f_assert(stream.as_dict(), &resolver)?;
     Ok(stream.decode(&resolver)?.into_owned())
+}
+
+/// Open file for testing. `file_path` relate to current crate directory.
+#[cfg(test)]
+pub(crate) fn open_test_file(file_path: impl AsRef<std::path::Path>) -> File {
+    let file_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(file_path);
+    let data = std::fs::read(file_path).unwrap();
+    File::parse(data, "", "").unwrap()
 }
 
 #[cfg(test)]
