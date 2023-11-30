@@ -40,6 +40,7 @@ use tiny_skia::{
 };
 
 mod fonts;
+use euclid::Angle;
 use fonts::*;
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -489,17 +490,24 @@ pub struct PageDimension {
     height: u32,
     // apply before ctm to handle crop_box/media_box left-bottom not at (0, 0) and page rotate
     transform: UserToUserSpace,
+    rotate: i32,
 }
 
 impl PageDimension {
-    pub fn update(&mut self, dimension: &Rectangle) {
+    pub fn update(&mut self, dimension: &Rectangle, rotate: i32) {
+        self.rotate = rotate % 360;
+
         let mut transform = UserToUserSpace::identity();
         if dimension.left_x != 0.0 || dimension.lower_y != 0.0 {
             transform = transform.then_translate((-dimension.left_x, -dimension.lower_y).into());
         }
         self.transform = transform;
+
         self.width = dimension.width() as u32;
         self.height = dimension.height() as u32;
+        if self.swap_wh() {
+            std::mem::swap(&mut self.width, &mut self.height);
+        }
     }
 
     pub fn canvas_width(&self) -> u32 {
@@ -510,8 +518,25 @@ impl PageDimension {
         (self.height as f32 * self.zoom) as u32
     }
 
+    fn swap_wh(&self) -> bool {
+        self.rotate.abs() == 90 || self.rotate.abs() == 270
+    }
+
     pub fn logic_device_to_device(&self) -> LogicDeviceToDeviceSpace {
-        logic_device_to_device(self.height, self.zoom)
+        if self.rotate != 0 {
+            let (w, h) = if self.swap_wh() {
+                (self.height, self.width)
+            } else {
+                (self.width, self.height)
+            };
+
+            let r = logic_device_to_device(h, self.zoom);
+            r.then_translate((w as f32 * self.zoom * -0.5, h as f32 * self.zoom * -0.5).into())
+                .then_rotate(Angle::degrees(self.rotate as f32))
+                .then_translate((h as f32 * self.zoom * 0.5, w as f32 * self.zoom * 0.5).into())
+        } else {
+            logic_device_to_device(self.height, self.zoom)
+        }
     }
 }
 
@@ -544,18 +569,7 @@ impl RenderOption {
 
     /// Convert canvas to image, crop if crop option not None
     pub fn to_image(&self, canvas: Pixmap) -> RgbaImage {
-        let mut r = RgbaImage::from_raw(canvas.width(), canvas.height(), canvas.take()).unwrap();
-
-        match self.rotate % 360 {
-            0 => r,
-            90 | -270 => image::imageops::rotate90(&r),
-            180 => {
-                image::imageops::rotate180_in_place(&mut r);
-                r
-            }
-            270 | -90 => image::imageops::rotate270(&r),
-            v => unreachable!("invalid rotation: {}", v), // rotation must be multiple of 90
-        }
+        RgbaImage::from_raw(canvas.width(), canvas.height(), canvas.take()).unwrap()
     }
 }
 
@@ -569,8 +583,8 @@ impl RenderOptionBuilder {
         self
     }
 
-    pub fn page_box(mut self, dimension: &Rectangle) -> Self {
-        self.0.dimension.update(dimension);
+    pub fn page_box(mut self, dimension: &Rectangle, rotate_degree: i32) -> Self {
+        self.0.dimension.update(dimension, rotate_degree);
         self
     }
 
@@ -1339,7 +1353,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         assert_eq!(b_box.height(), tile.y_step()?, "y_step not supported");
 
         let resources = tile.resources()?;
-        let option = RenderOptionBuilder::default().page_box(&b_box).build();
+        let option = RenderOptionBuilder::default().page_box(&b_box, 0).build();
         let mut canvas = option.create_canvas();
         let mut render = Render::new(&mut canvas, option, &resources);
         if let Some(color) = color {

@@ -305,7 +305,7 @@ impl<'a, 'b: 'a> Page<'a, 'b> {
         let media_box = self.media_box();
         let crop_box = self.crop_box();
         let option = option
-            .page_box(&crop_box.unwrap_or(media_box))
+            .page_box(&crop_box.unwrap_or(media_box), self.d.rotate().unwrap())
             .crop((!no_crop && need_crop(crop_box, media_box)).then(|| crop_box.unwrap()))
             .rotate(self.d.rotate().unwrap())
             .build();
