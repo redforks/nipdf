@@ -572,8 +572,15 @@ fn parse_object_or_operator(input: &[u8]) -> ParseResult<ObjectOrOperator> {
     alt((parse_object.map(ObjectOrOperator::Object), parse_operator))(input)
 }
 
-pub fn parse_operations(mut input: &[u8]) -> ParseResult<Vec<Operation>> {
+pub fn parse_operations2(input: &[u8]) -> ParseResult<Vec<Operation>> {
     let mut operands = Vec::with_capacity(8);
+    parse_operations(&mut operands, input)
+}
+
+pub fn parse_operations<'a>(
+    operands: &mut Vec<Object>,
+    mut input: &'a [u8],
+) -> ParseResult<'a, Vec<Operation>> {
     let mut ignore_parse_error = false;
     let mut r = vec![];
     loop {
@@ -590,7 +597,7 @@ pub fn parse_operations(mut input: &[u8]) -> ParseResult<Vec<Operation>> {
                     ObjectOrOperator::Operator(op) => {
                         let (input, opt_op) = (
                             input,
-                            create_operation(op, &mut operands).map_err(|e| {
+                            create_operation(op, operands).map_err(|e| {
                                 nom::Err::Error(ParseError::from_external_error(
                                     input,
                                     ErrorKind::Fail,
