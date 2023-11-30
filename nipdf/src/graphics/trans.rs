@@ -30,6 +30,13 @@ impl<S, D> IntoSkiaTransform for Transform2D<f32, S, D> {
     }
 }
 
+pub fn logic_device_to_device(
+    logic_device_height: f32,
+    zoom: f32,
+) -> Transform2D<f32, LogicDeviceSpace, DeviceSpace> {
+    Transform2D::scale(zoom, -zoom).then_translate((0.0, logic_device_height * zoom).into())
+}
+
 /// Return a transform convert space to device space.
 /// Flip y-axis and apply zoom, because pdf use left-bottom as origin.
 pub fn to_device_space<S>(
@@ -37,10 +44,7 @@ pub fn to_device_space<S>(
     zoom: f32,
     to_logic_device: &Transform2D<f32, S, LogicDeviceSpace>,
 ) -> Transform2D<f32, S, DeviceSpace> {
-    to_logic_device
-        .with_destination()
-        .then_scale(zoom, -zoom)
-        .then_translate((0.0, logic_device_height * zoom).into())
+    to_logic_device.then(&logic_device_to_device(logic_device_height, zoom))
 }
 
 /// Return a transform from image space to user space.

@@ -10,7 +10,7 @@ use crate::{
         shading::{build_shading, Axial, Extend, Radial, Shading},
         trans::{
             image_to_device_space, move_text_space_pos, move_text_space_right, to_device_space,
-            ImageToDeviceSpace, IntoSkiaTransform, TextToUserSpace, UserToDeviceSpace,
+            ImageToDeviceSpace, IntoSkiaTransform, TextToUserSpace, UserSpace, UserToDeviceSpace,
             UserToLogicDeviceSpace,
         },
         ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, PatternType, Point,
@@ -39,6 +39,7 @@ use tiny_skia::{
 };
 
 mod fonts;
+use euclid::Transform2D;
 use fonts::*;
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -226,9 +227,7 @@ struct State {
     width: f32,
     height: f32,
     zoom: f32,
-    /// ctm get from pdf file
     ctm: UserToLogicDeviceSpace,
-    /// ctm with flip_y and zoom
     user_to_device: UserToDeviceSpace,
     stroke: Stroke,
     mask: Option<MaskEntry>,
@@ -1086,7 +1085,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let b_box = axial.b_box;
 
         let state = self.stack.last().unwrap();
-        let ctm = to_device_space(self.height as f32, self.zoom, &state.ctm).into_skia();
+        let ctm = state.user_to_device.into_skia();
         let (shader_ctm, fill_ctm, rect) = if let Some(b_box) = b_box {
             (Transform::identity(), ctm, b_box)
         } else {
@@ -1120,7 +1119,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let r0 = radial.start.r;
         let r1 = radial.end.r;
         let state = self.stack.last().unwrap();
-        let ctm = to_device_space(self.height as f32, self.zoom, &state.ctm);
+        let ctm = state.user_to_device;
         let mask = state.get_mask();
         let mut paint = Paint::default();
         let stroke = Stroke::default();
@@ -1444,7 +1443,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let mut text_to_user_space: TextToUserSpace = text_object.matrix;
         let render_mode = text_object.render_mode;
         let mut text_clip_path = Path::default();
-        let flip_y = to_device_space(state.height, state.zoom, &state.ctm).into_skia();
+        let flip_y = state.user_to_device.into_skia();
         for ch in op.decode_chars(text) {
             let width = font_size.mul_add(
                 op.char_width(ch) as f32 / op.units_per_em() as f32,
