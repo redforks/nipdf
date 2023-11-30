@@ -30,7 +30,7 @@ fn parse_operator_succeed(s: &str, op: &str) {
 )]
 #[test_case("q 296.000000 0 0 295.000000 0 0 cm/Image80 Do Q " => vec![
         Operation::SaveGraphicsState,
-        Operation::ModifyCTM(UserToDeviceIndependentSpace::new(
+        Operation::ModifyCTM(UserToUserSpace::new(
             296f32, 0f32, 0f32, 295f32, 0f32, 0f32
         )),
         Operation::PaintXObject(NameOfDict(name!("Image80"))),
@@ -38,6 +38,9 @@ fn parse_operator_succeed(s: &str, op: &str) {
     ];
     "cm and Do"
 )]
+#[test_case(r"[(c)-4 (et)-1.9 (t)-1.8 (e t)-1.9 (r)1.4 (ans)-4 (m)-15.8 (i)-6.2 (s)-4 (s)-4 (i)-6.1 (on ne peut)-1.8 ( s)-4 (e f)-1.8 (ai)-6.1 (r)1.4 (e que par)1.4 ( v)-4 (oi)-6.1 (e \351l)-6.2 (ec)-4 (t)-1.9 (r)1.5 (oni)-6.1 (que)]     TJ" => vec![
+    Operation::ShowTexts(Vec::new())
+]; "TJ prefixed with extra whitespace")]
 fn test_parse_operations(s: &str) -> Vec<Operation> {
     let (_, result) = parse_operations(s.as_bytes()).unwrap();
     result
@@ -48,7 +51,7 @@ fn test_parse_operations(s: &str) -> Vec<Operation> {
 #[test_case("1 w" => Operation::SetLineWidth(1f32))]
 #[test_case("1.5 w" => Operation::SetLineWidth(1.5f32))]
 #[test_case("296.000000 0 0 295.000000 0 0 cm" => Operation::ModifyCTM(
-    UserToDeviceIndependentSpace::new(296f32, 0f32, 0f32, 295f32, 0f32, 0f32)
+    UserToUserSpace::new(296f32, 0f32, 0f32, 295f32, 0f32, 0f32)
 ); "cm")]
 #[test_case("[1 2] 0.5 d" => Operation::SetDashPattern(vec![1f32, 2f32], 0.5f32); "dash-pattern")]
 #[test_case("/stateName gs" => Operation::SetGraphicsStateParameters(NameOfDict(name!("stateName"))); "gs")]
@@ -112,13 +115,6 @@ fn test_arr_convert_from_object(v: Vec<Object>) -> Vec<f32> {
     let act = Vec::<f32>::convert_from_object(&mut outer).unwrap();
     assert!(outer.is_empty());
     act
-}
-
-#[test]
-fn vec_convert_from_object_no_arr() {
-    let mut outer = vec![];
-    let act = Vec::<f32>::convert_from_object(&mut outer).unwrap();
-    assert!(act.is_empty());
 }
 
 #[test_case(vec![1.into()] => ColorArgsOrName::Color(ColorArgs(vec![1.0])); "Color")]

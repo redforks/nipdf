@@ -6,12 +6,13 @@ use crate::{
     function::Domain,
     graphics::{
         color_space::{ColorSpace, ColorSpaceTrait},
-        parse_operations,
+        parse_operations, parse_operations2,
         shading::{build_shading, Axial, Extend, Radial, Shading},
         trans::{
-            image_to_device_space, move_text_space_pos, move_text_space_right, to_device_space,
-            ImageToDeviceSpace, IntoSkiaTransform, TextToUserSpace, UserToDeviceIndependentSpace,
-            UserToDeviceSpace,
+            image_to_user_space, logic_device_to_device, move_text_space_pos,
+            move_text_space_right, to_device_space, ImageToDeviceSpace, IntoSkiaTransform,
+            LogicDeviceToDeviceSpace, TextToUserSpace, UserToDeviceSpace, UserToLogicDeviceSpace,
+            UserToUserSpace,
         },
         ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, PatternType, Point,
         RenderingIntent, ShadingPatternDict, TextRenderingMode, TilingPatternDict,
@@ -21,7 +22,7 @@ use crate::{
 use anyhow::{Ok, Result as AnyResult};
 use educe::Educe;
 use either::Either::{self, Left, Right};
-use image::{GenericImage, RgbaImage};
+use image::RgbaImage;
 use log::{debug, info};
 use nom::{combinator::eof, sequence::terminated};
 use prescript::Name;
@@ -39,6 +40,7 @@ use tiny_skia::{
 };
 
 mod fonts;
+use euclid::{vec2, Angle, Transform2D};
 use fonts::*;
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -71,7 +73,7 @@ impl From<Point> for SkiaPoint {
 enum PaintCreator {
     Color(SkiaColor),
     Gradient(Paint<'static>),
-    Tile((Pixmap, UserToDeviceIndependentSpace)),
+    Tile((Pixmap, UserToLogicDeviceSpace)),
 }
 
 impl PaintCreator {
@@ -223,12 +225,8 @@ impl ColorState {
 
 #[derive(Debug, Clone)]
 struct State {
-    width: f32,
-    height: f32,
-    zoom: f32,
-    /// ctm get from pdf file
-    ctm: UserToDeviceIndependentSpace,
-    /// ctm with flip_y and zoom
+    dimension: PageDimension,
+    ctm: UserToLogicDeviceSpace,
     user_to_device: UserToDeviceSpace,
     stroke: Stroke,
     mask: Option<MaskEntry>,
@@ -242,11 +240,9 @@ impl State {
     /// height: height in user space coordinate
     fn new(option: &RenderOption) -> Self {
         let mut r = Self {
-            zoom: option.zoom,
-            width: option.width as f32,
-            height: option.height as f32,
+            dimension: option.dimension,
             user_to_device: UserToDeviceSpace::identity(),
-            ctm: UserToDeviceIndependentSpace::identity(),
+            ctm: UserToLogicDeviceSpace::identity(),
             stroke: Stroke::default(),
             mask: None,
             mask_cache: Rc::new(RefCell::new(MaskCache::new())),
@@ -255,7 +251,7 @@ impl State {
             fill_state: ColorState::default(),
         };
 
-        r.reset_ctm(UserToDeviceIndependentSpace::identity());
+        r.set_ctm(UserToLogicDeviceSpace::identity());
         r.set_line_cap(LineCapStyle::default());
         r.set_line_join(LineJoinStyle::default());
         r.set_miter_limit(10.0);
@@ -265,9 +261,16 @@ impl State {
         r
     }
 
-    fn reset_ctm(&mut self, ctm: UserToDeviceIndependentSpace) {
-        self.ctm = ctm;
-        self.user_to_device = to_device_space(self.height, self.zoom, &self.ctm);
+    fn set_ctm(&mut self, ctm: UserToLogicDeviceSpace) {
+        self.ctm = self.dimension.transform.then(&ctm);
+        self.user_to_device = self.ctm.then(&self.dimension.logic_device_to_device());
+    }
+
+    fn concat_ctm(&mut self, ctm: UserToUserSpace) {
+        self.ctm = ctm.then(&self.ctm);
+        self.user_to_device = self.ctm.then(&self.dimension.logic_device_to_device());
+        debug!("ctm to {:?}", self.ctm);
+        debug!("user_to_device to {:?}", self.user_to_device);
     }
 
     fn set_line_width(&mut self, w: f32) {
@@ -298,13 +301,6 @@ impl State {
         info!("not implemented: render intent: {}", intent);
     }
 
-    fn concat_ctm(&mut self, ctm: UserToDeviceIndependentSpace) {
-        self.ctm = ctm.then(&self.ctm.with_source());
-        self.user_to_device = to_device_space(self.height, self.zoom, &self.ctm);
-        debug!("ctm to {:?}", self.ctm);
-        debug!("user_to_device to {:?}", self.user_to_device);
-    }
-
     fn get_fill_paint(&self) -> Cow<'_, Paint<'_>> {
         self.fill_state.paint.create()
     }
@@ -318,7 +314,9 @@ impl State {
     }
 
     fn image_transform(&self, img_w: u32, img_h: u32) -> ImageToDeviceSpace {
-        image_to_device_space(img_w, img_h, self.height, self.zoom, &self.ctm)
+        image_to_user_space(img_w, img_h)
+            .then(&self.ctm)
+            .then(&self.dimension.logic_device_to_device())
     }
 
     fn get_mask(&self) -> Option<Ref<Mask>> {
@@ -349,11 +347,11 @@ impl State {
     }
 
     fn update_mask(&mut self, path: &SkiaPath, rule: FillRule, flip_y: bool) {
-        let w = self.width * self.zoom;
-        let h = self.height * self.zoom;
+        let w = self.dimension.canvas_width();
+        let h = self.dimension.canvas_height();
         let new_mask = || {
-            let mut r = Mask::new(w as u32, h as u32).unwrap();
-            let p = PathBuilder::from_rect(Rect::from_xywh(0.0, 0.0, w, h).unwrap());
+            let mut r = Mask::new(w, h).unwrap();
+            let p = PathBuilder::from_rect(Rect::from_xywh(0.0, 0.0, w as f32, h as f32).unwrap());
             r.fill_path(&p, FillRule::Winding, true, Transform::identity());
             r
         };
@@ -483,31 +481,33 @@ impl Path {
     }
 }
 
-/// Option for Render
-#[derive(Debug, Educe, Clone)]
+#[derive(Debug, Educe, Clone, Copy)]
 #[educe(Default)]
-pub struct RenderOption {
-    /// zoom level default to 1.0
+pub struct PageDimension {
     #[educe(Default = 1.0)]
     zoom: f32,
     width: u32,
     height: u32,
-    /// If crop is specified, the output canvas will be cropped to the specified rectangle.
-    crop: Option<Rectangle>,
-    #[educe(Default(expression = "SkiaColor::WHITE"))]
-    background_color: SkiaColor,
-    /// Initial state, used in paint_x_form to pass parent state to form Render.
-    state: Option<State>,
+    // apply before ctm to handle crop_box/media_box left-bottom not at (0, 0) and page rotate
+    transform: UserToUserSpace,
     rotate: i32,
 }
 
-impl RenderOption {
-    pub fn create_canvas(&self) -> Pixmap {
-        let mut r = Pixmap::new(self.canvas_width(), self.canvas_height()).unwrap();
-        if self.background_color.is_opaque() {
-            r.fill(self.background_color);
+impl PageDimension {
+    pub fn update(&mut self, dimension: &Rectangle, rotate: i32) {
+        self.rotate = rotate % 360;
+
+        let mut transform = UserToUserSpace::identity();
+        if dimension.left_x != 0.0 || dimension.lower_y != 0.0 {
+            transform = transform.then_translate((-dimension.left_x, -dimension.lower_y).into());
         }
-        r
+        self.transform = transform;
+
+        self.width = dimension.width() as u32;
+        self.height = dimension.height() as u32;
+        if self.swap_wh() {
+            std::mem::swap(&mut self.width, &mut self.height);
+        }
     }
 
     pub fn canvas_width(&self) -> u32 {
@@ -518,32 +518,58 @@ impl RenderOption {
         (self.height as f32 * self.zoom) as u32
     }
 
+    fn swap_wh(&self) -> bool {
+        self.rotate.abs() == 90 || self.rotate.abs() == 270
+    }
+
+    pub fn logic_device_to_device(&self) -> LogicDeviceToDeviceSpace {
+        if self.rotate != 0 {
+            let (w, h) = if self.swap_wh() {
+                (self.height, self.width)
+            } else {
+                (self.width, self.height)
+            };
+
+            let r = logic_device_to_device(h, self.zoom);
+            r.then_translate((w as f32 * self.zoom * -0.5, h as f32 * self.zoom * -0.5).into())
+                .then_rotate(Angle::degrees(self.rotate as f32))
+                .then_translate((h as f32 * self.zoom * 0.5, w as f32 * self.zoom * 0.5).into())
+        } else {
+            logic_device_to_device(self.height, self.zoom)
+        }
+    }
+}
+
+/// Option for Render
+#[derive(Debug, Educe, Clone)]
+#[educe(Default)]
+pub struct RenderOption {
+    /// If crop is specified, the output canvas will be cropped to the specified rectangle.
+    crop: Option<Rectangle>,
+    #[educe(Default(expression = "SkiaColor::WHITE"))]
+    background_color: SkiaColor,
+    /// Initial state, used in paint_x_form to pass parent state to form Render.
+    state: Option<State>,
+    rotate: i32,
+    dimension: PageDimension,
+}
+
+impl RenderOption {
+    pub fn create_canvas(&self) -> Pixmap {
+        let mut r = Pixmap::new(
+            self.dimension.canvas_width(),
+            self.dimension.canvas_height(),
+        )
+        .unwrap();
+        if self.background_color.is_opaque() {
+            r.fill(self.background_color);
+        }
+        r
+    }
+
     /// Convert canvas to image, crop if crop option not None
     pub fn to_image(&self, canvas: Pixmap) -> RgbaImage {
-        let mut r = RgbaImage::from_raw(canvas.width(), canvas.height(), canvas.take()).unwrap();
-        let mut r = if let Some(crop) = self.crop {
-            let crop = crop.zoom(self.zoom);
-            let sub_image = r.sub_image(
-                crop.left_x as u32,
-                r.height() - crop.upper_y as u32,
-                crop.width() as u32,
-                crop.height() as u32,
-            );
-            sub_image.to_image()
-        } else {
-            r
-        };
-
-        match self.rotate % 360 {
-            0 => r,
-            90 | -270 => image::imageops::rotate90(&r),
-            180 => {
-                image::imageops::rotate180_in_place(&mut r);
-                r
-            }
-            270 | -90 => image::imageops::rotate270(&r),
-            v => unreachable!("invalid rotation: {}", v), // rotation must be multiple of 90
-        }
+        RgbaImage::from_raw(canvas.width(), canvas.height(), canvas.take()).unwrap()
     }
 }
 
@@ -553,17 +579,17 @@ pub struct RenderOptionBuilder(RenderOption);
 
 impl RenderOptionBuilder {
     pub fn zoom(mut self, zoom: f32) -> Self {
-        self.0.zoom = zoom;
+        self.0.dimension.zoom = zoom;
         self
     }
 
-    pub fn width(mut self, width: u32) -> Self {
-        self.0.width = width;
+    pub fn page_box(mut self, dimension: &Rectangle, rotate_degree: i32) -> Self {
+        self.0.dimension.update(dimension, rotate_degree);
         self
     }
 
-    pub fn height(mut self, height: u32) -> Self {
-        self.0.height = height;
+    fn dimension(mut self, dimension: PageDimension) -> Self {
+        self.0.dimension = dimension;
         self
     }
 
@@ -597,14 +623,11 @@ impl RenderOptionBuilder {
 pub struct Render<'a, 'b, 'c> {
     canvas: &'c mut Pixmap,
     stack: Vec<State>,
-    width: u32,
-    height: u32,
-    zoom: f32,
     path: Path,
     #[educe(Debug(ignore))]
     font_cache: FontCache<'c>,
     resources: &'c ResourceDict<'a, 'b>,
-    crop: Option<Rectangle>,
+    dimension: PageDimension,
 }
 
 impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
@@ -629,14 +652,11 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
         Self {
             canvas,
-            zoom: option.zoom,
             stack: vec![state],
-            width: option.width,
-            height: option.height,
             path: Path::default(),
             font_cache: FontCache::new(resources).unwrap(),
             resources,
-            crop: option.crop,
+            dimension: option.dimension,
         }
     }
 
@@ -1049,13 +1069,11 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let state = self.stack.last().unwrap();
         let mut inner_state = self.stack.last().unwrap().clone();
         let ctm = matrix.then(&state.ctm).with_destination().with_source();
-        inner_state.reset_ctm(ctm);
+        inner_state.set_ctm(ctm);
         let mut render = Render::new(
             self.canvas,
             RenderOptionBuilder::default()
-                .width(self.width)
-                .height(self.height)
-                .zoom(self.zoom)
+                .dimension(self.dimension)
                 .crop(Some(b_box))
                 .background_color(SkiaColor::TRANSPARENT)
                 .state(inner_state)
@@ -1086,7 +1104,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let b_box = axial.b_box;
 
         let state = self.stack.last().unwrap();
-        let ctm = to_device_space(self.height as f32, self.zoom, &state.ctm).into_skia();
+        let ctm = state.user_to_device.into_skia();
         let (shader_ctm, fill_ctm, rect) = if let Some(b_box) = b_box {
             (Transform::identity(), ctm, b_box)
         } else {
@@ -1120,7 +1138,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let r0 = radial.start.r;
         let r1 = radial.end.r;
         let state = self.stack.last().unwrap();
-        let ctm = to_device_space(self.height as f32, self.zoom, &state.ctm);
+        let ctm = state.user_to_device;
         let mask = state.get_mask();
         let mut paint = Paint::default();
         let stroke = Stroke::default();
@@ -1274,7 +1292,9 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             F: FnOnce(),
         {
             fn drop(&mut self) {
-                if let Some(f) = self.0.take() { f() }
+                if let Some(f) = self.0.take() {
+                    f()
+                }
             }
         }
 
@@ -1297,22 +1317,23 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             None
         };
 
-        Ok(
-            match build_shading(&shading, resources)? {
-                Some(Shading::Axial(axial)) => {
-                    assert_eq!(Extend::new(true, true), axial.extend);
-                    axial.into_skia(pattern.matrix()?.into_skia())
-                }
-                Some(Shading::Radial(radial)) => radial.into_skia(pattern.matrix()?.into_skia()),
-                None => return Ok(None),
-            }.map(|shader| (
-                    PaintCreator::Gradient(Paint {
-                        shader,
-                        ..Default::default()
-                    }),
-                    background_color,
-                )),
-        )
+        Ok(match build_shading(&shading, resources)? {
+            Some(Shading::Axial(axial)) => {
+                assert_eq!(Extend::new(true, true), axial.extend);
+                axial.into_skia(pattern.matrix()?.into_skia())
+            }
+            Some(Shading::Radial(radial)) => radial.into_skia(pattern.matrix()?.into_skia()),
+            None => return Ok(None),
+        }
+        .map(|shader| {
+            (
+                PaintCreator::Gradient(Paint {
+                    shader,
+                    ..Default::default()
+                }),
+                background_color,
+            )
+        }))
     }
 
     fn tiling_pattern(
@@ -1326,16 +1347,13 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let stream: &Object = tile.resolver().resolve(tile.id().unwrap())?;
         let stream = stream.stream()?;
         let bytes = stream.decode(tile.resolver())?;
-        let (_, ops) = terminated(parse_operations, eof)(bytes.as_ref()).unwrap();
+        let (_, ops) = terminated(parse_operations2, eof)(bytes.as_ref()).unwrap();
         let b_box = tile.b_box()?;
         assert_eq!(b_box.width(), tile.x_step()?, "x_step not supported");
         assert_eq!(b_box.height(), tile.y_step()?, "y_step not supported");
 
         let resources = tile.resources()?;
-        let option = RenderOptionBuilder::default()
-            .width(b_box.width() as u32)
-            .height(b_box.height() as u32)
-            .build();
+        let option = RenderOptionBuilder::default().page_box(&b_box, 0).build();
         let mut canvas = option.create_canvas();
         let mut render = Render::new(&mut canvas, option, &resources);
         if let Some(color) = color {
@@ -1441,7 +1459,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let mut text_to_user_space: TextToUserSpace = text_object.matrix;
         let render_mode = text_object.render_mode;
         let mut text_clip_path = Path::default();
-        let flip_y = to_device_space(state.height, state.zoom, &state.ctm).into_skia();
+        let flip_y = state.user_to_device.into_skia();
         for ch in op.decode_chars(text) {
             let width = font_size.mul_add(
                 op.char_width(ch) as f32 / op.units_per_em() as f32,

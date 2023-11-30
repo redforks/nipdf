@@ -88,6 +88,18 @@ fn test_image_space_to_user_space() {
     f((100., 200.), (1., 0.));
 }
 
+fn image_to_device_space(
+    img_w: u32,
+    img_h: u32,
+    logic_device_height: impl AsPrimitive<f32>,
+    zoom: f32,
+    ctm: &UserToLogicDeviceSpace,
+) -> ImageToDeviceSpace {
+    image_to_user_space(img_w, img_h)
+        .then(ctm)
+        .then(&logic_device_to_device(logic_device_height, zoom))
+}
+
 #[test]
 fn test_image_to_device_space() {
     let f = new_assert(image_to_device_space(
@@ -95,7 +107,7 @@ fn test_image_to_device_space() {
         1352,
         648.,
         1.,
-        &UserToDeviceIndependentSpace::new(531.0, 0.0, 0.0, 648.0, 0.0, 0.0),
+        &UserToLogicDeviceSpace::new(531.0, 0.0, 0.0, 648.0, 0.0, 0.0),
     ));
     f((0., 0.), (0., 0.));
     f((1107., 0.), (531., 0.));
@@ -106,7 +118,7 @@ fn test_image_to_device_space() {
         512,
         842.,
         1.5,
-        &UserToDeviceIndependentSpace::new(383.9, 0.0, 0.0, 383.9, 105.7, 401.5),
+        &UserToLogicDeviceSpace::new(383.9, 0.0, 0.0, 383.9, 105.7, 401.5),
     );
     let f = new_assert(r);
     f((0., 0.), (105.7 * 1.5, (842. - (401.5 + 383.9)) * 1.5));

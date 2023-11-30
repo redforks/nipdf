@@ -305,8 +305,7 @@ impl<'a, 'b: 'a> Page<'a, 'b> {
         let media_box = self.media_box();
         let crop_box = self.crop_box();
         let option = option
-            .width(media_box.width() as u32)
-            .height(media_box.height() as u32)
+            .page_box(&crop_box.unwrap_or(media_box), self.d.rotate().unwrap())
             .crop((!no_crop && need_crop(crop_box, media_box)).then(|| crop_box.unwrap()))
             .rotate(self.d.rotate().unwrap())
             .build();
@@ -385,11 +384,15 @@ impl PageContent {
 
     pub fn operations(&self) -> Vec<Operation> {
         let mut r = vec![];
+        let mut operands = Vec::with_capacity(8);
         for buf in &self.bufs {
-            let (input, ops) = parse_operations(buf.as_ref()).finish().unwrap();
+            let (input, ops) = parse_operations(&mut operands, buf.as_ref())
+                .finish()
+                .unwrap();
             assert!(input.is_empty(), "buf should be empty: {:?}", input);
             r.extend_from_slice(ops.as_slice());
         }
+        assert!(operands.is_empty());
         r
     }
 

@@ -1,6 +1,6 @@
 use crate::{
     file::{GraphicsStateParameterDict, Rectangle, ResourceDict},
-    graphics::{shading::ShadingDict, trans::UserToDeviceIndependentSpace},
+    graphics::{shading::ShadingDict, trans::UserToLogicDeviceSpace},
 };
 use nipdf_macro::{pdf_object, TryFromIntObject};
 
@@ -56,7 +56,7 @@ pub trait TilingPatternDictTrait {
 
     #[try_from]
     #[or_default]
-    fn matrix(&self) -> UserToDeviceIndependentSpace;
+    fn matrix(&self) -> UserToLogicDeviceSpace;
 }
 
 #[pdf_object(2i32)]
@@ -67,7 +67,7 @@ pub trait ShadingPatternDictTrait {
 
     #[try_from]
     #[or_default]
-    fn matrix(&self) -> UserToDeviceIndependentSpace;
+    fn matrix(&self) -> UserToLogicDeviceSpace;
 
     #[nested]
     fn ext_g_state() -> Option<GraphicsStateParameterDict<'a, 'b>>;

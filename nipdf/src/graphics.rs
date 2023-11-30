@@ -1,5 +1,5 @@
 use crate::{
-    graphics::trans::{TextToUserSpace, UserToDeviceIndependentSpace},
+    graphics::trans::TextToUserSpace,
     object::{Array, Dictionary, Object, ObjectValueError, Stream, TextString, TextStringOrNumber},
     parser::{parse_object, whitespace_or_comment, ws_prefixed, ParseError, ParseResult},
 };
@@ -19,6 +19,7 @@ use std::num::NonZeroU32;
 pub(crate) mod color_space;
 mod pattern;
 pub(crate) mod trans;
+use self::trans::UserToUserSpace;
 pub(crate) use pattern::*;
 
 pub(crate) mod shading;
@@ -297,7 +298,7 @@ pub enum Operation {
     #[op_tag("Q")]
     RestoreGraphicsState,
     #[op_tag("cm")]
-    ModifyCTM(UserToDeviceIndependentSpace),
+    ModifyCTM(UserToUserSpace),
 
     // Path Construction Operations
     #[op_tag("m")]
@@ -461,17 +462,13 @@ where
 
 impl<'b, T: for<'c> ConvertFromObject<'c>> ConvertFromObject<'b> for Vec<T> {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
-        if let Some(arr) = objects.pop() {
-            let mut arr: Vec<_> = arr.into_arr()?.iter().cloned().collect();
-            let mut result = Self::new();
-            while !arr.is_empty() {
-                result.push(T::convert_from_object(&mut arr)?);
-            }
-            result.reverse();
-            Ok(result)
-        } else {
-            Ok(vec![])
+        let mut arr: Vec<_> = objects.pop().unwrap().into_arr()?.iter().cloned().collect();
+        let mut result = Self::new();
+        while !arr.is_empty() {
+            result.push(T::convert_from_object(&mut arr)?);
         }
+        result.reverse();
+        Ok(result)
     }
 }
 
@@ -575,8 +572,15 @@ fn parse_object_or_operator(input: &[u8]) -> ParseResult<ObjectOrOperator> {
     alt((parse_object.map(ObjectOrOperator::Object), parse_operator))(input)
 }
 
-pub fn parse_operations(mut input: &[u8]) -> ParseResult<Vec<Operation>> {
+pub fn parse_operations2(input: &[u8]) -> ParseResult<Vec<Operation>> {
     let mut operands = Vec::with_capacity(8);
+    parse_operations(&mut operands, input)
+}
+
+pub fn parse_operations<'a>(
+    operands: &mut Vec<Object>,
+    mut input: &'a [u8],
+) -> ParseResult<'a, Vec<Operation>> {
     let mut ignore_parse_error = false;
     let mut r = vec![];
     loop {
@@ -593,7 +597,7 @@ pub fn parse_operations(mut input: &[u8]) -> ParseResult<Vec<Operation>> {
                     ObjectOrOperator::Operator(op) => {
                         let (input, opt_op) = (
                             input,
-                            create_operation(op, &mut operands).map_err(|e| {
+                            create_operation(op, operands).map_err(|e| {
                                 nom::Err::Error(ParseError::from_external_error(
                                     input,
                                     ErrorKind::Fail,
