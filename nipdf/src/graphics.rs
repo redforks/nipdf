@@ -461,13 +461,17 @@ where
 
 impl<'b, T: for<'c> ConvertFromObject<'c>> ConvertFromObject<'b> for Vec<T> {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
-        let mut arr: Vec<_> = objects.pop().unwrap().into_arr()?.iter().cloned().collect();
-        let mut result = Self::new();
-        while !arr.is_empty() {
-            result.push(T::convert_from_object(&mut arr)?);
+        if let Some(arr) = objects.pop() {
+            let mut arr: Vec<_> = arr.into_arr()?.iter().cloned().collect();
+            let mut result = Self::new();
+            while !arr.is_empty() {
+                result.push(T::convert_from_object(&mut arr)?);
+            }
+            result.reverse();
+            Ok(result)
+        } else {
+            Ok(vec![])
         }
-        result.reverse();
-        Ok(result)
     }
 }
 

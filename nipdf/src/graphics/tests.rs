@@ -114,6 +114,13 @@ fn test_arr_convert_from_object(v: Vec<Object>) -> Vec<f32> {
     act
 }
 
+#[test]
+fn vec_convert_from_object_no_arr() {
+    let mut outer = vec![];
+    let act = Vec::<f32>::convert_from_object(&mut outer).unwrap();
+    assert!(act.is_empty());
+}
+
 #[test_case(vec![1.into()] => ColorArgsOrName::Color(ColorArgs(vec![1.0])); "Color")]
 #[test_case(vec!["/name".into()] => ColorArgsOrName::Name((name!("name"), None)); "name")]
 #[test_case(vec![1f32.into(), 2f32.into(), 3f32.into(), "/p1".into()] => ColorArgsOrName::Name((name!("p1"), Some(ColorArgs(vec![1f32, 2., 3.])))); "SCN for uncolored pattern")]
