@@ -1256,7 +1256,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             }
             ColorArgsOrName::Color(args) => {
                 let state = get_state(self);
-                state.set_color_args(&args);
+                state.set_color_args(args);
                 Ok(())
             }
         }
@@ -1274,7 +1274,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             F: FnOnce(),
         {
             fn drop(&mut self) {
-                self.0.take().map(|f| f());
+                if let Some(f) = self.0.take() { f() }
             }
         }
 
@@ -1298,24 +1298,20 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         };
 
         Ok(
-            if let Some(shader) = match build_shading(&shading, resources)? {
+            match build_shading(&shading, resources)? {
                 Some(Shading::Axial(axial)) => {
                     assert_eq!(Extend::new(true, true), axial.extend);
                     axial.into_skia(pattern.matrix()?.into_skia())
                 }
                 Some(Shading::Radial(radial)) => radial.into_skia(pattern.matrix()?.into_skia()),
                 None => return Ok(None),
-            } {
-                Some((
+            }.map(|shader| (
                     PaintCreator::Gradient(Paint {
                         shader,
                         ..Default::default()
                     }),
                     background_color,
-                ))
-            } else {
-                None
-            },
+                )),
         )
     }
 
