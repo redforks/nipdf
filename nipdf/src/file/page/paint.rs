@@ -9,9 +9,9 @@ use crate::{
         parse_operations,
         shading::{build_shading, Axial, Extend, Radial, Shading},
         trans::{
-            image_to_device_space, move_text_space_pos, move_text_space_right, to_device_space,
-            ImageToDeviceSpace, IntoSkiaTransform, TextToUserSpace, UserSpace, UserToDeviceSpace,
-            UserToLogicDeviceSpace,
+            image_to_user_space, logic_device_to_device, move_text_space_pos,
+            move_text_space_right, to_device_space, ImageToDeviceSpace, IntoSkiaTransform,
+            LogicDeviceToDeviceSpace, TextToUserSpace, UserToDeviceSpace, UserToLogicDeviceSpace,
         },
         ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, PatternType, Point,
         RenderingIntent, ShadingPatternDict, TextRenderingMode, TilingPatternDict,
@@ -39,7 +39,6 @@ use tiny_skia::{
 };
 
 mod fonts;
-use euclid::Transform2D;
 use fonts::*;
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -224,9 +223,7 @@ impl ColorState {
 
 #[derive(Debug, Clone)]
 struct State {
-    width: f32,
-    height: f32,
-    zoom: f32,
+    dimension: PageDimension,
     ctm: UserToLogicDeviceSpace,
     user_to_device: UserToDeviceSpace,
     stroke: Stroke,
@@ -241,9 +238,7 @@ impl State {
     /// height: height in user space coordinate
     fn new(option: &RenderOption) -> Self {
         let mut r = Self {
-            zoom: option.zoom,
-            width: option.width as f32,
-            height: option.height as f32,
+            dimension: option.dimension,
             user_to_device: UserToDeviceSpace::identity(),
             ctm: UserToLogicDeviceSpace::identity(),
             stroke: Stroke::default(),
@@ -265,8 +260,8 @@ impl State {
     }
 
     fn reset_ctm(&mut self, ctm: UserToLogicDeviceSpace) {
+        self.user_to_device = ctm.then(&self.dimension.logic_device_to_device());
         self.ctm = ctm;
-        self.user_to_device = to_device_space(self.height, self.zoom, &self.ctm);
     }
 
     fn set_line_width(&mut self, w: f32) {
@@ -299,7 +294,7 @@ impl State {
 
     fn concat_ctm(&mut self, ctm: UserToLogicDeviceSpace) {
         self.ctm = ctm.then(&self.ctm.with_source());
-        self.user_to_device = to_device_space(self.height, self.zoom, &self.ctm);
+        self.user_to_device = self.ctm.then(&self.dimension.logic_device_to_device());
         debug!("ctm to {:?}", self.ctm);
         debug!("user_to_device to {:?}", self.user_to_device);
     }
@@ -317,7 +312,9 @@ impl State {
     }
 
     fn image_transform(&self, img_w: u32, img_h: u32) -> ImageToDeviceSpace {
-        image_to_device_space(img_w, img_h, self.height, self.zoom, &self.ctm)
+        image_to_user_space(img_w, img_h)
+            .then(&self.ctm)
+            .then(&self.dimension.logic_device_to_device())
     }
 
     fn get_mask(&self) -> Option<Ref<Mask>> {
@@ -348,11 +345,11 @@ impl State {
     }
 
     fn update_mask(&mut self, path: &SkiaPath, rule: FillRule, flip_y: bool) {
-        let w = self.width * self.zoom;
-        let h = self.height * self.zoom;
+        let w = self.dimension.canvas_width();
+        let h = self.dimension.canvas_height();
         let new_mask = || {
-            let mut r = Mask::new(w as u32, h as u32).unwrap();
-            let p = PathBuilder::from_rect(Rect::from_xywh(0.0, 0.0, w, h).unwrap());
+            let mut r = Mask::new(w, h).unwrap();
+            let p = PathBuilder::from_rect(Rect::from_xywh(0.0, 0.0, w as f32, h as f32).unwrap());
             r.fill_path(&p, FillRule::Winding, true, Transform::identity());
             r
         };
@@ -482,33 +479,16 @@ impl Path {
     }
 }
 
-/// Option for Render
-#[derive(Debug, Educe, Clone)]
+#[derive(Debug, Educe, Clone, Copy)]
 #[educe(Default)]
-pub struct RenderOption {
-    /// zoom level default to 1.0
+pub struct PageDimension {
     #[educe(Default = 1.0)]
     zoom: f32,
     width: u32,
     height: u32,
-    /// If crop is specified, the output canvas will be cropped to the specified rectangle.
-    crop: Option<Rectangle>,
-    #[educe(Default(expression = "SkiaColor::WHITE"))]
-    background_color: SkiaColor,
-    /// Initial state, used in paint_x_form to pass parent state to form Render.
-    state: Option<State>,
-    rotate: i32,
 }
 
-impl RenderOption {
-    pub fn create_canvas(&self) -> Pixmap {
-        let mut r = Pixmap::new(self.canvas_width(), self.canvas_height()).unwrap();
-        if self.background_color.is_opaque() {
-            r.fill(self.background_color);
-        }
-        r
-    }
-
+impl PageDimension {
     pub fn canvas_width(&self) -> u32 {
         (self.width as f32 * self.zoom) as u32
     }
@@ -517,11 +497,43 @@ impl RenderOption {
         (self.height as f32 * self.zoom) as u32
     }
 
+    pub fn logic_device_to_device(&self) -> LogicDeviceToDeviceSpace {
+        logic_device_to_device(self.height, self.zoom)
+    }
+}
+
+/// Option for Render
+#[derive(Debug, Educe, Clone)]
+#[educe(Default)]
+pub struct RenderOption {
+    /// If crop is specified, the output canvas will be cropped to the specified rectangle.
+    crop: Option<Rectangle>,
+    #[educe(Default(expression = "SkiaColor::WHITE"))]
+    background_color: SkiaColor,
+    /// Initial state, used in paint_x_form to pass parent state to form Render.
+    state: Option<State>,
+    rotate: i32,
+    dimension: PageDimension,
+}
+
+impl RenderOption {
+    pub fn create_canvas(&self) -> Pixmap {
+        let mut r = Pixmap::new(
+            self.dimension.canvas_width(),
+            self.dimension.canvas_height(),
+        )
+        .unwrap();
+        if self.background_color.is_opaque() {
+            r.fill(self.background_color);
+        }
+        r
+    }
+
     /// Convert canvas to image, crop if crop option not None
     pub fn to_image(&self, canvas: Pixmap) -> RgbaImage {
         let mut r = RgbaImage::from_raw(canvas.width(), canvas.height(), canvas.take()).unwrap();
         let mut r = if let Some(crop) = self.crop {
-            let crop = crop.zoom(self.zoom);
+            let crop = crop.zoom(self.dimension.zoom);
             let sub_image = r.sub_image(
                 crop.left_x as u32,
                 r.height() - crop.upper_y as u32,
@@ -552,17 +564,22 @@ pub struct RenderOptionBuilder(RenderOption);
 
 impl RenderOptionBuilder {
     pub fn zoom(mut self, zoom: f32) -> Self {
-        self.0.zoom = zoom;
+        self.0.dimension.zoom = zoom;
+        self
+    }
+
+    fn dimension(mut self, dimension: PageDimension) -> Self {
+        self.0.dimension = dimension;
         self
     }
 
     pub fn width(mut self, width: u32) -> Self {
-        self.0.width = width;
+        self.0.dimension.width = width;
         self
     }
 
     pub fn height(mut self, height: u32) -> Self {
-        self.0.height = height;
+        self.0.dimension.height = height;
         self
     }
 
@@ -596,14 +613,11 @@ impl RenderOptionBuilder {
 pub struct Render<'a, 'b, 'c> {
     canvas: &'c mut Pixmap,
     stack: Vec<State>,
-    width: u32,
-    height: u32,
-    zoom: f32,
     path: Path,
     #[educe(Debug(ignore))]
     font_cache: FontCache<'c>,
     resources: &'c ResourceDict<'a, 'b>,
-    crop: Option<Rectangle>,
+    dimension: PageDimension,
 }
 
 impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
@@ -628,14 +642,11 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
         Self {
             canvas,
-            zoom: option.zoom,
             stack: vec![state],
-            width: option.width,
-            height: option.height,
             path: Path::default(),
             font_cache: FontCache::new(resources).unwrap(),
             resources,
-            crop: option.crop,
+            dimension: option.dimension,
         }
     }
 
@@ -1052,9 +1063,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let mut render = Render::new(
             self.canvas,
             RenderOptionBuilder::default()
-                .width(self.width)
-                .height(self.height)
-                .zoom(self.zoom)
+                .dimension(self.dimension)
                 .crop(Some(b_box))
                 .background_color(SkiaColor::TRANSPARENT)
                 .state(inner_state)

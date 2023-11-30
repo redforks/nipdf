@@ -88,6 +88,18 @@ fn test_image_space_to_user_space() {
     f((100., 200.), (1., 0.));
 }
 
+fn image_to_device_space(
+    img_w: u32,
+    img_h: u32,
+    logic_device_height: impl AsPrimitive<f32>,
+    zoom: f32,
+    ctm: &UserToLogicDeviceSpace,
+) -> ImageToDeviceSpace {
+    image_to_user_space(img_w, img_h)
+        .then(ctm)
+        .then(&logic_device_to_device(logic_device_height, zoom))
+}
+
 #[test]
 fn test_image_to_device_space() {
     let f = new_assert(image_to_device_space(
