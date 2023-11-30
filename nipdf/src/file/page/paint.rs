@@ -22,7 +22,7 @@ use crate::{
 use anyhow::{Ok, Result as AnyResult};
 use educe::Educe;
 use either::Either::{self, Left, Right};
-use image::{GenericImage, RgbaImage};
+use image::RgbaImage;
 use log::{debug, info};
 use nom::{combinator::eof, sequence::terminated};
 use prescript::Name;
@@ -261,8 +261,8 @@ impl State {
     }
 
     fn set_ctm(&mut self, ctm: UserToLogicDeviceSpace) {
-        self.ctm = ctm;
-        self.user_to_device = ctm.then(&self.dimension.logic_device_to_device());
+        self.ctm = self.dimension.transform.then(&ctm);
+        self.user_to_device = self.ctm.then(&self.dimension.logic_device_to_device());
     }
 
     fn concat_ctm(&mut self, ctm: UserToUserSpace) {
@@ -487,9 +487,21 @@ pub struct PageDimension {
     zoom: f32,
     width: u32,
     height: u32,
+    // apply before ctm to handle crop_box/media_box left-bottom not at (0, 0) and page rotate
+    transform: UserToUserSpace,
 }
 
 impl PageDimension {
+    pub fn update(&mut self, dimension: &Rectangle) {
+        let mut transform = UserToUserSpace::identity();
+        if dimension.left_x != 0.0 || dimension.lower_y != 0.0 {
+            transform = transform.then_translate((-dimension.left_x, -dimension.lower_y).into());
+        }
+        self.transform = transform;
+        self.width = dimension.width() as u32;
+        self.height = dimension.height() as u32;
+    }
+
     pub fn canvas_width(&self) -> u32 {
         (self.width as f32 * self.zoom) as u32
     }
@@ -533,18 +545,6 @@ impl RenderOption {
     /// Convert canvas to image, crop if crop option not None
     pub fn to_image(&self, canvas: Pixmap) -> RgbaImage {
         let mut r = RgbaImage::from_raw(canvas.width(), canvas.height(), canvas.take()).unwrap();
-        let mut r = if let Some(crop) = self.crop {
-            let crop = crop.zoom(self.dimension.zoom);
-            let sub_image = r.sub_image(
-                crop.left_x as u32,
-                r.height() - crop.upper_y as u32,
-                crop.width() as u32,
-                crop.height() as u32,
-            );
-            sub_image.to_image()
-        } else {
-            r
-        };
 
         match self.rotate % 360 {
             0 => r,
@@ -569,18 +569,13 @@ impl RenderOptionBuilder {
         self
     }
 
+    pub fn page_box(mut self, dimension: &Rectangle) -> Self {
+        self.0.dimension.update(dimension);
+        self
+    }
+
     fn dimension(mut self, dimension: PageDimension) -> Self {
         self.0.dimension = dimension;
-        self
-    }
-
-    pub fn width(mut self, width: u32) -> Self {
-        self.0.dimension.width = width;
-        self
-    }
-
-    pub fn height(mut self, height: u32) -> Self {
-        self.0.dimension.height = height;
         self
     }
 
@@ -1344,10 +1339,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         assert_eq!(b_box.height(), tile.y_step()?, "y_step not supported");
 
         let resources = tile.resources()?;
-        let option = RenderOptionBuilder::default()
-            .width(b_box.width() as u32)
-            .height(b_box.height() as u32)
-            .build();
+        let option = RenderOptionBuilder::default().page_box(&b_box).build();
         let mut canvas = option.create_canvas();
         let mut render = Render::new(&mut canvas, option, &resources);
         if let Some(color) = color {
