@@ -249,7 +249,7 @@ impl State {
             fill_state: ColorState::default(),
         };
 
-        r.reset_ctm(UserToLogicDeviceSpace::identity());
+        r.set_ctm(UserToLogicDeviceSpace::identity());
         r.set_line_cap(LineCapStyle::default());
         r.set_line_join(LineJoinStyle::default());
         r.set_miter_limit(10.0);
@@ -259,9 +259,16 @@ impl State {
         r
     }
 
-    fn reset_ctm(&mut self, ctm: UserToLogicDeviceSpace) {
-        self.user_to_device = ctm.then(&self.dimension.logic_device_to_device());
+    fn set_ctm(&mut self, ctm: UserToLogicDeviceSpace) {
         self.ctm = ctm;
+        self.user_to_device = ctm.then(&self.dimension.logic_device_to_device());
+    }
+
+    fn concat_ctm(&mut self, ctm: UserToLogicDeviceSpace) {
+        self.ctm = ctm.then(&self.ctm.with_source());
+        self.user_to_device = ctm.then(&self.dimension.logic_device_to_device());
+        debug!("ctm to {:?}", self.ctm);
+        debug!("user_to_device to {:?}", self.user_to_device);
     }
 
     fn set_line_width(&mut self, w: f32) {
@@ -290,13 +297,6 @@ impl State {
 
     fn set_render_intent(&mut self, intent: RenderingIntent) {
         info!("not implemented: render intent: {}", intent);
-    }
-
-    fn concat_ctm(&mut self, ctm: UserToLogicDeviceSpace) {
-        self.ctm = ctm.then(&self.ctm.with_source());
-        self.user_to_device = self.ctm.then(&self.dimension.logic_device_to_device());
-        debug!("ctm to {:?}", self.ctm);
-        debug!("user_to_device to {:?}", self.user_to_device);
     }
 
     fn get_fill_paint(&self) -> Cow<'_, Paint<'_>> {
@@ -1059,7 +1059,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let state = self.stack.last().unwrap();
         let mut inner_state = self.stack.last().unwrap().clone();
         let ctm = matrix.then(&state.ctm).with_destination().with_source();
-        inner_state.reset_ctm(ctm);
+        inner_state.set_ctm(ctm);
         let mut render = Render::new(
             self.canvas,
             RenderOptionBuilder::default()
