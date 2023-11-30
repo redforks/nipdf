@@ -60,8 +60,9 @@ pub fn image_to_device_space(
     zoom: f32,
     ctm: &UserToLogicDeviceSpace,
 ) -> ImageToDeviceSpace {
-    let user = image_to_user_space(img_w, img_h).then(ctm);
-    to_device_space(logic_device_height, zoom, &user)
+    image_to_user_space(img_w, img_h)
+        .then(ctm)
+        .then(&logic_device_to_device(logic_device_height, zoom))
 }
 
 /// Adjust transform moves text space to right.
