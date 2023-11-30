@@ -1,5 +1,5 @@
 use crate::{
-    graphics::trans::{TextToUserSpace, UserToLogicDeviceSpace},
+    graphics::trans::TextToUserSpace,
     object::{Array, Dictionary, Object, ObjectValueError, Stream, TextString, TextStringOrNumber},
     parser::{parse_object, whitespace_or_comment, ws_prefixed, ParseError, ParseResult},
 };
@@ -19,6 +19,7 @@ use std::num::NonZeroU32;
 pub(crate) mod color_space;
 mod pattern;
 pub(crate) mod trans;
+use self::trans::UserToUserSpace;
 pub(crate) use pattern::*;
 
 pub(crate) mod shading;
@@ -297,7 +298,7 @@ pub enum Operation {
     #[op_tag("Q")]
     RestoreGraphicsState,
     #[op_tag("cm")]
-    ModifyCTM(UserToLogicDeviceSpace),
+    ModifyCTM(UserToUserSpace),
 
     // Path Construction Operations
     #[op_tag("m")]

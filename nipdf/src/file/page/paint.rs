@@ -12,6 +12,7 @@ use crate::{
             image_to_user_space, logic_device_to_device, move_text_space_pos,
             move_text_space_right, to_device_space, ImageToDeviceSpace, IntoSkiaTransform,
             LogicDeviceToDeviceSpace, TextToUserSpace, UserToDeviceSpace, UserToLogicDeviceSpace,
+            UserToUserSpace,
         },
         ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, PatternType, Point,
         RenderingIntent, ShadingPatternDict, TextRenderingMode, TilingPatternDict,
@@ -264,9 +265,9 @@ impl State {
         self.user_to_device = ctm.then(&self.dimension.logic_device_to_device());
     }
 
-    fn concat_ctm(&mut self, ctm: UserToLogicDeviceSpace) {
-        self.ctm = ctm.then(&self.ctm.with_source());
-        self.user_to_device = ctm.then(&self.dimension.logic_device_to_device());
+    fn concat_ctm(&mut self, ctm: UserToUserSpace) {
+        self.ctm = ctm.then(&self.ctm);
+        self.user_to_device = self.ctm.then(&self.dimension.logic_device_to_device());
         debug!("ctm to {:?}", self.ctm);
         debug!("user_to_device to {:?}", self.user_to_device);
     }

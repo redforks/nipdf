@@ -12,6 +12,7 @@ pub enum DeviceSpace {}
 pub enum ImageSpace {}
 pub enum TextSpace {}
 pub enum FormSpace {}
+pub type UserToUserSpace = Transform2D<f32, UserSpace, UserSpace>;
 pub type UserToLogicDeviceSpace = Transform2D<f32, UserSpace, LogicDeviceSpace>;
 pub type UserToDeviceSpace = Transform2D<f32, UserSpace, DeviceSpace>;
 pub type LogicDeviceToDeviceSpace = Transform2D<f32, LogicDeviceSpace, DeviceSpace>;
