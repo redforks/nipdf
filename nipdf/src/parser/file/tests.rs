@@ -117,3 +117,10 @@ fn read_xref_stream() {
             .unwrap()
     );
 }
+
+#[test]
+fn read_xref_stream_has_prev() {
+    let f = open_test_file("pdf.js/test/pdfs/160F-2019.pdf");
+    // get resolver without error
+    f.resolver().unwrap();
+}

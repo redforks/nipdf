@@ -85,7 +85,6 @@ fn parse_trailer(buf: &[u8]) -> ParseResult<Dictionary> {
 struct CrossReferenceStreamDict {
     size: u32,
     index: Option<Domains<u32>>,
-    prev: Option<u32>,
     w: Vec<u32>,
 }
 
@@ -98,10 +97,6 @@ impl CrossReferenceStreamDict {
         let index = d
             .get(&name!("Index"))
             .map(|o| Domains::<u32>::try_from(o).unwrap());
-        let prev = d
-            .get(&name!("Prev"))
-            .map(|o| o.int().map(|v| v as u32))
-            .transpose()?;
         let w = d
             .get(&name!("W"))
             .ok_or(ObjectValueError::DictKeyNotFound)?
@@ -110,12 +105,7 @@ impl CrossReferenceStreamDict {
             .map(|o| o.int().map(|v| v as u32))
             .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(Self {
-            size,
-            index,
-            prev,
-            w,
-        })
+        Ok(Self { size, index, w })
     }
 }
 
@@ -146,10 +136,6 @@ fn parse_xref_stream(input: &[u8]) -> ParseResult<(XRefSection, Dictionary)> {
     let (buf, stream) = parse_indirect_stream(input)?;
     let d = stream.as_dict();
     let d = CrossReferenceStreamDict::new(d).map_err(to_parse_error)?;
-    assert!(
-        d.prev.is_none(),
-        "cross-reference streams with multi frame not supported"
-    );
 
     let data = stream
         .decode_without_resolve_length(input)
