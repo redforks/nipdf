@@ -77,10 +77,10 @@ impl ObjectStream {
         let d = stream.as_dict();
         assert_eq!(name!("ObjStm"), d[&name!("Type")].name()?);
         let n = d.get(&name!("N")).map_or(Ok(0), |v| v.int())? as usize;
-        assert!(
-            !d.contains_key(&name!("Extends")),
-            "Extends is not supported"
-        );
+        // assert!(
+        //     !d.contains_key(&name!("Extends")),
+        //     "Extends is not supported"
+        // );
         let buf = stream.decode_without_resolve_length(file)?;
         parse_object_stream(n, buf.as_ref())
             .map_err(|e| ObjectValueError::ParseError(e.to_string()))
