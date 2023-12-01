@@ -2,8 +2,9 @@ use self::paint::Render;
 pub use self::paint::{RenderOption, RenderOptionBuilder};
 use crate::{
     graphics::{
-        parse_operations, shading::ShadingDict, trans::FormToUserSpace, ColorArgs, ColorSpaceArgs,
-        LineCapStyle, LineJoinStyle, Operation, PatternDict, Point, RenderingIntent,
+        parse_operations2, shading::ShadingDict, trans::FormToUserSpace,
+        ColorArgs, ColorSpaceArgs, LineCapStyle, LineJoinStyle, Operation, PatternDict, Point,
+        RenderingIntent,
     },
     object::{Dictionary, Object, ObjectValueError, PdfObject, Stream},
     text::FontDict,
@@ -386,7 +387,7 @@ impl PageContent {
         let mut r = vec![];
         let mut operands = Vec::with_capacity(8);
         for buf in &self.bufs {
-            let (input, ops) = parse_operations(&mut operands, buf.as_ref())
+            let (input, ops) = parse_operations2(&mut operands, buf.as_ref())
                 .finish()
                 .unwrap();
             assert!(input.is_empty(), "buf should be empty: {:?}", input);

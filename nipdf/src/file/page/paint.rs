@@ -6,7 +6,7 @@ use crate::{
     function::Domain,
     graphics::{
         color_space::{ColorSpace, ColorSpaceTrait},
-        parse_operations, parse_operations2,
+        parse_operations,
         shading::{build_shading, Axial, Extend, Radial, Shading},
         trans::{
             image_to_user_space, logic_device_to_device, move_text_space_pos,
@@ -40,7 +40,7 @@ use tiny_skia::{
 };
 
 mod fonts;
-use euclid::{vec2, Angle, Transform2D};
+use euclid::Angle;
 use fonts::*;
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -1347,7 +1347,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let stream: &Object = tile.resolver().resolve(tile.id().unwrap())?;
         let stream = stream.stream()?;
         let bytes = stream.decode(tile.resolver())?;
-        let (_, ops) = terminated(parse_operations2, eof)(bytes.as_ref()).unwrap();
+        let (_, ops) = terminated(parse_operations, eof)(bytes.as_ref()).unwrap();
         let b_box = tile.b_box()?;
         assert_eq!(b_box.width(), tile.x_step()?, "x_step not supported");
         assert_eq!(b_box.height(), tile.y_step()?, "y_step not supported");

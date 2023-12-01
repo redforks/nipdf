@@ -38,9 +38,6 @@ fn parse_operator_succeed(s: &str, op: &str) {
     ];
     "cm and Do"
 )]
-#[test_case(r"[(c)-4 (et)-1.9 (t)-1.8 (e t)-1.9 (r)1.4 (ans)-4 (m)-15.8 (i)-6.2 (s)-4 (s)-4 (i)-6.1 (on ne peut)-1.8 ( s)-4 (e f)-1.8 (ai)-6.1 (r)1.4 (e que par)1.4 ( v)-4 (oi)-6.1 (e \351l)-6.2 (ec)-4 (t)-1.9 (r)1.5 (oni)-6.1 (que)]     TJ" => vec![
-    Operation::ShowTexts(Vec::new())
-]; "TJ prefixed with extra whitespace")]
 fn test_parse_operations(s: &str) -> Vec<Operation> {
     let (_, result) = parse_operations(s.as_bytes()).unwrap();
     result

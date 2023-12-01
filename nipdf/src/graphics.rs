@@ -572,12 +572,12 @@ fn parse_object_or_operator(input: &[u8]) -> ParseResult<ObjectOrOperator> {
     alt((parse_object.map(ObjectOrOperator::Object), parse_operator))(input)
 }
 
-pub fn parse_operations2(input: &[u8]) -> ParseResult<Vec<Operation>> {
+pub fn parse_operations(input: &[u8]) -> ParseResult<Vec<Operation>> {
     let mut operands = Vec::with_capacity(8);
-    parse_operations(&mut operands, input)
+    parse_operations2(&mut operands, input)
 }
 
-pub fn parse_operations<'a>(
+pub fn parse_operations2<'a>(
     operands: &mut Vec<Object>,
     mut input: &'a [u8],
 ) -> ParseResult<'a, Vec<Operation>> {

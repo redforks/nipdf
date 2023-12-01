@@ -142,3 +142,13 @@ fn todo_coons_patch_mesh_shading() {
     // ShadingType::CoonsPatchMesh not implemented
     assert_ron_snapshot!(&decode_file_page("sample_files/bizarre/PDF32000_2008.pdf", 747).unwrap())
 }
+
+#[test]
+fn todo_interactive_form() {
+    // Tests:
+    //   1. media_box left-lower point not (0,0)
+    //   1. multiple page content stream, and operands and operator cross streams
+    //   1. todo interactive form
+
+    assert_ron_snapshot!(&decode_file_page("pdf.js/test/pdfs/160F-2019.pdf", 0).unwrap())
+}
