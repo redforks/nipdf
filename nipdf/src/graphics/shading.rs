@@ -1,4 +1,4 @@
-use super::{color_space::ColorSpace, Point};
+use super::{color_space::ColorSpace, IntoSkia, Point};
 use crate::{
     file::{Rectangle, ResourceDict},
     function::{default_domain, Domain, Function, FunctionDict, Type as FunctionType},
@@ -67,14 +67,8 @@ impl TryFrom<&Object> for AxialCoords {
             return Err(ObjectValueError::UnexpectedType);
         }
         Ok(Self {
-            start: Point {
-                x: arr[0].as_number()?,
-                y: arr[1].as_number()?,
-            },
-            end: Point {
-                x: arr[2].as_number()?,
-                y: arr[3].as_number()?,
-            },
+            start: Point::new(arr[0].as_number()?, arr[1].as_number()?),
+            end: Point::new(arr[2].as_number()?, arr[3].as_number()?),
         })
     }
 }
@@ -123,17 +117,11 @@ impl TryFrom<&Object> for RadialCoords {
         }
         Ok(Self {
             start: RadialCircle {
-                point: Point {
-                    x: arr[0].as_number()?,
-                    y: arr[1].as_number()?,
-                },
+                point: Point::new(arr[0].as_number()?, arr[1].as_number()?),
                 r: arr[2].as_number()?,
             },
             end: RadialCircle {
-                point: Point {
-                    x: arr[3].as_number()?,
-                    y: arr[4].as_number()?,
-                },
+                point: Point::new(arr[3].as_number()?, arr[4].as_number()?),
                 r: arr[5].as_number()?,
             },
         })
@@ -273,8 +261,8 @@ pub struct Axial {
 impl Axial {
     pub fn into_skia(self, transform: Transform) -> Option<Shader<'static>> {
         LinearGradient::new(
-            self.start.into(),
-            self.end.into(),
+            self.start.into_skia(),
+            self.end.into_skia(),
             self.stops,
             tiny_skia::SpreadMode::Pad,
             transform,
@@ -299,8 +287,8 @@ pub struct Radial {
 impl Radial {
     pub fn into_skia(self, transform: Transform) -> Option<Shader<'static>> {
         RadialGradient::new(
-            self.start.point.into(),
-            self.end.point.into(),
+            self.start.point.into_skia(),
+            self.end.point.into_skia(),
             self.start.r.max(self.end.r),
             self.stops,
             tiny_skia::SpreadMode::Pad,

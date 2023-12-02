@@ -35,8 +35,7 @@ use std::{
 };
 use tiny_skia::{
     Color as SkiaColor, FillRule, FilterQuality, Mask, MaskType, Paint, Path as SkiaPath,
-    PathBuilder, Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect, Stroke, StrokeDash,
-    Transform,
+    PathBuilder, Pixmap, PixmapPaint, PixmapRef, Rect, Stroke, StrokeDash, Transform,
 };
 
 mod fonts;
@@ -60,12 +59,6 @@ impl From<LineJoinStyle> for tiny_skia::LineJoin {
             LineJoinStyle::Round => tiny_skia::LineJoin::Round,
             LineJoinStyle::Bevel => tiny_skia::LineJoin::Bevel,
         }
-    }
-}
-
-impl From<Point> for SkiaPoint {
-    fn from(p: Point) -> Self {
-        Self::from_xy(p.x, p.y)
     }
 }
 
@@ -440,7 +433,7 @@ impl Path {
 
     pub fn curve_to_cur_point_as_control(&mut self, p2: Point, p3: Point) {
         let p1 = self.path_builder().last_point().unwrap();
-        self.curve_to(Point { x: p1.x, y: p1.y }, p2, p3);
+        self.curve_to(Point::new(p1.x, p1.y), p2, p3);
     }
 
     pub fn curve_to_dest_point_as_control(&mut self, p1: Point, p3: Point) {
@@ -1151,8 +1144,8 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
     fn paint_radial(&mut self, radial: &Radial) -> AnyResult<()> {
         let Domain { start: t0, end: t1 } = radial.domain;
-        let Point { x: x0, y: y0 } = radial.start.point;
-        let Point { x: x1, y: y1 } = radial.end.point;
+        let (x0, y0) = (radial.start.point.x, radial.start.point.y);
+        let (x1, y1) = (radial.end.point.x, radial.end.point.y);
         let r0 = radial.start.r;
         let r1 = radial.end.r;
         let state = self.stack.last().unwrap();
@@ -1206,7 +1199,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         }
 
         if radial.extend.begin() && radial.start.r > 0.0 {
-            let Point { x, y } = radial.start.point;
+            let (x, y) = (radial.start.point.x, radial.start.point.y);
             let r = radial.start.r;
             let c = radial.function.call(&[0.0])?;
             let c = radial.color_space.to_rgba(c.as_slice());
