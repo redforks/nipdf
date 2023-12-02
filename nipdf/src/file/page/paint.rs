@@ -70,11 +70,13 @@ enum PaintCreator {
 }
 
 impl PaintCreator {
-    fn create(&self) -> Cow<'_, Paint<'_>> {
+    fn create(&self, alpha: f32) -> Cow<'_, Paint<'_>> {
         match self {
             PaintCreator::Color(c) => {
                 let mut r = Paint::default();
-                r.set_color(*c);
+                let mut c = *c;
+                c.set_alpha(alpha);
+                r.set_color(c);
                 Cow::Owned(r)
             }
 
@@ -88,7 +90,7 @@ impl PaintCreator {
                     p.as_ref(),
                     tiny_skia::SpreadMode::Repeat,
                     FilterQuality::Bicubic,
-                    1.0f32,
+                    alpha,
                     transform.into_skia(),
                 );
                 Cow::Owned(r)
@@ -168,9 +170,15 @@ struct ColorState {
     paint: PaintCreator,
     #[educe(Default(expression = "ColorSpace::DeviceRGB"))]
     color_space: ColorSpace<f32>,
+    #[educe(Default = 1.0f32)]
+    alpha: f32,
 }
 
 impl ColorState {
+    pub fn set_alpha(&mut self, alpha: f32) {
+        self.alpha = alpha;
+    }
+
     pub fn set_color_args(&mut self, color_args: impl AsRef<[f32]>) {
         let color = self.color_space.to_skia_color(color_args.as_ref());
         self.set_color(color);
@@ -195,9 +203,19 @@ impl ColorState {
         mask: Option<&Mask>,
     ) {
         if let Some(paint) = &self.background_paint {
-            canvas.stroke_path(path, &paint.create(), stroke, transform, mask);
+            canvas.stroke_path(path, &paint.create(self.alpha), stroke, transform, mask);
         }
-        canvas.stroke_path(path, &self.paint.create(), stroke, transform, mask);
+        canvas.stroke_path(
+            path,
+            &self.paint.create(self.alpha),
+            stroke,
+            transform,
+            mask,
+        );
+    }
+
+    pub fn create_paint(&self) -> Cow<'_, Paint<'_>> {
+        self.paint.create(self.alpha)
     }
 
     /// If background_paint not null, fill using it before use self.paint
@@ -210,9 +228,15 @@ impl ColorState {
         mask: Option<&Mask>,
     ) {
         if let Some(paint) = &self.background_paint {
-            canvas.fill_path(path, &paint.create(), fill_rule, transform, mask);
+            canvas.fill_path(path, &paint.create(self.alpha), fill_rule, transform, mask);
         }
-        canvas.fill_path(path, &self.paint.create(), fill_rule, transform, mask);
+        canvas.fill_path(
+            path,
+            &self.paint.create(self.alpha),
+            fill_rule,
+            transform,
+            mask,
+        );
     }
 }
 
@@ -295,11 +319,11 @@ impl State {
     }
 
     fn get_fill_paint(&self) -> Cow<'_, Paint<'_>> {
-        self.fill_state.paint.create()
+        self.fill_state.create_paint()
     }
 
     fn get_stroke_paint(&self) -> Cow<'_, Paint<'_>> {
-        self.stroke_state.paint.create()
+        self.stroke_state.create_paint()
     }
 
     fn get_stroke(&self) -> &Stroke {
@@ -326,6 +350,8 @@ impl State {
                 "RI" => self.set_render_intent(res.rendering_intent().unwrap().unwrap()),
                 "TK" => self.set_text_knockout_flag(res.text_knockout_flag().unwrap().unwrap()),
                 "FL" => self.set_flatness(res.flatness().unwrap().unwrap()),
+                "CA" => self.set_stroke_alpha(res.stroke_alpha().unwrap().unwrap()),
+                "ca" => self.set_fill_alpha(res.fill_alpha().unwrap().unwrap()),
                 "Type" => (),
                 "SM" => debug!("ExtGState key: SM (smoothness tolerance) not implemented"),
                 k @ ("OPM" | "op" | "OP") => {
@@ -399,6 +425,14 @@ impl State {
             self.clip_non_zero(&p, false);
             self.text_object.text_clipping_path.reset();
         }
+    }
+
+    fn set_stroke_alpha(&mut self, alpha: f32) {
+        self.stroke_state.set_alpha(alpha);
+    }
+
+    fn set_fill_alpha(&mut self, alpha: f32) {
+        self.fill_state.set_alpha(alpha);
     }
 }
 
