@@ -3,6 +3,7 @@
 use anyhow::Result as AnyResult;
 use hex::ToHex;
 use insta::assert_ron_snapshot;
+use log::info;
 use md5::{Digest, Md5};
 use nipdf::file::{File, RenderOptionBuilder};
 use nipdf_test_macro::pdf_file_test_cases;
@@ -80,7 +81,8 @@ fn render(f: &str) -> AnyResult<()> {
     let pdf = File::parse(buf, "", "").unwrap_or_else(|_| panic!("failed to parse {f:?}"));
     let resolver = pdf.resolver().unwrap();
     let catalog = pdf.catalog(&resolver)?;
-    for page in catalog.pages()? {
+    for (idx, page) in catalog.pages()?.into_iter().enumerate() {
+        info!("Page: {}", idx);
         let option = RenderOptionBuilder::new().zoom(0.75);
         page.render(option)?;
     }
