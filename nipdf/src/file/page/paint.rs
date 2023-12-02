@@ -501,10 +501,21 @@ impl PageDimension {
         if dimension.left_x != 0.0 || dimension.lower_y != 0.0 {
             transform = transform.then_translate((-dimension.left_x, -dimension.lower_y).into());
         }
+        let (mut w, mut h) = (dimension.width() as u64, dimension.height() as u64);
+        while w * h > 1024 * 1024 * 100 {
+            w /= 2;
+            h /= 2;
+        }
+
+        // update transform to scale down if w shrinks
+        if w != dimension.width() as u64 {
+            let scale = w as f32 / dimension.width();
+            transform = transform.then_scale(scale, scale);
+        }
         self.transform = transform;
 
-        self.width = dimension.width() as u32;
-        self.height = dimension.height() as u32;
+        self.width = w as u32;
+        self.height = h as u32;
         if self.swap_wh() {
             std::mem::swap(&mut self.width, &mut self.height);
         }
