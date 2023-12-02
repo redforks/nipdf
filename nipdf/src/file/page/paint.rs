@@ -1471,6 +1471,11 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
     fn show_text(&mut self, text: &[u8]) {
         let text_object = self.text_object();
+        let render_mode = text_object.render_mode;
+        if render_mode == TextRenderingMode::Invisible {
+            return;
+        }
+
         let char_spacing = text_object.char_spacing;
         let word_spacing = text_object.word_spacing;
         let font = self
@@ -1496,7 +1501,6 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             .unwrap();
 
         let mut text_to_user_space: TextToUserSpace = text_object.matrix;
-        let render_mode = text_object.render_mode;
         let mut text_clip_path = Path::default();
         let flip_y = state.user_to_device.into_skia();
         for ch in op.decode_chars(text) {
