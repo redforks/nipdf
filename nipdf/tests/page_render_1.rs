@@ -45,6 +45,7 @@ fn image_separation_color_space() {
 fn render(f: &str) -> AnyResult<()> {
     let hash_file: String = Md5::digest(f.as_bytes()).as_slice().encode_hex();
     let mut hash_file = Path::join(Path::new(env!["CARGO_TARGET_TMPDIR"]), hash_file);
+    eprintln!("{}.pdf", hash_file.to_str().unwrap());
     hash_file.set_extension("ok");
     let hash_file = hash_file;
     if hash_file.exists() {
