@@ -287,7 +287,7 @@ where
 /// Abstract `ObjectResolver` out, to help
 /// `SchemaDict` works without `ObjectResolver`.
 /// Some `Dictionary` are known not contains Reference.
-pub trait Resolver<'a> {
+pub trait Resolver {
     fn resolve_reference<'b>(&'b self, v: &'b Object) -> Result<&'b Object, ObjectValueError>;
 
     fn do_resolve_container_value<'b: 'c, 'c, C: DataContainer>(
@@ -297,7 +297,7 @@ pub trait Resolver<'a> {
     ) -> Result<(Option<NonZeroU32>, &'c Object), ObjectValueError>;
 }
 
-impl<'a> Resolver<'a> for () {
+impl Resolver for () {
     fn resolve_reference<'b>(&'b self, v: &'b Object) -> Result<&'b Object, ObjectValueError> {
         debug_assert!(
             !matches!(v, Object::Reference(_)),
@@ -323,10 +323,10 @@ impl<'a> Resolver<'a> for () {
     }
 }
 
-pub trait PdfObject<'a, 'b, R>
+pub trait PdfObject<'b, R>
 where
     Self: Sized,
-    R: Resolver<'a>,
+    R: Resolver,
 {
     fn new(
         id: Option<NonZeroU32>,
@@ -395,7 +395,7 @@ macro_rules! schema_access {
     };
 }
 
-impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
+impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
     schema_access!(bool, bool);
 
     schema_access!(int, i32);
@@ -643,7 +643,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
             .as_string()
     }
 
-    pub fn opt_resolve_pdf_object<'s, O: PdfObject<'a, 'b, R>>(
+    pub fn opt_resolve_pdf_object<'s, O: PdfObject<'b, R>>(
         &self,
         id: Name,
     ) -> Result<Option<O>, ObjectValueError> {
@@ -663,7 +663,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
     /// If value not exist, return empty vector.
     pub fn resolve_one_or_more_pdf_object<O>(&self, id: Name) -> Result<Vec<O>, ObjectValueError>
     where
-        O: PdfObject<'a, 'b, R>,
+        O: PdfObject<'b, R>,
     {
         let id_n_obj = self._opt_resolve_container_value(id)?;
         id_n_obj.map_or_else(
@@ -693,7 +693,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
     /// The raw value should be an array of references.
     pub fn resolve_pdf_object_array<O>(&self, id: Name) -> Result<Vec<O>, ObjectValueError>
     where
-        O: PdfObject<'a, 'b, R>,
+        O: PdfObject<'b, R>,
     {
         let arr = self.opt_resolve_value(id)?;
         arr.map_or_else(
@@ -719,7 +719,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
     /// The raw value should be a dictionary, that key is Name and value is Dictionary.
     pub fn resolve_pdf_object_map<O>(&self, id: Name) -> anyhow::Result<HashMap<Name, O>>
     where
-        O: PdfObject<'a, 'b, R>,
+        O: PdfObject<'b, R>,
     {
         let dict = self.opt_resolve_value(id)?;
         dict.map_or_else(
@@ -736,7 +736,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
         )
     }
 
-    fn _resolve_pdf_object<O: PdfObject<'a, 'b, R>>(
+    fn _resolve_pdf_object<O: PdfObject<'b, R>>(
         &self,
         d: &'b Dictionary,
         id: Name,
@@ -750,10 +750,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
         O::new(id, obj, self.r)
     }
 
-    pub fn resolve_pdf_object<O: PdfObject<'a, 'b, R>>(
-        &self,
-        id: Name,
-    ) -> Result<O, ObjectValueError> {
+    pub fn resolve_pdf_object<O: PdfObject<'b, R>>(&self, id: Name) -> Result<O, ObjectValueError> {
         self._resolve_pdf_object(self.d, id)
     }
 
