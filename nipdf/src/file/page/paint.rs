@@ -40,7 +40,7 @@ use tiny_skia::{
 };
 
 mod fonts;
-use euclid::Angle;
+use euclid::{default::Size2D, Angle};
 use fonts::*;
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -501,21 +501,10 @@ impl PageDimension {
         if dimension.left_x != 0.0 || dimension.lower_y != 0.0 {
             transform = transform.then_translate((-dimension.left_x, -dimension.lower_y).into());
         }
-        let (mut w, mut h) = (dimension.width() as u64, dimension.height() as u64);
-        while w * h > 1024 * 1024 * 100 {
-            w /= 2;
-            h /= 2;
-        }
-
-        // update transform to scale down if w shrinks
-        if w != dimension.width() as u64 {
-            let scale = w as f32 / dimension.width();
-            transform = transform.then_scale(scale, scale);
-        }
         self.transform = transform;
 
-        self.width = w as u32;
-        self.height = h as u32;
+        self.width = dimension.width() as u32;
+        self.height = dimension.height() as u32;
         if self.swap_wh() {
             std::mem::swap(&mut self.width, &mut self.height);
         }
@@ -567,11 +556,15 @@ pub struct RenderOption {
 
 impl RenderOption {
     pub fn create_canvas(&self) -> Pixmap {
-        let mut r = Pixmap::new(
-            self.dimension.canvas_width(),
-            self.dimension.canvas_height(),
-        )
-        .unwrap();
+        let (w, h) = (
+            self.dimension.canvas_width() as u64,
+            self.dimension.canvas_height() as u64,
+        );
+        if w * h > 1024 * 1024 * 100 {
+            panic!("page size too large: {}x{}", w, h);
+        }
+
+        let mut r = Pixmap::new(w as u32, h as u32).unwrap();
         if self.background_color.is_opaque() {
             r.fill(self.background_color);
         }
@@ -1122,24 +1115,22 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                 ctm,
                 PathBuilder::from_rect(b_box.into()),
             )
+        } else if let Some((path, _)) = &state.mask {
+            (ctm, Transform::identity(), (**path).clone())
         } else {
-            if let Some((path, _)) = &state.mask {
-                (ctm, Transform::identity(), (**path).clone())
-            } else {
-                (
-                    ctm,
-                    Transform::identity(),
-                    PathBuilder::from_rect(
-                        Rectangle::from_xywh(
-                            0.,
-                            0.,
-                            self.device_width() as f32,
-                            self.device_height() as f32,
-                        )
-                        .into(),
-                    ),
-                )
-            }
+            (
+                ctm,
+                Transform::identity(),
+                PathBuilder::from_rect(
+                    Rectangle::from_xywh(
+                        0.,
+                        0.,
+                        self.device_width() as f32,
+                        self.device_height() as f32,
+                    )
+                    .into(),
+                ),
+            )
         };
 
         if let Some(shader) = axial.into_skia(shader_ctm) {
@@ -1286,7 +1277,16 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                 let pattern = &pattern[name];
                 match pattern.pattern_type()? {
                     PatternType::Tiling => {
-                        Self::tiling_pattern(get_state(self), pattern.tiling_pattern()?, color)
+                        let dimension = Size2D::new(
+                            self.dimension.canvas_width() as f32,
+                            self.dimension.canvas_height() as f32,
+                        );
+                        Self::tiling_pattern(
+                            &dimension,
+                            get_state(self),
+                            pattern.tiling_pattern()?,
+                            color,
+                        )
                     }
                     PatternType::Shading => {
                         if let Some((paint, background_color)) =
@@ -1364,6 +1364,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
     }
 
     fn tiling_pattern(
+        canvas_size: &Size2D<f32>,
         color_state: &mut ColorState,
         tile: TilingPatternDict<'a, 'b>,
         color: Option<SkiaColor>,
@@ -1378,9 +1379,21 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let b_box = tile.b_box()?;
         assert_eq!(b_box.width(), tile.x_step()?, "x_step not supported");
         assert_eq!(b_box.height(), tile.y_step()?, "y_step not supported");
+        let mut zoom = 1.0f32;
+        let (mut w, mut h) = (b_box.width(), b_box.height());
+        let mut matrix = tile.matrix()?;
+        while w > canvas_size.width && h > canvas_size.height {
+            w /= 2.0;
+            h /= 2.0;
+            zoom /= 2.0;
+            matrix = matrix.then_scale(2.0, 2.0);
+        }
 
         let resources = tile.resources()?;
-        let option = RenderOptionBuilder::default().page_box(&b_box, 0).build();
+        let option = RenderOptionBuilder::default()
+            .zoom(zoom)
+            .page_box(&b_box, 0)
+            .build();
         let mut canvas = option.create_canvas();
         let mut render = Render::new(&mut canvas, option, &resources);
         if let Some(color) = color {
@@ -1389,7 +1402,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         }
         ops.into_iter().for_each(|op| render.exec(op));
         drop(render);
-        color_state.paint = PaintCreator::Tile((canvas, tile.matrix()?));
+        color_state.paint = PaintCreator::Tile((canvas, matrix));
         Ok(())
     }
 

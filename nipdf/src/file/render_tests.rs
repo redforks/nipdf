@@ -152,3 +152,10 @@ fn todo_interactive_form() {
 
     assert_ron_snapshot!(&decode_file_page("pdf.js/test/pdfs/160F-2019.pdf", 0).unwrap())
 }
+
+#[test]
+fn tile_pattern_with_very_large_b_box() {
+    assert_ron_snapshot!(
+        &decode_file_page("pdf.js/web/compressed.tracemonkey-pldi-09.pdf", 12).unwrap()
+    )
+}
