@@ -368,7 +368,7 @@ pub enum Operation {
     #[op_tag("TJ")]
     ShowTexts(Vec<TextStringOrNumber>),
     #[op_tag("'")]
-    MoveToNextLineAndShowText(String),
+    MoveToNextLineAndShowText(TextString),
     #[op_tag("\"")]
     SetSpacingMoveToNextLineAndShowText(f32, f32, String),
 

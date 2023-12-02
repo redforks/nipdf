@@ -773,14 +773,14 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                 self.text_object_mut().move_text_position(p);
             }
             Operation::SetTextMatrix(m) => self.text_object_mut().set_text_matrix(m),
-            Operation::MoveToStartOfNextLine => {
-                let leading = self.stack.last().unwrap().text_object.leading;
-                self.text_object_mut()
-                    .move_text_position(Point::new(0.0, -leading));
-            }
+            Operation::MoveToStartOfNextLine => self.move_to_start_of_next_line(),
 
             // Text Showing Operations
             Operation::ShowText(text) => self.show_text(text.to_bytes().unwrap()),
+            Operation::MoveToNextLineAndShowText(text) => {
+                self.move_to_start_of_next_line();
+                self.show_text(text.to_bytes().unwrap());
+            }
             Operation::ShowTexts(texts) => self.show_texts(&texts),
 
             // Color Operations
@@ -838,6 +838,12 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
             _ => todo!("{:?}", op),
         }
+    }
+
+    fn move_to_start_of_next_line(&mut self) {
+        let leading = self.stack.last().unwrap().text_object.leading;
+        self.text_object_mut()
+            .move_text_position(Point::new(0.0, -leading));
     }
 
     fn set_color_args(
