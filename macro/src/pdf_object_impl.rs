@@ -613,21 +613,20 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
     let tokens = if stub_resolver(&def.attrs) {
         quote! {
             #[derive(Clone, Debug)]
-            #vis struct #struct_name<'a, 'b> {
+            #vis struct #struct_name<'b> {
                 d: crate::object::SchemaDict<'b, #valid_ty, ()>,
                 id: Option<std::num::NonZeroU32>,
-                _phantom: std::marker::PhantomData<&'a ()>,
             }
 
-            impl<'a, 'b> crate::object::PdfObject<'a, 'b, ()> for #struct_name<'a, 'b> {
+            impl<'b> crate::object::PdfObject<'b, ()> for #struct_name<'b> {
                 fn new(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary, r: &'b ()) -> Result<Self, crate::object::ObjectValueError> {
                     let d = crate::object::SchemaDict::new(dict, r, #valid_arg)?;
-                    Ok(Self { d, id, _phantom: std::marker::PhantomData})
+                    Ok(Self { d, id })
                 }
 
                 fn checked(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary, r: &'b ()) -> Result<Option<Self>, crate::object::ObjectValueError> {
                     let d = crate::object::SchemaDict::from(dict, r, #valid_arg)?;
-                    Ok(d.map(|d| Self { d, id, _phantom: std::marker::PhantomData}))
+                    Ok(d.map(|d| Self { d, id }))
                 }
 
                 fn id(&self) -> Option<std::num::NonZeroU32> {
@@ -639,7 +638,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
             }
 
-            impl<'a, 'b> #struct_name<'a, 'b> {
+            impl<'b> #struct_name<'b> {
                 #(#methods)*
             }
         }
@@ -651,7 +650,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 id: Option<std::num::NonZeroU32>,
             }
 
-            impl<'a, 'b> crate::object::PdfObject<'a, 'b, crate::file::ObjectResolver<'a>> for #struct_name<'a, 'b> {
+            impl<'a, 'b> crate::object::PdfObject<'b, crate::file::ObjectResolver<'a>> for #struct_name<'a, 'b> {
                 fn new(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary, r: &'b crate::file::ObjectResolver<'a>) -> Result<Self, crate::object::ObjectValueError> {
                     let d = crate::object::SchemaDict::new(dict, r, #valid_arg)?;
                     Ok(Self { d, id})
