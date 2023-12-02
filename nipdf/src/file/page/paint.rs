@@ -10,9 +10,9 @@ use crate::{
         shading::{build_shading, Axial, Extend, Radial, Shading},
         trans::{
             f_flip, image_to_user_space, logic_device_to_device, move_text_space_pos,
-            move_text_space_right, ImageToDeviceSpace, IntoSkiaTransform,
-            LogicDeviceToDeviceSpace, PatternSpace, PatternToUserSpace, TextToUserSpace,
-            UserToDeviceSpace, UserToLogicDeviceSpace, UserToUserSpace,
+            move_text_space_right, ImageToDeviceSpace, IntoSkiaTransform, LogicDeviceToDeviceSpace,
+            PatternSpace, PatternToUserSpace, TextToUserSpace, UserToDeviceSpace,
+            UserToLogicDeviceSpace, UserToUserSpace,
         },
         ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, PatternType, Point,
         RenderingIntent, ShadingPatternDict, TextRenderingMode, TilingPatternDict,
@@ -1105,19 +1105,30 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
         let state = self.stack.last().unwrap();
         let ctm = state.user_to_device.into_skia();
-        let (shader_ctm, fill_ctm, rect) = if let Some(b_box) = b_box {
-            (Transform::identity(), ctm, b_box)
-        } else {
+        let (shader_ctm, fill_ctm, path) = if let Some(b_box) = b_box {
             (
-                ctm,
                 Transform::identity(),
-                Rectangle::from_xywh(
-                    0.,
-                    0.,
-                    self.device_width() as f32,
-                    self.device_height() as f32,
-                ),
+                ctm,
+                PathBuilder::from_rect(b_box.into()),
             )
+        } else {
+            if let Some((path, _)) = &state.mask {
+                (ctm, Transform::identity(), (**path).clone())
+            } else {
+                (
+                    ctm,
+                    Transform::identity(),
+                    PathBuilder::from_rect(
+                        Rectangle::from_xywh(
+                            0.,
+                            0.,
+                            self.device_width() as f32,
+                            self.device_height() as f32,
+                        )
+                        .into(),
+                    ),
+                )
+            }
         };
 
         if let Some(shader) = axial.into_skia(shader_ctm) {
@@ -1125,8 +1136,13 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                 shader,
                 ..Default::default()
             };
-            self.canvas
-                .fill_rect(rect.into(), &paint, fill_ctm, state.get_mask().as_deref());
+            self.canvas.fill_path(
+                &path,
+                &paint,
+                FillRule::Winding,
+                fill_ctm,
+                state.get_mask().as_deref(),
+            );
         }
         Ok(())
     }
