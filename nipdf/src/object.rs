@@ -287,7 +287,7 @@ where
 /// Abstract `ObjectResolver` out, to help
 /// `SchemaDict` works without `ObjectResolver`.
 /// Some `Dictionary` are known not contains Reference.
-pub trait Resolver<'a> {
+pub trait Resolver {
     fn resolve_reference<'b>(&'b self, v: &'b Object) -> Result<&'b Object, ObjectValueError>;
 
     fn do_resolve_container_value<'b: 'c, 'c, C: DataContainer>(
@@ -297,7 +297,7 @@ pub trait Resolver<'a> {
     ) -> Result<(Option<NonZeroU32>, &'c Object), ObjectValueError>;
 }
 
-impl<'a> Resolver<'a> for () {
+impl Resolver for () {
     fn resolve_reference<'b>(&'b self, v: &'b Object) -> Result<&'b Object, ObjectValueError> {
         debug_assert!(
             !matches!(v, Object::Reference(_)),
@@ -326,7 +326,7 @@ impl<'a> Resolver<'a> for () {
 pub trait PdfObject<'a, 'b, R>
 where
     Self: Sized,
-    R: Resolver<'a>,
+    R: Resolver,
 {
     fn new(
         id: Option<NonZeroU32>,
@@ -395,7 +395,7 @@ macro_rules! schema_access {
     };
 }
 
-impl<'a, 'b, T: TypeValidator, R: 'a + Resolver<'a>> SchemaDict<'b, T, R> {
+impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
     schema_access!(bool, bool);
 
     schema_access!(int, i32);

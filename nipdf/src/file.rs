@@ -515,7 +515,7 @@ impl<'a> ObjectResolver<'a> {
     }
 }
 
-impl<'a> Resolver<'a> for ObjectResolver<'a> {
+impl<'a> Resolver for ObjectResolver<'a> {
     fn do_resolve_container_value<'b: 'c, 'c, C: DataContainer>(
         &'b self,
         c: &'c C,
