@@ -7,7 +7,7 @@ use crate::{
     graphics::{
         color_space::{ColorSpace, ColorSpaceTrait},
         parse_operations,
-        shading::{build_shading, Axial, Extend, Radial, Shading},
+        shading::{build_shading, Axial, Radial, Shading},
         trans::{
             f_flip, image_to_user_space, logic_device_to_device, move_text_space_pos,
             move_text_space_right, ImageToDeviceSpace, IntoSkiaTransform, LogicDeviceToDeviceSpace,
@@ -62,10 +62,10 @@ impl From<LineJoinStyle> for tiny_skia::LineJoin {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 enum PaintCreator {
     Color(SkiaColor),
-    Gradient(Paint<'static>),
+    Gradient((Shading, UserToLogicDeviceSpace)),
     Tile((Pixmap, PatternToUserSpace)),
 }
 
@@ -80,7 +80,10 @@ impl PaintCreator {
                 Cow::Owned(r)
             }
 
-            PaintCreator::Gradient(p) => Cow::Borrowed(p),
+            PaintCreator::Gradient((pattern, matrix)) => Cow::Owned(Paint {
+                shader: pattern.to_skia(matrix, alpha).unwrap(),
+                ..Default::default()
+            }),
 
             PaintCreator::Tile((p, matrix)) => {
                 let mut r = Paint::default();
@@ -1166,7 +1169,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             )
         };
 
-        if let Some(shader) = axial.into_skia(shader_ctm) {
+        if let Some(shader) = axial.to_skia(shader_ctm, state.fill_state.alpha) {
             let paint = Paint {
                 shader,
                 ..Default::default()
@@ -1222,7 +1225,8 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let ctm = ctm.into_skia();
         if radial.extend.end() {
             let c = radial.function.call(&[1.0])?;
-            let c = radial.color_space.to_rgba(c.as_slice());
+            let mut c = radial.color_space.to_rgba(c.as_slice());
+            c[3] = state.fill_state.alpha;
             paint.set_color(SkiaColor::from_rgba(c[0], c[1], c[2], c[3]).unwrap());
             self.canvas.fill_rect(
                 Rect::from_xywh(
@@ -1378,22 +1382,10 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         };
 
         Ok(match build_shading(&shading, resources)? {
-            Some(Shading::Axial(axial)) => {
-                assert_eq!(Extend::new(true, true), axial.extend);
-                axial.into_skia(pattern.matrix()?.into_skia())
-            }
-            Some(Shading::Radial(radial)) => radial.into_skia(pattern.matrix()?.into_skia()),
+            Some(shading) => Some((shading, pattern.matrix()?)),
             None => return Ok(None),
         }
-        .map(|shader| {
-            (
-                PaintCreator::Gradient(Paint {
-                    shader,
-                    ..Default::default()
-                }),
-                background_color,
-            )
-        }))
+        .map(|shader| (PaintCreator::Gradient(shader), background_color)))
     }
 
     fn tiling_pattern(
