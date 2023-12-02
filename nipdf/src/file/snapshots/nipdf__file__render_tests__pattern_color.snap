@@ -2,4 +2,4 @@
 source: nipdf/src/file/render_tests.rs
 expression: "&decode_file_page(\"sample_files/normal/SamplePdf1_12mb_6pages.pdf\",\n            5).unwrap()"
 ---
-"6a95e0724da4b32d148d978f62a58dd3"
+"479134b3e911c17f453aa266f4991438"

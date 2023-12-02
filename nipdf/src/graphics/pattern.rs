@@ -1,3 +1,4 @@
+use super::trans::PatternToUserSpace;
 use crate::{
     file::{GraphicsStateParameterDict, Rectangle, ResourceDict},
     graphics::{shading::ShadingDict, trans::UserToLogicDeviceSpace},
@@ -56,7 +57,7 @@ pub trait TilingPatternDictTrait {
 
     #[try_from]
     #[or_default]
-    fn matrix(&self) -> UserToLogicDeviceSpace;
+    fn matrix(&self) -> PatternToUserSpace;
 }
 
 #[pdf_object(2i32)]

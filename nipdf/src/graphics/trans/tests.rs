@@ -30,6 +30,14 @@ fn new_assert<S, T, SP: Into<Point2D<f32, S>>, TP: Into<Point2D<f32, T>>>(
     }
 }
 
+fn to_device_space<S>(
+    logic_device_height: impl AsPrimitive<f32>,
+    zoom: f32,
+    to_logic_device: &Transform2D<f32, S, LogicDeviceSpace>,
+) -> Transform2D<f32, S, DeviceSpace> {
+    to_logic_device.then(&logic_device_to_device(logic_device_height, zoom))
+}
+
 #[test]
 fn test_user_to_device_space() {
     // ctm is identity, no zoom, flip y

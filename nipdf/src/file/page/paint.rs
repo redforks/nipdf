@@ -9,10 +9,10 @@ use crate::{
         parse_operations,
         shading::{build_shading, Axial, Extend, Radial, Shading},
         trans::{
-            image_to_user_space, logic_device_to_device, move_text_space_pos,
-            move_text_space_right, to_device_space, ImageToDeviceSpace, IntoSkiaTransform,
-            LogicDeviceToDeviceSpace, TextToUserSpace, UserToDeviceSpace, UserToLogicDeviceSpace,
-            UserToUserSpace,
+            f_flip, image_to_user_space, logic_device_to_device, move_text_space_pos,
+            move_text_space_right, ImageToDeviceSpace, IntoSkiaTransform,
+            LogicDeviceToDeviceSpace, PatternSpace, PatternToUserSpace, TextToUserSpace,
+            UserToDeviceSpace, UserToLogicDeviceSpace, UserToUserSpace,
         },
         ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, PatternType, Point,
         RenderingIntent, ShadingPatternDict, TextRenderingMode, TilingPatternDict,
@@ -73,7 +73,7 @@ impl From<Point> for SkiaPoint {
 enum PaintCreator {
     Color(SkiaColor),
     Gradient(Paint<'static>),
-    Tile((Pixmap, UserToLogicDeviceSpace)),
+    Tile((Pixmap, PatternToUserSpace)),
 }
 
 impl PaintCreator {
@@ -89,8 +89,8 @@ impl PaintCreator {
 
             PaintCreator::Tile((p, matrix)) => {
                 let mut r = Paint::default();
-                let height = p.height() as f32;
-                let transform = to_device_space(height, 1.0, matrix);
+                let transform =
+                    f_flip::<PatternSpace, PatternSpace>(p.height() as f32).then(matrix);
                 r.shader = tiny_skia::Pattern::new(
                     p.as_ref(),
                     tiny_skia::SpreadMode::Repeat,

@@ -12,6 +12,7 @@ pub enum DeviceSpace {}
 pub enum ImageSpace {}
 pub enum TextSpace {}
 pub enum FormSpace {}
+pub enum PatternSpace {}
 pub type UserToUserSpace = Transform2D<f32, UserSpace, UserSpace>;
 pub type UserToLogicDeviceSpace = Transform2D<f32, UserSpace, LogicDeviceSpace>;
 pub type UserToDeviceSpace = Transform2D<f32, UserSpace, DeviceSpace>;
@@ -20,6 +21,7 @@ pub type ImageToUserSpace = Transform2D<f32, ImageSpace, UserSpace>;
 pub type ImageToDeviceSpace = Transform2D<f32, ImageSpace, DeviceSpace>;
 pub type TextToUserSpace = Transform2D<f32, TextSpace, UserSpace>;
 pub type FormToUserSpace = Transform2D<f32, FormSpace, UserSpace>;
+pub type PatternToUserSpace = Transform2D<f32, PatternSpace, UserSpace>;
 
 /// Convert current object into tiny_skia `Transform`.
 pub trait IntoSkiaTransform {
@@ -32,21 +34,15 @@ impl<S, D> IntoSkiaTransform for Transform2D<f32, S, D> {
     }
 }
 
+pub fn f_flip<S, D>(height: f32) -> Transform2D<f32, S, D> {
+    Transform2D::scale(1.0, -1.0).then_translate((0.0, height).into())
+}
+
 pub fn logic_device_to_device(
     logic_device_height: impl AsPrimitive<f32>,
     zoom: f32,
 ) -> Transform2D<f32, LogicDeviceSpace, DeviceSpace> {
     Transform2D::scale(zoom, -zoom).then_translate((0.0, logic_device_height.as_() * zoom).into())
-}
-
-/// Return a transform convert space to device space.
-/// Flip y-axis and apply zoom, because pdf use left-bottom as origin.
-pub fn to_device_space<S>(
-    logic_device_height: impl AsPrimitive<f32>,
-    zoom: f32,
-    to_logic_device: &Transform2D<f32, S, LogicDeviceSpace>,
-) -> Transform2D<f32, S, DeviceSpace> {
-    to_logic_device.then(&logic_device_to_device(logic_device_height, zoom))
 }
 
 /// Return a transform from image space to user space.
