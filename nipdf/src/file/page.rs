@@ -305,8 +305,13 @@ impl<'a, 'b: 'a> Page<'a, 'b> {
     ) -> Result<RgbaImage, ObjectValueError> {
         let media_box = self.media_box();
         let crop_box = self.crop_box();
+        let mut canvas_box = crop_box.unwrap_or(media_box);
+        // if canvas is empty, use default A4 size
+        if canvas_box.width() == 0.0 || canvas_box.height() == 0.0 {
+            canvas_box = Rectangle::from_xywh(0.0, 0.0, 597.6, 842.4);
+        }
         let option = option
-            .page_box(&crop_box.unwrap_or(media_box), self.d.rotate().unwrap())
+            .page_box(&canvas_box, self.d.rotate().unwrap())
             .crop((!no_crop && need_crop(crop_box, media_box)).then(|| crop_box.unwrap()))
             .rotate(self.d.rotate().unwrap())
             .build();
