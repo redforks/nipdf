@@ -276,8 +276,15 @@ impl<'a, 'b: 'a> Page<'a, 'b> {
             .expect("page must have media box")
     }
 
+    /// Return None if crop_box not exist, or empty.
     pub fn crop_box(&self) -> Option<Rectangle> {
-        self.iter_to_root().find_map(|d| d.crop_box().unwrap())
+        let r = self.iter_to_root().find_map(|d| d.crop_box().unwrap());
+        if let Some(r) = r {
+            if r.width() == 0.0 || r.height() == 0.0 {
+                return None;
+            }
+        }
+        r
     }
 
     fn resources(&self) -> ResourceDict<'a, 'b> {
