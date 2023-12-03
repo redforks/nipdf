@@ -1,7 +1,7 @@
 use crate::{
     graphics::trans::TextToUserSpace,
     object::{Array, Dictionary, Object, ObjectValueError, Stream, TextString, TextStringOrNumber},
-    parser::{parse_object, whitespace_or_comment, ws_prefixed, ParseError, ParseResult},
+    parser::{parse_object, whitespace_or_comment, ParseError, ParseResult},
 };
 use euclid::Transform2D;
 use log::error;
@@ -570,7 +570,8 @@ pub fn parse_operations2<'a>(
     let mut ignore_parse_error = false;
     let mut r = vec![];
     loop {
-        let vr = ws_prefixed(parse_object_or_operator)(input);
+        (input, _) = whitespace_or_comment(input)?;
+        let vr = parse_object_or_operator(input);
         match vr {
             Err(Err::Error(_)) => break,
             Err(e) => return Err(e),
@@ -612,7 +613,6 @@ pub fn parse_operations2<'a>(
                 }
             }
         }
-        (input, _) = whitespace_or_comment(input)?;
     }
 
     Ok((input, r))
