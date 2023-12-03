@@ -4,11 +4,13 @@ use anyhow::Result as AnyResult;
 use hex::ToHex;
 use insta::assert_ron_snapshot;
 use log::info;
+use maplit::hashmap;
 use md5::{Digest, Md5};
 use nipdf::file::{File, RenderOptionBuilder};
 use nipdf_test_macro::pdf_file_test_cases;
 use reqwest::blocking::get as download;
 use std::{
+    collections::hash_map::HashMap,
     num::NonZeroU32,
     path::{Path, PathBuf},
 };
@@ -35,6 +37,16 @@ fn image_separation_color_space() {
     assert_ron_snapshot!(&decode_image(1297).unwrap());
 }
 
+/// Some link files point to dead link, replace with alternative download url
+fn replace_dead_link(f: &str) -> Option<&'_ str> {
+    let dead_links: HashMap<&str, &str> = hashmap! {
+        "bpl13210.pdf.link" => "https://raw.githubusercontent.com/Hehouhua/papers_read/master/bpl13210.pdf
+    ",
+    };
+    let p = Path::new(f);
+    dead_links.get(p.file_name()?.to_str()?).map(|f| *f)
+}
+
 /// Read pdf file and render each page, to save test time,
 /// touch a flag file at `$CARGO_TARGET_TMPDIR/(md5(f)).ok` if succeed.
 /// If the file exist, skips the test.
@@ -59,21 +71,28 @@ fn render(f: &str) -> AnyResult<()> {
         pdf_file.set_extension("pdf");
         file_path = pdf_file.to_str().unwrap();
         if !pdf_file.exists() {
-            let url = std::fs::read_to_string(f)?;
-            let url = url.trim();
-            let mut err = Ok(0u64);
-            for url in url.split("http").filter(|f| !f.is_empty()) {
-                let url = format!("http{}", url);
-                err = download(url).and_then(|mut resp| {
+            if let Some(link) = replace_dead_link(f) {
+                download(link).and_then(|mut resp| {
                     let mut f = std::fs::File::create(&pdf_file).unwrap();
                     resp.copy_to(&mut f)
-                });
-                if err.is_ok() {
-                    break;
+                })?;
+            } else {
+                let url = std::fs::read_to_string(f)?;
+                let url = url.trim();
+                let mut err = Ok(0u64);
+                for url in url.split("http").filter(|f| !f.is_empty()) {
+                    let url = format!("http{}", url);
+                    err = download(url).and_then(|mut resp| {
+                        let mut f = std::fs::File::create(&pdf_file).unwrap();
+                        resp.copy_to(&mut f)
+                    });
+                    if err.is_ok() {
+                        break;
+                    }
                 }
-            }
-            if let Err(err) = err {
-                return Err(err.into());
+                if let Err(err) = err {
+                    return Err(err.into());
+                }
             }
         }
     }
