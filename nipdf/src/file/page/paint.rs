@@ -272,6 +272,28 @@ struct State {
     fill_state: ColorState,
 }
 
+trait CloneOrMove {
+    type Target;
+
+    fn clone_or_move(self) -> Self::Target;
+}
+
+impl CloneOrMove for SkiaPath {
+    type Target = SkiaPath;
+
+    fn clone_or_move(self) -> Self::Target {
+        self
+    }
+}
+
+impl<T: Clone> CloneOrMove for &T {
+    type Target = T;
+
+    fn clone_or_move(self) -> Self::Target {
+        self.clone()
+    }
+}
+
 impl State {
     /// height: height in user space coordinate
     fn new(option: &RenderOption) -> Self {
@@ -385,7 +407,12 @@ impl State {
         }
     }
 
-    fn update_mask(&mut self, path: &SkiaPath, rule: FillRule, flip_y: bool) {
+    fn update_mask(
+        &mut self,
+        path: impl CloneOrMove<Target = SkiaPath>,
+        rule: FillRule,
+        flip_y: bool,
+    ) {
         let w = self.dimension.canvas_width();
         let h = self.dimension.canvas_height();
         let new_mask = || {
@@ -395,7 +422,7 @@ impl State {
             r
         };
 
-        let mut path = path.clone();
+        let mut path = path.clone_or_move();
         if flip_y {
             path = path.transform(self.user_to_device.into_skia()).unwrap();
         }
@@ -421,13 +448,13 @@ impl State {
 
     /// Apply current path to mask. Create mask if None, otherwise intersect with current path,
     /// using Winding fill rule.
-    fn clip_non_zero(&mut self, path: &SkiaPath, flip_y: bool) {
+    fn clip_non_zero(&mut self, path: impl CloneOrMove<Target = SkiaPath>, flip_y: bool) {
         self.update_mask(path, FillRule::Winding, flip_y);
     }
 
     /// Apply current path to mask. Create mask if None, otherwise intersect with current path,
     /// using Even-Odd fill rule.
-    fn clip_even_odd(&mut self, path: &SkiaPath, flip_y: bool) {
+    fn clip_even_odd(&mut self, path: impl CloneOrMove<Target = SkiaPath>, flip_y: bool) {
         self.update_mask(path, FillRule::EvenOdd, flip_y);
     }
 
@@ -442,7 +469,7 @@ impl State {
         let p = self.text_object.text_clipping_path.finish();
         if let Some(p) = p {
             let p = p.to_owned();
-            self.clip_non_zero(&p, false);
+            self.clip_non_zero(p, false);
             self.text_object.text_clipping_path.reset();
         }
     }
@@ -703,7 +730,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         };
 
         if let Some(rect) = option.crop {
-            state.clip_non_zero(&PathBuilder::from_rect(rect.into()), true);
+            state.clip_non_zero(PathBuilder::from_rect(rect.into()), true);
         }
 
         Self {
