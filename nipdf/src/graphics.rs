@@ -43,32 +43,18 @@ impl<S, T> TryFrom<&Object> for Transform2D<f32, S, T> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub struct Point {
-    pub x: f32,
-    pub y: f32,
+pub trait IntoSkia {
+    type Output;
+    fn into_skia(self) -> Self::Output;
 }
 
-impl<U> From<Point> for euclid::Point2D<f32, U> {
-    fn from(p: Point) -> Self {
-        Self::new(p.x, p.y)
-    }
-}
+pub type Point = euclid::default::Point2D<f32>;
 
-impl Point {
-    pub fn new(x: f32, y: f32) -> Self {
-        Self { x, y }
-    }
+impl IntoSkia for Point {
+    type Output = tiny_skia::Point;
 
-    pub fn distance(self, b: Self) -> f32 {
-        (self.x - b.x).hypot(self.y - b.y)
-    }
-
-    pub fn x_y_distance(self, b: Self) -> Self {
-        Self {
-            x: self.x - b.x,
-            y: self.y - b.y,
-        }
+    fn into_skia(self) -> Self::Output {
+        Self::Output::from_xy(self.x, self.y)
     }
 }
 
@@ -382,7 +368,7 @@ pub enum Operation {
     #[op_tag("TJ")]
     ShowTexts(Vec<TextStringOrNumber>),
     #[op_tag("'")]
-    MoveToNextLineAndShowText(String),
+    MoveToNextLineAndShowText(TextString),
     #[op_tag("\"")]
     SetSpacingMoveToNextLineAndShowText(f32, f32, String),
 
@@ -550,7 +536,7 @@ impl<'b> ConvertFromObject<'b> for Point {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
         let y = objects.pop().unwrap().as_number()?;
         let x = objects.pop().unwrap().as_number()?;
-        Ok(Self { x, y })
+        Ok(Self::new(x, y))
     }
 }
 

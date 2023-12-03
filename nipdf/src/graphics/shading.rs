@@ -1,4 +1,8 @@
-use super::{color_space::ColorSpace, Point};
+use super::{
+    color_space::ColorSpace,
+    trans::{IntoSkiaTransform, UserToLogicDeviceSpace},
+    IntoSkia, Point,
+};
 use crate::{
     file::{Rectangle, ResourceDict},
     function::{default_domain, Domain, Function, FunctionDict, Type as FunctionType},
@@ -9,7 +13,8 @@ use anyhow::Result as AnyResult;
 use educe::Educe;
 use log::error;
 use nipdf_macro::{pdf_object, TryFromIntObject};
-use tiny_skia::{GradientStop, LinearGradient, RadialGradient, Shader, Transform};
+use std::rc::Rc;
+use tiny_skia::{Color, GradientStop, LinearGradient, RadialGradient, Shader, Transform};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromIntObject)]
 pub enum ShadingType {
@@ -67,14 +72,8 @@ impl TryFrom<&Object> for AxialCoords {
             return Err(ObjectValueError::UnexpectedType);
         }
         Ok(Self {
-            start: Point {
-                x: arr[0].as_number()?,
-                y: arr[1].as_number()?,
-            },
-            end: Point {
-                x: arr[2].as_number()?,
-                y: arr[3].as_number()?,
-            },
+            start: Point::new(arr[0].as_number()?, arr[1].as_number()?),
+            end: Point::new(arr[2].as_number()?, arr[3].as_number()?),
         })
     }
 }
@@ -123,17 +122,11 @@ impl TryFrom<&Object> for RadialCoords {
         }
         Ok(Self {
             start: RadialCircle {
-                point: Point {
-                    x: arr[0].as_number()?,
-                    y: arr[1].as_number()?,
-                },
+                point: Point::new(arr[0].as_number()?, arr[1].as_number()?),
                 r: arr[2].as_number()?,
             },
             end: RadialCircle {
-                point: Point {
-                    x: arr[3].as_number()?,
-                    y: arr[4].as_number()?,
-                },
+                point: Point::new(arr[3].as_number()?, arr[4].as_number()?),
                 r: arr[5].as_number()?,
             },
         })
@@ -183,18 +176,18 @@ pub trait ShadingDictTrait {
     fn radial(&self) -> RadialShadingDict<'a, 'b>;
 }
 
-fn build_linear_gradient_stops(
+fn build_stops(
     cs: &ColorSpace,
     domain: Domain,
     mut f: Vec<FunctionDict>,
-) -> AnyResult<Vec<GradientStop>> {
+) -> AnyResult<Vec<(f32, Color)>> {
     assert!(f.len() == 1, "todo: support functions");
 
     let f = f.pop().unwrap();
-    fn create_stop<F: Function>(cs: &ColorSpace, f: &F, x: f32) -> AnyResult<GradientStop> {
+    fn create_stop<F: Function>(cs: &ColorSpace, f: &F, x: f32) -> AnyResult<(f32, Color)> {
         let rv = f.call(&[x])?;
         let color = cs.to_skia_color(&rv);
-        Ok(GradientStop::new(x, color))
+        Ok((x, color))
     }
 
     match f.function_type()? {
@@ -251,7 +244,7 @@ fn build_axial(d: &ShadingDict, resources: &ResourceDict) -> AnyResult<Option<Ax
     let color_space = ColorSpace::from_args(&color_space, resources.resolver(), Some(resources))?;
     let function = axial.function()?;
 
-    let stops = build_linear_gradient_stops(&color_space, axial.domain()?, function)?;
+    let stops = build_stops(&color_space, axial.domain()?, function)?;
     Ok(Some(Axial {
         start,
         end,
@@ -261,57 +254,82 @@ fn build_axial(d: &ShadingDict, resources: &ResourceDict) -> AnyResult<Option<Ax
     }))
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Axial {
     pub start: Point,
     pub end: Point,
     pub extend: Extend,
-    pub stops: Vec<GradientStop>,
+    pub stops: Vec<(f32, Color)>,
     pub b_box: Option<Rectangle>,
 }
 
+fn stops_to_skia(stops: &[(f32, Color)], alpha: f32) -> Vec<GradientStop> {
+    stops
+        .iter()
+        .map(|(t, c)| {
+            let mut c = *c;
+            c.set_alpha(alpha);
+            GradientStop::new(*t, c)
+        })
+        .collect()
+}
+
 impl Axial {
-    pub fn into_skia(self, transform: Transform) -> Option<Shader<'static>> {
+    pub fn to_skia(&self, transform: Transform, alpha: f32) -> Option<Shader<'static>> {
         LinearGradient::new(
-            self.start.into(),
-            self.end.into(),
-            self.stops,
+            self.start.into_skia(),
+            self.end.into_skia(),
+            stops_to_skia(&self.stops[..], alpha),
             tiny_skia::SpreadMode::Pad,
             transform,
         )
     }
 }
 
-#[derive(Educe)]
+#[derive(Educe, Clone)]
 #[educe(PartialEq, Debug)]
 pub struct Radial {
     pub start: RadialCircle,
     pub end: RadialCircle,
     #[educe(PartialEq(ignore))]
     #[educe(Debug(ignore))]
-    pub function: Box<dyn Function>,
+    pub function: Rc<dyn Function>,
     pub domain: Domain,
     pub extend: Extend,
     pub color_space: ColorSpace,
-    stops: Vec<GradientStop>,
+    stops: Vec<(f32, Color)>,
 }
 
 impl Radial {
-    pub fn into_skia(self, transform: Transform) -> Option<Shader<'static>> {
+    pub fn to_skia(&self, transform: Transform, alpha: f32) -> Option<Shader<'static>> {
         RadialGradient::new(
-            self.start.point.into(),
-            self.end.point.into(),
+            self.start.point.into_skia(),
+            self.end.point.into_skia(),
             self.start.r.max(self.end.r),
-            self.stops,
+            stops_to_skia(&self.stops[..], alpha),
             tiny_skia::SpreadMode::Pad,
             transform,
         )
     }
 }
 
+#[derive(Clone, Debug)]
 pub enum Shading {
     Axial(Axial),
     Radial(Radial),
+}
+
+impl Shading {
+    pub fn to_skia(
+        &self,
+        transform: &UserToLogicDeviceSpace,
+        alpha: f32,
+    ) -> Option<Shader<'static>> {
+        match self {
+            Self::Axial(axial) => axial.to_skia(transform.into_skia(), alpha),
+            Self::Radial(radial) => radial.to_skia(transform.into_skia(), alpha),
+        }
+    }
 }
 
 /// Return None if shading is not need to be rendered, such as Axial start point == end point.
@@ -346,11 +364,11 @@ fn build_radial<'a, 'b>(
     let domain = d.domain()?;
     let extend = d.extend()?;
     Ok(Some(Radial {
-        stops: build_linear_gradient_stops(&color_space, d.domain()?, d.function()?)?,
+        stops: build_stops(&color_space, d.domain()?, d.function()?)?,
         color_space,
         start,
         end,
-        function,
+        function: function.into(),
         domain,
         extend,
     }))

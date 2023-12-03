@@ -3,7 +3,7 @@ use crate::{
     file::{ObjectResolver, XRefTable},
     object::Dictionary,
 };
-use std::{num::NonZeroU32};
+use std::num::NonZeroU32;
 use test_case::test_case;
 
 #[test]
@@ -22,11 +22,11 @@ fn radial_coords_try_from() {
         coords,
         RadialCoords {
             start: RadialCircle {
-                point: Point { x: 1., y: 2. },
+                point: Point::new(1., 2.),
                 r: 3.
             },
             end: RadialCircle {
-                point: Point { x: 4., y: 5. },
+                point: Point::new(4., 5.),
                 r: 6.
             },
         }
@@ -40,8 +40,8 @@ fn axias_coords_try_from() {
     assert_eq!(
         coords,
         AxialCoords {
-            start: Point { x: 1., y: 2. },
-            end: Point { x: 3., y: 4. },
+            start: Point::new(1., 2.),
+            end: Point::new(3., 4.),
         }
     );
 }

@@ -93,10 +93,10 @@ struct FreeTypePathSink<'a> {
 }
 
 impl<'a> FreeTypePathSink<'a> {
-    fn new(path: &'a mut PathBuilder, font_size: f32) -> Self {
+    fn new(path: &'a mut PathBuilder, font_size: f32, unit_per_em: u32) -> Self {
         Self {
             path,
-            scale: font_size / 1000.0,
+            scale: font_size / unit_per_em as f32,
         }
     }
 }
@@ -145,7 +145,7 @@ struct Type1GlyphRender<'a> {
 
 impl<'a> GlyphRender for Type1GlyphRender<'a> {
     fn render(&self, gid: u16, font_size: f32, sink: &mut PathSink) -> AnyResult<()> {
-        let mut sink = FreeTypePathSink::new(sink.0, font_size);
+        let mut sink = FreeTypePathSink::new(sink.0, font_size, self.font.metrics().units_per_em);
         Ok(self.font.outline(
             gid as u32,
             font_kit::hinting::HintingOptions::None,

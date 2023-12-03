@@ -7,7 +7,7 @@ use crate::{
     graphics::{
         color_space::{ColorSpace, ColorSpaceTrait},
         parse_operations,
-        shading::{build_shading, Axial, Extend, Radial, Shading},
+        shading::{build_shading, Axial, Radial, Shading},
         trans::{
             f_flip, image_to_user_space, logic_device_to_device, move_text_space_pos,
             move_text_space_right, ImageToDeviceSpace, IntoSkiaTransform, LogicDeviceToDeviceSpace,
@@ -35,8 +35,7 @@ use std::{
 };
 use tiny_skia::{
     Color as SkiaColor, FillRule, FilterQuality, Mask, MaskType, Paint, Path as SkiaPath,
-    PathBuilder, Pixmap, PixmapPaint, PixmapRef, Point as SkiaPoint, Rect, Stroke, StrokeDash,
-    Transform,
+    PathBuilder, Pixmap, PixmapPaint, PixmapRef, Rect, Stroke, StrokeDash, Transform,
 };
 
 mod fonts;
@@ -63,29 +62,28 @@ impl From<LineJoinStyle> for tiny_skia::LineJoin {
     }
 }
 
-impl From<Point> for SkiaPoint {
-    fn from(p: Point) -> Self {
-        Self::from_xy(p.x, p.y)
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 enum PaintCreator {
     Color(SkiaColor),
-    Gradient(Paint<'static>),
+    Gradient((Shading, UserToLogicDeviceSpace)),
     Tile((Pixmap, PatternToUserSpace)),
 }
 
 impl PaintCreator {
-    fn create(&self) -> Cow<'_, Paint<'_>> {
+    fn create(&self, alpha: f32) -> Cow<'_, Paint<'_>> {
         match self {
             PaintCreator::Color(c) => {
                 let mut r = Paint::default();
-                r.set_color(*c);
+                let mut c = *c;
+                c.set_alpha(alpha);
+                r.set_color(c);
                 Cow::Owned(r)
             }
 
-            PaintCreator::Gradient(p) => Cow::Borrowed(p),
+            PaintCreator::Gradient((pattern, matrix)) => Cow::Owned(Paint {
+                shader: pattern.to_skia(matrix, alpha).unwrap(),
+                ..Default::default()
+            }),
 
             PaintCreator::Tile((p, matrix)) => {
                 let mut r = Paint::default();
@@ -95,7 +93,7 @@ impl PaintCreator {
                     p.as_ref(),
                     tiny_skia::SpreadMode::Repeat,
                     FilterQuality::Bicubic,
-                    1.0f32,
+                    alpha,
                     transform.into_skia(),
                 );
                 Cow::Owned(r)
@@ -175,9 +173,17 @@ struct ColorState {
     paint: PaintCreator,
     #[educe(Default(expression = "ColorSpace::DeviceRGB"))]
     color_space: ColorSpace<f32>,
+    #[educe(Default = 1.0f32)]
+    alpha: f32,
+    #[educe(Default = true)]
+    alpha_is_shape: bool,
 }
 
 impl ColorState {
+    pub fn set_alpha(&mut self, alpha: f32) {
+        self.alpha = alpha;
+    }
+
     pub fn set_color_args(&mut self, color_args: impl AsRef<[f32]>) {
         let color = self.color_space.to_skia_color(color_args.as_ref());
         self.set_color(color);
@@ -192,6 +198,10 @@ impl ColorState {
         self.paint = paint;
     }
 
+    pub fn alpha(&self) -> f32 {
+        if self.alpha_is_shape { 1.0 } else { self.alpha }
+    }
+
     /// If background_paint not null, stroke using it before use self.paint
     pub fn stroke(
         &self,
@@ -202,9 +212,19 @@ impl ColorState {
         mask: Option<&Mask>,
     ) {
         if let Some(paint) = &self.background_paint {
-            canvas.stroke_path(path, &paint.create(), stroke, transform, mask);
+            canvas.stroke_path(path, &paint.create(self.alpha()), stroke, transform, mask);
         }
-        canvas.stroke_path(path, &self.paint.create(), stroke, transform, mask);
+        canvas.stroke_path(
+            path,
+            &self.paint.create(self.alpha()),
+            stroke,
+            transform,
+            mask,
+        );
+    }
+
+    pub fn create_paint(&self) -> Cow<'_, Paint<'_>> {
+        self.paint.create(self.alpha())
     }
 
     /// If background_paint not null, fill using it before use self.paint
@@ -217,9 +237,25 @@ impl ColorState {
         mask: Option<&Mask>,
     ) {
         if let Some(paint) = &self.background_paint {
-            canvas.fill_path(path, &paint.create(), fill_rule, transform, mask);
+            canvas.fill_path(
+                path,
+                &paint.create(self.alpha()),
+                fill_rule,
+                transform,
+                mask,
+            );
         }
-        canvas.fill_path(path, &self.paint.create(), fill_rule, transform, mask);
+        canvas.fill_path(
+            path,
+            &self.paint.create(self.alpha()),
+            fill_rule,
+            transform,
+            mask,
+        );
+    }
+
+    fn set_alpha_is_shape(&mut self, v: bool) {
+        self.alpha_is_shape = v;
     }
 }
 
@@ -234,6 +270,28 @@ struct State {
     text_object: TextObject,
     stroke_state: ColorState,
     fill_state: ColorState,
+}
+
+trait CloneOrMove {
+    type Target;
+
+    fn clone_or_move(self) -> Self::Target;
+}
+
+impl CloneOrMove for SkiaPath {
+    type Target = SkiaPath;
+
+    fn clone_or_move(self) -> Self::Target {
+        self
+    }
+}
+
+impl<T: Clone> CloneOrMove for &T {
+    type Target = T;
+
+    fn clone_or_move(self) -> Self::Target {
+        self.clone()
+    }
 }
 
 impl State {
@@ -302,11 +360,11 @@ impl State {
     }
 
     fn get_fill_paint(&self) -> Cow<'_, Paint<'_>> {
-        self.fill_state.paint.create()
+        self.fill_state.create_paint()
     }
 
     fn get_stroke_paint(&self) -> Cow<'_, Paint<'_>> {
-        self.stroke_state.paint.create()
+        self.stroke_state.create_paint()
     }
 
     fn get_stroke(&self) -> &Stroke {
@@ -333,6 +391,9 @@ impl State {
                 "RI" => self.set_render_intent(res.rendering_intent().unwrap().unwrap()),
                 "TK" => self.set_text_knockout_flag(res.text_knockout_flag().unwrap().unwrap()),
                 "FL" => self.set_flatness(res.flatness().unwrap().unwrap()),
+                "CA" => self.set_stroke_alpha(res.stroke_alpha().unwrap().unwrap()),
+                "ca" => self.set_fill_alpha(res.fill_alpha().unwrap().unwrap()),
+                "AIS" => self.set_alpha_is_shape(res.alpha_is_shape().unwrap().unwrap()),
                 "Type" => (),
                 "SM" => debug!("ExtGState key: SM (smoothness tolerance) not implemented"),
                 k @ ("OPM" | "op" | "OP") => {
@@ -346,7 +407,12 @@ impl State {
         }
     }
 
-    fn update_mask(&mut self, path: &SkiaPath, rule: FillRule, flip_y: bool) {
+    fn update_mask(
+        &mut self,
+        path: impl CloneOrMove<Target = SkiaPath>,
+        rule: FillRule,
+        flip_y: bool,
+    ) {
         let w = self.dimension.canvas_width();
         let h = self.dimension.canvas_height();
         let new_mask = || {
@@ -356,7 +422,7 @@ impl State {
             r
         };
 
-        let mut path = path.clone();
+        let mut path = path.clone_or_move();
         if flip_y {
             path = path.transform(self.user_to_device.into_skia()).unwrap();
         }
@@ -382,13 +448,13 @@ impl State {
 
     /// Apply current path to mask. Create mask if None, otherwise intersect with current path,
     /// using Winding fill rule.
-    fn clip_non_zero(&mut self, path: &SkiaPath, flip_y: bool) {
+    fn clip_non_zero(&mut self, path: impl CloneOrMove<Target = SkiaPath>, flip_y: bool) {
         self.update_mask(path, FillRule::Winding, flip_y);
     }
 
     /// Apply current path to mask. Create mask if None, otherwise intersect with current path,
     /// using Even-Odd fill rule.
-    fn clip_even_odd(&mut self, path: &SkiaPath, flip_y: bool) {
+    fn clip_even_odd(&mut self, path: impl CloneOrMove<Target = SkiaPath>, flip_y: bool) {
         self.update_mask(path, FillRule::EvenOdd, flip_y);
     }
 
@@ -403,9 +469,22 @@ impl State {
         let p = self.text_object.text_clipping_path.finish();
         if let Some(p) = p {
             let p = p.to_owned();
-            self.clip_non_zero(&p, false);
+            self.clip_non_zero(p, false);
             self.text_object.text_clipping_path.reset();
         }
+    }
+
+    fn set_stroke_alpha(&mut self, alpha: f32) {
+        self.stroke_state.set_alpha(alpha);
+    }
+
+    fn set_fill_alpha(&mut self, alpha: f32) {
+        self.fill_state.set_alpha(alpha);
+    }
+
+    fn set_alpha_is_shape(&mut self, v: bool) {
+        self.stroke_state.set_alpha_is_shape(v);
+        self.fill_state.set_alpha_is_shape(v);
     }
 }
 
@@ -440,7 +519,7 @@ impl Path {
 
     pub fn curve_to_cur_point_as_control(&mut self, p2: Point, p3: Point) {
         let p1 = self.path_builder().last_point().unwrap();
-        self.curve_to(Point { x: p1.x, y: p1.y }, p2, p3);
+        self.curve_to(Point::new(p1.x, p1.y), p2, p3);
     }
 
     pub fn curve_to_dest_point_as_control(&mut self, p1: Point, p3: Point) {
@@ -651,7 +730,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         };
 
         if let Some(rect) = option.crop {
-            state.clip_non_zero(&PathBuilder::from_rect(rect.into()), true);
+            state.clip_non_zero(PathBuilder::from_rect(rect.into()), true);
         }
 
         Self {
@@ -780,14 +859,14 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                 self.text_object_mut().move_text_position(p);
             }
             Operation::SetTextMatrix(m) => self.text_object_mut().set_text_matrix(m),
-            Operation::MoveToStartOfNextLine => {
-                let leading = self.stack.last().unwrap().text_object.leading;
-                self.text_object_mut()
-                    .move_text_position(Point::new(0.0, -leading));
-            }
+            Operation::MoveToStartOfNextLine => self.move_to_start_of_next_line(),
 
             // Text Showing Operations
             Operation::ShowText(text) => self.show_text(text.to_bytes().unwrap()),
+            Operation::MoveToNextLineAndShowText(text) => {
+                self.move_to_start_of_next_line();
+                self.show_text(text.to_bytes().unwrap());
+            }
             Operation::ShowTexts(texts) => self.show_texts(&texts),
 
             // Color Operations
@@ -845,6 +924,12 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
             _ => todo!("{:?}", op),
         }
+    }
+
+    fn move_to_start_of_next_line(&mut self) {
+        let leading = self.stack.last().unwrap().text_object.leading;
+        self.text_object_mut()
+            .move_text_position(Point::new(0.0, -leading));
     }
 
     fn set_color_args(
@@ -1028,6 +1113,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         });
 
         let paint = PixmapPaint {
+            opacity: state.fill_state.alpha(),
             quality: if x_object.interpolate()? {
                 FilterQuality::Bilinear
             } else {
@@ -1133,7 +1219,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             )
         };
 
-        if let Some(shader) = axial.into_skia(shader_ctm) {
+        if let Some(shader) = axial.to_skia(shader_ctm, state.fill_state.alpha()) {
             let paint = Paint {
                 shader,
                 ..Default::default()
@@ -1151,8 +1237,8 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
     fn paint_radial(&mut self, radial: &Radial) -> AnyResult<()> {
         let Domain { start: t0, end: t1 } = radial.domain;
-        let Point { x: x0, y: y0 } = radial.start.point;
-        let Point { x: x1, y: y1 } = radial.end.point;
+        let (x0, y0) = (radial.start.point.x, radial.start.point.y);
+        let (x1, y1) = (radial.end.point.x, radial.end.point.y);
         let r0 = radial.start.r;
         let r1 = radial.end.r;
         let state = self.stack.last().unwrap();
@@ -1189,7 +1275,8 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let ctm = ctm.into_skia();
         if radial.extend.end() {
             let c = radial.function.call(&[1.0])?;
-            let c = radial.color_space.to_rgba(c.as_slice());
+            let mut c = radial.color_space.to_rgba(c.as_slice());
+            c[3] = state.fill_state.alpha();
             paint.set_color(SkiaColor::from_rgba(c[0], c[1], c[2], c[3]).unwrap());
             self.canvas.fill_rect(
                 Rect::from_xywh(
@@ -1206,7 +1293,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         }
 
         if radial.extend.begin() && radial.start.r > 0.0 {
-            let Point { x, y } = radial.start.point;
+            let (x, y) = (radial.start.point.x, radial.start.point.y);
             let r = radial.start.r;
             let c = radial.function.call(&[0.0])?;
             let c = radial.color_space.to_rgba(c.as_slice());
@@ -1345,22 +1432,10 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         };
 
         Ok(match build_shading(&shading, resources)? {
-            Some(Shading::Axial(axial)) => {
-                assert_eq!(Extend::new(true, true), axial.extend);
-                axial.into_skia(pattern.matrix()?.into_skia())
-            }
-            Some(Shading::Radial(radial)) => radial.into_skia(pattern.matrix()?.into_skia()),
+            Some(shading) => Some((shading, pattern.matrix()?)),
             None => return Ok(None),
         }
-        .map(|shader| {
-            (
-                PaintCreator::Gradient(Paint {
-                    shader,
-                    ..Default::default()
-                }),
-                background_color,
-            )
-        }))
+        .map(|shader| (PaintCreator::Gradient(shader), background_color)))
     }
 
     fn tiling_pattern(
@@ -1472,6 +1547,11 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
     fn show_text(&mut self, text: &[u8]) {
         let text_object = self.text_object();
+        let render_mode = text_object.render_mode;
+        if render_mode == TextRenderingMode::Invisible {
+            return;
+        }
+
         let char_spacing = text_object.char_spacing;
         let word_spacing = text_object.word_spacing;
         let font = self
@@ -1497,7 +1577,6 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             .unwrap();
 
         let mut text_to_user_space: TextToUserSpace = text_object.matrix;
-        let render_mode = text_object.render_mode;
         let mut text_clip_path = Path::default();
         let flip_y = state.user_to_device.into_skia();
         for ch in op.decode_chars(text) {
