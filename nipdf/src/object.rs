@@ -461,22 +461,6 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
             })
     }
 
-    fn resolve_required_value(
-        &self,
-        id: Name,
-    ) -> Result<(Option<NonZeroU32>, &'b Object), ObjectValueError> {
-        self.r
-            .do_resolve_container_value(self.d, id.clone())
-            .map_err(|e| {
-                error!("{}: {}", e, id);
-                e
-            })
-    }
-
-    fn resolve_container_value(&self, id: Name) -> Result<&'b Object, ObjectValueError> {
-        self.resolve_required_value(id).map(|(_, o)| o)
-    }
-
     fn opt_get(&self, id: Name) -> Result<Option<&'b Object>, ObjectValueError> {
         self.opt_resolve_value(id)
     }
@@ -589,12 +573,13 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
 
     pub fn opt_single_or_arr_stream(&self, id: Name) -> Result<Vec<&'b Stream>, ObjectValueError> {
         let resolver = self.resolver();
-        match self.resolve_container_value(id)? {
-            Object::Array(arr) => arr
+        match self._opt_resolve_container_value(id)? {
+            Some((_, Object::Array(arr))) => arr
                 .iter()
                 .map(|o| resolver.resolve_reference(o)?.stream())
                 .collect(),
-            o => resolver.resolve_reference(o)?.stream().map(|o| vec![o]),
+            None => Ok(vec![]),
+            Some((_, o)) => resolver.resolve_reference(o)?.stream().map(|o| vec![o]),
         }
     }
 
