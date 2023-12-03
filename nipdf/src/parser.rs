@@ -41,6 +41,10 @@ fn comment(buf: &[u8]) -> ParseResult<'_, ()> {
     Ok((buf, ()))
 }
 
+pub(crate) fn is_white_space(b: u8) -> bool {
+    b == b' ' || b == b'\t' || b == b'\n' || b == b'\x0C' || b == b'\r' || b == b'\0'
+}
+
 fn whitespace1<T, E: nom::error::ParseError<T>>(input: T) -> IResult<T, T, E>
 where
     T: InputTakeAtPosition<Item = u8>,

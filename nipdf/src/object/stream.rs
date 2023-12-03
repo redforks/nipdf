@@ -14,6 +14,7 @@ use crate::{
         ColorSpaceArgs,
     },
     object::PdfObject,
+    parser::is_white_space,
 };
 use anyhow::Result as AnyResult;
 use bitstream_io::{BigEndian, BitReader};
@@ -50,6 +51,7 @@ const S_FILTER_LZW_DECODE: &str = "LZWDecode";
 const S_FILTER_CCITT_FAX: &str = "CCITTFaxDecode";
 const S_FILTER_DCT_DECODE: &str = "DCTDecode";
 const S_FILTER_ASCII85_DECODE: &str = "ASCII85Decode";
+const S_FILTER_ASCII_HEX_DECODE: &str = "ASCIIHexDecode";
 const S_FILTER_RUN_LENGTH_DECODE: &str = "RunLengthDecode";
 const S_FILTER_JPX_DECODE: &str = "JPXDecode";
 
@@ -463,6 +465,42 @@ impl<'a> FilterDecodedData<'a> {
     }
 }
 
+/// decode ASCIIHexDecode encoded stream data.
+/// Ignore whitespace bytes.
+/// '>' means end of stream, assume '0' if last hex digit is missing.
+fn decode_ascii_hex(buf: &[u8]) -> Result<Vec<u8>, ObjectValueError> {
+    let mut r = Vec::with_capacity(buf.len() / 2);
+    let mut iter = buf.iter().filter(|&&b| !is_white_space(b));
+    while let Some(&b) = iter.next() {
+        let b = match b {
+            b'0'..=b'9' => b - b'0',
+            b'a'..=b'f' => b - b'a' + 10,
+            b'A'..=b'F' => b - b'A' + 10,
+            b'>' => break,
+            _ => {
+                error!("Invalid ASCIIHexDecode: {}", b);
+                return Err(ObjectValueError::FilterDecodeError);
+            }
+        };
+        let b = b << 4
+            | match iter.next() {
+                Some(&b) => match b {
+                    b'0'..=b'9' => b - b'0',
+                    b'a'..=b'f' => b - b'a' + 10,
+                    b'A'..=b'F' => b - b'A' + 10,
+                    b'>' => 0,
+                    _ => {
+                        error!("Invalid ASCIIHexDecode: {}", b);
+                        return Err(ObjectValueError::FilterDecodeError);
+                    }
+                },
+                None => 0,
+            };
+        r.push(b);
+    }
+    Ok(r)
+}
+
 fn decode_ascii85(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, ObjectValueError> {
     assert!(params.is_none());
     use crate::ascii85::decode;
@@ -519,6 +557,7 @@ fn filter<'a: 'b, 'b>(
         )
         .map(FilterDecodedData::bytes),
         S_FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(FilterDecodedData::bytes),
+        S_FILTER_ASCII_HEX_DECODE => decode_ascii_hex(&buf).map(FilterDecodedData::bytes),
         S_FILTER_RUN_LENGTH_DECODE => Ok(FilterDecodedData::bytes(decode_run_length(&buf, params))),
         S_FILTER_JPX_DECODE => decode_jpx(buf, params),
         S_FILTER_LZW_DECODE => decode_lzw(

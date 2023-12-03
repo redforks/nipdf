@@ -103,16 +103,20 @@ fn predictor_8bit() {
 #[test]
 fn predictor_24bit() {
     insta::assert_debug_snapshot!(
-        &decode_stream("sample_files/color-space/cal-rgb.pdf", 6u32, |d, resolver| {
-            let params = d.get(&name!("DecodeParms")).unwrap().as_dict()?;
-            assert_eq!(
-                15,
-                resolver
-                    .resolve_container_value(params, name!("Predictor"))?
-                    .int()?
-            );
-            Ok(())
-        })
+        &decode_stream(
+            "sample_files/color-space/cal-rgb.pdf",
+            6u32,
+            |d, resolver| {
+                let params = d.get(&name!("DecodeParms")).unwrap().as_dict()?;
+                assert_eq!(
+                    15,
+                    resolver
+                        .resolve_container_value(params, name!("Predictor"))?
+                        .int()?
+                );
+                Ok(())
+            }
+        )
         .unwrap()[..255]
     );
 }
@@ -172,4 +176,14 @@ fn test_color_key_range() {
     ]);
     let color_key: ColorKey = ([10, 15, 20, 255], [110, 115, 120, 255]);
     assert_eq!(color_key, color_key_range(&range, &ColorSpace::DeviceRGB));
+}
+
+#[test_case(b"" => b"".as_slice())]
+#[test_case(b"AB" => b"\xab".as_slice(); "upper case")]
+#[test_case(b"ab" => b"\xab".as_slice(); "lower case")]
+#[test_case(b"A B" => b"\xab".as_slice(); "ignore whitespace")]
+#[test_case(b"AB12>" => b"\xab\x12".as_slice(); "EOD")]
+#[test_case(b"AB1>" => b"\xab\x10".as_slice(); "EOD with odd hex digits")]
+fn test_decode_ascii_hex(buf: &[u8]) -> Vec<u8> {
+    decode_ascii_hex(buf).unwrap()
 }

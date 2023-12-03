@@ -51,7 +51,6 @@ cbc = "0.1.2"
 [dev-dependencies]
 env_logger = "0.10.0"
 glob = "0.3.1"
-hex = "0.4"
 insta = { version = "1.29.0", features = ["ron"] }
 assert_approx_eq = "1.1"
 test-case = "3.1.0"
