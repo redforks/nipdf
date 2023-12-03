@@ -175,6 +175,8 @@ struct ColorState {
     color_space: ColorSpace<f32>,
     #[educe(Default = 1.0f32)]
     alpha: f32,
+    #[educe(Default = true)]
+    alpha_is_shape: bool,
 }
 
 impl ColorState {
@@ -196,6 +198,10 @@ impl ColorState {
         self.paint = paint;
     }
 
+    pub fn alpha(&self) -> f32 {
+        if self.alpha_is_shape { 1.0 } else { self.alpha }
+    }
+
     /// If background_paint not null, stroke using it before use self.paint
     pub fn stroke(
         &self,
@@ -206,11 +212,11 @@ impl ColorState {
         mask: Option<&Mask>,
     ) {
         if let Some(paint) = &self.background_paint {
-            canvas.stroke_path(path, &paint.create(self.alpha), stroke, transform, mask);
+            canvas.stroke_path(path, &paint.create(self.alpha()), stroke, transform, mask);
         }
         canvas.stroke_path(
             path,
-            &self.paint.create(self.alpha),
+            &self.paint.create(self.alpha()),
             stroke,
             transform,
             mask,
@@ -218,7 +224,7 @@ impl ColorState {
     }
 
     pub fn create_paint(&self) -> Cow<'_, Paint<'_>> {
-        self.paint.create(self.alpha)
+        self.paint.create(self.alpha())
     }
 
     /// If background_paint not null, fill using it before use self.paint
@@ -231,15 +237,25 @@ impl ColorState {
         mask: Option<&Mask>,
     ) {
         if let Some(paint) = &self.background_paint {
-            canvas.fill_path(path, &paint.create(self.alpha), fill_rule, transform, mask);
+            canvas.fill_path(
+                path,
+                &paint.create(self.alpha()),
+                fill_rule,
+                transform,
+                mask,
+            );
         }
         canvas.fill_path(
             path,
-            &self.paint.create(self.alpha),
+            &self.paint.create(self.alpha()),
             fill_rule,
             transform,
             mask,
         );
+    }
+
+    fn set_alpha_is_shape(&mut self, v: bool) {
+        self.alpha_is_shape = v;
     }
 }
 
@@ -355,6 +371,7 @@ impl State {
                 "FL" => self.set_flatness(res.flatness().unwrap().unwrap()),
                 "CA" => self.set_stroke_alpha(res.stroke_alpha().unwrap().unwrap()),
                 "ca" => self.set_fill_alpha(res.fill_alpha().unwrap().unwrap()),
+                "AIS" => self.set_alpha_is_shape(res.alpha_is_shape().unwrap().unwrap()),
                 "Type" => (),
                 "SM" => debug!("ExtGState key: SM (smoothness tolerance) not implemented"),
                 k @ ("OPM" | "op" | "OP") => {
@@ -436,6 +453,11 @@ impl State {
 
     fn set_fill_alpha(&mut self, alpha: f32) {
         self.fill_state.set_alpha(alpha);
+    }
+
+    fn set_alpha_is_shape(&mut self, v: bool) {
+        self.stroke_state.set_alpha_is_shape(v);
+        self.fill_state.set_alpha_is_shape(v);
     }
 }
 
@@ -1064,6 +1086,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         });
 
         let paint = PixmapPaint {
+            opacity: state.fill_state.alpha(),
             quality: if x_object.interpolate()? {
                 FilterQuality::Bilinear
             } else {
@@ -1169,7 +1192,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             )
         };
 
-        if let Some(shader) = axial.to_skia(shader_ctm, state.fill_state.alpha) {
+        if let Some(shader) = axial.to_skia(shader_ctm, state.fill_state.alpha()) {
             let paint = Paint {
                 shader,
                 ..Default::default()
@@ -1226,7 +1249,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         if radial.extend.end() {
             let c = radial.function.call(&[1.0])?;
             let mut c = radial.color_space.to_rgba(c.as_slice());
-            c[3] = state.fill_state.alpha;
+            c[3] = state.fill_state.alpha();
             paint.set_color(SkiaColor::from_rgba(c[0], c[1], c[2], c[3]).unwrap());
             self.canvas.fill_rect(
                 Rect::from_xywh(

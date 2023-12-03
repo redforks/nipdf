@@ -2,9 +2,8 @@ use self::paint::Render;
 pub use self::paint::{RenderOption, RenderOptionBuilder};
 use crate::{
     graphics::{
-        parse_operations2, shading::ShadingDict, trans::FormToUserSpace,
-        ColorArgs, ColorSpaceArgs, LineCapStyle, LineJoinStyle, Operation, PatternDict, Point,
-        RenderingIntent,
+        parse_operations2, shading::ShadingDict, trans::FormToUserSpace, ColorArgs, ColorSpaceArgs,
+        LineCapStyle, LineJoinStyle, Operation, PatternDict, Point, RenderingIntent,
     },
     object::{Dictionary, Object, ObjectValueError, PdfObject, Stream},
     text::FontDict,
@@ -124,7 +123,7 @@ pub trait GraphicsStateParameterDictTrait {
     #[key("ca")]
     fn fill_alpha(&self) -> Option<f32>;
     #[key("AIS")]
-    fn alpha_source_flag(&self) -> Option<bool>;
+    fn alpha_is_shape(&self) -> Option<bool>;
     #[key("TK")]
     fn text_knockout_flag(&self) -> Option<bool>;
     #[key("FL")]

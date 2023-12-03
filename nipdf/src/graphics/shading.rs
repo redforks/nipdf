@@ -267,7 +267,7 @@ fn stops_to_skia(stops: &[(f32, Color)], alpha: f32) -> Vec<GradientStop> {
     stops
         .iter()
         .map(|(t, c)| {
-            let mut c = c.clone();
+            let mut c = *c;
             c.set_alpha(alpha);
             GradientStop::new(*t, c)
         })

@@ -159,3 +159,8 @@ fn tile_pattern_with_very_large_b_box() {
         &decode_file_page("pdf.js/web/compressed.tracemonkey-pldi-09.pdf", 12).unwrap()
     )
 }
+
+#[test]
+fn transparent() {
+    assert_ron_snapshot!(&decode_file_page("pdf.js/test/pdfs/alphatrans.pdf", 0).unwrap())
+}
