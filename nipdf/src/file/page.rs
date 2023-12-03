@@ -241,6 +241,7 @@ pub(crate) trait PageDictTrait {
     fn crop_box(&self) -> Option<Rectangle>;
     #[nested]
     fn resources(&self) -> Option<ResourceDict<'a, 'b>>;
+    #[one_or_more]
     fn contents(&self) -> Vec<&Stream>;
     #[key("Type")]
     fn type_name(&self) -> Name;
