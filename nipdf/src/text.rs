@@ -1,7 +1,7 @@
 use crate::{
-    file::Rectangle,
-    graphics::{NameOrDictByRef, NameOrStream},
-    object::{Object, ObjectValueError, Stream},
+    file::{Rectangle, ResourceDict},
+    graphics::{trans::GlyphToTextSpace, NameOrDictByRef, NameOrStream},
+    object::{Dictionary, Object, ObjectValueError, Stream},
 };
 use bitflags::bitflags;
 use nipdf_macro::{pdf_object, TryFromIntObjectForBitflags, TryFromNameObject};
@@ -36,6 +36,9 @@ pub trait FontDictTrait {
 
     #[self_as]
     fn truetype(&self) -> TrueTypeFontDict<'a, 'b>;
+
+    #[self_as]
+    fn type3(&self) -> Type3FontDict<'a, 'b>;
 
     #[nested]
     fn font_descriptor(&self) -> Option<FontDescriptorDict<'a, 'b>>;
@@ -111,6 +114,24 @@ pub trait TrueTypeFontDictTrait {
     #[try_from]
     fn encoding(&self) -> Option<NameOrDictByRef<'b>>;
     fn to_unicode(&self) -> Option<&'b Stream>;
+}
+
+#[pdf_object(("Font", "True3"))]
+pub trait Type3FontDictTrait {
+    #[try_from]
+    #[key("FontBBox")]
+    fn b_box(&self) -> Rectangle;
+    #[try_from]
+    #[key("FontMatrix")]
+    fn matrix(&self) -> GlyphToTextSpace;
+    fn char_procs(&self) -> &'b Dictionary;
+    #[try_from]
+    fn encoding(&self) -> Option<NameOrDictByRef<'b>>;
+    fn first_char(&self) -> u32;
+    fn last_char(&self) -> u32;
+    fn widths(&self) -> Vec<u32>;
+    #[nested]
+    fn resources(&self) -> Option<ResourceDict<'a, 'b>>;
 }
 
 #[derive(Debug, PartialEq)]
