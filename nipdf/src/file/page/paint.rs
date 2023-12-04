@@ -922,6 +922,11 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                 debug!("not implemented: {:?}", op);
             }
 
+            // Type3 Extra Operations
+            // Define something already known in FontDict, can safely ignored
+            Operation::D0(_, _) => {}
+            Operation::D1(_, _, _) => {}
+
             _ => todo!("{:?}", op),
         }
     }

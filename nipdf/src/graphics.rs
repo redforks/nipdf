@@ -437,6 +437,12 @@ pub enum Operation {
     BeginCompatibilitySection,
     #[op_tag("EX")]
     EndCompatibilitySection,
+
+    // Type3 Font Extra Operations
+    #[op_tag("d0")]
+    D0(f32, f32),
+    #[op_tag("d1")]
+    D1(Point, Point, Point),
 }
 
 pub(crate) trait ConvertFromObject<'b>
