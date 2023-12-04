@@ -1,10 +1,10 @@
 use crate::{
     file::{page::ResourceDict, ObjectResolver},
-    graphics::{NameOrDictByRef, NameOrStream},
+    graphics::{parse_operations, NameOrDictByRef, NameOrStream, Operation},
     object::{PdfObject, Stream},
     text::{
-        CIDFontType, CIDFontWidths, EncodingDict, FontDescriptorDict, FontDescriptorFlags,
-        FontDict, FontType, Type0FontDict, Type1FontDict,
+        CIDFontType, CIDFontWidths, EncodingDict, FirstLastWidths, FontDescriptorDict,
+        FontDescriptorFlags, FontDict, FontType, Type0FontDict, Type3FontDict,
     },
 };
 use anyhow::{anyhow, bail, Ok, Result as AnyResult};
@@ -30,17 +30,7 @@ struct FirstLastFontWidth {
 }
 
 impl FirstLastFontWidth {
-    fn _new(first_char: u32, last_char: u32, default_width: u32, widths: Vec<u32>) -> Self {
-        let range = first_char..=last_char;
-
-        Self {
-            range,
-            widths,
-            default_width,
-        }
-    }
-
-    pub fn from_type1_type(font: &Type1FontDict) -> AnyResult<Option<Self>> {
+    pub fn from(font: impl FirstLastWidths) -> AnyResult<Option<Self>> {
         let widths = font.widths()?;
         let first_char = font.first_char()?;
         let last_char = font.last_char()?;
@@ -48,17 +38,14 @@ impl FirstLastFontWidth {
             return Ok(None);
         }
 
-        let desc = font
-            .font_descriptor()?
-            .expect("missing font descriptor, if widths exist, descriptor must also exist");
-        let default_width = desc.missing_width()?;
+        let default_width = font.default_width()?;
 
-        Ok(Some(Self::_new(
-            first_char.unwrap(),
-            last_char.unwrap(),
+        let range = first_char.unwrap()..=last_char.unwrap();
+        Ok(Some(Self {
+            range,
             default_width,
             widths,
-        )))
+        }))
     }
 
     fn char_width(&self, ch: u32) -> u32 {
@@ -158,22 +145,46 @@ pub trait Font {
     fn font_type(&self) -> FontType;
     fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>>;
     fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender + '_>>;
+    fn as_type3(&self) -> Option<&Type3Font> {
+        None
+    }
 }
 
-fn parse_encoding<'c>(
-    font_dict: &'c FontDict<'_, '_>,
-    is_cff: bool,
-    font_data: &'c [u8],
-) -> AnyResult<Encoding> {
-    fn load_from_file<'a>(
+struct EncodingParser<'a, 'b, 'c>(&'c FontDict<'a, 'b>);
+
+impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
+    fn resolve_by_name(
+        &self,
+        encoding: &Option<NameOrDictByRef>,
         font_name: &str,
-        font_data: &'a [u8],
+    ) -> AnyResult<Option<Encoding>> {
+        let encoding_dict;
+        let encoding_name = match encoding {
+            Some(NameOrDictByRef::Dict(d)) => {
+                encoding_dict = EncodingDict::new(None, d, self.0.resolver())?;
+                encoding_dict.base_encoding()?
+            }
+            Some(NameOrDictByRef::Name(name)) => Some((*name).clone()),
+            None => None,
+        };
+        let encoding_name =
+            encoding_name.or_else(|| standard_14_type1_font_encoding(&name(font_name)));
+        encoding_name
+            .map(|n| {
+                Encoding::predefined(n.clone()).ok_or_else(|| anyhow!("Unknown encoding: {}", n))
+            })
+            .transpose()
+    }
+
+    fn load_from_file(
+        font_name: &str,
+        font_data: &[u8],
         is_cff: bool,
     ) -> AnyResult<Option<Encoding>> {
         if is_cff {
             info!("scan encoding from cff font. ({})", font_name);
-            let cff_file: CffFile<'a> = CffFile::open(font_data)?;
-            let font: CffFont<'a> = cff_file.iter()?.next().expect("no font in cff?");
+            let cff_file: CffFile = CffFile::open(font_data)?;
+            let font: CffFont = cff_file.iter()?.next().expect("no font in cff?");
             Ok(Some(font.encodings()?))
         } else {
             info!("scan encoding from type1 font. ({})", font_name);
@@ -191,8 +202,8 @@ fn parse_encoding<'c>(
         }
     }
 
-    fn default_encoding(font_dict: &FontDict) -> AnyResult<Encoding> {
-        if let Some(desc) = font_dict.font_descriptor()? {
+    fn default_encoding(&self) -> AnyResult<Encoding> {
+        if let Some(desc) = self.0.font_descriptor()? {
             if desc.flags()?.contains(FontDescriptorFlags::SYMBOLIC) {
                 panic!("Symbolic font must have encoding, but not found in font file");
             }
@@ -201,39 +212,36 @@ fn parse_encoding<'c>(
         Ok(Encoding::STANDARD)
     }
 
-    let encoding = font_dict.encoding()?;
-    let font_name = font_dict.font_name()?;
-    let mut r = resolve_by_name(&encoding, font_dict, font_name.as_ref())?
-        .or_else(|| load_from_file(font_name.as_ref(), font_data, is_cff).unwrap())
-        .or_else(|| guess_by_font_name(font_name.as_ref()))
-        .unwrap_or_else(|| default_encoding(font_dict).unwrap());
-    if let Some(NameOrDictByRef::Dict(d)) = encoding {
-        let encoding_dict = EncodingDict::new(None, d, font_dict.resolver())?;
-        if let Some(diff) = encoding_dict.differences()? {
-            r = diff.apply_differences(r)
+    pub fn type1(&self, is_cff: bool, font_data: &[u8]) -> AnyResult<Encoding> {
+        let encoding = self.0.encoding()?;
+        let font_name = self.0.font_name()?;
+        let mut r = self
+            .resolve_by_name(&encoding, font_name.as_ref())?
+            .or_else(|| Self::load_from_file(font_name.as_ref(), font_data, is_cff).unwrap())
+            .or_else(|| Self::guess_by_font_name(font_name.as_ref()))
+            .unwrap_or_else(|| self.default_encoding().unwrap());
+        if let Some(NameOrDictByRef::Dict(d)) = encoding {
+            let encoding_dict = EncodingDict::new(None, d, self.0.resolver())?;
+            if let Some(diff) = encoding_dict.differences()? {
+                r = diff.apply_differences(r)
+            }
         }
+        Ok(r)
     }
-    Ok(r)
-}
 
-fn resolve_by_name<'b>(
-    encoding: &Option<NameOrDictByRef<'b>>,
-    font_dict: &FontDict<'_, 'b>,
-    font_name: &str,
-) -> AnyResult<Option<Encoding>> {
-    let encoding_dict;
-    let encoding_name = match encoding {
-        Some(NameOrDictByRef::Dict(d)) => {
-            encoding_dict = EncodingDict::new(None, d, font_dict.resolver())?;
-            encoding_dict.base_encoding()?
+    pub fn type3(&self) -> AnyResult<Encoding> {
+        let encoding = self.0.encoding()?;
+        let mut r = self
+            .resolve_by_name(&encoding, "")?
+            .unwrap_or_else(|| self.default_encoding().unwrap());
+        if let Some(NameOrDictByRef::Dict(d)) = encoding {
+            let encoding_dict = EncodingDict::new(None, d, self.0.resolver())?;
+            if let Some(diff) = encoding_dict.differences()? {
+                r = diff.apply_differences(r)
+            }
         }
-        Some(NameOrDictByRef::Name(name)) => Some((*name).clone()),
-        None => None,
-    };
-    let encoding_name = encoding_name.or_else(|| standard_14_type1_font_encoding(&name(font_name)));
-    encoding_name
-        .map(|n| Encoding::predefined(n.clone()).ok_or_else(|| anyhow!("Unknown encoding: {}", n)))
-        .transpose()
+        Ok(r)
+    }
 }
 
 struct Type1FontOp<'a> {
@@ -249,9 +257,9 @@ impl<'a> Type1FontOp<'a> {
         is_cff: bool,
         font_data: &'a [u8],
     ) -> AnyResult<Self> {
-        let font_width = FirstLastFontWidth::from_type1_type(&font_dict.type1()?)?
+        let font_width = FirstLastFontWidth::from(font_dict.type1()?)?
             .map_or_else(|| Either::Right(FreeTypeFontWidth::new(font)), Either::Left);
-        let encoding = parse_encoding(font_dict, is_cff, font_data)?;
+        let encoding = EncodingParser(font_dict).type1(is_cff, font_data)?;
 
         Ok(Self {
             font_width,
@@ -833,6 +841,8 @@ impl<'c> FontCache<'c> {
                     let desc = font.font_descriptor()?.unwrap();
                     Ok(Some(Box::new(Self::load_ttf_parser_font(font, desc)?)))
                 }),
+
+            FontType::Type3 => Ok(Some(Box::new(Type3Font::new(font)?))),
             _ => {
                 error!("Unsupported font type: {:?}", font.subtype()?);
                 Ok(None)
@@ -966,6 +976,122 @@ impl<'a, 'b> Font for CIDFontType0Font<'a, 'b> {
 
     fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender + '_>> {
         Ok(Box::new(Type1GlyphRender { font: &self.font }))
+    }
+}
+
+pub struct Type3Glyph(Box<[Operation]>);
+
+impl Type3Glyph {
+    pub fn operations(&self) -> &[Operation] {
+        &self.0
+    }
+}
+
+struct Type3FontOp<'a> {
+    font_width: FirstLastFontWidth,
+    encoding: Encoding,
+    name_to_gid: &'a HashMap<Name, u16>,
+}
+
+impl<'a> Type3FontOp<'a> {
+    fn new(font_dict: &FontDict, name_to_gid: &'a HashMap<Name, u16>) -> AnyResult<Self> {
+        let encoding = EncodingParser(font_dict).type3()?;
+        let type3 = font_dict.type3()?;
+        Ok(Self {
+            font_width: FirstLastFontWidth::from(type3)?.unwrap(),
+            name_to_gid,
+            encoding,
+        })
+    }
+}
+
+impl<'a> FontOp for Type3FontOp<'a> {
+    fn decode_chars(&self, s: &[u8]) -> Vec<u32> {
+        s.iter().map(|v| *v as u32).collect()
+    }
+
+    fn char_to_gid(&self, ch: u32) -> u16 {
+        let gid_name = self.encoding.get_str(ch as u8);
+        if let Some(gid) = self.name_to_gid.get(gid_name) {
+            *gid
+        } else {
+            info!("glyph id not found for char: {:?}/{}", ch, gid_name);
+            u16::MAX
+        }
+    }
+
+    fn char_width(&self, ch: u32) -> u32 {
+        self.font_width.char_width(ch)
+    }
+}
+
+pub struct Type3Font<'a, 'b> {
+    name_to_gid: HashMap<Name, u16>,
+    glyphs: Box<[Type3Glyph]>,
+    dict: FontDict<'a, 'b>,
+}
+
+impl<'a, 'b> Type3Font<'a, 'b> {
+    fn parse_glyphs(d: &Type3FontDict) -> AnyResult<Vec<(Name, Type3Glyph)>> {
+        let procs = d.char_procs()?;
+        let mut r = Vec::with_capacity(procs.len());
+        for (name, stream) in procs.iter() {
+            let data = stream.decode(d.resolver())?;
+            let (_, ops) = parse_operations(&data[..])
+                .map_err(|e| anyhow!("parse type3 operation error: {}", e))?;
+            r.push((name.clone(), Type3Glyph(ops.into())))
+        }
+
+        Ok(r)
+    }
+
+    pub fn new(dict: FontDict<'a, 'b>) -> AnyResult<Self> {
+        let type3 = dict.type3()?;
+        let glyph_and_names = Self::parse_glyphs(&type3)?;
+        let mut glyphs = Vec::with_capacity(glyph_and_names.len());
+        let mut glyph_ids = HashMap::with_capacity(glyph_and_names.len());
+        for (name, glyph) in glyph_and_names {
+            let gid = glyphs.len() as u16;
+            glyphs.push(glyph);
+            glyph_ids.insert(name, gid);
+        }
+
+        Ok(Self {
+            name_to_gid: glyph_ids,
+            glyphs: glyphs.into(),
+            dict,
+        })
+    }
+
+    pub fn resources(&self) -> AnyResult<Option<ResourceDict>> {
+        self.dict.type3()?.resources()
+    }
+
+    pub fn get_glyph(&self, gid: u16) -> Option<&Type3Glyph> {
+        self.glyphs.get(gid as usize)
+    }
+}
+
+impl<'a, 'b> Font for Type3Font<'a, 'b> {
+    fn font_type(&self) -> FontType {
+        FontType::Type3
+    }
+
+    fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
+        Ok(Box::new(Type3FontOp::new(&self.dict, &self.name_to_gid)?))
+    }
+
+    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender + '_>> {
+        struct StubGlyphRender {}
+
+        impl GlyphRender for StubGlyphRender {
+            fn render(&self, _gid: u16, _font_size: f32, _sink: &mut PathSink) -> AnyResult<()> {
+                // Paint::show_texts() do not use GlyphRender to render glyphs
+                unreachable!()
+            }
+        }
+
+        Ok(Box::new(StubGlyphRender {}))
     }
 }
 

@@ -1162,7 +1162,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let resources = resources.as_ref().unwrap_or(self.resources);
 
         let state = self.stack.last().unwrap();
-        let mut inner_state = self.stack.last().unwrap().clone();
+        let mut inner_state = state.clone();
         let ctm = matrix.then(&state.ctm).with_destination().with_source();
         inner_state.set_ctm(ctm);
         let mut render = Render::new(
@@ -1584,31 +1584,64 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let mut text_to_user_space: TextToUserSpace = text_object.matrix;
         let mut text_clip_path = Path::default();
         let flip_y = state.user_to_device.into_skia();
-        for ch in op.decode_chars(text) {
-            let width = font_size.mul_add(
-                op.char_width(ch) as f32 / op.units_per_em() as f32,
-                char_spacing + if ch == 32 { word_spacing } else { 0.0 },
+        let type3_font = font.as_type3();
+
+        if let Some(type3_font) = type3_font {
+            let resources = type3_font.resources().unwrap();
+            let resources = resources.as_ref();
+            let state = state.clone();
+            let mut render = Render::new(
+                self.canvas,
+                RenderOptionBuilder::default()
+                    .dimension(self.dimension)
+                    .background_color(SkiaColor::TRANSPARENT)
+                    .state(state)
+                    .build(),
+                resources.unwrap_or_else(|| self.resources),
             );
 
-            let gid = op.char_to_gid(ch);
-            let path = Self::gen_glyph_path(glyph_render, gid, font_size);
-            if !path.is_empty() {
-                let path = path.finish().unwrap();
-                // pre transform path to user space, render_glyph() will zoom line_width,
-                // pdf line_width state is in user space, but skia line_width is in device space
-                // so we need to transform path to user space, and zoom line_width in device space
-                let path = path.transform(text_to_user_space.into_skia()).unwrap();
+            for ch in op.decode_chars(text) {
+                let gid = op.char_to_gid(ch);
+                if let Some(glyph) = type3_font.get_glyph(gid) {
+                    for op in glyph.operations() {
+                        render.exec(op.clone());
+                    }
+                }
 
-                Self::render_glyph(
-                    self.canvas,
-                    &mut text_clip_path,
-                    state,
-                    path,
-                    render_mode,
-                    flip_y,
+                let width = font_size.mul_add(
+                    op.char_width(ch) as f32 / op.units_per_em() as f32,
+                    char_spacing + if ch == 32 { word_spacing } else { 0.0 },
                 );
+                text_to_user_space = move_text_space_right(&text_to_user_space, width);
             }
-            text_to_user_space = move_text_space_right(&text_to_user_space, width);
+        } else {
+            for ch in op.decode_chars(text) {
+                let gid = op.char_to_gid(ch);
+                let path = Self::gen_glyph_path(glyph_render, gid, font_size);
+                if !path.is_empty() {
+                    let path = path.finish().unwrap();
+                    // pre transform path to user space, render_glyph() will zoom line_width,
+                    // pdf line_width state is in user space, but skia line_width is in device
+                    // space so we need to transform path to user space,
+                    // and zoom line_width in device space
+                    let path = path.transform(text_to_user_space.into_skia()).unwrap();
+
+                    Self::render_glyph(
+                        self.canvas,
+                        &mut text_clip_path,
+                        state,
+                        path,
+                        render_mode,
+                        flip_y,
+                    );
+                }
+
+                let width = font_size.mul_add(
+                    op.char_width(ch) as f32 / op.units_per_em() as f32,
+                    char_spacing + if ch == 32 { word_spacing } else { 0.0 },
+                );
+                text_to_user_space = move_text_space_right(&text_to_user_space, width);
+            }
         }
         self.text_object_mut().matrix = text_to_user_space;
         if let Some(text_clip_path) = text_clip_path.finish() {

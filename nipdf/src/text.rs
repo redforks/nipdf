@@ -1,12 +1,13 @@
 use crate::{
     file::{Rectangle, ResourceDict},
     graphics::{trans::GlyphToTextSpace, NameOrDictByRef, NameOrStream},
-    object::{Dictionary, Object, ObjectValueError, Stream},
+    object::{Object, ObjectValueError, Stream},
 };
+use ahash::{HashMap, HashMapExt};
+use anyhow::Result as AnyResult;
 use bitflags::bitflags;
 use nipdf_macro::{pdf_object, TryFromIntObjectForBitflags, TryFromNameObject};
 use prescript::{name, Encoding, Name};
-use std::collections::HashMap;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, TryFromNameObject)]
 pub enum FontType {
@@ -60,6 +61,13 @@ pub trait Type0FontDictTrait {
     fn to_unicode(&self) -> Option<&'b Stream>;
 }
 
+pub trait FirstLastWidths {
+    fn first_char(&self) -> AnyResult<Option<u32>>;
+    fn last_char(&self) -> AnyResult<Option<u32>>;
+    fn widths(&self) -> AnyResult<Vec<u32>>;
+    fn default_width(&self) -> AnyResult<u32>;
+}
+
 /// For standard 14 fonts, font_descriptor/first_char/last_char/widths may not exist.
 /// they should all exist or not exist. See PDF32000_2008.pdf page 255
 #[pdf_object(("Font", "Type1"))]
@@ -77,6 +85,26 @@ pub trait Type1FontDictTrait {
     #[try_from]
     fn encoding(&self) -> Option<NameOrDictByRef<'b>>;
     fn to_unicode(&self) -> Option<&'b Stream>;
+}
+
+impl<'a, 'b> FirstLastWidths for Type1FontDict<'a, 'b> {
+    fn first_char(&self) -> AnyResult<Option<u32>> {
+        self.first_char()
+    }
+
+    fn last_char(&self) -> AnyResult<Option<u32>> {
+        self.last_char()
+    }
+
+    fn widths(&self) -> AnyResult<Vec<u32>> {
+        self.widths()
+    }
+
+    fn default_width(&self) -> AnyResult<u32> {
+        self.font_descriptor()?
+            .expect("missing font descriptor, if widths exist, descriptor must also exist")
+            .missing_width()
+    }
 }
 
 impl<'a, 'b> FontDict<'a, 'b> {
@@ -116,7 +144,7 @@ pub trait TrueTypeFontDictTrait {
     fn to_unicode(&self) -> Option<&'b Stream>;
 }
 
-#[pdf_object(("Font", "True3"))]
+#[pdf_object(("Font", "Type3"))]
 pub trait Type3FontDictTrait {
     #[try_from]
     #[key("FontBBox")]
@@ -124,7 +152,7 @@ pub trait Type3FontDictTrait {
     #[try_from]
     #[key("FontMatrix")]
     fn matrix(&self) -> GlyphToTextSpace;
-    fn char_procs(&self) -> &'b Dictionary;
+    fn char_procs(&self) -> HashMap<Name, Stream>;
     #[try_from]
     fn encoding(&self) -> Option<NameOrDictByRef<'b>>;
     fn first_char(&self) -> u32;
@@ -132,6 +160,24 @@ pub trait Type3FontDictTrait {
     fn widths(&self) -> Vec<u32>;
     #[nested]
     fn resources(&self) -> Option<ResourceDict<'a, 'b>>;
+}
+
+impl FirstLastWidths for Type3FontDict<'_, '_> {
+    fn first_char(&self) -> AnyResult<Option<u32>> {
+        Ok(Some(self.first_char()?))
+    }
+
+    fn last_char(&self) -> AnyResult<Option<u32>> {
+        Ok(Some(self.last_char()?))
+    }
+
+    fn widths(&self) -> AnyResult<Vec<u32>> {
+        Ok(self.widths()?)
+    }
+
+    fn default_width(&self) -> AnyResult<u32> {
+        Ok(0)
+    }
 }
 
 #[derive(Debug, PartialEq)]
