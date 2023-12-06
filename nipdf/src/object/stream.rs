@@ -1,4 +1,4 @@
-use super::{Dictionary, Object, ObjectId, ObjectValueError};
+use super::{Dictionary, Object, ObjectId, ObjectValueError, Resolver};
 use crate::{
     ccitt::Flags,
     file::{
@@ -75,6 +75,20 @@ impl BufPos {
         let length = self.length.map_or_else(f, |v| Ok(u32::from(v)))? as usize;
         Ok(start..(start + length))
     }
+}
+
+/// Provides common implementation to decode stream data,
+/// to share implementation for `Stream` and `InlineStream`
+fn decode_stream<'a, 'b>(
+    filters: impl Iterator<Item = (Name, Option<&'b Dictionary>)>,
+    buf: impl Into<Cow<'a, [u8]>>,
+    resolver: Option<&ObjectResolver<'a>>,
+) -> Result<FilterDecodedData<'a>, ObjectValueError> {
+    let mut decoded = FilterDecodedData::Bytes(buf.into());
+    for (filter_name, params) in filters {
+        decoded = filter(decoded.into_bytes()?, resolver, &filter_name, params)?;
+    }
+    Ok(decoded)
 }
 
 // 2nd value is offset of stream data from the begin of indirect object
@@ -655,11 +669,7 @@ impl Stream {
             raw = buf.into();
         }
 
-        let mut decoded = FilterDecodedData::Bytes(raw);
-        for (filter_name, params) in self.iter_filter()? {
-            decoded = filter(decoded.into_bytes()?, Some(resolver), &filter_name, params)?;
-        }
-        Ok(decoded)
+        decode_stream(self.iter_filter()?, raw, Some(resolver))
     }
 
     /// Decode stream data using filter and parameters in stream dictionary.
