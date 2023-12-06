@@ -532,27 +532,27 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         let mut method = if let Some(method_name) =
             schema_method_name(rt, &attrs[..]).map(|m| Ident::new(m, name.span()))
         {
-            quote! { self.d.#method_name(prescript::name!(#key)) }
+            quote! { self.d.#method_name(&prescript::name!(#key)) }
         } else if let Some(nested_type) = nested(rt, attrs) {
             gen_option_method(
                 nested_type,
                 &key,
                 |ty| {
                     let type_name = remove_generic(ty);
-                    quote! { self.d.opt_resolve_pdf_object::<#type_name>(prescript::name!(#key)) }
+                    quote! { self.d.opt_resolve_pdf_object::<#type_name>(&prescript::name!(#key)) }
                 },
                 |ty| {
                     if is_vec(ty) {
                         if one_or_more(attrs) {
-                            quote! { self.d.resolve_one_or_more_pdf_object(prescript::name!(#key)) }
+                            quote! { self.d.resolve_one_or_more_pdf_object(&prescript::name!(#key)) }
                         } else {
-                            quote! { self.d.resolve_pdf_object_array(prescript::name!(#key)) }
+                            quote! { self.d.resolve_pdf_object_array(&prescript::name!(#key)) }
                         }
                     } else if is_map(ty) {
-                        quote! { self.d.resolve_pdf_object_map(prescript::name!(#key)) }
+                        quote! { self.d.resolve_pdf_object_map(&prescript::name!(#key)) }
                     } else {
                         let type_name = remove_generic(ty);
-                        quote! { self.d.resolve_pdf_object::<#type_name>(prescript::name!(#key)) }
+                        quote! { self.d.resolve_pdf_object::<#type_name>(&prescript::name!(#key)) }
                     }
                 },
             )
@@ -561,10 +561,10 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 try_from_type,
                 &key,
                 |ty| {
-                    quote! { self.d.opt_object(prescript::name!(#key)).context(#key)?.map(|d| <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from(d)).transpose() }
+                    quote! { self.d.opt_object(&prescript::name!(#key)).context(#key)?.map(|d| <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from(d)).transpose() }
                 },
                 |ty| {
-                    quote! { <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from( self.d.required_object(prescript::name!(#key)).unwrap()) }
+                    quote! { <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from( self.d.required_object(&prescript::name!(#key)).unwrap()) }
                 },
             )
         } else if let Some(rt) = self_as(rt, attrs) {

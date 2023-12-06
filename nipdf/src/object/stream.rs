@@ -107,19 +107,19 @@ impl LZWDeflateDecodeParams {
         Ok(if let Some(r) = r {
             Self {
                 predictor: r
-                    .opt_resolve_container_value(d, name!("Predictor"))?
+                    .opt_resolve_container_value(d, &name!("Predictor"))?
                     .map_or(1, |o| o.int().unwrap()),
                 colors: r
-                    .opt_resolve_container_value(d, name!("Colors"))?
+                    .opt_resolve_container_value(d, &name!("Colors"))?
                     .map_or(1, |o| o.int().unwrap()),
                 bits_per_comonent: r
-                    .opt_resolve_container_value(d, name!("BitsPerComponent"))?
+                    .opt_resolve_container_value(d, &name!("BitsPerComponent"))?
                     .map_or(8, |o| o.int().unwrap()),
                 columns: r
-                    .opt_resolve_container_value(d, name!("Columns"))?
+                    .opt_resolve_container_value(d, &name!("Columns"))?
                     .map_or(1, |o| o.int().unwrap()),
                 early_change: r
-                    .opt_resolve_container_value(d, name!("EarlyChange"))?
+                    .opt_resolve_container_value(d, &name!("EarlyChange"))?
                     .map_or(1, |o| o.int().unwrap()),
             }
         } else {

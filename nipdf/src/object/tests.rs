@@ -105,7 +105,7 @@ fn schema_ref_id_arr(ids: Option<&[u32]>) -> Vec<u32> {
     let resolver = ObjectResolver::empty(&xref);
     let d = Dictionary::from(d);
     let d = SchemaDict::new(&d, &resolver, ()).unwrap();
-    d.ref_id_arr(name!("ids"))
+    d.ref_id_arr(&name!("ids"))
         .unwrap()
         .into_iter()
         .map(|id| id.get())

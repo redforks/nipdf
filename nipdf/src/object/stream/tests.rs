@@ -91,7 +91,7 @@ fn predictor_8bit() {
             assert_eq!(
                 15,
                 resolver
-                    .resolve_container_value(params, name!("Predictor"))?
+                    .resolve_container_value(params, &name!("Predictor"))?
                     .int()?
             );
             Ok(())
@@ -111,7 +111,7 @@ fn predictor_24bit() {
                 assert_eq!(
                     15,
                     resolver
-                        .resolve_container_value(params, name!("Predictor"))?
+                        .resolve_container_value(params, &name!("Predictor"))?
                         .int()?
                 );
                 Ok(())

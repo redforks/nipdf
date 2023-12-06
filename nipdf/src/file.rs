@@ -307,19 +307,19 @@ fn decrypt_string(encrypt_info: &EncryptInfo, id: ObjectId, mut o: Object) -> Ob
 }
 
 pub trait DataContainer {
-    fn get_value(&self, key: Name) -> Option<&Object>;
+    fn get_value(&self, key: &Name) -> Option<&Object>;
 }
 
 impl DataContainer for Dictionary {
-    fn get_value(&self, key: Name) -> Option<&Object> {
-        self.get(&key)
+    fn get_value(&self, key: &Name) -> Option<&Object> {
+        self.get(key)
     }
 }
 
 /// Get value from first dictionary that contains `key`.
 impl DataContainer for Vec<&Dictionary> {
-    fn get_value(&self, key: Name) -> Option<&Object> {
-        self.iter().find_map(|d| d.get(&key))
+    fn get_value(&self, key: &Name) -> Option<&Object> {
+        self.iter().find_map(|d| d.get(key))
     }
 }
 
@@ -435,7 +435,7 @@ impl<'a> ObjectResolver<'a> {
     pub fn opt_resolve_container_value<'b: 'c, 'c, C: DataContainer>(
         &'b self,
         c: &'c C,
-        id: Name,
+        id: &Name,
     ) -> Result<Option<&'c Object>, ObjectValueError> {
         Self::not_found_error_to_opt(self._resolve_container_value(c, id).map(|(_, o)| o))
     }
@@ -445,7 +445,7 @@ impl<'a> ObjectResolver<'a> {
     pub fn resolve_container_value<'b: 'c, 'c, C: DataContainer>(
         &'b self,
         c: &'c C,
-        id: Name,
+        id: &Name,
     ) -> Result<&'c Object, ObjectValueError> {
         self.resolve_required_value(c, id).map(|(_, o)| o)
     }
@@ -454,9 +454,9 @@ impl<'a> ObjectResolver<'a> {
     fn resolve_required_value<'b: 'c, 'c, C: DataContainer>(
         &'b self,
         c: &'c C,
-        id: Name,
+        id: &Name,
     ) -> Result<(Option<NonZeroU32>, &'c Object), ObjectValueError> {
-        self._resolve_container_value(c, id.clone()).map_err(|e| {
+        self._resolve_container_value(c, id).map_err(|e| {
             error!("{}: {}", e, id);
             e
         })
@@ -465,7 +465,7 @@ impl<'a> ObjectResolver<'a> {
     fn _resolve_container_value<'b: 'c, 'c, C: DataContainer>(
         &'b self,
         c: &'c C,
-        id: Name,
+        id: &Name,
     ) -> Result<(Option<NonZeroU32>, &'c Object), ObjectValueError> {
         let obj = c.get_value(id).ok_or(ObjectValueError::DictKeyNotFound)?;
 
@@ -516,7 +516,7 @@ impl<'a> Resolver for ObjectResolver<'a> {
     fn do_resolve_container_value<'b: 'c, 'c, C: DataContainer>(
         &'b self,
         c: &'c C,
-        id: Name,
+        id: &Name,
     ) -> Result<(Option<NonZeroU32>, &'c Object), ObjectValueError> {
         self._resolve_container_value(c, id)
     }
