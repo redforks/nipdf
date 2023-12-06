@@ -1,11 +1,74 @@
 //! Inline Image and Inline Image Stream
 //!
 //! InlineImage decode from InlineImageStream
-use super::AnyResult;
+use super::{decode_image, decode_stream, AnyResult, ImageMetadata};
 use crate::{
+    file::{ObjectResolver, ResourceDict},
     graphics::ConvertFromObject,
     object::{Dictionary, Object, ObjectValueError},
 };
+use anyhow::anyhow;
+use image::DynamicImage;
+use prescript::{name, Name};
+
+struct InlineStreamDict<'a>(&'a Dictionary);
+
+impl<'a> InlineStreamDict<'a> {
+    fn alt_get<T>(
+        &self,
+        id1: &Name,
+        id2: &Name,
+        f: impl Fn(&'a Object) -> Result<T, ObjectValueError>,
+    ) -> Result<Option<T>, ObjectValueError> {
+        self.0
+            .get(id1)
+            .or_else(|| self.0.get(id2))
+            .map(f)
+            .transpose()
+    }
+
+    fn try_from<T: TryFrom<&'a Object, Error = ObjectValueError>>(
+        &self,
+        id1: &Name,
+        id2: &Name,
+    ) -> Result<Option<T>, ObjectValueError> {
+        self.alt_get(id1, id2, T::try_from)
+    }
+}
+
+impl<'a> ImageMetadata for InlineStreamDict<'a> {
+    fn width(&self) -> AnyResult<u32> {
+        self.alt_get(&name!("Width"), &name!("W"), |o| o.int().map(|v| v as u32))?
+            .ok_or_else(|| anyhow!("Missing Width"))
+    }
+
+    fn height(&self) -> AnyResult<u32> {
+        self.alt_get(&name!("Height"), &name!("H"), |o| o.int().map(|v| v as u32))?
+            .ok_or_else(|| anyhow!("Missing Height"))
+    }
+
+    fn bits_per_component(&self) -> AnyResult<Option<u8>> {
+        self.alt_get(&name!("BitsPerComponent"), &name!("BPC"), |o| {
+            o.int().map(|v| v as u8)
+        })
+        .map_err(|e| e.into())
+    }
+
+    fn color_space(&self) -> AnyResult<Option<crate::graphics::ColorSpaceArgs>> {
+        self.try_from(&name!("ColorSpace"), &name!("CS"))
+            .map_err(|e| e.into())
+    }
+
+    fn mask(&self) -> AnyResult<Option<super::ImageMask>> {
+        self.try_from(&name!("ImageMask"), &name!("IM"))
+            .map_err(|e| e.into())
+    }
+
+    fn decode(&self) -> AnyResult<Option<crate::function::Domains>> {
+        self.try_from(&name!("Decode"), &name!("D"))
+            .map_err(|e| e.into())
+    }
+}
 
 pub struct InlineStream<'a> {
     d: Dictionary,
@@ -17,14 +80,15 @@ impl<'a> InlineStream<'a> {
         Self { d, data }
     }
 
-    pub fn decode_image(&self) -> AnyResult<InlineImage> {
-        todo!()
+    pub fn decode_image(self) -> AnyResult<InlineImage> {
+        let decoded_data = decode_stream(&self.d, self.data, None)?;
+        Ok(InlineImage(self.d, decoded_data.into_bytes()?.into_owned()))
     }
 }
 
 /// Contains image data and metadata of inlined image.
 #[derive(Debug, Clone, PartialEq)]
-pub struct InlineImage;
+pub struct InlineImage(Dictionary, Vec<u8>);
 
 /// Stub implementation for used in `Operation::PaintInlineImage`,
 /// all methods are `unreachable!()`

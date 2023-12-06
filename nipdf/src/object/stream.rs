@@ -150,12 +150,13 @@ fn iter_filters<'a>(
 /// Provides common implementation to decode stream data,
 /// to share implementation for `Stream` and `InlineStream`
 fn decode_stream<'a, 'b>(
-    filters: impl Iterator<Item = (Name, Option<&'b Dictionary>)>,
+    filter_dict: &'b Dictionary,
     buf: impl Into<Cow<'a, [u8]>>,
     resolver: Option<&ObjectResolver<'a>>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
+    let filter_dict = FilterDict(filter_dict);
     let mut decoded = FilterDecodedData::Bytes(buf.into());
-    for (filter_name, params) in filters {
+    for (filter_name, params) in iter_filters(filter_dict)? {
         decoded = filter(decoded.into_bytes()?, resolver, &filter_name, params)?;
     }
     Ok(decoded)
@@ -872,7 +873,10 @@ impl Stream {
             raw = buf.into();
         }
 
-        decode_stream(self.iter_filter()?, raw, Some(resolver))
+        if self.0.contains_key(&KEY_FFILTER) {
+            return Err(ObjectValueError::ExternalStreamNotSupported);
+        }
+        decode_stream(&self.0, raw, Some(resolver))
     }
 
     /// Decode stream data using filter and parameters in stream dictionary.
