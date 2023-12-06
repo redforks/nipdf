@@ -91,6 +91,139 @@ fn decode_stream<'a, 'b>(
     Ok(decoded)
 }
 
+/// Abstract image metadata.for decode image from `Stream` and `InlineStream`
+trait ImageMetadata {
+    fn width(&self) -> AnyResult<u32>;
+    fn height(&self) -> AnyResult<u32>;
+    fn bits_per_component(&self) -> AnyResult<Option<u8>>;
+    fn color_space(&self) -> AnyResult<Option<ColorSpaceArgs>>;
+    fn mask(&self) -> AnyResult<Option<ImageMask>>;
+    fn decode(&self) -> AnyResult<Option<Domains>>;
+}
+
+fn decode_image<'a, M: ImageMetadata>(
+    data: FilterDecodedData<'a>,
+    img_meta: &M,
+    resolver: &ObjectResolver<'a>,
+    resources: Option<&ResourceDict<'a, '_>>,
+) -> Result<DynamicImage, ObjectValueError> {
+    let color_space = img_meta.color_space().unwrap();
+    let color_space =
+        color_space.map(|args| ColorSpace::from_args(&args, resolver, resources).unwrap());
+    let mut r = match data {
+        FilterDecodedData::Image(img) => {
+            if let Some(color_space) = color_space.as_ref() {
+                image_transform_color_space(img, color_space).unwrap()
+            } else {
+                img
+            }
+        }
+        FilterDecodedData::CmykImage((width, height, pixels)) => {
+            let cs = DeviceCMYK;
+            DynamicImage::ImageRgba8(RgbaImage::from_fn(width, height, |x, y| {
+                let i = (y * width + x) as usize * 4;
+                Rgba(cs.to_rgba(&[
+                    255 - pixels[i],
+                    255 - pixels[i + 1],
+                    255 - pixels[i + 2],
+                    255 - pixels[i + 3],
+                ]))
+            }))
+        }
+        FilterDecodedData::Bytes(data) => {
+            match (
+                &color_space,
+                img_meta.bits_per_component().unwrap().unwrap(),
+            ) {
+                (_, 1) => {
+                    use bitstream_io::read::BitRead;
+
+                    let mut img =
+                        GrayImage::new(img_meta.width().unwrap(), img_meta.height().unwrap());
+                    let mut r = BitReader::<_, BigEndian>::new(data.borrow() as &[u8]);
+                    for y in 0..img_meta.height().unwrap() {
+                        for x in 0..img_meta.width().unwrap() {
+                            img.put_pixel(
+                                x,
+                                y,
+                                Luma([if r.read_bit().unwrap() { 255u8 } else { 0 }]),
+                            );
+                        }
+                    }
+                    DynamicImage::ImageLuma8(img)
+                }
+                (Some(cs), 8) => {
+                    let n_colors = cs.components();
+                    let mut img =
+                        RgbaImage::new(img_meta.width().unwrap(), img_meta.height().unwrap());
+                    for (p, dest_p) in data.chunks(n_colors).zip(img.pixels_mut()) {
+                        let c: SmallVec<[f32; 4]> = p.iter().map(|v| v.into_color_comp()).collect();
+                        let color: [u8; 4] = color_to_rgba(cs, c.as_slice());
+                        *dest_p = Rgba(color);
+                    }
+                    DynamicImage::ImageRgba8(img)
+                }
+                _ => todo!(
+                    "unsupported interoperate decoded stream data as image: {:?} {}",
+                    color_space,
+                    img_meta.bits_per_component().unwrap().unwrap()
+                ),
+            }
+        }
+    };
+
+    assert!(
+        decode_array_is_default(color_space.as_ref(), img_meta.decode().unwrap()),
+        "TODO: handle image decode array"
+    );
+    if let Some(mask) = img_meta.mask().unwrap() {
+        let ImageMask::ColorKey(color_key) = mask else {
+            todo!("image mask: {:?}", mask);
+        };
+        let Some(cs) = color_space else {
+            todo!("Color Space not defined when process color key mask");
+        };
+        let mut img = r.into_rgba8();
+        let color_key = color_key_range(&color_key, &cs);
+
+        for p in img.pixels_mut() {
+            // set alpha color to 0 if its rgb color in color_key range inclusive
+            if color_matches_color_key(color_key, p.0) {
+                p[3] = 0;
+            }
+        }
+        r = DynamicImage::ImageRgba8(img);
+    }
+
+    Ok(r)
+}
+
+impl<'a, 'b> ImageMetadata for ImageDict<'a, 'b> {
+    fn width(&self) -> AnyResult<u32> {
+        self.width()
+    }
+
+    fn height(&self) -> AnyResult<u32> {
+        self.height()
+    }
+
+    fn bits_per_component(&self) -> AnyResult<Option<u8>> {
+        self.bits_per_component()
+    }
+
+    fn color_space(&self) -> AnyResult<Option<ColorSpaceArgs>> {
+        self.color_space()
+    }
+
+    fn mask(&self) -> AnyResult<Option<ImageMask>> {
+        self.mask()
+    }
+
+    fn decode(&self) -> AnyResult<Option<Domains>> {
+        self.decode()
+    }
+}
+
 // 2nd value is offset of stream data from the begin of indirect object
 #[derive(Clone, PartialEq, Debug)]
 pub struct Stream(
@@ -721,97 +854,7 @@ impl Stream {
     ) -> Result<DynamicImage, ObjectValueError> {
         let decoded = self._decode(resolver)?;
         let img_dict = ImageDict::new(None, &self.0, resolver)?;
-
-        let color_space = img_dict.color_space().unwrap();
-        let color_space =
-            color_space.map(|args| ColorSpace::from_args(&args, resolver, resources).unwrap());
-        let mut r = match decoded {
-            FilterDecodedData::Image(img) => {
-                if let Some(color_space) = color_space.as_ref() {
-                    image_transform_color_space(img, color_space).unwrap()
-                } else {
-                    img
-                }
-            }
-            FilterDecodedData::CmykImage((width, height, pixels)) => {
-                let cs = DeviceCMYK;
-                DynamicImage::ImageRgba8(RgbaImage::from_fn(width, height, |x, y| {
-                    let i = (y * width + x) as usize * 4;
-                    Rgba(cs.to_rgba(&[
-                        255 - pixels[i],
-                        255 - pixels[i + 1],
-                        255 - pixels[i + 2],
-                        255 - pixels[i + 3],
-                    ]))
-                }))
-            }
-            FilterDecodedData::Bytes(data) => {
-                match (
-                    &color_space,
-                    img_dict.bits_per_component().unwrap().unwrap(),
-                ) {
-                    (_, 1) => {
-                        use bitstream_io::read::BitRead;
-
-                        let mut img =
-                            GrayImage::new(img_dict.width().unwrap(), img_dict.height().unwrap());
-                        let mut r = BitReader::<_, BigEndian>::new(data.borrow() as &[u8]);
-                        for y in 0..img_dict.height().unwrap() {
-                            for x in 0..img_dict.width().unwrap() {
-                                img.put_pixel(
-                                    x,
-                                    y,
-                                    Luma([if r.read_bit().unwrap() { 255u8 } else { 0 }]),
-                                );
-                            }
-                        }
-                        DynamicImage::ImageLuma8(img)
-                    }
-                    (Some(cs), 8) => {
-                        let n_colors = cs.components();
-                        let mut img =
-                            RgbaImage::new(img_dict.width().unwrap(), img_dict.height().unwrap());
-                        for (p, dest_p) in data.chunks(n_colors).zip(img.pixels_mut()) {
-                            let c: SmallVec<[f32; 4]> =
-                                p.iter().map(|v| v.into_color_comp()).collect();
-                            let color: [u8; 4] = color_to_rgba(cs, c.as_slice());
-                            *dest_p = Rgba(color);
-                        }
-                        DynamicImage::ImageRgba8(img)
-                    }
-                    _ => todo!(
-                        "unsupported interoperate decoded stream data as image: {:?} {}",
-                        color_space,
-                        img_dict.bits_per_component().unwrap().unwrap()
-                    ),
-                }
-            }
-        };
-
-        assert!(
-            decode_array_is_default(color_space.as_ref(), img_dict.decode().unwrap()),
-            "TODO: handle image decode array"
-        );
-        if let Some(mask) = img_dict.mask().unwrap() {
-            let ImageMask::ColorKey(color_key) = mask else {
-                todo!("image mask: {:?}", mask);
-            };
-            let Some(cs) = color_space else {
-                todo!("Color Space not defined when process color key mask");
-            };
-            let mut img = r.into_rgba8();
-            let color_key = color_key_range(&color_key, &cs);
-
-            for p in img.pixels_mut() {
-                // set alpha color to 0 if its rgb color in color_key range inclusive
-                if color_matches_color_key(color_key, p.0) {
-                    p[3] = 0;
-                }
-            }
-            r = DynamicImage::ImageRgba8(img);
-        }
-
-        Ok(r)
+        decode_image(decoded, &img_dict, resolver, resources)
     }
 
     fn iter_filter(
