@@ -613,18 +613,18 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
     let tokens = if stub_resolver(&def.attrs) {
         quote! {
             #[derive(Clone, Debug)]
-            #vis struct #struct_name<'b> {
-                d: crate::object::SchemaDict<'b, #valid_ty, ()>,
+            #vis struct #struct_name<'b, R> {
+                d: crate::object::SchemaDict<'b, #valid_ty, R>,
                 id: Option<std::num::NonZeroU32>,
             }
 
-            impl<'b> crate::object::PdfObject<'b, ()> for #struct_name<'b> {
-                fn new(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary, r: &'b ()) -> Result<Self, crate::object::ObjectValueError> {
+            impl<'b, R: crate::object::Resolver> crate::object::PdfObject<'b, R> for #struct_name<'b, R> {
+                fn new(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary, r: &'b R) -> Result<Self, crate::object::ObjectValueError> {
                     let d = crate::object::SchemaDict::new(dict, r, #valid_arg)?;
                     Ok(Self { d, id })
                 }
 
-                fn checked(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary, r: &'b ()) -> Result<Option<Self>, crate::object::ObjectValueError> {
+                fn checked(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary, r: &'b R) -> Result<Option<Self>, crate::object::ObjectValueError> {
                     let d = crate::object::SchemaDict::from(dict, r, #valid_arg)?;
                     Ok(d.map(|d| Self { d, id }))
                 }
@@ -633,12 +633,12 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     self.id
                 }
 
-                fn resolver(&self) -> &'b () {
+                fn resolver(&self) -> &'b R {
                     self.d.resolver()
                 }
             }
 
-            impl<'b> #struct_name<'b> {
+            impl<'b, R: crate::object::Resolver> #struct_name<'b, R> {
                 #(#methods)*
             }
         }
