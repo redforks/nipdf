@@ -1,4 +1,4 @@
-use super::{Dictionary, Object, ObjectId, ObjectValueError, Resolver};
+use super::{Dictionary, Object, ObjectId, ObjectValueError, Resolver, SchemaDict};
 use crate::{
     ccitt::Flags,
     file::{
@@ -22,7 +22,7 @@ use image::{DynamicImage, GrayImage, Luma, RgbImage, Rgba, RgbaImage};
 use jpeg_decoder::PixelFormat;
 use log::error;
 use nipdf_macro::pdf_object;
-use once_cell::unsync::Lazy;
+use once_cell::unsync::{Lazy, OnceCell};
 use prescript::{sname, Name};
 use smallvec::SmallVec;
 use std::{
@@ -75,6 +75,76 @@ impl BufPos {
         let length = self.length.map_or_else(f, |v| Ok(u32::from(v)))? as usize;
         Ok(start..(start + length))
     }
+}
+
+struct FilterDict<'a>(&'a Dictionary);
+
+impl<'a> FilterDict<'a> {
+    fn alt_get(&self, id1: &Name, id2: &Name) -> Option<&'a Object> {
+        self.0.get(id1).or_else(|| self.0.get(id2))
+    }
+
+    /// Get object value of `Filter` field, or `F` field if `Filter` not defined.
+    /// If value is array, its items should all be Name,
+    /// Otherwise, it should be Name.
+    pub fn filters(&self) -> Result<Vec<Name>, ObjectValueError> {
+        let v = self.alt_get(&KEY_FILTER, &name!("F"));
+        let Some(v) = v else {
+            return Ok(vec![]);
+        };
+
+        Ok(match v {
+            Object::Array(vals) => vals
+                .iter()
+                .map(|v| v.name().map_err(|_| ObjectValueError::UnexpectedType))
+                .collect::<Result<_, _>>()?,
+            Object::Name(n) => vec![n.clone()],
+            _ => {
+                error!("Filter is not Name or Array of Name");
+                return Err(ObjectValueError::UnexpectedType);
+            }
+        })
+    }
+
+    /// Get object value of `DecodeParms` field, or `DP` field if `DecodeParms` not defined.
+    /// If value is array, its items should be Dictionary or None,
+    /// Otherwise, it should be Dictionary.
+    pub fn parameters(&self) -> Result<Vec<Option<&'a Dictionary>>, ObjectValueError> {
+        let v = self.alt_get(&KEY_FILTER_PARAMS, &name!("DP"));
+        let Some(v) = v else {
+            return Ok(vec![]);
+        };
+
+        Ok(match v {
+            Object::Array(vals) => vals
+                .iter()
+                .map(|v| match v {
+                    Object::Dictionary(d) => Ok(Some(d)),
+                    Object::Null => Ok(None),
+                    _ => {
+                        error!("DecodeParms is not Dictionary or Array of Dictionary");
+                        Err(ObjectValueError::UnexpectedType)
+                    }
+                })
+                .collect::<Result<_, _>>()?,
+            Object::Dictionary(d) => vec![Some(d)],
+            _ => {
+                error!("DecodeParms is not Dictionary or Array of Dictionary");
+                return Err(ObjectValueError::UnexpectedType);
+            }
+        })
+    }
+}
+
+/// Iterate pairs of filter name and its parameter
+fn iter_filters<'a>(
+    d: FilterDict<'a>,
+) -> Result<impl Iterator<Item = (Name, Option<&'a Dictionary>)>, ObjectValueError> {
+    let filters = d.filters()?;
+    let params = d.parameters()?;
+    Ok(filters
+        .into_iter()
+        .zip(params.into_iter().chain(repeat(None))))
 }
 
 /// Provides common implementation to decode stream data,
@@ -863,37 +933,8 @@ impl Stream {
         if self.0.contains_key(&KEY_FFILTER) {
             return Err(ObjectValueError::ExternalStreamNotSupported);
         }
-
-        let filters = self.0.get(&KEY_FILTER).map_or_else(
-            || Ok(vec![]),
-            |v| match v {
-                Object::Array(vals) => vals
-                    .iter()
-                    .map(|v| v.name().map_err(|_| ObjectValueError::UnexpectedType))
-                    .collect(),
-                Object::Name(n) => Ok(vec![n.clone()]),
-                _ => Err(ObjectValueError::UnexpectedType),
-            },
-        )?;
-        let params = self.0.get(&KEY_FILTER_PARAMS).map_or_else(
-            || Ok(vec![]),
-            |v| match v {
-                Object::Null => Ok(vec![]),
-                Object::Array(vals) => vals
-                    .iter()
-                    .map(|v| match v {
-                        Object::Null => Ok(None),
-                        Object::Dictionary(dict) => Ok(Some(dict)),
-                        _ => Err(ObjectValueError::UnexpectedType),
-                    })
-                    .collect(),
-                Object::Dictionary(dict) => Ok(vec![Some(dict)]),
-                _ => Err(ObjectValueError::UnexpectedType),
-            },
-        )?;
-        Ok(filters
-            .into_iter()
-            .zip(params.into_iter().chain(repeat(None))))
+        let d = FilterDict(&self.0);
+        iter_filters(d)
     }
 }
 

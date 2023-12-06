@@ -1,8 +1,8 @@
 use crate::{
     graphics::trans::TextToUserSpace,
     object::{
-        Array, Dictionary, InlineImage, InlineImageStream, Object, ObjectValueError, Stream,
-        TextString, TextStringOrNumber,
+        Array, Dictionary, InlineImage, InlineStream, Object, ObjectValueError, Stream, TextString,
+        TextStringOrNumber,
     },
     parser::{
         is_white_space, parse_dict_entries, parse_object, whitespace_or_comment, ws_terminated,
@@ -591,7 +591,7 @@ fn parse_inline_image(input: &[u8]) -> ParseResult<InlineImage> {
             break (&input[p + 2..], &input[..p]);
         }
     };
-    let stream = InlineImageStream::new(d, data);
+    let stream = InlineStream::new(d, data);
     let image = stream
         .decode_image()
         .map_err(|e| nom::Err::Error(ParseError::from_external_error(input, ErrorKind::Fail, e)))?;

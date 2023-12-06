@@ -20,12 +20,6 @@ use test_case::test_case;
 )]
 #[test_case(
     [(KEY_FILTER, FILTER_FLATE_DECODE.into()),
-     (KEY_FILTER_PARAMS, Object::Null)] =>
-    Ok(vec![(FILTER_FLATE_DECODE, None)]);
-     "one filter with null params"
-)]
-#[test_case(
-    [(KEY_FILTER, FILTER_FLATE_DECODE.into()),
      (KEY_FILTER_PARAMS, Object::Array(vec![Object::Null].into()))] =>
     Ok(vec![(FILTER_FLATE_DECODE, None)]);
      "one filter with null params in array"

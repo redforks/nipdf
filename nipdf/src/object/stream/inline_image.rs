@@ -7,12 +7,12 @@ use crate::{
     object::{Dictionary, Object, ObjectValueError},
 };
 
-pub struct InlineImageStream<'a> {
+pub struct InlineStream<'a> {
     d: Dictionary,
     data: &'a [u8],
 }
 
-impl<'a> InlineImageStream<'a> {
+impl<'a> InlineStream<'a> {
     pub fn new(d: Dictionary, data: &'a [u8]) -> Self {
         Self { d, data }
     }
