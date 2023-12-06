@@ -1,25 +1,33 @@
 use crate::{
     graphics::trans::TextToUserSpace,
-    object::{Array, Dictionary, Object, ObjectValueError, Stream, TextString, TextStringOrNumber},
-    parser::{parse_object, whitespace_or_comment, ParseError, ParseResult},
+    object::{
+        Array, Dictionary, InlineImage, InlineImageStream, Object, ObjectValueError, Stream,
+        TextString, TextStringOrNumber,
+    },
+    parser::{
+        is_white_space, parse_dict_entries, parse_object, whitespace_or_comment, ws_terminated,
+        ParseError, ParseResult,
+    },
 };
 use euclid::Transform2D;
 use log::error;
 use nipdf_macro::{pdf_object, OperationParser, TryFromIntObject, TryFromNameObject};
 use nom::{
     branch::alt,
-    bytes::complete::is_not,
+    bytes::complete::{is_not, tag},
     combinator::map_res,
     error::{ErrorKind, FromExternalError, ParseError as NomParseError},
+    sequence::{delimited, terminated},
     Err, Parser,
 };
-use prescript::Name;
+use prescript::{name, Name};
 use std::num::NonZeroU32;
 
 pub(crate) mod color_space;
 mod pattern;
 pub(crate) mod trans;
 use self::trans::UserToUserSpace;
+use memchr::{memchr2, memchr2_iter};
 pub(crate) use pattern::*;
 
 pub(crate) mod shading;
@@ -415,6 +423,8 @@ pub enum Operation {
     BeginInlineImageData,
     #[op_tag("EI")]
     EndInlineImage,
+    #[op_tag("paint-inline-image")]
+    PaintInlineImage(InlineImage),
 
     // XObject Operation
     #[op_tag("Do")]
@@ -564,6 +574,31 @@ fn parse_object_or_operator(input: &[u8]) -> ParseResult<ObjectOrOperator> {
     alt((parse_object.map(ObjectOrOperator::Object), parse_operator))(input)
 }
 
+/// Parses `Operation::PaintInlineImage` operation.
+/// `input` start after `BI`, parses dictionary and image data, consumes EI.
+fn parse_inline_image(input: &[u8]) -> ParseResult<InlineImage> {
+    fn parse_dict(input: &[u8]) -> ParseResult<Dictionary> {
+        terminated(parse_dict_entries, ws_terminated(tag(b"ID")))
+            .map(|v| v.into_iter().collect())
+            .parse(input)
+    }
+    let (input, d) = parse_dict(input)?;
+
+    let (input, data) = loop {
+        let p = memchr2(b'E', b'I', input)
+            .ok_or_else(|| nom::Err::Error(ParseError::from_error_kind(input, ErrorKind::Tag)))?;
+        if is_white_space(input[p + 2]) {
+            break (&input[p + 2..], &input[..p]);
+        }
+    };
+    let stream = InlineImageStream::new(d, data);
+    let image = stream
+        .decode_image()
+        .map_err(|e| nom::Err::Error(ParseError::from_external_error(input, ErrorKind::Fail, e)))?;
+
+    Ok((input, image))
+}
+
 pub fn parse_operations(input: &[u8]) -> ParseResult<Vec<Operation>> {
     let mut operands = Vec::with_capacity(8);
     parse_operations2(&mut operands, input)
@@ -588,7 +623,8 @@ pub fn parse_operations2<'a>(
                         operands.push(o);
                     }
                     ObjectOrOperator::Operator(op) => {
-                        let (input, opt_op) = (
+                        let opt_op;
+                        (input, opt_op) = (
                             input,
                             create_operation(op, operands).map_err(|e| {
                                 nom::Err::Error(ParseError::from_external_error(
@@ -601,6 +637,13 @@ pub fn parse_operations2<'a>(
                         match opt_op {
                             Some(Operation::BeginCompatibilitySection) => ignore_parse_error = true,
                             Some(Operation::EndCompatibilitySection) => ignore_parse_error = false,
+                            Some(Operation::BeginInlineImage) => {
+                                let inline_image;
+                                (input, inline_image) = parse_inline_image
+                                    .map(Operation::PaintInlineImage)
+                                    .parse(input)?;
+                                r.push(inline_image);
+                            }
                             Some(op) => r.push(op),
                             None => {
                                 if ignore_parse_error {

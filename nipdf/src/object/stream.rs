@@ -37,6 +37,8 @@ use std::{
 const KEY_FILTER: Name = sname("Filter");
 const KEY_FILTER_PARAMS: Name = sname("DecodeParms");
 const KEY_FFILTER: Name = sname("FFilter");
+mod inline_image;
+pub use inline_image::*;
 
 const FILTER_FLATE_DECODE: Name = sname("FlateDecode");
 // const FILTER_LZW_DECODE: Name = sname("LZWDecode");
