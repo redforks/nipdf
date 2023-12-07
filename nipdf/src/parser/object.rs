@@ -153,11 +153,15 @@ pub fn parse_array(input: &[u8]) -> ParseResult<Array> {
     Ok((input, arr.into()))
 }
 
+pub fn parse_dict_entries(input: &[u8]) -> ParseResult<Vec<(Name, Object)>> {
+    many0(tuple((parse_name, ws(parse_object))))(input)
+}
+
 pub fn parse_dict(input: &[u8]) -> ParseResult<Dictionary> {
     map(
         delimited(
             ws(tag(b"<<".as_slice())),
-            many0(tuple((parse_name, ws(parse_object)))),
+            parse_dict_entries,
             ws_terminated(tag(b">>")),
         ),
         |v| v.into_iter().collect(),

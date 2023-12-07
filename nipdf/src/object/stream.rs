@@ -8,7 +8,7 @@ use crate::{
     function::Domains,
     graphics::{
         color_space::{
-            color_to_rgba, convert_color_to, ColorComp, ColorCompConvertTo, ColorSpace,
+            color_to_rgba, convert_color_to, ColorCompConvertTo, ColorSpace,
             ColorSpaceTrait, DeviceCMYK,
         },
         ColorSpaceArgs,
@@ -37,6 +37,8 @@ use std::{
 const KEY_FILTER: Name = sname("Filter");
 const KEY_FILTER_PARAMS: Name = sname("DecodeParms");
 const KEY_FFILTER: Name = sname("FFilter");
+mod inline_image;
+pub use inline_image::*;
 
 const FILTER_FLATE_DECODE: Name = sname("FlateDecode");
 // const FILTER_LZW_DECODE: Name = sname("LZWDecode");
@@ -72,6 +74,225 @@ impl BufPos {
         let start = self.start as usize;
         let length = self.length.map_or_else(f, |v| Ok(u32::from(v)))? as usize;
         Ok(start..(start + length))
+    }
+}
+
+struct FilterDict<'a>(&'a Dictionary);
+
+impl<'a> FilterDict<'a> {
+    fn alt_get(&self, id1: &Name, id2: &Name) -> Option<&'a Object> {
+        self.0.get(id1).or_else(|| self.0.get(id2))
+    }
+
+    /// Get object value of `Filter` field, or `F` field if `Filter` not defined.
+    /// If value is array, its items should all be Name,
+    /// Otherwise, it should be Name.
+    pub fn filters(&self) -> Result<Vec<Name>, ObjectValueError> {
+        let v = self.alt_get(&KEY_FILTER, &sname("F"));
+        let Some(v) = v else {
+            return Ok(vec![]);
+        };
+
+        Ok(match v {
+            Object::Array(vals) => vals
+                .iter()
+                .map(|v| v.name().map_err(|_| ObjectValueError::UnexpectedType))
+                .collect::<Result<_, _>>()?,
+            Object::Name(n) => vec![n.clone()],
+            _ => {
+                error!("Filter is not Name or Array of Name");
+                return Err(ObjectValueError::UnexpectedType);
+            }
+        })
+    }
+
+    /// Get object value of `DecodeParms` field, or `DP` field if `DecodeParms` not defined.
+    /// If value is array, its items should be Dictionary or None,
+    /// Otherwise, it should be Dictionary.
+    pub fn parameters(&self) -> Result<Vec<Option<&'a Dictionary>>, ObjectValueError> {
+        let v = self.alt_get(&KEY_FILTER_PARAMS, &sname("DP"));
+        let Some(v) = v else {
+            return Ok(vec![]);
+        };
+
+        Ok(match v {
+            Object::Array(vals) => vals
+                .iter()
+                .map(|v| match v {
+                    Object::Dictionary(d) => Ok(Some(d)),
+                    Object::Null => Ok(None),
+                    _ => {
+                        error!("DecodeParms is not Dictionary or Array of Dictionary");
+                        Err(ObjectValueError::UnexpectedType)
+                    }
+                })
+                .collect::<Result<_, _>>()?,
+            Object::Dictionary(d) => vec![Some(d)],
+            _ => {
+                error!("DecodeParms is not Dictionary or Array of Dictionary");
+                return Err(ObjectValueError::UnexpectedType);
+            }
+        })
+    }
+}
+
+/// Iterate pairs of filter name and its parameter
+fn iter_filters(
+    d: FilterDict<'_>,
+) -> Result<impl Iterator<Item = (Name, Option<&'_ Dictionary>)>, ObjectValueError> {
+    let filters = d.filters()?;
+    let params = d.parameters()?;
+    Ok(filters
+        .into_iter()
+        .zip(params.into_iter().chain(repeat(None))))
+}
+
+/// Provides common implementation to decode stream data,
+/// to share implementation for `Stream` and `InlineStream`
+fn decode_stream<'a, 'b>(
+    filter_dict: &'b Dictionary,
+    buf: impl Into<Cow<'a, [u8]>>,
+    resolver: Option<&ObjectResolver<'a>>,
+) -> Result<FilterDecodedData<'a>, ObjectValueError> {
+    let filter_dict = FilterDict(filter_dict);
+    let mut decoded = FilterDecodedData::Bytes(buf.into());
+    for (filter_name, params) in iter_filters(filter_dict)? {
+        decoded = filter(decoded.into_bytes()?, resolver, &filter_name, params)?;
+    }
+    Ok(decoded)
+}
+
+/// Abstract image metadata.for decode image from `Stream` and `InlineStream`
+pub(crate) trait ImageMetadata {
+    fn width(&self) -> AnyResult<u32>;
+    fn height(&self) -> AnyResult<u32>;
+    fn bits_per_component(&self) -> AnyResult<Option<u8>>;
+    fn color_space(&self) -> AnyResult<Option<ColorSpaceArgs>>;
+    fn image_mask(&self) -> AnyResult<bool>;
+    fn mask(&self) -> AnyResult<Option<ImageMask>>;
+    fn decode(&self) -> AnyResult<Option<Domains>>;
+}
+
+fn decode_image<'a, M: ImageMetadata>(
+    data: FilterDecodedData<'a>,
+    img_meta: &M,
+    resolver: &ObjectResolver<'a>,
+    resources: Option<&ResourceDict<'a, '_>>,
+) -> Result<DynamicImage, ObjectValueError> {
+    let color_space = img_meta.color_space().unwrap();
+    let color_space =
+        color_space.map(|args| ColorSpace::from_args(&args, resolver, resources).unwrap());
+    let mut r = match data {
+        FilterDecodedData::Image(img) => {
+            if let Some(color_space) = color_space.as_ref() {
+                image_transform_color_space(img, color_space).unwrap()
+            } else {
+                img
+            }
+        }
+        FilterDecodedData::CmykImage((width, height, pixels)) => {
+            let cs = DeviceCMYK;
+            DynamicImage::ImageRgba8(RgbaImage::from_fn(width, height, |x, y| {
+                let i = (y * width + x) as usize * 4;
+                Rgba(cs.to_rgba(&[
+                    255 - pixels[i],
+                    255 - pixels[i + 1],
+                    255 - pixels[i + 2],
+                    255 - pixels[i + 3],
+                ]))
+            }))
+        }
+        FilterDecodedData::Bytes(data) => {
+            match (
+                &color_space,
+                img_meta.bits_per_component().unwrap().unwrap(),
+            ) {
+                (_, 1) => {
+                    use bitstream_io::read::BitRead;
+
+                    let mut img =
+                        GrayImage::new(img_meta.width().unwrap(), img_meta.height().unwrap());
+                    let mut r = BitReader::<_, BigEndian>::new(data.borrow() as &[u8]);
+                    for y in 0..img_meta.height().unwrap() {
+                        for x in 0..img_meta.width().unwrap() {
+                            img.put_pixel(
+                                x,
+                                y,
+                                Luma([if r.read_bit().unwrap() { 255u8 } else { 0 }]),
+                            );
+                        }
+                    }
+                    DynamicImage::ImageLuma8(img)
+                }
+                (Some(cs), 8) => {
+                    let n_colors = cs.components();
+                    let mut img =
+                        RgbaImage::new(img_meta.width().unwrap(), img_meta.height().unwrap());
+                    for (p, dest_p) in data.chunks(n_colors).zip(img.pixels_mut()) {
+                        let c: SmallVec<[f32; 4]> = p.iter().map(|v| v.into_color_comp()).collect();
+                        let color: [u8; 4] = color_to_rgba(cs, c.as_slice());
+                        *dest_p = Rgba(color);
+                    }
+                    DynamicImage::ImageRgba8(img)
+                }
+                _ => todo!(
+                    "unsupported interoperate decoded stream data as image: {:?} {}",
+                    color_space,
+                    img_meta.bits_per_component().unwrap().unwrap()
+                ),
+            }
+        }
+    };
+
+    if let Some(mask) = img_meta.mask().unwrap() {
+        let ImageMask::ColorKey(color_key) = mask else {
+            todo!("image mask: {:?}", mask);
+        };
+        let Some(cs) = color_space else {
+            todo!("Color Space not defined when process color key mask");
+        };
+        let mut img = r.into_rgba8();
+        let color_key = color_key_range(&color_key, &cs);
+
+        for p in img.pixels_mut() {
+            // set alpha color to 0 if its rgb color in color_key range inclusive
+            if color_matches_color_key(color_key, p.0) {
+                p[3] = 0;
+            }
+        }
+        r = DynamicImage::ImageRgba8(img);
+    }
+
+    Ok(r)
+}
+
+impl<'a, 'b> ImageMetadata for ImageDict<'a, 'b> {
+    fn width(&self) -> AnyResult<u32> {
+        self.width()
+    }
+
+    fn height(&self) -> AnyResult<u32> {
+        self.height()
+    }
+
+    fn bits_per_component(&self) -> AnyResult<Option<u8>> {
+        self.bits_per_component()
+    }
+
+    fn color_space(&self) -> AnyResult<Option<ColorSpaceArgs>> {
+        self.color_space()
+    }
+
+    fn image_mask(&self) -> AnyResult<bool> {
+        self.image_mask()
+    }
+
+    fn mask(&self) -> AnyResult<Option<ImageMask>> {
+        self.mask()
+    }
+
+    fn decode(&self) -> AnyResult<Option<Domains>> {
+        self.decode()
     }
 }
 
@@ -369,24 +590,14 @@ pub(crate) trait ImageDictTrait {
     fn bits_per_component(&self) -> Option<u8>;
     #[try_from]
     fn color_space(&self) -> Option<ColorSpaceArgs>;
+
+    #[or_default]
+    fn image_mask(&self) -> bool;
+
     #[try_from]
     fn mask(&self) -> Option<ImageMask>;
     #[try_from]
     fn decode(&self) -> Option<Domains>;
-}
-
-/// Return true if arr is None, or arr is default value based on color space.
-fn decode_array_is_default(cs: Option<&ColorSpace>, arr: Option<Domains>) -> bool {
-    arr.map_or(true, |arr| {
-        arr.n()
-            == cs
-                .expect("image decode array exist but no ColorSpace")
-                .components()
-            && arr
-                .0
-                .iter()
-                .all(|d| d.start == f32::min_color() && d.end == f32::max_color())
-    })
 }
 
 #[pdf_object(())]
@@ -653,11 +864,10 @@ impl Stream {
             raw = buf.into();
         }
 
-        let mut decoded = FilterDecodedData::Bytes(raw);
-        for (filter_name, params) in self.iter_filter()? {
-            decoded = filter(decoded.into_bytes()?, Some(resolver), &filter_name, params)?;
+        if self.0.contains_key(&KEY_FFILTER) {
+            return Err(ObjectValueError::ExternalStreamNotSupported);
         }
-        Ok(decoded)
+        decode_stream(&self.0, raw, Some(resolver))
     }
 
     /// Decode stream data using filter and parameters in stream dictionary.
@@ -709,97 +919,7 @@ impl Stream {
     ) -> Result<DynamicImage, ObjectValueError> {
         let decoded = self._decode(resolver)?;
         let img_dict = ImageDict::new(None, &self.0, resolver)?;
-
-        let color_space = img_dict.color_space().unwrap();
-        let color_space =
-            color_space.map(|args| ColorSpace::from_args(&args, resolver, resources).unwrap());
-        let mut r = match decoded {
-            FilterDecodedData::Image(img) => {
-                if let Some(color_space) = color_space.as_ref() {
-                    image_transform_color_space(img, color_space).unwrap()
-                } else {
-                    img
-                }
-            }
-            FilterDecodedData::CmykImage((width, height, pixels)) => {
-                let cs = DeviceCMYK;
-                DynamicImage::ImageRgba8(RgbaImage::from_fn(width, height, |x, y| {
-                    let i = (y * width + x) as usize * 4;
-                    Rgba(cs.to_rgba(&[
-                        255 - pixels[i],
-                        255 - pixels[i + 1],
-                        255 - pixels[i + 2],
-                        255 - pixels[i + 3],
-                    ]))
-                }))
-            }
-            FilterDecodedData::Bytes(data) => {
-                match (
-                    &color_space,
-                    img_dict.bits_per_component().unwrap().unwrap(),
-                ) {
-                    (_, 1) => {
-                        use bitstream_io::read::BitRead;
-
-                        let mut img =
-                            GrayImage::new(img_dict.width().unwrap(), img_dict.height().unwrap());
-                        let mut r = BitReader::<_, BigEndian>::new(data.borrow() as &[u8]);
-                        for y in 0..img_dict.height().unwrap() {
-                            for x in 0..img_dict.width().unwrap() {
-                                img.put_pixel(
-                                    x,
-                                    y,
-                                    Luma([if r.read_bit().unwrap() { 255u8 } else { 0 }]),
-                                );
-                            }
-                        }
-                        DynamicImage::ImageLuma8(img)
-                    }
-                    (Some(cs), 8) => {
-                        let n_colors = cs.components();
-                        let mut img =
-                            RgbaImage::new(img_dict.width().unwrap(), img_dict.height().unwrap());
-                        for (p, dest_p) in data.chunks(n_colors).zip(img.pixels_mut()) {
-                            let c: SmallVec<[f32; 4]> =
-                                p.iter().map(|v| v.into_color_comp()).collect();
-                            let color: [u8; 4] = color_to_rgba(cs, c.as_slice());
-                            *dest_p = Rgba(color);
-                        }
-                        DynamicImage::ImageRgba8(img)
-                    }
-                    _ => todo!(
-                        "unsupported interoperate decoded stream data as image: {:?} {}",
-                        color_space,
-                        img_dict.bits_per_component().unwrap().unwrap()
-                    ),
-                }
-            }
-        };
-
-        assert!(
-            decode_array_is_default(color_space.as_ref(), img_dict.decode().unwrap()),
-            "TODO: handle image decode array"
-        );
-        if let Some(mask) = img_dict.mask().unwrap() {
-            let ImageMask::ColorKey(color_key) = mask else {
-                todo!("image mask: {:?}", mask);
-            };
-            let Some(cs) = color_space else {
-                todo!("Color Space not defined when process color key mask");
-            };
-            let mut img = r.into_rgba8();
-            let color_key = color_key_range(&color_key, &cs);
-
-            for p in img.pixels_mut() {
-                // set alpha color to 0 if its rgb color in color_key range inclusive
-                if color_matches_color_key(color_key, p.0) {
-                    p[3] = 0;
-                }
-            }
-            r = DynamicImage::ImageRgba8(img);
-        }
-
-        Ok(r)
+        decode_image(decoded, &img_dict, resolver, resources)
     }
 
     fn iter_filter(
@@ -808,37 +928,8 @@ impl Stream {
         if self.0.contains_key(&KEY_FFILTER) {
             return Err(ObjectValueError::ExternalStreamNotSupported);
         }
-
-        let filters = self.0.get(&KEY_FILTER).map_or_else(
-            || Ok(vec![]),
-            |v| match v {
-                Object::Array(vals) => vals
-                    .iter()
-                    .map(|v| v.name().map_err(|_| ObjectValueError::UnexpectedType))
-                    .collect(),
-                Object::Name(n) => Ok(vec![n.clone()]),
-                _ => Err(ObjectValueError::UnexpectedType),
-            },
-        )?;
-        let params = self.0.get(&KEY_FILTER_PARAMS).map_or_else(
-            || Ok(vec![]),
-            |v| match v {
-                Object::Null => Ok(vec![]),
-                Object::Array(vals) => vals
-                    .iter()
-                    .map(|v| match v {
-                        Object::Null => Ok(None),
-                        Object::Dictionary(dict) => Ok(Some(dict)),
-                        _ => Err(ObjectValueError::UnexpectedType),
-                    })
-                    .collect(),
-                Object::Dictionary(dict) => Ok(vec![Some(dict)]),
-                _ => Err(ObjectValueError::UnexpectedType),
-            },
-        )?;
-        Ok(filters
-            .into_iter()
-            .zip(params.into_iter().chain(repeat(None))))
+        let d = FilterDict(&self.0);
+        iter_filters(d)
     }
 }
 

@@ -17,12 +17,12 @@ use crate::{
         ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, PatternType, Point,
         RenderingIntent, ShadingPatternDict, TextRenderingMode, TilingPatternDict,
     },
-    object::{Object, PdfObject, TextStringOrNumber},
+    object::{ImageMetadata, InlineImage, Object, PdfObject, TextStringOrNumber},
 };
 use anyhow::{Ok, Result as AnyResult};
 use educe::Educe;
 use either::Either::{self, Left, Right};
-use image::RgbaImage;
+use image::{RgbaImage};
 use log::{debug, info};
 use nom::{combinator::eof, sequence::terminated};
 use prescript::Name;
@@ -40,6 +40,7 @@ use tiny_skia::{
 
 mod fonts;
 use euclid::{default::Size2D, Angle};
+
 use fonts::*;
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -922,6 +923,15 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                 debug!("not implemented: {:?}", op);
             }
 
+            // Type3 Extra Operations
+            // Define something already known in FontDict, can safely ignored
+            Operation::SetGlyphWidth(_) => {}
+            Operation::SetGlyphWidthAndBoundingBox(_, _, _) => {}
+
+            Operation::PaintInlineImage(inline_image) => {
+                self.paint_inline_image(inline_image).unwrap()
+            }
+
             _ => todo!("{:?}", op),
         }
     }
@@ -1026,6 +1036,77 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         self.fill_and_stroke_even_odd();
     }
 
+    fn load_image_as_mask(mut img: RgbaImage, state: &State, s_mask: bool) -> AnyResult<Mask> {
+        let paint = PixmapPaint {
+            quality: FilterQuality::Nearest,
+            ..Default::default()
+        };
+
+        let mut canvas = Pixmap::new(
+            state.dimension.canvas_width(),
+            state.dimension.canvas_height(),
+        )
+        .unwrap();
+        img.pixels_mut()
+            .for_each(|p| p[3] = if s_mask { p[0] } else { 255 - p[0] });
+
+        let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
+        canvas.draw_pixmap(
+            0,
+            0,
+            img,
+            &paint,
+            state.image_transform(img.width(), img.height()).into_skia(),
+            None,
+        );
+        Ok(Mask::from_pixmap(canvas.as_ref(), MaskType::Alpha))
+    }
+
+    fn paint_inline_image(&mut self, inline_image: InlineImage) -> AnyResult<()> {
+        let state = self.stack.last().unwrap();
+        let meta = inline_image.meta();
+        let img = inline_image
+            .image(self.resources.resolver(), self.resources)?
+            .into_rgba8();
+
+        if meta.image_mask()? {
+            let domain = meta.decode()?.unwrap().0[0];
+            let mask_reversed = domain.start > domain.end;
+            let mask = Self::load_image_as_mask(img, state, mask_reversed)?;
+            // fill canvas with current fill paint with mask
+            let paint = state.get_fill_paint();
+            self.canvas.fill_rect(
+                Rect::from_xywh(
+                    0.0,
+                    0.0,
+                    self.device_width() as f32,
+                    self.device_height() as f32,
+                )
+                .unwrap(),
+                &paint,
+                Transform::identity(),
+                Some(&mask),
+            );
+            return Ok(());
+        }
+
+        let paint = PixmapPaint {
+            opacity: state.fill_state.alpha(),
+            ..Default::default()
+        };
+        let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
+        let state_mask = state.get_mask();
+        self.canvas.draw_pixmap(
+            0,
+            0,
+            img,
+            &paint,
+            state.image_transform(img.width(), img.height()).into_skia(),
+            state_mask.as_deref(),
+        );
+        Ok(())
+    }
+
     fn paint_image_x_object(&mut self, x_object: &XObjectDict<'a, '_>) -> AnyResult<()> {
         fn load_image<'a, 'b>(
             image_dict: &XObjectDict<'a, 'b>,
@@ -1040,49 +1121,12 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                 .into_rgba8()
         }
 
-        fn load_image_as_mask<'a, 'b>(
-            page_width: u32,
-            page_height: u32,
-            img_dict: &XObjectDict<'a, 'b>,
-            resources: &ResourceDict<'a, 'b>,
-            state: &State,
-            s_mask: bool,
-        ) -> AnyResult<Mask> {
-            let paint = PixmapPaint {
-                quality: FilterQuality::Nearest,
-                ..Default::default()
-            };
-
-            let mut canvas = Pixmap::new(page_width, page_height).unwrap();
-            let img = img_dict.as_stream().unwrap();
-            let img = img.decode_image(resources.resolver(), Some(resources))?;
-            let mut img = img.into_rgba8();
-            img.pixels_mut()
-                .for_each(|p| p[3] = if s_mask { p[0] } else { 255 - p[0] });
-
-            let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
-            canvas.draw_pixmap(
-                0,
-                0,
-                img,
-                &paint,
-                state.image_transform(img.width(), img.height()).into_skia(),
-                None,
-            );
-            Ok(Mask::from_pixmap(canvas.as_ref(), MaskType::Alpha))
-        }
-
         let state = self.stack.last().unwrap();
 
         if x_object.image_mask()? {
-            let mask = load_image_as_mask(
-                self.device_width(),
-                self.device_height(),
-                x_object,
-                self.resources,
-                state,
-                false,
-            )?;
+            let x_object = x_object.as_stream()?;
+            let img = x_object.decode_image(self.resources.resolver(), Some(self.resources))?;
+            let mask = Self::load_image_as_mask(img.into_rgba8(), state, false)?;
             // fill canvas with current fill paint with mask
             let paint = state.get_fill_paint();
             self.canvas.fill_rect(
@@ -1101,15 +1145,11 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         }
 
         let s_mask = x_object.s_mask()?.map(|s_mask| {
-            load_image_as_mask(
-                self.device_width(),
-                self.device_height(),
-                &s_mask,
-                self.resources,
-                state,
-                true,
-            )
-            .unwrap()
+            let s_mask = s_mask.as_stream().unwrap();
+            let img = s_mask
+                .decode_image(self.resources.resolver(), Some(self.resources))
+                .unwrap();
+            Self::load_image_as_mask(img.into_rgba8(), state, true).unwrap()
         });
 
         let paint = PixmapPaint {
@@ -1157,7 +1197,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let resources = resources.as_ref().unwrap_or(self.resources);
 
         let state = self.stack.last().unwrap();
-        let mut inner_state = self.stack.last().unwrap().clone();
+        let mut inner_state = state.clone();
         let ctm = matrix.then(&state.ctm).with_destination().with_source();
         inner_state.set_ctm(ctm);
         let mut render = Render::new(
@@ -1578,32 +1618,73 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
         let mut text_to_user_space: TextToUserSpace = text_object.matrix;
         let mut text_clip_path = Path::default();
-        let flip_y = state.user_to_device.into_skia();
-        for ch in op.decode_chars(text) {
-            let width = font_size.mul_add(
-                op.char_width(ch) as f32 / op.units_per_em() as f32,
-                char_spacing + if ch == 32 { word_spacing } else { 0.0 },
+        let user_to_device = state.user_to_device.into_skia();
+        let type3_font = font.as_type3();
+
+        if let Some(type3_font) = type3_font {
+            let font_matrix = type3_font.matrix().unwrap();
+            let resources = type3_font.resources().unwrap();
+            let resources = resources.as_ref();
+            let state = state.clone();
+            let ctm = state.ctm;
+            let mut render = Render::new(
+                self.canvas,
+                RenderOptionBuilder::default()
+                    .dimension(self.dimension)
+                    .background_color(SkiaColor::TRANSPARENT)
+                    .state(state)
+                    .build(),
+                resources.unwrap_or(self.resources),
             );
 
-            let gid = op.char_to_gid(ch);
-            let path = Self::gen_glyph_path(glyph_render, gid, font_size);
-            if !path.is_empty() {
-                let path = path.finish().unwrap();
-                // pre transform path to user space, render_glyph() will zoom line_width,
-                // pdf line_width state is in user space, but skia line_width is in device space
-                // so we need to transform path to user space, and zoom line_width in device space
-                let path = path.transform(text_to_user_space.into_skia()).unwrap();
-
-                Self::render_glyph(
-                    self.canvas,
-                    &mut text_clip_path,
-                    state,
-                    path,
-                    render_mode,
-                    flip_y,
+            for ch in op.decode_chars(text) {
+                render.current_mut().set_ctm(
+                    font_matrix
+                        .then_scale(font_size, font_size)
+                        .then(&text_to_user_space)
+                        .then(&ctm)
+                        .with_source()
+                        .with_destination(),
                 );
+                let gid = op.char_to_gid(ch);
+                if let Some(glyph) = type3_font.get_glyph(gid) {
+                    for op in glyph.operations() {
+                        render.exec(op.clone());
+                    }
+                }
+
+                let width = (font_size * op.char_width(ch) as f32).mul_add(font_matrix.m11, char_spacing)
+                    + if ch == 32 { word_spacing } else { 0.0 };
+                text_to_user_space = move_text_space_right(&text_to_user_space, width);
             }
-            text_to_user_space = move_text_space_right(&text_to_user_space, width);
+        } else {
+            for ch in op.decode_chars(text) {
+                let gid = op.char_to_gid(ch);
+                let path = Self::gen_glyph_path(glyph_render, gid, font_size);
+                if !path.is_empty() {
+                    let path = path.finish().unwrap();
+                    // pre transform path to user space, render_glyph() will zoom line_width,
+                    // pdf line_width state is in user space, but skia line_width is in device
+                    // space so we need to transform path to user space,
+                    // and zoom line_width in device space
+                    let path = path.transform(text_to_user_space.into_skia()).unwrap();
+
+                    Self::render_glyph(
+                        self.canvas,
+                        &mut text_clip_path,
+                        state,
+                        path,
+                        render_mode,
+                        user_to_device,
+                    );
+                }
+
+                let width = font_size.mul_add(
+                    op.char_width(ch) as f32 / op.units_per_em() as f32,
+                    char_spacing + if ch == 32 { word_spacing } else { 0.0 },
+                );
+                text_to_user_space = move_text_space_right(&text_to_user_space, width);
+            }
         }
         self.text_object_mut().matrix = text_to_user_space;
         if let Some(text_clip_path) = text_clip_path.finish() {

@@ -613,6 +613,19 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
             .map(|o| o.unwrap_or_default())
     }
 
+    pub fn stream_dict(&self, id: &Name) -> Result<HashMap<Name, Stream>, ObjectValueError> {
+        let resolver = self.resolver();
+        let mut res = HashMap::new();
+        let (_, v) = self
+            ._opt_resolve_container_value(id)?
+            .ok_or(ObjectValueError::DictKeyNotFound)?;
+        for (k, v) in v.dict()?.iter() {
+            let v = resolver.resolve_reference(v)?;
+            res.insert(k.clone(), v.stream()?.clone());
+        }
+        Ok(res)
+    }
+
     pub fn opt_stream(&self, id: &Name) -> Result<Option<&'b Stream>, ObjectValueError> {
         self.opt_get(id)?.map_or(Ok(None), |o| o.stream().map(Some))
     }

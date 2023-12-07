@@ -1,0 +1,5 @@
+---
+source: nipdf/src/file/render_tests.rs
+expression: "&decode_file_page(\"pdf.js/test/pdfs/bug1001080.pdf\", 0).unwrap()"
+---
+"7813fa75f39819ba50a338dd5ab42500"

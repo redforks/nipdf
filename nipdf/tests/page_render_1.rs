@@ -94,9 +94,7 @@ fn render(f: &str) -> AnyResult<()> {
                         break;
                     }
                 }
-                if let Err(err) = err {
-                    return Err(err.into());
-                }
+                err?
             }
         }
     }
