@@ -22,7 +22,7 @@ use image::{DynamicImage, GrayImage, Luma, RgbImage, Rgba, RgbaImage};
 use jpeg_decoder::PixelFormat;
 use log::error;
 use nipdf_macro::pdf_object;
-use once_cell::unsync::{Lazy};
+use once_cell::unsync::Lazy;
 use prescript::{sname, Name};
 use smallvec::SmallVec;
 use std::{
@@ -244,10 +244,6 @@ fn decode_image<'a, M: ImageMetadata>(
         }
     };
 
-    // assert!(
-    //     decode_array_is_default(color_space.as_ref(), img_meta.decode().unwrap()),
-    //     "TODO: handle image decode array"
-    // );
     if let Some(mask) = img_meta.mask().unwrap() {
         let ImageMask::ColorKey(color_key) = mask else {
             todo!("image mask: {:?}", mask);
@@ -602,20 +598,6 @@ pub(crate) trait ImageDictTrait {
     fn mask(&self) -> Option<ImageMask>;
     #[try_from]
     fn decode(&self) -> Option<Domains>;
-}
-
-/// Return true if arr is None, or arr is default value based on color space.
-fn decode_array_is_default(cs: Option<&ColorSpace>, arr: Option<Domains>) -> bool {
-    arr.map_or(true, |arr| {
-        arr.n()
-            == cs
-                .expect("image decode array exist but no ColorSpace")
-                .components()
-            && arr
-                .0
-                .iter()
-                .all(|d| d.start == f32::min_color() && d.end == f32::max_color())
-    })
 }
 
 #[pdf_object(())]
