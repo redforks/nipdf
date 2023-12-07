@@ -88,7 +88,7 @@ impl<'a> FilterDict<'a> {
     /// If value is array, its items should all be Name,
     /// Otherwise, it should be Name.
     pub fn filters(&self) -> Result<Vec<Name>, ObjectValueError> {
-        let v = self.alt_get(&KEY_FILTER, &name!("F"));
+        let v = self.alt_get(&KEY_FILTER, &sname("F"));
         let Some(v) = v else {
             return Ok(vec![]);
         };
@@ -110,7 +110,7 @@ impl<'a> FilterDict<'a> {
     /// If value is array, its items should be Dictionary or None,
     /// Otherwise, it should be Dictionary.
     pub fn parameters(&self) -> Result<Vec<Option<&'a Dictionary>>, ObjectValueError> {
-        let v = self.alt_get(&KEY_FILTER_PARAMS, &name!("DP"));
+        let v = self.alt_get(&KEY_FILTER_PARAMS, &sname("DP"));
         let Some(v) = v else {
             return Ok(vec![]);
         };
@@ -163,11 +163,12 @@ fn decode_stream<'a, 'b>(
 }
 
 /// Abstract image metadata.for decode image from `Stream` and `InlineStream`
-trait ImageMetadata {
+pub(crate) trait ImageMetadata {
     fn width(&self) -> AnyResult<u32>;
     fn height(&self) -> AnyResult<u32>;
     fn bits_per_component(&self) -> AnyResult<Option<u8>>;
     fn color_space(&self) -> AnyResult<Option<ColorSpaceArgs>>;
+    fn image_mask(&self) -> AnyResult<bool>;
     fn mask(&self) -> AnyResult<Option<ImageMask>>;
     fn decode(&self) -> AnyResult<Option<Domains>>;
 }
@@ -243,10 +244,10 @@ fn decode_image<'a, M: ImageMetadata>(
         }
     };
 
-    assert!(
-        decode_array_is_default(color_space.as_ref(), img_meta.decode().unwrap()),
-        "TODO: handle image decode array"
-    );
+    // assert!(
+    //     decode_array_is_default(color_space.as_ref(), img_meta.decode().unwrap()),
+    //     "TODO: handle image decode array"
+    // );
     if let Some(mask) = img_meta.mask().unwrap() {
         let ImageMask::ColorKey(color_key) = mask else {
             todo!("image mask: {:?}", mask);
@@ -284,6 +285,10 @@ impl<'a, 'b> ImageMetadata for ImageDict<'a, 'b> {
 
     fn color_space(&self) -> AnyResult<Option<ColorSpaceArgs>> {
         self.color_space()
+    }
+
+    fn image_mask(&self) -> AnyResult<bool> {
+        self.image_mask()
     }
 
     fn mask(&self) -> AnyResult<Option<ImageMask>> {
@@ -589,6 +594,10 @@ pub(crate) trait ImageDictTrait {
     fn bits_per_component(&self) -> Option<u8>;
     #[try_from]
     fn color_space(&self) -> Option<ColorSpaceArgs>;
+
+    #[or_default]
+    fn image_mask(&self) -> bool;
+
     #[try_from]
     fn mask(&self) -> Option<ImageMask>;
     #[try_from]

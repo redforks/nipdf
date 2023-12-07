@@ -1,6 +1,8 @@
 use crate::{
     file::{page::ResourceDict, ObjectResolver},
-    graphics::{parse_operations, NameOrDictByRef, NameOrStream, Operation},
+    graphics::{
+        parse_operations, trans::GlyphToTextSpace, NameOrDictByRef, NameOrStream, Operation,
+    },
     object::{PdfObject, Stream},
     text::{
         CIDFontType, CIDFontWidths, EncodingDict, FirstLastWidths, FontDescriptorDict,
@@ -13,7 +15,7 @@ use either::Either;
 use font_kit::loaders::freetype::Font as FontKitFont;
 use fontdb::{Database, Family, Query, Source, Weight};
 use heck::ToTitleCase;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use once_cell::sync::Lazy;
 use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
@@ -1036,6 +1038,7 @@ impl<'a, 'b> Type3Font<'a, 'b> {
         let procs = d.char_procs()?;
         let mut r = Vec::with_capacity(procs.len());
         for (name, stream) in procs.iter() {
+            debug!("parse Type3 glyph: {}", name.as_str());
             let data = stream.decode(d.resolver())?;
             let (_, ops) = parse_operations(&data[..])
                 .map_err(|e| anyhow!("parse type3 operation error: {}", e))?;
@@ -1070,6 +1073,10 @@ impl<'a, 'b> Type3Font<'a, 'b> {
     pub fn get_glyph(&self, gid: u16) -> Option<&Type3Glyph> {
         self.glyphs.get(gid as usize)
     }
+
+    pub fn matrix(&self) -> AnyResult<GlyphToTextSpace> {
+        self.dict.type3()?.matrix()
+    }
 }
 
 impl<'a, 'b> Font for Type3Font<'a, 'b> {
@@ -1092,6 +1099,10 @@ impl<'a, 'b> Font for Type3Font<'a, 'b> {
         }
 
         Ok(Box::new(StubGlyphRender {}))
+    }
+
+    fn as_type3(&self) -> Option<&Type3Font<'_, '_>> {
+        Some(self)
     }
 }
 

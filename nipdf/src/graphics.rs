@@ -5,8 +5,8 @@ use crate::{
         TextStringOrNumber,
     },
     parser::{
-        is_white_space, parse_dict_entries, parse_object, whitespace_or_comment, ws_terminated,
-        ParseError, ParseResult,
+        is_white_space, parse_dict_entries, parse_object, whitespace_or_comment, ws_prefixed,
+        ws_terminated, ParseError, ParseResult,
     },
 };
 use euclid::Transform2D;
@@ -18,7 +18,7 @@ use nom::{
     combinator::map_res,
     error::{ErrorKind, FromExternalError, ParseError as NomParseError},
     sequence::{delimited, terminated},
-    Err, Parser,
+    Err, FindSubstring, Parser,
 };
 use prescript::{name, Name};
 use std::num::NonZeroU32;
@@ -447,12 +447,6 @@ pub enum Operation {
     BeginCompatibilitySection,
     #[op_tag("EX")]
     EndCompatibilitySection,
-
-    // Type3 Font Extra Operations
-    #[op_tag("d0")]
-    D0(f32, f32),
-    #[op_tag("d1")]
-    D1(Point, Point, Point),
 }
 
 pub(crate) trait ConvertFromObject<'b>
@@ -582,14 +576,17 @@ fn parse_inline_image(input: &[u8]) -> ParseResult<InlineImage> {
             .map(|v| v.into_iter().collect())
             .parse(input)
     }
-    let (input, d) = parse_dict(input)?;
+    let (input, d) = ws_prefixed(parse_dict).parse(input)?;
 
+    let mut p = 0;
     let (input, data) = loop {
-        let p = memchr2(b'E', b'I', input)
+        p = (&input[p..])
+            .find_substring(b"EI".as_slice())
             .ok_or_else(|| nom::Err::Error(ParseError::from_error_kind(input, ErrorKind::Tag)))?;
         if is_white_space(input[p + 2]) {
             break (&input[p + 2..], &input[..p]);
         }
+        p += 2;
     };
     let stream = InlineStream::new(d, data);
     let image = stream
