@@ -1,5 +1,5 @@
 use super::*;
-use prescript::{name, sname};
+use prescript::sname;
 
 #[test]
 fn try_from_object_encoding_differences() {

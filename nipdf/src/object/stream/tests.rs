@@ -1,6 +1,6 @@
 use super::*;
 use crate::{file::decode_stream, function::Domain, object::Name};
-use prescript::name;
+
 use std::rc::Rc;
 use test_case::test_case;
 

@@ -1,6 +1,5 @@
 use crate::{
     machine::{Array, Machine, Value},
-    name,
     parser::header,
     sname, Encoding,
 };

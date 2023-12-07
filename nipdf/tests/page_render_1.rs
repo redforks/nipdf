@@ -44,7 +44,7 @@ fn replace_dead_link(f: &str) -> Option<&'_ str> {
     ",
     };
     let p = Path::new(f);
-    dead_links.get(p.file_name()?.to_str()?).map(|f| *f)
+    dead_links.get(p.file_name()?.to_str()?).copied()
 }
 
 /// Read pdf file and render each page, to save test time,
