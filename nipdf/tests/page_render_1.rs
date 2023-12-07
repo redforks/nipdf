@@ -8,13 +8,14 @@ use maplit::hashmap;
 use md5::{Digest, Md5};
 use nipdf::file::{File, RenderOptionBuilder};
 use nipdf_test_macro::pdf_file_test_cases;
-use reqwest::blocking::get as download;
 use std::{
     collections::hash_map::HashMap,
+    io::BufWriter,
     num::NonZeroU32,
     path::{Path, PathBuf},
 };
 use test_case::test_case;
+use ureq::get as download;
 
 /// Decode pdf embed image and return the result as Vec<u8>.
 /// The image is specified by ref id.
@@ -47,6 +48,15 @@ fn replace_dead_link(f: &str) -> Option<&'_ str> {
     dead_links.get(p.file_name()?.to_str()?).copied()
 }
 
+fn download_file(url: &str, f: impl AsRef<Path>) -> AnyResult<()> {
+    let resp = download(url).call()?;
+    let f = std::fs::File::create(f.as_ref())?;
+    let mut f = BufWriter::new(f);
+    let mut resp = resp.into_reader();
+    std::io::copy(&mut resp, &mut f)?;
+    Ok(())
+}
+
 /// Read pdf file and render each page, to save test time,
 /// touch a flag file at `$CARGO_TARGET_TMPDIR/(md5(f)).ok` if succeed.
 /// If the file exist, skips the test.
@@ -72,20 +82,14 @@ fn render(f: &str) -> AnyResult<()> {
         file_path = pdf_file.to_str().unwrap();
         if !pdf_file.exists() {
             if let Some(link) = replace_dead_link(f) {
-                download(link).and_then(|mut resp| {
-                    let mut f = std::fs::File::create(&pdf_file).unwrap();
-                    resp.copy_to(&mut f)
-                })?;
+                download_file(link, &pdf_file)?;
             } else {
                 let url = std::fs::read_to_string(f)?;
                 let url = url.trim();
-                let mut err = Ok(0u64);
+                let mut err = Ok(());
                 for url in url.split("http").filter(|f| !f.is_empty()) {
                     let url = format!("http{}", url);
-                    err = download(url).and_then(|mut resp| {
-                        let mut f = std::fs::File::create(&pdf_file).unwrap();
-                        resp.copy_to(&mut f)
-                    });
+                    err = download_file(&url, &pdf_file);
                     if err.is_ok() {
                         break;
                     }
