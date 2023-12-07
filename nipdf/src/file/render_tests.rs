@@ -164,3 +164,8 @@ fn tile_pattern_with_very_large_b_box() {
 fn transparent() {
     assert_ron_snapshot!(&decode_file_page("pdf.js/test/pdfs/alphatrans.pdf", 0).unwrap())
 }
+
+#[test]
+fn type3_font() {
+    assert_ron_snapshot!(&decode_file_page("pdf.js/test/pdfs/bug1001080.pdf", 0).unwrap())
+}
