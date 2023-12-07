@@ -172,7 +172,7 @@ impl FirstLastWidths for Type3FontDict<'_, '_> {
     }
 
     fn widths(&self) -> AnyResult<Vec<u32>> {
-        Ok(self.widths()?)
+        self.widths()
     }
 
     fn default_width(&self) -> AnyResult<u32> {

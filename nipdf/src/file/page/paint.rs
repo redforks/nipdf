@@ -22,7 +22,7 @@ use crate::{
 use anyhow::{Ok, Result as AnyResult};
 use educe::Educe;
 use either::Either::{self, Left, Right};
-use image::{DynamicImage, RgbaImage};
+use image::{RgbaImage};
 use log::{debug, info};
 use nom::{combinator::eof, sequence::terminated};
 use prescript::Name;
@@ -40,7 +40,7 @@ use tiny_skia::{
 
 mod fonts;
 use euclid::{default::Size2D, Angle};
-use font_kit::font;
+
 use fonts::*;
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -1125,7 +1125,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
         if x_object.image_mask()? {
             let x_object = x_object.as_stream()?;
-            let img = x_object.decode_image(self.resources.resolver(), Some(&self.resources))?;
+            let img = x_object.decode_image(self.resources.resolver(), Some(self.resources))?;
             let mask = Self::load_image_as_mask(img.into_rgba8(), state, false)?;
             // fill canvas with current fill paint with mask
             let paint = state.get_fill_paint();
@@ -1147,7 +1147,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let s_mask = x_object.s_mask()?.map(|s_mask| {
             let s_mask = s_mask.as_stream().unwrap();
             let img = s_mask
-                .decode_image(self.resources.resolver(), Some(&self.resources))
+                .decode_image(self.resources.resolver(), Some(self.resources))
                 .unwrap();
             Self::load_image_as_mask(img.into_rgba8(), state, true).unwrap()
         });
@@ -1634,7 +1634,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                     .background_color(SkiaColor::TRANSPARENT)
                     .state(state)
                     .build(),
-                resources.unwrap_or_else(|| self.resources),
+                resources.unwrap_or(self.resources),
             );
 
             for ch in op.decode_chars(text) {
@@ -1653,8 +1653,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                     }
                 }
 
-                let width = font_size * op.char_width(ch) as f32 * font_matrix.m11
-                    + char_spacing
+                let width = (font_size * op.char_width(ch) as f32).mul_add(font_matrix.m11, char_spacing)
                     + if ch == 32 { word_spacing } else { 0.0 };
                 text_to_user_space = move_text_space_right(&text_to_user_space, width);
             }

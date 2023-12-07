@@ -1,4 +1,4 @@
-use super::{Dictionary, Object, ObjectId, ObjectValueError, Resolver, SchemaDict};
+use super::{Dictionary, Object, ObjectId, ObjectValueError};
 use crate::{
     ccitt::Flags,
     file::{
@@ -8,7 +8,7 @@ use crate::{
     function::Domains,
     graphics::{
         color_space::{
-            color_to_rgba, convert_color_to, ColorComp, ColorCompConvertTo, ColorSpace,
+            color_to_rgba, convert_color_to, ColorCompConvertTo, ColorSpace,
             ColorSpaceTrait, DeviceCMYK,
         },
         ColorSpaceArgs,
@@ -22,7 +22,7 @@ use image::{DynamicImage, GrayImage, Luma, RgbImage, Rgba, RgbaImage};
 use jpeg_decoder::PixelFormat;
 use log::error;
 use nipdf_macro::pdf_object;
-use once_cell::unsync::{Lazy, OnceCell};
+use once_cell::unsync::{Lazy};
 use prescript::{sname, Name};
 use smallvec::SmallVec;
 use std::{
@@ -137,9 +137,9 @@ impl<'a> FilterDict<'a> {
 }
 
 /// Iterate pairs of filter name and its parameter
-fn iter_filters<'a>(
-    d: FilterDict<'a>,
-) -> Result<impl Iterator<Item = (Name, Option<&'a Dictionary>)>, ObjectValueError> {
+fn iter_filters(
+    d: FilterDict<'_>,
+) -> Result<impl Iterator<Item = (Name, Option<&'_ Dictionary>)>, ObjectValueError> {
     let filters = d.filters()?;
     let params = d.parameters()?;
     Ok(filters

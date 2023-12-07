@@ -1089,7 +1089,7 @@ impl<'a, 'b> Font for Type3Font<'a, 'b> {
     }
 
     fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender + '_>> {
-        struct StubGlyphRender {}
+        struct StubGlyphRender;
 
         impl GlyphRender for StubGlyphRender {
             fn render(&self, _gid: u16, _font_size: f32, _sink: &mut PathSink) -> AnyResult<()> {
@@ -1098,7 +1098,7 @@ impl<'a, 'b> Font for Type3Font<'a, 'b> {
             }
         }
 
-        Ok(Box::new(StubGlyphRender {}))
+        Ok(Box::new(StubGlyphRender))
     }
 
     fn as_type3(&self) -> Option<&Type3Font<'_, '_>> {

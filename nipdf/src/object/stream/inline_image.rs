@@ -121,7 +121,7 @@ impl<'a> InlineStream<'a> {
 pub struct InlineImage(Dictionary, Vec<u8>);
 
 impl InlineImage {
-    pub fn meta(&self) -> impl ImageMetadata + '_ {
+    pub(crate) fn meta(&self) -> impl ImageMetadata + '_ {
         InlineStreamDict(&self.0)
     }
 

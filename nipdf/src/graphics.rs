@@ -17,17 +17,17 @@ use nom::{
     bytes::complete::{is_not, tag},
     combinator::map_res,
     error::{ErrorKind, FromExternalError, ParseError as NomParseError},
-    sequence::{delimited, terminated},
+    sequence::{terminated},
     Err, FindSubstring, Parser,
 };
-use prescript::{name, Name};
+use prescript::{Name};
 use std::num::NonZeroU32;
 
 pub(crate) mod color_space;
 mod pattern;
 pub(crate) mod trans;
 use self::trans::UserToUserSpace;
-use memchr::{memchr2, memchr2_iter};
+
 pub(crate) use pattern::*;
 
 pub(crate) mod shading;
