@@ -4,7 +4,7 @@ use bitstream_io::{
     BigEndian, HuffmanRead,
 };
 use bitvec::{prelude::Msb0, slice::BitSlice, vec::BitVec};
-use log::{debug, error};
+use log::error;
 use std::iter::repeat;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -453,7 +453,6 @@ impl<'a> Coder<'a> {
     }
 
     fn fill(&mut self, run: Run) {
-        debug!("fill {:?} at {:?}", run, self.pos);
         let mut pos = self.pos.unwrap_or_default();
         for _ in 0..run.bytes {
             self.cur.set(pos, run.b_color());
@@ -471,7 +470,6 @@ impl<'a> Coder<'a> {
             }
             Code::Vertical(n) => {
                 let b1 = self.last.b1(self.pos, self.cur_color);
-                debug!("b1: {}, color: {}", b1, self.cur_color);
                 self.fill(Run::new(
                     if self.cur_color { WHITE } else { BLACK },
                     (b1 as i16 - self.pos.unwrap_or_default() as i16 + n as i16) as u16,
@@ -509,7 +507,6 @@ pub fn decode(buf: &[u8], width: u16, rows: Option<usize>, flags: Flags) -> Resu
     let mut coder = Coder::new(last_line, &mut line_buf);
     loop {
         let code = next_code(&coder, &flags);
-        debug!("code: {:?}", code);
         match code {
             None => break,
             Some(code) => match code? {
@@ -520,10 +517,7 @@ pub fn decode(buf: &[u8], width: u16, rows: Option<usize>, flags: Flags) -> Resu
                 code => {
                     if coder.decode(code)? {
                         r.extend(line_buf.iter());
-
                         coder = Coder::new(&r[r.len() - width as usize..], &mut line_buf);
-                        debug!("line: {}\n", r.len() / width as usize);
-                        // write_buf(&r[..], width as usize);
                     }
                 }
             },
