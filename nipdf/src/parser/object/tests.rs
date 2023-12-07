@@ -28,8 +28,8 @@ b)"; "literal string contains new line")]
 #[test_case(HexString::new(b"<>"), "<>")]
 #[test_case(HexString::new(b"<12A>"), "<12A>")]
 #[test_case(HexString::new(b"<12 A\t3>"), "<12 A\t3>"; "contains whitespace")]
-#[test_case(name!(""), "/"; "empty name")]
-#[test_case(name!("foo"), "/foo"; "name")]
+#[test_case(sname(""), "/"; "empty name")]
+#[test_case(sname("foo"), "/foo"; "name")]
 fn test_parse_simple_objects(exp: impl Into<Object>, buf: &'static str) {
     let o = parse_object(buf.as_bytes()).unwrap();
     assert_eq!((b"".as_slice(), exp.into()), o);
@@ -39,7 +39,7 @@ fn test_parse_simple_objects(exp: impl Into<Object>, buf: &'static str) {
 #[test_case(vec![], "[ \t]"; "empty array 2")]
 #[test_case(vec![Object::Null], "[null]"; "array with null")]
 #[test_case(vec![Object::Array(vec![Object::Null].into())], "[[null]]"; "nested array with null")]
-#[test_case(vec![name!("foo").into()], "[/foo]"; "name value")]
+#[test_case(vec![sname("foo").into()], "[/foo]"; "name value")]
 fn test_parse_array(exp: Vec<Object>, buf: &'static str) {
     assert_eq!(
         (b"".as_slice(), exp.into()),

@@ -1,6 +1,6 @@
 //! Contains the `CIDInit` ProcSet
 use super::{ok, Key, RuntimeDictionary, RuntimeValue};
-use crate::{name, Name};
+use crate::{sname, Name};
 
 macro_rules! built_in_ops {
     ($($k:literal => $v:expr),* $(,)?) => {
@@ -15,7 +15,7 @@ pub fn cid_init_dict<'a>() -> RuntimeDictionary<'a> {
         "endcmap" => |_| ok(),
         "CMapName" => |m| {
             // todo: should push defined CMapName dict value
-            m.push(name!("cmap-name-todo"));
+            m.push(sname("cmap-name-todo"));
             ok()
         },
         "begincodespacerange" => |m| {

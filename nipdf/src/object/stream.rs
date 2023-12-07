@@ -23,7 +23,7 @@ use jpeg_decoder::PixelFormat;
 use log::error;
 use nipdf_macro::pdf_object;
 use once_cell::unsync::Lazy;
-use prescript::{name, Name};
+use prescript::{sname, Name};
 use smallvec::SmallVec;
 use std::{
     borrow::{Borrow, Cow},
@@ -34,17 +34,17 @@ use std::{
     rc::Rc,
 };
 
-const KEY_FILTER: Name = name!("Filter");
-const KEY_FILTER_PARAMS: Name = name!("DecodeParms");
-const KEY_FFILTER: Name = name!("FFilter");
+const KEY_FILTER: Name = sname("Filter");
+const KEY_FILTER_PARAMS: Name = sname("DecodeParms");
+const KEY_FFILTER: Name = sname("FFilter");
 
-const FILTER_FLATE_DECODE: Name = name!("FlateDecode");
-// const FILTER_LZW_DECODE: Name = name!("LZWDecode");
-const FILTER_CCITT_FAX: Name = name!("CCITTFaxDecode");
-const FILTER_DCT_DECODE: Name = name!("DCTDecode");
-const FILTER_ASCII85_DECODE: Name = name!("ASCII85Decode");
-// const FILTER_RUN_LENGTH_DECODE: Name = name!("RunLengthDecode");
-const FILTER_JPX_DECODE: Name = name!("JPXDecode");
+const FILTER_FLATE_DECODE: Name = sname("FlateDecode");
+// const FILTER_LZW_DECODE: Name = sname("LZWDecode");
+const FILTER_CCITT_FAX: Name = sname("CCITTFaxDecode");
+const FILTER_DCT_DECODE: Name = sname("DCTDecode");
+const FILTER_ASCII85_DECODE: Name = sname("ASCII85Decode");
+// const FILTER_RUN_LENGTH_DECODE: Name = sname("RunLengthDecode");
+const FILTER_JPX_DECODE: Name = sname("JPXDecode");
 
 const S_FILTER_FLATE_DECODE: &str = "FlateDecode";
 const S_FILTER_LZW_DECODE: &str = "LZWDecode";
@@ -107,30 +107,30 @@ impl LZWDeflateDecodeParams {
         Ok(if let Some(r) = r {
             Self {
                 predictor: r
-                    .opt_resolve_container_value(d, &name!("Predictor"))?
+                    .opt_resolve_container_value(d, &sname("Predictor"))?
                     .map_or(1, |o| o.int().unwrap()),
                 colors: r
-                    .opt_resolve_container_value(d, &name!("Colors"))?
+                    .opt_resolve_container_value(d, &sname("Colors"))?
                     .map_or(1, |o| o.int().unwrap()),
                 bits_per_comonent: r
-                    .opt_resolve_container_value(d, &name!("BitsPerComponent"))?
+                    .opt_resolve_container_value(d, &sname("BitsPerComponent"))?
                     .map_or(8, |o| o.int().unwrap()),
                 columns: r
-                    .opt_resolve_container_value(d, &name!("Columns"))?
+                    .opt_resolve_container_value(d, &sname("Columns"))?
                     .map_or(1, |o| o.int().unwrap()),
                 early_change: r
-                    .opt_resolve_container_value(d, &name!("EarlyChange"))?
+                    .opt_resolve_container_value(d, &sname("EarlyChange"))?
                     .map_or(1, |o| o.int().unwrap()),
             }
         } else {
             Self {
-                predictor: d.get(&name!("Predictor")).map_or(1, |o| o.int().unwrap()),
-                colors: d.get(&name!("Colors")).map_or(1, |o| o.int().unwrap()),
+                predictor: d.get(&sname("Predictor")).map_or(1, |o| o.int().unwrap()),
+                colors: d.get(&sname("Colors")).map_or(1, |o| o.int().unwrap()),
                 bits_per_comonent: d
-                    .get(&name!("BitsPerComponent"))
+                    .get(&sname("BitsPerComponent"))
                     .map_or(8, |o| o.int().unwrap()),
-                columns: d.get(&name!("Columns")).map_or(1, |o| o.int().unwrap()),
-                early_change: d.get(&name!("EarlyChange")).map_or(1, |o| o.int().unwrap()),
+                columns: d.get(&sname("Columns")).map_or(1, |o| o.int().unwrap()),
+                early_change: d.get(&sname("EarlyChange")).map_or(1, |o| o.int().unwrap()),
             }
         })
     }
@@ -676,7 +676,7 @@ impl Stream {
         self.1.range(|| {
             let l = self
                 .0
-                .get(&name!("Length"))
+                .get(&sname("Length"))
                 .ok_or(ObjectValueError::StreamLengthNotDefined)?;
 
             match (l, resolver) {

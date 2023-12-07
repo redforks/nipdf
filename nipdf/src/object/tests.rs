@@ -1,6 +1,6 @@
 use super::*;
 use crate::file::{ObjectResolver, XRefTable};
-use prescript::name;
+use prescript::{name, sname};
 use static_assertions::assert_impl_all;
 use test_case::test_case;
 
@@ -34,7 +34,7 @@ fn hex_string_decoded(exp: impl AsRef<[u8]>, buf: impl AsRef<[u8]>) {
 
 #[test_case(Object::LiteralString(LiteralString::new(b"(foo)")), "(foo)"; "literal string")]
 #[test_case(Object::HexString(HexString::new(b"<901FA3>")), "<901FA3>"; "hex string")]
-#[test_case(Object::Name(name!("foo")), "/foo"; "name")]
+#[test_case(Object::Name(sname("foo")), "/foo"; "name")]
 fn buf_or_str_to_object(exp: Object, s: &str) {
     assert_eq!(exp, Object::from(s.as_bytes()));
     assert_eq!(exp, Object::from(s));
@@ -42,24 +42,24 @@ fn buf_or_str_to_object(exp: Object, s: &str) {
 
 #[test]
 fn equal_schema_type_validator() {
-    let checker = EqualTypeValueChecker::new(name!("Page"));
+    let checker = EqualTypeValueChecker::new(sname("Page"));
     assert!(!checker.check(None));
-    assert!(!checker.check(Some(name!("blah"))));
-    assert!(checker.check(Some(name!("Page"))));
+    assert!(!checker.check(Some(sname("blah"))));
+    assert!(checker.check(Some(sname("Page"))));
 }
 
 #[test]
 fn value_type_validator() {
     let validator = ValueTypeValidator::new(
-        NameTypeValueGetter::new(name!("Type")),
-        EqualTypeValueChecker::new(name!("Page")) as EqualTypeValueChecker<Name>,
+        NameTypeValueGetter::new(sname("Type")),
+        EqualTypeValueChecker::new(sname("Page")) as EqualTypeValueChecker<Name>,
     );
     assert_impl_all!(
         ValueTypeValidator<NameTypeValueGetter, EqualTypeValueChecker<Name>>: TypeValidator
     );
 
     let mut d = HashMap::new();
-    d.insert(name!("a"), "/foo".into());
+    d.insert(sname("a"), "/foo".into());
     let d = Dictionary::from(d);
 
     assert_eq!(
@@ -72,24 +72,24 @@ fn value_type_validator() {
 
 #[test]
 fn option_value_type_validator() {
-    let checker = EqualTypeValueChecker::new(name!("Page")).option();
+    let checker = EqualTypeValueChecker::new(sname("Page")).option();
     assert_impl_all!(OptionTypeValueChecker<EqualTypeValueChecker<Name>>: TypeValueCheck<Name>);
 
     assert!(checker.check(None));
-    assert!(!checker.check(Some(name!("blah"))));
-    assert!(checker.check(Some(name!("Page"))));
+    assert!(!checker.check(Some(sname("blah"))));
+    assert!(checker.check(Some(sname("Page"))));
 }
 
 #[test]
 fn one_of_type_value_checker() {
-    let checker = OneOfTypeValueChecker::new(vec![name!("Page"), name!("Pages")]);
+    let checker = OneOfTypeValueChecker::new(vec![sname("Page"), sname("Pages")]);
     let schema_type = <OneOfTypeValueChecker<Name> as TypeValueCheck<Name>>::schema_type(&checker);
     assert_eq!("Page|Pages", &schema_type);
 
     assert!(!checker.check(None::<Name>));
-    assert!(!checker.check(Some(name!("blah"))));
-    assert!(checker.check(Some(name!("Page"))));
-    assert!(checker.check(Some(name!("Pages"))));
+    assert!(!checker.check(Some(sname("blah"))));
+    assert!(checker.check(Some(sname("Page"))));
+    assert!(checker.check(Some(sname("Pages"))));
 }
 
 #[test_case(None => Vec::<u32>::new())]
@@ -99,13 +99,13 @@ fn schema_ref_id_arr(ids: Option<&[u32]>) -> Vec<u32> {
     let mut d = HashMap::new();
     if let Some(ids) = ids {
         let ids: Array = ids.iter().map(|id| Object::new_ref(*id)).collect();
-        d.insert(name!("ids"), ids.into());
+        d.insert(sname("ids"), ids.into());
     }
     let xref = XRefTable::empty();
     let resolver = ObjectResolver::empty(&xref);
     let d = Dictionary::from(d);
     let d = SchemaDict::new(&d, &resolver, ()).unwrap();
-    d.ref_id_arr(&name!("ids"))
+    d.ref_id_arr(&sname("ids"))
         .unwrap()
         .into_iter()
         .map(|id| id.get())
@@ -125,8 +125,8 @@ fn schema_ref_id_arr(ids: Option<&[u32]>) -> Vec<u32> {
 #[test_case(vec![1i32.into(), 2i32.into()] => "[1 2]"; "array with two int")]
 #[test_case(15u32 => "15 0 R"; "reference")]
 #[test_case(Dictionary::new() => "<<>>"; "empty dict")]
-#[test_case([(name!("a"), true.into())].into_iter().collect::<Dictionary>() => "<</a true>>"; "dict with one entry")]
-#[test_case([(name!("a"), true.into()), (name!("b"), false.into())].into_iter().collect::<Dictionary>() => "<</a true /b false>>"; "dict with two entries")]
+#[test_case([(sname("a"), true.into())].into_iter().collect::<Dictionary>() => "<</a true>>"; "dict with one entry")]
+#[test_case([(sname("a"), true.into()), (sname("b"), false.into())].into_iter().collect::<Dictionary>() => "<</a true /b false>>"; "dict with two entries")]
 fn pretty_print(o: impl Into<Object>) -> String {
     let o = o.into();
     let s = o.to_doc().pretty(20).to_string();

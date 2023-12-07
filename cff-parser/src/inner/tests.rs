@@ -411,14 +411,14 @@ fn parse_encodings_format1() {
 
 #[test]
 fn encoding_supplement_apply() {
-    const NOTDEF: Name = name!(".notdef");
+    const NOTDEF: Name = sname(".notdef");
     let string_index = StringIndex(IndexedData {
         offsets: Offsets::new(OffSize::One, &[1_u8, 3, 6][..]).unwrap(),
         data: b"abcde",
     });
     let mut encodings: [Name; 256] = [NOTDEF; 256];
-    encodings[100] = name!("foo");
-    encodings[101] = name!("bar");
+    encodings[100] = sname("foo");
+    encodings[101] = sname("bar");
     let supp = EncodingSupplement::new(100, 10);
     let mut encodings = Encoding::new(encodings);
     supp.apply(string_index, &mut encodings);

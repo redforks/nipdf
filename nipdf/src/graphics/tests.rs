@@ -1,6 +1,6 @@
 use super::*;
 use crate::object::LiteralString;
-use prescript::name;
+use prescript::sname;
 use test_case::test_case;
 
 #[test_case("w ", "w")]
@@ -33,7 +33,7 @@ fn parse_operator_succeed(s: &str, op: &str) {
         Operation::ModifyCTM(UserToUserSpace::new(
             296f32, 0f32, 0f32, 295f32, 0f32, 0f32
         )),
-        Operation::PaintXObject(NameOfDict(name!("Image80"))),
+        Operation::PaintXObject(NameOfDict(sname("Image80"))),
         Operation::RestoreGraphicsState
     ];
     "cm and Do"
@@ -51,12 +51,12 @@ fn test_parse_operations(s: &str) -> Vec<Operation> {
     UserToUserSpace::new(296f32, 0f32, 0f32, 295f32, 0f32, 0f32)
 ); "cm")]
 #[test_case("[1 2] 0.5 d" => Operation::SetDashPattern(vec![1f32, 2f32], 0.5f32); "dash-pattern")]
-#[test_case("/stateName gs" => Operation::SetGraphicsStateParameters(NameOfDict(name!("stateName"))); "gs")]
+#[test_case("/stateName gs" => Operation::SetGraphicsStateParameters(NameOfDict(sname("stateName"))); "gs")]
 #[test_case("1 2 3 4 5 6 c" => Operation::AppendBezierCurve(Point::new(1f32, 2f32), Point::new(3f32, 4f32), Point::new(5f32, 6f32)); "c")]
 #[test_case("(foo)Tj" => Operation::ShowText(TextString::Text(LiteralString::new(b"(foo)"))); "Tj")]
 #[test_case("[(foo) 1]TJ" => Operation::ShowTexts(vec![TextStringOrNumber::TextString(TextString::Text(LiteralString::new(b"(foo)"))), TextStringOrNumber::Number(1f32)]); "show texts")]
-#[test_case("/tag /name DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict(name!("tag")), NameOrDict::Name(name!("name"))); "DP with name")]
-#[test_case("/tag<<>>DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict(name!("tag")), NameOrDict::Dict(Dictionary::new())); "DP with dict")]
+#[test_case("/tag /name DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict(sname("tag")), NameOrDict::Name(sname("name"))); "DP with name")]
+#[test_case("/tag<<>>DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict(sname("tag")), NameOrDict::Dict(Dictionary::new())); "DP with dict")]
 fn test_parse_operation(s: &str) -> Operation {
     let (_, mut result) = parse_operations(s.as_bytes()).unwrap();
     assert_eq!(1, result.len());
@@ -115,8 +115,8 @@ fn test_arr_convert_from_object(v: Vec<Object>) -> Vec<f32> {
 }
 
 #[test_case(vec![1.into()] => ColorArgsOrName::Color(ColorArgs(vec![1.0])); "Color")]
-#[test_case(vec!["/name".into()] => ColorArgsOrName::Name((name!("name"), None)); "name")]
-#[test_case(vec![1f32.into(), 2f32.into(), 3f32.into(), "/p1".into()] => ColorArgsOrName::Name((name!("p1"), Some(ColorArgs(vec![1f32, 2., 3.])))); "SCN for uncolored pattern")]
+#[test_case(vec!["/name".into()] => ColorArgsOrName::Name((sname("name"), None)); "name")]
+#[test_case(vec![1f32.into(), 2f32.into(), 3f32.into(), "/p1".into()] => ColorArgsOrName::Name((sname("p1"), Some(ColorArgs(vec![1f32, 2., 3.])))); "SCN for uncolored pattern")]
 fn color_or_with_pattern_from_object(mut v: Vec<Object>) -> ColorArgsOrName {
     ColorArgsOrName::convert_from_object(&mut v).unwrap()
 }

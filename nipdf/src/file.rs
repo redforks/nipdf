@@ -18,7 +18,7 @@ use log::error;
 use nipdf_macro::pdf_object;
 use nom::Finish;
 use once_cell::unsync::OnceCell;
-use prescript::{name, Name};
+use prescript::{sname, Name};
 use std::{iter::repeat_with, num::NonZeroU32, rc::Rc};
 
 mod page;
@@ -75,10 +75,10 @@ fn parse_object_stream(n: usize, buf: &[u8]) -> ParseResult<ObjectStream> {
 impl ObjectStream {
     pub fn new(stream: Stream, file: &[u8]) -> Result<Self, ObjectValueError> {
         let d = stream.as_dict();
-        assert_eq!(name!("ObjStm"), d[&name!("Type")].name()?);
-        let n = d.get(&name!("N")).map_or(Ok(0), |v| v.int())? as usize;
+        assert_eq!(sname("ObjStm"), d[&sname("Type")].name()?);
+        let n = d.get(&sname("N")).map_or(Ok(0), |v| v.int())? as usize;
         // assert!(
-        //     !d.contains_key(&name!("Extends")),
+        //     !d.contains_key(&sname("Extends")),
         //     "Extends is not supported"
         // );
         let buf = stream.decode_without_resolve_length(file)?;
@@ -594,7 +594,7 @@ fn open_encrypt(
     };
 
     assert_eq!(
-        name!("Standard"),
+        sname("Standard"),
         encrypt.filter()?,
         "unsupported security handler"
     );
@@ -647,12 +647,12 @@ impl File {
         let encrypt_key = open_encrypt(
             &buf,
             &xref,
-            trailers.iter().find(|d| d.contains_key(&name!("Encrypt"))),
+            trailers.iter().find(|d| d.contains_key(&sname("Encrypt"))),
             owner_password,
             user_password,
         )?;
 
-        let root_id = trailers.iter().find_map(|t| t.get(&name!("Root"))).unwrap();
+        let root_id = trailers.iter().find_map(|t| t.get(&sname("Root"))).unwrap();
         let root_id = root_id.reference().unwrap().id().id();
 
         Ok(Self {

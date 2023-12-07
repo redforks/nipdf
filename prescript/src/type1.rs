@@ -2,7 +2,7 @@ use crate::{
     machine::{Array, Machine, Value},
     name,
     parser::header,
-    Encoding,
+    sname, Encoding,
 };
 use anyhow::Result as AnyResult;
 use std::{array::from_fn, borrow::Cow};
@@ -30,7 +30,7 @@ fn parse_header(mut data: &[u8]) -> AnyResult<Header> {
 }
 
 fn parse_vec_encoding(arr: &Array) -> Encoding {
-    let mut names = from_fn(|_| name!(".notdef"));
+    let mut names = from_fn(|_| sname(".notdef"));
     for (i, v) in arr.iter().enumerate() {
         names[i] = v.name().unwrap();
     }

@@ -47,15 +47,15 @@ fn parse_page_tree(root_id: u32, tree: Vec<(u32, Vec<u32>)>) -> Vec<u32> {
     for (id, kids) in tree {
         let mut dict = HashMap::new();
         dict.insert(
-            name!("Type"),
+            sname("Type"),
             (if kids.is_empty() { "/Page" } else { "/Pages" }).into(),
         );
         dict.insert(
-            name!("MediaBox"),
+            sname("MediaBox"),
             Object::Array(vec![0.0.into(), 0.0.into(), 0.0.into(), 0.0.into()].into()),
         );
         dict.insert(
-            name!("Kids"),
+            sname("Kids"),
             Object::Array(
                 kids.into_iter()
                     .map(Object::new_ref)

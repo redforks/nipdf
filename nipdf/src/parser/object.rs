@@ -17,7 +17,7 @@ use nom::{
     number::complete::float,
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
 };
-use prescript::{name, Name};
+use prescript::{sname, Name};
 use std::{
     borrow::Cow,
     num::NonZeroU32,
@@ -178,7 +178,7 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<Either<Object, StreamPar
             ))(data)?;
             if begin_stream.is_some() {
                 let start = input_len - data.len();
-                let length = match d.get(&name!("Length")) {
+                let length = match d.get(&sname("Length")) {
                     Some(Object::Integer(l)) => Some(*l as u32),
                     _ => None,
                 };

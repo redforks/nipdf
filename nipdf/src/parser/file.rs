@@ -17,7 +17,7 @@ use nom::{
     sequence::{preceded, separated_pair, tuple},
     InputIter, InputLength, InputTake, Parser, Slice,
 };
-use prescript::name;
+use prescript::sname;
 use std::{fmt::Display, num::NonZeroU32, ops::RangeFrom, str::from_utf8};
 
 pub fn parse_header(buf: &[u8]) -> ParseResult<&str> {
@@ -91,14 +91,14 @@ struct CrossReferenceStreamDict {
 impl CrossReferenceStreamDict {
     pub fn new(d: &Dictionary) -> Result<Self, ObjectValueError> {
         let size = d
-            .get(&name!("Size"))
+            .get(&sname("Size"))
             .ok_or(ObjectValueError::DictKeyNotFound)?
             .int()? as u32;
         let index = d
-            .get(&name!("Index"))
+            .get(&sname("Index"))
             .map(|o| Domains::<u32>::try_from(o).unwrap());
         let w = d
-            .get(&name!("W"))
+            .get(&sname("W"))
             .ok_or(ObjectValueError::DictKeyNotFound)?
             .arr()?
             .iter()
@@ -228,7 +228,7 @@ fn parse_frame(buf: &[u8]) -> ParseResult<(Dictionary, XRefSection)> {
 
 pub fn parse_frame_set(input: &[u8]) -> ParseResult<FrameSet> {
     fn get_prev(frame: &Frame) -> Option<i32> {
-        frame.trailer.get(&name!("Prev")).map(|o| o.int().unwrap())
+        frame.trailer.get(&sname("Prev")).map(|o| o.int().unwrap())
     }
 
     let mut frames = Vec::new();

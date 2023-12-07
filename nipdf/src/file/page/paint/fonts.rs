@@ -17,7 +17,7 @@ use log::{error, info, warn};
 use once_cell::sync::Lazy;
 use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
-use prescript::{name, Encoding, Name};
+use prescript::{name, sname, Encoding, Name};
 use std::{collections::HashMap, ops::RangeInclusive};
 use tiny_skia::PathBuilder;
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
@@ -608,20 +608,20 @@ fn normalize_font_name(name: &str) -> &str {
 /// If font_name is a standard 14 font, return its Encoding name
 fn standard_14_type1_font_encoding(font_name: &str) -> Option<Name> {
     match normalize_font_name(font_name) {
-        "Courier" => Some(name!("StandardEncoding")),
-        "Courier-Bold" => Some(name!("StandardEncoding")),
-        "Courier-BoldOblique" => Some(name!("StandardEncoding")),
-        "Courier-Oblique" => Some(name!("StandardEncoding")),
-        "Helvetica" => Some(name!("StandardEncoding")),
-        "Helvetica-Bold" => Some(name!("StandardEncoding")),
-        "Helvetica-BoldOblique" => Some(name!("StandardEncoding")),
-        "Helvetica-Oblique" => Some(name!("StandardEncoding")),
-        "Symbol" => Some(name!("Symbol")),
-        "Times-Bold" => Some(name!("StandardEncoding")),
-        "Times-BoldItalic" => Some(name!("StandardEncoding")),
-        "Times-Italic" => Some(name!("StandardEncoding")),
-        "Times-Roman" => Some(name!("StandardEncoding")),
-        "ZapfDingbats" => Some(name!("ZapfDingbats")),
+        "Courier" => Some(sname("StandardEncoding")),
+        "Courier-Bold" => Some(sname("StandardEncoding")),
+        "Courier-BoldOblique" => Some(sname("StandardEncoding")),
+        "Courier-Oblique" => Some(sname("StandardEncoding")),
+        "Helvetica" => Some(sname("StandardEncoding")),
+        "Helvetica-Bold" => Some(sname("StandardEncoding")),
+        "Helvetica-BoldOblique" => Some(sname("StandardEncoding")),
+        "Helvetica-Oblique" => Some(sname("StandardEncoding")),
+        "Symbol" => Some(sname("Symbol")),
+        "Times-Bold" => Some(sname("StandardEncoding")),
+        "Times-BoldItalic" => Some(sname("StandardEncoding")),
+        "Times-Italic" => Some(sname("StandardEncoding")),
+        "Times-Roman" => Some(sname("StandardEncoding")),
+        "ZapfDingbats" => Some(sname("ZapfDingbats")),
         _ => None,
     }
 }

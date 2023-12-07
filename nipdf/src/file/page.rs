@@ -14,7 +14,7 @@ use image::RgbaImage;
 use log::error;
 use nipdf_macro::{pdf_object, TryFromNameObject};
 use nom::Finish;
-use prescript::{name, Name};
+use prescript::{name, sname, Name};
 use std::iter::once;
 
 mod paint;
@@ -251,7 +251,7 @@ pub(crate) trait PageDictTrait {
 
 impl<'a, 'b> PageDict<'a, 'b> {
     pub fn is_leaf(&self) -> bool {
-        self.type_name().unwrap() == name!("Page")
+        self.type_name().unwrap() == sname("Page")
     }
 }
 

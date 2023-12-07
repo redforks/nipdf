@@ -3,6 +3,7 @@ use crate::{
     object::{Object, SchemaDict},
     parser::parse_dict,
 };
+use prescript::sname;
 use std::path::PathBuf;
 
 #[test]
@@ -55,13 +56,13 @@ fn object_resolver_resolve_container_value() {
 
     assert_eq!(
         resolver
-            .do_resolve_container_value(&dict, &name!("a"))
+            .do_resolve_container_value(&dict, &sname("a"))
             .unwrap(),
         (None, &Object::Integer(1))
     );
     assert_eq!(
         Err(ObjectValueError::DictKeyNotFound),
-        resolver.resolve_container_value(&dict, &name!("b"))
+        resolver.resolve_container_value(&dict, &sname("b"))
     );
 }
 
@@ -82,7 +83,7 @@ endobj
         .as_dict()?;
     let d = SchemaDict::new(d, &resolver, ())?;
     assert!(
-        d.resolve_one_or_more_pdf_object::<FooDict>(&name!("foo"))?
+        d.resolve_one_or_more_pdf_object::<FooDict>(&sname("foo"))?
             .is_empty()
     );
 
@@ -98,7 +99,7 @@ endobj
         .resolve(NonZeroU32::new(1_u32).unwrap())?
         .as_dict()?;
     let d = SchemaDict::new(d, &resolver, ())?;
-    let list = d.resolve_one_or_more_pdf_object::<FooDict>(&name!("foo"))?;
+    let list = d.resolve_one_or_more_pdf_object::<FooDict>(&sname("foo"))?;
     assert_eq!(list.len(), 1);
     assert_eq!(Some(NonZeroU32::new(2).unwrap()), list[0].id());
 
@@ -114,7 +115,7 @@ endobj
         .resolve(NonZeroU32::new(1_u32).unwrap())?
         .as_dict()?;
     let d = SchemaDict::new(d, &resolver, ())?;
-    let list = d.resolve_one_or_more_pdf_object::<FooDict>(&name!("foo"))?;
+    let list = d.resolve_one_or_more_pdf_object::<FooDict>(&sname("foo"))?;
     assert_eq!(list.len(), 2);
     assert_eq!(None, list[0].id());
     assert_eq!(Some(NonZeroU32::new(3).unwrap()), list[1].id());

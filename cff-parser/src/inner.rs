@@ -13,7 +13,7 @@ use nom::{
     IResult, Parser,
 };
 use paste::paste;
-use prescript::{name, Encoding, Name};
+use prescript::{name, sname, Encoding, Name};
 use std::{
     collections::HashMap,
     hash::Hash,
@@ -1170,7 +1170,7 @@ pub enum Encodings {
 impl Encodings {
     /// build encodings.
     pub fn build(&self, charsets: &Charsets, string_index: StringIndex<'_>) -> Encoding {
-        const NOTDEF: Name = name!(".notdef");
+        const NOTDEF: Name = sname(prescript::NOTDEF);
         match self {
             Self::Format0(codes) => {
                 let mut encodings = [NOTDEF; 256];

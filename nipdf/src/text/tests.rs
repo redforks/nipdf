@@ -1,5 +1,5 @@
 use super::*;
-use prescript::name;
+use prescript::{name, sname};
 
 #[test]
 fn try_from_object_encoding_differences() {
@@ -12,10 +12,10 @@ fn try_from_object_encoding_differences() {
     let obj = Object::Array(
         vec![
             Object::Integer(1),
-            Object::Name(name!("A")),
+            Object::Name(sname("A")),
             Object::Integer(3),
-            Object::Name(name!("B")),
-            Object::Name(name!("C")),
+            Object::Name(sname("B")),
+            Object::Name(sname("C")),
         ]
         .into(),
     );

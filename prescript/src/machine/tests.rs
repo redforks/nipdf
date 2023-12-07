@@ -1,4 +1,5 @@
 use super::*;
+use crate::sname;
 use test_log::test;
 
 trait Assert<'a> {
@@ -88,7 +89,7 @@ fn count() {
 fn test_def() {
     assert_op(
         "10 dict begin /foo 10 def currentdict",
-        dict![name!("foo") => 10],
+        dict![sname("foo") => 10],
     );
 }
 
@@ -295,7 +296,7 @@ fn test_put() {
     // dict
     assert_op(
         "10 dict begin /foo 10 def currentdict /foo 20 put currentdict",
-        dict![name!("foo") => 20],
+        dict![sname("foo") => 20],
     );
 
     // array
@@ -346,7 +347,7 @@ fn test_create_dict_on_stack() {
     assert_op("<<>>", dict![]);
     assert_op(
         "<< /foo 10/bar<<>> >>",
-        dict![name!("foo") => 10, name!("bar") => dict![]],
+        dict![sname("foo") => 10, sname("bar") => dict![]],
     );
 }
 
