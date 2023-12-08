@@ -10,9 +10,9 @@ use crate::{
         shading::{build_shading, Axial, Radial, Shading},
         trans::{
             f_flip, image_to_user_space, logic_device_to_device, move_text_space_pos,
-            move_text_space_right, ImageToDeviceSpace, IntoSkiaTransform, LogicDeviceToDeviceSpace,
-            PatternSpace, PatternToUserSpace, TextToUserSpace, UserToDeviceSpace,
-            UserToLogicDeviceSpace, UserToUserSpace,
+            move_text_space_right, GlyphToTextSpace, ImageToDeviceSpace, IntoSkiaTransform,
+            LogicDeviceToDeviceSpace, PatternSpace, PatternToUserSpace, TextSpace, TextToUserSpace,
+            UserToDeviceSpace, UserToLogicDeviceSpace, UserToUserSpace,
         },
         ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, PatternType, Point,
         RenderingIntent, ShadingPatternDict, TextRenderingMode, TilingPatternDict,
@@ -39,7 +39,7 @@ use tiny_skia::{
 };
 
 mod fonts;
-use euclid::{default::Size2D, Angle};
+use euclid::{default::Size2D, Angle, Transform2D};
 use fonts::*;
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -1765,9 +1765,20 @@ impl TextObject {
         self.line_matrix = matrix;
     }
 
+    fn update_horizontal_scale(&mut self) {
+        let glyph_manipulate = if self.horiz_scaling == 1.0 {
+            Transform2D::<f32, TextSpace, TextSpace>::identity()
+        } else {
+            Transform2D::<f32, TextSpace, TextSpace>::scale(self.horiz_scaling, 1.0)
+        };
+        self.matrix = glyph_manipulate.then(&self.matrix);
+        self.line_matrix = glyph_manipulate.then(&self.line_matrix);
+    }
+
     fn set_text_matrix(&mut self, m: TextToUserSpace) {
         self.matrix = m;
         self.line_matrix = m;
+        self.update_horizontal_scale();
     }
 
     fn move_right(&mut self, n: f32) {
@@ -1785,6 +1796,7 @@ impl TextObject {
 
     fn set_horizontal_scaling(&mut self, scale: f32) {
         self.horiz_scaling = scale / 100.0;
+        self.update_horizontal_scale();
     }
 
     fn set_leading(&mut self, leading: f32) {
