@@ -22,7 +22,7 @@ use crate::{
 use anyhow::{Ok, Result as AnyResult};
 use educe::Educe;
 use either::Either::{self, Left, Right};
-use image::{RgbaImage};
+use image::RgbaImage;
 use log::{debug, info};
 use nom::{combinator::eof, sequence::terminated};
 use prescript::Name;
@@ -40,7 +40,6 @@ use tiny_skia::{
 
 mod fonts;
 use euclid::{default::Size2D, Angle};
-
 use fonts::*;
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -1653,7 +1652,8 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                     }
                 }
 
-                let width = (font_size * op.char_width(ch) as f32).mul_add(font_matrix.m11, char_spacing)
+                let width = (font_size * op.char_width(ch) as f32)
+                    .mul_add(font_matrix.m11, char_spacing)
                     + if ch == 32 { word_spacing } else { 0.0 };
                 text_to_user_space = move_text_space_right(&text_to_user_space, width);
             }
@@ -1720,9 +1720,10 @@ struct TextObject {
     font_name: Option<Name>,
     text_clipping_path: Path,
 
-    char_spacing: f32,              // Tc
-    word_spacing: f32,              // Tw
-    horiz_scaling: f32,             // Th
+    char_spacing: f32, // Tc
+    word_spacing: f32, // Tw
+    // Th, divide by 100, 100 to be 1.0 for example
+    horiz_scaling: f32,
     leading: f32,                   // Tl
     render_mode: TextRenderingMode, // Tmode
     rise: f32,                      // Trise
@@ -1740,7 +1741,7 @@ impl TextObject {
 
             char_spacing: 0.0,
             word_spacing: 0.0,
-            horiz_scaling: 100.0,
+            horiz_scaling: 1.0,
             leading: 0.0,
             render_mode: TextRenderingMode::Fill,
             rise: 0.0,
@@ -1783,10 +1784,7 @@ impl TextObject {
     }
 
     fn set_horizontal_scaling(&mut self, scale: f32) {
-        self.horiz_scaling = scale;
-        if scale != 100.0 {
-            todo!("text horizontal scaling");
-        }
+        self.horiz_scaling = scale / 100.0;
     }
 
     fn set_leading(&mut self, leading: f32) {
