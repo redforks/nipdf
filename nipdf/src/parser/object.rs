@@ -21,7 +21,7 @@ use std::{
     borrow::Cow,
     num::NonZeroU32,
     rc::Rc,
-    str::{from_utf8, FromStr},
+    str::{from_utf8, from_utf8_unchecked, FromStr},
 };
 
 /// Unwrap the result of nom parser to a *normal* result.
@@ -41,10 +41,12 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<Object> {
         take_while1(|c| is_digit(c) || c == b'.' || c == b'+' || c == b'-'),
         |s| {
             if memchr::memchr(b'.', s).is_some() {
-                let s = from_utf8(s).unwrap();
+                // from_utf8_unchecked is safe here, because the parser takes only digits
+                let s = unsafe { from_utf8_unchecked(s) };
                 f32::from_str(s).map(Object::Number).unwrap()
             } else {
-                let s = from_utf8(s).unwrap();
+                // from_utf8_unchecked is safe here, because the parser takes only digits
+                let s = unsafe { from_utf8_unchecked(s) };
                 i32::from_str(s)
                     .map(Object::Integer)
                     .unwrap_or_else(|_| Object::Number(f32::from_str(s).unwrap()))
