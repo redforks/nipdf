@@ -67,6 +67,7 @@ null
 endobj",
     "null"
 )]
+#[test_case(b"1 0 obj 25endobj", "no whitespace between number and endobj")]
 fn test_parse_indirected_object(buf: impl AsRef<[u8]>, name: &str) {
     insta::assert_debug_snapshot!(name, parse_indirect_object(buf.as_ref()).unwrap());
 }

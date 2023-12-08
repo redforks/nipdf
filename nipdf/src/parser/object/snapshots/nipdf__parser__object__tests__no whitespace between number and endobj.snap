@@ -1,0 +1,16 @@
+---
+source: nipdf/src/parser/object/tests.rs
+expression: parse_indirect_object(buf.as_ref()).unwrap()
+---
+(
+    [],
+    IndirectObject(
+        ObjectId {
+            id: 1,
+            generation: 0,
+        },
+        Integer(
+            25,
+        ),
+    ),
+)

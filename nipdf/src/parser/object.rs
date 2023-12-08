@@ -6,15 +6,14 @@ use crate::object::{
 use either::Either;
 use nom::{
     branch::alt,
-    bytes::complete::{escaped, is_not, tag, take_till, take_while},
+    bytes::complete::{escaped, is_not, tag, take_till, take_while, take_while1},
     character::{
         complete::{anychar, line_ending, multispace1, u16, u32},
-        is_hex_digit,
+        is_digit, is_hex_digit,
     },
     combinator::{map, not, opt, peek, recognize, value},
     error::{ErrorKind, FromExternalError, ParseError as ParseErrorTrait},
     multi::{many0, many0_count},
-    number::complete::float,
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
 };
 use prescript::{sname, Name};
@@ -38,17 +37,20 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<Object> {
     let null = value(Object::Null, tag(b"null"));
     let true_parser = value(Object::Bool(true), tag(b"true"));
     let false_parser = value(Object::Bool(false), tag(b"false"));
-    let number_parser = map(recognize(float), |s| {
-        if memchr::memchr(b'.', s).is_some() {
-            let s = from_utf8(s).unwrap();
-            f32::from_str(s).map(Object::Number).unwrap()
-        } else {
-            let s = from_utf8(s).unwrap();
-            i32::from_str(s)
-                .map(Object::Integer)
-                .unwrap_or_else(|_| Object::Number(f32::from_str(s).unwrap()))
-        }
-    });
+    let number_parser = map(
+        take_while1(|c| is_digit(c) || c == b'.' || c == b'+' || c == b'-'),
+        |s| {
+            if memchr::memchr(b'.', s).is_some() {
+                let s = from_utf8(s).unwrap();
+                f32::from_str(s).map(Object::Number).unwrap()
+            } else {
+                let s = from_utf8(s).unwrap();
+                i32::from_str(s)
+                    .map(Object::Integer)
+                    .unwrap_or_else(|_| Object::Number(f32::from_str(s).unwrap()))
+            }
+        },
+    );
 
     fn parse_quoted_string(input: &[u8]) -> ParseResult<&[u8]> {
         let esc = escaped(is_not("\\()"), '\\', anychar);
