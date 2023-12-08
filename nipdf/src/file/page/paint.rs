@@ -1637,9 +1637,13 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             );
 
             for ch in op.decode_chars(text) {
-                render
-                    .current_mut()
-                    .set_ctm(text_object.runtime_matrix().then(&ctm).with_source());
+                render.current_mut().set_ctm(
+                    text_object
+                        .type3_runtime_matrix(&font_matrix)
+                        .then(&ctm)
+                        .with_destination()
+                        .with_source(),
+                );
                 let gid = op.char_to_gid(ch);
                 if let Some(glyph) = type3_font.get_glyph(gid) {
                     for op in glyph.operations() {
@@ -1756,6 +1760,12 @@ impl TextObject {
             rise: 0.0,
             knockout: true,
         }
+    }
+
+    pub fn type3_runtime_matrix(&self, font_matrix: &GlyphToTextSpace) -> GlyphToUserSpace {
+        font_matrix
+            .then_scale(self.font_size * self.horiz_scaling, self.font_size)
+            .then(&self.matrix)
     }
 
     pub fn runtime_matrix(&self) -> GlyphToUserSpace {

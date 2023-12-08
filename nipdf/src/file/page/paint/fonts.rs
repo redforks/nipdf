@@ -978,16 +978,20 @@ struct Type3FontOp<'a> {
     font_width: FirstLastFontWidth,
     encoding: Encoding,
     name_to_gid: &'a HashMap<Name, u16>,
+    units_per_em: u16,
 }
 
 impl<'a> Type3FontOp<'a> {
     fn new(font_dict: &FontDict, name_to_gid: &'a HashMap<Name, u16>) -> AnyResult<Self> {
         let encoding = EncodingParser(font_dict).type3()?;
         let type3 = font_dict.type3()?;
+        let matrix = type3.matrix()?;
+
         Ok(Self {
             font_width: FirstLastFontWidth::from(type3)?.unwrap(),
             name_to_gid,
             encoding,
+            units_per_em: (1.0 / matrix.m11).abs() as u16,
         })
     }
 }
@@ -1009,6 +1013,10 @@ impl<'a> FontOp for Type3FontOp<'a> {
 
     fn char_width(&self, ch: u32) -> GlyphLength {
         self.font_width.char_width(ch)
+    }
+
+    fn units_per_em(&self) -> u16 {
+        self.units_per_em
     }
 }
 
