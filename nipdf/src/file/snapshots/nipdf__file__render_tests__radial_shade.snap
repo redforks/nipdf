@@ -2,4 +2,4 @@
 source: nipdf/src/file/render_tests.rs
 expression: "&decode_file_page(\"sample_files/bizarre/pdfReferenceUpdated.pdf\",\n            809).unwrap()"
 ---
-"22fd771090a04b85ddad26da87bd63a9"
+"9eed2519eb5a0d6971a6686ea8de2355"
