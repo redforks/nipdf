@@ -458,12 +458,13 @@ impl<'a, 'b> Font for TTFParserFont<'a, 'b> {
     }
 
     fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
+        let face = TTFFace::parse(&self.data, 0)?;
         Ok(match self.font_type() {
-            FontType::TrueType | FontType::Type1 => {
-                let face = TTFFace::parse(&self.data, 0)?;
-                Box::new(TTFParserFontOp::new(face)?)
-            }
-            FontType::Type0 => Box::new(Type0FontOp::new(&self.font_dict.type0()?)?),
+            FontType::TrueType | FontType::Type1 => Box::new(TTFParserFontOp::new(face)?),
+            FontType::Type0 => Box::new(Type0FontOp::new(
+                &self.font_dict.type0()?,
+                face.units_per_em(),
+            )?),
             _ => unreachable!(
                 "TTFParserFont not support font type: {:?}",
                 self.font_type()
@@ -890,10 +891,11 @@ pub trait FontOp {
 struct Type0FontOp {
     widths: CIDFontWidths,
     default_width: u32,
+    units_per_em: u16,
 }
 
 impl Type0FontOp {
-    fn new(font: &Type0FontDict) -> AnyResult<Self> {
+    fn new(font: &Type0FontDict, units_per_em: u16) -> AnyResult<Self> {
         if let NameOrStream::Name(encoding) = font.encoding()? {
             assert_eq!(encoding, "Identity-H");
         } else {
@@ -905,6 +907,7 @@ impl Type0FontOp {
         Ok(Self {
             widths,
             default_width: cid_font.dw()?,
+            units_per_em,
         })
     }
 }
@@ -926,7 +929,13 @@ impl FontOp for Type0FontOp {
     }
 
     fn char_width(&self, ch: u32) -> GlyphLength {
-        GlyphLength::new(self.widths.char_width(ch).unwrap_or(self.default_width) as f32)
+        let mut char_width = self.widths.char_width(ch).unwrap_or(self.default_width) as f32;
+        char_width = char_width / 1000.0 * self.units_per_em as f32;
+        GlyphLength::new(char_width as f32)
+    }
+
+    fn units_per_em(&self) -> u16 {
+        self.units_per_em
     }
 }
 
@@ -949,7 +958,7 @@ impl<'a, 'b> Font for CIDFontType0Font<'a, 'b> {
     }
 
     fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
-        Ok(Box::new(Type0FontOp::new(&self.font_dict.type0()?)?))
+        Ok(Box::new(Type0FontOp::new(&self.font_dict.type0()?, 1000)?))
     }
 
     fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender + '_>> {
