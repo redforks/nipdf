@@ -10,9 +10,10 @@ use crate::{
         shading::{build_shading, Axial, Radial, Shading},
         trans::{
             f_flip, image_to_user_space, logic_device_to_device, move_text_space_pos,
-            move_text_space_right, GlyphToTextSpace, ImageToDeviceSpace, IntoSkiaTransform,
-            LogicDeviceToDeviceSpace, PatternSpace, PatternToUserSpace, TextSpace, TextToUserSpace,
-            UserToDeviceSpace, UserToLogicDeviceSpace, UserToUserSpace,
+            move_text_space_right, GlyphLength, GlyphSpace, GlyphToTextSpace, GlyphToUserSpace,
+            ImageToDeviceSpace, IntoSkiaTransform, LogicDeviceToDeviceSpace, PatternSpace,
+            PatternToUserSpace, TextPoint, TextSpace, TextToUserSpace, ThousandthsOfText,
+            UserSpace, UserToDeviceSpace, UserToLogicDeviceSpace, UserToUserSpace,
         },
         ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, PatternType, Point,
         RenderingIntent, ShadingPatternDict, TextRenderingMode, TilingPatternDict,
@@ -39,7 +40,8 @@ use tiny_skia::{
 };
 
 mod fonts;
-use euclid::{default::Size2D, Angle, Transform2D};
+use aes::cipher::typenum::Len;
+use euclid::{default::Size2D, Angle, Length, Scale, Transform2D};
 use fonts::*;
 
 impl From<LineCapStyle> for tiny_skia::LineCap {
@@ -938,7 +940,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
     fn move_to_start_of_next_line(&mut self) {
         let leading = self.stack.last().unwrap().text_object.leading;
         self.text_object_mut()
-            .move_text_position(Point::new(0.0, -leading));
+            .move_text_position(TextPoint::new(0.0, -leading));
     }
 
     fn set_color_args(
@@ -1520,10 +1522,10 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         Ok(())
     }
 
-    fn gen_glyph_path(glyph_render: &dyn GlyphRender, gid: u16, font_size: f32) -> PathBuilder {
+    fn gen_glyph_path(glyph_render: &dyn GlyphRender, gid: u16) -> PathBuilder {
         let mut path = PathBuilder::new();
         let mut sink = PathSink(&mut path);
-        glyph_render.render(gid, font_size, &mut sink).unwrap();
+        glyph_render.render(gid, &mut sink).unwrap();
         path
     }
 
@@ -1591,8 +1593,6 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             return;
         }
 
-        let char_spacing = text_object.char_spacing;
-        let word_spacing = text_object.word_spacing;
         let font = self
             .font_cache
             .get_font(text_object.font_name.as_ref().unwrap())
@@ -1608,18 +1608,18 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             .unwrap();
         let state = self.stack.last().unwrap();
 
-        let text_object = &state.text_object;
-        let font_size = text_object.font_size;
+        let mut text_object = state.text_object.clone();
+        text_object.set_units_per_em(op.units_per_em() as f32);
         let glyph_render = self
             .font_cache
             .get_glyph_render(self.text_object().font_name.as_ref().unwrap())
             .unwrap();
 
-        let mut text_to_user_space: TextToUserSpace = text_object.matrix;
         let mut text_clip_path = Path::default();
         let user_to_device = state.user_to_device.into_skia();
         let type3_font = font.as_type3();
 
+        let canvas = &mut self.canvas;
         if let Some(type3_font) = type3_font {
             let font_matrix = type3_font.matrix().unwrap();
             let resources = type3_font.resources().unwrap();
@@ -1627,7 +1627,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             let state = state.clone();
             let ctm = state.ctm;
             let mut render = Render::new(
-                self.canvas,
+                canvas,
                 RenderOptionBuilder::default()
                     .dimension(self.dimension)
                     .background_color(SkiaColor::TRANSPARENT)
@@ -1637,14 +1637,9 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             );
 
             for ch in op.decode_chars(text) {
-                render.current_mut().set_ctm(
-                    font_matrix
-                        .then_scale(font_size, font_size)
-                        .then(&text_to_user_space)
-                        .then(&ctm)
-                        .with_source()
-                        .with_destination(),
-                );
+                render
+                    .current_mut()
+                    .set_ctm(text_object.runtime_matrix().then(&ctm).with_source());
                 let gid = op.char_to_gid(ch);
                 if let Some(glyph) = type3_font.get_glyph(gid) {
                     for op in glyph.operations() {
@@ -1652,22 +1647,21 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                     }
                 }
 
-                let width = (font_size * op.char_width(ch) as f32)
-                    .mul_add(font_matrix.m11, char_spacing)
-                    + if ch == 32 { word_spacing } else { 0.0 };
-                text_to_user_space = move_text_space_right(&text_to_user_space, width);
+                text_object.to_next_pos(op.char_width(ch), ch == 32);
             }
         } else {
             for ch in op.decode_chars(text) {
                 let gid = op.char_to_gid(ch);
-                let path = Self::gen_glyph_path(glyph_render, gid, font_size);
+                let path = Self::gen_glyph_path(glyph_render, gid);
                 if !path.is_empty() {
                     let path = path.finish().unwrap();
                     // pre transform path to user space, render_glyph() will zoom line_width,
                     // pdf line_width state is in user space, but skia line_width is in device
                     // space so we need to transform path to user space,
                     // and zoom line_width in device space
-                    let path = path.transform(text_to_user_space.into_skia()).unwrap();
+                    let path = path
+                        .transform(dbg!(text_object.runtime_matrix().into_skia()))
+                        .unwrap();
 
                     Self::render_glyph(
                         self.canvas,
@@ -1679,14 +1673,10 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                     );
                 }
 
-                let width = font_size.mul_add(
-                    op.char_width(ch) as f32 / op.units_per_em() as f32,
-                    char_spacing + if ch == 32 { word_spacing } else { 0.0 },
-                );
-                text_to_user_space = move_text_space_right(&text_to_user_space, width);
+                text_object.to_next_pos(op.char_width(ch), ch == 32);
             }
         }
-        self.text_object_mut().matrix = text_to_user_space;
+        self.current_mut().text_object = text_object;
         if let Some(text_clip_path) = text_clip_path.finish() {
             self.text_object_mut()
                 .text_clipping_path
@@ -1700,7 +1690,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             match t {
                 TextStringOrNumber::TextString(s) => self.show_text(s.to_bytes().unwrap()),
                 TextStringOrNumber::Number(n) => {
-                    self.text_object_mut().move_right(*n);
+                    self.text_object_mut().adjust_tj(*n);
                 }
             }
         }
@@ -1708,6 +1698,22 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
     fn end_text(&mut self) {
         self.current_mut().end_text_object();
+    }
+}
+
+trait ToTextSpaceLength {
+    fn to_text_space_length(self) -> Length<f32, TextSpace>;
+}
+
+impl ToTextSpaceLength for Length<f32, TextSpace> {
+    fn to_text_space_length(self) -> Length<f32, TextSpace> {
+        self
+    }
+}
+
+impl ToTextSpaceLength for Length<f32, ThousandthsOfText> {
+    fn to_text_space_length(self) -> Length<f32, TextSpace> {
+        Length::new(self.0 / 1000.0)
     }
 }
 
@@ -1719,9 +1725,11 @@ struct TextObject {
     font_size: f32,
     font_name: Option<Name>,
     text_clipping_path: Path,
+    // 1 / units_per_em
+    em_ratio: Scale<f32, GlyphSpace, TextSpace>,
 
-    char_spacing: f32, // Tc
-    word_spacing: f32, // Tw
+    char_spacing: Length<f32, TextSpace>, // Tc
+    word_spacing: Length<f32, TextSpace>, // Tw
     // Th, divide by 100, 100 to be 1.0 for example
     horiz_scaling: f32,
     leading: f32,                   // Tl
@@ -1738,15 +1746,23 @@ impl TextObject {
             font_size: 0.0,
             font_name: None,
             text_clipping_path: Path::default(),
+            em_ratio: Scale::new(1.0 / 1000.0),
 
-            char_spacing: 0.0,
-            word_spacing: 0.0,
+            char_spacing: Length::new(0.0),
+            word_spacing: Length::new(0.0),
             horiz_scaling: 1.0,
             leading: 0.0,
             render_mode: TextRenderingMode::Fill,
             rise: 0.0,
             knockout: true,
         }
+    }
+
+    pub fn runtime_matrix(&self) -> GlyphToUserSpace {
+        dbg!((self.em_ratio, self.font_size, self.horiz_scaling));
+        Transform2D::scale(self.em_ratio.0, self.em_ratio.0)
+            .then_scale(self.font_size * self.horiz_scaling, self.font_size)
+            .then(&self.matrix)
     }
 
     fn reset(&mut self) {
@@ -1759,8 +1775,12 @@ impl TextObject {
         self.font_name = Some(nm.0);
     }
 
-    fn move_text_position(&mut self, p: Point) {
-        let matrix = move_text_space_pos(&self.line_matrix, p.x, p.y);
+    fn set_units_per_em(&mut self, units_per_em: f32) {
+        self.em_ratio = Scale::new(1.0 / units_per_em);
+    }
+
+    fn move_text_position(&mut self, p: TextPoint) {
+        let matrix = move_text_space_pos(&self.line_matrix, p);
         self.matrix = matrix;
         self.line_matrix = matrix;
     }
@@ -1781,16 +1801,24 @@ impl TextObject {
         self.update_horizontal_scale();
     }
 
-    fn move_right(&mut self, n: f32) {
-        let tx = -n * 0.001 * self.font_size;
-        self.matrix = move_text_space_right(&self.matrix, tx);
+    fn to_next_pos(&mut self, glyph_width: GlyphLength, word_boundary: bool) {
+        let mut w = glyph_width * self.em_ratio * self.font_size + self.char_spacing;
+        if word_boundary {
+            w += self.word_spacing;
+        }
+        self.matrix = move_text_space_right(&self.matrix, w);
     }
 
-    fn set_character_spacing(&mut self, spacing: f32) {
+    fn adjust_tj(&mut self, tj: Length<f32, ThousandthsOfText>) {
+        let n = tj * self.font_size * Scale::new(1.0 / 1000.0);
+        self.matrix = move_text_space_right(&self.matrix, -n);
+    }
+
+    fn set_character_spacing(&mut self, spacing: Length<f32, TextSpace>) {
         self.char_spacing = spacing;
     }
 
-    fn set_word_spacing(&mut self, spacing: f32) {
+    fn set_word_spacing(&mut self, spacing: Length<f32, TextSpace>) {
         self.word_spacing = spacing;
     }
 

@@ -37,10 +37,24 @@ fn cmyk_to_rgb() {
     assert_eq!(rgb, [0, 173, 239, 255]);
 }
 
+fn to_f32(v: impl ColorCompConvertTo<f32>) -> f32 {
+    v.into_color_comp()
+}
+
+fn to_u8(v: impl ColorCompConvertTo<u8>) -> u8 {
+    v.into_color_comp()
+}
+
 #[test]
 fn convert_color_comp_u8_to_f32() {
-    assert_eq!(0.0f32, ColorCompConvertTo::<f32>::into_color_comp(0_u8));
-    assert_eq!(1.0f32, 255_u8.into_color_comp());
+    assert_eq!(
+        0.0f32,
+        <u8 as ColorCompConvertTo<f32>>::into_color_comp(0_u8)
+    );
+    assert_eq!(
+        1.0f32,
+        <u8 as ColorCompConvertTo<f32>>::into_color_comp(255_u8)
+    );
     assert_approx_eq!(
         0.5f32,
         ColorCompConvertTo::<f32>::into_color_comp(127_u8),
@@ -50,11 +64,11 @@ fn convert_color_comp_u8_to_f32() {
 
 #[test]
 fn convert_color_com_f32_to_u8() {
-    assert_eq!(0_u8, 0.0f32.into_color_comp());
-    assert_eq!(255_u8, 1.0f32.into_color_comp());
-    assert_eq!(128_u8, 0.5f32.into_color_comp()); // round integer part
+    assert_eq!(0_u8, to_u8(0.0f32));
+    assert_eq!(255_u8, to_u8(1.0f32));
+    assert_eq!(128_u8, to_u8(0.5f32)); // round integer part
     assert_eq!(0_u8, ColorCompConvertTo::<u8>::into_color_comp(-1.0f32));
-    assert_eq!(255_u8, 33f32.into_color_comp());
+    assert_eq!(255_u8, to_u8(33f32));
 }
 
 #[test]

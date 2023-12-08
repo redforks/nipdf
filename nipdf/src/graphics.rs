@@ -9,7 +9,7 @@ use crate::{
         ws_terminated, ParseError, ParseResult,
     },
 };
-use euclid::Transform2D;
+use euclid::{Length, Point2D, Transform2D};
 use log::error;
 use nipdf_macro::{pdf_object, OperationParser, TryFromIntObject, TryFromNameObject};
 use nom::{
@@ -17,17 +17,16 @@ use nom::{
     bytes::complete::{is_not, tag},
     combinator::map_res,
     error::{ErrorKind, FromExternalError, ParseError as NomParseError},
-    sequence::{terminated},
+    sequence::terminated,
     Err, FindSubstring, Parser,
 };
-use prescript::{Name};
+use prescript::Name;
 use std::num::NonZeroU32;
 
 pub(crate) mod color_space;
 mod pattern;
 pub(crate) mod trans;
-use self::trans::UserToUserSpace;
-
+use self::trans::{GlyphSpace, TextPoint, TextSpace, ThousandthsOfText, UserToUserSpace};
 pub(crate) use pattern::*;
 
 pub(crate) mod shading;
@@ -346,9 +345,9 @@ pub enum Operation {
 
     // Text State Operations
     #[op_tag("Tc")]
-    SetCharacterSpacing(f32),
+    SetCharacterSpacing(Length<f32, TextSpace>),
     #[op_tag("Tw")]
-    SetWordSpacing(f32),
+    SetWordSpacing(Length<f32, TextSpace>),
     #[op_tag("Tz")]
     SetHorizontalScaling(f32),
     #[op_tag("TL")]
@@ -362,9 +361,9 @@ pub enum Operation {
 
     // Text Positioning Operations
     #[op_tag("Td")]
-    MoveTextPosition(Point),
+    MoveTextPosition(TextPoint),
     #[op_tag("TD")]
-    MoveTextPositionAndSetLeading(Point),
+    MoveTextPositionAndSetLeading(TextPoint),
     #[op_tag("Tm")]
     SetTextMatrix(TextToUserSpace),
     #[op_tag("T*")]
@@ -485,8 +484,8 @@ impl<'b> ConvertFromObject<'b> for TextStringOrNumber {
         match o {
             Object::LiteralString(s) => Ok(TextStringOrNumber::TextString(TextString::Text(s))),
             Object::HexString(s) => Ok(TextStringOrNumber::TextString(TextString::HexText(s))),
-            Object::Number(n) => Ok(TextStringOrNumber::Number(n)),
-            Object::Integer(v) => Ok(TextStringOrNumber::Number(v as f32)),
+            Object::Number(n) => Ok(TextStringOrNumber::Number(Length::new(n))),
+            Object::Integer(v) => Ok(TextStringOrNumber::Number(Length::new(v as f32))),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
@@ -516,6 +515,13 @@ impl<'b> ConvertFromObject<'b> for f32 {
     }
 }
 
+impl<'b, U> ConvertFromObject<'b> for Length<f32, U> {
+    fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
+        let o = objects.pop().unwrap();
+        o.as_number().map(|n| Length::new(n))
+    }
+}
+
 /// Convert Object literal string to String
 impl<'b> ConvertFromObject<'b> for String {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
@@ -542,7 +548,7 @@ impl<'b> ConvertFromObject<'b> for NameOrDict {
     }
 }
 
-impl<'b> ConvertFromObject<'b> for Point {
+impl<'b, U> ConvertFromObject<'b> for Point2D<f32, U> {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
         let y = objects.pop().unwrap().as_number()?;
         let x = objects.pop().unwrap().as_number()?;

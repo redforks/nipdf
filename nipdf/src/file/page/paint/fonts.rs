@@ -1,7 +1,9 @@
 use crate::{
     file::{page::ResourceDict, ObjectResolver},
     graphics::{
-        parse_operations, trans::GlyphToTextSpace, NameOrDictByRef, NameOrStream, Operation,
+        parse_operations,
+        trans::{GlyphLength, GlyphSpace, GlyphToTextSpace},
+        NameOrDictByRef, NameOrStream, Operation,
     },
     object::{PdfObject, Stream},
     text::{
@@ -12,6 +14,7 @@ use crate::{
 use anyhow::{anyhow, bail, Ok, Result as AnyResult};
 use cff_parser::{File as CffFile, Font as CffFont};
 use either::Either;
+use euclid::Length;
 use font_kit::loaders::freetype::Font as FontKitFont;
 use fontdb::{Database, Family, Query, Source, Weight};
 use heck::ToTitleCase;
@@ -50,13 +53,13 @@ impl FirstLastFontWidth {
         }))
     }
 
-    fn char_width(&self, ch: u32) -> u32 {
-        if self.range.contains(&ch) {
+    fn char_width(&self, ch: u32) -> GlyphLength {
+        GlyphLength::new(if self.range.contains(&ch) {
             let idx = (ch - self.range.start()) as usize;
             self.widths[idx]
         } else {
             self.default_width
-        }
+        } as f32)
     }
 }
 
@@ -78,44 +81,35 @@ pub struct PathSink<'a>(pub &'a mut PathBuilder);
 
 struct FreeTypePathSink<'a> {
     path: &'a mut PathBuilder,
-    scale: f32,
 }
 
 impl<'a> FreeTypePathSink<'a> {
-    fn new(path: &'a mut PathBuilder, font_size: f32, unit_per_em: u32) -> Self {
-        Self {
-            path,
-            scale: font_size / unit_per_em as f32,
-        }
+    fn new(path: &'a mut PathBuilder) -> Self {
+        Self { path }
     }
 }
 
 impl<'a> font_kit::outline::OutlineSink for FreeTypePathSink<'a> {
     fn move_to(&mut self, to: Vector2F) {
-        self.path.move_to(to.x() * self.scale, to.y() * self.scale);
+        self.path.move_to(to.x(), to.y());
     }
 
     fn line_to(&mut self, to: Vector2F) {
-        self.path.line_to(to.x() * self.scale, to.y() * self.scale);
+        self.path.line_to(to.x(), to.y());
     }
 
     fn quadratic_curve_to(&mut self, ctrl: Vector2F, to: Vector2F) {
-        self.path.quad_to(
-            ctrl.x() * self.scale,
-            ctrl.y() * self.scale,
-            to.x() * self.scale,
-            to.y() * self.scale,
-        );
+        self.path.quad_to(ctrl.x(), ctrl.y(), to.x(), to.y());
     }
 
     fn cubic_curve_to(&mut self, ctrl: LineSegment2F, to: Vector2F) {
         self.path.cubic_to(
-            ctrl.from().x() * self.scale,
-            ctrl.from().y() * self.scale,
-            ctrl.to().x() * self.scale,
-            ctrl.to().y() * self.scale,
-            to.x() * self.scale,
-            to.y() * self.scale,
+            ctrl.from().x(),
+            ctrl.from().y(),
+            ctrl.to().x(),
+            ctrl.to().y(),
+            to.x(),
+            to.y(),
         );
     }
 
@@ -125,7 +119,7 @@ impl<'a> font_kit::outline::OutlineSink for FreeTypePathSink<'a> {
 }
 
 pub trait GlyphRender {
-    fn render(&self, gid: u16, font_size: f32, sink: &mut PathSink) -> AnyResult<()>;
+    fn render(&self, gid: u16, sink: &mut PathSink) -> AnyResult<()>;
 }
 
 struct Type1GlyphRender<'a> {
@@ -133,8 +127,8 @@ struct Type1GlyphRender<'a> {
 }
 
 impl<'a> GlyphRender for Type1GlyphRender<'a> {
-    fn render(&self, gid: u16, font_size: f32, sink: &mut PathSink) -> AnyResult<()> {
-        let mut sink = FreeTypePathSink::new(sink.0, font_size, self.font.metrics().units_per_em);
+    fn render(&self, gid: u16, sink: &mut PathSink) -> AnyResult<()> {
+        let mut sink = FreeTypePathSink::new(sink.0);
         Ok(self.font.outline(
             gid as u32,
             font_kit::hinting::HintingOptions::None,
@@ -288,10 +282,10 @@ impl<'a> FontOp for Type1FontOp<'a> {
         }
     }
 
-    fn char_width(&self, gid: u32) -> u32 {
+    fn char_width(&self, gid: u32) -> GlyphLength {
         self.font_width.as_ref().either(
             |x| x.char_width(gid),
-            |x| x.glyph_width(self.char_to_gid(gid) as u32),
+            |x| GlyphLength::new(x.glyph_width(self.char_to_gid(gid) as u32) as f32),
         )
     }
 }
@@ -395,10 +389,12 @@ impl<'a> FontOp for TTFParserFontOp<'a> {
             )
     }
 
-    fn char_width(&self, ch: u32) -> u32 {
-        self.face
-            .glyph_hor_advance(GlyphId(self.char_to_gid(ch)))
-            .unwrap() as u32
+    fn char_width(&self, ch: u32) -> GlyphLength {
+        GlyphLength::new(
+            self.face
+                .glyph_hor_advance(GlyphId(self.char_to_gid(ch)))
+                .unwrap() as f32,
+        )
     }
 
     fn units_per_em(&self) -> u16 {
@@ -408,45 +404,29 @@ impl<'a> FontOp for TTFParserFontOp<'a> {
 
 struct TTFParserPathSink<'a> {
     path: &'a mut PathBuilder,
-    scale: f32,
 }
 
 impl<'a> TTFParserPathSink<'a> {
-    pub fn new(path: &'a mut PathBuilder, font_size: f32, units_per_em: f32) -> Self {
-        Self {
-            path,
-            scale: font_size / units_per_em,
-        }
+    pub fn new(path: &'a mut PathBuilder) -> Self {
+        Self { path }
     }
 }
 
 impl<'a> OutlineBuilder for TTFParserPathSink<'a> {
     fn move_to(&mut self, x: f32, y: f32) {
-        self.path.move_to(x * self.scale, y * self.scale);
+        self.path.move_to(x, y);
     }
 
     fn line_to(&mut self, x: f32, y: f32) {
-        self.path.line_to(x * self.scale, y * self.scale);
+        self.path.line_to(x, y);
     }
 
     fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {
-        self.path.quad_to(
-            x1 * self.scale,
-            y1 * self.scale,
-            x * self.scale,
-            y * self.scale,
-        );
+        self.path.quad_to(x1, y1, x, y);
     }
 
     fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32) {
-        self.path.cubic_to(
-            x1 * self.scale,
-            y1 * self.scale,
-            x2 * self.scale,
-            y2 * self.scale,
-            x * self.scale,
-            y * self.scale,
-        );
+        self.path.cubic_to(x1, y1, x2, y2, x, y);
     }
 
     fn close(&mut self) {
@@ -456,12 +436,11 @@ impl<'a> OutlineBuilder for TTFParserPathSink<'a> {
 
 struct TTFParserGlyphRender<'a> {
     face: TTFFace<'a>,
-    units_per_em: f32,
 }
 
 impl<'a> GlyphRender for TTFParserGlyphRender<'a> {
-    fn render(&self, gid: u16, font_size: f32, sink: &mut PathSink) -> AnyResult<()> {
-        let mut sink = TTFParserPathSink::new(sink.0, font_size, self.units_per_em);
+    fn render(&self, gid: u16, sink: &mut PathSink) -> AnyResult<()> {
+        let mut sink = TTFParserPathSink::new(sink.0);
         self.face.outline_glyph(GlyphId(gid), &mut sink);
         Ok(())
     }
@@ -494,10 +473,7 @@ impl<'a, 'b> Font for TTFParserFont<'a, 'b> {
 
     fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender + '_>> {
         let face = TTFFace::parse(&self.data, 0)?;
-        Ok(Box::new(TTFParserGlyphRender {
-            units_per_em: face.units_per_em() as f32,
-            face,
-        }))
+        Ok(Box::new(TTFParserGlyphRender { face }))
     }
 }
 
@@ -905,7 +881,7 @@ pub trait FontOp {
     fn decode_chars(&self, s: &[u8]) -> Vec<u32>;
     fn char_to_gid(&self, ch: u32) -> u16;
     /// Return glyph width for specified char
-    fn char_width(&self, ch: u32) -> u32;
+    fn char_width(&self, ch: u32) -> GlyphLength;
     fn units_per_em(&self) -> u16 {
         1000
     }
@@ -949,8 +925,8 @@ impl FontOp for Type0FontOp {
         ch as u16
     }
 
-    fn char_width(&self, ch: u32) -> u32 {
-        self.widths.char_width(ch).unwrap_or(self.default_width)
+    fn char_width(&self, ch: u32) -> GlyphLength {
+        GlyphLength::new(self.widths.char_width(ch).unwrap_or(self.default_width) as f32)
     }
 }
 
@@ -1022,7 +998,7 @@ impl<'a> FontOp for Type3FontOp<'a> {
         }
     }
 
-    fn char_width(&self, ch: u32) -> u32 {
+    fn char_width(&self, ch: u32) -> GlyphLength {
         self.font_width.char_width(ch)
     }
 }
@@ -1092,7 +1068,7 @@ impl<'a, 'b> Font for Type3Font<'a, 'b> {
         struct StubGlyphRender;
 
         impl GlyphRender for StubGlyphRender {
-            fn render(&self, _gid: u16, _font_size: f32, _sink: &mut PathSink) -> AnyResult<()> {
+            fn render(&self, _gid: u16, _sink: &mut PathSink) -> AnyResult<()> {
                 // Paint::show_texts() do not use GlyphRender to render glyphs
                 unreachable!()
             }
@@ -1119,10 +1095,10 @@ mod tests {
             default_width: 15,
         };
 
-        assert_eq!(100, font_width.char_width('a' as u32));
-        assert_eq!(200, font_width.char_width('b' as u32));
-        assert_eq!(400, font_width.char_width('d' as u32));
-        assert_eq!(15, font_width.char_width('e' as u32));
+        assert_eq!(100.0, font_width.char_width('a' as u32).0);
+        assert_eq!(200.0, font_width.char_width('b' as u32).0);
+        assert_eq!(400.0, font_width.char_width('d' as u32).0);
+        assert_eq!(15.0, font_width.char_width('e' as u32).0);
     }
 
     #[test_case("s" => "s"; "no need to normalize")]
