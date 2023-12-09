@@ -6,7 +6,8 @@ use insta::assert_ron_snapshot;
 use log::info;
 use maplit::hashmap;
 use md5::{Digest, Md5};
-use nipdf::file::{File, RenderOptionBuilder};
+use nipdf::file::File;
+use nipdf_render::{render_page, RenderOptionBuilder};
 use nipdf_test_macro::pdf_file_test_cases;
 use std::{
     collections::hash_map::HashMap,
@@ -117,7 +118,7 @@ fn render(f: &str) -> AnyResult<()> {
     for (idx, page) in catalog.pages()?.into_iter().enumerate() {
         info!("Page: {}", idx);
         let option = RenderOptionBuilder::new().zoom(0.75);
-        page.render(option)?;
+        render_page(&page, option)?;
     }
     std::fs::write(&hash_file, "")?;
 
