@@ -1,5 +1,3 @@
-use self::paint::Render;
-pub use self::paint::{RenderOption, RenderOptionBuilder};
 use crate::{
     function::Domains,
     graphics::{
@@ -11,7 +9,6 @@ use crate::{
 };
 use ahash::{HashMap, HashMapExt};
 use educe::Educe;
-use image::RgbaImage;
 use log::error;
 use nipdf_macro::{pdf_object, TryFromNameObject};
 use nom::Finish;
@@ -312,43 +309,6 @@ impl<'a, 'b: 'a> Page<'a, 'b> {
         Ok(PageContent { bufs })
     }
 
-    pub fn render_steps(
-        &self,
-        option: RenderOptionBuilder,
-        steps: Option<usize>,
-        no_crop: bool,
-    ) -> Result<RgbaImage, ObjectValueError> {
-        let media_box = self.media_box();
-        let crop_box = self.crop_box();
-        let mut canvas_box = crop_box.unwrap_or(media_box);
-        // if canvas is empty, use default A4 size
-        if canvas_box.width() == 0.0 || canvas_box.height() == 0.0 {
-            canvas_box = Rectangle::from_xywh(0.0, 0.0, 597.6, 842.4);
-        }
-        let option = option
-            .page_box(&canvas_box, self.d.rotate().unwrap())
-            .crop((!no_crop && need_crop(crop_box, media_box)).then(|| crop_box.unwrap()))
-            .rotate(self.d.rotate().unwrap())
-            .build();
-        let content = self.content()?;
-        let ops = content.operations();
-        let resource = self.resources();
-        let mut canvas = option.create_canvas();
-        let mut renderer = Render::new(&mut canvas, option.clone(), &resource);
-        if let Some(steps) = steps {
-            ops.into_iter().take(steps).for_each(|op| renderer.exec(op));
-        } else {
-            ops.into_iter().for_each(|op| renderer.exec(op));
-        };
-        drop(renderer);
-        let r = option.to_image(canvas);
-        Ok(r)
-    }
-
-    pub fn render(&self, option: RenderOptionBuilder) -> Result<RgbaImage, ObjectValueError> {
-        self.render_steps(option, None, false)
-    }
-
     /// Parse page tree to get all pages
     pub(crate) fn parse(root: PageDict<'a, 'b>) -> Result<Vec<Self>, ObjectValueError> {
         let mut pages = Vec::new();
@@ -384,13 +344,6 @@ impl<'a, 'b: 'a> Page<'a, 'b> {
             d: d.clone(),
             parents_to_root: parents,
         })
-    }
-}
-
-fn need_crop(crop: Option<Rectangle>, media: Rectangle) -> bool {
-    match crop {
-        None => false,
-        Some(crop) => crop != media,
     }
 }
 
