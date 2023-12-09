@@ -36,6 +36,9 @@ insta = { version = "1.29.0", features = ["ron"] }
 test-case = "3.1.0"
 md-5 = "0.10"
 hex = { version = "0.4.3" }
+ureq = "2.8"
+nipdf-test-macro = { path = "../test-macro" }
+maplit = "1.0"
 
 [lints]
 workspace = true

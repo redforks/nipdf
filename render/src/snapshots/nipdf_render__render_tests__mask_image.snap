@@ -1,6 +1,5 @@
 ---
 source: render/src/render_tests.rs
-assertion_line: 42
 expression: "&decode_page(163).unwrap()"
 ---
 "98e6080ae336eabcb449cc0febf96a7b"
