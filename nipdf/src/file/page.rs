@@ -1,6 +1,7 @@
 use self::paint::Render;
 pub use self::paint::{RenderOption, RenderOptionBuilder};
 use crate::{
+    function::Domains,
     graphics::{
         parse_operations2, shading::ShadingDict, trans::FormToUserSpace, ColorArgs, ColorSpaceArgs,
         LineCapStyle, LineJoinStyle, Operation, PatternDict, Point, RenderingIntent,
@@ -158,6 +159,9 @@ pub trait XObjectDictTrait {
 
     #[self_as]
     fn as_form(&self) -> FormXObjectDict<'a, 'b>;
+
+    #[try_from]
+    fn decode(&self) -> Option<Domains>;
 }
 
 impl<'a, 'b> XObjectDict<'a, 'b> {

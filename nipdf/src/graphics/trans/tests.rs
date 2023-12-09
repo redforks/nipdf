@@ -138,7 +138,7 @@ fn test_move_text_space_right() {
         &Transform2D::identity()
             .then_scale(2.0, 3.)
             .then_rotate(Angle::degrees(90.)),
-        10.0,
+        Length::new(10.0),
     ));
     f((0., 0.), (0. * 3., 10. * 2.));
 }

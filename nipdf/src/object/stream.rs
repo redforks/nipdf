@@ -8,8 +8,8 @@ use crate::{
     function::Domains,
     graphics::{
         color_space::{
-            color_to_rgba, convert_color_to, ColorCompConvertTo, ColorSpace,
-            ColorSpaceTrait, DeviceCMYK,
+            color_to_rgba, convert_color_to, ColorCompConvertTo, ColorSpace, ColorSpaceTrait,
+            DeviceCMYK,
         },
         ColorSpaceArgs,
     },
@@ -179,6 +179,27 @@ fn decode_image<'a, M: ImageMetadata>(
     resolver: &ObjectResolver<'a>,
     resources: Option<&ResourceDict<'a, '_>>,
 ) -> Result<DynamicImage, ObjectValueError> {
+    fn decode_one_bit(w: u32, h: u32, data: &[u8], row_padding: bool) -> DynamicImage {
+        use bitstream_io::read::BitRead;
+
+        let mut img = GrayImage::new(w, h);
+        let row_padding_bits = if row_padding {
+            let remain_bits = w % 8;
+            if remain_bits != 0 { 8 - remain_bits } else { 0 }
+        } else {
+            0
+        };
+
+        let mut r = BitReader::<_, BigEndian>::new(data as &[u8]);
+        for y in 0..h {
+            for x in 0..w {
+                img.put_pixel(x, y, Luma([if r.read_bit().unwrap() { 255u8 } else { 0 }]));
+            }
+            r.skip(row_padding_bits).unwrap();
+        }
+        DynamicImage::ImageLuma8(img)
+    }
+
     let color_space = img_meta.color_space().unwrap();
     let color_space =
         color_space.map(|args| ColorSpace::from_args(&args, resolver, resources).unwrap());
@@ -190,6 +211,7 @@ fn decode_image<'a, M: ImageMetadata>(
                 img
             }
         }
+
         FilterDecodedData::CmykImage((width, height, pixels)) => {
             let cs = DeviceCMYK;
             DynamicImage::ImageRgba8(RgbaImage::from_fn(width, height, |x, y| {
@@ -202,28 +224,18 @@ fn decode_image<'a, M: ImageMetadata>(
                 ]))
             }))
         }
+
         FilterDecodedData::Bytes(data) => {
             match (
                 &color_space,
                 img_meta.bits_per_component().unwrap().unwrap(),
             ) {
-                (_, 1) => {
-                    use bitstream_io::read::BitRead;
-
-                    let mut img =
-                        GrayImage::new(img_meta.width().unwrap(), img_meta.height().unwrap());
-                    let mut r = BitReader::<_, BigEndian>::new(data.borrow() as &[u8]);
-                    for y in 0..img_meta.height().unwrap() {
-                        for x in 0..img_meta.width().unwrap() {
-                            img.put_pixel(
-                                x,
-                                y,
-                                Luma([if r.read_bit().unwrap() { 255u8 } else { 0 }]),
-                            );
-                        }
-                    }
-                    DynamicImage::ImageLuma8(img)
-                }
+                (_, 1) => decode_one_bit(
+                    img_meta.width().unwrap(),
+                    img_meta.height().unwrap(),
+                    data.borrow(),
+                    true,
+                ),
                 (Some(cs), 8) => {
                     let n_colors = cs.components();
                     let mut img =
@@ -241,6 +253,16 @@ fn decode_image<'a, M: ImageMetadata>(
                     img_meta.bits_per_component().unwrap().unwrap()
                 ),
             }
+        }
+
+        FilterDecodedData::CCITTFaxImage(data) => {
+            assert_eq!(1, img_meta.bits_per_component().unwrap().unwrap());
+            decode_one_bit(
+                img_meta.width().unwrap(),
+                img_meta.height().unwrap(),
+                &data,
+                false,
+            )
         }
     };
 
@@ -659,6 +681,7 @@ impl<'b> TryFrom<&'b Object> for CCITTFGroup {
 enum FilterDecodedData<'a> {
     Bytes(Cow<'a, [u8]>),
     Image(DynamicImage),
+    CCITTFaxImage(Vec<u8>),         // width, height, data
     CmykImage((u32, u32, Vec<u8>)), // width, height, data
 }
 
@@ -766,7 +789,7 @@ fn filter<'a: 'b, 'b>(
                 resolver.unwrap(),
             )?,
         )
-        .map(FilterDecodedData::bytes),
+        .map(FilterDecodedData::CCITTFaxImage),
         S_FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(FilterDecodedData::bytes),
         S_FILTER_ASCII_HEX_DECODE => decode_ascii_hex(&buf).map(FilterDecodedData::bytes),
         S_FILTER_RUN_LENGTH_DECODE => Ok(FilterDecodedData::bytes(decode_run_length(&buf, params))),

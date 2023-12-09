@@ -794,7 +794,11 @@ mod xref;
 pub use xref::{Entry as XRefEntry, Section as XRefSection, *};
 
 mod frame;
-use crate::{file::DataContainer, parser};
+use crate::{
+    file::DataContainer,
+    graphics::trans::{ThousandthsOfText},
+    parser,
+};
 pub use frame::*;
 
 #[derive(Clone, PartialEq, Debug, thiserror::Error)]
@@ -1031,6 +1035,7 @@ impl<const N: usize> TryFrom<&Object> for [f32; N] {
 }
 
 use either::Either;
+use euclid::Length;
 #[cfg(feature = "pretty")]
 use pretty::RcDoc;
 use static_assertions::assert_eq_size;
@@ -1298,7 +1303,7 @@ impl TextString {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TextStringOrNumber {
     TextString(TextString),
-    Number(f32),
+    Number(Length<f32, ThousandthsOfText>),
 }
 
 pub(crate) type InnerString = TinyVec<[u8; 14]>;

@@ -1,7 +1,7 @@
 //! Lib to translate coordinates. Including CTM,
 //! line matrix, pattern etc, and User space to screen space.
 
-use euclid::Transform2D;
+use euclid::{Length, Point2D, Transform2D};
 use num::traits::AsPrimitive;
 
 pub enum UserSpace {}
@@ -14,7 +14,11 @@ pub enum TextSpace {}
 pub enum FormSpace {}
 pub enum PatternSpace {}
 pub enum GlyphSpace {}
+pub enum ThousandthsOfText {}
+pub type GlyphLength = Length<f32, GlyphSpace>;
+pub type TextPoint = Point2D<f32, TextSpace>;
 pub type GlyphToTextSpace = Transform2D<f32, GlyphSpace, TextSpace>;
+pub type GlyphToUserSpace = Transform2D<f32, GlyphSpace, UserSpace>;
 pub type UserToUserSpace = Transform2D<f32, UserSpace, UserSpace>;
 pub type UserToLogicDeviceSpace = Transform2D<f32, UserSpace, LogicDeviceSpace>;
 pub type UserToDeviceSpace = Transform2D<f32, UserSpace, DeviceSpace>;
@@ -54,17 +58,16 @@ pub fn image_to_user_space(img_w: u32, img_h: u32) -> ImageToUserSpace {
 }
 
 /// Adjust transform moves text space to right.
-pub fn move_text_space_right(transform: &TextToUserSpace, x_text_space: f32) -> TextToUserSpace {
-    move_text_space_pos(transform, x_text_space, 0.)
+pub fn move_text_space_right(
+    transform: &TextToUserSpace,
+    x_text_space: Length<f32, TextSpace>,
+) -> TextToUserSpace {
+    move_text_space_pos(transform, TextPoint::new(x_text_space.0, 0.0))
 }
 
 /// Adjust transform to moves position in text space.
-pub fn move_text_space_pos(
-    transform: &TextToUserSpace,
-    x_text_space: f32,
-    y_text_space: f32,
-) -> TextToUserSpace {
-    transform.pre_translate((x_text_space, y_text_space).into())
+pub fn move_text_space_pos(transform: &TextToUserSpace, p: TextPoint) -> TextToUserSpace {
+    transform.pre_translate(p.to_vector())
 }
 
 #[cfg(test)]
