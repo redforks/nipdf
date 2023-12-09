@@ -57,6 +57,12 @@ fn download_file(url: &str, f: impl AsRef<Path>) -> AnyResult<()> {
     Ok(())
 }
 
+/// These files are very rare and odd, not to be tested
+const IGNORED: [&str; 1] = [
+    // xpdf, mupdf, are all failed to open
+    "bug1020226.pdf",
+];
+
 /// Read pdf file and render each page, to save test time,
 /// touch a flag file at `$CARGO_TARGET_TMPDIR/(md5(f)).ok` if succeed.
 /// If the file exist, skips the test.
@@ -65,6 +71,11 @@ fn download_file(url: &str, f: impl AsRef<Path>) -> AnyResult<()> {
 /// that file to `$flag_file.pdf`, skip the download if `$flag_file.pdf` exists.
 #[pdf_file_test_cases]
 fn render(f: &str) -> AnyResult<()> {
+    // return if f ends with one of IGNORED
+    if IGNORED.iter().any(|s| f.ends_with(s)) {
+        return Ok(());
+    }
+
     let hash_file: String = Md5::digest(f.as_bytes()).as_slice().encode_hex();
     let mut hash_file = Path::join(Path::new(env!["CARGO_TARGET_TMPDIR"]), hash_file);
     eprintln!("{}.pdf", hash_file.to_str().unwrap());
