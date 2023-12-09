@@ -197,3 +197,6 @@ fn need_crop(crop: Option<Rectangle>, media: Rectangle) -> bool {
         Some(crop) => crop != media,
     }
 }
+
+#[cfg(test)]
+mod render_tests;

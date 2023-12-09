@@ -135,7 +135,6 @@ impl XRefTable {
 
     /// Scan IDOffsetMap by scan indirect object declaration,
     /// helps to create pdf file objects for testing.
-    #[cfg(test)]
     pub fn from_buf(buf: &[u8]) -> Self {
         use crate::parser::{whitespace_or_comment, ws_prefixed};
         use nom::{combinator::all_consuming, multi::many1};
@@ -719,6 +718,3 @@ pub(crate) fn open_test_file(file_path: impl AsRef<std::path::Path>) -> File {
 
 #[cfg(test)]
 mod tests;
-
-#[cfg(test)]
-mod render_tests;

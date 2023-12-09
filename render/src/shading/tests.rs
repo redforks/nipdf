@@ -3,6 +3,7 @@ use nipdf::{
     file::{ObjectResolver, XRefTable},
     object::Dictionary,
 };
+use std::num::NonZeroU32;
 use test_case::test_case;
 
 #[test_case(b"1 0 obj<</ShadingType 3/ColorSpace/DeviceGray/Coords[1 1 0 1 1 0]>>endobj"; "radius both be zero")]

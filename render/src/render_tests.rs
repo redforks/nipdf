@@ -1,10 +1,19 @@
 //! Test page render result using `insta` to ensure that the rendering result is not changed.
 //! This file checks file pdfreference1.0.pdf
-use super::open_test_file;
-use crate::file::RenderOptionBuilder;
+use crate::{render_page, RenderOptionBuilder};
 use anyhow::Result as AnyResult;
 use insta::assert_ron_snapshot;
 use md5::{Digest, Md5};
+use nipdf::file::File;
+
+/// Open file for testing. `file_path` relate to current crate directory.
+fn open_test_file(file_path: impl AsRef<std::path::Path>) -> File {
+    let file_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../nipdf")
+        .join(file_path);
+    let data = std::fs::read(file_path).unwrap();
+    File::parse(data, "", "").unwrap()
+}
 
 fn decode_file_page(path: &str, page_no: usize) -> AnyResult<String> {
     let f = open_test_file(path);
@@ -13,7 +22,7 @@ fn decode_file_page(path: &str, page_no: usize) -> AnyResult<String> {
     let pages = catalog.pages()?;
     let page = &pages[page_no];
     let option = RenderOptionBuilder::new().zoom(1.5);
-    let bytes = page.render(option)?.into_vec();
+    let bytes = render_page(page, option)?.into_vec();
     let hash = Md5::digest(&bytes[..]);
     Ok(hex::encode(hash))
 }

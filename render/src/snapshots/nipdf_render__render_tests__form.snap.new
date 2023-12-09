@@ -1,5 +1,6 @@
 ---
-source: nipdf/src/file/render_tests.rs
+source: render/src/render_tests.rs
+assertion_line: 54
 expression: "&decode_file_page(\"sample_files/xobject/form.pdf\", 0).unwrap()"
 ---
 "dbcd20b7e195813d045da17f838fa485"

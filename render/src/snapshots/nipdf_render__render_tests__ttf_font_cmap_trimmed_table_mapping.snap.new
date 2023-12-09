@@ -1,5 +1,6 @@
 ---
-source: nipdf/src/file/render_tests.rs
+source: render/src/render_tests.rs
+assertion_line: 106
 expression: "&decode_file_page(\"pdf.js/web/compressed.tracemonkey-pldi-09.pdf\", 9).unwrap()"
 ---
 "dffd86ce01ec8e82794aa8e7e1163d99"

@@ -1,5 +1,6 @@
 ---
-source: nipdf/src/file/render_tests.rs
+source: render/src/render_tests.rs
+assertion_line: 66
 expression: "&decode_file_page(\"sample_files/bizarre/pdfReferenceUpdated.pdf\",\n            809).unwrap()"
 ---
 "9eed2519eb5a0d6971a6686ea8de2355"
