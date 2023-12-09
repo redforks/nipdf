@@ -18,7 +18,7 @@ use nom::Finish;
 use prescript::{sname, Name};
 use std::iter::once;
 
-mod paint;
+pub mod paint;
 
 #[derive(Debug, Copy, Clone, PartialEq, Default)]
 pub struct Rectangle {
@@ -165,7 +165,7 @@ pub trait XObjectDictTrait {
 }
 
 impl<'a, 'b> XObjectDict<'a, 'b> {
-    fn as_stream(&self) -> Result<&Stream, ObjectValueError> {
+    pub fn as_stream(&self) -> Result<&Stream, ObjectValueError> {
         self.d.resolver().resolve(self.id().unwrap())?.stream()
     }
 }
@@ -280,6 +280,10 @@ impl<'a, 'b: 'a> Page<'a, 'b> {
             .expect("page must have media box")
     }
 
+    pub fn rotate(&self) -> i32 {
+        self.d.rotate().unwrap()
+    }
+
     /// Return None if crop_box not exist, or empty.
     pub fn crop_box(&self) -> Option<Rectangle> {
         let r = self.iter_to_root().find_map(|d| d.crop_box().unwrap());
@@ -291,7 +295,7 @@ impl<'a, 'b: 'a> Page<'a, 'b> {
         r
     }
 
-    fn resources(&self) -> ResourceDict<'a, 'b> {
+    pub fn resources(&self) -> ResourceDict<'a, 'b> {
         self.iter_to_root()
             .find_map(|d| d.resources().unwrap())
             .expect("page must have resources")

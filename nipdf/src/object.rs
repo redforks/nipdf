@@ -342,6 +342,8 @@ where
 
     fn id(&self) -> Option<NonZeroU32>;
 
+    fn dict(&self) -> &Dictionary;
+
     fn resolver(&self) -> &'b R;
 }
 
@@ -794,11 +796,7 @@ mod xref;
 pub use xref::{Entry as XRefEntry, Section as XRefSection, *};
 
 mod frame;
-use crate::{
-    file::DataContainer,
-    graphics::trans::{ThousandthsOfText},
-    parser,
-};
+use crate::{file::DataContainer, graphics::trans::ThousandthsOfText, parser};
 pub use frame::*;
 
 #[derive(Clone, PartialEq, Debug, thiserror::Error)]

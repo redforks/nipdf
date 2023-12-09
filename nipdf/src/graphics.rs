@@ -23,13 +23,14 @@ use nom::{
 use prescript::Name;
 use std::num::NonZeroU32;
 
-pub(crate) mod color_space;
-mod pattern;
-pub(crate) mod trans;
+pub mod color_space;
+pub mod pattern;
+pub mod trans;
 use self::trans::{TextPoint, TextSpace, UserToUserSpace};
 pub(crate) use pattern::*;
 
-pub(crate) mod shading;
+pub mod shading;
+pub use shading::{Extend, RadialCircle};
 
 impl<S, T> TryFrom<&Object> for Transform2D<f32, S, T> {
     type Error = ObjectValueError;

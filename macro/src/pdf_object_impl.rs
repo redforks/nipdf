@@ -631,6 +631,10 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     Ok(d.map(|d| Self { d, id }))
                 }
 
+                fn dict(&self) -> &crate::object::Dictionary {
+                    self.d.dict()
+                }
+
                 fn id(&self) -> Option<std::num::NonZeroU32> {
                     self.id
                 }
@@ -661,6 +665,10 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 fn checked(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary, r: &'b crate::file::ObjectResolver<'a>) -> Result<Option<Self>, crate::object::ObjectValueError> {
                     let d = crate::object::SchemaDict::from(dict, r, #valid_arg)?;
                     Ok(d.map(|d| Self { d, id}))
+                }
+
+                fn dict(&self) -> &crate::object::Dictionary {
+                    self.d.dict()
                 }
 
                 fn id(&self) -> Option<std::num::NonZeroU32> {

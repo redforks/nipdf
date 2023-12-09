@@ -21,7 +21,7 @@ use once_cell::unsync::OnceCell;
 use prescript::{sname, Name};
 use std::{iter::repeat_with, num::NonZeroU32, rc::Rc};
 
-mod page;
+pub mod page;
 pub use page::*;
 
 pub(crate) mod encrypt;

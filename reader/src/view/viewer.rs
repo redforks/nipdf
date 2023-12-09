@@ -24,7 +24,8 @@ use iced_aw::{
 };
 #[cfg(feature = "debug")]
 use iced_aw::{modal, Card};
-use nipdf::file::{File as PdfFile, RenderOptionBuilder};
+use nipdf::file::File as PdfFile;
+use nipdf_render::{render_page, RenderOptionBuilder};
 #[cfg(feature = "debug")]
 use std::time::{Duration, Instant};
 
@@ -219,7 +220,7 @@ impl Viewer {
         let pages = catalog.pages()?;
         let page = &pages[no as usize];
         let option = RenderOptionBuilder::new().zoom(self.zoom);
-        let image = page.render(option)?;
+        let image = render_page(page, option)?;
         self.page = Page {
             width: image.width(),
             height: image.height(),

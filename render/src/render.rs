@@ -1,37 +1,40 @@
 use crate::{
+    shading::{build_shading, Axial, Radial, Shading},
+    PageDimension, RenderOption, RenderOptionBuilder,
+};
+use anyhow::Result as AnyResult;
+use educe::Educe;
+use either::Either::{self, Left, Right};
+use euclid::{default::Size2D, Length, Scale, Transform2D};
+use image::RgbaImage;
+use log::{debug, info};
+use nipdf::{
     file::{
-        page::{GraphicsStateParameterDict, Operation, PageContent, Rectangle, ResourceDict},
-        XObjectDict, XObjectType,
+        paint::fonts::{FontCache, GlyphRender, PathSink},
+        GraphicsStateParameterDict, PageContent, Rectangle, ResourceDict, XObjectDict, XObjectType,
     },
     function::Domain,
     graphics::{
         color_space::{ColorSpace, ColorSpaceTrait},
         parse_operations,
-        shading::{build_shading, Axial, Radial, Shading},
+        pattern::{PatternType, ShadingPatternDict, TilingPatternDict},
         trans::{
-            f_flip, image_to_user_space, logic_device_to_device, move_text_space_pos,
-            move_text_space_right, GlyphLength, GlyphSpace, GlyphToTextSpace, GlyphToUserSpace,
-            ImageToDeviceSpace, IntoSkiaTransform, LogicDeviceToDeviceSpace, PatternSpace,
-            PatternToUserSpace, TextPoint, TextSpace, TextToUserSpace, ThousandthsOfText,
-            UserToDeviceSpace, UserToLogicDeviceSpace, UserToUserSpace,
+            f_flip, image_to_user_space, move_text_space_pos, move_text_space_right, GlyphLength,
+            GlyphSpace, GlyphToTextSpace, GlyphToUserSpace, ImageToDeviceSpace, IntoSkiaTransform,
+            PatternSpace, PatternToUserSpace, TextPoint, TextSpace, TextToUserSpace,
+            ThousandthsOfText, UserToDeviceSpace, UserToLogicDeviceSpace, UserToUserSpace,
         },
-        ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, PatternType, Point,
-        RenderingIntent, ShadingPatternDict, TextRenderingMode, TilingPatternDict,
+        ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, Operation, Point,
+        RenderingIntent, TextRenderingMode,
     },
     object::{ImageMetadata, InlineImage, Object, PdfObject, TextStringOrNumber},
 };
-use anyhow::{Ok, Result as AnyResult};
-use educe::Educe;
-use either::Either::{self, Left, Right};
-use image::RgbaImage;
-use log::{debug, info};
 use nom::{combinator::eof, sequence::terminated};
 use prescript::Name;
 use std::{
     borrow::Cow,
     cell::{Ref, RefCell},
     collections::VecDeque,
-    convert::AsRef,
     rc::Rc,
 };
 use tiny_skia::{
@@ -39,27 +42,25 @@ use tiny_skia::{
     PathBuilder, Pixmap, PixmapPaint, PixmapRef, Rect, Stroke, StrokeDash, Transform,
 };
 
-pub mod fonts;
-use euclid::{default::Size2D, Angle, Length, Scale, Transform2D};
-use fonts::*;
+trait CloneOrMove {
+    type Target;
 
-impl From<LineCapStyle> for tiny_skia::LineCap {
-    fn from(cap: LineCapStyle) -> Self {
-        match cap {
-            LineCapStyle::Butt => tiny_skia::LineCap::Butt,
-            LineCapStyle::Round => tiny_skia::LineCap::Round,
-            LineCapStyle::Square => tiny_skia::LineCap::Square,
-        }
+    fn clone_or_move(self) -> Self::Target;
+}
+
+impl CloneOrMove for SkiaPath {
+    type Target = SkiaPath;
+
+    fn clone_or_move(self) -> Self::Target {
+        self
     }
 }
 
-impl From<LineJoinStyle> for tiny_skia::LineJoin {
-    fn from(join: LineJoinStyle) -> Self {
-        match join {
-            LineJoinStyle::Miter => tiny_skia::LineJoin::Miter,
-            LineJoinStyle::Round => tiny_skia::LineJoin::Round,
-            LineJoinStyle::Bevel => tiny_skia::LineJoin::Bevel,
-        }
+impl<T: Clone> CloneOrMove for &T {
+    type Target = T;
+
+    fn clone_or_move(self) -> Self::Target {
+        self.clone()
     }
 }
 
@@ -259,9 +260,8 @@ impl ColorState {
         self.alpha_is_shape = v;
     }
 }
-
 #[derive(Debug, Clone)]
-struct State {
+pub(super) struct State {
     dimension: PageDimension,
     ctm: UserToLogicDeviceSpace,
     user_to_device: UserToDeviceSpace,
@@ -271,28 +271,6 @@ struct State {
     text_object: TextObject,
     stroke_state: ColorState,
     fill_state: ColorState,
-}
-
-trait CloneOrMove {
-    type Target;
-
-    fn clone_or_move(self) -> Self::Target;
-}
-
-impl CloneOrMove for SkiaPath {
-    type Target = SkiaPath;
-
-    fn clone_or_move(self) -> Self::Target {
-        self
-    }
-}
-
-impl<T: Clone> CloneOrMove for &T {
-    type Target = T;
-
-    fn clone_or_move(self) -> Self::Target {
-        self.clone()
-    }
 }
 
 impl State {
@@ -385,7 +363,7 @@ impl State {
     }
 
     fn set_graphics_state(&mut self, res: &GraphicsStateParameterDict) {
-        for key in res.d.dict().keys() {
+        for key in res.dict().keys() {
             match key.as_str() {
                 "LW" => self.set_line_width(res.line_width().unwrap().unwrap()),
                 "LC" => self.set_line_cap(res.line_cap().unwrap().unwrap()),
@@ -560,147 +538,6 @@ impl Path {
 
     pub fn clear(&mut self) {
         self.reset();
-    }
-}
-
-#[derive(Debug, Educe, Clone, Copy)]
-#[educe(Default)]
-pub struct PageDimension {
-    #[educe(Default = 1.0)]
-    zoom: f32,
-    width: u32,
-    height: u32,
-    // apply before ctm to handle crop_box/media_box left-bottom not at (0, 0) and page rotate
-    transform: UserToUserSpace,
-    rotate: i32,
-}
-
-impl PageDimension {
-    pub fn update(&mut self, dimension: &Rectangle, rotate: i32) {
-        self.rotate = rotate % 360;
-
-        let mut transform = UserToUserSpace::identity();
-        if dimension.left_x != 0.0 || dimension.lower_y != 0.0 {
-            transform = transform.then_translate((-dimension.left_x, -dimension.lower_y).into());
-        }
-        self.transform = transform;
-
-        self.width = dimension.width() as u32;
-        self.height = dimension.height() as u32;
-        if self.swap_wh() {
-            std::mem::swap(&mut self.width, &mut self.height);
-        }
-    }
-
-    pub fn canvas_width(&self) -> u32 {
-        (self.width as f32 * self.zoom) as u32
-    }
-
-    pub fn canvas_height(&self) -> u32 {
-        (self.height as f32 * self.zoom) as u32
-    }
-
-    fn swap_wh(&self) -> bool {
-        self.rotate.abs() == 90 || self.rotate.abs() == 270
-    }
-
-    pub fn logic_device_to_device(&self) -> LogicDeviceToDeviceSpace {
-        if self.rotate != 0 {
-            let (w, h) = if self.swap_wh() {
-                (self.height, self.width)
-            } else {
-                (self.width, self.height)
-            };
-
-            let r = logic_device_to_device(h, self.zoom);
-            r.then_translate((w as f32 * self.zoom * -0.5, h as f32 * self.zoom * -0.5).into())
-                .then_rotate(Angle::degrees(self.rotate as f32))
-                .then_translate((h as f32 * self.zoom * 0.5, w as f32 * self.zoom * 0.5).into())
-        } else {
-            logic_device_to_device(self.height, self.zoom)
-        }
-    }
-}
-
-/// Option for Render
-#[derive(Debug, Educe, Clone)]
-#[educe(Default)]
-pub struct RenderOption {
-    /// If crop is specified, the output canvas will be cropped to the specified rectangle.
-    crop: Option<Rectangle>,
-    #[educe(Default(expression = "SkiaColor::WHITE"))]
-    background_color: SkiaColor,
-    /// Initial state, used in paint_x_form to pass parent state to form Render.
-    state: Option<State>,
-    rotate: i32,
-    dimension: PageDimension,
-}
-
-impl RenderOption {
-    pub fn create_canvas(&self) -> Pixmap {
-        let (w, h) = (
-            self.dimension.canvas_width() as u64,
-            self.dimension.canvas_height() as u64,
-        );
-        if w * h > 1024 * 1024 * 100 {
-            panic!("page size too large: {}x{}", w, h);
-        }
-
-        let mut r = Pixmap::new(w as u32, h as u32).unwrap();
-        if self.background_color.is_opaque() {
-            r.fill(self.background_color);
-        }
-        r
-    }
-
-    /// Convert canvas to image, crop if crop option not None
-    pub fn to_image(&self, canvas: Pixmap) -> RgbaImage {
-        RgbaImage::from_raw(canvas.width(), canvas.height(), canvas.take()).unwrap()
-    }
-}
-
-#[derive(Educe)]
-#[educe(Default(new))]
-pub struct RenderOptionBuilder(RenderOption);
-
-impl RenderOptionBuilder {
-    pub fn zoom(mut self, zoom: f32) -> Self {
-        self.0.dimension.zoom = zoom;
-        self
-    }
-
-    pub fn page_box(mut self, dimension: &Rectangle, rotate_degree: i32) -> Self {
-        self.0.dimension.update(dimension, rotate_degree);
-        self
-    }
-
-    fn dimension(mut self, dimension: PageDimension) -> Self {
-        self.0.dimension = dimension;
-        self
-    }
-
-    pub fn crop(mut self, rect: Option<Rectangle>) -> Self {
-        self.0.crop = rect;
-        self
-    }
-
-    pub fn background_color(mut self, color: SkiaColor) -> Self {
-        self.0.background_color = color;
-        self
-    }
-
-    pub fn rotate(mut self, rotate: i32) -> Self {
-        self.0.rotate = rotate;
-        self
-    }
-
-    fn state(mut self, state: State) -> Self {
-        self.0.state = Some(state);
-        self
-    }
-
-    pub fn build(self) -> RenderOption {
-        self.0
     }
 }
 
