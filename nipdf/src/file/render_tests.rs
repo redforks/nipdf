@@ -169,3 +169,8 @@ fn transparent() {
 fn type3_font() {
     assert_ron_snapshot!(&decode_file_page("pdf.js/test/pdfs/bug1001080.pdf", 0).unwrap())
 }
+
+#[test]
+fn type3_with_nagative_font_size() {
+    assert_ron_snapshot!(&decode_file_page("pdf.js/test/pdfs/bug1011159.pdf", 0).unwrap())
+}
