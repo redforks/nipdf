@@ -10,10 +10,14 @@ pub use type1::Font;
 pub type Name = kstring::KStringBase<Box<str>>;
 
 /// Create Name from `&str`
+#[inline]
+#[must_use]
 pub fn name(s: &str) -> Name {
     Name::from_ref(s)
 }
 
+#[inline]
+#[must_use]
 pub const fn sname(s: &'static str) -> Name {
     Name::from_static(s)
 }

@@ -56,10 +56,12 @@ impl Font {
         })
     }
 
+    #[inline]
     pub fn header(&self) -> &Header {
         &self.header
     }
 
+    #[inline]
     pub fn encoding(&self) -> Option<&Encoding> {
         self.encoding.as_ref()
     }

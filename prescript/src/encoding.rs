@@ -11,19 +11,23 @@ use std::array::from_fn;
 pub struct Encoding([Name; 256]);
 
 impl Encoding {
+    #[inline]
     pub const fn new(names: [Name; 256]) -> Self {
         Self(names)
     }
 
+    #[inline]
     pub fn from(names: [&str; 256]) -> Self {
         Self(from_fn(|i| name(names[i])))
     }
 
+    #[inline]
     pub fn get_name(&self, ch: u8) -> &Name {
         &self.0[ch as usize]
     }
 
     /// Get glyph name for char code.
+    #[inline]
     pub fn get_str(&self, ch: u8) -> &str {
         self.0[ch as usize].as_str()
     }
