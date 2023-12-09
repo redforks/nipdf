@@ -24,7 +24,6 @@ use log::error;
 use nipdf_macro::pdf_object;
 use once_cell::unsync::Lazy;
 use prescript::{sname, Name};
-use smallvec::SmallVec;
 use std::{
     borrow::{Borrow, Cow},
     fmt::Display,
@@ -33,6 +32,7 @@ use std::{
     ops::Range,
     rc::Rc,
 };
+use tinyvec::TinyVec;
 
 const KEY_FILTER: Name = sname("Filter");
 const KEY_FILTER_PARAMS: Name = sname("DecodeParms");
@@ -241,7 +241,7 @@ fn decode_image<'a, M: ImageMetadata>(
                     let mut img =
                         RgbaImage::new(img_meta.width().unwrap(), img_meta.height().unwrap());
                     for (p, dest_p) in data.chunks(n_colors).zip(img.pixels_mut()) {
-                        let c: SmallVec<[f32; 4]> = p.iter().map(|v| v.into_color_comp()).collect();
+                        let c: TinyVec<[f32; 4]> = p.iter().map(|v| v.into_color_comp()).collect();
                         let color: [u8; 4] = color_to_rgba(cs, c.as_slice());
                         *dest_p = Rgba(color);
                     }

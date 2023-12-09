@@ -3,7 +3,7 @@ use anyhow::Result as AnyResult;
 #[cfg(test)]
 use mockall::automock;
 use nipdf_macro::{pdf_object, TryFromIntObject};
-use smallvec::{smallvec, SmallVec};
+use tinyvec::{tiny_vec, TinyVec};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Domain<T = f32> {
@@ -98,7 +98,7 @@ impl Domains {
     }
 }
 
-pub type FunctionValue = SmallVec<[f32; 4]>;
+pub type FunctionValue = TinyVec<[f32; 4]>;
 
 #[cfg_attr(test, automock)]
 pub trait Function {
@@ -123,7 +123,7 @@ impl Function for Box<dyn Function> {
         self.as_ref().signature()
     }
 
-    fn inner_call(&self, _args: SmallVec<[f32; 4]>) -> AnyResult<FunctionValue> {
+    fn inner_call(&self, _args: TinyVec<[f32; 4]>) -> AnyResult<FunctionValue> {
         unreachable!()
     }
 }
@@ -261,7 +261,7 @@ impl Signature {
         self.range.as_ref().map(|range| range.n())
     }
 
-    fn clip_args(&self, args: &[f32]) -> SmallVec<[f32; 4]> {
+    fn clip_args(&self, args: &[f32]) -> TinyVec<[f32; 4]> {
         debug_assert_eq!(args.len(), self.n_args());
 
         args.iter()
@@ -338,7 +338,7 @@ impl SampledFunction {
 }
 
 impl Function for SampledFunction {
-    fn inner_call(&self, args: SmallVec<[f32; 4]>) -> AnyResult<FunctionValue> {
+    fn inner_call(&self, args: TinyVec<[f32; 4]>) -> AnyResult<FunctionValue> {
         let mut idx = 0;
         for (i, arg) in args.iter().enumerate() {
             let domain = &self.signature.domain.0[i];
@@ -349,7 +349,7 @@ impl Function for SampledFunction {
         }
 
         let n = self.signature.n_returns().unwrap();
-        let mut r = smallvec![];
+        let mut r = tiny_vec![];
         let decode = &self.decode.0[0];
         for i in 0..n {
             let sample = self.samples[idx as usize * n + i];
@@ -426,7 +426,7 @@ pub struct ExponentialInterpolationFunction {
 }
 
 impl Function for ExponentialInterpolationFunction {
-    fn inner_call(&self, args: SmallVec<[f32; 4]>) -> AnyResult<FunctionValue> {
+    fn inner_call(&self, args: TinyVec<[f32; 4]>) -> AnyResult<FunctionValue> {
         let x = args[0];
         let c0 = &self.c0;
         let c1 = &self.c1;
@@ -542,7 +542,7 @@ impl StitchingFunction {
 }
 
 impl Function for StitchingFunction {
-    fn inner_call(&self, args: SmallVec<[f32; 4]>) -> AnyResult<FunctionValue> {
+    fn inner_call(&self, args: TinyVec<[f32; 4]>) -> AnyResult<FunctionValue> {
         assert_eq!(args.len(), 1);
 
         let x = args[0];

@@ -37,7 +37,6 @@ weezl = "0.1.7"
 either = "1.9.0"
 euclid = "0.22.9"
 ttf-parser = { version = "0.20", features = ["gvar-alloc"] }
-smallvec = "1.11"
 ouroboros = "0.18"
 md-5 = "0.10"
 arc4 = "0.1"

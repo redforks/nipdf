@@ -5,7 +5,6 @@ use crate::{
     parser::parse_dict,
 };
 use mockall::predicate::eq;
-use smallvec::smallvec;
 use test_case::test_case;
 
 #[test]
@@ -16,11 +15,11 @@ fn test_clip_args() {
     };
     assert_eq!(
         signature.clip_args(&[0.5, 0.0]),
-        smallvec![0.5_f32, 0.0_f32] as SmallVec<[f32; 4]>
+        tiny_vec![0.5_f32, 0.0_f32] as TinyVec<[f32; 4]>
     );
     assert_eq!(
         signature.clip_args(&[-1.0, 100.0]),
-        smallvec![0.0_f32, 2.0_f32] as SmallVec<[f32; 4]>
+        tiny_vec![0.0_f32, 2.0_f32] as TinyVec<[f32; 4]>
     );
 }
 
@@ -31,8 +30,8 @@ fn test_clip_returns() {
         range: None,
     };
     assert_eq!(
-        signature.clip_returns(smallvec![100.0, -100.0]),
-        smallvec![100.0_f32, -100.0_f32] as FunctionValue
+        signature.clip_returns(tiny_vec![100.0, -100.0]),
+        tiny_vec![100.0_f32, -100.0_f32] as FunctionValue
     );
     assert_eq!(
         signature.clip_returns(FunctionValue::new()),
@@ -44,12 +43,12 @@ fn test_clip_returns() {
         range: Some(Domains(vec![Domain::new(0.0, 1.0), Domain::new(-2.0, 2.0)])),
     };
     assert_eq!(
-        signature.clip_returns(smallvec![0.5, 0.0]),
-        FunctionValue::from_slice(&[0.5, 0.0]),
+        signature.clip_returns(tiny_vec![0.5, 0.0]),
+        FunctionValue::from([0.5f32, 0.0].as_slice()),
     );
     assert_eq!(
-        signature.clip_returns(smallvec![-1.0, 100.0]),
-        FunctionValue::from_slice(&[0.0, 2.0]),
+        signature.clip_returns(tiny_vec![-1.0, 100.0]),
+        FunctionValue::from([0.0f32, 2.0].as_slice()),
     );
 }
 
@@ -64,15 +63,15 @@ fn test_exponential_function() {
     let f = f.func().unwrap();
     assert_eq!(
         f.call(&[0.0]).unwrap(),
-        smallvec![0.1_f32, 0.2_f32] as FunctionValue
+        tiny_vec![0.1_f32, 0.2_f32] as FunctionValue
     );
     assert_eq!(
         f.call(&[1.0]).unwrap(),
-        smallvec![0.2_f32, 0.4_f32] as FunctionValue
+        tiny_vec![0.2_f32, 0.4_f32] as FunctionValue
     );
     assert_eq!(
         f.call(&[0.5]).unwrap(),
-        smallvec![0.15_f32, 0.3_f32] as FunctionValue
+        tiny_vec![0.15_f32, 0.3_f32] as FunctionValue
     );
 }
 
@@ -140,7 +139,7 @@ fn stitching_function() {
     let f = f.func().unwrap();
     assert_eq!(
         f.call(&[0f32]).unwrap(),
-        smallvec![0.2_f32, 0.4_f32] as FunctionValue
+        tiny_vec![0.2_f32, 0.4_f32] as FunctionValue
     );
 }
 
@@ -155,7 +154,7 @@ fn test_n_func() {
     ));
     f1.expect_call()
         .with(eq(&[0.5_f32, 3.0_f32][..]))
-        .returning(|_| Ok(FunctionValue::from_slice(&[0.6_f32])));
+        .returning(|_| Ok(FunctionValue::from(&[0.6_f32][..])));
     let mut f2 = MockFunction::new();
     f2.expect_signature().return_const(Signature::new(
         Domains(vec![Domain::new(0.0, 1.0), Domain::new(2., 3.)]),
@@ -163,7 +162,7 @@ fn test_n_func() {
     ));
     f2.expect_call()
         .with(eq(&[0.5_f32, 3.0_f32][..]))
-        .returning(|_| Ok(FunctionValue::from_slice(&[0.8_f32])));
+        .returning(|_| Ok(FunctionValue::from(&[0.8_f32][..])));
     let f = NFunc::new(vec![Box::new(f1), Box::new(f2)]).unwrap();
     assert_eq!(
         f.signature().domain,
@@ -173,6 +172,6 @@ fn test_n_func() {
 
     assert_eq!(
         f.call(&[0.5_f32, 3.0_f32][..]).unwrap(),
-        FunctionValue::from_slice(&[0.6_f32, 0.8_f32])
+        FunctionValue::from(&[0.6_f32, 0.8_f32][..])
     )
 }
