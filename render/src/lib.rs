@@ -11,6 +11,8 @@ use tiny_skia::{Color, Pixmap};
 mod render;
 mod shading;
 use render::{Render, State};
+mod into_skia;
+pub(crate) use into_skia::*;
 
 #[derive(Debug, Educe, Clone, Copy)]
 #[educe(Default)]

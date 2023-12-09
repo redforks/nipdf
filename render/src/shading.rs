@@ -1,3 +1,4 @@
+use crate::IntoSkia;
 use anyhow::Result as AnyResult;
 use educe::Educe;
 use log::error;
@@ -8,7 +9,7 @@ use nipdf::{
         color_space::{ColorSpace, ColorSpaceTrait},
         shading::{AxialCoords, RadialCoords, ShadingDict, ShadingType},
         trans::{IntoSkiaTransform, UserToLogicDeviceSpace},
-        Extend, IntoSkia, Point, RadialCircle,
+        Extend, Point, RadialCircle,
     },
     object::PdfObject,
 };
