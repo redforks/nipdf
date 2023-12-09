@@ -1,20 +1,11 @@
-use super::{
-    color_space::ColorSpace,
-    trans::{IntoSkiaTransform, UserToLogicDeviceSpace},
-    IntoSkia, Point,
-};
+use super::Point;
 use crate::{
-    file::{Rectangle, ResourceDict},
-    function::{default_domain, Domain, Function, FunctionDict, Type as FunctionType},
-    graphics::{color_space::ColorSpaceTrait, ColorArgs, ColorSpaceArgs},
-    object::{Object, ObjectValueError, PdfObject},
+    file::Rectangle,
+    function::{default_domain, Domain, FunctionDict},
+    graphics::{ColorArgs, ColorSpaceArgs},
+    object::{Object, ObjectValueError},
 };
-use anyhow::Result as AnyResult;
-use educe::Educe;
-use log::error;
 use nipdf_macro::{pdf_object, TryFromIntObject};
-use std::rc::Rc;
-use tiny_skia::{Color, GradientStop, LinearGradient, RadialGradient, Shader, Transform};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromIntObject)]
 pub enum ShadingType {

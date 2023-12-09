@@ -439,6 +439,11 @@ where
     pub fn len(&self) -> usize {
         self.data.len() / self.base.components()
     }
+
+    #[allow(dead_code)]
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
 }
 
 impl<T> ColorSpaceTrait<T> for IndexedColorSpace<T>
