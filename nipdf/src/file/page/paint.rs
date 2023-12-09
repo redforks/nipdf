@@ -323,6 +323,8 @@ impl State {
 
     fn update_user_to_device(&mut self) {
         self.user_to_device = self.ctm.then(&self.dimension.logic_device_to_device());
+        debug!("ctm to {:?}", self.ctm);
+        debug!("user_to_device to {:?}", self.user_to_device);
     }
 
     fn set_ctm(&mut self, ctm: UserToLogicDeviceSpace) {
@@ -333,8 +335,6 @@ impl State {
     fn concat_ctm(&mut self, ctm: UserToUserSpace) {
         self.ctm = ctm.then(&self.ctm);
         self.update_user_to_device();
-        debug!("ctm to {:?}", self.ctm);
-        debug!("user_to_device to {:?}", self.user_to_device);
     }
 
     fn set_line_width(&mut self, w: f32) {
@@ -378,9 +378,7 @@ impl State {
     }
 
     fn image_transform(&self, img_w: u32, img_h: u32) -> ImageToDeviceSpace {
-        image_to_user_space(img_w, img_h)
-            .then(&self.ctm)
-            .then(&self.dimension.logic_device_to_device())
+        image_to_user_space(img_w, img_h).then(&self.user_to_device)
     }
 
     fn get_mask(&self) -> Option<Ref<Mask>> {
@@ -1061,7 +1059,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             0,
             img,
             &paint,
-            dbg!(state.image_transform(img.width(), img.height()).into_skia()),
+            state.image_transform(img.width(), img.height()).into_skia(),
             None,
         );
 
@@ -1666,7 +1664,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                     // space so we need to transform path to user space,
                     // and zoom line_width in device space
                     let path = path
-                        .transform(dbg!(text_object.runtime_matrix().into_skia()))
+                        .transform(text_object.runtime_matrix().into_skia())
                         .unwrap();
 
                     Self::render_glyph(
@@ -1766,9 +1764,11 @@ impl TextObject {
     }
 
     pub fn type3_runtime_matrix(&self, font_matrix: &GlyphToTextSpace) -> GlyphToUserSpace {
-        font_matrix
-            .then_scale(self.font_size * self.horiz_scaling, self.font_size)
-            .then(&self.matrix)
+        dbg!(
+            font_matrix
+                .then_scale(self.font_size * self.horiz_scaling.abs(), self.font_size)
+                .then(&self.matrix)
+        )
     }
 
     pub fn runtime_matrix(&self) -> GlyphToUserSpace {
@@ -1818,6 +1818,7 @@ impl TextObject {
         if word_boundary {
             w += self.word_spacing;
         }
+        w;
         self.matrix = move_text_space_right(&self.matrix, w);
     }
 
