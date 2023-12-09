@@ -321,14 +321,18 @@ impl State {
         r
     }
 
+    fn update_user_to_device(&mut self) {
+        self.user_to_device = self.ctm.then(&self.dimension.logic_device_to_device());
+    }
+
     fn set_ctm(&mut self, ctm: UserToLogicDeviceSpace) {
         self.ctm = self.dimension.transform.then(&ctm);
-        self.user_to_device = self.ctm.then(&self.dimension.logic_device_to_device());
+        self.update_user_to_device();
     }
 
     fn concat_ctm(&mut self, ctm: UserToUserSpace) {
         self.ctm = ctm.then(&self.ctm);
-        self.user_to_device = self.ctm.then(&self.dimension.logic_device_to_device());
+        self.update_user_to_device();
         debug!("ctm to {:?}", self.ctm);
         debug!("user_to_device to {:?}", self.user_to_device);
     }
@@ -1049,7 +1053,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         )
         .unwrap();
         img.pixels_mut()
-            .for_each(|p| p[3] = if s_mask { p[0] } else { 255 - p[0] });
+            .for_each(|p| p[3] = if s_mask { p[0] } else { !p[0] });
 
         let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
         canvas.draw_pixmap(
@@ -1057,9 +1061,10 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             0,
             img,
             &paint,
-            state.image_transform(img.width(), img.height()).into_skia(),
+            dbg!(state.image_transform(img.width(), img.height()).into_skia()),
             None,
         );
+
         Ok(Mask::from_pixmap(canvas.as_ref(), MaskType::Alpha))
     }
 
@@ -1125,9 +1130,15 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let state = self.stack.last().unwrap();
 
         if x_object.image_mask()? {
+            let is_invert = if let Some(decode) = x_object.decode()? {
+                let domain = decode.0[0];
+                domain.start > domain.end
+            } else {
+                false
+            };
             let x_object = x_object.as_stream()?;
             let img = x_object.decode_image(self.resources.resolver(), Some(self.resources))?;
-            let mask = Self::load_image_as_mask(img.into_rgba8(), state, false)?;
+            let mask = Self::load_image_as_mask(img.into_rgba8(), state, is_invert)?;
             // fill canvas with current fill paint with mask
             let paint = state.get_fill_paint();
             self.canvas.fill_rect(
@@ -1588,8 +1599,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
     fn show_text(&mut self, text: &[u8]) {
         let text_object = self.text_object();
-        let render_mode = text_object.render_mode;
-        if render_mode == TextRenderingMode::Invisible {
+        if text_object.render_mode == TextRenderingMode::Invisible {
             return;
         }
 
@@ -1607,45 +1617,32 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             .get_op(self.text_object().font_name.as_ref().unwrap())
             .unwrap();
         let state = self.stack.last().unwrap();
-
         let mut text_object = state.text_object.clone();
         text_object.set_units_per_em(op.units_per_em() as f32);
-        let glyph_render = self
-            .font_cache
-            .get_glyph_render(self.text_object().font_name.as_ref().unwrap())
-            .unwrap();
-
-        let mut text_clip_path = Path::default();
         let user_to_device = state.user_to_device.into_skia();
-        let type3_font = font.as_type3();
 
-        let canvas = &mut self.canvas;
-        if let Some(type3_font) = type3_font {
+        if let Some(type3_font) = font.as_type3() {
             let font_matrix = type3_font.matrix().unwrap();
             let resources = type3_font.resources().unwrap();
-            let resources = resources.as_ref();
-            let state = state.clone();
-            let ctm = state.ctm;
             let mut render = Render::new(
-                canvas,
+                &mut self.canvas,
                 RenderOptionBuilder::default()
                     .dimension(self.dimension)
                     .background_color(SkiaColor::TRANSPARENT)
-                    .state(state)
+                    .state(state.clone())
                     .build(),
-                resources.unwrap_or(self.resources),
+                resources.as_ref().unwrap_or(self.resources),
             );
 
             for ch in op.decode_chars(text) {
-                render.current_mut().set_ctm(
+                render.current_mut().set_ctm(dbg!(
                     text_object
                         .type3_runtime_matrix(&font_matrix)
-                        .then(&ctm)
+                        .then(&state.ctm)
                         .with_destination()
-                        .with_source(),
-                );
-                let gid = op.char_to_gid(ch);
-                if let Some(glyph) = type3_font.get_glyph(gid) {
+                        .with_source()
+                ));
+                if let Some(glyph) = type3_font.get_glyph(op.char_to_gid(ch)) {
                     for op in glyph.operations() {
                         render.exec(op.clone());
                     }
@@ -1654,9 +1651,14 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                 text_object.to_next_pos(op.char_width(ch), ch == 32);
             }
         } else {
+            let glyph_render = self
+                .font_cache
+                .get_glyph_render(self.text_object().font_name.as_ref().unwrap())
+                .unwrap();
+            let mut text_clip_path = Path::default();
+
             for ch in op.decode_chars(text) {
-                let gid = op.char_to_gid(ch);
-                let path = Self::gen_glyph_path(glyph_render, gid);
+                let path = Self::gen_glyph_path(glyph_render, op.char_to_gid(ch));
                 if !path.is_empty() {
                     let path = path.finish().unwrap();
                     // pre transform path to user space, render_glyph() will zoom line_width,
@@ -1672,21 +1674,22 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                         &mut text_clip_path,
                         state,
                         path,
-                        render_mode,
+                        text_object.render_mode,
                         user_to_device,
                     );
                 }
 
                 text_object.to_next_pos(op.char_width(ch), ch == 32);
             }
+
+            if let Some(text_clip_path) = text_clip_path.finish() {
+                self.text_object_mut()
+                    .text_clipping_path
+                    .path_builder()
+                    .push_path(text_clip_path);
+            }
         }
         self.current_mut().text_object = text_object;
-        if let Some(text_clip_path) = text_clip_path.finish() {
-            self.text_object_mut()
-                .text_clipping_path
-                .path_builder()
-                .push_path(text_clip_path);
-        }
     }
 
     fn show_texts(&mut self, texts: &[TextStringOrNumber]) {
@@ -1769,7 +1772,6 @@ impl TextObject {
     }
 
     pub fn runtime_matrix(&self) -> GlyphToUserSpace {
-        dbg!((self.em_ratio, self.font_size, self.horiz_scaling));
         Transform2D::scale(self.em_ratio.0, self.em_ratio.0)
             .then_scale(self.font_size * self.horiz_scaling, self.font_size)
             .then(&self.matrix)
