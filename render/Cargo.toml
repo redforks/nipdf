@@ -39,6 +39,12 @@ hex = { version = "0.4.3" }
 ureq = "2.8"
 nipdf-test-macro = { path = "../test-macro" }
 maplit = "1.0"
+criterion = "0.5"
+mimalloc = "0.1"
+
+[[bench]]
+name = "page_render"
+harness = false
 
 [lints]
 workspace = true
