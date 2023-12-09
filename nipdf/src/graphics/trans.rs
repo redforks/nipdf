@@ -1,7 +1,7 @@
 //! Lib to translate coordinates. Including CTM,
 //! line matrix, pattern etc, and User space to screen space.
 
-use euclid::{vec2, Length, Point2D, Transform2D};
+use euclid::{Length, Point2D, Transform2D};
 use num::traits::AsPrimitive;
 
 pub enum UserSpace {}
@@ -16,7 +16,6 @@ pub enum PatternSpace {}
 pub enum GlyphSpace {}
 pub enum ThousandthsOfText {}
 pub type GlyphLength = Length<f32, GlyphSpace>;
-pub type TextLength = Length<f32, TextSpace>;
 pub type TextPoint = Point2D<f32, TextSpace>;
 pub type GlyphToTextSpace = Transform2D<f32, GlyphSpace, TextSpace>;
 pub type GlyphToUserSpace = Transform2D<f32, GlyphSpace, UserSpace>;

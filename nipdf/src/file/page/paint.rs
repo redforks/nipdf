@@ -13,7 +13,7 @@ use crate::{
             move_text_space_right, GlyphLength, GlyphSpace, GlyphToTextSpace, GlyphToUserSpace,
             ImageToDeviceSpace, IntoSkiaTransform, LogicDeviceToDeviceSpace, PatternSpace,
             PatternToUserSpace, TextPoint, TextSpace, TextToUserSpace, ThousandthsOfText,
-            UserSpace, UserToDeviceSpace, UserToLogicDeviceSpace, UserToUserSpace,
+            UserToDeviceSpace, UserToLogicDeviceSpace, UserToUserSpace,
         },
         ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, PatternType, Point,
         RenderingIntent, ShadingPatternDict, TextRenderingMode, TilingPatternDict,
@@ -40,7 +40,6 @@ use tiny_skia::{
 };
 
 mod fonts;
-use aes::cipher::typenum::Len;
 use euclid::{default::Size2D, Angle, Length, Scale, Transform2D};
 use fonts::*;
 
@@ -1623,7 +1622,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             let font_matrix = type3_font.matrix().unwrap();
             let resources = type3_font.resources().unwrap();
             let mut render = Render::new(
-                &mut self.canvas,
+                self.canvas,
                 RenderOptionBuilder::default()
                     .dimension(self.dimension)
                     .background_color(SkiaColor::TRANSPARENT)
@@ -1633,20 +1632,20 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             );
 
             for ch in op.decode_chars(text) {
-                render.current_mut().set_ctm(dbg!(
+                render.current_mut().set_ctm(
                     text_object
                         .type3_runtime_matrix(&font_matrix)
                         .then(&state.ctm)
                         .with_destination()
-                        .with_source()
-                ));
+                        .with_source(),
+                );
                 if let Some(glyph) = type3_font.get_glyph(op.char_to_gid(ch)) {
                     for op in glyph.operations() {
                         render.exec(op.clone());
                     }
                 }
 
-                text_object.to_next_pos(op.char_width(ch), ch == 32);
+                text_object.move_to_next_pos(op.char_width(ch), ch == 32);
             }
         } else {
             let glyph_render = self
@@ -1677,7 +1676,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                     );
                 }
 
-                text_object.to_next_pos(op.char_width(ch), ch == 32);
+                text_object.move_to_next_pos(op.char_width(ch), ch == 32);
             }
 
             if let Some(text_clip_path) = text_clip_path.finish() {
@@ -1764,11 +1763,9 @@ impl TextObject {
     }
 
     pub fn type3_runtime_matrix(&self, font_matrix: &GlyphToTextSpace) -> GlyphToUserSpace {
-        dbg!(
-            font_matrix
-                .then_scale(self.font_size * self.horiz_scaling.abs(), self.font_size)
-                .then(&self.matrix)
-        )
+        font_matrix
+            .then_scale(self.font_size * self.horiz_scaling.abs(), self.font_size)
+            .then(&self.matrix)
     }
 
     pub fn runtime_matrix(&self) -> GlyphToUserSpace {
@@ -1813,12 +1810,11 @@ impl TextObject {
         self.update_horizontal_scale();
     }
 
-    fn to_next_pos(&mut self, glyph_width: GlyphLength, word_boundary: bool) {
+    fn move_to_next_pos(&mut self, glyph_width: GlyphLength, word_boundary: bool) {
         let mut w = glyph_width * self.em_ratio * self.font_size + self.char_spacing;
         if word_boundary {
             w += self.word_spacing;
         }
-        w;
         self.matrix = move_text_space_right(&self.matrix, w);
     }
 

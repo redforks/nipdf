@@ -796,7 +796,7 @@ pub use xref::{Entry as XRefEntry, Section as XRefSection, *};
 mod frame;
 use crate::{
     file::DataContainer,
-    graphics::trans::{GlyphSpace, ThousandthsOfText},
+    graphics::trans::{ThousandthsOfText},
     parser,
 };
 pub use frame::*;

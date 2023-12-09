@@ -2,7 +2,7 @@ use crate::{
     file::{page::ResourceDict, ObjectResolver},
     graphics::{
         parse_operations,
-        trans::{GlyphLength, GlyphSpace, GlyphToTextSpace},
+        trans::{GlyphLength, GlyphToTextSpace},
         NameOrDictByRef, NameOrStream, Operation,
     },
     object::{PdfObject, Stream},
@@ -14,7 +14,7 @@ use crate::{
 use anyhow::{anyhow, bail, Ok, Result as AnyResult};
 use cff_parser::{File as CffFile, Font as CffFont};
 use either::Either;
-use euclid::Length;
+
 use font_kit::loaders::freetype::Font as FontKitFont;
 use fontdb::{Database, Family, Query, Source, Weight};
 use heck::ToTitleCase;
@@ -931,7 +931,7 @@ impl FontOp for Type0FontOp {
     fn char_width(&self, ch: u32) -> GlyphLength {
         let mut char_width = self.widths.char_width(ch).unwrap_or(self.default_width) as f32;
         char_width = char_width / 1000.0 * self.units_per_em as f32;
-        GlyphLength::new(char_width as f32)
+        GlyphLength::new(char_width)
     }
 
     fn units_per_em(&self) -> u16 {

@@ -28,7 +28,6 @@ use smallvec::SmallVec;
 use std::{
     borrow::{Borrow, Cow},
     fmt::Display,
-    io::{Cursor, SeekFrom},
     iter::{once, repeat},
     num::NonZeroU32,
     ops::Range,
@@ -191,7 +190,7 @@ fn decode_image<'a, M: ImageMetadata>(
             0
         };
 
-        let mut r = BitReader::<_, BigEndian>::new(data.borrow() as &[u8]);
+        let mut r = BitReader::<_, BigEndian>::new(data as &[u8]);
         for y in 0..h {
             for x in 0..w {
                 img.put_pixel(x, y, Luma([if r.read_bit().unwrap() { 255u8 } else { 0 }]));

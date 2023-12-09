@@ -37,10 +37,6 @@ fn cmyk_to_rgb() {
     assert_eq!(rgb, [0, 173, 239, 255]);
 }
 
-fn to_f32(v: impl ColorCompConvertTo<f32>) -> f32 {
-    v.into_color_comp()
-}
-
 fn to_u8(v: impl ColorCompConvertTo<u8>) -> u8 {
     v.into_color_comp()
 }

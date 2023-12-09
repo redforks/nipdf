@@ -26,7 +26,7 @@ use std::num::NonZeroU32;
 pub(crate) mod color_space;
 mod pattern;
 pub(crate) mod trans;
-use self::trans::{GlyphSpace, TextPoint, TextSpace, ThousandthsOfText, UserToUserSpace};
+use self::trans::{TextPoint, TextSpace, UserToUserSpace};
 pub(crate) use pattern::*;
 
 pub(crate) mod shading;
