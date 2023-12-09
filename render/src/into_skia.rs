@@ -1,4 +1,4 @@
-use nipdf::graphics::Point;
+use nipdf::{file::Rectangle, graphics::Point};
 
 pub trait IntoSkia {
     type Output;
@@ -10,5 +10,28 @@ impl IntoSkia for Point {
 
     fn into_skia(self) -> Self::Output {
         Self::Output::from_xy(self.x, self.y)
+    }
+}
+
+impl IntoSkia for Rectangle {
+    type Output = tiny_skia::Rect;
+
+    fn into_skia(self) -> Self::Output {
+        Self::Output::from_ltrb(self.left_x, self.lower_y, self.right_x, self.upper_y).unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rectangle_to_skia() {
+        let rect = Rectangle::from_xywh(98.0, 519.0, 423.0, -399.0);
+        let skia_rect: tiny_skia::Rect = rect.into_skia();
+        assert_eq!(
+            skia_rect,
+            tiny_skia::Rect::from_ltrb(98.0, 519.0 - 399.0, 98.0 + 423.0, 519.0).unwrap()
+        );
     }
 }

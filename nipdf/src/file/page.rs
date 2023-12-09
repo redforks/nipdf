@@ -67,12 +67,6 @@ impl Rectangle {
     }
 }
 
-impl From<Rectangle> for tiny_skia::Rect {
-    fn from(rect: Rectangle) -> Self {
-        Self::from_ltrb(rect.left_x, rect.lower_y, rect.right_x, rect.upper_y).unwrap()
-    }
-}
-
 /// Convert from raw array, auto re-order to (left_x, lower_y, right_x, upper_y),
 /// see PDF 32000-1:2008 7.9.5
 impl TryFrom<&Object> for Rectangle {

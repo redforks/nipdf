@@ -1,6 +1,6 @@
 use crate::{
     shading::{build_shading, Axial, Radial, Shading},
-    PageDimension, RenderOption, RenderOptionBuilder,
+    IntoSkia, PageDimension, RenderOption, RenderOptionBuilder,
 };
 use anyhow::Result as AnyResult;
 use educe::Educe;
@@ -509,7 +509,7 @@ impl Path {
 
     pub fn append_rect(&mut self, p: Point, w: f32, h: f32) {
         let r = Rectangle::from_xywh(p.x, p.y, w, h);
-        self.path_builder().push_rect(r.into());
+        self.path_builder().push_rect(r.into_skia());
     }
 
     /// Build path and clear the path builder, return None if path is empty
@@ -570,7 +570,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         };
 
         if let Some(rect) = option.crop {
-            state.clip_non_zero(PathBuilder::from_rect(rect.into()), true);
+            state.clip_non_zero(PathBuilder::from_rect(rect.into_skia()), true);
         }
 
         Self {
@@ -1085,7 +1085,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             (
                 Transform::identity(),
                 ctm,
-                PathBuilder::from_rect(b_box.into()),
+                PathBuilder::from_rect(b_box.into_skia()),
             )
         } else if let Some((path, _)) = &state.mask {
             (ctm, Transform::identity(), (**path).clone())
@@ -1100,7 +1100,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                         self.device_width() as f32,
                         self.device_height() as f32,
                     )
-                    .into(),
+                    .into_skia(),
                 ),
             )
         };

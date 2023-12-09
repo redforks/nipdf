@@ -19,16 +19,6 @@ fn rectangle_from_array(
     (rect.left_x, rect.lower_y, rect.right_x, rect.upper_y)
 }
 
-#[test]
-fn rectangle_to_skia() {
-    let rect = Rectangle::from_xywh(98.0, 519.0, 423.0, -399.0);
-    let skia_rect: tiny_skia::Rect = rect.into();
-    assert_eq!(
-        skia_rect,
-        tiny_skia::Rect::from_ltrb(98.0, 519.0 - 399.0, 98.0 + 423.0, 519.0).unwrap()
-    );
-}
-
 #[test_case(1, vec![(1, vec![2]), (2, vec![])]=> vec![2u32]; "one page")]
 #[test_case(1, vec![
     (1, vec![2, 3, 4]),
