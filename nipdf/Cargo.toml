@@ -56,8 +56,6 @@ test-case = "3.1.0"
 test-log = "0.2.12"
 mockall = "0.11"
 hex-literal = "0.4"
-maplit = "1.0"
-ureq = "2.8"
 
 [lints]
 workspace = true
