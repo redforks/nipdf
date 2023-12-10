@@ -1014,6 +1014,25 @@ impl Object {
             _ => Box::new(std::iter::once(self)),
         }
     }
+
+    /// Update array items in place, if array is shared, clone it first.
+    pub fn update_array_items(arr: &mut Array, mut f: impl FnMut(&mut Object)) {
+        match Rc::get_mut(arr) {
+            Some(r) => {
+                for o in r.iter_mut() {
+                    f(o);
+                }
+            }
+            None => {
+                let mut ar: Vec<_> = arr.iter().cloned().collect();
+                for o in ar.iter_mut() {
+                    f(o);
+                }
+                let ar: Rc<[Object]> = ar.into();
+                *arr = ar;
+            }
+        }
+    }
 }
 
 impl<const N: usize> TryFrom<&Object> for [f32; N] {

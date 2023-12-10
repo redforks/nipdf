@@ -260,23 +260,7 @@ fn decrypt_string(encrypt_info: &EncryptInfo, id: ObjectId, mut o: Object) -> Ob
         }
 
         fn arr(&self, arr: &mut Array) {
-            match Rc::get_mut(arr) {
-                Some(r) => {
-                    for o in r.iter_mut() {
-                        self.decrypt(o);
-                    }
-                }
-                None => {
-                    let mut r = Vec::with_capacity(arr.len());
-                    for o in arr.iter() {
-                        let mut o = o.clone();
-                        self.decrypt(&mut o);
-                        r.push(o);
-                    }
-                    let r: Rc<[Object]> = r.into();
-                    *arr = r;
-                }
-            }
+            Object::update_array_items(arr, |o| self.decrypt(o));
         }
 
         fn stream(&self, stream: &mut Rc<Stream>) {

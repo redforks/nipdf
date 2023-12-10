@@ -11,6 +11,7 @@ use anyhow::anyhow;
 use image::DynamicImage;
 use prescript::{sname, Name};
 
+
 struct InlineStreamDict<'a>(&'a Dictionary);
 
 impl<'a> InlineStreamDict<'a> {
@@ -83,23 +84,35 @@ pub struct InlineStream<'a> {
 /// Replace abbr name values with standard names.
 /// Replace abbr name values with standard names.
 fn normalize_name(d: &mut Dictionary) {
+    fn replace_name(name: &mut Name) {
+        match name.as_str() {
+            "G" => *name = sname("DeviceGray"),
+            "RGB" => *name = sname("DeviceRGB"),
+            "CMYK" => *name = sname("DeviceCMYK"),
+            "I" => *name = sname("Indexed"),
+            "AHx" => *name = sname("ASCIIHexDecode"),
+            "A85" => *name = sname("ASCII85Decode"),
+            "LZW" => *name = sname("LZWDecode"),
+            "Fl" => *name = sname("FlateDecode"),
+            "RL" => *name = sname("RunLengthDecode"),
+            "CCF" => *name = sname("CCITTFaxDecode"),
+            "DCT" => *name = sname("DCTDecode"),
+            _ => {}
+        }
+    }
+
     d.update(|d| {
         for (_, v) in d.iter_mut() {
-            if let Object::Name(v) = v {
-                match v.as_str() {
-                    "G" => *v = sname("DeviceGray"),
-                    "RGB" => *v = sname("DeviceRGB"),
-                    "CMYK" => *v = sname("DeviceCMYK"),
-                    "I" => *v = sname("Indexed"),
-                    "AHx" => *v = sname("ASCIIHexDecode"),
-                    "A85" => *v = sname("ASCII85Decode"),
-                    "LZW" => *v = sname("LZWDecode"),
-                    "Fl" => *v = sname("FlateDecode"),
-                    "RL" => *v = sname("RunLengthDecode"),
-                    "CCF" => *v = sname("CCITTFaxDecode"),
-                    "DCT" => *v = sname("DCTDecode"),
-                    _ => {}
+            match v {
+                Object::Name(v) => replace_name(v),
+                Object::Array(arr) => {
+                    Object::update_array_items(arr, |v| {
+                        if let Object::Name(v) = v {
+                            replace_name(v);
+                        }
+                    });
                 }
+                _ => {}
             }
         }
     })
