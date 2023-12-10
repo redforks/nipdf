@@ -25,7 +25,9 @@ codegen-units = 1
 
 [profile.dev]
 split-debuginfo = "unpacked"
-opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
 
 [workspace.lints.clippy]
 empty_structs_with_brackets = "warn"
