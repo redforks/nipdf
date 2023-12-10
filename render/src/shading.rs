@@ -1,4 +1,4 @@
-use crate::IntoSkia;
+use crate::{into_skia::to_skia_color, IntoSkia};
 use anyhow::Result as AnyResult;
 use educe::Educe;
 use log::error;
@@ -167,7 +167,7 @@ fn build_stops(
     let f = f.pop().unwrap();
     fn create_stop<F: Function>(cs: &ColorSpace, f: &F, x: f32) -> AnyResult<(f32, Color)> {
         let rv = f.call(&[x])?;
-        let color = cs.to_skia_color(&rv);
+        let color = to_skia_color(cs, &rv);
         Ok((x, color))
     }
 

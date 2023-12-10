@@ -1,4 +1,5 @@
 use crate::{
+    into_skia::to_skia_color,
     shading::{build_shading, Axial, Radial, Shading},
     IntoSkia, PageDimension, RenderOption, RenderOptionBuilder,
 };
@@ -187,7 +188,7 @@ impl ColorState {
     }
 
     pub fn set_color_args(&mut self, color_args: impl AsRef<[f32]>) {
-        let color = self.color_space.to_skia_color(color_args.as_ref());
+        let color = to_skia_color(&self.color_space, color_args.as_ref());
         self.set_color(color);
     }
 
@@ -1245,7 +1246,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             ColorArgsOrName::Name((name, color_args)) => {
                 let color = color_args
                     .as_ref()
-                    .map(|args| get_state(self).color_space.to_skia_color(args.as_ref()));
+                    .map(|args| to_skia_color(&get_state(self).color_space, args.as_ref()));
                 let pattern = self.resources.pattern()?;
                 let pattern = &pattern[name];
                 match pattern.pattern_type()? {
@@ -1312,7 +1313,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let background_color = if let Some(args) = shading.background()? {
             let cs = shading.color_space()?;
             let cs = ColorSpace::from_args(&cs, resources.resolver(), Some(resources)).unwrap();
-            Some(cs.to_skia_color(args.as_ref()))
+            Some(to_skia_color(&cs, args.as_ref()))
         } else {
             None
         };

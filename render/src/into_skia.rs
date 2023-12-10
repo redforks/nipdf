@@ -1,7 +1,10 @@
 use euclid::Transform2D;
 use nipdf::{
     file::Rectangle,
-    graphics::{LineCapStyle, LineJoinStyle, Point},
+    graphics::{
+        color_space::{convert_color_to, ColorComp, ColorCompConvertTo, ColorSpaceTrait},
+        LineCapStyle, LineJoinStyle, Point,
+    },
 };
 
 pub trait IntoSkia {
@@ -55,6 +58,15 @@ impl<S, D> IntoSkia for Transform2D<f32, S, D> {
     fn into_skia(self) -> Self::Output {
         tiny_skia::Transform::from_row(self.m11, self.m12, self.m21, self.m22, self.m31, self.m32)
     }
+}
+
+pub fn to_skia_color<T>(cs: &impl ColorSpaceTrait<T>, color: &[T]) -> tiny_skia::Color
+where
+    T: ColorComp + ColorCompConvertTo<f32>,
+{
+    let rgba = cs.to_rgba(color);
+    let [r, g, b, a] = convert_color_to(&rgba);
+    tiny_skia::Color::from_rgba(r, g, b, a).unwrap()
 }
 
 #[cfg(test)]
