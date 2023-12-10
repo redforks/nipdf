@@ -323,7 +323,7 @@ impl State {
     }
 
     fn set_line_join(&mut self, join: LineJoinStyle) {
-        self.stroke.line_join = join.into();
+        self.stroke.line_join = join.into_skia();
     }
 
     fn set_dash_pattern(&mut self, pattern: &[f32], phase: f32) {

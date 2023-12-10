@@ -1,7 +1,8 @@
 use nipdf::{
     file::Rectangle,
-    graphics::{LineCapStyle, Point},
+    graphics::{LineCapStyle, LineJoinStyle, Point},
 };
+use tiny_skia::LineJoin;
 
 pub trait IntoSkia {
     type Output;
@@ -32,6 +33,18 @@ impl IntoSkia for LineCapStyle {
             Self::Butt => Self::Output::Butt,
             Self::Round => Self::Output::Round,
             Self::Square => Self::Output::Square,
+        }
+    }
+}
+
+impl IntoSkia for LineJoinStyle {
+    type Output = tiny_skia::LineJoin;
+
+    fn into_skia(self) -> Self::Output {
+        match self {
+            Self::Miter => Self::Output::Miter,
+            Self::Round => Self::Output::Round,
+            Self::Bevel => Self::Output::Bevel,
         }
     }
 }
