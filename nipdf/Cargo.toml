@@ -18,18 +18,18 @@ flate2 = "1.0.26"
 log = "0.4"
 jpeg-decoder = { version = "0.3.0", default-features = false }
 image = { version = "0.24.6", default-features = false }
-bitstream-io = "1.6.0"
+bitstream-io = "2.0"
 strum = { version = "0.25.0", features = ["derive"] }
 bitvec = "1.0.1"
 jpeg2k = "0.6.6"
 nipdf-macro = { path = "../macro" }
 cff-parser = { path = "../cff-parser" }
 prescript = { path = "../prescript" }
-educe = "0.4.22"
+educe = "0.5"
 pretty = "0.12.1"
 bitflags = "2.4.0"
-fontdb = "0.15.0"
-font-kit = { version = "0.11.0", features = ["loader-freetype"] }
+fontdb = "0.16.0"
+font-kit = { version = "0.12", features = ["loader-freetype"] }
 pathfinder_geometry = "0.5.1"
 weezl = "0.1.7"
 either = "1.9.0"
@@ -52,7 +52,7 @@ insta = { version = "1.29.0", features = ["ron"] }
 assert_approx_eq = "1.1"
 test-case = "3.1.0"
 test-log = "0.2.12"
-mockall = "0.11"
+mockall = "0.12"
 hex-literal = "0.4"
 
 [lints]
