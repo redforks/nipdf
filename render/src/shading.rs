@@ -6,7 +6,7 @@ use nipdf::{
     file::{Rectangle, ResourceDict},
     function::{Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
-        color_space::{ColorSpace, ColorSpaceTrait},
+        color_space::ColorSpace,
         shading::{AxialCoords, RadialCoords, ShadingDict, ShadingType},
         trans::UserToLogicDeviceSpace,
         Extend, Point, RadialCircle,

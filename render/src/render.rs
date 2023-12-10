@@ -542,6 +542,56 @@ impl Path {
     }
 }
 
+struct SkiaPathSink(PathBuilder);
+
+impl SkiaPathSink {
+    fn into_inner(self) -> PathBuilder {
+        self.0
+    }
+}
+
+impl PathSink for SkiaPathSink {
+    #[inline]
+    fn move_to(&mut self, to: pathfinder_geometry::vector::Vector2F) {
+        self.0.move_to(to.x(), to.y());
+    }
+
+    #[inline]
+    fn line_to(&mut self, to: pathfinder_geometry::vector::Vector2F) {
+        self.0.line_to(to.x(), to.y());
+    }
+
+    #[inline]
+    fn quad_to(
+        &mut self,
+        ctrl: pathfinder_geometry::vector::Vector2F,
+        to: pathfinder_geometry::vector::Vector2F,
+    ) {
+        self.0.quad_to(ctrl.x(), ctrl.y(), to.x(), to.y());
+    }
+
+    #[inline]
+    fn cubic_to(
+        &mut self,
+        ctrl: pathfinder_geometry::line_segment::LineSegment2F,
+        to: pathfinder_geometry::vector::Vector2F,
+    ) {
+        self.0.cubic_to(
+            ctrl.from_x(),
+            ctrl.from_y(),
+            ctrl.to_x(),
+            ctrl.to_y(),
+            to.x(),
+            to.y(),
+        );
+    }
+
+    #[inline]
+    fn close(&mut self) {
+        self.0.close();
+    }
+}
+
 #[derive(Educe)]
 #[educe(Debug)]
 pub struct Render<'a, 'b, 'c> {
@@ -549,7 +599,7 @@ pub struct Render<'a, 'b, 'c> {
     stack: Vec<State>,
     path: Path,
     #[educe(Debug(ignore))]
-    font_cache: FontCache<'c>,
+    font_cache: FontCache<'c, SkiaPathSink>,
     resources: &'c ResourceDict<'a, 'b>,
     dimension: PageDimension,
 }
@@ -1368,11 +1418,10 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         Ok(())
     }
 
-    fn gen_glyph_path(glyph_render: &dyn GlyphRender, gid: u16) -> PathBuilder {
-        let mut path = PathBuilder::new();
-        let mut sink = PathSink(&mut path);
+    fn gen_glyph_path(glyph_render: &dyn GlyphRender<SkiaPathSink>, gid: u16) -> PathBuilder {
+        let mut sink = SkiaPathSink(PathBuilder::new());
         glyph_render.render(gid, &mut sink).unwrap();
-        path
+        sink.into_inner()
     }
 
     fn render_glyph(
