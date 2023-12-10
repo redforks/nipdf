@@ -59,11 +59,13 @@ fn download_file(url: &str, f: impl AsRef<Path>) -> AnyResult<()> {
 }
 
 /// These files are very rare and odd, not to be tested
-const IGNORED: [&str; 2] = [
+const IGNORED: [&str; 3] = [
     // xpdf, mupdf, are all failed to open
     "bug1020226.pdf",
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
     "bug1050040.pdf",
+    // the link is dead
+    "bug1037816.pdf.link",
 ];
 
 /// Read pdf file and render each page, to save test time,
