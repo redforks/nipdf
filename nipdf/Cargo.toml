@@ -17,10 +17,9 @@ ahash = { version = "0.8", features = ["no-rng"] }
 flate2 = "1.0.26"
 log = "0.4"
 jpeg-decoder = { version = "0.3.0", default-features = false }
-image = { version = "0.24.6", default-features = false, features = ["png"] }
+image = { version = "0.24.6", default-features = false }
 bitstream-io = "1.6.0"
 strum = { version = "0.25.0", features = ["derive"] }
-png = "0.17.9"
 bitvec = "1.0.1"
 jpeg2k = "0.6.6"
 nipdf-macro = { path = "../macro" }
