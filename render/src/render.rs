@@ -319,7 +319,7 @@ impl State {
     }
 
     fn set_line_cap(&mut self, cap: LineCapStyle) {
-        self.stroke.line_cap = cap.into();
+        self.stroke.line_cap = cap.into_skia();
     }
 
     fn set_line_join(&mut self, join: LineJoinStyle) {

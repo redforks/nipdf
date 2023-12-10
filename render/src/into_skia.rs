@@ -1,4 +1,7 @@
-use nipdf::{file::Rectangle, graphics::Point};
+use nipdf::{
+    file::Rectangle,
+    graphics::{LineCapStyle, Point},
+};
 
 pub trait IntoSkia {
     type Output;
@@ -18,6 +21,18 @@ impl IntoSkia for Rectangle {
 
     fn into_skia(self) -> Self::Output {
         Self::Output::from_ltrb(self.left_x, self.lower_y, self.right_x, self.upper_y).unwrap()
+    }
+}
+
+impl IntoSkia for LineCapStyle {
+    type Output = tiny_skia::LineCap;
+
+    fn into_skia(self) -> Self::Output {
+        match self {
+            Self::Butt => Self::Output::Butt,
+            Self::Round => Self::Output::Round,
+            Self::Square => Self::Output::Square,
+        }
     }
 }
 
