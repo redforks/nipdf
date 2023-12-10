@@ -20,9 +20,9 @@ use nipdf::{
         pattern::{PatternType, ShadingPatternDict, TilingPatternDict},
         trans::{
             f_flip, image_to_user_space, move_text_space_pos, move_text_space_right, GlyphLength,
-            GlyphSpace, GlyphToTextSpace, GlyphToUserSpace, ImageToDeviceSpace, IntoSkiaTransform,
-            PatternSpace, PatternToUserSpace, TextPoint, TextSpace, TextToUserSpace,
-            ThousandthsOfText, UserToDeviceSpace, UserToLogicDeviceSpace, UserToUserSpace,
+            GlyphSpace, GlyphToTextSpace, GlyphToUserSpace, ImageToDeviceSpace, PatternSpace,
+            PatternToUserSpace, TextPoint, TextSpace, TextToUserSpace, ThousandthsOfText,
+            UserToDeviceSpace, UserToLogicDeviceSpace, UserToUserSpace,
         },
         ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, Operation, Point,
         RenderingIntent, TextRenderingMode,

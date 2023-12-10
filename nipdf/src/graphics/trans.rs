@@ -29,17 +29,6 @@ pub type TextToUserSpace = Transform2D<f32, TextSpace, UserSpace>;
 pub type FormToUserSpace = Transform2D<f32, FormSpace, UserSpace>;
 pub type PatternToUserSpace = Transform2D<f32, PatternSpace, UserSpace>;
 
-/// Convert current object into tiny_skia `Transform`.
-pub trait IntoSkiaTransform {
-    fn into_skia(self) -> tiny_skia::Transform;
-}
-
-impl<S, D> IntoSkiaTransform for Transform2D<f32, S, D> {
-    fn into_skia(self) -> tiny_skia::Transform {
-        tiny_skia::Transform::from_row(self.m11, self.m12, self.m21, self.m22, self.m31, self.m32)
-    }
-}
-
 pub fn f_flip<S, D>(height: f32) -> Transform2D<f32, S, D> {
     Transform2D::scale(1.0, -1.0).then_translate((0.0, height).into())
 }

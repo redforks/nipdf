@@ -8,7 +8,7 @@ use nipdf::{
     graphics::{
         color_space::{ColorSpace, ColorSpaceTrait},
         shading::{AxialCoords, RadialCoords, ShadingDict, ShadingType},
-        trans::{IntoSkiaTransform, UserToLogicDeviceSpace},
+        trans::UserToLogicDeviceSpace,
         Extend, Point, RadialCircle,
     },
     object::PdfObject,

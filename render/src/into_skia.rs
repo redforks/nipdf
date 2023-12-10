@@ -1,8 +1,8 @@
+use euclid::Transform2D;
 use nipdf::{
     file::Rectangle,
     graphics::{LineCapStyle, LineJoinStyle, Point},
 };
-use tiny_skia::LineJoin;
 
 pub trait IntoSkia {
     type Output;
@@ -49,9 +49,18 @@ impl IntoSkia for LineJoinStyle {
     }
 }
 
+impl<S, D> IntoSkia for Transform2D<f32, S, D> {
+    type Output = tiny_skia::Transform;
+
+    fn into_skia(self) -> Self::Output {
+        tiny_skia::Transform::from_row(self.m11, self.m12, self.m21, self.m22, self.m31, self.m32)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use euclid::default::Transform2D;
 
     #[test]
     fn rectangle_to_skia() {
@@ -61,5 +70,17 @@ mod tests {
             skia_rect,
             tiny_skia::Rect::from_ltrb(98.0, 519.0 - 399.0, 98.0 + 423.0, 519.0).unwrap()
         );
+    }
+
+    #[test]
+    fn transform_to_skia() {
+        let m = Transform2D::new(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
+        let skia = m.into_skia();
+        assert_eq!(skia.sx, 1.0);
+        assert_eq!(skia.ky, 2.0);
+        assert_eq!(skia.kx, 3.0);
+        assert_eq!(skia.sy, 4.0);
+        assert_eq!(skia.tx, 5.0);
+        assert_eq!(skia.ty, 6.0);
     }
 }
