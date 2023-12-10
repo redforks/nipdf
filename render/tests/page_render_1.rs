@@ -42,8 +42,8 @@ fn image_separation_color_space() {
 /// Some link files point to dead link, replace with alternative download url
 fn replace_dead_link(f: &str) -> Option<&'_ str> {
     let dead_links: HashMap<&str, &str> = hashmap! {
-        "bpl13210.pdf.link" => "https://raw.githubusercontent.com/Hehouhua/papers_read/master/bpl13210.pdf
-    ",
+        "bpl13210.pdf.link" => "https://raw.githubusercontent.com/Hehouhua/papers_read/master/bpl13210.pdf",
+        "artofwar.pdf.link" => "http://www.thegoyslife.com/Documents/Books/ArtofWarbySunTzu.pdf",
     };
     let p = Path::new(f);
     dead_links.get(p.file_name()?.to_str()?).copied()

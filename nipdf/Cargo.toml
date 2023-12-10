@@ -14,7 +14,8 @@ num = "0.4.0"
 memchr = "2.5.0"
 anyhow = "1.0.71"
 ahash = { version = "0.8", features = ["no-rng"] }
-flate2 = "1.0.26"
+# use zlib instead of rust_backend, rust_backend failed decode artofwar.pdf Pg 141 (start 0)
+flate2 = { version = "1.0.26", default-features = false, features = ["zlib"] }
 log = "0.4"
 jpeg-decoder = { version = "0.3.0", default-features = false }
 image = { version = "0.24.6", default-features = false }
