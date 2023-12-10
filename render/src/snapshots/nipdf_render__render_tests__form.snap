@@ -1,0 +1,5 @@
+---
+source: render/src/render_tests.rs
+expression: "&decode_file_page(\"sample_files/xobject/form.pdf\", 0).unwrap()"
+---
+"dbcd20b7e195813d045da17f838fa485"

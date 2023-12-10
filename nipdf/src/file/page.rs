@@ -1,5 +1,3 @@
-use self::paint::Render;
-pub use self::paint::{RenderOption, RenderOptionBuilder};
 use crate::{
     function::Domains,
     graphics::{
@@ -11,14 +9,13 @@ use crate::{
 };
 use ahash::{HashMap, HashMapExt};
 use educe::Educe;
-use image::RgbaImage;
 use log::error;
 use nipdf_macro::{pdf_object, TryFromNameObject};
 use nom::Finish;
 use prescript::{sname, Name};
 use std::iter::once;
 
-mod paint;
+pub mod paint;
 
 #[derive(Debug, Copy, Clone, PartialEq, Default)]
 pub struct Rectangle {
@@ -67,12 +64,6 @@ impl Rectangle {
             self.right_x * v,
             self.upper_y * v,
         )
-    }
-}
-
-impl From<Rectangle> for tiny_skia::Rect {
-    fn from(rect: Rectangle) -> Self {
-        Self::from_ltrb(rect.left_x, rect.lower_y, rect.right_x, rect.upper_y).unwrap()
     }
 }
 
@@ -165,7 +156,7 @@ pub trait XObjectDictTrait {
 }
 
 impl<'a, 'b> XObjectDict<'a, 'b> {
-    fn as_stream(&self) -> Result<&Stream, ObjectValueError> {
+    pub fn as_stream(&self) -> Result<&Stream, ObjectValueError> {
         self.d.resolver().resolve(self.id().unwrap())?.stream()
     }
 }
@@ -280,6 +271,10 @@ impl<'a, 'b: 'a> Page<'a, 'b> {
             .expect("page must have media box")
     }
 
+    pub fn rotate(&self) -> i32 {
+        self.d.rotate().unwrap()
+    }
+
     /// Return None if crop_box not exist, or empty.
     pub fn crop_box(&self) -> Option<Rectangle> {
         let r = self.iter_to_root().find_map(|d| d.crop_box().unwrap());
@@ -291,7 +286,7 @@ impl<'a, 'b: 'a> Page<'a, 'b> {
         r
     }
 
-    fn resources(&self) -> ResourceDict<'a, 'b> {
+    pub fn resources(&self) -> ResourceDict<'a, 'b> {
         self.iter_to_root()
             .find_map(|d| d.resources().unwrap())
             .expect("page must have resources")
@@ -306,43 +301,6 @@ impl<'a, 'b: 'a> Page<'a, 'b> {
             .map(|s| s.decode(self.d.d.resolver()).map(|v| v.into_owned()))
             .collect::<Result<_, _>>()?;
         Ok(PageContent { bufs })
-    }
-
-    pub fn render_steps(
-        &self,
-        option: RenderOptionBuilder,
-        steps: Option<usize>,
-        no_crop: bool,
-    ) -> Result<RgbaImage, ObjectValueError> {
-        let media_box = self.media_box();
-        let crop_box = self.crop_box();
-        let mut canvas_box = crop_box.unwrap_or(media_box);
-        // if canvas is empty, use default A4 size
-        if canvas_box.width() == 0.0 || canvas_box.height() == 0.0 {
-            canvas_box = Rectangle::from_xywh(0.0, 0.0, 597.6, 842.4);
-        }
-        let option = option
-            .page_box(&canvas_box, self.d.rotate().unwrap())
-            .crop((!no_crop && need_crop(crop_box, media_box)).then(|| crop_box.unwrap()))
-            .rotate(self.d.rotate().unwrap())
-            .build();
-        let content = self.content()?;
-        let ops = content.operations();
-        let resource = self.resources();
-        let mut canvas = option.create_canvas();
-        let mut renderer = Render::new(&mut canvas, option.clone(), &resource);
-        if let Some(steps) = steps {
-            ops.into_iter().take(steps).for_each(|op| renderer.exec(op));
-        } else {
-            ops.into_iter().for_each(|op| renderer.exec(op));
-        };
-        drop(renderer);
-        let r = option.to_image(canvas);
-        Ok(r)
-    }
-
-    pub fn render(&self, option: RenderOptionBuilder) -> Result<RgbaImage, ObjectValueError> {
-        self.render_steps(option, None, false)
     }
 
     /// Parse page tree to get all pages
@@ -380,13 +338,6 @@ impl<'a, 'b: 'a> Page<'a, 'b> {
             d: d.clone(),
             parents_to_root: parents,
         })
-    }
-}
-
-fn need_crop(crop: Option<Rectangle>, media: Rectangle) -> bool {
-    match crop {
-        None => false,
-        Some(crop) => crop != media,
     }
 }
 

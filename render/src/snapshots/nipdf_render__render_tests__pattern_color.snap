@@ -1,0 +1,5 @@
+---
+source: render/src/render_tests.rs
+expression: "&decode_file_page(\"sample_files/normal/SamplePdf1_12mb_6pages.pdf\",\n            5).unwrap()"
+---
+"479134b3e911c17f453aa266f4991438"

@@ -2,10 +2,8 @@ use anyhow::Result as AnyResult;
 use clap::{arg, Command};
 use image::ImageOutputFormat;
 use mimalloc::MiMalloc;
-use nipdf::{
-    file::{File, RenderOptionBuilder},
-    object::Object,
-};
+use nipdf::{file::File, object::Object};
+use nipdf_render::{render_steps, RenderOptionBuilder};
 use std::{
     collections::HashSet,
     io::{copy, stdout, BufWriter, Cursor},
@@ -102,7 +100,8 @@ fn dump_page(
     } else if to_png {
         let page_no = page_no.expect("page number is required");
         let page = &catalog.pages()?[page_no as usize];
-        let image = page.render_steps(
+        let image = render_steps(
+            page,
             RenderOptionBuilder::new().zoom(zoom.unwrap_or(1.75)),
             steps,
             no_crop,

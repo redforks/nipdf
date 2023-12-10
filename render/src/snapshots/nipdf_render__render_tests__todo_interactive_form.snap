@@ -1,0 +1,5 @@
+---
+source: render/src/render_tests.rs
+expression: "&decode_file_page(\"pdf.js/test/pdfs/160F-2019.pdf\", 0).unwrap()"
+---
+"52325edd3e19610742e4c0fa63cf7a3e"

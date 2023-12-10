@@ -163,7 +163,7 @@ fn decode_stream<'a, 'b>(
 }
 
 /// Abstract image metadata.for decode image from `Stream` and `InlineStream`
-pub(crate) trait ImageMetadata {
+pub trait ImageMetadata {
     fn width(&self) -> AnyResult<u32>;
     fn height(&self) -> AnyResult<u32>;
     fn bits_per_component(&self) -> AnyResult<Option<u8>>;

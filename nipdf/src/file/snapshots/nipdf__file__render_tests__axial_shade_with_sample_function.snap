@@ -1,5 +1,0 @@
----
-source: nipdf/src/file/render_tests.rs
-expression: "&decode_file_page(\"pdf.js/web/compressed.tracemonkey-pldi-09.pdf\",\n            10).unwrap()"
----
-"5d6f285a4378562e7508015e3c8f4125"

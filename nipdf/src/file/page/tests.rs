@@ -3,7 +3,7 @@ use crate::{
     file::{ObjectResolver, XRefTable},
     object::{Array, Object},
 };
-use std::{num::NonZeroU32};
+use std::num::NonZeroU32;
 use test_case::test_case;
 
 #[test_case(1.0, 2, 3.0, 4.0 => (1.0, 2.0, 3.0, 4.0); "normal")]
@@ -17,16 +17,6 @@ fn rectangle_from_array(
     let arr = vec![x1.into(), y1.into(), x2.into(), y2.into()].into();
     let rect = Rectangle::try_from(&arr).unwrap();
     (rect.left_x, rect.lower_y, rect.right_x, rect.upper_y)
-}
-
-#[test]
-fn rectangle_to_skia() {
-    let rect = Rectangle::from_xywh(98.0, 519.0, 423.0, -399.0);
-    let skia_rect: tiny_skia::Rect = rect.into();
-    assert_eq!(
-        skia_rect,
-        tiny_skia::Rect::from_ltrb(98.0, 519.0 - 399.0, 98.0 + 423.0, 519.0).unwrap()
-    );
 }
 
 #[test_case(1, vec![(1, vec![2]), (2, vec![])]=> vec![2u32]; "one page")]
@@ -56,11 +46,7 @@ fn parse_page_tree(root_id: u32, tree: Vec<(u32, Vec<u32>)>) -> Vec<u32> {
         );
         dict.insert(
             sname("Kids"),
-            Object::Array(
-                kids.into_iter()
-                    .map(Object::new_ref)
-                    .collect::<Array>(),
-            ),
+            Object::Array(kids.into_iter().map(Object::new_ref).collect::<Array>()),
         );
         resolver.setup_object(id, Object::Dictionary(Dictionary::from(dict)));
     }

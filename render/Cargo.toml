@@ -1,0 +1,49 @@
+[package]
+name = "nipdf-render"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+nipdf = { path = "../nipdf" }
+cff-parser = { path = "../cff-parser" }
+prescript = { path = "../prescript" }
+log = "0.4"
+flate2 = "1.0.26"
+anyhow = "1.0.71"
+ahash = { version = "0.8", features = ["no-rng"] }
+tiny-skia = "0.11.2"
+once_cell = "1.17.2"
+bitvec = "1.0.1"
+png = "0.17.9"
+bitflags = "2.4.0"
+fontdb = "0.15.0"
+font-kit = { version = "0.11.0", features = ["loader-freetype"] }
+weezl = "0.1.7"
+either = "1.9.0"
+euclid = "0.22.9"
+image = { version = "0.24.6", default-features = false, features = ["png"] }
+educe = "0.4.22"
+ttf-parser = { version = "0.20", features = ["gvar-alloc"] }
+heck = "0.4"
+ouroboros = "0.18"
+nom = "7.1.3"
+
+[dev-dependencies]
+insta = { version = "1.29.0", features = ["ron"] }
+test-case = "3.1.0"
+md-5 = "0.10"
+hex = { version = "0.4.3" }
+ureq = "2.8"
+nipdf-test-macro = { path = "../test-macro" }
+maplit = "1.0"
+criterion = "0.5"
+mimalloc = "0.1"
+
+[[bench]]
+name = "page_render"
+harness = false
+
+[lints]
+workspace = true

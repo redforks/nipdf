@@ -1,5 +1,0 @@
----
-source: nipdf/src/file/render_tests.rs
-expression: "&decode_file_page(\"../../pdf/5176.CFF.pdf\", 0).unwrap()"
----
-"ac8a7196309d4aeb875bffcda7656649"

@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 nipdf = { path = "../nipdf", features = ["pretty"] }
+nipdf-render = { path = "../render" }
 env_logger = { version = "0.10.0" }
 clap = { version = "4.3.4", features = ["derive"] }
 anyhow = "1.0.75"

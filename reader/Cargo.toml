@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 nipdf = { path = "../nipdf" }
+nipdf-render = { path = "../render" }
 env_logger = { version = "0.10.0" }
 iced = { version = "0.10.0", features = ["image", "advanced"] }
 tiny-skia = "0.11.2"

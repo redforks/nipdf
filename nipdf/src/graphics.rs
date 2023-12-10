@@ -23,13 +23,14 @@ use nom::{
 use prescript::Name;
 use std::num::NonZeroU32;
 
-pub(crate) mod color_space;
-mod pattern;
-pub(crate) mod trans;
+pub mod color_space;
+pub mod pattern;
+pub mod trans;
 use self::trans::{TextPoint, TextSpace, UserToUserSpace};
 pub(crate) use pattern::*;
 
-pub(crate) mod shading;
+pub mod shading;
+pub use shading::{Extend, RadialCircle};
 
 impl<S, T> TryFrom<&Object> for Transform2D<f32, S, T> {
     type Error = ObjectValueError;
@@ -50,20 +51,7 @@ impl<S, T> TryFrom<&Object> for Transform2D<f32, S, T> {
     }
 }
 
-pub trait IntoSkia {
-    type Output;
-    fn into_skia(self) -> Self::Output;
-}
-
 pub type Point = euclid::default::Point2D<f32>;
-
-impl IntoSkia for Point {
-    type Output = tiny_skia::Point;
-
-    fn into_skia(self) -> Self::Output {
-        Self::Output::from_xy(self.x, self.y)
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Default, TryFromIntObject)]
 pub enum LineCapStyle {

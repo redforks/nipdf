@@ -1,5 +1,0 @@
----
-source: nipdf/src/file/render_tests.rs
-expression: "&decode_file_page(\"sample_files/bizarre/PDF32000_2008.pdf\", 159).unwrap()"
----
-"b1f2f6ac091e3f51e72effed3a941394"

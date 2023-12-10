@@ -269,17 +269,6 @@ pub trait ColorSpaceTrait<T> {
 
     /// Number of color components in this color space.
     fn components(&self) -> usize;
-
-    /// Convert color from current space to RGBA tiny_skia color
-    /// `color` len should at least be `components()`
-    fn to_skia_color(&self, color: &[T]) -> tiny_skia::Color
-    where
-        T: ColorComp + ColorCompConvertTo<f32>,
-    {
-        let rgba = self.to_rgba(color);
-        let rgba: [_; 4] = convert_color_to(&rgba);
-        tiny_skia::Color::from_rgba(rgba[0], rgba[1], rgba[2], rgba[3]).unwrap()
-    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -438,6 +427,11 @@ where
     #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.data.len() / self.base.components()
+    }
+
+    #[allow(dead_code)]
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
     }
 }
 

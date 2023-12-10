@@ -1,0 +1,5 @@
+---
+source: render/src/render_tests.rs
+expression: "&decode_file_page(\"../../pdf/code.pdf\", 620).unwrap()"
+---
+"3dcdafb7f63b42e7b8f34c5b9cc55470"

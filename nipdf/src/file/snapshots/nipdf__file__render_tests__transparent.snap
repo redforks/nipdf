@@ -1,5 +1,0 @@
----
-source: nipdf/src/file/render_tests.rs
-expression: "&decode_file_page(\"pdf.js/test/pdfs/alphatrans.pdf\", 0).unwrap()"
----
-"bec3412e7acd26d9f747606d53654366"

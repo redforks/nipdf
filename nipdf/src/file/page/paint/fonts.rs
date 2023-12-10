@@ -3,7 +3,7 @@ use crate::{
     graphics::{
         parse_operations,
         trans::{GlyphLength, GlyphToTextSpace},
-        NameOrDictByRef, NameOrStream, Operation,
+        NameOrDictByRef, NameOrStream, Operation, Point,
     },
     object::{PdfObject, Stream},
     text::{
@@ -14,7 +14,6 @@ use crate::{
 use anyhow::{anyhow, bail, Ok, Result as AnyResult};
 use cff_parser::{File as CffFile, Font as CffFont};
 use either::Either;
-
 use font_kit::loaders::freetype::Font as FontKitFont;
 use fontdb::{Database, Family, Query, Source, Weight};
 use heck::ToTitleCase;
@@ -24,7 +23,6 @@ use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
 use prescript::{name, sname, Encoding, Name};
 use std::{collections::HashMap, ops::RangeInclusive};
-use tiny_skia::PathBuilder;
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
 
 /// FontWidth used in Type1 and TrueType fonts
@@ -77,70 +75,87 @@ impl<'a> FreeTypeFontWidth<'a> {
     }
 }
 
-pub struct PathSink<'a>(pub &'a mut PathBuilder);
-
-struct FreeTypePathSink<'a> {
-    path: &'a mut PathBuilder,
+pub trait PathSink {
+    fn move_to(&mut self, to: Point);
+    fn line_to(&mut self, to: Point);
+    fn quad_to(&mut self, ctrl: Point, to: Point);
+    fn cubic_to(&mut self, ctrl1: Point, ctrl2: Point, to: Point);
+    fn close(&mut self);
 }
 
-impl<'a> FreeTypePathSink<'a> {
-    fn new(path: &'a mut PathBuilder) -> Self {
-        Self { path }
-    }
-}
+pub struct PathSinkWrap<'a, P>(&'a mut P);
 
-impl<'a> font_kit::outline::OutlineSink for FreeTypePathSink<'a> {
+impl<'a, S: PathSink> font_kit::outline::OutlineSink for PathSinkWrap<'a, S> {
     fn move_to(&mut self, to: Vector2F) {
-        self.path.move_to(to.x(), to.y());
+        self.0.move_to(Point::new(to.x(), to.y()));
     }
 
     fn line_to(&mut self, to: Vector2F) {
-        self.path.line_to(to.x(), to.y());
+        self.0.line_to(Point::new(to.x(), to.y()));
     }
 
     fn quadratic_curve_to(&mut self, ctrl: Vector2F, to: Vector2F) {
-        self.path.quad_to(ctrl.x(), ctrl.y(), to.x(), to.y());
+        self.0
+            .quad_to(Point::new(ctrl.x(), ctrl.y()), Point::new(to.x(), to.y()));
     }
 
     fn cubic_curve_to(&mut self, ctrl: LineSegment2F, to: Vector2F) {
-        self.path.cubic_to(
-            ctrl.from().x(),
-            ctrl.from().y(),
-            ctrl.to().x(),
-            ctrl.to().y(),
-            to.x(),
-            to.y(),
+        self.0.cubic_to(
+            Point::new(ctrl.from().x(), ctrl.from().y()),
+            Point::new(ctrl.to().x(), ctrl.to().y()),
+            Point::new(to.x(), to.y()),
         );
     }
 
     fn close(&mut self) {
-        self.path.close();
+        self.0.close();
     }
 }
 
-pub trait GlyphRender {
-    fn render(&self, gid: u16, sink: &mut PathSink) -> AnyResult<()>;
+impl<'a, S: PathSink> OutlineBuilder for PathSinkWrap<'a, S> {
+    fn move_to(&mut self, x: f32, y: f32) {
+        self.0.move_to(Point::new(x, y));
+    }
+
+    fn line_to(&mut self, x: f32, y: f32) {
+        self.0.line_to(Point::new(x, y));
+    }
+
+    fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {
+        self.0.quad_to(Point::new(x1, y1), Point::new(x, y));
+    }
+
+    fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32) {
+        self.0
+            .cubic_to(Point::new(x1, y1), Point::new(x2, y2), Point::new(x, y));
+    }
+
+    fn close(&mut self) {
+        self.0.close();
+    }
+}
+pub trait GlyphRender<P> {
+    fn render(&self, gid: u16, sink: &mut P) -> AnyResult<()>;
 }
 
 struct Type1GlyphRender<'a> {
     font: &'a FontKitFont,
 }
 
-impl<'a> GlyphRender for Type1GlyphRender<'a> {
-    fn render(&self, gid: u16, sink: &mut PathSink) -> AnyResult<()> {
-        let mut sink = FreeTypePathSink::new(sink.0);
+impl<'a, P: PathSink> GlyphRender<P> for Type1GlyphRender<'a> {
+    fn render(&self, gid: u16, sink: &mut P) -> AnyResult<()> {
         Ok(self.font.outline(
             gid as u32,
             font_kit::hinting::HintingOptions::None,
-            &mut sink,
+            &mut PathSinkWrap(sink),
         )?)
     }
 }
 
-pub trait Font {
+pub trait Font<P> {
     fn font_type(&self) -> FontType;
     fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>>;
-    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender + '_>>;
+    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender<P> + '_>>;
     fn as_type3(&self) -> Option<&Type3Font> {
         None
     }
@@ -312,7 +327,7 @@ impl<'a, 'b> Type1Font<'a, 'b> {
     }
 }
 
-impl<'a, 'b: 'a> Font for Type1Font<'a, 'b> {
+impl<'a, 'b: 'a, P: PathSink> Font<P> for Type1Font<'a, 'b> {
     fn font_type(&self) -> FontType {
         FontType::Type1
     }
@@ -326,7 +341,7 @@ impl<'a, 'b: 'a> Font for Type1Font<'a, 'b> {
         )?))
     }
 
-    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender + '_>> {
+    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender<P> + '_>> {
         Ok(Box::new(Type1GlyphRender { font: &self.font }))
     }
 }
@@ -402,46 +417,14 @@ impl<'a> FontOp for TTFParserFontOp<'a> {
     }
 }
 
-struct TTFParserPathSink<'a> {
-    path: &'a mut PathBuilder,
-}
-
-impl<'a> TTFParserPathSink<'a> {
-    pub fn new(path: &'a mut PathBuilder) -> Self {
-        Self { path }
-    }
-}
-
-impl<'a> OutlineBuilder for TTFParserPathSink<'a> {
-    fn move_to(&mut self, x: f32, y: f32) {
-        self.path.move_to(x, y);
-    }
-
-    fn line_to(&mut self, x: f32, y: f32) {
-        self.path.line_to(x, y);
-    }
-
-    fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {
-        self.path.quad_to(x1, y1, x, y);
-    }
-
-    fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32) {
-        self.path.cubic_to(x1, y1, x2, y2, x, y);
-    }
-
-    fn close(&mut self) {
-        self.path.close()
-    }
-}
-
 struct TTFParserGlyphRender<'a> {
     face: TTFFace<'a>,
 }
 
-impl<'a> GlyphRender for TTFParserGlyphRender<'a> {
-    fn render(&self, gid: u16, sink: &mut PathSink) -> AnyResult<()> {
-        let mut sink = TTFParserPathSink::new(sink.0);
-        self.face.outline_glyph(GlyphId(gid), &mut sink);
+impl<'a, P: PathSink> GlyphRender<P> for TTFParserGlyphRender<'a> {
+    fn render(&self, gid: u16, sink: &mut P) -> AnyResult<()> {
+        self.face
+            .outline_glyph(GlyphId(gid), &mut PathSinkWrap(sink));
         Ok(())
     }
 }
@@ -452,27 +435,24 @@ struct TTFParserFont<'a, 'b> {
     font_dict: FontDict<'a, 'b>,
 }
 
-impl<'a, 'b> Font for TTFParserFont<'a, 'b> {
+impl<'a, 'b, P: PathSink> Font<P> for TTFParserFont<'a, 'b> {
     fn font_type(&self) -> FontType {
         self.typ
     }
 
     fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
         let face = TTFFace::parse(&self.data, 0)?;
-        Ok(match self.font_type() {
+        Ok(match self.typ {
             FontType::TrueType | FontType::Type1 => Box::new(TTFParserFontOp::new(face)?),
             FontType::Type0 => Box::new(Type0FontOp::new(
                 &self.font_dict.type0()?,
                 face.units_per_em(),
             )?),
-            _ => unreachable!(
-                "TTFParserFont not support font type: {:?}",
-                self.font_type()
-            ),
+            _ => unreachable!("TTFParserFont not support font type: {:?}", self.typ),
         })
     }
 
-    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender + '_>> {
+    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender<P> + '_>> {
         let face = TTFFace::parse(&self.data, 0)?;
         Ok(Box::new(TTFParserGlyphRender { face }))
     }
@@ -636,19 +616,19 @@ fn standard_14_type1_font_data(font_name: &str) -> Option<&'static [u8]> {
 }
 
 #[self_referencing]
-struct FontCacheInner<'c> {
-    fonts: HashMap<Name, Box<dyn Font + 'c>>,
+struct FontCacheInner<'c, P: PathSink + 'static> {
+    fonts: HashMap<Name, Box<dyn Font<P> + 'c>>,
     #[borrows(fonts)]
     #[covariant]
     ops: HashMap<Name, Box<dyn FontOp + 'this>>,
     #[borrows(fonts)]
     #[covariant]
-    renders: HashMap<Name, Box<dyn GlyphRender + 'this>>,
+    renders: HashMap<Name, Box<dyn GlyphRender<P> + 'this>>,
 }
 
-pub struct FontCache<'c>(FontCacheInner<'c>);
+pub struct FontCache<'c, P: PathSink + 'static>(FontCacheInner<'c, P>);
 
-impl<'c> FontCache<'c> {
+impl<'c, P: PathSink + 'static> FontCache<'c, P> {
     fn load_true_type_font_from_bytes<'a, 'b>(
         font: FontDict<'a, 'b>,
         bytes: Vec<u8>,
@@ -771,7 +751,7 @@ impl<'c> FontCache<'c> {
         Type1Font::new(is_cff, bytes, font)
     }
 
-    fn scan_font<'a, 'b>(font: FontDict<'a, 'b>) -> AnyResult<Option<Box<dyn Font + 'c>>>
+    fn scan_font<'a, 'b>(font: FontDict<'a, 'b>) -> AnyResult<Option<Box<dyn Font<P> + 'c>>>
     where
         'a: 'c,
         'b: 'c,
@@ -811,7 +791,7 @@ impl<'c> FontCache<'c> {
             }
 
             FontType::Type1 => Self::load_type1_font(font.clone())
-                .map(|v| Some(Box::new(v) as Box<dyn Font + 'c>))
+                .map(|v| Some(Box::new(v) as Box<dyn Font<P> + 'c>))
                 .or_else(|err| {
                     info!(
                         "Failed to load type1 font \"{:?}\", try load as truetype",
@@ -864,7 +844,7 @@ impl<'c> FontCache<'c> {
         )?))
     }
 
-    pub fn get_font(&self, s: &Name) -> Option<&dyn Font> {
+    pub fn get_font(&self, s: &Name) -> Option<&dyn Font<P>> {
         self.0.borrow_fonts().get(s).map(|x| x.as_ref())
     }
 
@@ -872,7 +852,7 @@ impl<'c> FontCache<'c> {
         self.0.borrow_ops().get(s).map(|x| x.as_ref())
     }
 
-    pub fn get_glyph_render(&self, s: &Name) -> Option<&(dyn GlyphRender)> {
+    pub fn get_glyph_render(&self, s: &Name) -> Option<&(dyn GlyphRender<P>)> {
         self.0.borrow_renders().get(s).map(|x| x.as_ref())
     }
 }
@@ -952,7 +932,7 @@ impl<'a, 'b> CIDFontType0Font<'a, 'b> {
     }
 }
 
-impl<'a, 'b> Font for CIDFontType0Font<'a, 'b> {
+impl<'a, 'b, P: PathSink + 'static> Font<P> for CIDFontType0Font<'a, 'b> {
     fn font_type(&self) -> FontType {
         FontType::Type0
     }
@@ -961,7 +941,7 @@ impl<'a, 'b> Font for CIDFontType0Font<'a, 'b> {
         Ok(Box::new(Type0FontOp::new(&self.font_dict.type0()?, 1000)?))
     }
 
-    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender + '_>> {
+    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender<P> + '_>> {
         Ok(Box::new(Type1GlyphRender { font: &self.font }))
     }
 }
@@ -1072,7 +1052,7 @@ impl<'a, 'b> Type3Font<'a, 'b> {
     }
 }
 
-impl<'a, 'b> Font for Type3Font<'a, 'b> {
+impl<'a, 'b, P: PathSink + 'static> Font<P> for Type3Font<'a, 'b> {
     fn font_type(&self) -> FontType {
         FontType::Type3
     }
@@ -1081,11 +1061,11 @@ impl<'a, 'b> Font for Type3Font<'a, 'b> {
         Ok(Box::new(Type3FontOp::new(&self.dict, &self.name_to_gid)?))
     }
 
-    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender + '_>> {
+    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender<P> + '_>> {
         struct StubGlyphRender;
 
-        impl GlyphRender for StubGlyphRender {
-            fn render(&self, _gid: u16, _sink: &mut PathSink) -> AnyResult<()> {
+        impl<P> GlyphRender<P> for StubGlyphRender {
+            fn render(&self, _gid: u16, _sink: &mut P) -> AnyResult<()> {
                 // Paint::show_texts() do not use GlyphRender to render glyphs
                 unreachable!()
             }

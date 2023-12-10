@@ -3,18 +3,6 @@
 use super::*;
 use euclid::{approxeq::ApproxEq, default::Transform2D as Transform, Angle, Point2D};
 
-#[test]
-fn to_skia() {
-    let m = Transform::new(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
-    let skia = m.into_skia();
-    assert_eq!(skia.sx, 1.0);
-    assert_eq!(skia.ky, 2.0);
-    assert_eq!(skia.kx, 3.0);
-    assert_eq!(skia.sy, 4.0);
-    assert_eq!(skia.tx, 5.0);
-    assert_eq!(skia.ty, 6.0);
-}
-
 fn new_assert<S, T, SP: Into<Point2D<f32, S>>, TP: Into<Point2D<f32, T>>>(
     m: Transform2D<f32, S, T>,
 ) -> impl Fn(SP, TP) {

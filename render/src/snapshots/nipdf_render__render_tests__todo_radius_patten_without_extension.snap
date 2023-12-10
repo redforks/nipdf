@@ -1,0 +1,5 @@
+---
+source: render/src/render_tests.rs
+expression: "&decode_file_page(\"sample_files/bizarre/PDF32000_2008.pdf\", 746).unwrap()"
+---
+"9ea584cb0e82b62292221fe56161ef53"
