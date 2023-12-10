@@ -112,7 +112,6 @@ fn schema_ref_id_arr(ids: Option<&[u32]>) -> Vec<u32> {
         .collect()
 }
 
-#[cfg(feature = "pretty")]
 #[test_case(Object::Null => "null")]
 #[test_case(true => "true")]
 #[test_case(1i32 => "1")]

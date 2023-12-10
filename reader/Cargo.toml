@@ -24,7 +24,7 @@ notify-rust = { version = "4", default-features = false, optional = true, featur
 mimalloc = "0.1"
 
 [features]
-debug = ["notify-rust", "iced-debug", "nipdf/pretty", "iced_aw/menu"]
+debug = ["notify-rust", "iced-debug", "iced_aw/menu"]
 # enable iced debug, hit F12 to toggle iced debug display 
 iced-debug = ["iced/debug"]
 

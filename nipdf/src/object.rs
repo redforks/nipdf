@@ -1034,11 +1034,9 @@ impl<const N: usize> TryFrom<&Object> for [f32; N] {
 
 use either::Either;
 use euclid::Length;
-#[cfg(feature = "pretty")]
 use pretty::RcDoc;
 use static_assertions::assert_eq_size;
 
-#[cfg(feature = "pretty")]
 impl Object {
     pub fn to_doc(&self) -> RcDoc {
         fn name_to_doc(n: &Name) -> RcDoc<'_> {
@@ -1095,10 +1093,8 @@ impl Object {
     }
 }
 
-#[cfg(feature = "pretty")]
 struct PrettyNumber(f32);
 
-#[cfg(feature = "pretty")]
 impl Display for PrettyNumber {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.0)

@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-nipdf = { path = "../nipdf", features = ["pretty"] }
+nipdf = { path = "../nipdf" }
 nipdf-render = { path = "../render" }
 env_logger = { version = "0.10.0" }
 clap = { version = "4.3.4", features = ["derive"] }
