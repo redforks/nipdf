@@ -3,7 +3,7 @@ use crate::{
     graphics::{
         parse_operations,
         trans::{GlyphLength, GlyphToTextSpace},
-        NameOrDictByRef, NameOrStream, Operation,
+        NameOrDictByRef, NameOrStream, Operation, Point,
     },
     object::{PdfObject, Stream},
     text::{
@@ -76,10 +76,10 @@ impl<'a> FreeTypeFontWidth<'a> {
 }
 
 pub trait PathSink {
-    fn move_to(&mut self, to: Vector2F);
-    fn line_to(&mut self, to: Vector2F);
-    fn quad_to(&mut self, ctrl: Vector2F, to: Vector2F);
-    fn cubic_to(&mut self, ctrl: LineSegment2F, to: Vector2F);
+    fn move_to(&mut self, to: Point);
+    fn line_to(&mut self, to: Point);
+    fn quad_to(&mut self, ctrl: Point, to: Point);
+    fn cubic_to(&mut self, ctrl1: Point, ctrl2: Point, to: Point);
     fn close(&mut self);
 }
 
@@ -87,19 +87,24 @@ pub struct PathSinkWrap<'a, P>(&'a mut P);
 
 impl<'a, S: PathSink> font_kit::outline::OutlineSink for PathSinkWrap<'a, S> {
     fn move_to(&mut self, to: Vector2F) {
-        self.0.move_to(to);
+        self.0.move_to(Point::new(to.x(), to.y()));
     }
 
     fn line_to(&mut self, to: Vector2F) {
-        self.0.line_to(to);
+        self.0.line_to(Point::new(to.x(), to.y()));
     }
 
     fn quadratic_curve_to(&mut self, ctrl: Vector2F, to: Vector2F) {
-        self.0.quad_to(ctrl, to);
+        self.0
+            .quad_to(Point::new(ctrl.x(), ctrl.y()), Point::new(to.x(), to.y()));
     }
 
     fn cubic_curve_to(&mut self, ctrl: LineSegment2F, to: Vector2F) {
-        self.0.cubic_to(ctrl, to);
+        self.0.cubic_to(
+            Point::new(ctrl.from().x(), ctrl.from().y()),
+            Point::new(ctrl.to().x(), ctrl.to().y()),
+            Point::new(to.x(), to.y()),
+        );
     }
 
     fn close(&mut self) {
@@ -109,22 +114,20 @@ impl<'a, S: PathSink> font_kit::outline::OutlineSink for PathSinkWrap<'a, S> {
 
 impl<'a, S: PathSink> OutlineBuilder for PathSinkWrap<'a, S> {
     fn move_to(&mut self, x: f32, y: f32) {
-        self.0.move_to(Vector2F::new(x, y));
+        self.0.move_to(Point::new(x, y));
     }
 
     fn line_to(&mut self, x: f32, y: f32) {
-        self.0.line_to(Vector2F::new(x, y));
+        self.0.line_to(Point::new(x, y));
     }
 
     fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {
-        self.0.quad_to(Vector2F::new(x1, y1), Vector2F::new(x, y));
+        self.0.quad_to(Point::new(x1, y1), Point::new(x, y));
     }
 
     fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32) {
-        self.0.cubic_to(
-            LineSegment2F::new(Vector2F::new(x1, y1), Vector2F::new(x2, y2)),
-            Vector2F::new(x, y),
-        );
+        self.0
+            .cubic_to(Point::new(x1, y1), Point::new(x2, y2), Point::new(x, y));
     }
 
     fn close(&mut self) {

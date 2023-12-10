@@ -20,7 +20,6 @@ png = "0.17.9"
 bitflags = "2.4.0"
 fontdb = "0.15.0"
 font-kit = { version = "0.11.0", features = ["loader-freetype"] }
-pathfinder_geometry = "0.5.1"
 weezl = "0.1.7"
 either = "1.9.0"
 euclid = "0.22.9"

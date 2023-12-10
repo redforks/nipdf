@@ -552,38 +552,24 @@ impl SkiaPathSink {
 
 impl PathSink for SkiaPathSink {
     #[inline]
-    fn move_to(&mut self, to: pathfinder_geometry::vector::Vector2F) {
-        self.0.move_to(to.x(), to.y());
+    fn move_to(&mut self, to: Point) {
+        self.0.move_to(to.x, to.y);
     }
 
     #[inline]
-    fn line_to(&mut self, to: pathfinder_geometry::vector::Vector2F) {
-        self.0.line_to(to.x(), to.y());
+    fn line_to(&mut self, to: Point) {
+        self.0.line_to(to.x, to.y);
     }
 
     #[inline]
-    fn quad_to(
-        &mut self,
-        ctrl: pathfinder_geometry::vector::Vector2F,
-        to: pathfinder_geometry::vector::Vector2F,
-    ) {
-        self.0.quad_to(ctrl.x(), ctrl.y(), to.x(), to.y());
+    fn quad_to(&mut self, ctrl: Point, to: Point) {
+        self.0.quad_to(ctrl.x, ctrl.y, to.x, to.y);
     }
 
     #[inline]
-    fn cubic_to(
-        &mut self,
-        ctrl: pathfinder_geometry::line_segment::LineSegment2F,
-        to: pathfinder_geometry::vector::Vector2F,
-    ) {
-        self.0.cubic_to(
-            ctrl.from_x(),
-            ctrl.from_y(),
-            ctrl.to_x(),
-            ctrl.to_y(),
-            to.x(),
-            to.y(),
-        );
+    fn cubic_to(&mut self, ctrl1: Point, ctrl2: Point, to: Point) {
+        self.0
+            .cubic_to(ctrl1.x, ctrl1.y, ctrl2.x, ctrl2.y, to.x, to.y);
     }
 
     #[inline]
