@@ -77,11 +77,18 @@ impl BufPos {
     }
 }
 
-struct FilterDict<'a>(&'a Dictionary);
+struct FilterDict<'a, 'b> {
+    d: &'b Dictionary,
+    r: Option<&'b ObjectResolver<'a>>,
+}
 
-impl<'a> FilterDict<'a> {
-    fn alt_get(&self, id1: &Name, id2: &Name) -> Option<&'a Object> {
-        self.0.get(id1).or_else(|| self.0.get(id2))
+impl<'a, 'b> FilterDict<'a, 'b> {
+    pub fn new(d: &'b Dictionary, r: Option<&'b ObjectResolver<'a>>) -> Self {
+        Self { d, r }
+    }
+
+    fn alt_get(&self, id1: &Name, id2: &Name) -> Option<&'b Object> {
+        self.d.get(id1).or_else(|| self.d.get(id2))
     }
 
     /// Get object value of `Filter` field, or `F` field if `Filter` not defined.
@@ -109,7 +116,7 @@ impl<'a> FilterDict<'a> {
     /// Get object value of `DecodeParms` field, or `DP` field if `DecodeParms` not defined.
     /// If value is array, its items should be Dictionary or None,
     /// Otherwise, it should be Dictionary.
-    pub fn parameters(&self) -> Result<Vec<Option<&'a Dictionary>>, ObjectValueError> {
+    pub fn parameters(&self) -> Result<Vec<Option<&'b Dictionary>>, ObjectValueError> {
         let v = self.alt_get(&KEY_FILTER_PARAMS, &sname("DP"));
         let Some(v) = v else {
             return Ok(vec![]);
@@ -121,6 +128,11 @@ impl<'a> FilterDict<'a> {
                 .map(|v| match v {
                     Object::Dictionary(d) => Ok(Some(d)),
                     Object::Null => Ok(None),
+                    Object::Reference(r) => self
+                        .r
+                        .unwrap()
+                        .resolve(r.id().id())
+                        .and_then(|o| o.as_dict().map(Some)),
                     _ => {
                         error!("DecodeParms is not Dictionary or Array of Dictionary");
                         Err(ObjectValueError::UnexpectedType)
@@ -137,9 +149,9 @@ impl<'a> FilterDict<'a> {
 }
 
 /// Iterate pairs of filter name and its parameter
-fn iter_filters(
-    d: FilterDict<'_>,
-) -> Result<impl Iterator<Item = (Name, Option<&'_ Dictionary>)>, ObjectValueError> {
+fn iter_filters<'a, 'b>(
+    d: FilterDict<'a, 'b>,
+) -> Result<impl Iterator<Item = (Name, Option<&'b Dictionary>)>, ObjectValueError> {
     let filters = d.filters()?;
     let params = d.parameters()?;
     Ok(filters
@@ -154,7 +166,7 @@ fn decode_stream<'a, 'b>(
     buf: impl Into<Cow<'a, [u8]>>,
     resolver: Option<&ObjectResolver<'a>>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
-    let filter_dict = FilterDict(filter_dict);
+    let filter_dict = FilterDict::new(filter_dict, resolver);
     let mut decoded = FilterDecodedData::Bytes(buf.into());
     for (filter_name, params) in iter_filters(filter_dict)? {
         decoded = filter(decoded.into_bytes()?, resolver, &filter_name, params)?;
@@ -951,7 +963,7 @@ impl Stream {
         if self.0.contains_key(&KEY_FFILTER) {
             return Err(ObjectValueError::ExternalStreamNotSupported);
         }
-        let d = FilterDict(&self.0);
+        let d = FilterDict::new(&self.0, None);
         iter_filters(d)
     }
 }
