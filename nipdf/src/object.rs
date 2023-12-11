@@ -9,7 +9,6 @@ use std::{
     borrow::{Borrow, Cow},
     fmt::{Debug, Display},
     iter::{repeat, Peekable},
-    num::NonZeroU32,
     rc::Rc,
     str::from_utf8,
 };
@@ -294,7 +293,7 @@ pub trait Resolver {
         &'b self,
         c: &'c C,
         id: &Name,
-    ) -> Result<(Option<NonZeroU32>, &'c Object), ObjectValueError>;
+    ) -> Result<(Option<RuntimeObjectId>, &'c Object), ObjectValueError>;
 }
 
 impl Resolver for () {
@@ -310,7 +309,7 @@ impl Resolver for () {
         &'b self,
         c: &'c C,
         id: &Name,
-    ) -> Result<(Option<NonZeroU32>, &'c Object), ObjectValueError> {
+    ) -> Result<(Option<RuntimeObjectId>, &'c Object), ObjectValueError> {
         c.get_value(id)
             .map(|o| {
                 debug_assert!(
@@ -329,18 +328,18 @@ where
     R: Resolver,
 {
     fn new(
-        id: Option<NonZeroU32>,
+        id: Option<RuntimeObjectId>,
         dict: &'b Dictionary,
         r: &'b R,
     ) -> Result<Self, ObjectValueError>;
 
     fn checked(
-        id: Option<NonZeroU32>,
+        id: Option<RuntimeObjectId>,
         dict: &'b Dictionary,
         r: &'b R,
     ) -> Result<Option<Self>, ObjectValueError>;
 
-    fn id(&self) -> Option<NonZeroU32>;
+    fn id(&self) -> Option<RuntimeObjectId>;
 
     fn dict(&self) -> &Dictionary;
 
@@ -438,7 +437,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
     fn _opt_resolve_container_value(
         &self,
         id: &Name,
-    ) -> Result<Option<(Option<NonZeroU32>, &'b Object)>, ObjectValueError> {
+    ) -> Result<Option<(Option<RuntimeObjectId>, &'b Object)>, ObjectValueError> {
         self.r
             .do_resolve_container_value(self.d, id)
             .map(Some)
@@ -596,7 +595,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
         })
     }
 
-    pub fn required_ref(&self, id: &Name) -> Result<NonZeroU32, ObjectValueError> {
+    pub fn required_ref(&self, id: &Name) -> Result<RuntimeObjectId, ObjectValueError> {
         self.d
             .get(id)
             .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id.clone()))?
@@ -604,13 +603,13 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
             .map(|r| r.id().id())
     }
 
-    pub fn opt_ref(&self, id: &Name) -> Result<Option<NonZeroU32>, ObjectValueError> {
+    pub fn opt_ref(&self, id: &Name) -> Result<Option<RuntimeObjectId>, ObjectValueError> {
         self.d
             .get(id)
             .map_or(Ok(None), |o| o.reference().map(|r| Some(r.id().id())))
     }
 
-    pub fn ref_id_arr(&self, id: &Name) -> Result<Vec<NonZeroU32>, ObjectValueError> {
+    pub fn ref_id_arr(&self, id: &Name) -> Result<Vec<RuntimeObjectId>, ObjectValueError> {
         self.opt_arr_map(id, |o| o.reference().map(|r| r.id().id()))
             .map(|o| o.unwrap_or_default())
     }
@@ -764,26 +763,52 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
     }
 }
 
+/// Object id has id and generation, at runtime, generation
+/// is not used, RuntimeObjectId removes generation to save space.
+#[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
+pub struct RuntimeObjectId(pub u32);
+
+impl Borrow<u32> for RuntimeObjectId {
+    fn borrow(&self) -> &u32 {
+        &self.0
+    }
+}
+
+impl Display for RuntimeObjectId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<u32> for RuntimeObjectId {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
 pub struct ObjectId {
-    id: NonZeroU32,
+    id: RuntimeObjectId,
     generation: u16,
 }
 
 impl ObjectId {
-    pub fn new(id: NonZeroU32, generation: u16) -> Self {
-        Self { id, generation }
+    pub fn new(id: impl Into<RuntimeObjectId>, generation: u16) -> Self {
+        Self {
+            id: id.into(),
+            generation,
+        }
     }
 
     #[cfg(test)]
     pub fn empty() -> Self {
         Self {
-            id: NonZeroU32::new(1u32).unwrap(),
+            id: 1.into(),
             generation: 0,
         }
     }
 
-    pub fn id(&self) -> NonZeroU32 {
+    pub fn id(&self) -> RuntimeObjectId {
         self.id
     }
 
@@ -824,7 +849,7 @@ pub enum ObjectValueError {
     #[error("Stream length not defined")]
     StreamLengthNotDefined,
     #[error("Object not found by id {0}")]
-    ObjectIDNotFound(NonZeroU32),
+    ObjectIDNotFound(RuntimeObjectId),
     #[error("Parse error: {0}")]
     ParseError(String),
     #[error("Unexpected dict schema type, schema: {0}")]
@@ -940,7 +965,7 @@ impl From<Vec<Object>> for Object {
 
 impl Object {
     pub fn new_ref(id: u32) -> Self {
-        Self::Reference(Reference::new_u32(id, 0))
+        Self::Reference(Reference::new(id, 0))
     }
 
     pub fn is_null(&self) -> bool {
@@ -1371,13 +1396,8 @@ impl From<HexString> for Object {
 pub struct Reference(ObjectId);
 
 impl Reference {
-    pub fn new(id: NonZeroU32, generation: u16) -> Self {
+    pub fn new(id: impl Into<RuntimeObjectId>, generation: u16) -> Self {
         Self(ObjectId::new(id, generation))
-    }
-
-    /// Panic if id is Zero
-    pub fn new_u32(id: u32, generation: u16) -> Self {
-        Self(ObjectId::new(NonZeroU32::new(id).unwrap(), generation))
     }
 
     pub fn id(&self) -> ObjectId {
@@ -1388,7 +1408,7 @@ impl Reference {
 #[cfg(test)]
 impl From<u32> for Object {
     fn from(value: u32) -> Self {
-        Self::Reference(Reference::new_u32(value, 0))
+        Self::Reference(Reference::new(value, 0))
     }
 }
 

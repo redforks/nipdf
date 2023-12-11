@@ -12,7 +12,6 @@ use nipdf_test_macro::pdf_file_test_cases;
 use std::{
     collections::hash_map::HashMap,
     io::BufWriter,
-    num::NonZeroU32,
     path::{Path, PathBuf},
 };
 use test_case::test_case;
@@ -25,7 +24,7 @@ fn decode_image(id: u32) -> AnyResult<String> {
     let buf = std::fs::read(path)?;
     let f = File::parse(buf, "", "").unwrap_or_else(|_| panic!("failed to parse {path:?}"));
     let resolver = f.resolver()?;
-    let obj = resolver.resolve(NonZeroU32::new(id).unwrap())?;
+    let obj = resolver.resolve(id)?;
     let image = obj.stream()?.decode_image(&resolver, None)?;
     let hash = Md5::digest(image.into_bytes());
     Ok(hex::encode(hash))

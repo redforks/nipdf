@@ -3,7 +3,6 @@ use nipdf::{
     file::File,
     object::{Object, ObjectValueError},
 };
-use std::num::NonZeroU32;
 
 #[test_log::test]
 fn scan_objects() {
@@ -15,7 +14,7 @@ fn scan_objects() {
         let resolver = f.resolver().unwrap();
         for id in 1..resolver.n() {
             print!("scan object: {id}");
-            match resolver.resolve(NonZeroU32::new(id as u32).unwrap()) {
+            match resolver.resolve(id as u32) {
                 Err(ObjectValueError::ObjectIDNotFound(_)) => {
                     print!(" not found")
                 }

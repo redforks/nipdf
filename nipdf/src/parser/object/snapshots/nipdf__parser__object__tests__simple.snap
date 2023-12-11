@@ -6,7 +6,9 @@ expression: parse_reference(buf.as_ref()).unwrap()
     [],
     Reference(
         ObjectId {
-            id: 1,
+            id: RuntimeObjectId(
+                1,
+            ),
             generation: 0,
         },
     ),

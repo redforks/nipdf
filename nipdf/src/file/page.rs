@@ -4,7 +4,7 @@ use crate::{
         parse_operations2, shading::ShadingDict, trans::FormToUserSpace, ColorArgs, ColorSpaceArgs,
         LineCapStyle, LineJoinStyle, Operation, PatternDict, Point, RenderingIntent,
     },
-    object::{Dictionary, Object, ObjectValueError, PdfObject, Stream},
+    object::{Dictionary, Object, ObjectValueError, PdfObject, RuntimeObjectId, Stream},
     text::FontDict,
 };
 use ahash::{HashMap, HashMapExt};
@@ -257,8 +257,8 @@ pub struct Page<'a, 'b> {
 }
 
 impl<'a, 'b: 'a> Page<'a, 'b> {
-    pub fn id(&self) -> u32 {
-        self.d.id().unwrap().get()
+    pub fn id(&self) -> RuntimeObjectId {
+        self.d.id().unwrap()
     }
 
     fn iter_to_root(&self) -> impl Iterator<Item = &PageDict<'a, 'b>> {

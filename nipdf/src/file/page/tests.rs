@@ -3,7 +3,6 @@ use crate::{
     file::{ObjectResolver, XRefTable},
     object::{Array, Object},
 };
-use std::num::NonZeroU32;
 use test_case::test_case;
 
 #[test_case(1.0, 2, 3.0, 4.0 => (1.0, 2.0, 3.0, 4.0); "normal")]
@@ -51,10 +50,6 @@ fn parse_page_tree(root_id: u32, tree: Vec<(u32, Vec<u32>)>) -> Vec<u32> {
         resolver.setup_object(id, Object::Dictionary(Dictionary::from(dict)));
     }
 
-    let pages = Page::parse(
-        resolver
-            .resolve_pdf_object(NonZeroU32::new(root_id).unwrap())
-            .unwrap(),
-    );
-    pages.unwrap().into_iter().map(|p| p.id()).collect()
+    let pages = Page::parse(resolver.resolve_pdf_object(root_id).unwrap());
+    pages.unwrap().into_iter().map(|p| p.id().0).collect()
 }

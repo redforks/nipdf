@@ -1,12 +1,14 @@
 ---
 source: nipdf/src/parser/object/tests.rs
-expression: parse_indirected_object(buf.as_ref()).unwrap()
+expression: parse_indirect_object(buf.as_ref()).unwrap()
 ---
 (
     [],
     IndirectObject(
         ObjectId {
-            id: 1,
+            id: RuntimeObjectId(
+                1,
+            ),
             generation: 0,
         },
         Null,

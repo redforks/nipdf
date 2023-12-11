@@ -6,7 +6,6 @@ use crate::{
 use assert_approx_eq::assert_approx_eq;
 use mockall::predicate::*;
 use prescript::name;
-use std::num::NonZeroU32;
 use test_case::test_case;
 use tinyvec::tiny_vec;
 
@@ -123,7 +122,7 @@ endobj
 "#;
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
-    let args = ColorSpaceArgs::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap())?)?;
+    let args = ColorSpaceArgs::try_from(resolver.resolve(1)?)?;
     let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None)?;
     assert_eq!(ColorSpace::DeviceGray, color_space);
 
@@ -149,7 +148,7 @@ endobj
         let buf = buf.as_bytes();
         let xref = XRefTable::from_buf(buf);
         let resolver = ObjectResolver::new(buf, &xref, None);
-        let args = ColorSpaceArgs::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap())?)?;
+        let args = ColorSpaceArgs::try_from(resolver.resolve(1)?)?;
         let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None)?;
         assert_eq!(exp, color_space);
     }
@@ -184,7 +183,7 @@ endobj
 "#;
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
-    let args = ColorSpaceArgs::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap())?)?;
+    let args = ColorSpaceArgs::try_from(resolver.resolve(1)?)?;
     let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None)?;
     assert_eq!(
         ColorSpace::Separation(Box::new(SeparationColorSpace {
@@ -211,7 +210,7 @@ endobj
 fn indexed(buf: &[u8]) -> AnyResult<()> {
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
-    let args = ColorSpaceArgs::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap())?).unwrap();
+    let args = ColorSpaceArgs::try_from(resolver.resolve(1)?).unwrap();
     let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None).unwrap();
     assert_eq!(
         ColorSpace::Indexed(Box::new(IndexedColorSpace {
@@ -232,7 +231,7 @@ endobj
 "#;
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
-    let args = ColorSpaceArgs::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap()).unwrap())
+    let args = ColorSpaceArgs::try_from(resolver.resolve(1).unwrap())
         .unwrap();
     let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None).unwrap();
     assert_eq!(
@@ -256,7 +255,7 @@ endobj
 "#;
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
-    let args = ColorSpaceArgs::try_from(resolver.resolve(NonZeroU32::new(1u32).unwrap()).unwrap())
+    let args = ColorSpaceArgs::try_from(resolver.resolve(1).unwrap())
         .unwrap();
     let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None).unwrap();
     assert_eq!(

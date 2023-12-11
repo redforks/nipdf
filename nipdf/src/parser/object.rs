@@ -219,14 +219,11 @@ pub fn parse_indirect_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
         Either::Right((dict, start, length)) => Object::Stream(Rc::new(Stream::new(
             dict,
             BufPos::new(offset as u16 + start, length),
-            ObjectId::new(NonZeroU32::new(id).unwrap(), gen),
+            ObjectId::new(id, gen),
         ))),
     };
     let (input, _) = opt(ws_prefixed(tag("endobj")))(input)?;
-    Ok((
-        input,
-        IndirectObject::new(NonZeroU32::new(id).unwrap(), gen, obj),
-    ))
+    Ok((input, IndirectObject::new(id.into(), gen, obj)))
 }
 
 /// Parse stream wrapped in indirect object tag,
@@ -251,7 +248,7 @@ fn parse_reference(input: &[u8]) -> ParseResult<Reference> {
         // Integer(0), Reference(1 0)
         delimited(whitespace_or_comment, tag(b"R"), not(peek(tag("G")))),
     )(input)?;
-    Ok((input, Reference::new_u32(id, gen)))
+    Ok((input, Reference::new(id, gen)))
 }
 
 #[cfg(test)]

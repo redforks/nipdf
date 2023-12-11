@@ -1,7 +1,6 @@
-use super::{Dictionary, Object, ObjectValueError, XRefSection};
+use super::{Dictionary, Object, ObjectValueError, RuntimeObjectId, XRefSection};
 use crate::file::EncryptDict;
 use nipdf_macro::pdf_object;
-use std::num::NonZeroU32;
 
 /// Document id, two binary string.
 pub struct DocId(pub Box<[u8]>, pub Box<[u8]>);
@@ -26,7 +25,7 @@ impl TryFrom<&Object> for DocId {
 pub trait TrailerDictTrait {
     fn size(&self) -> i32;
     fn prev(&self) -> Option<i32>;
-    fn root(&self) -> Option<NonZeroU32>;
+    fn root(&self) -> Option<RuntimeObjectId>;
     #[nested]
     fn encrypt(&self) -> Option<EncryptDict<'a, 'b>>;
     #[key("ID")]

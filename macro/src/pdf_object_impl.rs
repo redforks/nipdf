@@ -216,7 +216,7 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         } else {
             Some("u32_arr")
         }
-    } else if rt == &(parse_quote!(Vec<NonZeroU32>)) {
+    } else if rt == &(parse_quote!(Vec<RuntimeObjectId>)) {
         if get_type().is_some_and(|s| s == "Ref") {
             Some("ref_id_arr")
         } else {
@@ -234,9 +234,9 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         Some("stream_dict")
     } else if rt == &(parse_quote!(Option<&'b Stream>)) {
         Some("opt_stream")
-    } else if rt == &(parse_quote!(NonZeroU32)) {
+    } else if rt == &(parse_quote!(RuntimeObjectId)) {
         Some("required_ref")
-    } else if rt == &(parse_quote!(Option<NonZeroU32>)) {
+    } else if rt == &(parse_quote!(Option<RuntimeObjectId>)) {
         Some("opt_ref")
     } else if rt == &(parse_quote!(&[u8])) {
         Some("as_byte_string")
@@ -617,16 +617,16 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             #[derive(Clone, Debug)]
             #vis struct #struct_name<'b, R> {
                 d: crate::object::SchemaDict<'b, #valid_ty, R>,
-                id: Option<std::num::NonZeroU32>,
+                id: Option<crate::object::RuntimeObjectId>,
             }
 
             impl<'b, R: crate::object::Resolver> crate::object::PdfObject<'b, R> for #struct_name<'b, R> {
-                fn new(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary, r: &'b R) -> Result<Self, crate::object::ObjectValueError> {
+                fn new(id: Option<crate::object::RuntimeObjectId>, dict: &'b crate::object::Dictionary, r: &'b R) -> Result<Self, crate::object::ObjectValueError> {
                     let d = crate::object::SchemaDict::new(dict, r, #valid_arg)?;
                     Ok(Self { d, id })
                 }
 
-                fn checked(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary, r: &'b R) -> Result<Option<Self>, crate::object::ObjectValueError> {
+                fn checked(id: Option<crate::object::RuntimeObjectId>, dict: &'b crate::object::Dictionary, r: &'b R) -> Result<Option<Self>, crate::object::ObjectValueError> {
                     let d = crate::object::SchemaDict::from(dict, r, #valid_arg)?;
                     Ok(d.map(|d| Self { d, id }))
                 }
@@ -635,7 +635,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     self.d.dict()
                 }
 
-                fn id(&self) -> Option<std::num::NonZeroU32> {
+                fn id(&self) -> Option<crate::object::RuntimeObjectId> {
                     self.id
                 }
 
@@ -653,16 +653,16 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             #[derive(Clone, Debug)]
             #vis struct #struct_name<'a, 'b> {
                 d: crate::object::SchemaDict<'b, #valid_ty, crate::file::ObjectResolver<'a>>,
-                id: Option<std::num::NonZeroU32>,
+                id: Option<crate::object::RuntimeObjectId>,
             }
 
             impl<'a, 'b> crate::object::PdfObject<'b, crate::file::ObjectResolver<'a>> for #struct_name<'a, 'b> {
-                fn new(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary, r: &'b crate::file::ObjectResolver<'a>) -> Result<Self, crate::object::ObjectValueError> {
+                fn new(id: Option<crate::object::RuntimeObjectId>, dict: &'b crate::object::Dictionary, r: &'b crate::file::ObjectResolver<'a>) -> Result<Self, crate::object::ObjectValueError> {
                     let d = crate::object::SchemaDict::new(dict, r, #valid_arg)?;
                     Ok(Self { d, id})
                 }
 
-                fn checked(id: Option<std::num::NonZeroU32>, dict: &'b crate::object::Dictionary, r: &'b crate::file::ObjectResolver<'a>) -> Result<Option<Self>, crate::object::ObjectValueError> {
+                fn checked(id: Option<crate::object::RuntimeObjectId>, dict: &'b crate::object::Dictionary, r: &'b crate::file::ObjectResolver<'a>) -> Result<Option<Self>, crate::object::ObjectValueError> {
                     let d = crate::object::SchemaDict::from(dict, r, #valid_arg)?;
                     Ok(d.map(|d| Self { d, id}))
                 }
@@ -671,7 +671,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     self.d.dict()
                 }
 
-                fn id(&self) -> Option<std::num::NonZeroU32> {
+                fn id(&self) -> Option<crate::object::RuntimeObjectId> {
                     self.id
                 }
 

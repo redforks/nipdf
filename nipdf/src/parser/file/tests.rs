@@ -93,7 +93,7 @@ fn read_xref_stream() {
     assert_eq!(
         sname("Catalog"),
         resolver
-            .resolve(NonZeroU32::new(1u32).unwrap())
+            .resolve(1)
             .unwrap()
             .as_dict()
             .unwrap()
@@ -107,7 +107,7 @@ fn read_xref_stream() {
     assert_eq!(
         1,
         resolver
-            .resolve(NonZeroU32::new(2u32).unwrap())
+            .resolve(2)
             .unwrap()
             .as_dict()
             .unwrap()
