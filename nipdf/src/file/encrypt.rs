@@ -253,7 +253,7 @@ impl Decryptor for Rc4Decryptor {
         let n = key.len();
         let mut k = TinyVec::<[u8; 16 + 5]>::with_capacity(n + 5);
         k.extend_from_slice(key);
-        k.extend_from_slice(&u32::from(id.id()).to_le_bytes()[..3]);
+        k.extend_from_slice(&id.id().0.to_le_bytes()[..3]);
         k.extend_from_slice(&id.generation().to_le_bytes()[..]);
         let key = Md5::digest(&k[..]);
         let key = key.into_iter().take((n + 5).min(16)).collect();
@@ -272,7 +272,7 @@ impl Decryptor for AesDecryptor {
         let n = key.len();
         let mut k = TinyVec::<[u8; 16 + 5 + 4]>::with_capacity(n + 5 + 4);
         k.extend_from_slice(key);
-        k.extend_from_slice(&u32::from(id.id()).to_le_bytes()[..3]);
+        k.extend_from_slice(&id.id().0.to_le_bytes()[..3]);
         k.extend_from_slice(&id.generation().to_le_bytes()[..]);
         k.extend_from_slice(b"sAlT");
         let key = Md5::digest(&k[..]);

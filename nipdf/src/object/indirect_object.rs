@@ -1,11 +1,11 @@
-use super::{Object, ObjectId};
-use std::num::NonZeroU32;
+use super::{Object, ObjectId, RuntimeObjectId};
+
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct IndirectObject(ObjectId, Object);
 
 impl IndirectObject {
-    pub fn new(id: NonZeroU32, generation: u16, object: Object) -> Self {
+    pub fn new(id: RuntimeObjectId, generation: u16, object: Object) -> Self {
         Self(ObjectId::new(id, generation), object)
     }
 

@@ -108,7 +108,7 @@ fn schema_ref_id_arr(ids: Option<&[u32]>) -> Vec<u32> {
     d.ref_id_arr(&sname("ids"))
         .unwrap()
         .into_iter()
-        .map(|id| id.get())
+        .map(|id| id.0)
         .collect()
 }
 

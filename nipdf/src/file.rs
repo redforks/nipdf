@@ -4,7 +4,7 @@ use crate::{
     file::encrypt::{calc_encrypt_key, Algorithm, Decryptor, Rc4Decryptor, StandardHandlerRevion},
     object::{
         Array, Dictionary, Entry, FrameSet, HexString, LiteralString, Object, ObjectId,
-        ObjectValueError, PdfObject, Resolver, Stream, TrailerDict,
+        ObjectValueError, PdfObject, Resolver, RuntimeObjectId, Stream, TrailerDict,
     },
     parser::{
         parse_frame_set, parse_header, parse_indirect_object, parse_indirect_stream, parse_object,
@@ -19,7 +19,7 @@ use nipdf_macro::pdf_object;
 use nom::Finish;
 use once_cell::unsync::OnceCell;
 use prescript::{sname, Name};
-use std::{iter::repeat_with, num::NonZeroU32, rc::Rc};
+use std::{iter::repeat_with, rc::Rc};
 
 pub mod page;
 pub use page::*;
@@ -31,7 +31,7 @@ pub use encrypt::EncryptDict;
 #[derive(Debug, Copy, Clone)]
 pub enum ObjectPos {
     Offset(u32),
-    InStream(NonZeroU32, u16),
+    InStream(RuntimeObjectId, u16),
 }
 
 impl<'a> From<&'a Entry> for ObjectPos {
@@ -43,7 +43,7 @@ impl<'a> From<&'a Entry> for ObjectPos {
     }
 }
 
-type IDOffsetMap = HashMap<u32, ObjectPos>;
+type IDOffsetMap = HashMap<RuntimeObjectId, ObjectPos>;
 
 /// Object stream stores multiple objects in a stream. See section 7.5.7
 #[derive(Debug)]
@@ -77,10 +77,10 @@ impl ObjectStream {
         let d = stream.as_dict();
         assert_eq!(sname("ObjStm"), d[&sname("Type")].name()?);
         let n = d.get(&sname("N")).map_or(Ok(0), |v| v.int())? as usize;
-        // assert!(
-        //     !d.contains_key(&sname("Extends")),
-        //     "Extends is not supported"
-        // );
+        assert!(
+            !d.contains_key(&sname("Extends")),
+            "Extends is not supported"
+        );
         let buf = stream.decode_without_resolve_length(file)?;
         parse_object_stream(n, buf.as_ref())
             .map_err(|e| ObjectValueError::ParseError(e.to_string()))
@@ -102,7 +102,7 @@ impl ObjectStream {
 pub struct XRefTable {
     id_offset: IDOffsetMap,
     // object id -> offset
-    object_streams: HashMap<NonZeroU32, OnceCell<ObjectStream>>, // stream id -> ObjectStream
+    object_streams: HashMap<RuntimeObjectId, OnceCell<ObjectStream>>, // stream id -> ObjectStream
 }
 
 impl XRefTable {
@@ -148,7 +148,7 @@ impl XRefTable {
                 .windows(search_key.len())
                 .position(|w| w == search_key.as_bytes())
                 .unwrap() as u32;
-            id_offset.insert(o.id().id().into(), ObjectPos::Offset(pos));
+            id_offset.insert(o.id().id(), ObjectPos::Offset(pos));
         }
 
         Self::new(id_offset)
@@ -158,7 +158,7 @@ impl XRefTable {
         let mut r = IDOffsetMap::with_capacity(5000);
         for (id, entry) in frame_set.iter().rev().flat_map(|f| f.xref_section.iter()) {
             if entry.is_used() {
-                r.insert(*id, entry.into());
+                r.insert(RuntimeObjectId(*id), entry.into());
             } else if *id != 0 {
                 r.remove(id);
             }
@@ -174,7 +174,7 @@ impl XRefTable {
     fn resolve_object_buf<'a, 'b>(
         &'b self,
         buf: &'a [u8],
-        id: NonZeroU32,
+        id: impl Into<RuntimeObjectId>,
     ) -> Option<Either<&'a [u8], &'b [u8]>> {
         self.id_offset.get(&id.into()).map(|entry| match entry {
             ObjectPos::Offset(offset) => Either::Left(&buf[*offset as usize..]),
@@ -194,9 +194,10 @@ impl XRefTable {
     pub fn parse_object<'a: 'c, 'b: 'c, 'c>(
         &'b self,
         buf: &'a [u8],
-        id: NonZeroU32,
+        id: impl Into<RuntimeObjectId>,
         encrypt_info: Option<&EncryptInfo>,
     ) -> Result<Object, ObjectValueError> {
+        let id = id.into();
         self.resolve_object_buf(buf, id)
             .ok_or(ObjectValueError::ObjectIDNotFound(id))
             .and_then(|buf| {
@@ -225,8 +226,8 @@ impl XRefTable {
             })
     }
 
-    pub fn iter_ids(&self) -> impl Iterator<Item = NonZeroU32> + '_ {
-        self.id_offset.keys().map(|v| NonZeroU32::new(*v).unwrap())
+    pub fn iter_ids(&self) -> impl Iterator<Item = RuntimeObjectId> + '_ {
+        self.id_offset.keys().copied()
     }
 
     pub fn count(&self) -> usize {
@@ -324,7 +325,7 @@ impl EncryptInfo {
 pub struct ObjectResolver<'a> {
     buf: &'a [u8],
     xref_table: &'a XRefTable,
-    objects: HashMap<NonZeroU32, OnceCell<Object>>,
+    objects: HashMap<RuntimeObjectId, OnceCell<Object>>,
     encript_info: Option<EncryptInfo>,
 }
 
@@ -368,9 +369,8 @@ impl<'a> ObjectResolver<'a> {
     }
 
     #[cfg(test)]
-    pub fn setup_object(&mut self, id: u32, v: Object) {
-        self.objects
-            .insert(NonZeroU32::new(id).unwrap(), OnceCell::with_value(v));
+    pub fn setup_object(&mut self, id: impl Into<RuntimeObjectId>, v: Object) {
+        self.objects.insert(id.into(), OnceCell::with_value(v));
     }
 
     /// Resolve pdf object from object, if object is dict, use it as pdf object,
@@ -387,14 +387,16 @@ impl<'a> ObjectResolver<'a> {
 
     pub fn resolve_pdf_object<'b, T: PdfObject<'b, Self>>(
         &'b self,
-        id: NonZeroU32,
+        id: impl Into<RuntimeObjectId>,
     ) -> Result<T, ObjectValueError> {
+        let id = id.into();
         let obj = self.resolve(id)?.as_dict()?;
         T::new(Some(id), obj, self)
     }
 
     /// Resolve object with id `id`.
-    pub fn resolve(&self, id: NonZeroU32) -> Result<&Object, ObjectValueError> {
+    pub fn resolve(&self, id: impl Into<RuntimeObjectId>) -> Result<&Object, ObjectValueError> {
+        let id = id.into();
         self.objects
             .get(&id)
             .ok_or(ObjectValueError::ObjectIDNotFound(id))?
@@ -406,7 +408,7 @@ impl<'a> ObjectResolver<'a> {
 
     /// Return file data start from stream id indirect object till the file end
     /// Panic if id not found or not stream
-    pub fn stream_data(&self, id: NonZeroU32) -> &'a [u8] {
+    pub fn stream_data(&self, id: impl Into<RuntimeObjectId>) -> &'a [u8] {
         self.xref_table
             .resolve_object_buf(self.buf, id)
             .unwrap()
@@ -438,7 +440,7 @@ impl<'a> ObjectResolver<'a> {
         &'b self,
         c: &'c C,
         id: &Name,
-    ) -> Result<(Option<NonZeroU32>, &'c Object), ObjectValueError> {
+    ) -> Result<(Option<RuntimeObjectId>, &'c Object), ObjectValueError> {
         self._resolve_container_value(c, id).map_err(|e| {
             error!("{}: {}", e, id);
             e
@@ -449,7 +451,7 @@ impl<'a> ObjectResolver<'a> {
         &'b self,
         c: &'c C,
         id: &Name,
-    ) -> Result<(Option<NonZeroU32>, &'c Object), ObjectValueError> {
+    ) -> Result<(Option<RuntimeObjectId>, &'c Object), ObjectValueError> {
         let obj = c.get_value(id).ok_or(ObjectValueError::DictKeyNotFound)?;
 
         if let Object::Reference(id) = obj {
@@ -463,8 +465,9 @@ impl<'a> ObjectResolver<'a> {
     /// If its end value is array, return all elements in array.
     pub fn resolve_one_or_more_pdf_object<'b, T: PdfObject<'b, Self>>(
         &'b self,
-        id: NonZeroU32,
+        id: impl Into<RuntimeObjectId>,
     ) -> Result<Vec<T>, ObjectValueError> {
+        let id = id.into();
         let obj = self.resolve(id)?;
         match obj {
             Object::Dictionary(d) => Ok(vec![T::new(Some(id), d, self)?]),
@@ -500,7 +503,7 @@ impl<'a> Resolver for ObjectResolver<'a> {
         &'b self,
         c: &'c C,
         id: &Name,
-    ) -> Result<(Option<NonZeroU32>, &'c Object), ObjectValueError> {
+    ) -> Result<(Option<RuntimeObjectId>, &'c Object), ObjectValueError> {
         self._resolve_container_value(c, id)
     }
 
@@ -526,7 +529,10 @@ pub struct Catalog<'a, 'b> {
 }
 
 impl<'a, 'b: 'a> Catalog<'a, 'b> {
-    fn parse(id: NonZeroU32, resolver: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
+    fn parse(
+        id: impl Into<RuntimeObjectId>,
+        resolver: &'b ObjectResolver<'a>,
+    ) -> Result<Self, ObjectValueError> {
         Ok(Self {
             d: resolver.resolve_pdf_object(id)?,
         })
@@ -542,7 +548,7 @@ impl<'a, 'b: 'a> Catalog<'a, 'b> {
 }
 
 pub struct File {
-    root_id: NonZeroU32,
+    root_id: RuntimeObjectId,
     head_ver: String,
     data: Vec<u8>,
     xref: XRefTable,
@@ -679,7 +685,7 @@ impl File {
 #[cfg(test)]
 pub(crate) fn decode_stream<
     E: std::error::Error + Sync + Send + 'static,
-    T: TryInto<NonZeroU32, Error = E>,
+    T: TryInto<u32, Error = E>,
 >(
     file_path: impl AsRef<std::path::Path>,
     id: T,

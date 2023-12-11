@@ -1,4 +1,4 @@
-use std::num::NonZeroU32;
+use super::RuntimeObjectId;
 
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub struct FilePos(u32, u16, bool); // offset, generation, is_used
@@ -26,7 +26,7 @@ pub enum Entry {
     /// The object stored directly in file as object
     InFile(FilePos),
     /// The object stored in a stream, (stream_object_id, idx_of_object_in_stream)
-    InStream(NonZeroU32, u16),
+    InStream(RuntimeObjectId, u16),
 }
 
 impl Entry {
@@ -34,7 +34,7 @@ impl Entry {
         Self::InFile(FilePos::new(offset, generation, is_used))
     }
 
-    pub fn in_stream(stream_object_id: NonZeroU32, idx_of_object_in_stream: u16) -> Self {
+    pub fn in_stream(stream_object_id: RuntimeObjectId, idx_of_object_in_stream: u16) -> Self {
         Self::InStream(stream_object_id, idx_of_object_in_stream)
     }
 

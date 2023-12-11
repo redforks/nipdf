@@ -1,8 +1,8 @@
 use crate::{
     graphics::trans::TextToUserSpace,
     object::{
-        Array, Dictionary, InlineImage, InlineStream, Object, ObjectValueError, Stream, TextString,
-        TextStringOrNumber,
+        Array, Dictionary, InlineImage, InlineStream, Object, ObjectValueError, RuntimeObjectId,
+        Stream, TextString, TextStringOrNumber,
     },
     parser::{
         is_white_space, parse_dict_entries, parse_object, whitespace_or_comment, ws_prefixed,
@@ -21,7 +21,6 @@ use nom::{
     Err, FindSubstring, Parser,
 };
 use prescript::Name;
-use std::num::NonZeroU32;
 
 pub mod color_space;
 pub mod pattern;
@@ -121,7 +120,7 @@ impl<'b> ConvertFromObject<'b> for ColorArgs {
 pub enum ColorSpaceArgs {
     Name(Name),
     Array(Array),
-    Ref(NonZeroU32),
+    Ref(RuntimeObjectId),
 }
 
 impl<'b> TryFrom<&'b Object> for ColorSpaceArgs {

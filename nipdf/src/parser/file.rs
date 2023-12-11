@@ -1,7 +1,7 @@
 use super::{ws_terminated, FileError, ParseError, ParseResult};
 use crate::{
     function::{Domain, Domains},
-    object::{Dictionary, Entry, Frame, FrameSet, ObjectValueError, XRefSection},
+    object::{Dictionary, Entry, Frame, FrameSet, ObjectValueError, RuntimeObjectId, XRefSection},
     parser::{parse_dict, parse_indirect_stream},
 };
 use log::{error, info};
@@ -18,7 +18,7 @@ use nom::{
     InputIter, InputLength, InputTake, Parser, Slice,
 };
 use prescript::sname;
-use std::{fmt::Display, num::NonZeroU32, ops::RangeFrom, str::from_utf8};
+use std::{fmt::Display, ops::RangeFrom, str::from_utf8};
 
 pub fn parse_header(buf: &[u8]) -> ParseResult<&str> {
     let one_digit = || satisfy(|c| c.is_ascii_digit());
@@ -167,7 +167,7 @@ fn parse_xref_stream(input: &[u8]) -> ParseResult<(XRefSection, Dictionary)> {
                 1 => r.push((start + idx as u32, Entry::in_file(b, c as u16, true))),
                 2 => r.push((
                     start + idx as u32,
-                    Entry::in_stream(NonZeroU32::new(b).unwrap(), c as u16),
+                    Entry::in_stream(RuntimeObjectId(b), c as u16),
                 )),
                 _ => info!("unknown xref stream entry type: {a}, idx: {idx}, ignored",),
             }

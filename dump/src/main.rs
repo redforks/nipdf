@@ -2,12 +2,14 @@ use anyhow::Result as AnyResult;
 use clap::{arg, Command};
 use image::ImageOutputFormat;
 use mimalloc::MiMalloc;
-use nipdf::{file::File, object::Object};
+use nipdf::{
+    file::File,
+    object::{Object, RuntimeObjectId},
+};
 use nipdf_render::{render_steps, RenderOptionBuilder};
 use std::{
     collections::HashSet,
     io::{copy, stdout, BufWriter, Cursor},
-    num::NonZeroU32,
 };
 
 #[global_allocator]
@@ -50,7 +52,7 @@ fn open(path: &str) -> AnyResult<File> {
     File::parse(buf, "", "")
 }
 
-fn dump_stream(path: &str, id: NonZeroU32, raw: bool, as_png: bool) -> AnyResult<()> {
+fn dump_stream(path: &str, id: u32, raw: bool, as_png: bool) -> AnyResult<()> {
     let f = open(path)?;
     let resolver = f.resolver()?;
     let obj = resolver.resolve(id)?;
@@ -121,10 +123,11 @@ fn dump_page(
     Ok(())
 }
 
-fn dump_object(path: &str, id: NonZeroU32) -> AnyResult<()> {
+fn dump_object(path: &str, id: u32) -> AnyResult<()> {
     let f = open(path)?;
     let resolver = f.resolver()?;
 
+    let id = RuntimeObjectId(id);
     let mut id_wait_scanned = vec![id];
     let mut ids = HashSet::new();
     while let Some(id) = id_wait_scanned.pop() {
