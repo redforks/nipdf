@@ -59,7 +59,7 @@ fn download_file(url: &str, f: impl AsRef<Path>) -> AnyResult<()> {
 }
 
 /// These files are very rare and odd, not to be tested
-const IGNORED: [&str; 4] = [
+const IGNORED: [&str; 5] = [
     // xpdf, mupdf, are all failed to open
     "bug1020226.pdf",
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
@@ -69,6 +69,8 @@ const IGNORED: [&str; 4] = [
     // corrupt content at the end of file, xpdf, mupdf okay, qpdf failed(although it tried to
     // recover) see: xpdf/PDFDoc.cc PDFDoc::setup2()
     "bug1250079.pdf",
+    // incorrect startxref pos, and incorrect page content operations
+    "bug1130815.pdf.link",
 ];
 
 /// Read pdf file and render each page, to save test time,
