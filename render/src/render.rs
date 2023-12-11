@@ -633,7 +633,10 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
     }
 
     fn pop(&mut self) {
-        self.stack.pop().unwrap();
+        if self.stack.pop().is_none() {
+            // some file contains unpaired q/Q operations
+            info!("pop empty state stack");
+        }
     }
 
     fn current_mut(&mut self) -> &mut State {
