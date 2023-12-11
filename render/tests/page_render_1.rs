@@ -58,7 +58,7 @@ fn download_file(url: &str, f: impl AsRef<Path>) -> AnyResult<()> {
 }
 
 /// These files are very rare and odd, not to be tested
-const IGNORED: [&str; 5] = [
+const IGNORED: [&str; 6] = [
     // xpdf, mupdf, are all failed to open
     "bug1020226.pdf",
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
@@ -70,6 +70,12 @@ const IGNORED: [&str; 5] = [
     "bug1250079.pdf",
     // incorrect startxref pos, and incorrect page content operations
     "bug1130815.pdf.link",
+    // Contains JBIG2Decode stream, an image format likes CCITT, only one crate can decode JBig2:
+    // `jbig2dec`, ffi to `jbig2dec` written in C, which is AGPL license.
+    // `xpdf` and `pdf.js` implement its own decoder. AGPL can link with Apache libs
+    // I'll dive into this after other features implemented. Crate `jbig2dec` need forked to
+    // support JBIG2 Global stream
+    "bug1064894.pdf.link",
 ];
 
 /// Read pdf file and render each page, to save test time,
