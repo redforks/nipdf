@@ -1,14 +1,14 @@
 //! Contains types of PDF file structures.
 
 use crate::{
-    file::encrypt::{calc_encrypt_key, Algorithm, Decryptor, Rc4Decryptor, StandardHandlerRevion},
+    file::encrypt::calc_encrypt_key,
     object::{
         Array, Dictionary, Entry, FrameSet, HexString, LiteralString, Object, ObjectId,
         ObjectValueError, PdfObject, Resolver, RuntimeObjectId, Stream, TrailerDict,
     },
     parser::{
         parse_frame_set, parse_header, parse_indirect_object, parse_indirect_stream, parse_object,
-        ParseResult,
+        ws_terminated, ParseResult,
     },
 };
 use ahash::{HashMap, HashMapExt};
@@ -26,6 +26,7 @@ pub use page::*;
 
 pub(crate) mod encrypt;
 
+use self::encrypt::{CryptFilters, VecLike};
 pub use encrypt::EncryptDict;
 
 #[derive(Debug, Copy, Clone)]
@@ -56,12 +57,12 @@ struct ObjectStream {
 
 fn parse_object_stream(n: usize, buf: &[u8]) -> ParseResult<ObjectStream> {
     use nom::{
-        character::complete::{space0, space1, u16, u32},
+        character::complete::{space1, u16, u32},
         multi::count,
-        sequence::{separated_pair, terminated},
+        sequence::separated_pair,
     };
 
-    let (buf, nums) = count(terminated(separated_pair(u32, space1, u16), space0), n)(buf)?;
+    let (buf, nums) = count(ws_terminated(separated_pair(u32, space1, u16)), n)(buf)?;
     let offsets = nums.into_iter().map(|(_, n)| n).collect();
     Ok((
         buf,
@@ -73,7 +74,11 @@ fn parse_object_stream(n: usize, buf: &[u8]) -> ParseResult<ObjectStream> {
 }
 
 impl ObjectStream {
-    pub fn new(stream: Stream, file: &[u8]) -> Result<Self, ObjectValueError> {
+    pub fn new(
+        stream: Stream,
+        file: &[u8],
+        encrypt_info: Option<&EncryptInfo>,
+    ) -> Result<Self, ObjectValueError> {
         let d = stream.as_dict();
         assert_eq!(sname("ObjStm"), d[&sname("Type")].name()?);
         let n = d.get(&sname("N")).map_or(Ok(0), |v| v.int())? as usize;
@@ -81,7 +86,7 @@ impl ObjectStream {
             !d.contains_key(&sname("Extends")),
             "Extends is not supported"
         );
-        let buf = stream.decode_without_resolve_length(file)?;
+        let buf = stream.decode_without_resolve_length(file, encrypt_info)?;
         parse_object_stream(n, buf.as_ref())
             .map_err(|e| ObjectValueError::ParseError(e.to_string()))
             .map(|(_, r)| r)
@@ -175,15 +180,28 @@ impl XRefTable {
         &'b self,
         buf: &'a [u8],
         id: impl Into<RuntimeObjectId>,
+        encrypt_info: Option<&EncryptInfo>,
     ) -> Option<Either<&'a [u8], &'b [u8]>> {
         self.id_offset.get(&id.into()).map(|entry| match entry {
             ObjectPos::Offset(offset) => Either::Left(&buf[*offset as usize..]),
             ObjectPos::InStream(id, idx) => {
                 let object_stream = self.object_streams[id]
                     .get_or_try_init(|| {
-                        let buf = self.resolve_object_buf(buf, *id).unwrap();
-                        let (_, stream) = parse_indirect_stream(&buf).unwrap();
-                        ObjectStream::new(stream, &buf)
+                        let obj_buf = self.resolve_object_buf(buf, *id, encrypt_info).unwrap();
+                        let (_, mut stream) = parse_indirect_stream(&obj_buf).unwrap();
+                        let length = stream.0.get("Length").cloned();
+                        // Some pdf file use indirect object to store length, which it is not
+                        // allowed by pdf file standard, but anyway, we
+                        // support it.
+                        if let Some(Object::Reference(id)) = length {
+                            stream.0.update(|d| {
+                                d.insert(
+                                    sname("Length"),
+                                    self.parse_object(buf, id.id().id(), None).unwrap(),
+                                );
+                            });
+                        }
+                        ObjectStream::new(stream, &obj_buf, encrypt_info)
                     })
                     .unwrap();
                 Either::Right(object_stream.get_buf(*idx as usize))
@@ -198,7 +216,7 @@ impl XRefTable {
         encrypt_info: Option<&EncryptInfo>,
     ) -> Result<Object, ObjectValueError> {
         let id = id.into();
-        self.resolve_object_buf(buf, id)
+        self.resolve_object_buf(buf, id, encrypt_info)
             .ok_or(ObjectValueError::ObjectIDNotFound(id))
             .and_then(|buf| {
                 buf.either(
@@ -237,19 +255,15 @@ impl XRefTable {
 
 /// Decrypt HexString/LiteralString nested in object.
 fn decrypt_string(encrypt_info: &EncryptInfo, id: ObjectId, mut o: Object) -> Object {
-    struct Decryptor<T>(T);
+    struct Decryptor<'a>(&'a EncryptInfo, ObjectId);
 
-    impl<T: crate::file::Decryptor> Decryptor<T> {
-        pub fn new(decryptor: T) -> Self {
-            Self(decryptor)
-        }
-
+    impl<'a> Decryptor<'a> {
         fn hex_string(&self, s: &mut HexString) {
-            self.0.decrypt(&mut s.0);
+            self.0.string_decrypt(self.1, &mut s.0);
         }
 
         fn literal_string(&self, s: &mut LiteralString) {
-            self.0.decrypt(&mut s.0);
+            self.0.string_decrypt(self.1, &mut s.0);
         }
 
         fn dict(&self, dict: &mut Dictionary) {
@@ -281,12 +295,7 @@ fn decrypt_string(encrypt_info: &EncryptInfo, id: ObjectId, mut o: Object) -> Ob
         }
     }
 
-    match encrypt_info.algorithm {
-        Algorithm::Key40 | Algorithm::Key40AndMore => {
-            Decryptor::new(Rc4Decryptor::new(&encrypt_info.encript_key, id)).decrypt(&mut o);
-        }
-        _ => todo!(),
-    }
+    Decryptor(encrypt_info, id).decrypt(&mut o);
     o
 }
 
@@ -309,16 +318,28 @@ impl DataContainer for Vec<&Dictionary> {
 
 #[derive(Clone)]
 pub struct EncryptInfo {
-    pub encript_key: Box<[u8]>,
-    pub algorithm: Algorithm,
+    encript_key: Box<[u8]>,
+    filters: CryptFilters,
 }
 
 impl EncryptInfo {
-    pub fn new(encript_key: Box<[u8]>, algorithm: Algorithm) -> Self {
+    pub fn new(encript_key: Box<[u8]>, filters: CryptFilters) -> Self {
         Self {
             encript_key,
-            algorithm,
+            filters,
         }
+    }
+
+    pub fn stream_decrypt(&self, filter: Option<Name>, id: ObjectId, data: &mut Vec<u8>) {
+        self.filters
+            .stream_filter(filter)
+            .decrypt(&self.encript_key, id, data)
+    }
+
+    pub fn string_decrypt(&self, id: ObjectId, data: &mut impl VecLike) {
+        self.filters
+            .string_filter()
+            .decrypt(&self.encript_key, id, data)
     }
 }
 
@@ -410,7 +431,7 @@ impl<'a> ObjectResolver<'a> {
     /// Panic if id not found or not stream
     pub fn stream_data(&self, id: impl Into<RuntimeObjectId>) -> &'a [u8] {
         self.xref_table
-            .resolve_object_buf(self.buf, id)
+            .resolve_object_buf(self.buf, id, self.encript_info())
             .unwrap()
             .unwrap_left()
     }
@@ -591,10 +612,6 @@ fn open_encrypt(
         encrypt.sub_filter()?.is_none(),
         "unsupported security handler (SubFilter)"
     );
-    assert!(
-        StandardHandlerRevion::V3 == encrypt.revison()?
-            || StandardHandlerRevion::V2 == encrypt.revison()?
-    );
 
     let owner_hash = encrypt.owner_password_hash()?;
     let user_hash = encrypt.user_password_hash()?;
@@ -620,7 +637,7 @@ fn open_encrypt(
             encrypt.permission_flags()?,
             &trailer.id()?.unwrap().0,
         );
-        Ok(Some(EncryptInfo::new(key, encrypt.algorithm()?)))
+        Ok(Some(EncryptInfo::new(key, encrypt.crypt_filters())))
     } else {
         Ok(None)
     }

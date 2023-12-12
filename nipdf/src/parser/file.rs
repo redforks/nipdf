@@ -138,7 +138,7 @@ fn parse_xref_stream(input: &[u8]) -> ParseResult<(XRefSection, Dictionary)> {
     let d = CrossReferenceStreamDict::new(d).map_err(to_parse_error)?;
 
     let data = stream
-        .decode_without_resolve_length(input)
+        .decode_without_resolve_length(input, None)
         .map_err(to_parse_error)?;
     assert_eq!(3, d.w.len());
     let (a, b, c) = (d.w[0], d.w[1], d.w[2]);

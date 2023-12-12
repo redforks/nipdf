@@ -11,7 +11,6 @@ use anyhow::anyhow;
 use image::DynamicImage;
 use prescript::{sname, Name};
 
-
 struct InlineStreamDict<'a>(&'a Dictionary);
 
 impl<'a> InlineStreamDict<'a> {
@@ -143,7 +142,7 @@ impl InlineImage {
         resolver: &ObjectResolver,
         resources: &ResourceDict,
     ) -> AnyResult<DynamicImage> {
-        let decoded_data = decode_stream(&self.0, &self.1, Some(resolver))?;
+        let decoded_data = decode_stream(&self.0, &self.1, Some(resolver), None, None)?;
         Ok(decode_image(
             decoded_data,
             &InlineStreamDict(&self.0),

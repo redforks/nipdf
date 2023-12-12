@@ -1,8 +1,10 @@
 use crate::object::ObjectId;
+use ahash::{HashMap, HashMapExt};
 use arc4::Arc4;
+use log::error;
 use md5::{Digest, Md5};
-use nipdf_macro::{pdf_object, TryFromIntObject};
-use prescript::Name;
+use nipdf_macro::{pdf_object, TryFromIntObject, TryFromNameObject};
+use prescript::{sname, Name};
 use tinyvec::{Array, ArrayVec, TinyVec};
 
 #[derive(TryFromIntObject, Default, Debug, PartialEq, Eq, Clone, Copy)]
@@ -20,6 +22,25 @@ pub enum StandardHandlerRevion {
     V2 = 2,
     V3 = 3,
     V4 = 4,
+}
+
+#[derive(TryFromNameObject, PartialEq, Eq, Debug, Clone, Copy, PartialOrd, Ord, Default)]
+pub enum DecryptMethod {
+    #[default]
+    None,
+    V2,
+    AESV2,
+}
+
+const fn identity() -> Name {
+    sname("Identity")
+}
+
+#[pdf_object(Some("CryptFilter"))]
+pub trait CryptFilterDictTrait {
+    #[key("CFM")]
+    #[try_from]
+    fn decrypt_method(&self) -> DecryptMethod;
 }
 
 #[pdf_object(())]
@@ -51,6 +72,123 @@ pub trait EncryptDictTrait {
     /// 32-byte long string.
     #[key("U")]
     fn user_password_hash(&self) -> &[u8];
+
+    #[key("CF")]
+    #[one_or_more]
+    #[nested]
+    fn crypt_filter_params(&self) -> HashMap<Name, CryptFilterDict>;
+
+    /// Crypt filter used if Crypt field not set on Stream dictionary
+    #[key("StmF")]
+    #[default_fn(identity)]
+    fn stream_default_crypt_filter(&self) -> Name;
+
+    /// Crypt filter used to decode strings
+    #[key("StrF")]
+    #[default_fn(identity)]
+    fn string_crypt_filter(&self) -> Name;
+}
+
+/// Support get crypt filter by its name.
+#[derive(Clone)]
+pub struct CryptFilters {
+    filters: HashMap<Name, CryptFilter>,
+    default_stream: CryptFilter,
+    string_filter: CryptFilter,
+}
+
+impl CryptFilters {
+    fn new(
+        filters: HashMap<Name, CryptFilter>,
+        default_stream: &Name,
+        default_string: &Name,
+    ) -> Self {
+        Self {
+            default_stream: Self::_resolve(&filters, default_stream),
+            string_filter: Self::_resolve(&filters, default_string),
+            filters,
+        }
+    }
+
+    fn rc4() -> Self {
+        Self {
+            filters: HashMap::new(),
+            default_stream: CryptFilter::Rc4,
+            string_filter: CryptFilter::Rc4,
+        }
+    }
+
+    fn identity() -> Self {
+        Self {
+            filters: HashMap::new(),
+            default_stream: CryptFilter::Identity,
+            string_filter: CryptFilter::Identity,
+        }
+    }
+
+    pub fn string_filter(&self) -> CryptFilter {
+        self.string_filter
+    }
+
+    pub fn stream_filter(&self, name: Option<Name>) -> CryptFilter {
+        name.map_or(self.default_stream, |n| Self::_resolve(&self.filters, &n))
+    }
+
+    fn _resolve(d: &HashMap<Name, CryptFilter>, n: &Name) -> CryptFilter {
+        if n == &identity() {
+            return CryptFilter::Identity;
+        }
+        *d.get(n).unwrap_or_else(|| {
+            error!("crypt filter not found: {}", n);
+            &CryptFilter::Identity
+        })
+    }
+}
+
+impl<'a, 'b> EncryptDict<'a, 'b> {
+    pub fn crypt_filters(&self) -> CryptFilters {
+        use anyhow::Result;
+
+        fn _do(this: &EncryptDict) -> Result<CryptFilters> {
+            if this.revison()? != StandardHandlerRevion::V4 {
+                return Ok(CryptFilters::rc4());
+            }
+
+            let params = this.crypt_filter_params()?;
+            let d = params
+                .into_iter()
+                .map(|(k, d)| {
+                    d.decrypt_method().map(|m| {
+                        (
+                            k,
+                            match m {
+                                DecryptMethod::None => CryptFilter::Identity,
+                                DecryptMethod::V2 => CryptFilter::Rc4,
+                                DecryptMethod::AESV2 => CryptFilter::Aes,
+                            },
+                        )
+                    })
+                })
+                .collect::<Result<_>>()?;
+            Ok(CryptFilters::new(
+                d,
+                &this.stream_default_crypt_filter()?,
+                &this.string_crypt_filter()?,
+            ))
+        }
+
+        if !matches!(
+            self.algorithm().unwrap(),
+            Algorithm::Key40 | Algorithm::Key40AndMore | Algorithm::DefinedInDoc,
+        ) {
+            todo!("Algorithm: {:?}", self.algorithm().unwrap());
+        }
+
+        _do(self).unwrap_or_else(|e| {
+            error!("failed to parse crypt filters, use Identity: {}", e);
+            CryptFilters::identity()
+        })
+    }
 }
 
 const PADDING: [u8; 32] = [
@@ -246,7 +384,24 @@ impl VecLike for Vec<u8> {
     }
 }
 
-pub struct Rc4Decryptor(ArrayVec<[u8; 16]>);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CryptFilter {
+    Identity,
+    Rc4,
+    Aes,
+}
+
+impl CryptFilter {
+    pub fn decrypt(&self, key: &[u8], id: ObjectId, data: &mut impl VecLike) {
+        match self {
+            CryptFilter::Identity => {}
+            CryptFilter::Rc4 => Rc4Decryptor::new(key, id).decrypt(data),
+            CryptFilter::Aes => AesDecryptor::new(key, id).decrypt(data),
+        }
+    }
+}
+
+struct Rc4Decryptor(ArrayVec<[u8; 16]>);
 
 impl Decryptor for Rc4Decryptor {
     fn new(key: &[u8], id: ObjectId) -> Self {
@@ -265,7 +420,7 @@ impl Decryptor for Rc4Decryptor {
     }
 }
 
-pub struct AesDecryptor(ArrayVec<[u8; 16]>);
+struct AesDecryptor(ArrayVec<[u8; 16]>);
 
 impl Decryptor for AesDecryptor {
     fn new(key: &[u8], id: ObjectId) -> Self {
