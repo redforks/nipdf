@@ -58,7 +58,7 @@ fn download_file(url: &str, f: impl AsRef<Path>) -> AnyResult<()> {
 }
 
 /// These files are very rare and odd, not to be tested
-const IGNORED: [&str; 6] = [
+const IGNORED: [&str; 7] = [
     // xpdf, mupdf, are all failed to open
     "bug1020226.pdf",
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
@@ -76,6 +76,9 @@ const IGNORED: [&str; 6] = [
     // I'll dive into this after other features implemented. Crate `jbig2dec` need forked to
     // support JBIG2 Global stream
     "bug1064894.pdf.link",
+    // damaged file, xpdf/mupdf/qpdf all failed to open,
+    // maybe can be read using Linearized PDF (Annex F)
+    "bpl13210.pdf.link",
 ];
 
 /// Read pdf file and render each page, to save test time,
