@@ -1,7 +1,7 @@
 //! Contains types of PDF file structures.
 
 use crate::{
-    file::encrypt::{calc_encrypt_key, Algorithm, Decryptor, Rc4Decryptor, StandardHandlerRevion},
+    file::encrypt::calc_encrypt_key,
     object::{
         Array, Dictionary, Entry, FrameSet, HexString, LiteralString, Object, ObjectId,
         ObjectValueError, PdfObject, Resolver, RuntimeObjectId, Stream, TrailerDict,
@@ -57,9 +57,9 @@ struct ObjectStream {
 
 fn parse_object_stream(n: usize, buf: &[u8]) -> ParseResult<ObjectStream> {
     use nom::{
-        character::complete::{space0, space1, u16, u32},
+        character::complete::{space1, u16, u32},
         multi::count,
-        sequence::{separated_pair, terminated},
+        sequence::separated_pair,
     };
 
     let (buf, nums) = count(ws_terminated(separated_pair(u32, space1, u16)), n)(buf)?;

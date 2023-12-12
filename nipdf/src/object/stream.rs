@@ -1,10 +1,7 @@
 use super::{Dictionary, Object, ObjectId, ObjectValueError};
 use crate::{
     ccitt::Flags,
-    file::{
-        encrypt::{Algorithm, Decryptor, Rc4Decryptor},
-        EncryptInfo, ObjectResolver, ResourceDict,
-    },
+    file::{EncryptInfo, ObjectResolver, ResourceDict},
     function::Domains,
     graphics::{
         color_space::{
@@ -158,8 +155,8 @@ impl<'a, 'b> FilterDict<'a, 'b> {
 }
 
 /// Iterate pairs of filter name and its parameter
-fn iter_filters<'a, 'b>(
-    d: FilterDict<'a, 'b>,
+fn iter_filters<'b>(
+    d: FilterDict<'_, 'b>,
 ) -> Result<impl Iterator<Item = (Name, Option<&'b Dictionary>)>, ObjectValueError> {
     let filters = d.filters()?;
     let params = d.parameters()?;
@@ -177,7 +174,7 @@ fn decode_stream<'a, 'b>(
     encrypt_info: Option<&EncryptInfo>,
     id: Option<ObjectId>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
-    let encrypt_info = encrypt_info.or_else(|| resolver.map(|r| r.encript_info()).flatten());
+    let encrypt_info = encrypt_info.or_else(|| resolver.and_then(|r| r.encript_info()));
     let filter_dict = FilterDict::new(filter_dict, resolver)?;
     let mut decoded = FilterDecodedData::Bytes(buf.into());
     let filters = iter_filters(filter_dict)?;
