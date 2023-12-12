@@ -110,6 +110,14 @@ impl CryptFilters {
         }
     }
 
+    fn rc4() -> Self {
+        Self {
+            filters: HashMap::new(),
+            default_stream: CryptFilter::Rc4,
+            string_filter: CryptFilter::Rc4,
+        }
+    }
+
     fn identity() -> Self {
         Self {
             filters: HashMap::new(),
@@ -143,7 +151,7 @@ impl<'a, 'b> EncryptDict<'a, 'b> {
 
         fn _do(this: &EncryptDict) -> Result<CryptFilters> {
             if this.revison()? != StandardHandlerRevion::V4 {
-                return Ok(CryptFilters::identity());
+                return Ok(CryptFilters::rc4());
             }
 
             let params = this.crypt_filter_params()?;
