@@ -226,7 +226,7 @@ impl<'b> TryFrom<&'b Object> for CIDFontWidths {
                 Object::Array(arr) => {
                     let mut width = Vec::with_capacity(arr.len());
                     for num in arr.iter() {
-                        let num = num.int()? as u16;
+                        let num = num.as_number()? as u16;
                         width.push(num);
                     }
                     widths.push(CIDFontWidthGroup::NConsecutive((first as u32, width)));
@@ -236,7 +236,7 @@ impl<'b> TryFrom<&'b Object> for CIDFontWidths {
                     widths.push(CIDFontWidthGroup::FirstLast {
                         first: first as u32,
                         last: *last as u32,
-                        width: width.int()? as u16,
+                        width: width.as_number()? as u16,
                     });
                 }
                 _ => return Err(Self::Error::UnexpectedType),
