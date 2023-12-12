@@ -593,7 +593,9 @@ fn open_encrypt(
     );
     assert!(
         StandardHandlerRevion::V3 == encrypt.revison()?
-            || StandardHandlerRevion::V2 == encrypt.revison()?
+            || StandardHandlerRevion::V2 == encrypt.revison()?,
+        "{:?}",
+        encrypt.revison()?
     );
 
     let owner_hash = encrypt.owner_password_hash()?;

@@ -1,8 +1,9 @@
 use crate::object::ObjectId;
+use ahash::HashMap;
 use arc4::Arc4;
 use md5::{Digest, Md5};
-use nipdf_macro::{pdf_object, TryFromIntObject};
-use prescript::Name;
+use nipdf_macro::{pdf_object, TryFromIntObject, TryFromNameObject};
+use prescript::{sname, Name};
 use tinyvec::{Array, ArrayVec, TinyVec};
 
 #[derive(TryFromIntObject, Default, Debug, PartialEq, Eq, Clone, Copy)]
@@ -20,6 +21,25 @@ pub enum StandardHandlerRevion {
     V2 = 2,
     V3 = 3,
     V4 = 4,
+}
+
+#[derive(TryFromNameObject, PartialEq, Eq, Debug, Clone, Copy, PartialOrd, Ord, Default)]
+pub enum DecryptMethod {
+    #[default]
+    None,
+    V2,
+    AesV2,
+}
+
+const fn identity() -> Name {
+    sname("Identity")
+}
+
+#[pdf_object(Some("CryptFilter"))]
+pub trait CryptFilterDictTrait {
+    #[key("CFM")]
+    #[try_from]
+    fn decrypt_method(&self) -> DecryptMethod;
 }
 
 #[pdf_object(())]
@@ -51,6 +71,21 @@ pub trait EncryptDictTrait {
     /// 32-byte long string.
     #[key("U")]
     fn user_password_hash(&self) -> &[u8];
+
+    #[key("CF")]
+    #[one_or_more]
+    #[nested]
+    fn crypt_filter_params(&self) -> HashMap<Name, CryptFilterDict>;
+
+    /// Crypt filter used if Crypt field not set on Stream dictionary
+    #[key("StmF")]
+    #[default_fn(identity)]
+    fn stream_default_crypt_filter(&self) -> Name;
+
+    /// Crypt filter used to decode strings
+    #[key("StrF")]
+    #[default_fn(identity)]
+    fn string_crypt_filter(&self) -> Name;
 }
 
 const PADDING: [u8; 32] = [
