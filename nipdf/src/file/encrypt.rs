@@ -29,7 +29,7 @@ pub enum DecryptMethod {
     #[default]
     None,
     V2,
-    AesV2,
+    AESV2,
 }
 
 const fn identity() -> Name {
@@ -90,6 +90,7 @@ pub trait EncryptDictTrait {
 }
 
 /// Support get crypt filter by its name.
+#[derive(Clone)]
 pub struct CryptFilters {
     filters: HashMap<Name, CryptFilter>,
     default_stream: CryptFilter,
@@ -155,7 +156,7 @@ impl<'a, 'b> EncryptDict<'a, 'b> {
                             match m {
                                 DecryptMethod::None => CryptFilter::Identity,
                                 DecryptMethod::V2 => CryptFilter::Rc4,
-                                DecryptMethod::AesV2 => CryptFilter::Aes,
+                                DecryptMethod::AESV2 => CryptFilter::Aes,
                             },
                         )
                     })
@@ -170,7 +171,7 @@ impl<'a, 'b> EncryptDict<'a, 'b> {
 
         if !matches!(
             self.algorithm().unwrap(),
-            Algorithm::Key40 | Algorithm::Key40AndMore,
+            Algorithm::Key40 | Algorithm::Key40AndMore | Algorithm::DefinedInDoc,
         ) {
             todo!("Algorithm: {:?}", self.algorithm().unwrap());
         }
@@ -205,7 +206,7 @@ impl<'a, 'b> EncryptDict<'a, 'b> {
                 .map(|m| match m {
                     DecryptMethod::None => CryptFilter::Identity,
                     DecryptMethod::V2 => CryptFilter::Rc4,
-                    DecryptMethod::AesV2 => CryptFilter::Aes,
+                    DecryptMethod::AESV2 => CryptFilter::Aes,
                 })
         }
 

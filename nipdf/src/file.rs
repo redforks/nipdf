@@ -26,6 +26,7 @@ pub use page::*;
 
 pub(crate) mod encrypt;
 
+use self::encrypt::{CryptFilters, VecLike};
 pub use encrypt::EncryptDict;
 
 #[derive(Debug, Copy, Clone)]
@@ -281,12 +282,6 @@ fn decrypt_string(encrypt_info: &EncryptInfo, id: ObjectId, mut o: Object) -> Ob
         }
     }
 
-    match encrypt_info.algorithm {
-        Algorithm::Key40 | Algorithm::Key40AndMore => {
-            Decryptor::new(Rc4Decryptor::new(&encrypt_info.encript_key, id)).decrypt(&mut o);
-        }
-        _ => todo!(),
-    }
     o
 }
 
@@ -309,16 +304,28 @@ impl DataContainer for Vec<&Dictionary> {
 
 #[derive(Clone)]
 pub struct EncryptInfo {
-    pub encript_key: Box<[u8]>,
-    pub algorithm: Algorithm,
+    encript_key: Box<[u8]>,
+    filters: CryptFilters,
 }
 
 impl EncryptInfo {
-    pub fn new(encript_key: Box<[u8]>, algorithm: Algorithm) -> Self {
+    pub fn new(encript_key: Box<[u8]>, filters: CryptFilters) -> Self {
         Self {
             encript_key,
-            algorithm,
+            filters,
         }
+    }
+
+    pub fn stream_decrypt(&self, filter: Option<Name>, id: ObjectId, data: &mut Vec<u8>) {
+        self.filters
+            .stream_filter(filter)
+            .decrypt(&self.encript_key, id, data)
+    }
+
+    pub fn string_decrypt(&self, id: ObjectId, data: &mut impl VecLike) {
+        self.filters
+            .string_filter()
+            .decrypt(&self.encript_key, id, data)
     }
 }
 
@@ -591,12 +598,6 @@ fn open_encrypt(
         encrypt.sub_filter()?.is_none(),
         "unsupported security handler (SubFilter)"
     );
-    assert!(
-        StandardHandlerRevion::V3 == encrypt.revison()?
-            || StandardHandlerRevion::V2 == encrypt.revison()?,
-        "{:?}",
-        encrypt.revison()?
-    );
 
     let owner_hash = encrypt.owner_password_hash()?;
     let user_hash = encrypt.user_password_hash()?;
@@ -622,7 +623,7 @@ fn open_encrypt(
             encrypt.permission_flags()?,
             &trailer.id()?.unwrap().0,
         );
-        Ok(Some(EncryptInfo::new(key, encrypt.algorithm()?)))
+        Ok(Some(EncryptInfo::new(key, encrypt.crypt_filters())))
     } else {
         Ok(None)
     }

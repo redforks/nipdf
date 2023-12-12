@@ -3,7 +3,7 @@ use crate::{
     ccitt::Flags,
     file::{
         encrypt::{Algorithm, Decryptor, Rc4Decryptor},
-        ObjectResolver, ResourceDict,
+        EncryptInfo, ObjectResolver, ResourceDict,
     },
     function::Domains,
     graphics::{
@@ -40,14 +40,7 @@ const KEY_FFILTER: Name = sname("FFilter");
 mod inline_image;
 pub use inline_image::*;
 
-const FILTER_FLATE_DECODE: Name = sname("FlateDecode");
-// const FILTER_LZW_DECODE: Name = sname("LZWDecode");
-const FILTER_CCITT_FAX: Name = sname("CCITTFaxDecode");
-const FILTER_DCT_DECODE: Name = sname("DCTDecode");
-const FILTER_ASCII85_DECODE: Name = sname("ASCII85Decode");
-// const FILTER_RUN_LENGTH_DECODE: Name = sname("RunLengthDecode");
-const FILTER_JPX_DECODE: Name = sname("JPXDecode");
-
+const S_FILTER_CRYPT: &str = "Crypt";
 const S_FILTER_FLATE_DECODE: &str = "FlateDecode";
 const S_FILTER_LZW_DECODE: &str = "LZWDecode";
 const S_FILTER_CCITT_FAX: &str = "CCITTFaxDecode";
@@ -56,6 +49,15 @@ const S_FILTER_ASCII85_DECODE: &str = "ASCII85Decode";
 const S_FILTER_ASCII_HEX_DECODE: &str = "ASCIIHexDecode";
 const S_FILTER_RUN_LENGTH_DECODE: &str = "RunLengthDecode";
 const S_FILTER_JPX_DECODE: &str = "JPXDecode";
+
+const FILTER_CRYPT: Name = sname(S_FILTER_CRYPT);
+const FILTER_FLATE_DECODE: Name = sname("FlateDecode");
+// const FILTER_LZW_DECODE: Name = sname("LZWDecode");
+const FILTER_CCITT_FAX: Name = sname("CCITTFaxDecode");
+const FILTER_DCT_DECODE: Name = sname("DCTDecode");
+const FILTER_ASCII85_DECODE: Name = sname("ASCII85Decode");
+// const FILTER_RUN_LENGTH_DECODE: Name = sname("RunLengthDecode");
+const FILTER_JPX_DECODE: Name = sname("JPXDecode");
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct BufPos {
@@ -165,12 +167,57 @@ fn decode_stream<'a, 'b>(
     filter_dict: &'b Dictionary,
     buf: impl Into<Cow<'a, [u8]>>,
     resolver: Option<&ObjectResolver<'a>>,
+    id: Option<ObjectId>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     let filter_dict = FilterDict::new(filter_dict, resolver);
     let mut decoded = FilterDecodedData::Bytes(buf.into());
-    for (filter_name, params) in iter_filters(filter_dict)? {
-        decoded = filter(decoded.into_bytes()?, resolver, &filter_name, params)?;
+    let filters = iter_filters(filter_dict)?;
+    if let Some(resolver) = resolver {
+        if resolver.encript_info().is_some() {
+            let mut filters = filters.peekable();
+            if !filters
+                .peek()
+                .map_or_else(|| false, |(f, _)| f == &FILTER_CRYPT)
+            {
+                // pre a Crypt filter if enabled encrypt and Crypt not a first filter
+                let filters = once((FILTER_CRYPT, None)).chain(filters);
+                for (filter_name, params) in filters {
+                    decoded = filter(
+                        decoded.into_bytes()?,
+                        Some(resolver),
+                        &filter_name,
+                        params,
+                        id,
+                    )?;
+                }
+            } else {
+                for (filter_name, params) in filters {
+                    decoded = filter(
+                        decoded.into_bytes()?,
+                        Some(resolver),
+                        &filter_name,
+                        params,
+                        id,
+                    )?;
+                }
+            }
+        } else {
+            for (filter_name, params) in filters {
+                decoded = filter(
+                    decoded.into_bytes()?,
+                    Some(resolver),
+                    &filter_name,
+                    params,
+                    id,
+                )?;
+            }
+        }
+    } else {
+        for (filter_name, params) in filters {
+            decoded = filter(decoded.into_bytes()?, resolver, &filter_name, params, id)?;
+        }
     }
+
     Ok(decoded)
 }
 
@@ -528,6 +575,19 @@ fn decode_lzw(buf: &[u8], params: LZWDeflateDecodeParams) -> Result<Vec<u8>, Obj
     predictor_decode(r, &params)
 }
 
+fn crypt_filter(
+    mut buf: Vec<u8>,
+    id: ObjectId,
+    encrypt_info: &EncryptInfo,
+    params: Option<&Dictionary>,
+) -> Result<Vec<u8>, ObjectValueError> {
+    let name = params
+        .and_then(|d| d.get("Name").map(|o| o.name()))
+        .transpose()?;
+    encrypt_info.stream_decrypt(name, id, &mut buf);
+    Ok(buf)
+}
+
 fn decode_flate(buf: &[u8], params: LZWDeflateDecodeParams) -> Result<Vec<u8>, ObjectValueError> {
     use flate2::bufread::{DeflateDecoder, ZlibDecoder};
     use std::io::Read;
@@ -783,10 +843,21 @@ fn filter<'a: 'b, 'b>(
     resolver: Option<&ObjectResolver<'a>>,
     filter_name: &Name,
     params: Option<&'b Dictionary>,
+    id: Option<ObjectId>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     let empty_dict = Lazy::new(Dictionary::new);
     #[allow(clippy::match_ref_pats)]
     match filter_name.as_str() {
+        S_FILTER_CRYPT => crypt_filter(
+            buf.into_owned(),
+            id.unwrap(),
+            resolver
+                .unwrap()
+                .encript_info()
+                .expect("File not encrypted"),
+            params,
+        )
+        .map(FilterDecodedData::bytes),
         S_FILTER_FLATE_DECODE => decode_flate(
             &buf,
             LZWDeflateDecodeParams::new(params.unwrap_or_else(|| &*empty_dict), resolver)?,
@@ -887,22 +958,12 @@ impl Stream {
         &self,
         resolver: &ObjectResolver<'a>,
     ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
-        let mut raw: Cow<'a, [u8]> = self.raw(resolver)?.into();
-        if let Some(encrypt_info) = resolver.encript_info() {
-            let mut buf = raw.into_owned();
-            match encrypt_info.algorithm {
-                Algorithm::Key40 | Algorithm::Key40AndMore => {
-                    Rc4Decryptor::new(&encrypt_info.encript_key, self.2).decrypt(&mut buf);
-                }
-                _ => todo!(),
-            }
-            raw = buf.into();
-        }
-
         if self.0.contains_key(&KEY_FFILTER) {
             return Err(ObjectValueError::ExternalStreamNotSupported);
         }
-        decode_stream(&self.0, raw, Some(resolver))
+
+        let mut raw: Cow<'a, [u8]> = self.raw(resolver)?.into();
+        decode_stream(&self.0, raw, Some(resolver), Some(self.2))
     }
 
     /// Decode stream data using filter and parameters in stream dictionary.
@@ -929,7 +990,10 @@ impl Stream {
                 (Object::Reference(id), Some(resolver)) => {
                     Ok(resolver.resolve(id.id().id())?.int()? as u32)
                 }
-                _ => Err(ObjectValueError::UnexpectedType),
+                _ => {
+                    error!("Length is not Integer or Reference, {:?}", l);
+                    Err(ObjectValueError::UnexpectedType)
+                }
             }
         })
     }
@@ -942,7 +1006,13 @@ impl Stream {
     ) -> Result<Cow<'a, [u8]>, ObjectValueError> {
         let mut decoded = FilterDecodedData::Bytes(buf[self.buf_range(None)?].into());
         for (filter_name, params) in self.iter_filter()? {
-            decoded = filter(decoded.into_bytes()?, None, &filter_name, params)?;
+            decoded = filter(
+                decoded.into_bytes()?,
+                None,
+                &filter_name,
+                params,
+                Some(self.2),
+            )?;
         }
         decoded.into_bytes()
     }
