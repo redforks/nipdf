@@ -74,7 +74,11 @@ fn parse_object_stream(n: usize, buf: &[u8]) -> ParseResult<ObjectStream> {
 }
 
 impl ObjectStream {
-    pub fn new(stream: Stream, file: &[u8]) -> Result<Self, ObjectValueError> {
+    pub fn new(
+        stream: Stream,
+        file: &[u8],
+        encrypt_info: Option<&EncryptInfo>,
+    ) -> Result<Self, ObjectValueError> {
         let d = stream.as_dict();
         assert_eq!(sname("ObjStm"), d[&sname("Type")].name()?);
         let n = d.get(&sname("N")).map_or(Ok(0), |v| v.int())? as usize;
@@ -82,7 +86,7 @@ impl ObjectStream {
             !d.contains_key(&sname("Extends")),
             "Extends is not supported"
         );
-        let buf = stream.decode_without_resolve_length(file)?;
+        let buf = stream.decode_without_resolve_length(file, encrypt_info)?;
         parse_object_stream(n, buf.as_ref())
             .map_err(|e| ObjectValueError::ParseError(e.to_string()))
             .map(|(_, r)| r)
@@ -176,13 +180,14 @@ impl XRefTable {
         &'b self,
         buf: &'a [u8],
         id: impl Into<RuntimeObjectId>,
+        encrypt_info: Option<&EncryptInfo>,
     ) -> Option<Either<&'a [u8], &'b [u8]>> {
         self.id_offset.get(&id.into()).map(|entry| match entry {
             ObjectPos::Offset(offset) => Either::Left(&buf[*offset as usize..]),
             ObjectPos::InStream(id, idx) => {
                 let object_stream = self.object_streams[id]
                     .get_or_try_init(|| {
-                        let obj_buf = self.resolve_object_buf(buf, *id).unwrap();
+                        let obj_buf = self.resolve_object_buf(buf, *id, encrypt_info).unwrap();
                         let (_, mut stream) = parse_indirect_stream(&obj_buf).unwrap();
                         let length = stream.0.get("Length").cloned();
                         // Some pdf file use indirect object to store length, which it is not
@@ -196,7 +201,7 @@ impl XRefTable {
                                 );
                             });
                         }
-                        ObjectStream::new(stream, &obj_buf)
+                        ObjectStream::new(stream, &obj_buf, encrypt_info)
                     })
                     .unwrap();
                 Either::Right(object_stream.get_buf(*idx as usize))
@@ -211,7 +216,7 @@ impl XRefTable {
         encrypt_info: Option<&EncryptInfo>,
     ) -> Result<Object, ObjectValueError> {
         let id = id.into();
-        self.resolve_object_buf(buf, id)
+        self.resolve_object_buf(buf, id, encrypt_info)
             .ok_or(ObjectValueError::ObjectIDNotFound(id))
             .and_then(|buf| {
                 buf.either(
@@ -250,19 +255,15 @@ impl XRefTable {
 
 /// Decrypt HexString/LiteralString nested in object.
 fn decrypt_string(encrypt_info: &EncryptInfo, id: ObjectId, mut o: Object) -> Object {
-    struct Decryptor<T>(T);
+    struct Decryptor<'a>(&'a EncryptInfo, ObjectId);
 
-    impl<T: crate::file::Decryptor> Decryptor<T> {
-        pub fn new(decryptor: T) -> Self {
-            Self(decryptor)
-        }
-
+    impl<'a> Decryptor<'a> {
         fn hex_string(&self, s: &mut HexString) {
-            self.0.decrypt(&mut s.0);
+            self.0.string_decrypt(self.1, &mut s.0);
         }
 
         fn literal_string(&self, s: &mut LiteralString) {
-            self.0.decrypt(&mut s.0);
+            self.0.string_decrypt(self.1, &mut s.0);
         }
 
         fn dict(&self, dict: &mut Dictionary) {
@@ -294,6 +295,7 @@ fn decrypt_string(encrypt_info: &EncryptInfo, id: ObjectId, mut o: Object) -> Ob
         }
     }
 
+    Decryptor(encrypt_info, id).decrypt(&mut o);
     o
 }
 
@@ -429,7 +431,7 @@ impl<'a> ObjectResolver<'a> {
     /// Panic if id not found or not stream
     pub fn stream_data(&self, id: impl Into<RuntimeObjectId>) -> &'a [u8] {
         self.xref_table
-            .resolve_object_buf(self.buf, id)
+            .resolve_object_buf(self.buf, id, self.encript_info())
             .unwrap()
             .unwrap_left()
     }

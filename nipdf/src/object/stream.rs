@@ -85,8 +85,15 @@ struct FilterDict<'a, 'b> {
 }
 
 impl<'a, 'b> FilterDict<'a, 'b> {
-    pub fn new(d: &'b Dictionary, r: Option<&'b ObjectResolver<'a>>) -> Self {
-        Self { d, r }
+    pub fn new(
+        d: &'b Dictionary,
+        r: Option<&'b ObjectResolver<'a>>,
+    ) -> Result<Self, ObjectValueError> {
+        if d.contains_key(&KEY_FFILTER) {
+            return Err(ObjectValueError::ExternalStreamNotSupported);
+        }
+
+        Ok(Self { d, r })
     }
 
     fn alt_get(&self, id1: &Name, id2: &Name) -> Option<&'b Object> {
@@ -167,54 +174,53 @@ fn decode_stream<'a, 'b>(
     filter_dict: &'b Dictionary,
     buf: impl Into<Cow<'a, [u8]>>,
     resolver: Option<&ObjectResolver<'a>>,
+    encrypt_info: Option<&EncryptInfo>,
     id: Option<ObjectId>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
-    let filter_dict = FilterDict::new(filter_dict, resolver);
+    let encrypt_info = encrypt_info.or_else(|| resolver.map(|r| r.encript_info()).flatten());
+    let filter_dict = FilterDict::new(filter_dict, resolver)?;
     let mut decoded = FilterDecodedData::Bytes(buf.into());
     let filters = iter_filters(filter_dict)?;
-    if let Some(resolver) = resolver {
-        if resolver.encript_info().is_some() {
-            let mut filters = filters.peekable();
-            if !filters
-                .peek()
-                .map_or_else(|| false, |(f, _)| f == &FILTER_CRYPT)
-            {
-                // pre a Crypt filter if enabled encrypt and Crypt not a first filter
-                let filters = once((FILTER_CRYPT, None)).chain(filters);
-                for (filter_name, params) in filters {
-                    decoded = filter(
-                        decoded.into_bytes()?,
-                        Some(resolver),
-                        &filter_name,
-                        params,
-                        id,
-                    )?;
-                }
-            } else {
-                for (filter_name, params) in filters {
-                    decoded = filter(
-                        decoded.into_bytes()?,
-                        Some(resolver),
-                        &filter_name,
-                        params,
-                        id,
-                    )?;
-                }
+    if let Some(encryp_info) = encrypt_info {
+        let mut filters = filters.peekable();
+        if !filters
+            .peek()
+            .map_or_else(|| false, |(f, _)| f == &FILTER_CRYPT)
+        {
+            // pre a Crypt filter if enabled encrypt and Crypt not a first filter
+            let filters = once((FILTER_CRYPT, None)).chain(filters);
+            for (filter_name, params) in filters {
+                decoded = filter(
+                    decoded.into_bytes()?,
+                    resolver,
+                    &filter_name,
+                    params,
+                    id,
+                    Some(encryp_info),
+                )?;
             }
         } else {
             for (filter_name, params) in filters {
                 decoded = filter(
                     decoded.into_bytes()?,
-                    Some(resolver),
+                    resolver,
                     &filter_name,
                     params,
                     id,
+                    Some(encryp_info),
                 )?;
             }
         }
     } else {
         for (filter_name, params) in filters {
-            decoded = filter(decoded.into_bytes()?, resolver, &filter_name, params, id)?;
+            decoded = filter(
+                decoded.into_bytes()?,
+                resolver,
+                &filter_name,
+                params,
+                id,
+                None,
+            )?;
         }
     }
 
@@ -844,20 +850,15 @@ fn filter<'a: 'b, 'b>(
     filter_name: &Name,
     params: Option<&'b Dictionary>,
     id: Option<ObjectId>,
+    encrypt_info: Option<&EncryptInfo>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     let empty_dict = Lazy::new(Dictionary::new);
     #[allow(clippy::match_ref_pats)]
     match filter_name.as_str() {
-        S_FILTER_CRYPT => crypt_filter(
-            buf.into_owned(),
-            id.unwrap(),
-            resolver
-                .unwrap()
-                .encript_info()
-                .expect("File not encrypted"),
-            params,
-        )
-        .map(FilterDecodedData::bytes),
+        S_FILTER_CRYPT => {
+            crypt_filter(buf.into_owned(), id.unwrap(), encrypt_info.unwrap(), params)
+                .map(FilterDecodedData::bytes)
+        }
         S_FILTER_FLATE_DECODE => decode_flate(
             &buf,
             LZWDeflateDecodeParams::new(params.unwrap_or_else(|| &*empty_dict), resolver)?,
@@ -962,8 +963,8 @@ impl Stream {
             return Err(ObjectValueError::ExternalStreamNotSupported);
         }
 
-        let mut raw: Cow<'a, [u8]> = self.raw(resolver)?.into();
-        decode_stream(&self.0, raw, Some(resolver), Some(self.2))
+        let raw: Cow<'a, [u8]> = self.raw(resolver)?.into();
+        decode_stream(&self.0, raw, Some(resolver), None, Some(self.2))
     }
 
     /// Decode stream data using filter and parameters in stream dictionary.
@@ -1003,18 +1004,16 @@ impl Stream {
     pub fn decode_without_resolve_length<'a>(
         &self,
         buf: &'a [u8],
+        encrypt_info: Option<&EncryptInfo>,
     ) -> Result<Cow<'a, [u8]>, ObjectValueError> {
-        let mut decoded = FilterDecodedData::Bytes(buf[self.buf_range(None)?].into());
-        for (filter_name, params) in self.iter_filter()? {
-            decoded = filter(
-                decoded.into_bytes()?,
-                None,
-                &filter_name,
-                params,
-                Some(self.2),
-            )?;
-        }
-        decoded.into_bytes()
+        let data = decode_stream(
+            &self.0,
+            &buf[self.buf_range(None)?],
+            None,
+            encrypt_info,
+            Some(self.2),
+        )?;
+        data.into_bytes()
     }
 
     pub fn decode_image<'a>(
@@ -1025,16 +1024,6 @@ impl Stream {
         let decoded = self._decode(resolver)?;
         let img_dict = ImageDict::new(None, &self.0, resolver)?;
         decode_image(decoded, &img_dict, resolver, resources)
-    }
-
-    fn iter_filter(
-        &self,
-    ) -> Result<impl Iterator<Item = (Name, Option<&Dictionary>)>, ObjectValueError> {
-        if self.0.contains_key(&KEY_FFILTER) {
-            return Err(ObjectValueError::ExternalStreamNotSupported);
-        }
-        let d = FilterDict::new(&self.0, None);
-        iter_filters(d)
     }
 }
 

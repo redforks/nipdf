@@ -15,14 +15,14 @@ fn xref_table_resolve_object_buf() {
     let xref_table = XRefTable::new(id_offset);
 
     assert_eq!(
-        xref_table.resolve_object_buf(buf, 1),
+        xref_table.resolve_object_buf(buf, 1, None),
         Some(Either::Left(&b"67890"[..]))
     );
     assert_eq!(
-        xref_table.resolve_object_buf(buf, 2),
+        xref_table.resolve_object_buf(buf, 2, None),
         Some(Either::Left(&b"4567890"[..]))
     );
-    assert_eq!(xref_table.resolve_object_buf(buf, 3), None);
+    assert_eq!(xref_table.resolve_object_buf(buf, 3, None), None);
 }
 
 #[test]
@@ -100,9 +100,7 @@ endobj
 "#;
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
-    let d = resolver
-        .resolve(1)?
-        .as_dict()?;
+    let d = resolver.resolve(1)?.as_dict()?;
     let d = SchemaDict::new(d, &resolver, ())?;
     let list = d.resolve_one_or_more_pdf_object::<FooDict>(&sname("foo"))?;
     assert_eq!(list.len(), 2);

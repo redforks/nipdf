@@ -1,6 +1,5 @@
 use super::*;
 use crate::{file::decode_stream, function::Domain, object::Name};
-
 use std::rc::Rc;
 use test_case::test_case;
 
@@ -61,11 +60,9 @@ fn test_iter_filter(
         .into_iter()
         .map(|(k, v)| (k, v))
         .collect::<Dictionary>();
-    let stream = Stream(dict, BufPos::new(0, None), ObjectId::empty());
-    let r: Vec<(Name, Option<Dictionary>)> = stream
-        .iter_filter()?
-        .map(|(k, v)| (k, v.cloned()))
-        .collect();
+    let d = FilterDict::new(&dict, None)?;
+    let r: Vec<(Name, Option<Dictionary>)> =
+        iter_filters(d)?.map(|(k, v)| (k, v.cloned())).collect();
     Ok(r)
 }
 
