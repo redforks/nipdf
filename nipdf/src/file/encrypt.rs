@@ -1,5 +1,5 @@
 use crate::object::ObjectId;
-use ahash::HashMap;
+use ahash::{HashMap, HashMapExt};
 use arc4::Arc4;
 use log::error;
 use md5::{Digest, Md5};
@@ -89,7 +89,98 @@ pub trait EncryptDictTrait {
     fn string_crypt_filter(&self) -> Name;
 }
 
+/// Support get crypt filter by its name.
+pub struct CryptFilters {
+    filters: HashMap<Name, CryptFilter>,
+    default_stream: CryptFilter,
+    string_filter: CryptFilter,
+}
+
+impl CryptFilters {
+    fn new(
+        filters: HashMap<Name, CryptFilter>,
+        default_stream: &Name,
+        default_string: &Name,
+    ) -> Self {
+        Self {
+            default_stream: Self::_resolve(&filters, default_stream),
+            string_filter: Self::_resolve(&filters, default_string),
+            filters,
+        }
+    }
+
+    fn identity() -> Self {
+        Self {
+            filters: HashMap::new(),
+            default_stream: CryptFilter::Identity,
+            string_filter: CryptFilter::Identity,
+        }
+    }
+
+    pub fn string_filter(&self) -> CryptFilter {
+        self.string_filter
+    }
+
+    pub fn stream_filter(&self, name: Option<Name>) -> CryptFilter {
+        name.map_or(self.default_stream, |n| Self::_resolve(&self.filters, &n))
+    }
+
+    fn _resolve(d: &HashMap<Name, CryptFilter>, n: &Name) -> CryptFilter {
+        if n == &identity() {
+            return CryptFilter::Identity;
+        }
+        *d.get(n).unwrap_or_else(|| {
+            error!("crypt filter not found: {}", n);
+            &CryptFilter::Identity
+        })
+    }
+}
+
 impl<'a, 'b> EncryptDict<'a, 'b> {
+    pub fn crypt_filters(&self) -> CryptFilters {
+        use anyhow::Result;
+
+        fn _do(this: &EncryptDict) -> Result<CryptFilters> {
+            if this.revison()? != StandardHandlerRevion::V4 {
+                return Ok(CryptFilters::identity());
+            }
+
+            let params = this.crypt_filter_params()?;
+            let d = params
+                .into_iter()
+                .map(|(k, d)| {
+                    d.decrypt_method().map(|m| {
+                        (
+                            k,
+                            match m {
+                                DecryptMethod::None => CryptFilter::Identity,
+                                DecryptMethod::V2 => CryptFilter::Rc4,
+                                DecryptMethod::AesV2 => CryptFilter::Aes,
+                            },
+                        )
+                    })
+                })
+                .collect::<Result<_>>()?;
+            Ok(CryptFilters::new(
+                d,
+                &this.stream_default_crypt_filter()?,
+                &this.string_crypt_filter()?,
+            ))
+        }
+
+        if !matches!(
+            self.algorithm().unwrap(),
+            Algorithm::Key40 | Algorithm::Key40AndMore,
+        ) {
+            todo!("Algorithm: {:?}", self.algorithm().unwrap());
+        }
+
+        _do(self).unwrap_or_else(|e| {
+            error!("failed to parse crypt filters, use Identity: {}", e);
+            CryptFilters::identity()
+        })
+    }
+
     /// Return the default crypt filter for stream and string.
     /// If `self.>revision()` not V4, return (Identity, Identity).
     /// Stream default crypt filter: lookup `self.crypt_filter_params` by
