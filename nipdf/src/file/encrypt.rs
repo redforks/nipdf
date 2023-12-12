@@ -189,58 +189,6 @@ impl<'a, 'b> EncryptDict<'a, 'b> {
             CryptFilters::identity()
         })
     }
-
-    /// Return the default crypt filter for stream and string.
-    /// If `self.>revision()` not V4, return (Identity, Identity).
-    /// Stream default crypt filter: lookup `self.crypt_filter_params` by
-    /// `self.stream_default_crypt_filter()`, If not found, use Identity, otherwise by
-    /// `decrypt_method()` return value.
-    /// String default crypt filter similar to stream, but lookup by
-    /// `self.string_default_crypt_filter()`. If any error occurs, uses Identity.
-    pub fn default_filters(&self) -> (CryptFilter, CryptFilter) {
-        use anyhow::{anyhow, Result};
-        fn resolve_filter(
-            name: &Name,
-            params: &HashMap<Name, CryptFilterDict>,
-        ) -> Result<CryptFilter> {
-            if name == &identity() {
-                return Ok(CryptFilter::Identity);
-            }
-
-            params
-                .get(name)
-                .ok_or_else(|| anyhow!("crypt filter params not found: {}", name))
-                .and_then(|d| d.decrypt_method())
-                .map(|m| match m {
-                    DecryptMethod::None => CryptFilter::Identity,
-                    DecryptMethod::V2 => CryptFilter::Rc4,
-                    DecryptMethod::AESV2 => CryptFilter::Aes,
-                })
-        }
-
-        fn _do(this: &EncryptDict) -> Result<(CryptFilter, CryptFilter)> {
-            if this.revison()? != StandardHandlerRevion::V4 {
-                return Ok((CryptFilter::Identity, CryptFilter::Identity));
-            }
-
-            let params = this.crypt_filter_params()?;
-            let stream_filter = resolve_filter(&this.stream_default_crypt_filter()?, &params)?;
-            let string_filter = resolve_filter(&this.string_crypt_filter()?, &params)?;
-            Ok((stream_filter, string_filter))
-        }
-
-        if !matches!(
-            self.algorithm().unwrap(),
-            Algorithm::Key40 | Algorithm::Key40AndMore,
-        ) {
-            todo!("Algorithm: {:?}", self.algorithm().unwrap());
-        }
-
-        _do(self).unwrap_or_else(|e| {
-            error!("failed to get default crypt filter, use Identity: {}", e);
-            (CryptFilter::Identity, CryptFilter::Identity)
-        })
-    }
 }
 
 const PADDING: [u8; 32] = [
@@ -453,7 +401,7 @@ impl CryptFilter {
     }
 }
 
-pub struct Rc4Decryptor(ArrayVec<[u8; 16]>);
+struct Rc4Decryptor(ArrayVec<[u8; 16]>);
 
 impl Decryptor for Rc4Decryptor {
     fn new(key: &[u8], id: ObjectId) -> Self {
@@ -472,7 +420,7 @@ impl Decryptor for Rc4Decryptor {
     }
 }
 
-pub struct AesDecryptor(ArrayVec<[u8; 16]>);
+struct AesDecryptor(ArrayVec<[u8; 16]>);
 
 impl Decryptor for AesDecryptor {
     fn new(key: &[u8], id: ObjectId) -> Self {
