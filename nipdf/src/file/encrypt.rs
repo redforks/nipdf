@@ -343,6 +343,16 @@ pub enum CryptFilter {
     Aes,
 }
 
+impl CryptFilter {
+    pub fn decrypt(&self, key: &[u8], id: ObjectId, data: &mut impl VecLike) {
+        match self {
+            CryptFilter::Identity => {}
+            CryptFilter::Rc4 => Rc4Decryptor::new(key, id).decrypt(data),
+            CryptFilter::Aes => AesDecryptor::new(key, id).decrypt(data),
+        }
+    }
+}
+
 pub struct Rc4Decryptor(ArrayVec<[u8; 16]>);
 
 impl Decryptor for Rc4Decryptor {
