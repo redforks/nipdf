@@ -180,15 +180,17 @@ pub fn render_steps(
         .build();
     let content = page.content()?;
     let ops = content.operations();
-    let resource = page.resources();
     let mut canvas = option.create_canvas();
-    let mut renderer = Render::new(&mut canvas, option.clone(), &resource);
-    if let Some(steps) = steps {
-        ops.into_iter().take(steps).for_each(|op| renderer.exec(op));
-    } else {
-        ops.into_iter().for_each(|op| renderer.exec(op));
-    };
-    drop(renderer);
+    if !ops.is_empty() {
+        // skip render if no operations, fixes incorrect pdf files that no resources
+        let resource = page.resources();
+        let mut renderer = Render::new(&mut canvas, option.clone(), &resource);
+        if let Some(steps) = steps {
+            ops.into_iter().take(steps).for_each(|op| renderer.exec(op));
+        } else {
+            ops.into_iter().for_each(|op| renderer.exec(op));
+        };
+    }
     let r = option.to_image(canvas);
     Ok(r)
 }
