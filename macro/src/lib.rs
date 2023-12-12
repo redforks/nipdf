@@ -99,7 +99,7 @@ pub fn try_from_int_object_for_bitflags(input: TokenStream) -> TokenStream {
 
             fn try_from(object: &crate::object::Object) -> Result<Self, Self::Error> {
                 let n = object.int()?;
-                Ok(<#t as bitflags::Flags>::from_bits(n as u32).unwrap())
+                Ok(<#t as bitflags::Flags>::from_bits_truncate(n as u32))
             }
         }
     };
