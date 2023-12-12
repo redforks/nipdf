@@ -254,6 +254,7 @@ pub trait CIDFontDictTrait {
     #[nested]
     fn font_descriptor(&self) -> Option<FontDescriptorDict<'a, 'b>>;
     #[default(1000u32)]
+    #[key("DW")]
     fn dw(&self) -> u32;
     #[try_from]
     fn w(&self) -> CIDFontWidths;
