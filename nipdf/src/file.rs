@@ -182,9 +182,21 @@ impl XRefTable {
             ObjectPos::InStream(id, idx) => {
                 let object_stream = self.object_streams[id]
                     .get_or_try_init(|| {
-                        let buf = self.resolve_object_buf(buf, *id).unwrap();
-                        let (_, stream) = parse_indirect_stream(&buf).unwrap();
-                        ObjectStream::new(stream, &buf)
+                        let obj_buf = self.resolve_object_buf(buf, *id).unwrap();
+                        let (_, mut stream) = parse_indirect_stream(&obj_buf).unwrap();
+                        let length = stream.0.get("Length").cloned();
+                        // Some pdf file use indirect object to store length, which it is not
+                        // allowed by pdf file standard, but anyway, we
+                        // support it.
+                        if let Some(Object::Reference(id)) = length {
+                            stream.0.update(|d| {
+                                d.insert(
+                                    sname("Length"),
+                                    self.parse_object(buf, id.id().id(), None).unwrap(),
+                                );
+                            });
+                        }
+                        ObjectStream::new(stream, &obj_buf)
                     })
                     .unwrap();
                 Either::Right(object_stream.get_buf(*idx as usize))
