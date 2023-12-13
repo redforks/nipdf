@@ -570,7 +570,7 @@ impl<'a, 'b: 'a> Catalog<'a, 'b> {
 
 pub struct File {
     root_id: RuntimeObjectId,
-    head_ver: String,
+    head_ver: Option<String>,
     data: Vec<u8>,
     xref: XRefTable,
     encrypt_info: Option<EncryptInfo>,
@@ -662,7 +662,7 @@ impl File {
         let root_id = root_id.reference().unwrap().id().id();
 
         Ok(Self {
-            head_ver: head_ver.to_owned(),
+            head_ver: head_ver.map(|s| s.to_owned()),
             root_id,
             data: buf,
             xref,
@@ -681,11 +681,11 @@ impl File {
     pub fn version<'a>(
         &'a self,
         resolver: &'a ObjectResolver<'a>,
-    ) -> Result<String, ObjectValueError> {
+    ) -> Result<Option<String>, ObjectValueError> {
         let catalog = self.catalog(resolver)?;
         Ok(catalog
             .ver()
-            .map(|s| s.into_string())
+            .map(|s| Some(s.into_string()))
             .unwrap_or_else(|| self.head_ver.clone()))
     }
 

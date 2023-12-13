@@ -164,5 +164,5 @@ fn parse_file() {
     let buf = std::fs::read(p).unwrap();
     let f = File::parse(buf, "", "").unwrap();
     let resolver = f.resolver().unwrap();
-    assert_eq!("1.5", f.version(&resolver).unwrap());
+    assert_eq!(Some("1.5".to_owned()), f.version(&resolver).unwrap());
 }
