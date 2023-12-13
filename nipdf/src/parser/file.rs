@@ -9,7 +9,7 @@ use memchr::memmem::rfind;
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{char, satisfy, u16, u32},
+    character::complete::{char, satisfy, u32},
     combinator::{complete, map, map_res, opt, recognize},
     error::{context, ErrorKind, ParseError as NomParseError},
     multi::{count, fold_many1, many0},
@@ -194,11 +194,19 @@ fn parse_xref_table(buf: &[u8]) -> ParseResult<XRefSection> {
             ws_terminated(tuple((
                 u32,
                 tag(b" "),
-                u16,
+                u32,
                 tag(b" "),
                 alt((tag(b"n"), tag(b"f"))),
             ))),
-            |(offset, _, generation, _, ty)| Entry::in_file(offset, generation, ty == b"n"),
+            |(offset, _, generation, _, ty)| {
+                Entry::in_file(
+                    offset,
+                    // saturation to u16 for incorrect pdf file, they may use 65536
+                    // which out of the range of u16
+                    generation.clamp(0, u16::MAX as u32) as u16,
+                    ty == b"n",
+                )
+            },
         ),
     );
     let group = tuple((record_count_parser, many0(record_parser)));
