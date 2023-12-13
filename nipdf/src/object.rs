@@ -528,7 +528,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
 
     /// Return empty vec if not exist, error if not array
     pub fn u32_arr(&self, id: &Name) -> Result<Vec<u32>, ObjectValueError> {
-        self.opt_arr_map(id, |o| o.int().map(|i| i as u32))
+        self.opt_arr_map(id, |o| o.as_int().map(|i| i as u32))
             .map(|o| o.unwrap_or_default())
     }
 
@@ -982,6 +982,12 @@ impl Object {
             Ok(u) => Ok(Either::Left(u)),
             Err(_) => V::try_from(self).map(Either::Right),
         }
+    }
+
+    /// Get number as i32, if value is f32, convert to i32, error otherwise.
+    pub fn as_int(&self) -> Result<i32, ObjectValueError> {
+        self.either::<f32, i32>()
+            .map(|v| v.map_either(|v| v as i32, |v| v).into_inner())
     }
 
     pub fn as_number(&self) -> Result<f32, ObjectValueError> {
