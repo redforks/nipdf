@@ -13,6 +13,7 @@ mod shading;
 use render::{Render, State};
 mod into_skia;
 pub(crate) use into_skia::*;
+use num::ToPrimitive;
 
 #[derive(Debug, Educe, Clone, Copy)]
 #[educe(Default)]
@@ -36,19 +37,19 @@ impl PageDimension {
         }
         self.transform = transform;
 
-        self.width = dimension.width() as u32;
-        self.height = dimension.height() as u32;
+        self.width = dimension.width().to_u32().unwrap();
+        self.height = dimension.height().to_u32().unwrap();
         if self.swap_wh() {
             std::mem::swap(&mut self.width, &mut self.height);
         }
     }
 
     pub fn canvas_width(&self) -> u32 {
-        (self.width as f32 * self.zoom) as u32
+        (self.width as f32 * self.zoom).to_u32().unwrap()
     }
 
     pub fn canvas_height(&self) -> u32 {
-        (self.height as f32 * self.zoom) as u32
+        (self.height as f32 * self.zoom).to_u32().unwrap()
     }
 
     fn swap_wh(&self) -> bool {
@@ -96,7 +97,7 @@ impl RenderOption {
             panic!("page size too large: {}x{}", w, h);
         }
 
-        let mut r = Pixmap::new(w as u32, h as u32).unwrap();
+        let mut r = Pixmap::new(w.try_into().unwrap(), h.try_into().unwrap()).unwrap();
         if self.background_color.is_opaque() {
             r.fill(self.background_color);
         }

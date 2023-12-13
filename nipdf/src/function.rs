@@ -3,6 +3,7 @@ use anyhow::Result as AnyResult;
 #[cfg(test)]
 use mockall::automock;
 use nipdf_macro::{pdf_object, TryFromIntObject};
+use num::ToPrimitive;
 use tinyvec::{tiny_vec, TinyVec};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -345,7 +346,7 @@ impl Function for SampledFunction {
             let encode = &self.encode.0[i];
             let arg = (arg - domain.start) / (domain.end - domain.start);
             let arg = arg.mul_add(encode.end - encode.start, encode.start);
-            idx += (arg as u32).clamp(0, self.size[i] - 1);
+            idx += arg.to_u32().unwrap().clamp(0, self.size[i] - 1);
         }
 
         let n = self.signature.n_returns().unwrap();

@@ -462,6 +462,7 @@ impl<'a> Coder<'a> {
     }
 
     // return true if current line filled.
+    #[allow(clippy::cast_possible_truncation)]
     fn decode(&mut self, code: Code) -> Result<bool> {
         match code {
             Code::Horizontal(a0a1, a1a2) => {
