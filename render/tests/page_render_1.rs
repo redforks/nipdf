@@ -58,7 +58,7 @@ fn download_file(url: &str, f: impl AsRef<Path>) -> AnyResult<()> {
 }
 
 /// These files are very rare and odd, not to be tested
-const IGNORED: [&str; 7] = [
+const IGNORED: [&str; 8] = [
     // xpdf, mupdf, are all failed to open
     "bug1020226.pdf",
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
@@ -79,6 +79,9 @@ const IGNORED: [&str; 7] = [
     // damaged file, xpdf/mupdf/qpdf all failed to open,
     // maybe can be read using Linearized PDF (Annex F)
     "bpl13210.pdf.link",
+    // incorrect startxref pos, need to fix xref.
+    // xpdf says: attempting to reconstruct xref table...
+    "bug1606566.pdf",
 ];
 
 /// Read pdf file and render each page, to save test time,
