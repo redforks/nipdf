@@ -200,10 +200,15 @@ where
                     })))
                 }
                 "Pattern" => {
-                    assert_eq!(2, arr.len());
-                    let base = ColorSpaceArgs::try_from(&arr[1])?;
-                    let base: ColorSpace<T> = Self::from_args(&base, resolver, resources)?;
-                    Ok(Self::Pattern(Box::new(PatternColorSpace(Some(base)))))
+                    assert!(arr.len() <= 2);
+                    let base = arr
+                        .get(1)
+                        .map(|args| {
+                            let base = ColorSpaceArgs::try_from(args)?;
+                            Self::from_args(&base, resolver, resources)
+                        })
+                        .transpose()?;
+                    Ok(Self::Pattern(Box::new(PatternColorSpace(base))))
                 }
                 s => todo!("ColorSpace::from_args() {} color space", s),
             },
