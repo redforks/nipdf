@@ -59,12 +59,12 @@ const FILTER_JPX_DECODE: Name = sname("JPXDecode");
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct BufPos {
-    start: u16,
+    start: u32,
     length: Option<NonZeroU32>,
 }
 
 impl BufPos {
-    pub fn new(start: u16, length: Option<NonZeroU32>) -> Self {
+    pub fn new(start: u32, length: Option<NonZeroU32>) -> Self {
         Self { start, length }
     }
 

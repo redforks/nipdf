@@ -173,7 +173,7 @@ pub fn parse_dict(input: &[u8]) -> ParseResult<Dictionary> {
     )(input)
 }
 
-type StreamParts = (Dictionary, u16, Option<NonZeroU32>);
+type StreamParts = (Dictionary, u32, Option<NonZeroU32>);
 
 fn parse_object_and_stream(input: &[u8]) -> ParseResult<Either<Object, StreamParts>> {
     let input_len = input.len();
@@ -223,7 +223,7 @@ pub fn parse_indirect_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
         Either::Left(o) => o,
         Either::Right((dict, start, length)) => Object::Stream(Rc::new(Stream::new(
             dict,
-            BufPos::new(offset.to_u16().unwrap() + start, length),
+            BufPos::new(offset.to_u32().unwrap() + start, length),
             ObjectId::new(id, gen),
         ))),
     };
