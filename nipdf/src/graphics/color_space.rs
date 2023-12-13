@@ -7,6 +7,7 @@ use crate::{
 };
 use anyhow::{anyhow, bail, Result as AnyResult};
 use nipdf_macro::pdf_object;
+use num::ToPrimitive;
 use std::rc::Rc;
 
 /// Color component composes a color.
@@ -50,7 +51,8 @@ impl ColorCompConvertTo<u8> for f32 {
         // according to pdf file specification, float color component should be
         // rounded to nearest integer, See page 157 of PDF 32000-1:2008
         // If the value is a real number, it shall be rounded to the nearest integer;
-        (self * 255.0).round().clamp(0., 255.) as u8
+        // value clamped to u8 range, cast is safe
+        (self * 255.0).round().clamp(0., 255.).to_u8().unwrap()
     }
 }
 

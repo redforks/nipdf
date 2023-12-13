@@ -467,16 +467,18 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
     }
 
     pub fn opt_u16(&self, id: &Name) -> Result<Option<u16>, ObjectValueError> {
-        self.opt_int(id).map(|i| i.map(|i| i as u16))
+        self.opt_int(id).map(|i| i.map(|i| i.try_into().unwrap()))
     }
 
     pub fn required_u16(&self, id: &Name) -> Result<u16, ObjectValueError> {
-        self.int(id).map(|i| i as u16)
+        self.int(id).map(|i| i.try_into().unwrap())
     }
 
     pub fn opt_u32(&self, id: &Name) -> Result<Option<u32>, ObjectValueError> {
         self.opt_int(id).map(|i| {
             // i32 as u32 as a no-op, so it is safe to use `as` operator.
+            // truncate is expected here, so allow it.
+            #[allow(clippy::cast_possible_truncation)]
             i.map(|i| i as u32)
         })
     }
@@ -491,11 +493,11 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
     }
 
     pub fn opt_u8(&self, id: &Name) -> Result<Option<u8>, ObjectValueError> {
-        self.opt_int(id).map(|i| i.map(|i| i as u8))
+        self.opt_int(id).map(|i| i.map(|i| i.try_into().unwrap()))
     }
 
     pub fn required_u8(&self, id: &Name) -> Result<u8, ObjectValueError> {
-        self.int(id).map(|i| i as u8)
+        self.int(id).map(|i| i.try_into().unwrap())
     }
 
     pub fn u8_or(&self, id: &Name, default: u8) -> Result<u8, ObjectValueError> {
@@ -987,7 +989,7 @@ impl Object {
     /// Get number as i32, if value is f32, convert to i32, error otherwise.
     pub fn as_int(&self) -> Result<i32, ObjectValueError> {
         self.either::<f32, i32>()
-            .map(|v| v.map_either(|v| v as i32, |v| v).into_inner())
+            .map(|v| v.map_either(|v| v.to_i32().unwrap(), |v| v).into_inner())
     }
 
     pub fn as_number(&self) -> Result<f32, ObjectValueError> {
@@ -1084,6 +1086,7 @@ impl<const N: usize> TryFrom<&Object> for [f32; N] {
 
 use either::Either;
 use euclid::Length;
+use num::ToPrimitive;
 use pretty::RcDoc;
 use static_assertions::assert_eq_size;
 

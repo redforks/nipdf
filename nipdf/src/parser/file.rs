@@ -38,7 +38,7 @@ pub fn parse_header(buf: &[u8]) -> ParseResult<Option<&str>> {
 
     let (buf, _) = tag("%")(buf)?;
     let (buf, v) = opt(tag("PDF-"))(buf)?;
-    if !v.is_some() {
+    if v.is_none() {
         return Ok((buf, None));
     }
 
@@ -167,13 +167,12 @@ fn parse_xref_stream(input: &[u8]) -> ParseResult<(XRefSection, Dictionary)> {
     let mut entries = entries.into_iter();
     for Domain { start, end: size } in sections.0 {
         for (idx, (a, b, c)) in entries.by_ref().take(size as usize).enumerate() {
+            let c: u16 = c.try_into().unwrap();
+            let idx: u32 = idx.try_into().unwrap();
             match a {
-                0 => r.push((start + idx as u32, Entry::in_file(0, c as u16, false))),
-                1 => r.push((start + idx as u32, Entry::in_file(b, c as u16, true))),
-                2 => r.push((
-                    start + idx as u32,
-                    Entry::in_stream(RuntimeObjectId(b), c as u16),
-                )),
+                0 => r.push((start + idx, Entry::in_file(0, c, false))),
+                1 => r.push((start + idx, Entry::in_file(b, c, true))),
+                2 => r.push((start + idx, Entry::in_stream(RuntimeObjectId(b), c))),
                 _ => info!("unknown xref stream entry type: {a}, idx: {idx}, ignored",),
             }
         }
@@ -199,6 +198,8 @@ fn parse_xref_table(buf: &[u8]) -> ParseResult<XRefSection> {
                 alt((tag(b"n"), tag(b"f"))),
             ))),
             |(offset, _, generation, _, ty)| {
+                // safe because clamp into u16 range
+                #[allow(clippy::cast_possible_truncation)]
                 Entry::in_file(
                     offset,
                     // saturation to u16 for incorrect pdf file, they may use 65536
@@ -211,9 +212,9 @@ fn parse_xref_table(buf: &[u8]) -> ParseResult<XRefSection> {
     );
     let group = tuple((record_count_parser, many0(record_parser)));
     let parser = fold_many1(group, Vec::new, |mut table, ((start, count), entries)| {
-        assert_eq!(count, entries.len() as u32);
+        assert_eq!(count as usize, entries.len());
         for (i, entry) in entries.into_iter().enumerate() {
-            table.push((start + i as u32, entry));
+            table.push((start + u32::try_from(i).unwrap(), entry));
         }
         table
     });

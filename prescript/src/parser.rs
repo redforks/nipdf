@@ -165,6 +165,7 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
     fn escaped_char<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>> {
         fn parse_oct_byte(input: &mut &[u8]) -> PResult<u8> {
             let buf = take_while(1..=3, |c: u8| c.is_oct_digit()).parse_next(input)?;
+            #[allow(clippy::cast_possible_truncation)]
             Ok(unsafe { u16::from_str_radix(from_utf8_unchecked(buf), 8).unwrap() as u8 })
         }
 

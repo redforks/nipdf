@@ -19,6 +19,7 @@ use image::{DynamicImage, GrayImage, Luma, RgbImage, Rgba, RgbaImage};
 use jpeg_decoder::PixelFormat;
 use log::error;
 use nipdf_macro::pdf_object;
+use num::ToPrimitive;
 use once_cell::unsync::Lazy;
 use prescript::{sname, Name};
 use std::{
@@ -488,6 +489,7 @@ fn png_predictor(buf: &[u8], columns: i32) -> Result<Vec<u8>, ObjectValueError> 
     let mut r = vec![0u8; buf.len() / (columns + 1) * columns];
     for (cur_row, dest_row) in buf.chunks(columns + 1).zip(r.chunks_mut(columns)) {
         let (flag, cur_row) = cur_row.split_first().unwrap();
+        #[allow(clippy::cast_possible_truncation)]
         match flag {
             0 => dest_row.copy_from_slice(cur_row),
             1 => {
@@ -510,6 +512,7 @@ fn png_predictor(buf: &[u8], columns: i32) -> Result<Vec<u8>, ObjectValueError> 
                     .iter_mut()
                     .zip(upper_row.iter().zip(left_row.zip(cur_row.iter())))
                 {
+                    // overflow truncate is expected behavior
                     *dest = (*cur).wrapping_add(((left as i16 + *up as i16) / 2) as u8);
                 }
             }
@@ -1036,8 +1039,8 @@ fn color_key_range(range: &Domains, cs: &ColorSpace) -> ColorKey {
     let mut min = [0u8; 4];
     let mut max = [0u8; 4];
     for (i, (min, max)) in min.iter_mut().zip(max.iter_mut()).take(n).enumerate() {
-        *min = range.0[i].start as u8;
-        *max = range.0[i].end as u8;
+        *min = range.0[i].start.to_u8().unwrap();
+        *max = range.0[i].end.to_u8().unwrap();
     }
     let min: [_; 4] = convert_color_to(&min[..]);
     let max: [_; 4] = convert_color_to(&max[..]);

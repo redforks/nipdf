@@ -16,6 +16,7 @@ use nom::{
     multi::{many0, many0_count},
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
 };
+use num::ToPrimitive;
 use prescript::{sname, Name};
 use std::{
     borrow::Cow,
@@ -198,7 +199,11 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<Either<Object, StreamPar
                 }
                 Ok((
                     data,
-                    Either::Right((d, start as u16, length.and_then(NonZeroU32::new))),
+                    Either::Right((
+                        d,
+                        start.try_into().unwrap(),
+                        length.and_then(NonZeroU32::new),
+                    )),
                 ))
             } else {
                 Ok((data, Either::Left(Object::Dictionary(d))))
@@ -218,7 +223,7 @@ pub fn parse_indirect_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
         Either::Left(o) => o,
         Either::Right((dict, start, length)) => Object::Stream(Rc::new(Stream::new(
             dict,
-            BufPos::new(offset as u16 + start, length),
+            BufPos::new(offset.to_u16().unwrap() + start, length),
             ObjectId::new(id, gen),
         ))),
     };

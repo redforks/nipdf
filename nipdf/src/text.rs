@@ -7,6 +7,7 @@ use ahash::{HashMap, HashMapExt};
 use anyhow::Result as AnyResult;
 use bitflags::bitflags;
 use nipdf_macro::{pdf_object, TryFromIntObjectForBitflags, TryFromNameObject};
+use num::ToPrimitive;
 use prescript::{name, Encoding, Name};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, TryFromNameObject)]
@@ -194,7 +195,7 @@ impl CIDFontWidths {
         for group in &self.0 {
             match group {
                 CIDFontWidthGroup::NConsecutive((first, widths)) => {
-                    if ch >= *first && ch < *first + widths.len() as u32 {
+                    if ch >= *first && ch < *first + u32::try_from(widths.len()).unwrap() {
                         return Some(widths[(ch - first) as usize] as u32);
                     }
                 }
@@ -226,7 +227,7 @@ impl<'b> TryFrom<&'b Object> for CIDFontWidths {
                 Object::Array(arr) => {
                     let mut width = Vec::with_capacity(arr.len());
                     for num in arr.iter() {
-                        let num = num.as_number()? as u16;
+                        let num = num.as_number()?.to_u16().unwrap();
                         width.push(num);
                     }
                     widths.push(CIDFontWidthGroup::NConsecutive((first as u32, width)));
@@ -236,7 +237,7 @@ impl<'b> TryFrom<&'b Object> for CIDFontWidths {
                     widths.push(CIDFontWidthGroup::FirstLast {
                         first: first as u32,
                         last: *last as u32,
-                        width: width.as_number()? as u16,
+                        width: width.as_number()?.to_u16().unwrap(),
                     });
                 }
                 _ => return Err(Self::Error::UnexpectedType),
@@ -395,7 +396,7 @@ impl<'b> TryFrom<&'b Object> for EncodingDifferences<'b> {
         for o in iter {
             match o {
                 Object::Name(name) => {
-                    map.insert(code as u8, name.as_str());
+                    map.insert(code.try_into().unwrap(), name.as_str());
                     code += 1;
                 }
                 Object::Integer(num) => {

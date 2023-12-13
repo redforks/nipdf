@@ -783,7 +783,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
         },
         // Push counts of items in stack to stack
         sname("count") => |m| {
-            let len = m.stack.len() as i32;
+            let len: i32 = m.stack.len().try_into().unwrap();
             m.push(len);
             ok()
         },
@@ -1063,14 +1063,18 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
                     }
                     array[index] = value.try_into()?;
                 }
-                RuntimeValue::Value(Value::String(s)) => {
+                RuntimeValue::Value(Value::String(s)) =>
+                {
                     let index = key.int()?;
                     let mut s = s.borrow_mut();
                     let index = index as usize;
                     if index >= s.len() {
                         return Err(MachineError::RangeCheck);
                     }
-                    s[index] = value.int()? as u8;
+                    #[allow(clippy::cast_possible_truncation)]
+                    {
+                        s[index] = value.int()? as u8;
+                    }
                 }
                 RuntimeValue::Value(Value::Procedure(arr)) => {
                     let index = key.int()?;

@@ -18,6 +18,7 @@ use font_kit::loaders::freetype::Font as FontKitFont;
 use fontdb::{Database, Family, Query, Source, Weight};
 use heck::ToTitleCase;
 use log::{debug, error, info, warn};
+use num::ToPrimitive;
 use once_cell::sync::Lazy;
 use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
@@ -71,7 +72,7 @@ impl<'a> FreeTypeFontWidth<'a> {
     }
 
     pub fn glyph_width(&self, gid: u32) -> u32 {
-        self.font.advance(gid).unwrap().x() as u32
+        self.font.advance(gid).unwrap().x().to_u32().unwrap()
     }
 }
 
@@ -287,9 +288,9 @@ impl<'a> FontOp for Type1FontOp<'a> {
 
     /// Use font.glyph_for_char() if encoding is None or encoding.replace() returns None
     fn char_to_gid(&self, ch: u32) -> u16 {
-        let gid_name = self.encoding.get_str(ch as u8);
+        let gid_name = self.encoding.get_str(ch.try_into().unwrap());
         if let Some(r) = self.font.glyph_by_name(gid_name) {
-            r as u16
+            r.try_into().unwrap()
         } else {
             info!("glyph id not found for char: {:?}/{}", ch, gid_name);
             // .notdef gid is always be 0 for type1 font
@@ -669,7 +670,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
             families: &families,
             weight: desc
                 .font_weight()?
-                .map(|v| Weight(v as u16))
+                .map(|v| Weight(v.try_into().unwrap()))
                 .unwrap_or(Weight::NORMAL),
             style,
             ..Default::default()
@@ -905,7 +906,7 @@ impl FontOp for Type0FontOp {
     }
 
     fn char_to_gid(&self, ch: u32) -> u16 {
-        ch as u16
+        ch.try_into().unwrap()
     }
 
     fn char_width(&self, ch: u32) -> GlyphLength {
@@ -971,7 +972,7 @@ impl<'a> Type3FontOp<'a> {
             font_width: FirstLastFontWidth::from(type3)?.unwrap(),
             name_to_gid,
             encoding,
-            units_per_em: (1.0 / matrix.m11).abs() as u16,
+            units_per_em: (1.0 / matrix.m11).abs().to_u16().unwrap(),
         })
     }
 }
@@ -982,7 +983,7 @@ impl<'a> FontOp for Type3FontOp<'a> {
     }
 
     fn char_to_gid(&self, ch: u32) -> u16 {
-        let gid_name = self.encoding.get_str(ch as u8);
+        let gid_name = self.encoding.get_str(ch.try_into().unwrap());
         if let Some(gid) = self.name_to_gid.get(gid_name) {
             *gid
         } else {
@@ -1027,7 +1028,7 @@ impl<'a, 'b> Type3Font<'a, 'b> {
         let mut glyphs = Vec::with_capacity(glyph_and_names.len());
         let mut glyph_ids = HashMap::with_capacity(glyph_and_names.len());
         for (name, glyph) in glyph_and_names {
-            let gid = glyphs.len() as u16;
+            let gid = glyphs.len().try_into().unwrap();
             glyphs.push(glyph);
             glyph_ids.insert(name, gid);
         }

@@ -228,7 +228,7 @@ impl Viewer {
         };
         self.navi = PageNavigator {
             current_page: no,
-            total_pages: pages.len() as u32,
+            total_pages: pages.len().try_into().unwrap(),
         };
         self.update_cur_page_editing_from_navigation();
         #[cfg(feature = "debug")]

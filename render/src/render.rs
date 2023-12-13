@@ -31,6 +31,7 @@ use nipdf::{
     object::{ImageMetadata, InlineImage, Object, PdfObject, TextStringOrNumber},
 };
 use nom::{combinator::eof, sequence::terminated};
+use num::ToPrimitive;
 use prescript::Name;
 use std::{
     borrow::Cow,
@@ -1195,7 +1196,9 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         } else {
             d / 2.0
         }
-        .ceil() as usize;
+        .ceil()
+        .to_usize()
+        .unwrap();
         let steps = steps.max(10);
 
         let ctm = ctm.into_skia();

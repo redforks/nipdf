@@ -836,7 +836,7 @@ impl<'a> SIDDict<'a> {
     fn resolve_sid(&self, v: &Operand) -> Result<&str> {
         v.int()
             .ok_or(Error::ExpectInt)
-            .map(|v| self.strings.get(v as u16))
+            .map(|v| self.strings.get(v.try_into().unwrap()))
     }
 
     pub fn sid(&self, k: Operator) -> Result<&str> {
@@ -973,7 +973,7 @@ impl<'a> TopDictData<'a> {
     pub fn n_glyphs(&self, file: &[u8]) -> Result<u16> {
         let buf = &file[self.char_strings()? as usize..];
         let (_, index) = parse_indexed_data(buf)?;
-        Ok(index.len() as u16)
+        Ok(index.len().try_into().unwrap())
     }
 
     pub fn synthetic_base(&self) -> Result<i32> {
@@ -1053,7 +1053,7 @@ impl Charsets {
                 let mut i: Sid = 1;
                 for range in ranges {
                     let start = i;
-                    i += range.len() as Sid;
+                    i += Sid::try_from(range.len()).unwrap();
                     if i > idx {
                         return Some(*range.start() + idx - start as Sid);
                     }
@@ -1074,10 +1074,10 @@ impl Charsets {
 fn parse_charsets(buf: &[u8], n_glyphs: u16) -> ParseResult<Charsets> {
     let n_glyphs = n_glyphs - 1; // 0 is always .notdef, not exist in charsets
 
-    fn covers(r: &[RangeInclusive<Sid>]) -> usize {
+    fn covers(r: &[RangeInclusive<Sid>]) -> i32 {
         let mut covers = 0;
         for range in r {
-            covers += range.len();
+            covers += i32::try_from(range.len()).unwrap();
         }
         covers
     }
@@ -1098,7 +1098,7 @@ fn parse_charsets(buf: &[u8], n_glyphs: u16) -> ParseResult<Charsets> {
             let mut iter = iterator(buf, |buf| parse_item.parse(buf));
             iter.map_while(|v| {
                 ranges.push(v);
-                match n_glyphs as i32 - covers(&ranges[..]) as i32 {
+                match n_glyphs as i32 - covers(&ranges[..]) {
                     0 => None,
                     1.. => Some(()),
                     ..=-1 => panic!("parse charsets failed: {:?}", ranges.last().unwrap()),
@@ -1176,7 +1176,7 @@ impl Encodings {
                 let mut encodings = [NOTDEF; 256];
                 for (i, code) in codes.iter().enumerate() {
                     if let Some(v) = charsets
-                        .resolve_sid(i as Gid)
+                        .resolve_sid(i.try_into().unwrap())
                         .map(|sid| string_index.get(sid))
                     {
                         encodings[*code as usize] = name(v);
