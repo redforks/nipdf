@@ -6,14 +6,16 @@ use crate::{
     object::Object,
 };
 use anyhow::{anyhow, bail, Result as AnyResult};
+use educe::Educe;
 use nipdf_macro::pdf_object;
 use num_traits::ToPrimitive;
-use std::rc::Rc;
+use std::{fmt::Debug, iter::repeat, rc::Rc};
+use tinyvec::TinyVec;
 
 /// Color component composes a color.
 /// Two kinds of color component: float or integer.
 /// For float color component must in range [0, 1].
-pub trait ColorComp: Copy + std::fmt::Debug + std::cmp::PartialOrd {
+pub trait ColorComp: Copy + Debug + std::cmp::PartialOrd {
     fn min_color() -> Self;
     /// Max value of color component, for float color component must be 1.0
     fn max_color() -> Self;
@@ -102,7 +104,7 @@ where
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ColorSpace<T = f32> {
+pub enum ColorSpace<T: Debug + PartialEq = f32> {
     DeviceGray,
     DeviceRGB,
     DeviceCMYK,
@@ -110,6 +112,7 @@ pub enum ColorSpace<T = f32> {
     Indexed(Box<IndexedColorSpace<T>>),
     Separation(Box<SeparationColorSpace<T>>),
     CalRGB(Box<CalRGBColorSpace>),
+    DeviceN(Box<DeviceNColorSpace<T>>),
     /// Without this, complier complains T is not referenced in any of enum branches
     _Phantom(T),
 }
@@ -118,6 +121,7 @@ impl<T> ColorSpace<T>
 where
     T: ColorComp + ColorCompConvertTo<f32> + 'static,
     T: ColorCompConvertTo<u8>,
+    T: Default,
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
 {
@@ -237,7 +241,7 @@ fn resolve_index_data(o: &Object, resolver: &ObjectResolver) -> AnyResult<Vec<u8
 impl<T> ColorSpaceTrait<T> for ColorSpace<T>
 where
     T: ColorComp + ColorCompConvertTo<f32> + 'static,
-    T: ColorCompConvertTo<u8>,
+    T: ColorCompConvertTo<u8> + Debug + Default,
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
 {
@@ -250,6 +254,7 @@ where
             Self::Indexed(indexed) => indexed.to_rgba(color),
             Self::Separation(sep) => sep.as_ref().to_rgba(color),
             Self::CalRGB(cal_rgb) => cal_rgb.to_rgba(color),
+            Self::DeviceN(device_n) => device_n.to_rgba(color),
             Self::_Phantom(_) => unreachable!(),
         }
     }
@@ -263,6 +268,7 @@ where
             Self::Indexed(indexed) => indexed.components(),
             Self::Separation(sep) => sep.as_ref().components(),
             Self::CalRGB(cal_rgb) => cal_rgb.components(),
+            Self::DeviceN(device_n) => device_n.components(),
             Self::_Phantom(_) => unreachable!(),
         }
     }
@@ -401,12 +407,13 @@ where
 
 /// Pattern color space may contains a color space for uncolored pattern.
 #[derive(Debug, Clone, PartialEq)]
-pub struct PatternColorSpace<T>(Option<ColorSpace<T>>);
+pub struct PatternColorSpace<T: Debug + PartialEq>(Option<ColorSpace<T>>);
 
 impl<T> ColorSpaceTrait<T> for PatternColorSpace<T>
 where
     T: ColorComp + ColorCompConvertTo<f32> + 'static,
     T: ColorCompConvertTo<u8>,
+    T: Default,
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
 {
@@ -427,7 +434,7 @@ where
 /// Base color stored in data, each color component is a u8. Max index
 /// is data.len() / base.components().
 #[derive(Debug, Clone, PartialEq)]
-pub struct IndexedColorSpace<T> {
+pub struct IndexedColorSpace<T: Debug + PartialEq> {
     pub base: ColorSpace<T>,
     pub data: Vec<u8>,
 }
@@ -436,6 +443,7 @@ impl<T> IndexedColorSpace<T>
 where
     T: ColorComp + ColorCompConvertTo<f32> + 'static,
     T: ColorCompConvertTo<u8>,
+    T: Default,
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
 {
@@ -456,6 +464,7 @@ impl<T> ColorSpaceTrait<T> for IndexedColorSpace<T>
 where
     T: ColorComp + ColorCompConvertTo<f32> + 'static,
     T: ColorCompConvertTo<u8>,
+    T: Default,
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
 {
@@ -479,32 +488,22 @@ where
     }
 }
 
-#[derive(Clone)]
-pub struct SeparationColorSpace<T> {
+#[derive(Clone, Educe)]
+#[educe(Debug, PartialEq)]
+pub struct SeparationColorSpace<T: Debug + PartialEq> {
     alt: ColorSpace<T>,
 
     // use Rc, because Box not impl clone trait
+    #[educe(Debug(ignore))]
+    #[educe(PartialEq(ignore))]
     f: Rc<dyn Function>,
-}
-
-impl<T: core::fmt::Debug> core::fmt::Debug for SeparationColorSpace<T> {
-    fn fmt(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
-        let mut builder = formatter.debug_struct("SeparationColorSpace");
-        builder.field("base", &self.alt);
-        builder.finish()
-    }
-}
-
-impl<T: PartialEq> core::cmp::PartialEq for SeparationColorSpace<T> {
-    fn eq(&self, other: &Self) -> bool {
-        core::cmp::PartialEq::eq(&self.alt, &other.alt)
-    }
 }
 
 impl<T> ColorSpaceTrait<T> for SeparationColorSpace<T>
 where
     T: ColorComp + ColorCompConvertTo<f32> + 'static,
     T: ColorCompConvertTo<u8>,
+    T: Default,
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
 {
@@ -519,6 +518,52 @@ where
 
     fn components(&self) -> usize {
         1
+    }
+}
+
+#[derive(Clone, Educe)]
+#[educe(Debug)]
+pub struct DeviceNColorSpace<T: Debug + PartialEq> {
+    n: u8,
+    alt: ColorSpace<T>,
+    #[educe(Debug(ignore))]
+    f: Rc<dyn Function>,
+}
+
+impl<T> ColorSpaceTrait<T> for DeviceNColorSpace<T>
+where
+    T: ColorComp + ColorCompConvertTo<f32> + 'static,
+    T: ColorCompConvertTo<u8> + Default,
+    f32: ColorCompConvertTo<T>,
+    u8: ColorCompConvertTo<T>,
+{
+    fn to_rgba(&self, color: &[T]) -> [T; 4] {
+        let color: TinyVec<[f32; 4]> = color
+            .into_iter()
+            .take(self.n as usize)
+            .map(|c| c.into_color_comp())
+            .collect();
+        let c = self.f.call(color.as_slice()).unwrap();
+        let mut r = [T::max_color(); 4];
+        c.iter()
+            .zip(r.iter_mut())
+            .for_each(|(v, r)| *r = v.into_color_comp());
+        self.alt.to_rgba(r.as_slice())
+    }
+
+    fn components(&self) -> usize {
+        self.n as usize
+    }
+
+    fn default_color(&self) -> [T; 4] {
+        let color: TinyVec<[T; 4]> = repeat(T::max_color()).take(self.n as usize).collect();
+        self.to_rgba(color.as_slice())
+    }
+}
+
+impl<T: PartialEq + Debug> core::cmp::PartialEq for DeviceNColorSpace<T> {
+    fn eq(&self, other: &Self) -> bool {
+        core::cmp::PartialEq::eq(&self.alt, &other.alt)
     }
 }
 
