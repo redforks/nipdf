@@ -589,15 +589,8 @@ fn parse_inline_image(input: &[u8]) -> ParseResult<InlineImage> {
     Ok((input, image))
 }
 
-pub fn parse_operations(input: &[u8]) -> ParseResult<Vec<Operation>> {
+pub fn parse_operations<'a>(mut input: &'a [u8]) -> ParseResult<'a, Vec<Operation>> {
     let mut operands = Vec::with_capacity(8);
-    parse_operations2(&mut operands, input)
-}
-
-pub fn parse_operations2<'a>(
-    operands: &mut Vec<Object>,
-    mut input: &'a [u8],
-) -> ParseResult<'a, Vec<Operation>> {
     let mut ignore_parse_error = false;
     let mut r = vec![];
     loop {
@@ -613,17 +606,13 @@ pub fn parse_operations2<'a>(
                         operands.push(o);
                     }
                     ObjectOrOperator::Operator(op) => {
-                        let opt_op;
-                        (input, opt_op) = (
-                            input,
-                            create_operation(op, operands).map_err(|e| {
-                                nom::Err::Error(ParseError::from_external_error(
-                                    input,
-                                    ErrorKind::Fail,
-                                    e,
-                                ))
-                            })?,
-                        );
+                        let opt_op = create_operation(op, &mut operands).map_err(|e| {
+                            nom::Err::Error(ParseError::from_external_error(
+                                input,
+                                ErrorKind::Fail,
+                                e,
+                            ))
+                        })?;
                         match opt_op {
                             Some(Operation::BeginCompatibilitySection) => ignore_parse_error = true,
                             Some(Operation::EndCompatibilitySection) => ignore_parse_error = false,

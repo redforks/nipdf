@@ -1,7 +1,7 @@
 use crate::{
     function::Domains,
     graphics::{
-        parse_operations2, shading::ShadingDict, trans::FormToUserSpace, ColorArgs, ColorSpaceArgs,
+        parse_operations, shading::ShadingDict, trans::FormToUserSpace, ColorArgs, ColorSpaceArgs,
         LineCapStyle, LineJoinStyle, Operation, PatternDict, Point, RenderingIntent,
     },
     object::{Dictionary, Object, ObjectValueError, PdfObject, RuntimeObjectId, Stream},
@@ -350,18 +350,23 @@ impl PageContent {
         Self { bufs }
     }
 
-    pub fn operations(&self) -> Vec<Operation> {
-        let mut r = vec![];
-        let mut operands = Vec::with_capacity(8);
-        for buf in &self.bufs {
-            let (input, ops) = parse_operations2(&mut operands, buf.as_ref())
-                .finish()
-                .unwrap();
-            assert!(input.is_empty(), "buf should be empty: {:?}", input);
-            r.extend_from_slice(ops.as_slice());
+    pub fn operations(self) -> Vec<Operation> {
+        let mut data: Option<Vec<u8>> = None;
+        for buf in self.bufs.into_iter() {
+            if let Some(data) = data.as_mut() {
+                data.extend_from_slice(&buf);
+            } else {
+                data = Some(buf);
+            }
         }
-        assert!(operands.is_empty());
-        r
+
+        if let Some(data) = data {
+            let (input, ops) = parse_operations(&data).finish().unwrap();
+            assert!(input.is_empty(), "buf should be empty: {:?}", input);
+            ops
+        } else {
+            vec![]
+        }
     }
 
     pub fn as_ref(&self) -> impl Iterator<Item = &[u8]> {
