@@ -172,7 +172,7 @@ where
                     let function = NFunc::new_box(functions?)?;
                     let base = Self::from_args(&alternate, resolver, resources)?;
                     Ok(Self::Separation(Box::new(SeparationColorSpace {
-                        base,
+                        alt: base,
                         f: Rc::new(function),
                     })))
                 }
@@ -471,7 +471,7 @@ where
 
 #[derive(Clone)]
 pub struct SeparationColorSpace<T> {
-    base: ColorSpace<T>,
+    alt: ColorSpace<T>,
 
     // use Rc, because Box not impl clone trait
     f: Rc<dyn Function>,
@@ -480,14 +480,14 @@ pub struct SeparationColorSpace<T> {
 impl<T: core::fmt::Debug> core::fmt::Debug for SeparationColorSpace<T> {
     fn fmt(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
         let mut builder = formatter.debug_struct("SeparationColorSpace");
-        builder.field("base", &self.base);
+        builder.field("base", &self.alt);
         builder.finish()
     }
 }
 
 impl<T: PartialEq> core::cmp::PartialEq for SeparationColorSpace<T> {
     fn eq(&self, other: &Self) -> bool {
-        core::cmp::PartialEq::eq(&self.base, &other.base)
+        core::cmp::PartialEq::eq(&self.alt, &other.alt)
     }
 }
 
@@ -504,7 +504,7 @@ where
         c.iter()
             .zip(r.iter_mut())
             .for_each(|(v, r)| *r = v.into_color_comp());
-        self.base.to_rgba(r.as_slice())
+        self.alt.to_rgba(r.as_slice())
     }
 
     fn components(&self) -> usize {

@@ -163,7 +163,7 @@ fn separation_color_space() {
         .with(eq(vec![0.5f32]))
         .returning(|_| Ok(tiny_vec![0.1f32, 0.2f32, 0.3f32] as FunctionValue));
     let cs = SeparationColorSpace::<f32> {
-        base: ColorSpace::DeviceRGB,
+        alt: ColorSpace::DeviceRGB,
         f: Rc::new(f),
     };
 
@@ -187,7 +187,7 @@ endobj
     let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None)?;
     assert_eq!(
         ColorSpace::Separation(Box::new(SeparationColorSpace {
-            base: ColorSpace::DeviceGray,
+            alt: ColorSpace::DeviceGray,
             f: Rc::new(MockFunction::new())
         })),
         color_space
@@ -231,8 +231,7 @@ endobj
 "#;
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
-    let args = ColorSpaceArgs::try_from(resolver.resolve(1).unwrap())
-        .unwrap();
+    let args = ColorSpaceArgs::try_from(resolver.resolve(1).unwrap()).unwrap();
     let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None).unwrap();
     assert_eq!(
         ColorSpace::CalRGB(Box::new(CalRGBColorSpace {
@@ -255,8 +254,7 @@ endobj
 "#;
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
-    let args = ColorSpaceArgs::try_from(resolver.resolve(1).unwrap())
-        .unwrap();
+    let args = ColorSpaceArgs::try_from(resolver.resolve(1).unwrap()).unwrap();
     let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None).unwrap();
     assert_eq!(
         ColorSpace::Pattern(Box::new(PatternColorSpace(Some(ColorSpace::DeviceRGB)))),
