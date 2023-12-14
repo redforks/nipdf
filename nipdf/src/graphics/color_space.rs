@@ -268,7 +268,7 @@ where
     }
 }
 
-pub trait ColorSpaceTrait<T> {
+pub trait ColorSpaceTrait<T: ColorComp> {
     /// Convert color from current space to RGBA.
     /// `color` len should at least be `components()`
     /// Use `color_to_rgba()` function, if target color space is not T.
@@ -276,6 +276,16 @@ pub trait ColorSpaceTrait<T> {
 
     /// Number of color components in this color space.
     fn components(&self) -> usize;
+
+    /// Default color in rgba
+    fn default_color(&self) -> [T; 4] {
+        [
+            T::min_color(),
+            T::min_color(),
+            T::min_color(),
+            T::max_color(),
+        ]
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
