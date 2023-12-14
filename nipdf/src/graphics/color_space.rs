@@ -9,6 +9,7 @@ use anyhow::{anyhow, bail, Result as AnyResult};
 use educe::Educe;
 use nipdf_macro::pdf_object;
 use num_traits::ToPrimitive;
+use prescript::sname;
 use std::{fmt::Debug, iter::repeat, rc::Rc};
 use tinyvec::TinyVec;
 
@@ -213,6 +214,29 @@ where
                         })
                         .transpose()?;
                     Ok(Self::Pattern(Box::new(PatternColorSpace(base))))
+                }
+                "DeviceN" => {
+                    assert!(arr.len() == 4 || arr.len() == 5);
+                    let names = arr[1].arr()?;
+
+                    // A DeviceN colour space whose component colorant names are all None shall
+                    // always discard its output, just  the same as a Separation colour space for
+                    // None; it shall never revert to the alternate colour space. Reversion  shall
+                    // occur only if at least one colour component (other than None) is specified
+                    // and is not available on the  device.
+                    if names.iter().all(|n| n.name().unwrap() == sname("None")) {
+                        bail!("all color component None should not render which is not supported");
+                    }
+
+                    let n = names.len();
+                    let alternate = ColorSpaceArgs::try_from(&arr[2])?;
+                    let f: FunctionDict = resolver.resolve_pdf_object2(&arr[3])?;
+                    let base = Self::from_args(&alternate, resolver, resources)?;
+                    Ok(Self::DeviceN(Box::new(DeviceNColorSpace {
+                        n: n as u8,
+                        alt: base,
+                        f: Rc::new(f.func()?),
+                    })))
                 }
                 s => todo!("ColorSpace::from_args() {} color space", s),
             },

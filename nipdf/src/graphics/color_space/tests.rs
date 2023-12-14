@@ -294,3 +294,39 @@ fn pattern_color_space() {
     assert_eq!(3, cs.components());
     assert_eq!(cs.to_rgba(&[1.0, 0., 0., 0.]), [1.0, 0., 0., 1.]);
 }
+
+#[test]
+fn device_n_from_args() -> AnyResult<()> {
+    let buf = br#"1 0 obj
+[/DeviceN [/foo] /DeviceRGB 2 0 R]
+endobj
+2 0 obj
+<</FunctionType 2/Domain [0 1]/N 1>>
+endobj
+% has attribute
+3 0 obj
+[/DeviceN [/bar /None] /DeviceRGB 2 0 R <<>>]
+endobj
+% all color names are None
+4 0 obj
+[/DeviceN [/None /None] /DeviceRGB 2 0 R]
+endobj
+"#;
+    let xref = XRefTable::from_buf(buf);
+    let resolver = ObjectResolver::new(buf, &xref, None);
+
+    let args = ColorSpaceArgs::try_from(resolver.resolve(1)?)?;
+    let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None)?;
+    assert_eq!(1, color_space.components());
+    assert!(matches!(color_space, ColorSpace::DeviceN(_)));
+
+    let args = ColorSpaceArgs::try_from(resolver.resolve(3)?)?;
+    let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None)?;
+    assert_eq!(2, color_space.components());
+    assert!(matches!(color_space, ColorSpace::DeviceN(_)));
+
+    let args = ColorSpaceArgs::try_from(resolver.resolve(4)?)?;
+    let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None);
+    assert!(color_space.is_err());
+    Ok(())
+}
