@@ -1082,6 +1082,16 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             ok()
         },
 
+        // num sqrt real
+        sname("sqrt") => |m| {
+            let a = m.pop()?.number()?;
+            match a {
+                Either::Left(a) => m.push((a as f32).sqrt()),
+                Either::Right(a) => m.push(a.sqrt()),
+            }
+            ok()
+        },
+
         // int array -> array
         sname("array") => |m| {
             let count = m.pop()?.int()?;

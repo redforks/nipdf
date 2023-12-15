@@ -466,3 +466,10 @@ fn truncate() {
     assert_op("-4.8 truncate", -4.0);
     assert_op("99 truncate", 99);  
 }
+
+#[test]
+fn sqrt() {
+    assert_op("4 sqrt", 2.0);
+    assert_op("4.0 sqrt", 2.0);
+    assert_op("99 sqrt", 9.949874); 
+}
