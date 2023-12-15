@@ -398,7 +398,7 @@ impl Function for SampledFunction {
             let sample = sample.mul_add(decode.end - decode.start, decode.start);
             r.push(sample);
         }
-        Ok(self.signature.clip_returns(r))
+        Ok(r)
     }
 
     fn signature(&self) -> &Signature {
@@ -475,7 +475,7 @@ impl Function for ExponentialInterpolationFunction {
         let r = (0..c0.len())
             .map(|i| x.powf(n).mul_add(c1[i] - c0[i], c0[i]))
             .collect();
-        Ok(self.signature.clip_returns(r))
+        Ok(r)
     }
 
     fn signature(&self) -> &Signature {
