@@ -13,7 +13,7 @@ mod shading;
 use render::{Render, State};
 mod into_skia;
 pub(crate) use into_skia::*;
-use num::ToPrimitive;
+use num_traits::ToPrimitive;
 
 #[derive(Debug, Educe, Clone, Copy)]
 #[educe(Default)]

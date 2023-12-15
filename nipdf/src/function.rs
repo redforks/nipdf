@@ -3,7 +3,7 @@ use anyhow::Result as AnyResult;
 #[cfg(test)]
 use mockall::automock;
 use nipdf_macro::{pdf_object, TryFromIntObject};
-use num::ToPrimitive;
+use num_traits::ToPrimitive;
 use tinyvec::{tiny_vec, TinyVec};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -18,7 +18,7 @@ impl<T: PartialOrd + Copy> Domain<T> {
     }
 
     fn clamp(&self, x: T) -> T {
-        num::clamp(x, self.start, self.end)
+        num_traits::clamp(x, self.start, self.end)
     }
 }
 

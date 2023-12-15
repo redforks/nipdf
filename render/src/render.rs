@@ -31,7 +31,7 @@ use nipdf::{
     object::{ImageMetadata, InlineImage, Object, PdfObject, TextStringOrNumber},
 };
 use nom::{combinator::eof, sequence::terminated};
-use num::ToPrimitive;
+use num_traits::ToPrimitive;
 use prescript::Name;
 use std::{
     borrow::Cow,

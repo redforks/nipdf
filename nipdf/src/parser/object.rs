@@ -16,7 +16,7 @@ use nom::{
     multi::{many0, many0_count},
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
 };
-use num::ToPrimitive;
+use num_traits::ToPrimitive;
 use prescript::{sname, Name};
 use std::{
     borrow::Cow,

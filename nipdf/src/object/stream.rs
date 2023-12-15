@@ -19,7 +19,7 @@ use image::{DynamicImage, GrayImage, Luma, RgbImage, Rgba, RgbaImage};
 use jpeg_decoder::PixelFormat;
 use log::error;
 use nipdf_macro::pdf_object;
-use num::ToPrimitive;
+use num_traits::ToPrimitive;
 use once_cell::unsync::Lazy;
 use prescript::{sname, Name};
 use std::{

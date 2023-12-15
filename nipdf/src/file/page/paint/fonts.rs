@@ -18,7 +18,7 @@ use font_kit::loaders::freetype::Font as FontKitFont;
 use fontdb::{Database, Family, Query, Source, Weight};
 use heck::ToTitleCase;
 use log::{debug, error, info, warn};
-use num::ToPrimitive;
+use num_traits::ToPrimitive;
 use once_cell::sync::Lazy;
 use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};

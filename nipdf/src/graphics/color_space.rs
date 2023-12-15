@@ -7,7 +7,7 @@ use crate::{
 };
 use anyhow::{anyhow, bail, Result as AnyResult};
 use nipdf_macro::pdf_object;
-use num::ToPrimitive;
+use num_traits::ToPrimitive;
 use std::rc::Rc;
 
 /// Color component composes a color.

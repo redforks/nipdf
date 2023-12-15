@@ -7,7 +7,7 @@ use ahash::{HashMap, HashMapExt};
 use anyhow::Result as AnyResult;
 use bitflags::bitflags;
 use nipdf_macro::{pdf_object, TryFromIntObjectForBitflags, TryFromNameObject};
-use num::ToPrimitive;
+use num_traits::ToPrimitive;
 use prescript::{name, Encoding, Name};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, TryFromNameObject)]

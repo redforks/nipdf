@@ -2,7 +2,7 @@
 //! line matrix, pattern etc, and User space to screen space.
 
 use euclid::{Length, Point2D, Transform2D};
-use num::traits::AsPrimitive;
+use num_traits::AsPrimitive;
 
 pub enum UserSpace {}
 /// Coordinate space between UserSpace and DeviceSpace,

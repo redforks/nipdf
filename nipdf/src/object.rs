@@ -1086,7 +1086,7 @@ impl<const N: usize> TryFrom<&Object> for [f32; N] {
 
 use either::Either;
 use euclid::Length;
-use num::ToPrimitive;
+use num_traits::ToPrimitive;
 use pretty::RcDoc;
 use static_assertions::assert_eq_size;
 
