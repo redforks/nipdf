@@ -19,7 +19,7 @@ use winnow::Parser;
 mod decrypt;
 use decrypt::{decrypt, EEXEC_KEY};
 use log::error;
-use num::ToPrimitive;
+use num_traits::ToPrimitive;
 mod cidinit;
 
 pub type Array = Vec<Value>;
