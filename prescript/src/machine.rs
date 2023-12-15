@@ -847,6 +847,26 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             ok()
         },
 
+        // anyn−1  …  any0  n  j  roll  any (j−1) mod n  …  any0  anyn−1  …  anyj mod n
+        sname("roll") => |m| {
+            let j = m.pop()?.int()?;
+            let n = m.pop()?.int()?;
+            let mut items = Vec::new();
+            for _ in 0..n {
+                items.push(m.pop()?);
+            }
+            items.reverse();
+            if j > 0 {
+                items.rotate_right(j as usize);
+            } else {
+                items.rotate_left(-j as usize);
+            }
+            for item in items {
+                m.push(item);
+            }
+            ok()
+        },
+
         // - mark -> Mark
         sname("mark") => |m| {
             m.push(RuntimeValue::Mark);

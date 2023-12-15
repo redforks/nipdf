@@ -571,3 +571,10 @@ fn bitshit() {
     assert_op("7 3 bitshift", 56);
     assert_op("142 -3 bitshift", 17);
 }
+
+#[test]
+fn roll() {
+    assert_op("1 2 3 3 -1 roll", Stack(rt_values![2, 3, 1]));
+    assert_op("1 2 3 3 1 roll", Stack(rt_values![3, 1, 2]));
+    assert_op("1 2 3 3 0 roll", Stack(rt_values![1, 2, 3]));
+}
