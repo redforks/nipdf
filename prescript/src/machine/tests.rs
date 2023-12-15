@@ -536,3 +536,9 @@ fn ln() {
     assert_op("2.0 ln", 0.6931472);
     assert_op("10 ln", 2.3025851);
 }
+
+#[test]
+fn log() {
+    assert_op("10 log", 1.0);
+    assert_op("100.0 log", 2.0);
+}

@@ -1152,6 +1152,16 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             ok()
         },
 
+        // num log real
+        sname("log") => |m| {
+            let num = m.pop()?.number()?;
+            match num {
+                Either::Left(num) => m.push((num as f32).log10()),
+                Either::Right(num) => m.push(num.log10()),
+            }
+            ok()
+        },
+
         // int array -> array
         sname("array") => |m| {
             let count = m.pop()?.int()?;
