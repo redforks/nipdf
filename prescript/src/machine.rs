@@ -992,8 +992,8 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
 
         // num1 num2 sub difference
         sname("sub") => |m| {
-            let a = m.pop()?.number()?;
             let b = m.pop()?.number()?;
+            let a = m.pop()?.number()?;
             match (a, b) {
                 (Either::Left(a), Either::Left(b)) => m.push(a - b),
                 (Either::Right(a), Either::Right(b)) => m.push(a - b),

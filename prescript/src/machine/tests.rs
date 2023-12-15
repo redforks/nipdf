@@ -397,6 +397,14 @@ fn to_unicode_cmap() {
 }
 
 #[test]
+fn sub() {
+    assert_op("1 2 sub", -1);
+    assert_op("1.0 2.0 sub", -1.0);
+    assert_op("1.0 2 sub", -1.0); 
+    assert_op("1 2.0 sub", -1.0); 
+}
+
+#[test]
 fn abs() {
     assert_op("1 abs", 1);
     assert_op("-1 abs", 1);
