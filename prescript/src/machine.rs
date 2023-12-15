@@ -1077,6 +1077,19 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             ok()
         },
 
+        // num1 num2 div quotient
+        sname("div") => |m| {
+            let b = m.pop()?.number()?;
+            let a = m.pop()?.number()?;
+            match (a, b) {
+                (Either::Left(a), Either::Left(b)) => m.push(a as f32 / b as f32),
+                (Either::Right(a), Either::Right(b)) => m.push(a / b),
+                (Either::Left(a), Either::Right(b)) => m.push(a as f32 / b),
+                (Either::Right(a), Either::Left(b)) => m.push(a / b as f32),
+            }
+            ok()
+        },
+
         // int1 int2 mod remainder
         sname("mod") => |m| {
             let b = m.pop()?.int()?;
