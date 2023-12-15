@@ -400,8 +400,8 @@ fn to_unicode_cmap() {
 fn sub() {
     assert_op("1 2 sub", -1);
     assert_op("1.0 2.0 sub", -1.0);
-    assert_op("1.0 2 sub", -1.0); 
-    assert_op("1 2.0 sub", -1.0); 
+    assert_op("1.0 2 sub", -1.0);
+    assert_op("1 2.0 sub", -1.0);
 }
 
 #[test]
@@ -429,12 +429,19 @@ fn test_mod() {
 fn mul() {
     assert_op("10 3 mul", 30);
     assert_op("-5.0 3.0 mul", -15.0);
-    assert_op("-5.0 -3 mul", 15.0); 
-    assert_op("-5 -3.0 mul", 15.0); 
+    assert_op("-5.0 -3 mul", 15.0);
+    assert_op("-5 -3.0 mul", 15.0);
 }
 
 #[test]
 fn neg() {
     assert_op("10 neg", -10);
-    assert_op("-5.0 neg", 5.0); 
+    assert_op("-5.0 neg", 5.0);
+}
+
+#[test]
+fn ceiling() {
+    assert_op("3.2 ceiling", 4.0);
+    assert_op("-4.8 ceiling", -4.0);
+    assert_op("99 ceiling", 99);
 }
