@@ -4,6 +4,7 @@ use anyhow::Result as AnyResult;
 use mockall::automock;
 use nipdf_macro::{pdf_object, TryFromIntObject};
 use num_traits::ToPrimitive;
+use prescript::PdfFunc;
 use tinyvec::{tiny_vec, TinyVec};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -213,6 +214,33 @@ pub trait FunctionDictTrait {
     fn stitch(&self) -> StitchingFunctionDict<'a, 'b>;
 }
 
+pub struct PostScriptFunction {
+    signature: Signature,
+    f: PdfFunc,
+}
+
+impl PostScriptFunction {
+    pub fn new(signature: Signature, script: Box<[u8]>) -> Self {
+        Self {
+            f: PdfFunc::new(script, signature.n_returns().unwrap() as usize),
+            signature,
+        }
+    }
+}
+
+impl Function for PostScriptFunction {
+    fn signature(&self) -> &Signature {
+        &self.signature
+    }
+
+    #[doc = " Called by `self.call()`, args and return value are clipped by signature."]
+    fn inner_call(&self, args: FunctionValue) -> AnyResult<FunctionValue> {
+        let args = args.into_iter().collect::<Vec<_>>();
+        let r = self.f.exec(&args)?;
+        Ok(r.into_iter().collect())
+    }
+}
+
 impl<'a, 'b> FunctionDict<'a, 'b> {
     fn signature(&self) -> AnyResult<Signature> {
         Ok(Signature {
@@ -229,6 +257,18 @@ impl<'a, 'b> FunctionDict<'a, 'b> {
         self.range().unwrap().map(|range| range.n())
     }
 
+    pub fn post_script_func(&self) -> AnyResult<PostScriptFunction> {
+        assert_eq!(self.function_type()?, Type::PostScriptCalculator);
+        let signature = self.signature()?;
+        let resolver = self.d.resolver();
+        let stream = resolver.resolve(self.id.unwrap())?.stream()?;
+        let script = stream.decode(resolver)?;
+        Ok(PostScriptFunction::new(
+            signature,
+            script.into_owned().into_boxed_slice(),
+        ))
+    }
+
     /// Create boxed Function for this Function dict.
     pub fn func(&self) -> AnyResult<Box<dyn Function>> {
         match self.function_type()? {
@@ -237,7 +277,7 @@ impl<'a, 'b> FunctionDict<'a, 'b> {
                 Ok(Box::new(self.exponential_interpolation()?.func()?))
             }
             Type::Stitching => Ok(Box::new(self.stitch()?.func()?)),
-            Type::PostScriptCalculator => todo!(),
+            Type::PostScriptCalculator => Ok(Box::new(self.post_script_func()?)),
         }
     }
 }

@@ -594,7 +594,7 @@ impl<'a> Machine<'a> {
         }
     }
 
-    pub fn exec_as_function(&mut self, args: &[f32], n_out: usize) -> MachineResult<Box<[f32]>> {
+    pub fn exec_as_function(&mut self, args: &[f32], n_out: usize) -> MachineResult<Vec<f32>> {
         for arg in args.into_iter() {
             self.push(*arg);
         }
@@ -621,7 +621,7 @@ impl<'a> Machine<'a> {
         if r.len() != n_out {
             return Err(MachineError::StackUnderflow);
         }
-        Ok(r.into())
+        Ok(r)
     }
 
     #[allow(dead_code)]

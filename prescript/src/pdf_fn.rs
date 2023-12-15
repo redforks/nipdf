@@ -22,7 +22,7 @@ impl PdfFunc {
     ///
     /// `args` pushed to stack before execution.
     /// return numbers of stack after execution.
-    pub fn exec(&self, args: &[f32]) -> Result<Box<[f32]>> {
+    pub fn exec(&self, args: &[f32]) -> Result<Vec<f32>> {
         let mut m = Machine::new(self.script.as_ref());
         Ok(m.exec_as_function(args, self.n_out)?)
     }
