@@ -452,3 +452,10 @@ fn floor() {
     assert_op("-4.8 floor", -5.0);
     assert_op("99 floor", 99); 
 }
+
+#[test]
+fn round() {
+    assert_op("3.2 round", 3.0);
+    assert_op("-4.8 round", -5.0);
+    assert_op("99 round", 99); 
+}

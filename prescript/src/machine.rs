@@ -1046,6 +1046,16 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             ok()
         },
 
+        // num1 round round2
+        sname("round") => |m| {
+            let a = m.pop()?.number()?;
+            match a {
+                Either::Left(a) => m.push(a),
+                Either::Right(a) => m.push(a.round()),
+            }
+            ok()
+        },
+
         // int1 int2 idiv quotient
         sname("idiv") => |m| {
             let b = m.pop()?.int()?;
