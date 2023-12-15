@@ -424,3 +424,11 @@ fn test_mod() {
     assert_op("10 3 mod", 1);
     assert_op("-5 3 mod", -2);
 }
+
+#[test]
+fn mul() {
+    assert_op("10 3 mul", 30);
+    assert_op("-5.0 3.0 mul", -15.0);
+    assert_op("-5.0 -3 mul", 15.0); 
+    assert_op("-5 -3.0 mul", 15.0); 
+}
