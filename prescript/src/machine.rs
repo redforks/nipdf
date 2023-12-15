@@ -1092,6 +1092,23 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             ok()
         },
 
+        // num den atan angle, The signs of num and den determine the quadrant
+        // in which the result will lie: a positive num yields a result in the
+        // positive y plane, while a positive den yields a result in the
+        // positive x plane. The result is a real number.
+        sname("atan") => |m| {
+            let den = m.pop()?.number()?;
+            let num = m.pop()?.number()?;
+            let v = match (num, den) {
+                (Either::Left(num), Either::Left(den)) => (num as f32).atan2(den as f32).to_degrees(),
+                (Either::Right(num), Either::Right(den)) => num.atan2(den).to_degrees(),
+                (Either::Left(num), Either::Right(den)) => (num as f32).atan2(den).to_degrees(),
+                (Either::Right(num), Either::Left(den)) => num.atan2(den as f32).to_degrees(),
+            };
+            m.push((v + 360.0) % 360.0);
+            ok()
+        },
+
         // int array -> array
         sname("array") => |m| {
             let count = m.pop()?.int()?;

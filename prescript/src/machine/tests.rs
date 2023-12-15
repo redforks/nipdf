@@ -450,26 +450,34 @@ fn ceiling() {
 fn floor() {
     assert_op("3.2 floor", 3.0);
     assert_op("-4.8 floor", -5.0);
-    assert_op("99 floor", 99); 
+    assert_op("99 floor", 99);
 }
 
 #[test]
 fn round() {
     assert_op("3.2 round", 3.0);
     assert_op("-4.8 round", -5.0);
-    assert_op("99 round", 99); 
+    assert_op("99 round", 99);
 }
 
 #[test]
 fn truncate() {
     assert_op("3.2 truncate", 3.0);
     assert_op("-4.8 truncate", -4.0);
-    assert_op("99 truncate", 99);  
+    assert_op("99 truncate", 99);
 }
 
 #[test]
 fn sqrt() {
     assert_op("4 sqrt", 2.0);
     assert_op("4.0 sqrt", 2.0);
-    assert_op("99 sqrt", 9.949874); 
+    assert_op("99 sqrt", 9.949874);
+}
+
+#[test]
+fn atan() {
+    assert_op("0.0 1.0 atan", 0.0);
+    assert_op("1 0 atan", 90.0);
+    assert_op("-100.0 0 atan", 270.0);
+    assert_op("4 4.0 atan", 45.0);
 }
