@@ -2,8 +2,10 @@ pub(crate) mod machine;
 pub(crate) mod parser;
 
 mod encoding;
+mod pdf_fn;
 mod type1;
 pub use encoding::Encoding;
+pub use pdf_fn::PdfFunc;
 pub use type1::Font;
 
 /// PostScript Name Value

@@ -594,6 +594,36 @@ impl<'a> Machine<'a> {
         }
     }
 
+    pub fn exec_as_function(&mut self, args: &[f32], n_out: usize) -> MachineResult<Box<[f32]>> {
+        for arg in args.into_iter() {
+            self.push(*arg);
+        }
+
+        self.execute()?;
+        let mut r = vec![];
+        match self.pop()? {
+            RuntimeValue::Value(Value::Procedure(p)) => {
+                // the function may wrapped in a procedure
+                assert_eq!(ExecState::Ok, self.execute_procedure(p)?);
+            }
+            RuntimeValue::Value(Value::Real(v)) => r.push(v),
+            RuntimeValue::Value(Value::Integer(v)) => r.push(v as f32),
+            _ => return Err(MachineError::TypeCheck),
+        }
+
+        r.extend(
+            self.stack
+                .drain(..)
+                .rev()
+                .take(n_out)
+                .map(|v| v.number().unwrap().map_left(|v| v as f32).into_inner()),
+        );
+        if r.len() != n_out {
+            return Err(MachineError::StackUnderflow);
+        }
+        Ok(r.into())
+    }
+
     #[allow(dead_code)]
     pub fn execute(&mut self) -> MachineResult<()> {
         // ensure that the system_dict readonly, it will panic if modify
@@ -946,6 +976,19 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
                 (Either::Right(a), Either::Right(b)) => m.push(a + b),
                 (Either::Left(a), Either::Right(b)) => m.push(a as f32 + b),
                 (Either::Right(a), Either::Left(b)) => m.push(a + b as f32),
+            }
+            ok()
+        },
+
+        // num1 num2 sub difference
+        sname("sub") => |m| {
+            let a = m.pop()?.number()?;
+            let b = m.pop()?.number()?;
+            match (a, b) {
+                (Either::Left(a), Either::Left(b)) => m.push(a - b),
+                (Either::Right(a), Either::Right(b)) => m.push(a - b),
+                (Either::Left(a), Either::Right(b)) => m.push(a as f32 - b),
+                (Either::Right(a), Either::Left(b)) => m.push(a - b as f32),
             }
             ok()
         },
