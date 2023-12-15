@@ -515,3 +515,10 @@ fn cos() {
     assert_op("180 cos", -1.0);
     assert_op("270.0 cos", 0.0);
 }
+
+#[test]
+fn ln() {
+    assert_op("1 ln", 0.0);
+    assert_op("2.0 ln", 0.6931472);
+    assert_op("10 ln", 2.3025851);
+}
