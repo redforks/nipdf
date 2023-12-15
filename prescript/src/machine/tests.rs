@@ -459,3 +459,10 @@ fn round() {
     assert_op("-4.8 round", -5.0);
     assert_op("99 round", 99); 
 }
+
+#[test]
+fn truncate() {
+    assert_op("3.2 truncate", 3.0);
+    assert_op("-4.8 truncate", -4.0);
+    assert_op("99 truncate", 99);  
+}
