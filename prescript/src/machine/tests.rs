@@ -517,6 +517,14 @@ fn cos() {
 }
 
 #[test]
+fn sin() {
+    assert_op("0 sin", 0.0);
+    assert_op("90.0 sin", 1.0);
+    assert_op("180 sin", 0.0);
+    assert_op("270.0 sin", -1.0); 
+}
+
+#[test]
 fn ln() {
     assert_op("1 ln", 0.0);
     assert_op("2.0 ln", 0.6931472);

@@ -1119,6 +1119,16 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             ok()
         },
 
+        // angle sin real
+        sname("sin") => |m| {
+            let angle = m.pop()?.number()?;
+            match angle {
+                Either::Left(angle) => m.push((angle as f32).to_radians().sin()),
+                Either::Right(angle) => m.push(angle.to_radians().sin()),
+            }
+            ok()
+        },
+
         // num lg real
         sname("ln") => |m| {
             let num = m.pop()?.number()?;
