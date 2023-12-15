@@ -521,7 +521,13 @@ fn sin() {
     assert_op("0 sin", 0.0);
     assert_op("90.0 sin", 1.0);
     assert_op("180 sin", 0.0);
-    assert_op("270.0 sin", -1.0); 
+    assert_op("270.0 sin", -1.0);
+}
+
+#[test]
+fn exp() {
+    assert_op("9 0.5 exp", 3.0);
+    assert_op("9.0 -1 exp", 0.111111);
 }
 
 #[test]

@@ -1129,6 +1129,19 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             ok()
         },
 
+        // base exponent exp real
+        sname("exp" ) => |m| {
+            let exponent = m.pop()?.number()?;
+            let base = m.pop()?.number()?;
+            match (base, exponent) {
+                (Either::Left(base), Either::Left(exponent)) => m.push((base as f32).powf(exponent as f32)),
+                (Either::Right(base), Either::Right(exponent)) => m.push(base.powf(exponent)),
+                (Either::Left(base), Either::Right(exponent)) => m.push((base as f32).powf(exponent)),
+                (Either::Right(base), Either::Left(exponent)) => m.push(base.powf(exponent as f32)),
+            }
+            ok()
+        },
+
         // num lg real
         sname("ln") => |m| {
             let num = m.pop()?.number()?;
