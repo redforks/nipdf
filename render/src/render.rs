@@ -173,9 +173,9 @@ struct ColorState {
     // apply before `self.paint` if not null
     background_paint: Option<PaintCreator>,
 
-    #[educe(Default(expression = "PaintCreator::Color(SkiaColor::BLACK)"))]
+    #[educe(Default(expression = PaintCreator::Color(SkiaColor::BLACK)))]
     paint: PaintCreator,
-    #[educe(Default(expression = "ColorSpace::DeviceRGB"))]
+    #[educe(Default(expression = ColorSpace::DeviceRGB))]
     color_space: ColorSpace<f32>,
     #[educe(Default = 1.0f32)]
     alpha: f32,
@@ -474,7 +474,7 @@ impl State {
 #[derive(Debug, Clone, Educe)]
 #[educe(Default)]
 struct Path {
-    #[educe(Default(expression = "Either::Left(PathBuilder::new())"))]
+    #[educe(Default(expression = Left(PathBuilder::new())))]
     path: Either<PathBuilder, SkiaPath>,
 }
 

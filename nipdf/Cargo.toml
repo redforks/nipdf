@@ -26,7 +26,7 @@ jpeg2k = "0.6.6"
 nipdf-macro = { path = "../macro" }
 cff-parser = { path = "../cff-parser" }
 prescript = { path = "../prescript" }
-educe = "0.5"
+educe = "0.5.5"
 pretty = "0.12.1"
 bitflags = "2.4.0"
 fontdb = "0.16.0"

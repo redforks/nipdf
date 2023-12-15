@@ -79,7 +79,7 @@ impl PageDimension {
 pub struct RenderOption {
     /// If crop is specified, the output canvas will be cropped to the specified rectangle.
     crop: Option<Rectangle>,
-    #[educe(Default(expression = "Color::WHITE"))]
+    #[educe(Default(expression = Color::WHITE))]
     background_color: Color,
     /// Initial state, used in paint_x_form to pass parent state to form Render.
     state: Option<State>,
