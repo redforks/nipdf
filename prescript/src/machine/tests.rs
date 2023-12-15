@@ -450,8 +450,8 @@ fn div() {
     assert_op("10 3 div", 3.3333333);
     assert_op("10.0 -3 div", -3.3333333);
     assert_op("-10 3.0 div", -3.3333333);
-    assert_op("-10.0 -3.0 div", 3.3333333); 
-    assert_op("9 3 div", 3.0); 
+    assert_op("-10.0 -3.0 div", 3.3333333);
+    assert_op("9 3 div", 3.0);
 }
 
 #[test]
@@ -564,4 +564,10 @@ fn cvr() {
     assert_op("10 cvr", 10.0);
     assert_op("-10.1234 cvr", -10.1234);
     assert_op("(10.45) cvr", 10.45);
+}
+
+#[test]
+fn bitshit() {
+    assert_op("7 3 bitshift", 56);
+    assert_op("142 -3 bitshift", 17);
 }

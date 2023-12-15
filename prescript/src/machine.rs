@@ -1215,6 +1215,20 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             ok()
         },
 
+        // num1 shift bitshift num2
+        sname("bitshift") => |m| {
+            let shift = m.pop()?.int()?;
+            let num = m.pop()?.int()?;
+            m.push(
+                if shift < 0 {
+                    num.wrapping_shr(u32::try_from(-shift).unwrap())
+                } else {
+                    num.wrapping_shl(shift.try_into().unwrap())
+                }
+            );
+            ok()
+        },
+
         // int array -> array
         sname("array") => |m| {
             let count = m.pop()?.int()?;
