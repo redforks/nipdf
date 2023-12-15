@@ -1005,9 +1005,17 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
 
         // int1 int2 idiv quotient
         sname("idiv") => |m| {
-            let a = m.pop()?.int()?;
             let b = m.pop()?.int()?;
-            m.push(b / a);
+            let a = m.pop()?.int()?;
+            m.push(a / b);
+            ok()
+        },
+
+        // int1 int2 mod remainder
+        sname("mod") => |m| {
+            let b = m.pop()?.int()?;
+            let a = m.pop()?.int()?;
+            m.push(a % b);
             ok()
         },
 

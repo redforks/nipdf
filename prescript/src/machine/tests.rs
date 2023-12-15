@@ -408,5 +408,11 @@ fn idiv() {
     assert_op("10 3 idiv", 3);
     assert_op("10 -3 idiv", -3);
     assert_op("-10 3 idiv", -3);
-    assert_op("-10 -3 idiv", 3); 
+    assert_op("-10 -3 idiv", 3);
+}
+
+#[test]
+fn test_mod() {
+    assert_op("10 3 mod", 1);
+    assert_op("-5 3 mod", -2);
 }
