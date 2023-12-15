@@ -1109,6 +1109,16 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             ok()
         },
 
+        // angle cos real
+        sname("cos") => |m| {
+            let angle = m.pop()?.number()?;
+            match angle {
+                Either::Left(angle) => m.push((angle as f32).to_radians().cos()),
+                Either::Right(angle) => m.push(angle.to_radians().cos()),
+            }
+            ok()
+        },
+
         // int array -> array
         sname("array") => |m| {
             let count = m.pop()?.int()?;

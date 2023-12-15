@@ -1,15 +1,41 @@
 use super::*;
 use crate::sname;
+use assert_approx_eq::assert_approx_eq;
+use std::{fmt::Debug, ops::Sub};
 use test_log::test;
 
 trait Assert<'a> {
     fn assert(&self, m: &Machine<'a>);
 }
 
-impl<'a, V: Into<RuntimeValue<'a>> + Clone> Assert<'a> for V {
+macro_rules! ValueEqAssert {
+    ($t:ty) => {
+        impl<'a> Assert<'a> for $t {
+            fn assert(&self, m: &Machine<'a>) {
+                assert_eq!(m.stack.len(), 1);
+                assert_eq!(m.stack[0], self.clone().into());
+            }
+        }
+    };
+}
+
+ValueEqAssert!(bool);
+ValueEqAssert!(i32);
+ValueEqAssert!(Name);
+ValueEqAssert!(RuntimeDictionary<'a>);
+ValueEqAssert!(Array);
+
+impl<'a, const N: usize> Assert<'a> for [u8; N] {
     fn assert(&self, m: &Machine<'a>) {
         assert_eq!(m.stack.len(), 1);
-        assert_eq!(m.stack[0], self.clone().into());
+        assert_eq!(m.stack[0], (*self).into());
+    }
+}
+
+impl<'a> Assert<'a> for f32 {
+    fn assert(&self, m: &Machine<'a>) {
+        assert_eq!(m.stack.len(), 1);
+        assert_approx_eq!(m.stack[0].real().unwrap(), *self);
     }
 }
 
@@ -480,4 +506,12 @@ fn atan() {
     assert_op("1 0 atan", 90.0);
     assert_op("-100.0 0 atan", 270.0);
     assert_op("4 4.0 atan", 45.0);
+}
+
+#[test]
+fn cos() {
+    assert_op("0 cos", 1.0);
+    assert_op("90.0 cos", 0.0);
+    assert_op("180 cos", -1.0);
+    assert_op("270.0 cos", 0.0);
 }
