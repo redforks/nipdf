@@ -395,3 +395,10 @@ fn to_unicode_cmap() {
         }
     }
 }
+
+#[test]
+fn abs() {
+    assert_op("1 abs", 1);
+    assert_op("-1 abs", 1);
+    assert_op("-1.0 abs", 1.0);
+}

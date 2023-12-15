@@ -967,6 +967,16 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             ok()
         },
 
+        // num1 abs num1
+        sname("abs") => |m| {
+            let a = m.pop()?.number()?;
+            match a {
+                Either::Left(a) => m.push(a.abs()),
+                Either::Right(a) => m.push(a.abs()),
+            }
+            ok()
+        },
+
         // num1 num2 add sum
         sname("add") => |m| {
             let a = m.pop()?.number()?;
