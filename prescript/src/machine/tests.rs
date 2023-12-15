@@ -402,3 +402,11 @@ fn abs() {
     assert_op("-1 abs", 1);
     assert_op("-1.0 abs", 1.0);
 }
+
+#[test]
+fn idiv() {
+    assert_op("10 3 idiv", 3);
+    assert_op("10 -3 idiv", -3);
+    assert_op("-10 3 idiv", -3);
+    assert_op("-10 -3 idiv", 3); 
+}

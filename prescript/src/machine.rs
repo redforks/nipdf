@@ -1003,6 +1003,14 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             ok()
         },
 
+        // int1 int2 idiv quotient
+        sname("idiv") => |m| {
+            let a = m.pop()?.int()?;
+            let b = m.pop()?.int()?;
+            m.push(b / a);
+            ok()
+        },
+
         // int array -> array
         sname("array") => |m| {
             let count = m.pop()?.int()?;
