@@ -542,3 +542,10 @@ fn log() {
     assert_op("10 log", 1.0);
     assert_op("100.0 log", 2.0);
 }
+
+#[test]
+fn cvi() {
+    assert_op("10 cvi", 10);
+    assert_op("-10.1234 cvi", -10);
+    assert_op("(10.45) cvi", 10);
+}

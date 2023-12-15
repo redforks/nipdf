@@ -19,6 +19,7 @@ use winnow::Parser;
 mod decrypt;
 use decrypt::{decrypt, EEXEC_KEY};
 use log::error;
+use num::ToPrimitive;
 mod cidinit;
 
 pub type Array = Vec<Value>;
@@ -459,6 +460,8 @@ pub enum MachineError {
     InvalidAccess,
     #[error("range check error")]
     RangeCheck,
+    #[error("syntax error")]
+    SyntaxError,
 }
 
 pub type MachineResult<T> = Result<T, MachineError>;
@@ -1159,6 +1162,25 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
                 Either::Left(num) => m.push((num as f32).log10()),
                 Either::Right(num) => m.push(num.log10()),
             }
+            ok()
+        },
+
+        // number|string cvi int
+        sname("cvi") => |m| {
+            let v = m.pop()?;
+            let v = match v {
+                RuntimeValue::Value(Value::Integer(v)) => v,
+                RuntimeValue::Value(Value::Real(v)) => v as i32,
+                RuntimeValue::Value(Value::String(v)) =>  {
+                    let v = v.borrow();
+                    let v = std::str::from_utf8(&v).map_err(|_| MachineError::SyntaxError )?;
+                    v.parse::<f32>()
+                    .map_err(|_| MachineError::SyntaxError)
+                    .and_then(|v| v.to_i32().ok_or(MachineError::RangeCheck))?
+                }
+                _ => return Err(MachineError::TypeCheck),
+            };
+            m.push(v);
             ok()
         },
 
