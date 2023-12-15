@@ -445,3 +445,10 @@ fn ceiling() {
     assert_op("-4.8 ceiling", -4.0);
     assert_op("99 ceiling", 99);
 }
+
+#[test]
+fn floor() {
+    assert_op("3.2 floor", 3.0);
+    assert_op("-4.8 floor", -5.0);
+    assert_op("99 floor", 99); 
+}
