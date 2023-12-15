@@ -549,3 +549,10 @@ fn cvi() {
     assert_op("-10.1234 cvi", -10);
     assert_op("(10.45) cvi", 10);
 }
+
+#[test]
+fn cvr() {
+    assert_op("10 cvr", 10.0);
+    assert_op("-10.1234 cvr", -10.1234);
+    assert_op("(10.45) cvr", 10.45);
+}

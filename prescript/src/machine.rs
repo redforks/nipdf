@@ -1173,10 +1173,28 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
                 RuntimeValue::Value(Value::Real(v)) => v as i32,
                 RuntimeValue::Value(Value::String(v)) =>  {
                     let v = v.borrow();
-                    let v = std::str::from_utf8(&v).map_err(|_| MachineError::SyntaxError )?;
+                    let v = std::str::from_utf8(&v).map_err(|_| MachineError::SyntaxError)?;
                     v.parse::<f32>()
                     .map_err(|_| MachineError::SyntaxError)
                     .and_then(|v| v.to_i32().ok_or(MachineError::RangeCheck))?
+                }
+                _ => return Err(MachineError::TypeCheck),
+            };
+            m.push(v);
+            ok()
+        },
+
+        // number|string cvr real
+        sname("cvr") => |m| {
+            let v = m.pop()?;
+            let v = match v {
+                RuntimeValue::Value(Value::Integer(v)) => v as f32,
+                RuntimeValue::Value(Value::Real(v)) => v,
+                RuntimeValue::Value(Value::String(v)) =>  {
+                    let v = v.borrow();
+                    let v = std::str::from_utf8(&v).map_err(|_| MachineError::SyntaxError)?;
+                    v.parse::<f32>()
+                    .map_err(|_| MachineError::SyntaxError)?
                 }
                 _ => return Err(MachineError::TypeCheck),
             };
