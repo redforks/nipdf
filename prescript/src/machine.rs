@@ -617,7 +617,6 @@ impl<'a> Machine<'a> {
         r.extend(
             self.stack
                 .drain(..)
-                .rev()
                 .take(n_out)
                 .map(|v| v.number().unwrap().map_left(|v| v as f32).into_inner()),
         );
