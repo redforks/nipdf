@@ -477,11 +477,8 @@ pub struct ExponentialInterpolationFunction {
 impl Function for ExponentialInterpolationFunction {
     fn inner_call(&self, args: TinyVec<[f32; 4]>) -> AnyResult<FunctionValue> {
         let x = args[0];
-        let c0 = &self.c0;
-        let c1 = &self.c1;
-        let n = self.n;
-        let r = (0..c0.len())
-            .map(|i| x.powf(n).mul_add(c1[i] - c0[i], c0[i]))
+        let r = (0..self.c0.len())
+            .map(|i| x.powf(self.n).mul_add(self.c1[i] - self.c0[i], self.c0[i]))
             .collect();
         Ok(r)
     }
@@ -494,16 +491,11 @@ impl Function for ExponentialInterpolationFunction {
 impl<'a, 'b> ExponentialInterpolationFunctionDict<'a, 'b> {
     pub fn func(&self) -> AnyResult<ExponentialInterpolationFunction> {
         let f = self.function_dict()?;
-        let signature = f.signature()?;
-        let c0 = self.c0()?;
-        let c1 = self.c1()?;
-        let n = self.n()?;
-        // assert_eq!(n.fract(), 0.0);
         Ok(ExponentialInterpolationFunction {
-            c0,
-            c1,
-            n,
-            signature,
+            c0: self.c0()?,
+            c1: self.c1()?,
+            n: self.n()?,
+            signature: f.signature()?,
         })
     }
 }
@@ -603,10 +595,10 @@ impl Function for StitchingFunction {
             // breaks, cause a zero sub_domain
             sub_domain = self.domains().0[0];
         }
-        let x = Self::interpolation(&sub_domain, &self.encode.0[function_idx], x);
+        let x1 = Self::interpolation(&sub_domain, &self.encode.0[function_idx], x);
 
         let f = &self.functions[function_idx];
-        let r = f.call(&[x])?;
+        let r = f.call(&[x1])?;
         Ok(r)
     }
 
