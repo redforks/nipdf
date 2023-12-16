@@ -98,6 +98,24 @@ impl<'a, 'b> FilterDict<'a, 'b> {
         self.d.get(id1).or_else(|| self.d.get(id2))
     }
 
+    fn get_filters(
+        v: &Object,
+        r: Option<&'b ObjectResolver<'a>>,
+    ) -> Result<Vec<Name>, ObjectValueError> {
+        Ok(match v {
+            Object::Array(vals) => vals
+                .iter()
+                .map(|v| v.name().map_err(|_| ObjectValueError::UnexpectedType))
+                .collect::<Result<_, _>>()?,
+            Object::Name(n) => vec![n.clone()],
+            Object::Reference(id) => Self::get_filters(r.unwrap().resolve(id.id().id())?, r)?,
+            _ => {
+                error!("Filter is not Name or Array of Name");
+                return Err(ObjectValueError::UnexpectedType);
+            }
+        })
+    }
+
     /// Get object value of `Filter` field, or `F` field if `Filter` not defined.
     /// If value is array, its items should all be Name,
     /// Otherwise, it should be Name.
@@ -107,17 +125,7 @@ impl<'a, 'b> FilterDict<'a, 'b> {
             return Ok(vec![]);
         };
 
-        Ok(match v {
-            Object::Array(vals) => vals
-                .iter()
-                .map(|v| v.name().map_err(|_| ObjectValueError::UnexpectedType))
-                .collect::<Result<_, _>>()?,
-            Object::Name(n) => vec![n.clone()],
-            _ => {
-                error!("Filter is not Name or Array of Name");
-                return Err(ObjectValueError::UnexpectedType);
-            }
-        })
+        Self::get_filters(v, self.r)
     }
 
     /// Get object value of `DecodeParms` field, or `DP` field if `DecodeParms` not defined.
