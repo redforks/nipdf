@@ -110,7 +110,6 @@ pub type FunctionValue = TinyVec<[f32; 4]>;
 pub trait Function {
     fn call(&self, args: &[f32]) -> AnyResult<FunctionValue> {
         let args = self.signature().clip_args(args);
-        let args_clone = args.clone();
         let r = self.inner_call(args)?;
         for v in &r {
             assert!(!v.is_nan(), "{:?}", self.signature());
@@ -230,7 +229,7 @@ pub struct PostScriptFunction {
 impl PostScriptFunction {
     pub fn new(signature: Signature, script: Box<[u8]>) -> Self {
         Self {
-            f: PdfFunc::new(script, signature.n_returns().unwrap() as usize),
+            f: PdfFunc::new(script, signature.n_returns().unwrap()),
             signature,
         }
     }

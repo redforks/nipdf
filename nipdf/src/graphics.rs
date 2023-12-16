@@ -589,7 +589,7 @@ fn parse_inline_image(input: &[u8]) -> ParseResult<InlineImage> {
     Ok((input, image))
 }
 
-pub fn parse_operations<'a>(mut input: &'a [u8]) -> ParseResult<'a, Vec<Operation>> {
+pub fn parse_operations(mut input: &[u8]) -> ParseResult<'_, Vec<Operation>> {
     let mut operands = Vec::with_capacity(8);
     let mut ignore_parse_error = false;
     let mut r = vec![];

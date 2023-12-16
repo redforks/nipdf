@@ -233,7 +233,7 @@ where
                     let f: FunctionDict = resolver.resolve_pdf_object2(&arr[3])?;
                     let base = Self::from_args(&alternate, resolver, resources)?;
                     Ok(Self::DeviceN(Box::new(DeviceNColorSpace {
-                        n: n as u8,
+                        n: n.try_into().unwrap(),
                         alt: base,
                         f: Rc::new(f.func()?),
                     })))
@@ -563,7 +563,7 @@ where
 {
     fn to_rgba(&self, color: &[T]) -> [T; 4] {
         let color: TinyVec<[f32; 4]> = color
-            .into_iter()
+            .iter()
             .take(self.n as usize)
             .map(|c| c.into_color_comp())
             .collect();
