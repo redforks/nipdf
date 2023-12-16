@@ -1,0 +1,5 @@
+---
+source: render/src/render_tests.rs
+expression: "&decode_file_page(\"pdf.js/test/pdfs/bug1703683_page2_reduced.pdf\", 0).unwrap()"
+---
+"607b668969a502d358a34ad927a9b8e9"
