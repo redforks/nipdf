@@ -21,6 +21,10 @@ impl<T: PartialOrd + Copy> Domain<T> {
     fn clamp(&self, x: T) -> T {
         num_traits::clamp(x, self.start, self.end)
     }
+
+    pub fn is_zero(&self) -> bool {
+        self.start == self.end
+    }
 }
 
 /// Default domain is [0, 1]
@@ -106,7 +110,11 @@ pub type FunctionValue = TinyVec<[f32; 4]>;
 pub trait Function {
     fn call(&self, args: &[f32]) -> AnyResult<FunctionValue> {
         let args = self.signature().clip_args(args);
+        let args_clone = args.clone();
         let r = self.inner_call(args)?;
+        for v in &r {
+            assert!(!v.is_nan(), "{:?}", self.signature());
+        }
         Ok(self.signature().clip_returns(r))
     }
 
@@ -490,7 +498,7 @@ impl<'a, 'b> ExponentialInterpolationFunctionDict<'a, 'b> {
         let c0 = self.c0()?;
         let c1 = self.c1()?;
         let n = self.n()?;
-        assert_eq!(n.fract(), 0.0);
+        // assert_eq!(n.fract(), 0.0);
         Ok(ExponentialInterpolationFunction {
             c0,
             c1,
@@ -570,11 +578,11 @@ impl StitchingFunction {
         Domain::new(start, end)
     }
 
-    fn interpolation(a: &Domain, b: &Domain, t: f32) -> f32 {
-        let a_len = a.end - a.start;
-        let b_len = b.end - b.start;
-        let t = (t - a.start) / a_len;
-        t.mul_add(b_len, b.start) // t * b_len + b.start
+    fn interpolation(from: &Domain, to: &Domain, t: f32) -> f32 {
+        let a_len = from.end - from.start;
+        let b_len = to.end - to.start;
+        let t = (t - from.start) / a_len;
+        t.mul_add(b_len, to.start) // t * b_len + b.start
     }
 
     fn domains(&self) -> &Domains {
@@ -588,7 +596,13 @@ impl Function for StitchingFunction {
 
         let x = args[0];
         let function_idx = Self::find_function(&self.bounds, x);
-        let sub_domain = Self::sub_domain(&self.domains().0[0], &self.bounds, function_idx);
+        let mut sub_domain = Self::sub_domain(&self.domains().0[0], &self.bounds, function_idx);
+        if sub_domain.is_zero() {
+            // possibly incorrect bounds, bounds[0] should > domain[0].start
+            // bounds[last] should < domain[0].end, but some buggie file
+            // breaks, cause a zero sub_domain
+            sub_domain = self.domains().0[0];
+        }
         let x = Self::interpolation(&sub_domain, &self.encode.0[function_idx], x);
 
         let f = &self.functions[function_idx];
