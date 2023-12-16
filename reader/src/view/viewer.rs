@@ -244,7 +244,7 @@ impl Viewer {
         let catalog = self.file.catalog(&resolver)?;
         let pages = catalog.pages()?;
         let page = &pages[self.navi.current_page as usize];
-        Ok(page.id())
+        Ok(page.id().0)
     }
 
     /// Decode page content stream, dump using Debug trait and save to `/tmp/page-content` file.
@@ -273,15 +273,14 @@ impl Viewer {
         let page_no = page_no.unwrap_or_else(|| self.navi.current_page) as usize;
 
         use nipdf::object::Object;
-        use std::{collections::HashSet, io::Write, num::NonZeroU32};
+        use std::{collections::HashSet, io::Write};
 
         let resolver = self.file.resolver()?;
         let catalog = self.file.catalog(&resolver)?;
         let pages = catalog.pages()?;
         let page = &pages[page_no];
 
-        let id = NonZeroU32::new(page.id()).unwrap();
-        let mut id_wait_scanned = vec![id];
+        let mut id_wait_scanned = vec![page.id().0];
         let mut ids = HashSet::new();
 
         let mut f = std::fs::File::create("/tmp/page-object")?;
@@ -294,7 +293,7 @@ impl Viewer {
 
                 id_wait_scanned.extend(obj.iter_values().filter_map(|o| {
                     if let Object::Reference(r) = o {
-                        Some(r.id().id())
+                        Some(r.id().id().0)
                     } else {
                         None
                     }
