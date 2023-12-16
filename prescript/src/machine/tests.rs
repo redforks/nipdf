@@ -1,15 +1,40 @@
 use super::*;
 use crate::sname;
+use assert_approx_eq::assert_approx_eq;
 use test_log::test;
 
 trait Assert<'a> {
     fn assert(&self, m: &Machine<'a>);
 }
 
-impl<'a, V: Into<RuntimeValue<'a>> + Clone> Assert<'a> for V {
+macro_rules! ValueEqAssert {
+    ($t:ty) => {
+        impl<'a> Assert<'a> for $t {
+            fn assert(&self, m: &Machine<'a>) {
+                assert_eq!(m.stack.len(), 1);
+                assert_eq!(m.stack[0], self.clone().into());
+            }
+        }
+    };
+}
+
+ValueEqAssert!(bool);
+ValueEqAssert!(i32);
+ValueEqAssert!(Name);
+ValueEqAssert!(RuntimeDictionary<'a>);
+ValueEqAssert!(Array);
+
+impl<'a, const N: usize> Assert<'a> for [u8; N] {
     fn assert(&self, m: &Machine<'a>) {
         assert_eq!(m.stack.len(), 1);
-        assert_eq!(m.stack[0], self.clone().into());
+        assert_eq!(m.stack[0], (*self).into());
+    }
+}
+
+impl<'a> Assert<'a> for f32 {
+    fn assert(&self, m: &Machine<'a>) {
+        assert_eq!(m.stack.len(), 1);
+        assert_approx_eq!(m.stack[0].real().unwrap(), *self);
     }
 }
 
@@ -394,4 +419,161 @@ fn to_unicode_cmap() {
             panic!();
         }
     }
+}
+
+#[test]
+fn sub() {
+    assert_op("1 2 sub", -1);
+    assert_op("1.0 2.0 sub", -1.0);
+    assert_op("1.0 2 sub", -1.0);
+    assert_op("1 2.0 sub", -1.0);
+}
+
+#[test]
+fn abs() {
+    assert_op("1 abs", 1);
+    assert_op("-1 abs", 1);
+    assert_op("-1.0 abs", 1.0);
+}
+
+#[test]
+fn idiv() {
+    assert_op("10 3 idiv", 3);
+    assert_op("10 -3 idiv", -3);
+    assert_op("-10 3 idiv", -3);
+    assert_op("-10 -3 idiv", 3);
+}
+
+#[test]
+fn div() {
+    assert_op("10 3 div", 3.3333333);
+    assert_op("10.0 -3 div", -3.3333333);
+    assert_op("-10 3.0 div", -3.3333333);
+    assert_op("-10.0 -3.0 div", 3.3333333);
+    assert_op("9 3 div", 3.0);
+}
+
+#[test]
+fn test_mod() {
+    assert_op("10 3 mod", 1);
+    assert_op("-5 3 mod", -2);
+}
+
+#[test]
+fn mul() {
+    assert_op("10 3 mul", 30);
+    assert_op("-5.0 3.0 mul", -15.0);
+    assert_op("-5.0 -3 mul", 15.0);
+    assert_op("-5 -3.0 mul", 15.0);
+}
+
+#[test]
+fn neg() {
+    assert_op("10 neg", -10);
+    assert_op("-5.0 neg", 5.0);
+}
+
+#[test]
+fn ceiling() {
+    assert_op("3.2 ceiling", 4.0);
+    assert_op("-4.8 ceiling", -4.0);
+    assert_op("99 ceiling", 99);
+}
+
+#[test]
+fn floor() {
+    assert_op("3.2 floor", 3.0);
+    assert_op("-4.8 floor", -5.0);
+    assert_op("99 floor", 99);
+}
+
+#[test]
+fn round() {
+    assert_op("3.2 round", 3.0);
+    assert_op("-4.8 round", -5.0);
+    assert_op("99 round", 99);
+}
+
+#[test]
+fn truncate() {
+    assert_op("3.2 truncate", 3.0);
+    assert_op("-4.8 truncate", -4.0);
+    assert_op("99 truncate", 99);
+}
+
+#[test]
+fn sqrt() {
+    assert_op("4 sqrt", 2.0);
+    assert_op("4.0 sqrt", 2.0);
+    assert_op("99 sqrt", 9.949874);
+}
+
+#[test]
+fn atan() {
+    assert_op("0.0 1.0 atan", 0.0);
+    assert_op("1 0 atan", 90.0);
+    assert_op("-100.0 0 atan", 270.0);
+    assert_op("4 4.0 atan", 45.0);
+}
+
+#[test]
+fn cos() {
+    assert_op("0 cos", 1.0);
+    assert_op("90.0 cos", 0.0);
+    assert_op("180 cos", -1.0);
+    assert_op("270.0 cos", 0.0);
+}
+
+#[test]
+fn sin() {
+    assert_op("0 sin", 0.0);
+    assert_op("90.0 sin", 1.0);
+    assert_op("180 sin", 0.0);
+    assert_op("270.0 sin", -1.0);
+}
+
+#[test]
+fn exp() {
+    assert_op("9 0.5 exp", 3.0);
+    assert_op("9.0 -1 exp", 0.111111);
+}
+
+#[test]
+fn ln() {
+    assert_op("1 ln", 0.0);
+    assert_op("2.0 ln", 0.6931472);
+    assert_op("10 ln", 2.3025851);
+}
+
+#[test]
+fn log() {
+    assert_op("10 log", 1.0);
+    assert_op("100.0 log", 2.0);
+}
+
+#[test]
+fn cvi() {
+    assert_op("10 cvi", 10);
+    assert_op("-10.1234 cvi", -10);
+    assert_op("(10.45) cvi", 10);
+}
+
+#[test]
+fn cvr() {
+    assert_op("10 cvr", 10.0);
+    assert_op("-10.1234 cvr", -10.1234);
+    assert_op("(10.45) cvr", 10.45);
+}
+
+#[test]
+fn bitshit() {
+    assert_op("7 3 bitshift", 56);
+    assert_op("142 -3 bitshift", 17);
+}
+
+#[test]
+fn roll() {
+    assert_op("1 2 3 3 -1 roll", Stack(rt_values![2, 3, 1]));
+    assert_op("1 2 3 3 1 roll", Stack(rt_values![3, 1, 2]));
+    assert_op("1 2 3 3 0 roll", Stack(rt_values![1, 2, 3]));
 }

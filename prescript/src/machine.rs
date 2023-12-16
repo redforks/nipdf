@@ -19,6 +19,7 @@ use winnow::Parser;
 mod decrypt;
 use decrypt::{decrypt, EEXEC_KEY};
 use log::error;
+use num_traits::ToPrimitive;
 mod cidinit;
 
 pub type Array = Vec<Value>;
@@ -459,6 +460,8 @@ pub enum MachineError {
     InvalidAccess,
     #[error("range check error")]
     RangeCheck,
+    #[error("syntax error")]
+    SyntaxError,
 }
 
 pub type MachineResult<T> = Result<T, MachineError>;
@@ -592,6 +595,35 @@ impl<'a> Machine<'a> {
             stack: Vec::new(),
             fonts: vec![],
         }
+    }
+
+    pub fn exec_as_function(&mut self, args: &[f32], n_out: usize) -> MachineResult<Vec<f32>> {
+        for arg in args.iter() {
+            self.push(*arg);
+        }
+
+        self.execute()?;
+        let mut r = vec![];
+        match self.pop()? {
+            RuntimeValue::Value(Value::Procedure(p)) => {
+                // the function may wrapped in a procedure
+                assert_eq!(ExecState::Ok, self.execute_procedure(p)?);
+            }
+            RuntimeValue::Value(Value::Real(v)) => r.push(v),
+            RuntimeValue::Value(Value::Integer(v)) => r.push(v as f32),
+            _ => return Err(MachineError::TypeCheck),
+        }
+
+        r.extend(
+            self.stack
+                .drain(..)
+                .take(n_out)
+                .map(|v| v.number().unwrap().map_left(|v| v as f32).into_inner()),
+        );
+        if r.len() != n_out {
+            return Err(MachineError::StackUnderflow);
+        }
+        Ok(r)
     }
 
     #[allow(dead_code)]
@@ -814,6 +846,26 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             ok()
         },
 
+        // anyn−1  …  any0  n  j  roll  any (j−1) mod n  …  any0  anyn−1  …  anyj mod n
+        sname("roll") => |m| {
+            let j = m.pop()?.int()?;
+            let n = m.pop()?.int()?;
+            let mut items = Vec::new();
+            for _ in 0..n {
+                items.push(m.pop()?);
+            }
+            items.reverse();
+            if j > 0 {
+                items.rotate_right(j as usize);
+            } else {
+                items.rotate_left(-j as usize);
+            }
+            for item in items {
+                m.push(item);
+            }
+            ok()
+        },
+
         // - mark -> Mark
         sname("mark") => |m| {
             m.push(RuntimeValue::Mark);
@@ -937,6 +989,16 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             ok()
         },
 
+        // num1 abs num1
+        sname("abs") => |m| {
+            let a = m.pop()?.number()?;
+            match a {
+                Either::Left(a) => m.push(a.abs()),
+                Either::Right(a) => m.push(a.abs()),
+            }
+            ok()
+        },
+
         // num1 num2 add sum
         sname("add") => |m| {
             let a = m.pop()?.number()?;
@@ -947,6 +1009,242 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
                 (Either::Left(a), Either::Right(b)) => m.push(a as f32 + b),
                 (Either::Right(a), Either::Left(b)) => m.push(a + b as f32),
             }
+            ok()
+        },
+
+        // num1 num2 sub difference
+        sname("sub") => |m| {
+            let b = m.pop()?.number()?;
+            let a = m.pop()?.number()?;
+            match (a, b) {
+                (Either::Left(a), Either::Left(b)) => m.push(a - b),
+                (Either::Right(a), Either::Right(b)) => m.push(a - b),
+                (Either::Left(a), Either::Right(b)) => m.push(a as f32 - b),
+                (Either::Right(a), Either::Left(b)) => m.push(a - b as f32),
+            }
+            ok()
+        },
+
+        // num1 num2 mul num3
+        sname("mul") => |m| {
+            let a = m.pop()?.number()?;
+            let b = m.pop()?.number()?;
+            match (a, b) {
+                (Either::Left(a), Either::Left(b)) => m.push(a * b),
+                (Either::Right(a), Either::Right(b)) => m.push(a * b),
+                (Either::Left(a), Either::Right(b)) => m.push(a as f32 * b),
+                (Either::Right(a), Either::Left(b)) => m.push(a * b as f32),
+            }
+            ok()
+        },
+
+        // num1 neg num2
+        sname("neg") => |m| {
+            let a = m.pop()?.number()?;
+            match a {
+                Either::Left(a) => m.push(-a),
+                Either::Right(a) => m.push(-a),
+            }
+            ok()
+        },
+
+        // num1 ceiling num2
+        sname("ceiling") => |m| {
+            let a = m.pop()?.number()?;
+            match a {
+                Either::Left(a) => m.push(a),
+                Either::Right(a) => m.push(a.ceil()),
+            }
+            ok()
+        },
+
+        // num1 floor num2
+        sname("floor") => |m| {
+            let a = m.pop()?.number()?;
+            match a {
+                Either::Left(a) => m.push(a),
+                Either::Right(a) => m.push(a.floor()),
+            }
+            ok()
+        },
+
+        // num1 round round2
+        sname("round") => |m| {
+            let a = m.pop()?.number()?;
+            match a {
+                Either::Left(a) => m.push(a),
+                Either::Right(a) => m.push(a.round()),
+            }
+            ok()
+        },
+
+        // num1 truncate num2
+        sname("truncate") => |m| {
+            let a = m.pop()?.number()?;
+            match a {
+                Either::Left(a) => m.push(a),
+                Either::Right(a) => m.push(a.trunc()),
+            }
+            ok()
+        },
+
+        // int1 int2 idiv quotient
+        sname("idiv") => |m| {
+            let b = m.pop()?.int()?;
+            let a = m.pop()?.int()?;
+            m.push(a / b);
+            ok()
+        },
+
+        // num1 num2 div quotient
+        sname("div") => |m| {
+            let b = m.pop()?.number()?;
+            let a = m.pop()?.number()?;
+            match (a, b) {
+                (Either::Left(a), Either::Left(b)) => m.push(a as f32 / b as f32),
+                (Either::Right(a), Either::Right(b)) => m.push(a / b),
+                (Either::Left(a), Either::Right(b)) => m.push(a as f32 / b),
+                (Either::Right(a), Either::Left(b)) => m.push(a / b as f32),
+            }
+            ok()
+        },
+
+        // int1 int2 mod remainder
+        sname("mod") => |m| {
+            let b = m.pop()?.int()?;
+            let a = m.pop()?.int()?;
+            m.push(a % b);
+            ok()
+        },
+
+        // num sqrt real
+        sname("sqrt") => |m| {
+            let a = m.pop()?.number()?;
+            match a {
+                Either::Left(a) => m.push((a as f32).sqrt()),
+                Either::Right(a) => m.push(a.sqrt()),
+            }
+            ok()
+        },
+
+        // num den atan angle, The signs of num and den determine the quadrant
+        // in which the result will lie: a positive num yields a result in the
+        // positive y plane, while a positive den yields a result in the
+        // positive x plane. The result is a real number.
+        sname("atan") => |m| {
+            let den = m.pop()?.number()?;
+            let num = m.pop()?.number()?;
+            let v = match (num, den) {
+                (Either::Left(num), Either::Left(den)) => (num as f32).atan2(den as f32).to_degrees(),
+                (Either::Right(num), Either::Right(den)) => num.atan2(den).to_degrees(),
+                (Either::Left(num), Either::Right(den)) => (num as f32).atan2(den).to_degrees(),
+                (Either::Right(num), Either::Left(den)) => num.atan2(den as f32).to_degrees(),
+            };
+            m.push((v + 360.0) % 360.0);
+            ok()
+        },
+
+        // angle cos real
+        sname("cos") => |m| {
+            let angle = m.pop()?.number()?;
+            match angle {
+                Either::Left(angle) => m.push((angle as f32).to_radians().cos()),
+                Either::Right(angle) => m.push(angle.to_radians().cos()),
+            }
+            ok()
+        },
+
+        // angle sin real
+        sname("sin") => |m| {
+            let angle = m.pop()?.number()?;
+            match angle {
+                Either::Left(angle) => m.push((angle as f32).to_radians().sin()),
+                Either::Right(angle) => m.push(angle.to_radians().sin()),
+            }
+            ok()
+        },
+
+        // base exponent exp real
+        sname("exp" ) => |m| {
+            let exponent = m.pop()?.number()?;
+            let base = m.pop()?.number()?;
+            match (base, exponent) {
+                (Either::Left(base), Either::Left(exponent)) => m.push((base as f32).powf(exponent as f32)),
+                (Either::Right(base), Either::Right(exponent)) => m.push(base.powf(exponent)),
+                (Either::Left(base), Either::Right(exponent)) => m.push((base as f32).powf(exponent)),
+                (Either::Right(base), Either::Left(exponent)) => m.push(base.powf(exponent as f32)),
+            }
+            ok()
+        },
+
+        // num lg real
+        sname("ln") => |m| {
+            let num = m.pop()?.number()?;
+            match num {
+                Either::Left(num) => m.push((num as f32).ln()),
+                Either::Right(num) => m.push(num.ln()),
+            }
+            ok()
+        },
+
+        // num log real
+        sname("log") => |m| {
+            let num = m.pop()?.number()?;
+            match num {
+                Either::Left(num) => m.push((num as f32).log10()),
+                Either::Right(num) => m.push(num.log10()),
+            }
+            ok()
+        },
+
+        // number|string cvi int
+        sname("cvi") => |m| {
+            let v = m.pop()?;
+            let v = match v {
+                RuntimeValue::Value(Value::Integer(v)) => v,
+                RuntimeValue::Value(Value::Real(v)) => v.to_i32().ok_or(MachineError::RangeCheck)?,
+                RuntimeValue::Value(Value::String(v)) =>  {
+                    let v = v.borrow();
+                    let v = std::str::from_utf8(&v).map_err(|_| MachineError::SyntaxError)?;
+                    v.parse::<f32>()
+                    .map_err(|_| MachineError::SyntaxError)
+                    .and_then(|v| v.to_i32().ok_or(MachineError::RangeCheck))?
+                }
+                _ => return Err(MachineError::TypeCheck),
+            };
+            m.push(v);
+            ok()
+        },
+
+        // number|string cvr real
+        sname("cvr") => |m| {
+            let v = m.pop()?;
+            let v = match v {
+                RuntimeValue::Value(Value::Integer(v)) => v as f32,
+                RuntimeValue::Value(Value::Real(v)) => v,
+                RuntimeValue::Value(Value::String(v)) =>  {
+                    let v = v.borrow();
+                    let v = std::str::from_utf8(&v).map_err(|_| MachineError::SyntaxError)?;
+                    v.parse::<f32>()
+                    .map_err(|_| MachineError::SyntaxError)?
+                }
+                _ => return Err(MachineError::TypeCheck),
+            };
+            m.push(v);
+            ok()
+        },
+
+        // num1 shift bitshift num2
+        sname("bitshift") => |m| {
+            let shift = m.pop()?.int()?;
+            let num = m.pop()?.int()?;
+            m.push(
+                if shift < 0 {
+                    num.wrapping_shr(u32::try_from(-shift).unwrap())
+                } else {
+                    num.wrapping_shl(shift.try_into().unwrap())
+                }
+            );
             ok()
         },
 

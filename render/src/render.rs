@@ -188,12 +188,22 @@ impl ColorState {
         self.alpha = alpha;
     }
 
-    pub fn set_color_args(&mut self, color_args: impl AsRef<[f32]>) {
-        let color = to_skia_color(&self.color_space, color_args.as_ref());
-        self.set_color(color);
+    /// Set color space, if args is None, set color to color space default color
+    pub fn set_color_space(&mut self, cs: ColorSpace<f32>, args: Option<impl AsRef<[f32]>>) {
+        self.color_space = cs;
+        if let Some(args) = args {
+            self.set_color_args(args);
+        } else {
+            let [r, g, b, a] = self.color_space.default_color();
+            self.set_paint(
+                PaintCreator::Color(SkiaColor::from_rgba(r, g, b, a).unwrap()),
+                None,
+            );
+        }
     }
 
-    pub fn set_color(&mut self, color: SkiaColor) {
+    pub fn set_color_args(&mut self, color_args: impl AsRef<[f32]>) {
+        let color = to_skia_color(&self.color_space, color_args.as_ref());
         self.set_paint(PaintCreator::Color(color), None);
     }
 
@@ -752,38 +762,52 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
             // Color Operations
             Operation::SetStrokeColorSpace(args) => {
-                self.current_mut().stroke_state.color_space =
+                let cs =
                     ColorSpace::from_args(&args, self.resources.resolver(), Some(self.resources))
-                        .unwrap()
+                        .unwrap();
+                self.set_color_and_space(Self::stroke_color_state, cs, None);
             }
             Operation::SetFillColorSpace(args) => {
-                self.current_mut().fill_state.color_space =
+                let cs =
                     ColorSpace::from_args(&args, self.resources.resolver(), Some(self.resources))
-                        .unwrap()
+                        .unwrap();
+                self.set_color_and_space(Self::fill_color_state, cs, None);
             }
             Operation::SetStrokeColor(args) => self.set_color_args(Self::stroke_color_state, args),
-            Operation::SetStrokeGray(color) => {
-                self.set_color_and_space(Self::stroke_color_state, ColorSpace::DeviceGray, &color)
-            }
-            Operation::SetStrokeCMYK(color) => {
-                self.set_color_and_space(Self::stroke_color_state, ColorSpace::DeviceCMYK, &color)
-            }
-            Operation::SetStrokeRGB(color) => {
-                self.set_color_and_space(Self::stroke_color_state, ColorSpace::DeviceRGB, &color)
-            }
+            Operation::SetStrokeGray(color) => self.set_color_and_space(
+                Self::stroke_color_state,
+                ColorSpace::DeviceGray,
+                Some(&color),
+            ),
+            Operation::SetStrokeCMYK(color) => self.set_color_and_space(
+                Self::stroke_color_state,
+                ColorSpace::DeviceCMYK,
+                Some(&color),
+            ),
+            Operation::SetStrokeRGB(color) => self.set_color_and_space(
+                Self::stroke_color_state,
+                ColorSpace::DeviceRGB,
+                Some(&color),
+            ),
             Operation::SetStrokeColorOrWithPattern(color_or_name) => self
                 .set_color_or_pattern(Self::stroke_color_state, &color_or_name)
                 .unwrap(),
             Operation::SetFillColor(args) => self.set_color_args(Self::fill_color_state, args),
-            Operation::SetFillGray(color) => {
-                self.set_color_and_space(Self::fill_color_state, ColorSpace::DeviceGray, &color)
-            }
-            Operation::SetFillCMYK(color) => {
-                self.set_color_and_space(Self::fill_color_state, ColorSpace::DeviceCMYK, &color)
-            }
-            Operation::SetFillRGB(color) => {
-                self.set_color_and_space(Self::fill_color_state, ColorSpace::DeviceRGB, &color)
-            }
+            Operation::SetFillGray(color) => self.set_color_and_space(
+                Self::fill_color_state,
+                ColorSpace::DeviceGray,
+                Some(&color),
+            ),
+            Operation::SetFillCMYK(color) => self.set_color_and_space(
+                Self::fill_color_state,
+                ColorSpace::DeviceCMYK,
+                Some(&color),
+            ),
+            Operation::SetFillRGB(color) => self.set_color_and_space(
+                Self::fill_color_state,
+                ColorSpace::DeviceRGB,
+                Some(&color),
+            ),
             Operation::SetFillColorOrWithPattern(color_or_name) => self
                 .set_color_or_pattern(Self::fill_color_state, &color_or_name)
                 .unwrap(),
@@ -835,11 +859,10 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         &mut self,
         mut get_state: impl FnMut(&mut Self) -> &mut ColorState,
         cs: ColorSpace<f32>,
-        color: &[f32],
+        color: Option<&[f32]>,
     ) {
         let state = get_state(self);
-        state.color_space = cs;
-        state.set_color_args(color);
+        state.set_color_space(cs, color);
     }
 
     fn stroke(&mut self) {
@@ -1102,6 +1125,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             .into_iter()
             .for_each(|op| render.exec(op));
 
+        debug!("End render form");
         Ok(())
     }
 
@@ -1286,9 +1310,6 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
     ) -> AnyResult<()> {
         match color_or_name {
             ColorArgsOrName::Name((name, color_args)) => {
-                let color = color_args
-                    .as_ref()
-                    .map(|args| to_skia_color(&get_state(self).color_space, args.as_ref()));
                 let pattern = self.resources.pattern()?;
                 let pattern = &pattern[name];
                 match pattern.pattern_type()? {
@@ -1301,7 +1322,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                             &dimension,
                             get_state(self),
                             pattern.tiling_pattern()?,
-                            color,
+                            color_args.as_ref(),
                         )
                     }
                     PatternType::Shading => {
@@ -1371,7 +1392,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         canvas_size: &Size2D<f32>,
         color_state: &mut ColorState,
         tile: TilingPatternDict<'a, 'b>,
-        color: Option<SkiaColor>,
+        color_args: Option<&ColorArgs>,
     ) -> AnyResult<()>
     where
         'a: 'b,
@@ -1400,9 +1421,9 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             .build();
         let mut canvas = option.create_canvas();
         let mut render = Render::new(&mut canvas, option, &resources);
-        if let Some(color) = color {
+        if let Some(args) = color_args {
             // set color used for paint matrix image
-            color_state.set_color(color);
+            color_state.set_color_args(args);
         }
         ops.into_iter().for_each(|op| render.exec(op));
         drop(render);

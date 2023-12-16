@@ -4,6 +4,7 @@ use anyhow::Result as AnyResult;
 use mockall::automock;
 use nipdf_macro::{pdf_object, TryFromIntObject};
 use num_traits::ToPrimitive;
+use prescript::PdfFunc;
 use tinyvec::{tiny_vec, TinyVec};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -19,6 +20,10 @@ impl<T: PartialOrd + Copy> Domain<T> {
 
     fn clamp(&self, x: T) -> T {
         num_traits::clamp(x, self.start, self.end)
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.start == self.end
     }
 }
 
@@ -106,6 +111,9 @@ pub trait Function {
     fn call(&self, args: &[f32]) -> AnyResult<FunctionValue> {
         let args = self.signature().clip_args(args);
         let r = self.inner_call(args)?;
+        for v in &r {
+            assert!(!v.is_nan(), "{:?}", self.signature());
+        }
         Ok(self.signature().clip_returns(r))
     }
 
@@ -213,6 +221,33 @@ pub trait FunctionDictTrait {
     fn stitch(&self) -> StitchingFunctionDict<'a, 'b>;
 }
 
+pub struct PostScriptFunction {
+    signature: Signature,
+    f: PdfFunc,
+}
+
+impl PostScriptFunction {
+    pub fn new(signature: Signature, script: Box<[u8]>) -> Self {
+        Self {
+            f: PdfFunc::new(script, signature.n_returns().unwrap()),
+            signature,
+        }
+    }
+}
+
+impl Function for PostScriptFunction {
+    fn signature(&self) -> &Signature {
+        &self.signature
+    }
+
+    #[doc = " Called by `self.call()`, args and return value are clipped by signature."]
+    fn inner_call(&self, args: FunctionValue) -> AnyResult<FunctionValue> {
+        let args = args.into_iter().collect::<Vec<_>>();
+        let r = self.f.exec(&args)?;
+        Ok(r.into_iter().collect())
+    }
+}
+
 impl<'a, 'b> FunctionDict<'a, 'b> {
     fn signature(&self) -> AnyResult<Signature> {
         Ok(Signature {
@@ -229,6 +264,18 @@ impl<'a, 'b> FunctionDict<'a, 'b> {
         self.range().unwrap().map(|range| range.n())
     }
 
+    pub fn post_script_func(&self) -> AnyResult<PostScriptFunction> {
+        assert_eq!(self.function_type()?, Type::PostScriptCalculator);
+        let signature = self.signature()?;
+        let resolver = self.d.resolver();
+        let stream = resolver.resolve(self.id.unwrap())?.stream()?;
+        let script = stream.decode(resolver)?;
+        Ok(PostScriptFunction::new(
+            signature,
+            script.into_owned().into_boxed_slice(),
+        ))
+    }
+
     /// Create boxed Function for this Function dict.
     pub fn func(&self) -> AnyResult<Box<dyn Function>> {
         match self.function_type()? {
@@ -237,7 +284,7 @@ impl<'a, 'b> FunctionDict<'a, 'b> {
                 Ok(Box::new(self.exponential_interpolation()?.func()?))
             }
             Type::Stitching => Ok(Box::new(self.stitch()?.func()?)),
-            Type::PostScriptCalculator => todo!(),
+            Type::PostScriptCalculator => Ok(Box::new(self.post_script_func()?)),
         }
     }
 }
@@ -358,7 +405,7 @@ impl Function for SampledFunction {
             let sample = sample.mul_add(decode.end - decode.start, decode.start);
             r.push(sample);
         }
-        Ok(self.signature.clip_returns(r))
+        Ok(r)
     }
 
     fn signature(&self) -> &Signature {
@@ -429,13 +476,10 @@ pub struct ExponentialInterpolationFunction {
 impl Function for ExponentialInterpolationFunction {
     fn inner_call(&self, args: TinyVec<[f32; 4]>) -> AnyResult<FunctionValue> {
         let x = args[0];
-        let c0 = &self.c0;
-        let c1 = &self.c1;
-        let n = self.n;
-        let r = (0..c0.len())
-            .map(|i| x.powf(n).mul_add(c1[i] - c0[i], c0[i]))
+        let r = (0..self.c0.len())
+            .map(|i| x.powf(self.n).mul_add(self.c1[i] - self.c0[i], self.c0[i]))
             .collect();
-        Ok(self.signature.clip_returns(r))
+        Ok(r)
     }
 
     fn signature(&self) -> &Signature {
@@ -446,16 +490,11 @@ impl Function for ExponentialInterpolationFunction {
 impl<'a, 'b> ExponentialInterpolationFunctionDict<'a, 'b> {
     pub fn func(&self) -> AnyResult<ExponentialInterpolationFunction> {
         let f = self.function_dict()?;
-        let signature = f.signature()?;
-        let c0 = self.c0()?;
-        let c1 = self.c1()?;
-        let n = self.n()?;
-        assert_eq!(n.fract(), 0.0);
         Ok(ExponentialInterpolationFunction {
-            c0,
-            c1,
-            n,
-            signature,
+            c0: self.c0()?,
+            c1: self.c1()?,
+            n: self.n()?,
+            signature: f.signature()?,
         })
     }
 }
@@ -530,11 +569,11 @@ impl StitchingFunction {
         Domain::new(start, end)
     }
 
-    fn interpolation(a: &Domain, b: &Domain, t: f32) -> f32 {
-        let a_len = a.end - a.start;
-        let b_len = b.end - b.start;
-        let t = (t - a.start) / a_len;
-        t.mul_add(b_len, b.start) // t * b_len + b.start
+    fn interpolation(from: &Domain, to: &Domain, t: f32) -> f32 {
+        let a_len = from.end - from.start;
+        let b_len = to.end - to.start;
+        let t = (t - from.start) / a_len;
+        t.mul_add(b_len, to.start) // t * b_len + b.start
     }
 
     fn domains(&self) -> &Domains {
@@ -548,11 +587,17 @@ impl Function for StitchingFunction {
 
         let x = args[0];
         let function_idx = Self::find_function(&self.bounds, x);
-        let sub_domain = Self::sub_domain(&self.domains().0[0], &self.bounds, function_idx);
-        let x = Self::interpolation(&sub_domain, &self.encode.0[function_idx], x);
+        let mut sub_domain = Self::sub_domain(&self.domains().0[0], &self.bounds, function_idx);
+        if sub_domain.is_zero() {
+            // possibly incorrect bounds, bounds[0] should > domain[0].start
+            // bounds[last] should < domain[0].end, but some buggie file
+            // breaks, cause a zero sub_domain
+            sub_domain = self.domains().0[0];
+        }
+        let x1 = Self::interpolation(&sub_domain, &self.encode.0[function_idx], x);
 
         let f = &self.functions[function_idx];
-        let r = f.call(&[x])?;
+        let r = f.call(&[x1])?;
         Ok(r)
     }
 

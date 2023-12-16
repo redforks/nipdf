@@ -183,3 +183,14 @@ fn type3_font() {
 fn type3_with_nagative_font_size() {
     assert_ron_snapshot!(&decode_file_page("pdf.js/test/pdfs/bug1011159.pdf", 0).unwrap())
 }
+
+#[test]
+fn todo_tensor_product_patch_mesh_shading() {
+    // also test:
+    //   1. PostScript function(Function Type4)
+    //   1. DeviceN color space
+    // todo: ShadingType::TensorProductPatchMesh, the electronic header bucket shader not rendered
+    assert_ron_snapshot!(
+        &decode_file_page("pdf.js/test/pdfs/bug1703683_page2_reduced.pdf", 0).unwrap()
+    )
+}
