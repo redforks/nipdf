@@ -1125,6 +1125,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             .into_iter()
             .for_each(|op| render.exec(op));
 
+        debug!("End render form");
         Ok(())
     }
 
