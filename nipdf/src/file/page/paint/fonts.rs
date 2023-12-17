@@ -2,8 +2,7 @@ use crate::{
     file::{page::ResourceDict, ObjectResolver},
     graphics::{
         parse_operations,
-        trans::{GlyphLength, GlyphToTextSpace},
-        NameOrDict, NameOrDictByRef, NameOrStream, Operation, Point,
+        trans::{GlyphLength, GlyphToTextSpace}, NameOrDictByRef, NameOrStream, Operation, Point,
     },
     object::{PdfObject, Stream},
     text::{
@@ -182,8 +181,7 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
         font_name: &str,
     ) -> AnyResult<Option<Encoding>> {
         pair.as_ref()
-            .map(|p| p.0.as_ref().map(|n| Self::by_name(n.clone())))
-            .flatten()
+            .and_then(|p| p.0.as_ref().map(|n| Self::by_name(n.clone())))
             .or_else(|| self.by_font_name(&name(font_name)).transpose())
             .transpose()
     }

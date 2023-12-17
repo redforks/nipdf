@@ -14,7 +14,7 @@ fn scan_objects() {
         let resolver = f.resolver().unwrap();
         for id in 1..resolver.n() {
             print!("scan object: {id}");
-            match resolver.resolve(id as u32) {
+            match resolver.resolve(id.try_into().unwrap()) {
                 Err(ObjectValueError::ObjectIDNotFound(_)) => {
                     print!(" not found")
                 }

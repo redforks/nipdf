@@ -541,8 +541,8 @@ fn exp() {
 #[test]
 fn ln() {
     assert_op("1 ln", 0.0);
-    assert_op("2.0 ln", 0.6931472);
-    assert_op("10 ln", 2.3025851);
+    assert_op("2.0 ln", std::f32::consts::LN_2);
+    assert_op("10 ln", std::f32::consts::LN_10);
 }
 
 #[test]
