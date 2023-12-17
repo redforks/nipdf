@@ -6,6 +6,7 @@ use crate::{
 use ahash::{HashMap, HashMapExt};
 use anyhow::Result as AnyResult;
 use bitflags::bitflags;
+use log::warn;
 use nipdf_macro::{pdf_object, TryFromIntObjectForBitflags, TryFromNameObject};
 use num_traits::ToPrimitive;
 use prescript::{name, Encoding, Name};
@@ -115,9 +116,12 @@ impl<'a, 'b> FontDict<'a, 'b> {
             return Ok(0);
         }
 
-        self.font_descriptor()?
-            .expect("missing font descriptor, if widths exist, descriptor must also exist")
-            .missing_width()
+        let Some(desc) = self.font_descriptor()? else {
+            // some pdf file has bug, Type1 font missing font descriptor, but has widths
+            warn!("missing font descriptor, if widths exist, descriptor must also exist");
+            return Ok(1000);
+        };
+        desc.missing_width()
     }
 }
 
