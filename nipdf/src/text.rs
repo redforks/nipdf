@@ -48,6 +48,13 @@ pub trait FontDictTrait {
     #[try_from]
     fn encoding(&self) -> Option<NameOrDictByRef<'b>>;
 
+    /// If font is the standard 14 fonts, it may not exist.
+    fn first_char(&self) -> Option<u32>;
+    /// if font is the standard 14 fonts, it may not exist.
+    fn last_char(&self) -> Option<u32>;
+    /// if font is the standard 14 fonts, it may not exist.
+    fn widths(&self) -> Vec<u32>;
+
     fn base_font(&self) -> Name;
 }
 
@@ -60,13 +67,6 @@ pub trait Type0FontDictTrait {
     #[nested]
     fn descendant_fonts(&self) -> Vec<CIDFontDict<'a, 'b>>;
     fn to_unicode(&self) -> Option<&'b Stream>;
-}
-
-pub trait FirstLastWidths {
-    fn first_char(&self) -> AnyResult<Option<u32>>;
-    fn last_char(&self) -> AnyResult<Option<u32>>;
-    fn widths(&self) -> AnyResult<Vec<u32>>;
-    fn default_width(&self) -> AnyResult<u32>;
 }
 
 /// For standard 14 fonts, font_descriptor/first_char/last_char/widths may not exist.
@@ -86,26 +86,6 @@ pub trait Type1FontDictTrait {
     #[try_from]
     fn encoding(&self) -> Option<NameOrDictByRef<'b>>;
     fn to_unicode(&self) -> Option<&'b Stream>;
-}
-
-impl<'a, 'b> FirstLastWidths for Type1FontDict<'a, 'b> {
-    fn first_char(&self) -> AnyResult<Option<u32>> {
-        self.first_char()
-    }
-
-    fn last_char(&self) -> AnyResult<Option<u32>> {
-        self.last_char()
-    }
-
-    fn widths(&self) -> AnyResult<Vec<u32>> {
-        self.widths()
-    }
-
-    fn default_width(&self) -> AnyResult<u32> {
-        self.font_descriptor()?
-            .expect("missing font descriptor, if widths exist, descriptor must also exist")
-            .missing_width()
-    }
 }
 
 impl<'a, 'b> FontDict<'a, 'b> {
@@ -129,6 +109,16 @@ impl<'a, 'b> FontDict<'a, 'b> {
             Ok(r[..].to_owned())
         }
     }
+
+    pub fn default_width(&self) -> AnyResult<u32> {
+        if self.subtype()? == FontType::Type3 {
+            return Ok(0);
+        }
+
+        self.font_descriptor()?
+            .expect("missing font descriptor, if widths exist, descriptor must also exist")
+            .missing_width()
+    }
 }
 
 #[pdf_object(("Font", "TrueType"))]
@@ -143,24 +133,6 @@ pub trait TrueTypeFontDictTrait {
     #[try_from]
     fn encoding(&self) -> Option<NameOrDictByRef<'b>>;
     fn to_unicode(&self) -> Option<&'b Stream>;
-}
-
-impl FirstLastWidths for TrueTypeFontDict<'_, '_> {
-    fn first_char(&self) -> AnyResult<Option<u32>> {
-        Ok(Some(self.first_char()?))
-    }
-
-    fn last_char(&self) -> AnyResult<Option<u32>> {
-        Ok(Some(self.last_char()?))
-    }
-
-    fn widths(&self) -> AnyResult<Vec<u32>> {
-        self.widths()
-    }
-
-    fn default_width(&self) -> AnyResult<u32> {
-        Ok(0)
-    }
 }
 
 #[pdf_object(("Font", "Type3"))]
@@ -179,24 +151,6 @@ pub trait Type3FontDictTrait {
     fn widths(&self) -> Vec<u32>;
     #[nested]
     fn resources(&self) -> Option<ResourceDict<'a, 'b>>;
-}
-
-impl FirstLastWidths for Type3FontDict<'_, '_> {
-    fn first_char(&self) -> AnyResult<Option<u32>> {
-        Ok(Some(self.first_char()?))
-    }
-
-    fn last_char(&self) -> AnyResult<Option<u32>> {
-        Ok(Some(self.last_char()?))
-    }
-
-    fn widths(&self) -> AnyResult<Vec<u32>> {
-        self.widths()
-    }
-
-    fn default_width(&self) -> AnyResult<u32> {
-        Ok(0)
-    }
 }
 
 #[derive(Debug, PartialEq)]

@@ -7,8 +7,8 @@ use crate::{
     },
     object::{PdfObject, Stream},
     text::{
-        CIDFontType, CIDFontWidths, EncodingDict, EncodingDifferences, FirstLastWidths,
-        FontDescriptorDict, FontDescriptorFlags, FontDict, FontType, Type0FontDict, Type3FontDict,
+        CIDFontType, CIDFontWidths, EncodingDict, EncodingDifferences, FontDescriptorDict,
+        FontDescriptorFlags, FontDict, FontType, Type0FontDict, Type3FontDict,
     },
 };
 use anyhow::{anyhow, bail, Ok, Result as AnyResult};
@@ -35,7 +35,7 @@ struct FirstLastFontWidth {
 }
 
 impl FirstLastFontWidth {
-    pub fn from(font: impl FirstLastWidths) -> AnyResult<Option<Self>> {
+    pub fn from(font: &FontDict) -> AnyResult<Option<Self>> {
         let widths = font.widths()?;
         let first_char = font.first_char()?;
         let last_char = font.last_char()?;
@@ -293,7 +293,7 @@ impl<'a> Type1FontOp<'a> {
         is_cff: bool,
         font_data: &'a [u8],
     ) -> AnyResult<Self> {
-        let font_width = FirstLastFontWidth::from(font_dict.type1()?)?
+        let font_width = FirstLastFontWidth::from(font_dict)?
             .map_or_else(|| Either::Right(FreeTypeFontWidth::new(font)), Either::Left);
         let encoding = EncodingParser(font_dict).type1(is_cff, font_data)?;
 
@@ -507,7 +507,7 @@ impl<'a, 'b, P: PathSink> Font<P> for TTFParserFont<'a, 'b> {
                 Box::new(TTFParserFontOp::new(
                     face,
                     encoding,
-                    FirstLastFontWidth::from(self.font_dict.truetype()?)?,
+                    FirstLastFontWidth::from(&self.font_dict)?,
                 )?)
             }
             FontType::Type0 => Box::new(Type0FontOp::new(
@@ -1034,7 +1034,7 @@ impl<'a> Type3FontOp<'a> {
         let matrix = type3.matrix()?;
 
         Ok(Self {
-            font_width: FirstLastFontWidth::from(type3)?.unwrap(),
+            font_width: FirstLastFontWidth::from(font_dict)?.unwrap(),
             name_to_gid,
             encoding,
             units_per_em: (1.0 / matrix.m11).abs().to_u16().unwrap(),
