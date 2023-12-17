@@ -145,6 +145,24 @@ pub trait TrueTypeFontDictTrait {
     fn to_unicode(&self) -> Option<&'b Stream>;
 }
 
+impl FirstLastWidths for TrueTypeFontDict<'_, '_> {
+    fn first_char(&self) -> AnyResult<Option<u32>> {
+        Ok(Some(self.first_char()?))
+    }
+
+    fn last_char(&self) -> AnyResult<Option<u32>> {
+        Ok(Some(self.last_char()?))
+    }
+
+    fn widths(&self) -> AnyResult<Vec<u32>> {
+        self.widths()
+    }
+
+    fn default_width(&self) -> AnyResult<u32> {
+        Ok(0)
+    }
+}
+
 #[pdf_object(("Font", "Type3"))]
 pub trait Type3FontDictTrait {
     #[try_from]

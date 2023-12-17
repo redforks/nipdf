@@ -2,4 +2,4 @@
 source: render/src/render_tests.rs
 expression: "&decode_file_page(\"pdf.js/web/compressed.tracemonkey-pldi-09.pdf\",\n            12).unwrap()"
 ---
-"813961bbdd0c1a86f0e7d58953c39295"
+"8b0ca0446db6826298489e65936d8402"

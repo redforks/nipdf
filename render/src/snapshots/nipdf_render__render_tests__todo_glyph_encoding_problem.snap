@@ -2,4 +2,4 @@
 source: render/src/render_tests.rs
 expression: "&decode_file_page(\"sample_files/bizarre/PDF32000_2008.pdf\", 159).unwrap()"
 ---
-"2f6d40b8eb6c1b95c4f9bd77e060834d"
+"7b398bda5af620b50976286a265cc440"

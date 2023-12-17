@@ -374,14 +374,20 @@ struct TTFParserFontOp<'a> {
     face: TTFFace<'a>,
     units_per_em: u16,
     encoding: Option<Encoding>,
+    font_width: Option<FirstLastFontWidth>,
 }
 
 impl<'a> TTFParserFontOp<'a> {
-    pub fn new(face: TTFFace<'a>, encoding: Option<Encoding>) -> AnyResult<Self> {
+    pub fn new(
+        face: TTFFace<'a>,
+        encoding: Option<Encoding>,
+        font_width: Option<FirstLastFontWidth>,
+    ) -> AnyResult<Self> {
         Ok(Self {
             units_per_em: face.units_per_em(),
             face,
             encoding,
+            font_width,
         })
     }
 }
@@ -441,6 +447,10 @@ impl<'a> FontOp for TTFParserFontOp<'a> {
     }
 
     fn char_width(&self, ch: u32) -> GlyphLength {
+        if let Some(font_width) = &self.font_width {
+            return font_width.char_width(ch) / 1000.0 * self.units_per_em as f32;
+        }
+
         GlyphLength::new(
             self.face
                 .glyph_hor_advance(GlyphId(self.char_to_gid(ch)))
@@ -481,7 +491,11 @@ impl<'a, 'b, P: PathSink> Font<P> for TTFParserFont<'a, 'b> {
         Ok(match self.typ {
             FontType::TrueType | FontType::Type1 => {
                 let encoding = EncodingParser(&self.font_dict).ttf()?;
-                Box::new(TTFParserFontOp::new(face, encoding)?)
+                Box::new(TTFParserFontOp::new(
+                    face,
+                    encoding,
+                    FirstLastFontWidth::from(self.font_dict.truetype()?)?,
+                )?)
             }
             FontType::Type0 => Box::new(Type0FontOp::new(
                 &self.font_dict.type0()?,
