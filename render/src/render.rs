@@ -529,10 +529,14 @@ impl Path {
         if let Left(_) = self.path {
             let temp = Left(PathBuilder::new());
             let pb = std::mem::replace(&mut self.path, temp).left().unwrap();
+            if pb.is_empty() {
+                return None;
+            }
+
             if let Some(p) = pb.finish() {
                 self.path = Right(p);
             } else {
-                debug!("empty or invalid path");
+                debug!("invalid path");
             }
         }
 
