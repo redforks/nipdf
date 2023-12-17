@@ -3,12 +3,12 @@ use crate::{
     graphics::{
         parse_operations,
         trans::{GlyphLength, GlyphToTextSpace},
-        NameOrDictByRef, NameOrStream, Operation, Point,
+        NameOrDict, NameOrDictByRef, NameOrStream, Operation, Point,
     },
     object::{PdfObject, Stream},
     text::{
-        CIDFontType, CIDFontWidths, EncodingDict, FirstLastWidths, FontDescriptorDict,
-        FontDescriptorFlags, FontDict, FontType, Type0FontDict, Type3FontDict,
+        CIDFontType, CIDFontWidths, EncodingDict, EncodingDifferences, FirstLastWidths,
+        FontDescriptorDict, FontDescriptorFlags, FontDict, FontType, Type0FontDict, Type3FontDict,
     },
 };
 use anyhow::{anyhow, bail, Ok, Result as AnyResult};
@@ -22,7 +22,7 @@ use num_traits::ToPrimitive;
 use once_cell::sync::Lazy;
 use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
-use prescript::{name, sname, Encoding, Name};
+use prescript::{name, sname, Encoding, Name, NOTDEF};
 use std::{collections::HashMap, ops::RangeInclusive};
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
 
@@ -164,27 +164,26 @@ pub trait Font<P> {
 
 struct EncodingParser<'a, 'b, 'c>(&'c FontDict<'a, 'b>);
 
+type EncodingPair<'a> = (Option<Name>, Option<EncodingDifferences<'a>>);
 impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
-    fn resolve_by_name(
+    fn by_name(name: Name) -> AnyResult<Encoding> {
+        Encoding::predefined(name.clone()).ok_or_else(|| anyhow!("Unknown encoding: {}", name))
+    }
+
+    fn by_font_name(&self, font_name: &Name) -> AnyResult<Option<Encoding>> {
+        let encoding_name = standard_14_type1_font_encoding(font_name);
+        encoding_name.map(Self::by_name).transpose()
+    }
+
+    fn resolve_by_encoding_or_font_name(
         &self,
-        encoding: &Option<NameOrDictByRef>,
+        pair: &Option<EncodingPair>,
         font_name: &str,
     ) -> AnyResult<Option<Encoding>> {
-        let encoding_dict;
-        let encoding_name = match encoding {
-            Some(NameOrDictByRef::Dict(d)) => {
-                encoding_dict = EncodingDict::new(None, d, self.0.resolver())?;
-                encoding_dict.base_encoding()?
-            }
-            Some(NameOrDictByRef::Name(name)) => Some((*name).clone()),
-            None => None,
-        };
-        let encoding_name =
-            encoding_name.or_else(|| standard_14_type1_font_encoding(&name(font_name)));
-        encoding_name
-            .map(|n| {
-                Encoding::predefined(n.clone()).ok_or_else(|| anyhow!("Unknown encoding: {}", n))
-            })
+        pair.as_ref()
+            .map(|p| p.0.as_ref().map(|n| Self::by_name(n.clone())))
+            .flatten()
+            .or_else(|| self.by_font_name(&name(font_name)).transpose())
             .transpose()
     }
 
@@ -224,35 +223,59 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
         Ok(Encoding::STANDARD)
     }
 
+    fn apply_encoding_diff(&self, encoding: Encoding, pair: &Option<EncodingPair>) -> Encoding {
+        if let Some((_, Some(diff))) = pair {
+            return diff.apply_differences(encoding);
+        }
+        encoding
+    }
+
     pub fn type1(&self, is_cff: bool, font_data: &[u8]) -> AnyResult<Encoding> {
-        let encoding = self.0.encoding()?;
+        let encoding_pair = self.encoding_pair()?;
         let font_name = self.0.font_name()?;
-        let mut r = self
-            .resolve_by_name(&encoding, font_name.as_ref())?
+        let r = self
+            .resolve_by_encoding_or_font_name(&encoding_pair, font_name.as_ref())?
             .or_else(|| Self::load_from_file(font_name.as_ref(), font_data, is_cff).unwrap())
             .or_else(|| Self::guess_by_font_name(font_name.as_ref()))
             .unwrap_or_else(|| self.default_encoding().unwrap());
-        if let Some(NameOrDictByRef::Dict(d)) = encoding {
-            let encoding_dict = EncodingDict::new(None, d, self.0.resolver())?;
-            if let Some(diff) = encoding_dict.differences()? {
-                r = diff.apply_differences(r)
-            }
-        }
-        Ok(r)
+        Ok(self.apply_encoding_diff(r, &encoding_pair))
     }
 
     pub fn type3(&self) -> AnyResult<Encoding> {
-        let encoding = self.0.encoding()?;
-        let mut r = self
-            .resolve_by_name(&encoding, "")?
+        let encoding_pair = self.encoding_pair()?;
+        let r = self
+            .resolve_by_encoding_or_font_name(&encoding_pair, "")?
             .unwrap_or_else(|| self.default_encoding().unwrap());
-        if let Some(NameOrDictByRef::Dict(d)) = encoding {
-            let encoding_dict = EncodingDict::new(None, d, self.0.resolver())?;
-            if let Some(diff) = encoding_dict.differences()? {
-                r = diff.apply_differences(r)
+        Ok(self.apply_encoding_diff(r, &encoding_pair))
+    }
+
+    fn encoding_pair(&self) -> AnyResult<Option<EncodingPair>> {
+        let encoding = self.0.encoding()?;
+        let Some(encoding) = encoding else {
+            return Ok(None);
+        };
+
+        Ok(Some(match encoding {
+            NameOrDictByRef::Name(name) => (Some(name.clone()), None),
+            NameOrDictByRef::Dict(d) => {
+                let encoding_dict = EncodingDict::new(None, d, self.0.resolver())?;
+                let encoding_name = encoding_dict.base_encoding()?;
+                (encoding_name, encoding_dict.differences()?)
             }
-        }
-        Ok(r)
+        }))
+    }
+
+    pub fn ttf(&self) -> AnyResult<Option<Encoding>> {
+        let pair = self.encoding_pair()?;
+        let Some(pair) = pair else {
+            return Ok(None);
+        };
+
+        let r = pair
+            .0
+            .as_ref()
+            .map_or_else(|| Ok(Encoding::default()), |n| Self::by_name(n.clone()))?;
+        Ok(Some(self.apply_encoding_diff(r, &Some(pair))))
     }
 }
 
@@ -350,13 +373,15 @@ impl<'a, 'b: 'a, P: PathSink> Font<P> for Type1Font<'a, 'b> {
 struct TTFParserFontOp<'a> {
     face: TTFFace<'a>,
     units_per_em: u16,
+    encoding: Option<Encoding>,
 }
 
 impl<'a> TTFParserFontOp<'a> {
-    pub fn new(face: TTFFace<'a>) -> AnyResult<Self> {
+    pub fn new(face: TTFFace<'a>, encoding: Option<Encoding>) -> AnyResult<Self> {
         Ok(Self {
             units_per_em: face.units_per_em(),
             face,
+            encoding,
         })
     }
 }
@@ -367,6 +392,16 @@ impl<'a> FontOp for TTFParserFontOp<'a> {
     }
 
     fn char_to_gid(&self, ch: u32) -> u16 {
+        if let Some(encoding) = self.encoding.as_ref() {
+            let gid_name = encoding.get_str(ch.try_into().unwrap());
+            if gid_name != NOTDEF {
+                dbg!((ch, gid_name));
+                if let Some(r) = self.face.glyph_index_by_name(gid_name) {
+                    return r.0;
+                }
+            }
+        }
+
         self.face
             .glyph_index(unsafe { char::from_u32_unchecked(ch) })
             .map_or_else(
@@ -444,7 +479,10 @@ impl<'a, 'b, P: PathSink> Font<P> for TTFParserFont<'a, 'b> {
     fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
         let face = TTFFace::parse(&self.data, 0)?;
         Ok(match self.typ {
-            FontType::TrueType | FontType::Type1 => Box::new(TTFParserFontOp::new(face)?),
+            FontType::TrueType | FontType::Type1 => {
+                let encoding = EncodingParser(&self.font_dict).ttf()?;
+                Box::new(TTFParserFontOp::new(face, encoding)?)
+            }
             FontType::Type0 => Box::new(Type0FontOp::new(
                 &self.font_dict.type0()?,
                 face.units_per_em(),
