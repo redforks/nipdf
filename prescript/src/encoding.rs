@@ -51,6 +51,13 @@ impl Encoding {
     }
 }
 
+impl Default for Encoding {
+    /// Returns Encoding that all items are NOTDEF
+    fn default() -> Self {
+        Self::new(from_fn(|_| sname(".notdef")))
+    }
+}
+
 impl Encoding {
     pub const MAC_EXPERT: Self = Self([
         sname(".notdef"),
