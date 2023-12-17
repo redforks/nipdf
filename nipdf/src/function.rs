@@ -1,5 +1,6 @@
 use crate::object::{Object, ObjectValueError};
 use anyhow::Result as AnyResult;
+use educe::Educe;
 #[cfg(test)]
 use mockall::automock;
 use nipdf_macro::{pdf_object, TryFromIntObject};
@@ -56,7 +57,8 @@ impl TryFrom<&Object> for Domain<u32> {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Educe)]
+#[educe(Deref)]
 pub struct Domains<T = f32>(pub Vec<Domain<T>>);
 
 impl TryFrom<&Object> for Domains<f32> {
