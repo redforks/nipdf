@@ -22,6 +22,7 @@ use num_traits::ToPrimitive;
 use once_cell::sync::Lazy;
 use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
+use phf::phf_map;
 use prescript::{name, sname, Encoding, Name, NOTDEF};
 use std::{collections::HashMap, ops::RangeInclusive};
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
@@ -392,6 +393,8 @@ impl<'a> TTFParserFontOp<'a> {
     }
 }
 
+static GLYPH_NAME_TO_UNICODE: phf::Map<&'static str, u32> = include!("glyph_name_to_unicode.in");
+
 impl<'a> FontOp for TTFParserFontOp<'a> {
     fn decode_chars(&self, s: &[u8]) -> Vec<u32> {
         s.iter().map(|v| *v as u32).collect()
@@ -399,11 +402,21 @@ impl<'a> FontOp for TTFParserFontOp<'a> {
 
     fn char_to_gid(&self, ch: u32) -> u16 {
         if let Some(encoding) = self.encoding.as_ref() {
-            let gid_name = encoding.get_str(ch.try_into().unwrap());
-            if gid_name != NOTDEF {
-                dbg!((ch, gid_name));
-                if let Some(r) = self.face.glyph_index_by_name(gid_name) {
+            let glyph_name = encoding.get_str(ch.try_into().unwrap());
+            if glyph_name != NOTDEF {
+                if let Some(r) = self.face.glyph_index_by_name(glyph_name) {
                     return r.0;
+                } else {
+                    // If glyph_name not in font CMap, convert to unicode then resolve by unicode
+                    // use Adobe Glyph List to convert glyph name to unicode
+                    if let Some(unicode) = GLYPH_NAME_TO_UNICODE.get(glyph_name) {
+                        if let Some(gid) = self
+                            .face
+                            .glyph_index(unsafe { char::from_u32_unchecked(*unicode) })
+                        {
+                            return gid.0;
+                        }
+                    }
                 }
             }
         }
