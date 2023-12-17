@@ -974,7 +974,9 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             .into_rgba8();
 
         if meta.image_mask()? {
-            let domain = meta.decode()?.unwrap().0[0];
+            let domain = meta
+                .decode()?
+                .map_or_else(|| Domain::new(0.0, 1.0), |domains| domains[0]);
             let mask_reversed = domain.start > domain.end;
             let mask = Self::load_image_as_mask(img, state, mask_reversed)?;
             // fill canvas with current fill paint with mask
