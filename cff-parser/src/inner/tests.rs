@@ -452,9 +452,9 @@ fn build_encodings_format0() {
     });
     let encodings = Encodings::Format0(vec![1, 0, 2]);
     let r = encodings.build(&charsets, string_index);
-    assert_eq!(r.get_str(0), "space");
-    assert_eq!(r.get_str(1), ".notdef");
-    assert_eq!(r.get_str(2), "exclamsmall");
+    assert_eq!(r.get_str(0), "exclamsmall");
+    assert_eq!(r.get_str(1), "space");
+    assert_eq!(r.get_str(2), "Hungarumlautsmall");
     assert_eq!(r.get_str(3), NOTDEF);
 }
 

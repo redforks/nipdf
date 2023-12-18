@@ -1179,7 +1179,7 @@ impl Encodings {
                 let mut encodings = [NOTDEF; 256];
                 for (i, code) in codes.iter().enumerate() {
                     if let Some(v) = charsets
-                        .resolve_sid(i.try_into().unwrap())
+                        .resolve_sid((i+1).try_into().unwrap())
                         .map(|sid| string_index.get(sid))
                     {
                         encodings[*code as usize] = name(v);

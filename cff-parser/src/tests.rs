@@ -29,3 +29,12 @@ fn font_encodings() {
     assert_eq!(NOTDEF, encodings.get_str(0));
     assert_eq!("space", encodings.get_str(32));
 }
+
+#[test]
+fn font_encodings68() {
+    let file = File::open(include_bytes!("68.cff")).unwrap();
+    let fonts: Vec<_> = file.iter().unwrap().collect();
+    assert_eq!(1, fonts.len());
+    let encodings = fonts[0].encodings().unwrap();
+    assert_eq!("minus", encodings.get_str(0));
+}
