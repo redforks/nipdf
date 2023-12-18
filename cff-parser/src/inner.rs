@@ -317,6 +317,7 @@ impl Operator {
     pub const PAINT_TYPE: Self = Self::escaped(5);
     pub const POST_SCRIPT: Self = Self::escaped(21);
     pub const PRIVATE: Self = Self::new(18);
+    pub const ROS: Self = Self::escaped(30);
     pub const STROKE_WIDTH: Self = Self::escaped(8);
     pub const SYNTHETIC_BASE: Self = Self::escaped(20);
     pub const UNDERLINE_POSITION: Self = Self::escaped(3);
@@ -860,7 +861,9 @@ pub struct TopDictData<'a>(SIDDict<'a>);
 
 impl<'a> TopDictData<'a> {
     pub fn new(dict: Dict, strings: StringIndex<'a>) -> Self {
-        Self(SIDDict { dict, strings })
+        let r = Self(SIDDict { dict, strings });
+        assert!(!r.0.0.contains_key(&Operator::ROS), "TODO: CIDFont");
+        r
     }
 
     pub fn string_index(&self) -> StringIndex {
