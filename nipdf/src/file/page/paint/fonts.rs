@@ -948,7 +948,7 @@ pub trait FontOp {
 }
 
 struct Type0FontOp {
-    widths: CIDFontWidths,
+    widths: Option<CIDFontWidths>,
     default_width: u32,
     units_per_em: u16,
 }
@@ -988,7 +988,12 @@ impl FontOp for Type0FontOp {
     }
 
     fn char_width(&self, ch: u32) -> GlyphLength {
-        let mut char_width = self.widths.char_width(ch).unwrap_or(self.default_width) as f32;
+        let mut char_width = self
+            .widths
+            .as_ref()
+            .map(|w| w.char_width(ch))
+            .flatten()
+            .unwrap_or(self.default_width) as f32;
         char_width = char_width / 1000.0 * self.units_per_em as f32;
         GlyphLength::new(char_width)
     }

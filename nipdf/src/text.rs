@@ -234,7 +234,7 @@ pub trait CIDFontDictTrait {
     #[key("DW")]
     fn dw(&self) -> u32;
     #[try_from]
-    fn w(&self) -> CIDFontWidths;
+    fn w(&self) -> Option<CIDFontWidths>;
     #[try_from]
     fn cid_to_gid_map(&self) -> Option<NameOrStream<'b>>;
 }
