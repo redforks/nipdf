@@ -1586,7 +1586,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             }
 
             if let Some(text_clip_path) = text_clip_path.finish() {
-                self.text_object_mut()
+                text_object
                     .text_clipping_path
                     .path_builder()
                     .push_path(text_clip_path);
