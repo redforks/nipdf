@@ -1,7 +1,7 @@
 use glob::glob;
 use nipdf::{
     file::File,
-    object::{Object, ObjectValueError},
+    object::{Object, ObjectValueError, RuntimeObjectId},
 };
 
 #[test_log::test]
@@ -14,7 +14,7 @@ fn scan_objects() {
         let resolver = f.resolver().unwrap();
         for id in 1..resolver.n() {
             print!("scan object: {id}");
-            match resolver.resolve(id.try_into().unwrap()) {
+            match resolver.resolve(RuntimeObjectId(id.try_into().unwrap())) {
                 Err(ObjectValueError::ObjectIDNotFound(_)) => {
                     print!(" not found")
                 }
