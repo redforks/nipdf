@@ -141,7 +141,9 @@ impl<'b> TryFrom<&'b Object> for ColorSpaceArgs {
 
 impl<'b> ConvertFromObject<'b> for ColorSpaceArgs {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
-        let o = objects.pop().unwrap();
+        let o = objects
+            .pop()
+            .ok_or(ObjectValueError::GraphicsOperationSchemaError)?;
         ColorSpaceArgs::try_from(&o).map_err(|_| ObjectValueError::GraphicsOperationSchemaError)
     }
 }
@@ -157,7 +159,10 @@ impl<'b, const N: usize> ConvertFromObject<'b> for [f32; N] {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
         let mut result = [0.0; N];
         for i in 0..N {
-            result[N - 1 - i] = objects.pop().unwrap().as_number()?;
+            result[N - 1 - i] = objects
+                .pop()
+                .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
+                .as_number()?;
         }
         Ok(result)
     }
@@ -190,12 +195,30 @@ impl TryFrom<&Object> for ColorArgs {
 
 impl<'b, S, T> ConvertFromObject<'b> for Transform2D<f32, S, T> {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
-        let f = objects.pop().unwrap().as_number()?;
-        let e = objects.pop().unwrap().as_number()?;
-        let d = objects.pop().unwrap().as_number()?;
-        let c = objects.pop().unwrap().as_number()?;
-        let b = objects.pop().unwrap().as_number()?;
-        let a = objects.pop().unwrap().as_number()?;
+        let f = objects
+            .pop()
+            .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
+            .as_number()?;
+        let e = objects
+            .pop()
+            .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
+            .as_number()?;
+        let d = objects
+            .pop()
+            .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
+            .as_number()?;
+        let c = objects
+            .pop()
+            .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
+            .as_number()?;
+        let b = objects
+            .pop()
+            .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
+            .as_number()?;
+        let a = objects
+            .pop()
+            .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
+            .as_number()?;
         Ok(Self::new(a, b, c, d, e, f))
     }
 }
@@ -444,7 +467,13 @@ where
 
 impl<'b, T: for<'c> ConvertFromObject<'c>> ConvertFromObject<'b> for Vec<T> {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
-        let mut arr: Vec<_> = objects.pop().unwrap().into_arr()?.iter().cloned().collect();
+        let mut arr: Vec<_> = objects
+            .pop()
+            .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
+            .into_arr()?
+            .iter()
+            .cloned()
+            .collect();
         let mut result = Self::new();
         while !arr.is_empty() {
             result.push(T::convert_from_object(&mut arr)?);
@@ -456,7 +485,9 @@ impl<'b, T: for<'c> ConvertFromObject<'c>> ConvertFromObject<'b> for Vec<T> {
 
 impl<'b> ConvertFromObject<'b> for TextString {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
-        let o = objects.pop().unwrap();
+        let o = objects
+            .pop()
+            .ok_or(ObjectValueError::GraphicsOperationSchemaError)?;
         match o {
             Object::LiteralString(s) => Ok(TextString::Text(s)),
             Object::HexString(s) => Ok(TextString::HexText(s)),
@@ -467,7 +498,9 @@ impl<'b> ConvertFromObject<'b> for TextString {
 
 impl<'b> ConvertFromObject<'b> for TextStringOrNumber {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
-        let o = objects.pop().unwrap();
+        let o = objects
+            .pop()
+            .ok_or(ObjectValueError::GraphicsOperationSchemaError)?;
         match o {
             Object::LiteralString(s) => Ok(TextStringOrNumber::TextString(TextString::Text(s))),
             Object::HexString(s) => Ok(TextStringOrNumber::TextString(TextString::HexText(s))),
@@ -480,7 +513,9 @@ impl<'b> ConvertFromObject<'b> for TextStringOrNumber {
 
 impl<'b> ConvertFromObject<'b> for ColorArgsOrName {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
-        let o = objects.pop().unwrap();
+        let o = objects
+            .pop()
+            .ok_or(ObjectValueError::GraphicsOperationSchemaError)?;
         if let Ok(name) = o.name() {
             if objects.is_empty() {
                 Ok(ColorArgsOrName::Name((name, None)))
@@ -497,37 +532,51 @@ impl<'b> ConvertFromObject<'b> for ColorArgsOrName {
 
 impl<'b> ConvertFromObject<'b> for f32 {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
-        let o = objects.pop().unwrap();
-        o.as_number()
+        objects
+            .pop()
+            .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
+            .as_number()
     }
 }
 
 impl<'b, U> ConvertFromObject<'b> for Length<f32, U> {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
-        let o = objects.pop().unwrap();
-        o.as_number().map(|n| Length::new(n))
+        objects
+            .pop()
+            .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
+            .as_number()
+            .map(|n| Length::new(n))
     }
 }
 
 /// Convert Object literal string to String
 impl<'b> ConvertFromObject<'b> for String {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
-        let o = objects.pop().unwrap();
-        o.as_text_string().map(|s| s.to_owned())
+        objects
+            .pop()
+            .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
+            .as_text_string()
+            .map(|s| s.to_owned())
     }
 }
 
 /// Convert Object::Name to String
 impl<'b> ConvertFromObject<'b> for NameOfDict {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
-        let o = objects.pop().unwrap();
-        o.name().map(NameOfDict)
+        objects
+            .pop()
+            .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
+            .name()
+            .map(NameOfDict)
     }
 }
 
 impl<'b> ConvertFromObject<'b> for NameOrDict {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
-        match objects.pop().unwrap() {
+        match objects
+            .pop()
+            .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
+        {
             Object::Name(name) => Ok(NameOrDict::Name(name)),
             Object::Dictionary(dict) => Ok(NameOrDict::Dict(dict)),
             _ => Err(ObjectValueError::GraphicsOperationSchemaError),
@@ -537,8 +586,14 @@ impl<'b> ConvertFromObject<'b> for NameOrDict {
 
 impl<'b, U> ConvertFromObject<'b> for Point2D<f32, U> {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
-        let y = objects.pop().unwrap().as_number()?;
-        let x = objects.pop().unwrap().as_number()?;
+        let y = objects
+            .pop()
+            .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
+            .as_number()?;
+        let x = objects
+            .pop()
+            .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
+            .as_number()?;
         Ok(Self::new(x, y))
     }
 }
