@@ -2,7 +2,8 @@ use crate::{
     file::{page::ResourceDict, ObjectResolver},
     graphics::{
         parse_operations,
-        trans::{GlyphLength, GlyphToTextSpace}, NameOrDictByRef, NameOrStream, Operation, Point,
+        trans::{GlyphLength, GlyphToTextSpace},
+        NameOrDictByRef, NameOrStream, Operation, Point,
     },
     object::{PdfObject, Stream},
     text::{
@@ -492,6 +493,18 @@ struct TTFParserFont<'a, 'b> {
     font_dict: FontDict<'a, 'b>,
 }
 
+impl<'a, 'b> TTFParserFont<'a, 'b> {
+    fn new(typ: FontType, data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> AnyResult<Self> {
+        // check font is valid before create_op()/crate_glyph_render()
+        TTFFace::parse(&data, 0)?;
+        Ok(Self {
+            typ,
+            data,
+            font_dict,
+        })
+    }
+}
+
 impl<'a, 'b, P: PathSink> Font<P> for TTFParserFont<'a, 'b> {
     fn font_type(&self) -> FontType {
         self.typ
@@ -693,17 +706,6 @@ struct FontCacheInner<'c, P: PathSink + 'static> {
 pub struct FontCache<'c, P: PathSink + 'static>(FontCacheInner<'c, P>);
 
 impl<'c, P: PathSink + 'static> FontCache<'c, P> {
-    fn load_true_type_font_from_bytes<'a, 'b>(
-        font: FontDict<'a, 'b>,
-        bytes: Vec<u8>,
-    ) -> AnyResult<TTFParserFont<'a, 'b>> {
-        Ok(TTFParserFont {
-            typ: font.subtype()?,
-            data: bytes,
-            font_dict: font,
-        })
-    }
-
     fn load_true_type_from_os(desc: &FontDescriptorDict) -> AnyResult<Vec<u8>> {
         let font_name = desc.font_name()?;
         let font_name = normalize_true_type_font_name(&font_name);
@@ -760,18 +762,31 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         font: FontDict<'a, 'b>,
         desc: FontDescriptorDict<'a, 'b>,
     ) -> AnyResult<TTFParserFont<'a, 'b>> {
-        let bytes = match desc.font_file2()? {
-            Some(stream) => Self::load_embed_font_bytes(desc.resolver(), stream)?,
+        match desc.font_file2()? {
+            Some(stream) => {
+                let bytes = Self::load_embed_font_bytes(desc.resolver(), stream)?;
+                TTFParserFont::new(font.subtype()?, bytes, font.clone()).or_else(|e| {
+                    let font_name = desc.font_name()?;
+                    warn!(
+                        "Failed load embed ttf-font '{}', try load from OS: {}",
+                        font_name, e
+                    );
+                    {
+                        let bytes = Self::load_true_type_from_os(&desc)?;
+                        TTFParserFont::new(font.subtype()?, bytes, font)
+                    }
+                })
+            }
             None => {
                 let font_name = desc.font_name()?;
                 warn!(
                     "font {} not found in file, try to load from system",
                     font_name,
                 );
-                Self::load_true_type_from_os(&desc)?
+                let bytes = Self::load_true_type_from_os(&desc)?;
+                TTFParserFont::new(font.subtype()?, bytes, font)
             }
-        };
-        Self::load_true_type_font_from_bytes(font, bytes)
+        }
     }
 
     /// Load Type1 font, only standard 14 fonts supported, these fonts are replaced
