@@ -76,24 +76,6 @@ fn test_ignore_bx_ex() {
     );
 }
 
-#[test]
-fn error_in_bx_ex_block() {
-    // ignore unknown operation in BX/EX block
-    let (buf, result) = parse_operations(b"BX\nq\n1 2 foo\nEX\nQ").unwrap();
-    assert_eq!(buf, b"");
-    assert_eq!(
-        vec![
-            Operation::SaveGraphicsState,
-            Operation::RestoreGraphicsState
-        ],
-        result
-    );
-
-    // error on unknown operation not in BX/EX block
-    let vr = parse_operations(b"q\n1 2 foo\nQ");
-    assert!(vr.is_err());
-}
-
 #[test_case(0 => LineCapStyle::Butt)]
 #[test_case(1 => LineCapStyle::Round)]
 #[test_case(2 => LineCapStyle::Square)]

@@ -660,13 +660,11 @@ pub fn parse_operations(mut input: &[u8]) -> ParseResult<'_, Vec<Operation>> {
                         operands.push(o);
                     }
                     ObjectOrOperator::Operator(op) => {
-                        let opt_op = create_operation(op, &mut operands).map_err(|e| {
-                            nom::Err::Error(ParseError::from_external_error(
-                                input,
-                                ErrorKind::Fail,
-                                e,
-                            ))
-                        })?;
+                        let opt_op = create_operation(op, &mut operands).unwrap_or_else(|e| {
+                            // possible because not enough operands
+                            warn!("Invalid operation '{}': {:?}", op, e);
+                            None
+                        });
                         match opt_op {
                             Some(Operation::BeginCompatibilitySection) => {}
                             Some(Operation::EndCompatibilitySection) => {}
