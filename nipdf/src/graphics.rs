@@ -10,7 +10,7 @@ use crate::{
     },
 };
 use euclid::{Length, Point2D, Transform2D};
-use log::error;
+use log::{error, warn};
 use nipdf_macro::{pdf_object, OperationParser, TryFromIntObject, TryFromNameObject};
 use nom::{
     branch::alt,
@@ -591,7 +591,6 @@ fn parse_inline_image(input: &[u8]) -> ParseResult<InlineImage> {
 
 pub fn parse_operations(mut input: &[u8]) -> ParseResult<'_, Vec<Operation>> {
     let mut operands = Vec::with_capacity(8);
-    let mut ignore_parse_error = false;
     let mut r = vec![];
     loop {
         (input, _) = whitespace_or_comment(input)?;
@@ -614,8 +613,8 @@ pub fn parse_operations(mut input: &[u8]) -> ParseResult<'_, Vec<Operation>> {
                             ))
                         })?;
                         match opt_op {
-                            Some(Operation::BeginCompatibilitySection) => ignore_parse_error = true,
-                            Some(Operation::EndCompatibilitySection) => ignore_parse_error = false,
+                            Some(Operation::BeginCompatibilitySection) => {}
+                            Some(Operation::EndCompatibilitySection) => {}
                             Some(Operation::BeginInlineImage) => {
                                 let inline_image;
                                 (input, inline_image) = parse_inline_image
@@ -625,18 +624,11 @@ pub fn parse_operations(mut input: &[u8]) -> ParseResult<'_, Vec<Operation>> {
                             }
                             Some(op) => r.push(op),
                             None => {
-                                if ignore_parse_error {
-                                    operands.clear();
-                                } else {
-                                    error!("Unknown operation: {:?}", op);
-                                    return Err(nom::Err::Error(ParseError::from_error_kind(
-                                        input,
-                                        ErrorKind::Tag,
-                                    )));
-                                }
+                                warn!("Unknown operation: {:?}", op);
                             }
                         }
-                        assert!(operands.is_empty());
+                        // Some pdf files has bug that has extra operands
+                        operands.clear();
                     }
                 }
             }
