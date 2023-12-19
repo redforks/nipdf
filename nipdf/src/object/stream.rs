@@ -49,6 +49,7 @@ const S_FILTER_RUN_LENGTH_DECODE: &str = "RunLengthDecode";
 const S_FILTER_JPX_DECODE: &str = "JPXDecode";
 
 const FILTER_CRYPT: Name = sname(S_FILTER_CRYPT);
+#[cfg(test)]
 const FILTER_FLATE_DECODE: Name = sname("FlateDecode");
 // const FILTER_LZW_DECODE: Name = sname("LZWDecode");
 const FILTER_CCITT_FAX: Name = sname("CCITTFaxDecode");
@@ -602,20 +603,66 @@ fn crypt_filter(
     Ok(buf)
 }
 
+/// inflate zlib/deflate data, auto detect zlib or deflate, ignore adler32 checksum(some pdf file
+/// has wrong adler32 checksum).
+///
+/// Max output buffer size is 128MB, return error if output buffer size exceed this limit.
+fn deflate(input: &[u8]) -> Result<Vec<u8>, ObjectValueError> {
+    use miniz_oxide::inflate::{
+        core::{decompress, inflate_flags, DecompressorOxide},
+        TINFLStatus,
+    };
+
+    fn _deflate(input: &[u8], flags: u32) -> Result<Vec<u8>, ObjectValueError> {
+        const MAX_OUTPUT_SIZE: usize = 128 * 1024 * 1024;
+
+        let flags = flags
+            | inflate_flags::TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF
+            | inflate_flags::TINFL_FLAG_IGNORE_ADLER32;
+        let mut ret: Vec<u8> = vec![0; input.len().saturating_mul(2).min(MAX_OUTPUT_SIZE)];
+
+        let mut decomp = Box::<DecompressorOxide>::default();
+
+        let mut in_pos = 0;
+        let mut out_pos = 0;
+        loop {
+            // Wrap the whole output slice so we know we have enough of the
+            // decompressed data for matches.
+            let (status, in_consumed, out_consumed) =
+                decompress(&mut decomp, &input[in_pos..], &mut ret, out_pos, flags);
+            in_pos += in_consumed;
+            out_pos += out_consumed;
+
+            match status {
+                TINFLStatus::Done => {
+                    ret.truncate(out_pos);
+                    return Ok(ret);
+                }
+
+                TINFLStatus::HasMoreOutput => {
+                    // if the buffer has already reached the size limit, return an error
+                    if ret.len() >= MAX_OUTPUT_SIZE {
+                        error!("inflate: has more output");
+                        return Err(ObjectValueError::FilterDecodeError);
+                    }
+                    // calculate the new length, capped at `max_output_size`
+                    let new_len = ret.len().saturating_mul(2).min(MAX_OUTPUT_SIZE);
+                    ret.resize(new_len, 0);
+                }
+
+                _ => {
+                    error!("inflate: error: {:?}", status);
+                    return Err(ObjectValueError::FilterDecodeError);
+                }
+            }
+        }
+    }
+
+    _deflate(input, inflate_flags::TINFL_FLAG_PARSE_ZLIB_HEADER).or_else(|_| _deflate(input, 0))
+}
+
 fn decode_flate(buf: &[u8], params: LZWDeflateDecodeParams) -> Result<Vec<u8>, ObjectValueError> {
-    use flate2::bufread::{DeflateDecoder, ZlibDecoder};
-    use std::io::Read;
-
-    let mut r = Vec::with_capacity(buf.len() * 2);
-    let mut decoder = ZlibDecoder::new(buf);
-    handle_filter_error(
-        decoder
-            .read_to_end(&mut r)
-            .or_else(|_| DeflateDecoder::new(buf).read_to_end(&mut r)),
-        &FILTER_FLATE_DECODE,
-    )?;
-
-    predictor_decode(r, &params)
+    deflate(buf).and_then(|r| predictor_decode(r, &params))
 }
 
 fn decode_dct<'a>(

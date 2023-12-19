@@ -1,5 +1,6 @@
 use super::*;
 use crate::{file::decode_stream, function::Domain, object::Name};
+use miniz_oxide::deflate::compress_to_vec;
 use std::rc::Rc;
 use test_case::test_case;
 
@@ -177,4 +178,18 @@ fn test_color_key_range() {
 #[test_case(b"AB1>" => b"\xab\x10".as_slice(); "EOD with odd hex digits")]
 fn test_decode_ascii_hex(buf: &[u8]) -> Vec<u8> {
     decode_ascii_hex(buf).unwrap()
+}
+
+#[test]
+fn test_deflate() {
+    // with zlib header and invalid adler32
+    let input = include_bytes!("zlib-no-adler32");
+    let data = deflate(input).unwrap();
+    // assert that data is valid ascii char bytes
+    assert!(data.iter().all(|&b| b.is_ascii()));
+
+    // no zlib header(only deflate data)
+    let input = compress_to_vec(&data, 1);
+    let back = deflate(&input).unwrap();
+    assert_eq!(data, back);
 }
