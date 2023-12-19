@@ -194,3 +194,8 @@ fn todo_tensor_product_patch_mesh_shading() {
         &decode_file_page("pdf.js/test/pdfs/bug1703683_page2_reduced.pdf", 0).unwrap()
     )
 }
+
+#[test]
+fn text_clip_path() {
+    assert_ron_snapshot!(&decode_file_page("sample_files/xobject/text-clip.pdf", 0).unwrap())
+}

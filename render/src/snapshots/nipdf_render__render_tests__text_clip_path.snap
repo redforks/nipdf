@@ -1,0 +1,5 @@
+---
+source: render/src/render_tests.rs
+expression: "&decode_file_page(\"sample_files/xobject/text-clip.pdf\", 0).unwrap()"
+---
+"31352deca9749f326075966813d4f7e3"
