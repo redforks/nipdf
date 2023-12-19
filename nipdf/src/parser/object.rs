@@ -44,7 +44,24 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<Object> {
             if memchr::memchr(b'.', s).is_some() {
                 // from_utf8_unchecked is safe here, because the parser takes only digits
                 let s = unsafe { from_utf8_unchecked(s) };
-                f32::from_str(s).map(Object::Number).unwrap()
+                f32::from_str(s)
+                    .map_or_else(
+                        |e| {
+                            // get position of 2nd occur of '.'
+                            let s = s.as_bytes();
+                            let p = memchr::memchr(b'.', s).unwrap();
+                            if let Some(p) = memchr::memchr(b'.', &s[p + 1..]) {
+                                // if there is a 2nd occur of '.', ignore it
+                                Object::Number(
+                                    f32::from_str(unsafe { from_utf8_unchecked(&s[..p + 1]) })
+                                        .unwrap(),
+                                )
+                            } else {
+                                panic!("{}", e);
+                            }
+                        },
+                        Object::Number,
+                    )
             } else {
                 // from_utf8_unchecked is safe here, because the parser takes only digits
                 let s = unsafe { from_utf8_unchecked(s) };
