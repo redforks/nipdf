@@ -991,8 +991,7 @@ impl FontOp for Type0FontOp {
         let mut char_width = self
             .widths
             .as_ref()
-            .map(|w| w.char_width(ch))
-            .flatten()
+            .and_then(|w| w.char_width(ch))
             .unwrap_or(self.default_width) as f32;
         char_width = char_width / 1000.0 * self.units_per_em as f32;
         GlyphLength::new(char_width)
