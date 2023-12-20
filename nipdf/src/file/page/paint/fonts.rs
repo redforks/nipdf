@@ -1000,15 +1000,16 @@ impl FontOp for CIDFontType0FontOp {
     }
 }
 
-struct CIDFontType2FontOp {
+struct CIDFontType2FontOp<'a> {
+    face: TTFFace<'a>,
     widths: Option<CIDFontWidths>,
     default_width: u32,
     units_per_em: u16,
     cmap: CMap,
 }
 
-impl CIDFontType2FontOp {
-    fn new(font: &Type0FontDict, units_per_em: u16) -> AnyResult<Self> {
+impl<'a> CIDFontType2FontOp<'a> {
+    fn new(face: TTFFace<'a>, font: &Type0FontDict) -> AnyResult<Self> {
         let NameOrStream::Name(encoding_name) = font.encoding()? else {
             todo!("Only IdentityH encoding supported");
         };
@@ -1019,21 +1020,30 @@ impl CIDFontType2FontOp {
         let cid_font = &cid_fonts[0];
         let widths = cid_font.w()?;
         Ok(Self {
+            units_per_em: face.units_per_em(),
+            face,
             widths,
             default_width: cid_font.dw()?,
-            units_per_em,
             cmap,
         })
     }
 }
 
-impl FontOp for CIDFontType2FontOp {
+impl<'a> FontOp for CIDFontType2FontOp<'a> {
     fn decode_chars(&self, s: &[u8]) -> Vec<u32> {
         self.cmap.decode(s)
     }
 
     fn char_to_gid(&self, ch: u32) -> u16 {
-        ch.try_into().unwrap()
+        self.face
+            .glyph_index(unsafe { char::from_u32_unchecked(ch) })
+            .map_or_else(
+                || {
+                    warn!("(TTF) glyph id not found for char: {}", ch);
+                    0
+                },
+                |v| v.0,
+            )
     }
 
     fn char_width(&self, ch: u32) -> GlyphLength {
@@ -1085,8 +1095,8 @@ impl<'a, 'b, P: PathSink + 'static> Font<P> for CIDFontType2Font<'a, 'b> {
     fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
         let face = TTFFace::parse(&self.data, 0)?;
         Ok(Box::new(CIDFontType2FontOp::new(
+            face,
             &self.font_dict.type0()?,
-            face.units_per_em(),
         )?))
     }
 
