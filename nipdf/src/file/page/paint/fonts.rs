@@ -494,14 +494,13 @@ struct TTFParserFont<'a, 'b> {
 }
 
 impl<'a, 'b> TTFParserFont<'a, 'b> {
-    fn new(typ: FontType, data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> AnyResult<Self> {
-        // check font is valid before create_op()/crate_glyph_render()
-        TTFFace::parse(&data, 0)?;
-        Ok(Self {
+    fn new(typ: FontType, data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> Self {
+        debug_assert!(typ == FontType::TrueType || typ == FontType::Type1);
+        Self {
             typ,
             data,
             font_dict,
-        })
+        }
     }
 }
 
@@ -512,21 +511,12 @@ impl<'a, 'b, P: PathSink> Font<P> for TTFParserFont<'a, 'b> {
 
     fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
         let face = TTFFace::parse(&self.data, 0)?;
-        Ok(match self.typ {
-            FontType::TrueType | FontType::Type1 => {
-                let encoding = EncodingParser(&self.font_dict).ttf()?;
-                Box::new(TTFParserFontOp::new(
-                    face,
-                    encoding,
-                    FirstLastFontWidth::from(&self.font_dict)?,
-                )?)
-            }
-            FontType::Type0 => Box::new(Type0FontOp::new(
-                &self.font_dict.type0()?,
-                face.units_per_em(),
-            )?),
-            _ => unreachable!("TTFParserFont not support font type: {:?}", self.typ),
-        })
+        let encoding = EncodingParser(&self.font_dict).ttf()?;
+        Ok(Box::new(TTFParserFontOp::new(
+            face,
+            encoding,
+            FirstLastFontWidth::from(&self.font_dict)?,
+        )?))
     }
 
     fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender<P> + '_>> {
@@ -759,33 +749,36 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
     }
 
     fn load_ttf_parser_font<'a, 'b>(
+        font_type: FontType,
         font: FontDict<'a, 'b>,
         desc: FontDescriptorDict<'a, 'b>,
-    ) -> AnyResult<TTFParserFont<'a, 'b>> {
-        match desc.font_file2()? {
+    ) -> AnyResult<Box<dyn Font<P> + 'b>> {
+        let ttf_bytes = match desc.font_file2()? {
             Some(stream) => {
+                // if font is invalid, load from os
                 let bytes = Self::load_embed_font_bytes(desc.resolver(), stream)?;
-                TTFParserFont::new(font.subtype()?, bytes, font.clone()).or_else(|e| {
-                    let font_name = desc.font_name()?;
-                    warn!(
-                        "Failed load embed ttf-font '{}', try load from OS: {}",
-                        font_name, e
-                    );
-                    {
-                        let bytes = Self::load_true_type_from_os(&desc)?;
-                        TTFParserFont::new(font.subtype()?, bytes, font)
+                match TTFFace::parse(&bytes, 0) {
+                    Result::Ok(_) => Ok(bytes),
+                    Err(e) => {
+                        warn!(
+                            "Failed load embed ttf-font '{}', try load from OS: {}",
+                            desc.font_name()?,
+                            e
+                        );
+                        Self::load_true_type_from_os(&desc)
                     }
-                })
+                }
             }
-            None => {
-                let font_name = desc.font_name()?;
-                warn!(
-                    "font {} not found in file, try to load from system",
-                    font_name,
-                );
-                let bytes = Self::load_true_type_from_os(&desc)?;
-                TTFParserFont::new(font.subtype()?, bytes, font)
-            }
+            None => Self::load_true_type_from_os(&desc),
+        }?;
+        if font_type == FontType::Type0 {
+            Ok(Box::new(CIDFontType2Font::new(ttf_bytes, font)))
+        } else {
+            Ok(Box::new(TTFParserFont::new(
+                font.subtype()?,
+                ttf_bytes,
+                font,
+            )))
         }
     }
 
@@ -840,7 +833,11 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
             FontType::TrueType => {
                 let tt = font.truetype()?;
                 let desc = tt.font_descriptor()?.unwrap();
-                Ok(Some(Box::new(Self::load_ttf_parser_font(font, desc)?)))
+                Ok(Some(Self::load_ttf_parser_font(
+                    FontType::TrueType,
+                    font,
+                    desc,
+                )?))
             }
 
             FontType::Type0 => {
@@ -864,7 +861,11 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                     CIDFontType::CIDFontType2 => {
                         let desc = descentdant_font.font_descriptor()?.unwrap();
 
-                        Ok(Some(Box::new(Self::load_ttf_parser_font(font, desc)?)))
+                        Ok(Some(Self::load_ttf_parser_font(
+                            FontType::Type0,
+                            font,
+                            desc,
+                        )?))
                     }
                 }
             }
@@ -877,7 +878,11 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                         err
                     );
                     let desc = font.font_descriptor()?.unwrap();
-                    Ok(Some(Box::new(Self::load_ttf_parser_font(font, desc)?)))
+                    Ok(Some(Self::load_ttf_parser_font(
+                        FontType::Type1,
+                        font,
+                        desc,
+                    )?))
                 }),
 
             FontType::Type3 => Ok(Some(Box::new(Type3Font::new(font)?))),
@@ -1012,6 +1017,36 @@ impl<'a, 'b> CIDFontType0Font<'a, 'b> {
     fn new(font_dict: FontDict<'a, 'b>, data: Vec<u8>) -> AnyResult<Self> {
         let font = FontKitFont::from_bytes(data.into(), 0)?;
         Ok(Self { font_dict, font })
+    }
+}
+
+struct CIDFontType2Font<'a, 'b> {
+    data: Vec<u8>,
+    font_dict: FontDict<'a, 'b>,
+}
+
+impl<'a, 'b> CIDFontType2Font<'a, 'b> {
+    fn new(data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> Self {
+        Self { data, font_dict }
+    }
+}
+
+impl<'a, 'b, P: PathSink + 'static> Font<P> for CIDFontType2Font<'a, 'b> {
+    fn font_type(&self) -> FontType {
+        FontType::Type0
+    }
+
+    fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
+        let face = TTFFace::parse(&self.data, 0)?;
+        Ok(Box::new(Type0FontOp::new(
+            &self.font_dict.type0()?,
+            face.units_per_em(),
+        )?))
+    }
+
+    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender<P> + '_>> {
+        let face = TTFFace::parse(&self.data, 0)?;
+        Ok(Box::new(TTFParserGlyphRender { face }))
     }
 }
 
