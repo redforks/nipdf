@@ -238,7 +238,9 @@ pub trait CIDFontDictTrait {
     #[try_from]
     fn w(&self) -> Option<CIDFontWidths>;
     #[try_from]
-    fn cid_to_gid_map(&self) -> Option<NameOrStream<'b>>;
+    #[key("CIDToGIDMap")]
+    #[default_fn(NameOrStream::identity)]
+    fn cid_to_gid_map(&self) -> NameOrStream<'b>;
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, TryFromNameObject)]

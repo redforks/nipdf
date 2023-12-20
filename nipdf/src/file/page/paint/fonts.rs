@@ -420,42 +420,7 @@ impl<'a> FontOp for TTFParserFontOp<'a> {
             }
         }
 
-        self.face
-            .glyph_index(unsafe { char::from_u32_unchecked(ch) })
-            .map_or_else(
-                || {
-                    // face.glyph_index() ignore subtable.is_unicode() returns false,
-                    // TrimmedTableMapping .is_unicode() returned false.
-                    //
-                    // ```
-                    //   pub fn glyph_index(&self, code_point: char) -> Option<GlyphId> {
-                    //     for subtable in self.tables.cmap?.subtables {
-                    //       if !subtable.is_unicode() {
-                    //         continue;
-                    //       }
-                    //
-                    //       if let Some(id) = subtable.glyph_index(u32::from(code_point)) {
-                    //         return Some(id);
-                    //       }
-                    //     }
-                    //     None
-                    //  }
-                    // `
-                    if let Some(cmap) = self.face.tables().cmap {
-                        for subtable in cmap.subtables {
-                            if let Some(id) = subtable.glyph_index(ch) {
-                                return id.0;
-                            }
-                        }
-                        warn!("(TTF) glyph id not found from cmap: {}", ch);
-                    }
-
-                    warn!("(TTF) glyph id not found for char: {}", ch);
-                    // .notdef gid is always be 0 for type1 font
-                    0
-                },
-                |v| v.0,
-            )
+        glyph_index(&self.face, ch)
     }
 
     fn char_width(&self, ch: u32) -> GlyphLength {
@@ -1000,18 +965,17 @@ impl FontOp for CIDFontType0FontOp {
     }
 }
 
-struct CIDFontType2FontOp<'a> {
-    face: TTFFace<'a>,
+struct CIDFontType2FontOp {
     widths: Option<CIDFontWidths>,
     default_width: u32,
     units_per_em: u16,
     cmap: CMap,
 }
 
-impl<'a> CIDFontType2FontOp<'a> {
+impl CIDFontType2FontOp {
     fn new(face: TTFFace<'a>, font: &Type0FontDict) -> AnyResult<Self> {
         let NameOrStream::Name(encoding_name) = font.encoding()? else {
-            todo!("Only IdentityH encoding supported");
+            todo!("cmap stream not supported");
         };
         assert!(
             !(encoding_name.ends_with("-V") || encoding_name == "V"),
@@ -1022,10 +986,10 @@ impl<'a> CIDFontType2FontOp<'a> {
 
         let cid_fonts = font.descendant_fonts()?;
         let cid_font = &cid_fonts[0];
+        assert_eq!(cid_font.cid_to_gid_map()?, NameOrStream::identity());
         let widths = cid_font.w()?;
         Ok(Self {
             units_per_em: face.units_per_em(),
-            face,
             widths,
             default_width: cid_font.dw()?,
             cmap,
@@ -1033,21 +997,27 @@ impl<'a> CIDFontType2FontOp<'a> {
     }
 }
 
-impl<'a> FontOp for CIDFontType2FontOp<'a> {
+// TTFFace::glyph_index() ignores non unicode cmap table,
+// some non-cjk pdf file use non unicode cmap table. This function
+// try to find glyph id from all cmap tables
+fn glyph_index(face: &TTFFace, ch: u32) -> u16 {
+    for subtable in face.tables().cmap.unwrap().subtables {
+        if let Some(id) = subtable.glyph_index(ch) {
+            return id.0;
+        }
+    }
+
+    warn!("(TTF) glyph id not found for char: {}", ch);
+    0
+}
+
+impl FontOp for CIDFontType2FontOp {
     fn decode_chars(&self, s: &[u8]) -> Vec<u32> {
         self.cmap.decode(s)
     }
 
     fn char_to_gid(&self, ch: u32) -> u16 {
-        self.face
-            .glyph_index(unsafe { char::from_u32_unchecked(ch) })
-            .map_or_else(
-                || {
-                    warn!("(TTF) glyph id not found for char: {}", ch);
-                    0
-                },
-                |v| v.0,
-            )
+        ch.try_into().unwrap()
     }
 
     fn char_width(&self, ch: u32) -> GlyphLength {

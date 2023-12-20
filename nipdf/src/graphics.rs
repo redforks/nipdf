@@ -20,7 +20,7 @@ use nom::{
     sequence::terminated,
     Err, FindSubstring, Parser,
 };
-use prescript::Name;
+use prescript::{sname, Name};
 
 pub mod color_space;
 pub mod pattern;
@@ -260,6 +260,14 @@ impl<'b> TryFrom<&'b Object> for NameOrDictByRef<'b> {
 pub enum NameOrStream<'b> {
     Name(&'b Name),
     Stream(&'b Stream),
+}
+
+impl<'b> NameOrStream<'b> {
+    const IDENTITY: &'static Name = &sname("Identity");
+
+    pub const fn identity() -> Self {
+        NameOrStream::Name(Self::IDENTITY)
+    }
 }
 
 impl<'b> TryFrom<&'b Object> for NameOrStream<'b> {
