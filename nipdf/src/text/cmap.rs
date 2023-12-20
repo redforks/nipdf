@@ -68,10 +68,58 @@ static CMAP_TO_ENCODING: phf::Map<&'static str, &'static Encoding> = phf_map! {
     "GBKp-EUC-V" => encoding_rs::GBK,
     "GBK2K-H" => encoding_rs::GB18030,
     "GBK2K-V" => encoding_rs::GB18030,
+    // UTF-16 compatible to UCS2
+    "UniGB-UCS2-H" => encoding_rs::UTF_16BE,
+    "UniGB-UCS2-V" => encoding_rs::UTF_16BE,
+    "UniGB-UTF16-H" => encoding_rs::UTF_16BE,
+    "UniGB-UTF16-V" => encoding_rs::UTF_16BE,
 
+    "B5pc-H" => encoding_rs::BIG5,
+    "B5pc-V" => encoding_rs::BIG5,
+    // Hong Kong SCS, an extension to the Big Five character set and encoding
+    "HKscs-B5-H" => encoding_rs::BIG5,
+    "HKscs-B5-V" => encoding_rs::BIG5,
     // ETen-B5: big5 with ETen, currently big5 implicit has ETen extension
     "ETen-B5-H" => encoding_rs::BIG5,
     "ETen-B5-V" => encoding_rs::BIG5,
+    // Same as ETen-B5, but replace half-width Latin characters with proportional forms
+    "ETenms-B5-H" => encoding_rs::BIG5,
+    "ETenms-B5-V" => encoding_rs::BIG5,
+    // TODO: CNS-EUC-H/CNS-EUC-V, encoding_rs no EUC-TW yet
+    "UniCNS-UCS2-H" => encoding_rs::UTF_16BE,
+    "UniCNS-UCS2-V" => encoding_rs::UTF_16BE,
+    "UniCNS-UTF16-H" => encoding_rs::UTF_16BE,
+    "UniCNS-UTF16-V" => encoding_rs::UTF_16BE,
+
+    "83pv-RKSJ-H" => encoding_rs::SHIFT_JIS,
+    "90ms-RKSJ-H" => encoding_rs::SHIFT_JIS,
+    "90ms-RKSJ-V" => encoding_rs::SHIFT_JIS,
+    "90msp-RKSJ-H" => encoding_rs::SHIFT_JIS,
+    "90msp-RKSJ-V" => encoding_rs::SHIFT_JIS,
+    "90pv-RKSJ-H" => encoding_rs::SHIFT_JIS,
+    "Add-RKSJ-H" => encoding_rs::SHIFT_JIS,
+    "Add-RKSJ-V" => encoding_rs::SHIFT_JIS,
+    "EUC-H" => encoding_rs::EUC_JP,
+    "EUC-V" => encoding_rs::EUC_JP,
+    "Ext-RKSJ-H" => encoding_rs::SHIFT_JIS,
+    "Ext-RKSJ-V" => encoding_rs::SHIFT_JIS,
+    "H" => encoding_rs::EUC_JP,
+    "V" => encoding_rs::EUC_JP,
+    "UniJIS-UCS2-H" => encoding_rs::UTF_16BE,
+    "UniJIS-UCS2-V" => encoding_rs::UTF_16BE,
+    "UniJIS-UCS2-HW-H" => encoding_rs::UTF_16BE,
+    "UniJIS-UCS2-HW-V" => encoding_rs::UTF_16BE,
+    "UniJIS-UTF16-H" => encoding_rs::UTF_16BE,
+    "UniJIS-UTF16-V" => encoding_rs::UTF_16BE,
+
+    "KSC-EUC-H" => encoding_rs::EUC_KR,
+    "KSC-EUC-V" => encoding_rs::EUC_KR,
+    "KSCms-UHC-H" => encoding_rs::EUC_KR,
+    "KSCms-UHC-V" => encoding_rs::EUC_KR,
+    "KSCpc-EUC-H" => encoding_rs::EUC_KR,
+    "KSCpc-EUC-V" => encoding_rs::EUC_KR,
+    "UniKS-UTF16-H" => encoding_rs::UTF_16BE,
+    "UniKS-UTF16-V" => encoding_rs::UTF_16BE,
 };
 
 #[cfg(test)]

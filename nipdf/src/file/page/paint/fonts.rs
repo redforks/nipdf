@@ -1013,7 +1013,11 @@ impl<'a> CIDFontType2FontOp<'a> {
         let NameOrStream::Name(encoding_name) = font.encoding()? else {
             todo!("Only IdentityH encoding supported");
         };
-        assert!(!encoding_name.ends_with("-V"), "todo: Vertical write mode");
+        assert!(
+            !(encoding_name.ends_with("-V") || encoding_name == "V"),
+            "todo: Vertical write mode '{}'",
+            encoding_name
+        );
         let cmap = CMap::predefined(encoding_name.as_str())?;
 
         let cid_fonts = font.descendant_fonts()?;
