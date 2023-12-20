@@ -7,8 +7,8 @@ use crate::{
     },
     object::{PdfObject, Stream},
     text::{
-        CIDFontType, CIDFontWidths, EncodingDict, EncodingDifferences, FontDescriptorDict,
-        FontDescriptorFlags, FontDict, FontType, Type0FontDict, Type3FontDict,
+        cmap::CMap, CIDFontType, CIDFontWidths, EncodingDict, EncodingDifferences,
+        FontDescriptorDict, FontDescriptorFlags, FontDict, FontType, Type0FontDict, Type3FontDict,
     },
 };
 use anyhow::{anyhow, bail, Ok, Result as AnyResult};
@@ -1004,15 +1004,17 @@ struct CIDFontType2FontOp {
     widths: Option<CIDFontWidths>,
     default_width: u32,
     units_per_em: u16,
+    cmap: CMap,
 }
 
 impl CIDFontType2FontOp {
     fn new(font: &Type0FontDict, units_per_em: u16) -> AnyResult<Self> {
-        if let NameOrStream::Name(encoding) = font.encoding()? {
-            assert_eq!(encoding, "Identity-H");
-        } else {
+        let NameOrStream::Name(encoding_name) = font.encoding()? else {
             todo!("Only IdentityH encoding supported");
-        }
+        };
+        assert!(!encoding_name.ends_with("-V"), "todo: Vertical write mode");
+        let cmap = CMap::predefined(encoding_name.as_str())?;
+
         let cid_fonts = font.descendant_fonts()?;
         let cid_font = &cid_fonts[0];
         let widths = cid_font.w()?;
@@ -1020,19 +1022,14 @@ impl CIDFontType2FontOp {
             widths,
             default_width: cid_font.dw()?,
             units_per_em,
+            cmap,
         })
     }
 }
 
 impl FontOp for CIDFontType2FontOp {
     fn decode_chars(&self, s: &[u8]) -> Vec<u32> {
-        debug_assert!(s.len() % 2 == 0, "{:?}", s);
-        let mut rv = Vec::with_capacity(s.len() / 2);
-        for i in 0..s.len() / 2 {
-            let ch = u16::from_be_bytes([s[i * 2], s[i * 2 + 1]]);
-            rv.push(ch as u32);
-        }
-        rv
+        self.cmap.decode(s)
     }
 
     fn char_to_gid(&self, ch: u32) -> u16 {

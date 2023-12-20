@@ -11,6 +11,8 @@ use nipdf_macro::{pdf_object, TryFromIntObjectForBitflags, TryFromNameObject};
 use num_traits::ToPrimitive;
 use prescript::{name, Encoding, Name};
 
+pub(crate) mod cmap;
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, TryFromNameObject)]
 pub enum FontType {
     Type0,
