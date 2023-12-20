@@ -952,13 +952,61 @@ pub trait FontOp {
     }
 }
 
-struct Type0FontOp {
+struct CIDFontType0FontOp {
+    widths: Option<CIDFontWidths>,
+    default_width: u32,
+}
+
+impl CIDFontType0FontOp {
+    fn new(font: &Type0FontDict) -> AnyResult<Self> {
+        if let NameOrStream::Name(encoding) = font.encoding()? {
+            assert_eq!(encoding, "Identity-H");
+        } else {
+            todo!("Only IdentityH encoding supported");
+        }
+        let cid_fonts = font.descendant_fonts()?;
+        let cid_font = &cid_fonts[0];
+        let widths = cid_font.w()?;
+        Ok(Self {
+            widths,
+            default_width: cid_font.dw()?,
+        })
+    }
+}
+
+impl FontOp for CIDFontType0FontOp {
+    /// `s` each two bytes as a char code, big endian. append 0 if len(s) is odd
+    fn decode_chars(&self, s: &[u8]) -> Vec<u32> {
+        debug_assert!(s.len() % 2 == 0, "{:?}", s);
+        let mut rv = Vec::with_capacity(s.len() / 2);
+        for i in 0..s.len() / 2 {
+            let ch = u16::from_be_bytes([s[i * 2], s[i * 2 + 1]]);
+            rv.push(ch as u32);
+        }
+        rv
+    }
+
+    fn char_to_gid(&self, ch: u32) -> u16 {
+        ch.try_into().unwrap()
+    }
+
+    fn char_width(&self, ch: u32) -> GlyphLength {
+        let char_width = self
+            .widths
+            .as_ref()
+            .and_then(|w| w.char_width(ch))
+            .unwrap_or(self.default_width) as f32;
+        GlyphLength::new(char_width)
+    }
+}
+
+struct CIDFontType2FontOp {
     widths: Option<CIDFontWidths>,
     default_width: u32,
     units_per_em: u16,
 }
 
-impl Type0FontOp {
+impl CIDFontType2FontOp {
     fn new(font: &Type0FontDict, units_per_em: u16) -> AnyResult<Self> {
         if let NameOrStream::Name(encoding) = font.encoding()? {
             assert_eq!(encoding, "Identity-H");
@@ -976,8 +1024,7 @@ impl Type0FontOp {
     }
 }
 
-impl FontOp for Type0FontOp {
-    /// `s` each two bytes as a char code, big endian. append 0 if len(s) is odd
+impl FontOp for CIDFontType2FontOp {
     fn decode_chars(&self, s: &[u8]) -> Vec<u32> {
         debug_assert!(s.len() % 2 == 0, "{:?}", s);
         let mut rv = Vec::with_capacity(s.len() / 2);
@@ -998,7 +1045,9 @@ impl FontOp for Type0FontOp {
             .as_ref()
             .and_then(|w| w.char_width(ch))
             .unwrap_or(self.default_width) as f32;
-        char_width = char_width / 1000.0 * self.units_per_em as f32;
+        if self.units_per_em != 1000 {
+            char_width = char_width / 1000.0 * self.units_per_em as f32;
+        }
         GlyphLength::new(char_width)
     }
 
@@ -1038,7 +1087,7 @@ impl<'a, 'b, P: PathSink + 'static> Font<P> for CIDFontType2Font<'a, 'b> {
 
     fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
         let face = TTFFace::parse(&self.data, 0)?;
-        Ok(Box::new(Type0FontOp::new(
+        Ok(Box::new(CIDFontType2FontOp::new(
             &self.font_dict.type0()?,
             face.units_per_em(),
         )?))
@@ -1056,7 +1105,7 @@ impl<'a, 'b, P: PathSink + 'static> Font<P> for CIDFontType0Font<'a, 'b> {
     }
 
     fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
-        Ok(Box::new(Type0FontOp::new(&self.font_dict.type0()?, 1000)?))
+        Ok(Box::new(CIDFontType0FontOp::new(&self.font_dict.type0()?)?))
     }
 
     fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender<P> + '_>> {
