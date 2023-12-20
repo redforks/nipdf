@@ -18,12 +18,13 @@ use std::{
 /// Using `proc-macro2`, `syn`, `quote` crates to help for parsing and generating code.
 #[proc_macro_attribute]
 pub fn pdf_file_test_cases(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let cache_file = Path::new(&var("CARGO_TARGET_TMPDIR").unwrap()).join("render-test.list");
+    let cache_file = Path::new(&var("OUT_DIR").unwrap()).join("render-test.list");
     let files = if cache_file.exists() {
         let cache = std::fs::read_to_string(cache_file).unwrap();
         cache
             .lines()
-            .filter(|&l| (!l.is_empty())).map(|l| l.to_owned())
+            .filter(|&l| (!l.is_empty()))
+            .map(|l| l.to_owned())
             .collect()
     } else {
         let dirs = vec!["sample_files", "../../pdf", "pdf.js/test/pdfs"];
