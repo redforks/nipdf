@@ -1,6 +1,7 @@
 pub(crate) mod machine;
 pub(crate) mod parser;
 
+mod cmap;
 mod encoding;
 mod pdf_fn;
 mod type1;
