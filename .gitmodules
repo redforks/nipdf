@@ -1,3 +1,6 @@
 [submodule "nipdf/pdf.js"]
 	path = nipdf/pdf.js
 	url = https://github.com/mozilla/pdf.js
+[submodule "prescript/cmap-resources"]
+	path = prescript/cmap-resources
+	url = https://github.com/adobe-type-tools/cmap-resources.git
