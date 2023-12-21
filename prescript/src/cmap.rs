@@ -110,16 +110,26 @@ impl CodeRange {
         Some(Self(r))
     }
 
-    /// `ch` in this range if: ch has same length as range, and each byte in nth byte range.
-    fn in_range(&self, ch: CharCode) -> bool {
+    /// If ch not in range, return None,
+    /// else return offset from lower bound.
+    fn offset(&self, ch: CharCode) -> Option<u16> {
         if ch.n_bytes() != self.n_bytes() {
-            return false;
+            return None;
         }
 
-        self.0
-            .iter()
-            .zip(ch.as_ref().into_iter().copied())
-            .all(|(r, c)| r.in_range(c))
+        let mut offset = 0u16;
+        for (r, c) in self.0.iter().zip(ch.as_ref().into_iter().copied()) {
+            if !r.in_range(c) {
+                return None;
+            }
+            offset = offset * (r.upper - r.lower + 1) as u16 + (c - r.lower) as u16;
+        }
+        Some(offset)
+    }
+
+    /// `ch` in this range if: ch has same length as range, and each byte in nth byte range.
+    fn in_range(&self, ch: CharCode) -> bool {
+        self.offset(ch).is_some()
     }
 
     /// Find next code.
@@ -183,7 +193,9 @@ struct IncRangeMap {
 
 impl CodeMap for IncRangeMap {
     fn map(&self, code: CharCode) -> Option<CID> {
-        todo!()
+        self.range
+            .offset(code)
+            .map(|offset| CID(self.start_cid.0 + offset))
     }
 }
 

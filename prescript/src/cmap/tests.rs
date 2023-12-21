@@ -23,7 +23,7 @@ fn char_code_as_byte_slice() {
     assert_eq!(&[0x20][..], one(0x20).as_ref());
     assert_eq!(&[0x81, 0x40][..], two(0x8140).as_ref());
     assert_eq!(&[0x00, 0x81, 0x40][..], three(0x8140).as_ref());
-    assert_eq!(&[0xD8, 0x00, 0xDC, 0x00][..], four(0xD800DC00).as_ref()); 
+    assert_eq!(&[0xD8, 0x00, 0xDC, 0x00][..], four(0xD800DC00).as_ref());
 }
 
 #[test]
@@ -152,4 +152,28 @@ fn range_map_to_one() {
     assert_eq!(Some(CID(0x1234)), m.map(one(0x7e)));
     assert_eq!(None, m.map(one(0x12)));
     assert_eq!(None, m.map(two(0x21)));
+}
+
+#[test]
+fn inc_range_map() {
+    // one byte
+    let m = IncRangeMap {
+        range: CodeRange::parse("20", "7e").unwrap(),
+        start_cid: CID(1234),
+    };
+    assert_eq!(Some(CID(1234)), m.map(one(0x20)));
+    assert_eq!(Some(CID(1235)), m.map(one(0x21)));
+    assert_eq!(Some(CID(1236)), m.map(one(0x22)));
+    assert_eq!(None, m.map(one(0x1f)));
+    assert_eq!(None, m.map(one(0x7f)));
+
+    // two bytes
+    let m = IncRangeMap {
+        range: CodeRange::parse("8100", "827f").unwrap(),
+        start_cid: CID(1000),
+    };
+    assert_eq!(Some(CID(1000)), m.map(two(0x8100)));
+    assert_eq!(Some(CID(1001)), m.map(two(0x8101)));
+    assert_eq!(Some(CID(1128)), m.map(two(0x8200)));
+    assert_eq!(Some(CID(1255)), m.map(two(0x827f)));
 }
