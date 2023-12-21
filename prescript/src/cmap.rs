@@ -28,6 +28,18 @@ impl CharCode {
     }
 }
 
+impl AsRef<[u8]> for CharCode {
+    fn as_ref(&self) -> &[u8] {
+        use std::slice::from_raw_parts;
+        match self {
+            Self::One(b) => std::slice::from_ref(b),
+            Self::Two(b1, _) => unsafe { from_raw_parts(b1, 2) },
+            Self::Three(b1, _, _) => unsafe { from_raw_parts(b1, 3) },
+            Self::Four(b1, _, _, _) => unsafe { from_raw_parts(b1, 4) },
+        }
+    }
+}
+
 impl From<&[u8]> for CharCode {
     fn from(bytes: &[u8]) -> Self {
         match bytes.len() {
@@ -93,9 +105,21 @@ impl CodeRange {
         for i in (0..n_bytes).into_iter().rev() {
             let lower = (lower >> (i * 8)) as u8;
             let upper = (upper >> (i * 8)) as u8;
-            r.push(ByteRange::new( lower, upper ));
+            r.push(ByteRange::new(lower, upper));
         }
         Some(Self(r))
+    }
+
+    /// `ch` in this range if: ch has same length as range, and each byte in nth byte range.
+    fn in_range(&self, ch: CharCode) -> bool {
+        if ch.n_bytes() != self.n_bytes() {
+            return false;
+        }
+
+        self.0
+            .iter()
+            .zip(ch.as_ref().into_iter().copied())
+            .all(|(r, c)| r.in_range(c))
     }
 
     /// Find next code.
@@ -109,7 +133,9 @@ impl CodeRange {
         {
             0 => CodeSpaceResult::NotMatched,
             n if n == self.n_bytes() => CodeSpaceResult::Matched(CharCode::from(&codes[..n])),
-            _ => CodeSpaceResult::Partial(CharCode::from(&codes[..self.n_bytes().min(codes.len())])),
+            _ => {
+                CodeSpaceResult::Partial(CharCode::from(&codes[..self.n_bytes().min(codes.len())]))
+            }
         }
     }
 
@@ -170,7 +196,7 @@ struct RangeMapToOne {
 
 impl CodeMap for RangeMapToOne {
     fn map(&self, code: CharCode) -> Option<CID> {
-        todo!()
+        (self.range.in_range(code)).then(|| self.cid)
     }
 }
 
@@ -181,9 +207,15 @@ struct SingleCodeMap {
     cid: CID,
 }
 
+impl SingleCodeMap {
+    fn new(code: CharCode, cid: CID) -> Self {
+        Self { code, cid }
+    }
+}
+
 impl CodeMap for SingleCodeMap {
     fn map(&self, code: CharCode) -> Option<CID> {
-        todo!()
+        (code == self.code).then(|| self.cid)
     }
 }
 
@@ -195,9 +227,11 @@ struct Mapper<R> {
     chars: Box<[SingleCodeMap]>,
 }
 
-impl<R> CodeMap for Mapper<R> {
+impl<R: CodeMap> CodeMap for Mapper<R> {
     fn map(&self, code: CharCode) -> Option<CID> {
-        todo!()
+        let find_in_chars = self.chars.iter().filter_map(|m| m.map(code));
+        let find_in_ranges = self.ranges.iter().filter_map(|m| m.map(code));
+        find_in_chars.chain(find_in_ranges).next()
     }
 }
 

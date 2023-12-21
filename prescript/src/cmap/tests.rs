@@ -19,6 +19,14 @@ fn four(v: u32) -> CharCode {
 }
 
 #[test]
+fn char_code_as_byte_slice() {
+    assert_eq!(&[0x20][..], one(0x20).as_ref());
+    assert_eq!(&[0x81, 0x40][..], two(0x8140).as_ref());
+    assert_eq!(&[0x00, 0x81, 0x40][..], three(0x8140).as_ref());
+    assert_eq!(&[0xD8, 0x00, 0xDC, 0x00][..], four(0xD800DC00).as_ref()); 
+}
+
+#[test]
 fn code_range_parse() {
     assert_eq!(
         CodeRange::parse("20", "7e").unwrap(),
@@ -40,6 +48,25 @@ fn code_range_parse() {
             ByteRange::new(0x00, 0xFF),
         )),
     );
+}
+
+#[test]
+fn code_range_in_range() {
+    let r = CodeRange::parse("20", "7e").unwrap();
+    assert!(r.in_range(one(0x20)));
+    assert!(r.in_range(one(0x7e)));
+    assert!(r.in_range(one(0x21)));
+    assert!(!r.in_range(one(0x1f)));
+    assert!(!r.in_range(one(0x7f)));
+    assert!(!r.in_range(two(0x7f)));
+
+    let r = CodeRange::parse("8140", "817e").unwrap();
+    assert!(r.in_range(two(0x8140)));
+    assert!(r.in_range(two(0x817e)));
+    assert!(r.in_range(two(0x8141)));
+    assert!(!r.in_range(two(0x8040)));
+    assert!(!r.in_range(one(0x81)));
+    assert!(!r.in_range(three(0x8140)));
 }
 
 #[test]
@@ -106,4 +133,23 @@ fn code_space() {
         (&[][..], Err(two(0x817f))),
         code_space.next_code(&[0x81, 0x7f]),
     );
+}
+
+#[test]
+fn single_code_map() {
+    let m = SingleCodeMap::new(one(0x20), CID(0x1234));
+    assert_eq!(Some(CID(0x1234)), m.map(one(0x20)));
+    assert_eq!(None, m.map(one(0x21)));
+}
+
+#[test]
+fn range_map_to_one() {
+    let m = RangeMapToOne {
+        range: CodeRange::parse("20", "7e").unwrap(),
+        cid: CID(0x1234),
+    };
+    assert_eq!(Some(CID(0x1234)), m.map(one(0x20)));
+    assert_eq!(Some(CID(0x1234)), m.map(one(0x7e)));
+    assert_eq!(None, m.map(one(0x12)));
+    assert_eq!(None, m.map(two(0x21)));
 }
