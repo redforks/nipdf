@@ -25,7 +25,7 @@ use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
 use phf::phf_map;
 use prescript::{name, sname, Encoding, Name, NOTDEF};
 use std::{collections::HashMap, ops::RangeInclusive};
-use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
+use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder, PlatformId};
 
 /// FontWidth used in Type1 and TrueType fonts
 struct FirstLastFontWidth {
@@ -420,7 +420,10 @@ impl<'a> FontOp for TTFParserFontOp<'a> {
             }
         }
 
-        glyph_index(&self.face, ch)
+        glyph_index(&self.face, ch).unwrap_or_else(|| {
+            warn!("TTF glyph id not found for char: {}", ch);
+            0
+        })
     }
 
     fn char_width(&self, ch: u32) -> GlyphLength {
@@ -718,26 +721,26 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         font: FontDict<'a, 'b>,
         desc: FontDescriptorDict<'a, 'b>,
     ) -> AnyResult<Box<dyn Font<P> + 'b>> {
-        let ttf_bytes = match desc.font_file2()? {
+        let (is_embed, ttf_bytes) = match desc.font_file2()? {
             Some(stream) => {
                 // if font is invalid, load from os
                 let bytes = Self::load_embed_font_bytes(desc.resolver(), stream)?;
                 match TTFFace::parse(&bytes, 0) {
-                    Result::Ok(_) => Ok(bytes),
+                    Result::Ok(_) => (true, bytes),
                     Err(e) => {
                         warn!(
                             "Failed load embed ttf-font '{}', try load from OS: {}",
                             desc.font_name()?,
                             e
                         );
-                        Self::load_true_type_from_os(&desc)
+                        (false, Self::load_true_type_from_os(&desc)?)
                     }
                 }
             }
-            None => Self::load_true_type_from_os(&desc),
-        }?;
+            None => (false, Self::load_true_type_from_os(&desc)?),
+        };
         if font_type == FontType::Type0 {
-            Ok(Box::new(CIDFontType2Font::new(ttf_bytes, font)))
+            Ok(Box::new(CIDFontType2Font::new(is_embed, ttf_bytes, font)))
         } else {
             Ok(Box::new(TTFParserFont::new(
                 font.subtype()?,
@@ -965,15 +968,37 @@ impl FontOp for CIDFontType0FontOp {
     }
 }
 
-struct CIDFontType2FontOp {
+/// CID -> GID, GID is u16. stored in [u8], each u16 is big endian
+struct CIDToGIDMap(Box<[u8]>);
+
+impl CIDToGIDMap {
+    pub fn new(data: Vec<u8>) -> Self {
+        assert!(data.len() % 2 == 0);
+        Self(data.into())
+    }
+
+    pub fn to_gid(&self, ch: usize) -> Option<u16> {
+        let idx = ch * 2;
+        if idx + 1 >= self.0.len() {
+            warn!("(cid_to_gid_map) glyph id not found for char: {}", ch);
+            return None;
+        }
+        Some(u16::from_be_bytes([self.0[idx], self.0[idx + 1]]))
+    }
+}
+
+struct CIDFontType2FontOp<'a> {
+    face: TTFFace<'a>,
     widths: Option<CIDFontWidths>,
     default_width: u32,
     units_per_em: u16,
     cmap: CMap,
+    cid_to_gid: Option<CIDToGIDMap>,
+    cid_is_gid: bool,
 }
 
-impl CIDFontType2FontOp {
-    fn new(face: TTFFace<'a>, font: &Type0FontDict) -> AnyResult<Self> {
+impl<'a> CIDFontType2FontOp<'a> {
+    fn new(face: TTFFace<'a>, font: &Type0FontDict, is_embed: bool) -> AnyResult<Self> {
         let NameOrStream::Name(encoding_name) = font.encoding()? else {
             todo!("cmap stream not supported");
         };
@@ -986,13 +1011,22 @@ impl CIDFontType2FontOp {
 
         let cid_fonts = font.descendant_fonts()?;
         let cid_font = &cid_fonts[0];
-        assert_eq!(cid_font.cid_to_gid_map()?, NameOrStream::identity());
+        let cid_to_gid = match cid_font.cid_to_gid_map()? {
+            NameOrStream::Name(_) => None,
+            NameOrStream::Stream(s) => Some(CIDToGIDMap::new(
+                s.decode(cid_font.resolver())?.into_owned(),
+            )),
+        };
         let widths = cid_font.w()?;
+
         Ok(Self {
             units_per_em: face.units_per_em(),
+            face,
             widths,
             default_width: cid_font.dw()?,
             cmap,
+            cid_is_gid: is_embed && cid_to_gid.is_none(),
+            cid_to_gid,
         })
     }
 }
@@ -1000,24 +1034,43 @@ impl CIDFontType2FontOp {
 // TTFFace::glyph_index() ignores non unicode cmap table,
 // some non-cjk pdf file use non unicode cmap table. This function
 // try to find glyph id from all cmap tables
-fn glyph_index(face: &TTFFace, ch: u32) -> u16 {
+fn glyph_index(face: &TTFFace, ch: u32) -> Option<u16> {
     for subtable in face.tables().cmap.unwrap().subtables {
         if let Some(id) = subtable.glyph_index(ch) {
-            return id.0;
+            return Some(id.0);
         }
     }
 
-    warn!("(TTF) glyph id not found for char: {}", ch);
-    0
+    warn!("glyph id not found from TTF CMap for char: {}", ch);
+    None
 }
 
-impl FontOp for CIDFontType2FontOp {
+impl<'a> FontOp for CIDFontType2FontOp<'a> {
     fn decode_chars(&self, s: &[u8]) -> Vec<u32> {
         self.cmap.decode(s)
     }
 
     fn char_to_gid(&self, ch: u32) -> u16 {
-        ch.try_into().unwrap()
+        if self.cid_is_gid {
+            return ch.try_into().unwrap();
+        }
+
+        self.cid_to_gid.as_ref().map_or_else(
+            || {
+                glyph_index(&self.face, ch).unwrap_or_else(|| {
+                    // warn!("(cid_to_gid_map) glyph id not found for char: {}", ch);
+                    ch.try_into().unwrap()
+                })
+            },
+            |m| {
+                m.to_gid(ch as usize).unwrap_or_else(|| {
+                    glyph_index(&self.face, ch).unwrap_or_else(|| {
+                        // warn!("(cid_to_gid_map) glyph id not found for char: {}", ch);
+                        ch.try_into().unwrap()
+                    })
+                })
+            },
+        )
     }
 
     fn char_width(&self, ch: u32) -> GlyphLength {
@@ -1053,11 +1106,16 @@ impl<'a, 'b> CIDFontType0Font<'a, 'b> {
 struct CIDFontType2Font<'a, 'b> {
     data: Vec<u8>,
     font_dict: FontDict<'a, 'b>,
+    font_is_embed: bool,
 }
 
 impl<'a, 'b> CIDFontType2Font<'a, 'b> {
-    fn new(data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> Self {
-        Self { data, font_dict }
+    fn new(font_is_embed: bool, data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> Self {
+        Self {
+            data,
+            font_dict,
+            font_is_embed,
+        }
     }
 }
 
@@ -1071,6 +1129,7 @@ impl<'a, 'b, P: PathSink + 'static> Font<P> for CIDFontType2Font<'a, 'b> {
         Ok(Box::new(CIDFontType2FontOp::new(
             face,
             &self.font_dict.type0()?,
+            self.font_is_embed,
         )?))
     }
 
