@@ -1,7 +1,10 @@
 //! Cmap to map CharCode to CID, used in Type0/CID font
 
-use crate::Name;
-use either::Either::{self, Left, Right};
+use crate::{
+    machine::{Machine, MachinePlugin},
+    Name,
+};
+use either::Either::{self, Right};
 use std::{collections::HashMap, rc::Rc};
 use tinyvec::ArrayVec;
 
@@ -298,8 +301,20 @@ impl CMapRegistry {
     }
 
     /// Add a CMap file, parse it and add to registry.
-    pub fn add_cmap_file(&mut self, file_data: &[u8]) -> anyhow::Result<Rc<CMap>> {
-        todo!()
+    pub fn add_cmap_file(&mut self, file: &[u8]) -> anyhow::Result<Rc<CMap>> {
+        let p = CMapMachinePlugin {
+            registry: self,
+            parsed: None,
+        };
+        let mut m = Machine::<CMapMachinePlugin>::with_plugin(file, p);
+        m.execute()?;
+        let mut p = m.take_plugin();
+        let parsed = p.parsed.take().unwrap();
+        let name = parsed.name.clone();
+        drop(p);
+        self.add(parsed);
+        self.get(&name)
+            .ok_or_else(|| anyhow::anyhow!("CMap not found: {:?}", name))
     }
 }
 
@@ -356,6 +371,21 @@ impl CMap {
                 .as_ref()
                 .map_or(DEFAULT_NOTDEF, |m| m.map_undef(ch))
         })
+    }
+}
+
+/// CMap Machine plugin.
+struct CMapMachinePlugin<'a> {
+    registry: &'a CMapRegistry,
+    parsed: Option<CMap>,
+}
+
+impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
+    fn find_proc_set_resource<'b, P>(
+        &self,
+        name: &Name,
+    ) -> Option<crate::machine::RuntimeDictionary<'b, P>> {
+        todo!()
     }
 }
 

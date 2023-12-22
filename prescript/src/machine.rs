@@ -25,7 +25,7 @@ mod cidinit;
 pub type Array = Vec<Value>;
 pub type TokenArray = Vec<Token>;
 
-type OperatorFn = fn(&mut Machine) -> MachineResult<ExecState>;
+type OperatorFn<P> = fn(&mut Machine<P>) -> MachineResult<ExecState>;
 
 #[derive(Educe)]
 #[educe(Debug, PartialEq, Clone)]
@@ -44,7 +44,7 @@ pub enum Value {
 
 #[derive(Educe)]
 #[educe(Debug, PartialEq, Clone)]
-enum RuntimeValue<'a> {
+pub(crate) enum RuntimeValue<'a, P> {
     Value(Value),
     /// Mark stack position
     Mark,
@@ -52,11 +52,11 @@ enum RuntimeValue<'a> {
     ArrayMark,
     /// Tell >> operation that end of dictionary in stack.
     DictMark,
-    Dictionary(Rc<RefCell<RuntimeDictionary<'a>>>),
+    Dictionary(Rc<RefCell<RuntimeDictionary<'a, P>>>),
     BuiltInOp(
         #[educe(Debug(ignore))]
         #[educe(PartialEq(ignore))]
-        OperatorFn,
+        OperatorFn<P>,
     ),
     /// Tells eexec operation that works on current file.
     CurrentFile(
@@ -66,7 +66,7 @@ enum RuntimeValue<'a> {
     ),
 }
 
-impl<'b> Display for RuntimeValue<'b> {
+impl<'b, P> Display for RuntimeValue<'b, P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RuntimeValue::Mark => write!(f, "mark"),
@@ -97,13 +97,13 @@ impl<'b> Display for RuntimeValue<'b> {
     }
 }
 
-impl<'a> From<Name> for RuntimeValue<'a> {
+impl<'a, P> From<Name> for RuntimeValue<'a, P> {
     fn from(v: Name) -> Self {
         Self::Value(Value::Name(v))
     }
 }
 
-type RuntimeDictionary<'a> = HashMap<Key, RuntimeValue<'a>>;
+pub(crate) type RuntimeDictionary<'a, P> = HashMap<Key, RuntimeValue<'a, P>>;
 
 macro_rules! value_access {
     ($method:ident, $opt_method:ident, $branch:ident, $t: ty) => {
@@ -125,7 +125,7 @@ macro_rules! value_access {
             }
         }
 
-        impl<'a> RuntimeValue<'a> {
+        impl<'a, P> RuntimeValue<'a, P> {
             #[allow(dead_code)]
             pub fn $opt_method(&self) -> Option<$t> {
                 match self {
@@ -147,7 +147,7 @@ macro_rules! value_access {
 
 macro_rules! rt_value_access {
     ($method:ident, $opt_method:ident, $branch:ident, $t: ty) => {
-        impl<'a> RuntimeValue<'a> {
+        impl<'a, P> RuntimeValue<'a, P> {
             #[allow(dead_code)]
             pub fn $opt_method(&self) -> Option<$t> {
                 match self {
@@ -176,11 +176,11 @@ rt_value_access!(
     dict,
     opt_dict,
     Dictionary,
-    Rc<RefCell<RuntimeDictionary<'a>>>
+    Rc<RefCell<RuntimeDictionary<'a, P>>>
 );
 value_access!(procedure, opt_procedure, Procedure, Rc<RefCell<TokenArray>>);
 value_access!(name, opt_name, Name, Name);
-rt_value_access!(built_in_op, opt_built_in_op, BuiltInOp, OperatorFn);
+rt_value_access!(built_in_op, opt_built_in_op, BuiltInOp, OperatorFn<P>);
 rt_value_access!(
     current_file,
     opt_current_file,
@@ -188,7 +188,7 @@ rt_value_access!(
     Rc<RefCell<CurrentFile<'a>>>
 );
 
-impl<'a> RuntimeValue<'a> {
+impl<'a, P> RuntimeValue<'a, P> {
     pub fn opt_number(&self) -> Option<Either<i32, f32>> {
         match self {
             Self::Value(Value::Integer(i)) => Some(Either::Left(*i)),
@@ -214,10 +214,10 @@ pub enum Key {
     Name(Name),
 }
 
-impl<'a> TryFrom<RuntimeValue<'a>> for Key {
+impl<'a, P> TryFrom<RuntimeValue<'a, P>> for Key {
     type Error = MachineError;
 
-    fn try_from(v: RuntimeValue) -> Result<Self, Self::Error> {
+    fn try_from(v: RuntimeValue<'a, P>) -> Result<Self, Self::Error> {
         match v {
             RuntimeValue::Value(Value::Bool(b)) => Ok(Self::Bool(b)),
             RuntimeValue::Value(Value::Integer(i)) => Ok(Self::Integer(i)),
@@ -236,7 +236,7 @@ impl From<TokenArray> for Value {
     }
 }
 
-impl<'a> From<Value> for RuntimeValue<'a> {
+impl<'a, P> From<Value> for RuntimeValue<'a, P> {
     fn from(v: Value) -> Self {
         Self::Value(v)
     }
@@ -277,7 +277,7 @@ pub enum Token {
     Name(Name),
 }
 
-impl<'a> From<Token> for RuntimeValue<'a> {
+impl<'a, P> From<Token> for RuntimeValue<'a, P> {
     fn from(v: Token) -> Self {
         match v {
             Token::Literal(v) => Self::Value(v),
@@ -286,15 +286,15 @@ impl<'a> From<Token> for RuntimeValue<'a> {
     }
 }
 
-impl<'a> TryFrom<RuntimeValue<'a>> for Token {
+impl<'a, P> TryFrom<RuntimeValue<'a, P>> for Token {
     type Error = MachineError;
 
-    fn try_from(v: RuntimeValue) -> Result<Self, Self::Error> {
+    fn try_from(v: RuntimeValue<'a, P>) -> Result<Self, Self::Error> {
         match v {
             RuntimeValue::Value(Value::Name(n)) => Ok(Self::Name(n)),
             RuntimeValue::Value(v) => Ok(Self::Literal(v)),
             RuntimeValue::Dictionary(d) => {
-                let d: RuntimeDictionary =
+                let d: RuntimeDictionary<P> =
                     Rc::try_unwrap(d).map_or_else(|d| d.borrow().clone(), |d| d.into_inner());
                 Ok(Self::Literal(Value::Dictionary(into_dict(d)?)))
             }
@@ -308,10 +308,10 @@ pub fn name_token(s: &str) -> Token {
     Token::Name(name(s))
 }
 
-impl<'a> TryFrom<RuntimeValue<'a>> for Value {
+impl<'a, P> TryFrom<RuntimeValue<'a, P>> for Value {
     type Error = MachineError;
 
-    fn try_from(v: RuntimeValue) -> Result<Self, Self::Error> {
+    fn try_from(v: RuntimeValue<'a, P>) -> Result<Self, Self::Error> {
         match v {
             RuntimeValue::Value(v) => Ok(v),
             _ => Err(MachineError::TypeCheck),
@@ -327,7 +327,7 @@ macro_rules! to_value {
             }
         }
 
-        impl<'a> From<$t> for RuntimeValue<'a> {
+        impl<'a, P> From<$t> for RuntimeValue<'a, P> {
             fn from(v: $t) -> Self {
                 Self::Value(Value::$branch(v))
             }
@@ -346,14 +346,14 @@ impl<const N: usize> From<[u8; N]> for Value {
     }
 }
 
-impl<'a, const N: usize> From<[u8; N]> for RuntimeValue<'a> {
+impl<'a, P, const N: usize> From<[u8; N]> for RuntimeValue<'a, P> {
     fn from(v: [u8; N]) -> Self {
         let bytes: Vec<u8> = v.into();
         bytes.into()
     }
 }
 
-impl<'a> From<Vec<u8>> for RuntimeValue<'a> {
+impl<'a, P> From<Vec<u8>> for RuntimeValue<'a, P> {
     fn from(v: Vec<u8>) -> Self {
         Value::String(Rc::new(RefCell::new(v))).into()
     }
@@ -365,7 +365,7 @@ impl From<Vec<u8>> for Value {
     }
 }
 
-impl<'a> From<&str> for RuntimeValue<'a> {
+impl<'a, P> From<&str> for RuntimeValue<'a, P> {
     fn from(v: &str) -> Self {
         Value::from(v).into()
     }
@@ -383,31 +383,31 @@ impl From<Array> for Value {
     }
 }
 
-impl<'a> From<Array> for RuntimeValue<'a> {
+impl<'a, P> From<Array> for RuntimeValue<'a, P> {
     fn from(v: Array) -> Self {
         Value::Array(Rc::new(RefCell::new(v))).into()
     }
 }
 
-impl<'a> From<RuntimeDictionary<'a>> for RuntimeValue<'a> {
-    fn from(v: RuntimeDictionary<'a>) -> Self {
+impl<'a, P> From<RuntimeDictionary<'a, P>> for RuntimeValue<'a, P> {
+    fn from(v: RuntimeDictionary<'a, P>) -> Self {
         RuntimeValue::Dictionary(Rc::new(RefCell::new(v)))
     }
 }
 
-impl<'a> From<Rc<RefCell<RuntimeDictionary<'a>>>> for RuntimeValue<'a> {
-    fn from(v: Rc<RefCell<RuntimeDictionary<'a>>>) -> Self {
+impl<'a, P> From<Rc<RefCell<RuntimeDictionary<'a, P>>>> for RuntimeValue<'a, P> {
+    fn from(v: Rc<RefCell<RuntimeDictionary<'a, P>>>) -> Self {
         Self::Dictionary(v)
     }
 }
 
-fn into_dict(d: RuntimeDictionary) -> MachineResult<Dictionary> {
+fn into_dict<'a, P>(d: RuntimeDictionary<'a, P>) -> MachineResult<Dictionary> {
     let mut dict = Dictionary::new();
     for (k, v) in d {
         let v = match v {
             RuntimeValue::Value(v) => v,
             RuntimeValue::Dictionary(d) => {
-                let d: RuntimeDictionary =
+                let d: RuntimeDictionary<P> =
                     Rc::try_unwrap(d).map_or_else(|d| d.borrow().clone(), |d| d.into_inner());
                 Value::Dictionary(into_dict(d)?)
             }
@@ -441,7 +441,7 @@ macro_rules! rt_values {
         Array::new()
     };
     ($($e:expr),*) => {
-        vec![$(Into::<RuntimeValue>::into($e)),*]
+        vec![$(Into::<RuntimeValue::<_>>::into($e)),*]
     }
 }
 
@@ -466,7 +466,7 @@ pub enum MachineError {
 
 pub type MachineResult<T> = Result<T, MachineError>;
 
-struct CurrentFile<'a> {
+pub(crate) struct CurrentFile<'a> {
     data: &'a [u8],
     remains_pos: usize,
     hex_form: bool,
@@ -569,12 +569,25 @@ impl<'a> CurrentFile<'a> {
     }
 }
 
+pub(crate) trait MachinePlugin {
+    /// Find resource in ProcSet, return None if not found.
+    /// Called on `findresource` operation.
+    fn find_proc_set_resource<'a, P>(&self, name: &Name) -> Option<RuntimeDictionary<'a, P>>;
+}
+
+impl MachinePlugin for () {
+    fn find_proc_set_resource<'a, P>(&self, name: &Name) -> Option<RuntimeDictionary<'a, P>> {
+        None
+    }
+}
+
 /// PostScript machine to execute operations.
-pub struct Machine<'a> {
+pub struct Machine<'a, P> {
     file: Rc<RefCell<CurrentFile<'a>>>,
-    variable_stack: VariableDictStack<'a>,
-    stack: Vec<RuntimeValue<'a>>,
+    variable_stack: VariableDictStack<'a, P>,
+    stack: Vec<RuntimeValue<'a, P>>,
     fonts: Vec<(String, Dictionary)>,
+    p: P,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -587,13 +600,32 @@ pub enum ExecState {
     DefinesEncoding,
 }
 
-impl<'a> Machine<'a> {
+impl<'a, P> Machine<'a, P> {
+    pub fn take_plugin(self) -> P {
+        self.p
+    }
+}
+
+impl<'a> Machine<'a, ()> {
     pub fn new(file: &'a [u8]) -> Self {
         Self {
             file: Rc::new(RefCell::new(CurrentFile::new(file))),
             variable_stack: VariableDictStack::new(),
             stack: Vec::new(),
             fonts: vec![],
+            p: (),
+        }
+    }
+}
+
+impl<'a, P> Machine<'a, P> {
+    pub fn with_plugin(file: &'a [u8], p: P) -> Self {
+        Self {
+            file: Rc::new(RefCell::new(CurrentFile::new(file))),
+            variable_stack: VariableDictStack::new(),
+            stack: Vec::new(),
+            fonts: vec![],
+            p,
         }
     }
 
@@ -744,17 +776,17 @@ impl<'a> Machine<'a> {
         // });
     }
 
-    fn pop(&mut self) -> MachineResult<RuntimeValue<'a>> {
+    fn pop(&mut self) -> MachineResult<RuntimeValue<'a, P>> {
         let r = self.stack.pop().ok_or(MachineError::StackUnderflow);
         self.dump_stack();
         r
     }
 
-    fn top(&self) -> MachineResult<&RuntimeValue<'a>> {
+    fn top(&self) -> MachineResult<&RuntimeValue<'a, P>> {
         self.stack.last().ok_or(MachineError::StackUnderflow)
     }
 
-    fn push(&mut self, v: impl Into<RuntimeValue<'a>>) {
+    fn push(&mut self, v: impl Into<RuntimeValue<'a, P>>) {
         self.stack.push(v.into());
         self.dump_stack();
     }
@@ -768,8 +800,8 @@ impl<'a> Machine<'a> {
     }
 }
 
-struct VariableDictStack<'a> {
-    stack: Vec<Rc<RefCell<RuntimeDictionary<'a>>>>,
+struct VariableDictStack<'a, P> {
+    stack: Vec<Rc<RefCell<RuntimeDictionary<'a, P>>>>,
 }
 
 macro_rules! built_in_ops {
@@ -783,7 +815,7 @@ macro_rules! dict {
         RuntimeDictionary::new()
     };
     ($($k:expr => $v:expr),* $(,)?) => {
-        std::iter::Iterator::collect::<RuntimeDictionary>(std::iter::IntoIterator::into_iter([$((Key::Name($k), RuntimeValue::from($v)),)*]))
+        std::iter::Iterator::collect::<RuntimeDictionary<_>>(std::iter::IntoIterator::into_iter([$((Key::Name($k), RuntimeValue::from($v)),)*]))
     };
 }
 
@@ -792,8 +824,8 @@ fn ok() -> MachineResult<ExecState> {
 }
 
 /// Create the `systemdict`
-fn system_dict<'a>() -> RuntimeDictionary<'a> {
-    let mut r: RuntimeDictionary<'a> = built_in_ops!(
+fn system_dict<'a, P>() -> RuntimeDictionary<'a, P> {
+    let mut r: RuntimeDictionary<'a, P> = built_in_ops!(
         // any1 any2 exch -> any2 any1
         sname("exch") => (|m| {
             let a = m.pop()?;
@@ -801,7 +833,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
             m.push(a);
             m.push(b);
             ok()
-        }) as OperatorFn,
+        }) as OperatorFn<P>,
 
         // any -> any any
         sname("dup") => |m| {
@@ -1580,7 +1612,7 @@ fn system_dict<'a>() -> RuntimeDictionary<'a> {
     r
 }
 
-fn object_gt<'a>(a: &RuntimeValue<'a>, b: &RuntimeValue<'a>) -> MachineResult<bool> {
+fn object_gt<'a, P>(a: &RuntimeValue<'a, P>, b: &RuntimeValue<'a, P>) -> MachineResult<bool> {
     Ok(match (a, b) {
         (RuntimeValue::Value(Value::Integer(a)), RuntimeValue::Value(Value::Integer(b))) => a > b,
         (RuntimeValue::Value(Value::Real(a)), RuntimeValue::Value(Value::Real(b))) => a > b,
@@ -1597,7 +1629,7 @@ fn object_gt<'a>(a: &RuntimeValue<'a>, b: &RuntimeValue<'a>) -> MachineResult<bo
     })
 }
 
-fn object_eq<'a>(a: RuntimeValue<'a>, b: RuntimeValue<'a>) -> bool {
+fn object_eq<'a, P>(a: RuntimeValue<'a, P>, b: RuntimeValue<'a, P>) -> bool {
     match (a, b) {
         (RuntimeValue::Value(Value::Integer(a)), RuntimeValue::Value(Value::Real(b))) => {
             a as f32 == b
@@ -1624,18 +1656,18 @@ fn object_eq<'a>(a: RuntimeValue<'a>, b: RuntimeValue<'a>) -> bool {
 }
 
 /// Create the `globaldict`
-fn global_dict<'a>() -> RuntimeDictionary<'a> {
+fn global_dict<'a, P>() -> RuntimeDictionary<'a, P> {
     dict![
         sname("FontDirectory") => RuntimeDictionary::new(),
     ]
 }
 
 /// Create the `userdict`
-fn user_dict<'a>() -> RuntimeDictionary<'a> {
+fn user_dict<'a, P>() -> RuntimeDictionary<'a, P> {
     RuntimeDictionary::new()
 }
 
-impl<'a> VariableDictStack<'a> {
+impl<'a, P> VariableDictStack<'a, P> {
     fn new() -> Self {
         Self {
             stack: vec![
@@ -1650,7 +1682,7 @@ impl<'a> VariableDictStack<'a> {
         self.stack.push(self.stack[0].clone());
     }
 
-    fn get(&self, name: &Name) -> MachineResult<RuntimeValue<'a>> {
+    fn get(&self, name: &Name) -> MachineResult<RuntimeValue<'a, P>> {
         let r = self
             .stack
             .iter()
@@ -1663,21 +1695,21 @@ impl<'a> VariableDictStack<'a> {
         r
     }
 
-    fn push(&mut self, dict: Rc<RefCell<RuntimeDictionary<'a>>>) {
+    fn push(&mut self, dict: Rc<RefCell<RuntimeDictionary<'a, P>>>) {
         self.stack.push(dict);
     }
 
     /// Pop the top dictionary from the stack. The first 3 dictionaries can not
     /// be popped, returns None if trying to pop them.
-    fn pop(&mut self) -> Option<Rc<RefCell<RuntimeDictionary<'a>>>> {
+    fn pop(&mut self) -> Option<Rc<RefCell<RuntimeDictionary<'a, P>>>> {
         (self.stack.len() > 3).then(|| self.stack.pop()).flatten()
     }
 
-    fn top(&self) -> Rc<RefCell<RuntimeDictionary<'a>>> {
+    fn top(&self) -> Rc<RefCell<RuntimeDictionary<'a, P>>> {
         self.stack.last().unwrap().clone()
     }
 
-    fn lock_system_dict(&self) -> Ref<RuntimeDictionary<'a>> {
+    fn lock_system_dict(&self) -> Ref<RuntimeDictionary<'a, P>> {
         self.stack[0].borrow()
     }
 }

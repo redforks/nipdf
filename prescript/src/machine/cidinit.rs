@@ -9,7 +9,7 @@ macro_rules! built_in_ops {
 }
 
 /// Returns Dictionary contains CIDInit ProcSet
-pub fn cid_init_dict<'a>() -> RuntimeDictionary<'a> {
+pub fn cid_init_dict<'a, P>() -> RuntimeDictionary<'a, P> {
     built_in_ops!(
         "begincmap" =>|_| ok(),
         "endcmap" => |_| ok(),

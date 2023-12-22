@@ -3,14 +3,14 @@ use crate::sname;
 use assert_approx_eq::assert_approx_eq;
 use test_log::test;
 
-trait Assert<'a> {
-    fn assert(&self, m: &Machine<'a>);
+trait Assert<'a, P = ()> {
+    fn assert(&self, m: &Machine<'a, P>);
 }
 
 macro_rules! ValueEqAssert {
     ($t:ty) => {
-        impl<'a> Assert<'a> for $t {
-            fn assert(&self, m: &Machine<'a>) {
+        impl<'a, P> Assert<'a, P> for $t {
+            fn assert(&self, m: &Machine<'a, P>) {
                 assert_eq!(m.stack.len(), 1);
                 assert_eq!(m.stack[0], self.clone().into());
             }
@@ -21,35 +21,35 @@ macro_rules! ValueEqAssert {
 ValueEqAssert!(bool);
 ValueEqAssert!(i32);
 ValueEqAssert!(Name);
-ValueEqAssert!(RuntimeDictionary<'a>);
+ValueEqAssert!(RuntimeDictionary<'a, P>);
 ValueEqAssert!(Array);
 
-impl<'a, const N: usize> Assert<'a> for [u8; N] {
-    fn assert(&self, m: &Machine<'a>) {
+impl<'a, const N: usize, P> Assert<'a, P> for [u8; N] {
+    fn assert(&self, m: &Machine<'a, P>) {
         assert_eq!(m.stack.len(), 1);
         assert_eq!(m.stack[0], (*self).into());
     }
 }
 
-impl<'a> Assert<'a> for f32 {
-    fn assert(&self, m: &Machine<'a>) {
+impl<'a, P> Assert<'a, P> for f32 {
+    fn assert(&self, m: &Machine<'a, P>) {
         assert_eq!(m.stack.len(), 1);
         assert_approx_eq!(m.stack[0].real().unwrap(), *self);
     }
 }
 
-impl<'a> Assert<'a> for Vec<Box<dyn Assert<'a>>> {
-    fn assert(&self, m: &Machine<'a>) {
+impl<'a, P> Assert<'a, P> for Vec<Box<dyn Assert<'a, P>>> {
+    fn assert(&self, m: &Machine<'a, P>) {
         for a in self {
             a.assert(m);
         }
     }
 }
 
-struct Stack<'a>(Vec<RuntimeValue<'a>>);
+struct Stack<'a, P>(Vec<RuntimeValue<'a, P>>);
 
-impl<'a> Assert<'a> for Stack<'a> {
-    fn assert(&self, m: &Machine<'a>) {
+impl<'a, P> Assert<'a, P> for Stack<'a, P> {
+    fn assert(&self, m: &Machine<'a, P>) {
         assert_eq!(m.stack.len(), self.0.len());
         for (i, v) in self.0.iter().enumerate() {
             assert_eq!(m.stack[i], v.clone());
@@ -65,10 +65,10 @@ macro_rules! asserts {
 
 /// Check Dict stack current top equals to the given value
 #[derive(Clone)]
-struct VariableStack<'a>(RuntimeDictionary<'a>);
+struct VariableStack<'a, P>(RuntimeDictionary<'a, P>);
 
-impl<'a> Assert<'a> for VariableStack<'a> {
-    fn assert(&self, m: &Machine<'a>) {
+impl<'a, P> Assert<'a, P> for VariableStack<'a, P> {
+    fn assert(&self, m: &Machine<'a, P>) {
         assert_eq!(&*m.variable_stack.top().borrow(), &self.0);
     }
 }
