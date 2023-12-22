@@ -1,6 +1,7 @@
 //! Cmap to map CharCode to CID, used in Type0/CID font
 
-use either::Either;
+use either::Either::{self, Left, Right};
+use std::rc::Rc;
 use tinyvec::ArrayVec;
 
 /// Convert from CharCode using cmap, use it to select glyph id
@@ -291,6 +292,7 @@ pub struct CMap {
     code_space: CodeSpace,
     cid_map: Mapper<IncRangeMap>,
     notdef_map: Mapper<RangeMapToOne>,
+    use_map: Option<Rc<CMap>>,
 }
 
 const DEFAULT_NOTDEF: CID = CID(0);
@@ -303,15 +305,36 @@ impl CMap {
         let mut r = Vec::with_capacity(codes.len());
         while !codes.is_empty() {
             let code;
-            (codes, code) = self.code_space.next_code(codes);
-            let cid = code
-                .right_and_then(|c| self.cid_map.map(c).ok_or(c).into())
-                .map_left(|c| self.notdef_map.map(c).unwrap_or(DEFAULT_NOTDEF))
-                .into_inner();
+            (codes, code) = self.next_cid(codes);
+            let cid = code.map_left(|c| self.map_undef(c)).into_inner();
 
             r.push(cid);
         }
         r
+    }
+
+    /// Get next cid, update codes buffer, without map notdef.
+    /// If use_map not null, recover codes buffer, call next_cid.
+    fn next_cid<'a>(&self, codes: &'a [u8]) -> (&'a [u8], Either<CharCode, CID>) {
+        let (new_codes, code) = self.code_space.next_code(codes);
+        let cid_or_code = code.right_and_then(|c| self.cid_map.map(c).ok_or(c).into());
+
+        let Some(use_map) = self.use_map.as_ref() else {
+            return (new_codes, cid_or_code);
+        };
+
+        cid_or_code
+            .map_either(|_| use_map.next_cid(codes), |cid| (new_codes, Right(cid)))
+            .into_inner()
+    }
+
+    /// Map undef cid, if notdef_map failed, call use_map.map_undef() if has use_map
+    fn map_undef(&self, ch: CharCode) -> CID {
+        self.notdef_map.map(ch).unwrap_or_else(|| {
+            self.use_map
+                .as_ref()
+                .map_or(DEFAULT_NOTDEF, |m| m.map_undef(ch))
+        })
     }
 }
 

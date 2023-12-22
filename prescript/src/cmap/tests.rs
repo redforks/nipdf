@@ -244,6 +244,7 @@ fn cmap() {
         code_space,
         cid_map,
         notdef_map,
+        use_map: None,
     };
 
     assert_eq!(
@@ -265,5 +266,61 @@ fn cmap() {
 
 #[test]
 fn use_map() {
-    todo!()
+    let base_code_space = CodeSpace::new(vec![CodeRange::parse("20", "30").unwrap()]);
+    let code_space = CodeSpace::new(vec![CodeRange::parse("25", "40").unwrap()]);
+    let base_cid_map = Mapper {
+        ranges: vec![].into(),
+        chars: vec![SingleCodeMap::new(one(0x30), CID(0x500))].into(),
+    };
+    let cid_map = Mapper {
+        ranges: vec![].into(),
+        chars: vec![SingleCodeMap::new(one(0x35), CID(0x501))].into(),
+    };
+    let base_notdef_map = Mapper {
+        ranges: vec![].into(),
+        chars: vec![
+            SingleCodeMap::new(one(0x20), CID(1))
+            ].into(),
+    };
+    let notdef_map = Mapper {
+        ranges: vec![].into(),
+        chars: vec![
+            SingleCodeMap::new(one(0x30), CID(2)),
+            SingleCodeMap::new(one(0x36), CID(20)),
+        ].into(),
+    };
+
+    let use_map = CMap {
+        cid_system_info: Default::default(),
+        w_mode: Default::default(),
+        code_space: base_code_space,
+        cid_map: base_cid_map,
+        notdef_map: base_notdef_map,
+        use_map: None,
+    };
+
+    let cmap = CMap {
+        cid_system_info: Default::default(),
+        w_mode: Default::default(),
+        code_space,
+        cid_map,
+        notdef_map,
+        use_map: Some(Rc::new(use_map)),
+    };
+
+    assert_eq!(
+        vec![
+            // in current cid map
+            CID(0x501),
+            // cid map failed, use base cid map
+            CID(0x500),
+            // both cid map failed, use current notdef map
+            CID(20),
+            // both cid map failed, use base notdef map if current notdef map failed
+            CID(1),
+            // use default undef, if both cid and notdef failed
+            CID(0),
+        ],
+        cmap.map(&[0x35u8, 0x30, 0x36, 0x20, 0x7f])
+    );
 }
