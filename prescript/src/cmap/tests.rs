@@ -1,4 +1,5 @@
 use super::*;
+use crate::sname;
 use either::{Left, Right};
 use tinyvec::array_vec;
 use CharCode::*;
@@ -241,6 +242,7 @@ fn cmap() {
     let cmap = CMap {
         cid_system_info: Default::default(),
         w_mode: Default::default(),
+        name: sname("foo"),
         code_space,
         cid_map,
         notdef_map,
@@ -278,21 +280,21 @@ fn use_map() {
     };
     let base_notdef_map = Mapper {
         ranges: vec![].into(),
-        chars: vec![
-            SingleCodeMap::new(one(0x20), CID(1))
-            ].into(),
+        chars: vec![SingleCodeMap::new(one(0x20), CID(1))].into(),
     };
     let notdef_map = Mapper {
         ranges: vec![].into(),
         chars: vec![
             SingleCodeMap::new(one(0x30), CID(2)),
             SingleCodeMap::new(one(0x36), CID(20)),
-        ].into(),
+        ]
+        .into(),
     };
 
     let use_map = CMap {
         cid_system_info: Default::default(),
         w_mode: Default::default(),
+        name: sname("base"),
         code_space: base_code_space,
         cid_map: base_cid_map,
         notdef_map: base_notdef_map,
@@ -302,6 +304,7 @@ fn use_map() {
     let cmap = CMap {
         cid_system_info: Default::default(),
         w_mode: Default::default(),
+        name: sname("foo"),
         code_space,
         cid_map,
         notdef_map,

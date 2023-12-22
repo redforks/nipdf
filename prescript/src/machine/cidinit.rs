@@ -25,7 +25,7 @@ pub fn cid_init_dict<'a>() -> RuntimeDictionary<'a> {
         },
         "endcodespacerange" => |_| ok(),
         "defineresource" => |m| {
-            m.pop()?    ;
+            m.pop()?;
             m.pop()?;
             ok()
         }

@@ -1,7 +1,8 @@
 //! Cmap to map CharCode to CID, used in Type0/CID font
 
+use crate::Name;
 use either::Either::{self, Left, Right};
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 use tinyvec::ArrayVec;
 
 /// Convert from CharCode using cmap, use it to select glyph id
@@ -269,7 +270,7 @@ impl<R: CodeMap> CodeMap for Mapper<R> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Hash)]
 pub struct CIDSystemInfo {
     registry: String,
     ordering: String,
@@ -283,11 +284,31 @@ pub enum WriteMode {
     Vertical = 1,
 }
 
+/// CMapRegistry contains all CMaps, access by CMap Name.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CMapRegistry(HashMap<Name, Rc<CMap>>);
+
+impl CMapRegistry {
+    pub fn add(&mut self, cmap: CMap) {
+        self.0.insert(cmap.name.clone(), Rc::new(cmap));
+    }
+
+    pub fn get(&self, name: &Name) -> Option<Rc<CMap>> {
+        self.0.get(name).cloned()
+    }
+
+    /// Add a CMap file, parse it and add to registry.
+    pub fn add_cmap_file(&mut self, file_data: &[u8]) -> anyhow::Result<Rc<CMap>> {
+        todo!()
+    }
+}
+
 /// CMap maps sequence CharCode to sequence of CIDs.
 #[derive(Debug, PartialEq, Eq)]
 pub struct CMap {
     pub cid_system_info: CIDSystemInfo,
     pub w_mode: WriteMode,
+    pub name: Name,
 
     code_space: CodeSpace,
     cid_map: Mapper<IncRangeMap>,
