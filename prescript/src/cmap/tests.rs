@@ -1,7 +1,7 @@
 use super::*;
+use either::{Left, Right};
 use tinyvec::array_vec;
 use CharCode::*;
-use either::{Left, Right};
 
 fn one(v: u8) -> CharCode {
     One(v)
@@ -123,10 +123,7 @@ fn code_space() {
     );
 
     // not enough bytes
-    assert_eq!(
-        (&[][..], Left(two(0x1f00))),
-        code_space.next_code(&[0x1f])
-    );
+    assert_eq!((&[][..], Left(two(0x1f00))), code_space.next_code(&[0x1f]));
 
     // four bytes matched
     assert_eq!(
@@ -185,6 +182,42 @@ fn inc_range_map() {
 }
 
 #[test]
+fn mapper() {
+    let mapper = Mapper {
+        ranges: vec![
+            IncRangeMap {
+                range: CodeRange::parse("20", "7e").unwrap(),
+                start_cid: CID(1234),
+            },
+            IncRangeMap {
+                range: CodeRange::parse("8100", "827f").unwrap(),
+                start_cid: CID(1000),
+            },
+        ]
+        .into(),
+        chars: vec![
+            SingleCodeMap::new(one(0x7f), CID(0x0000)),
+            SingleCodeMap::new(one(0x20), CID(0x1234)),
+        ]
+        .into(),
+    };
+
+    // no matches
+    assert_eq!(None, mapper.map(one(0x1f)));
+
+    // matches single cid 
+    assert_eq!(Some(CID(0x0000)), mapper.map(one(0x7f)));
+
+    // single cid has high priority than range if both matches
+    assert_eq!(Some(CID(0x1234)), mapper.map(one(0x20)));
+
+    // matches range 1
+    assert_eq!(Some(CID(1235)), mapper.map(one(0x21)));
+    // matches range 2
+    assert_eq!(Some(CID(1002)), mapper.map(two(0x8102)));
+}
+
+#[test]
 fn cmap() {
     // let code_space = CodeSpace::new(vec![
     //     CodeRange::parse("20", "7e").unwrap(),
@@ -192,18 +225,18 @@ fn cmap() {
     //     CodeRange::parse("D800DC00", "DBFFDFFF").unwrap(),
     //     CodeRange::parse("E000", "FFFF").unwrap(),
     // ]);
-    // let cid_map = vec![
-    //     SingleCodeMap::new(one(0x20), CID(0x1234)),
-    //     RangeMapToOne {
-    //         range: CodeRange::parse("8140", "817e").unwrap(),
-    //         cid: CID(0x5678),
-    //     },
-    //     IncRangeMap {
+    // let cid_map = Mapper {
+    //     ranges: vec![IncRangeMap {
     //         range: CodeRange::parse("D800DC00", "DBFFDFFF").unwrap(),
     //         start_cid: CID(0x9abc),
-    //     },
-    // ];
-    // let notdef_map = SingleCodeMap::new(one(0x7f), CID(0x0000));
+    //     }]
+    //     .into(),
+    //     chars: vec![SingleCodeMap::new(one(0x20), CID(0x1234))].into(),
+    // };
+    // let notdef_map = Mapper {
+    //     ranges: vec![].into(),
+    //     chars: vec![SingleCodeMap::new(one(0x7f), CID(0x0000))].into(),
+    // };
 
     // let cmap = CMap {
     //     cid_system_info: Default::default(),
