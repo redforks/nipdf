@@ -1,6 +1,7 @@
 use super::*;
 use tinyvec::array_vec;
 use CharCode::*;
+use either::{Left, Right};
 
 fn one(v: u8) -> CharCode {
     One(v)
@@ -112,25 +113,25 @@ fn code_space() {
 
     // matches
     assert_eq!(
-        (&[0u8][..], Ok(one(0x20))),
+        (&[0u8][..], Right(one(0x20))),
         code_space.next_code(&[0x20, 0])
     );
 
     // not match
     assert_eq!(
-        (&[0u8][..], Err(one(0x1f))),
+        (&[0u8][..], Left(one(0x1f))),
         code_space.next_code(&[0x1f, 0])
     );
 
     // four bytes matched
     assert_eq!(
-        (&[][..], Ok(four(0xD800DC00))),
+        (&[][..], Right(four(0xD800DC00))),
         code_space.next_code(&[0xD8, 0x00, 0xDC, 0x00])
     );
 
     // two bytes partial matched
     assert_eq!(
-        (&[][..], Err(two(0x817f))),
+        (&[][..], Left(two(0x817f))),
         code_space.next_code(&[0x81, 0x7f]),
     );
 }
@@ -176,4 +177,39 @@ fn inc_range_map() {
     assert_eq!(Some(CID(1001)), m.map(two(0x8101)));
     assert_eq!(Some(CID(1128)), m.map(two(0x8200)));
     assert_eq!(Some(CID(1255)), m.map(two(0x827f)));
+}
+
+#[test]
+fn cmap() {
+    // let code_space = CodeSpace::new(vec![
+    //     CodeRange::parse("20", "7e").unwrap(),
+    //     CodeRange::parse("8140", "817e").unwrap(),
+    //     CodeRange::parse("D800DC00", "DBFFDFFF").unwrap(),
+    //     CodeRange::parse("E000", "FFFF").unwrap(),
+    // ]);
+    // let cid_map = vec![
+    //     SingleCodeMap::new(one(0x20), CID(0x1234)),
+    //     RangeMapToOne {
+    //         range: CodeRange::parse("8140", "817e").unwrap(),
+    //         cid: CID(0x5678),
+    //     },
+    //     IncRangeMap {
+    //         range: CodeRange::parse("D800DC00", "DBFFDFFF").unwrap(),
+    //         start_cid: CID(0x9abc),
+    //     },
+    // ];
+    // let notdef_map = SingleCodeMap::new(one(0x7f), CID(0x0000));
+
+    // let cmap = CMap {
+    //     cid_system_info: Default::default(),
+    //     w_mode: Default::default(),
+    //     code_space,
+    //     cid_map,
+    //     notdef_map,
+    // };
+}
+
+#[test]
+fn use_map() {
+    todo!()
 }

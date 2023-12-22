@@ -164,9 +164,11 @@ impl CodeSpace {
     }
 
     /// Take next code from input codes, return the rest codes and the next code.
-    /// If next code not in code space, return `Err(next_code)`.
+    /// If next code not in code space, return `Left(next_code)`.
     /// Panic if input codes is empty.
-    fn next_code<'a>(&self, codes: &'a [u8]) -> (&'a [u8], Result<CharCode, CharCode>) {
+    fn next_code<'a>(&self, codes: &'a [u8]) -> (&'a [u8], Either<CharCode, CharCode>) {
+        // TODO: if NotMatched, returns CharCode with minimal bytes of self minimal bytes,
+        // TODO: if codes not have enough bytes, prefix with zero
         let next = self
             .0
             .iter()
@@ -179,7 +181,7 @@ impl CodeSpace {
                 }
             })
             .unwrap_or_else(|| Either::Left(CharCode::One(codes[0])));
-        (&codes[next.clone().into_inner().n_bytes()..], next.into())
+        (&codes[next.clone().into_inner().n_bytes()..], next)
     }
 }
 
@@ -247,15 +249,16 @@ impl<R: CodeMap> CodeMap for Mapper<R> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CIDSystemInfo {
     registry: String,
     ordering: String,
     supplement: u16,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WriteMode {
+    #[default]
     Horizontal = 0,
     Vertical = 1,
 }
@@ -275,30 +278,19 @@ const DEFAULT_NOTDEF: CID = CID(0);
 
 impl CMap {
     /// Map(Decode) char codes to CIDs.
-    /// If code out of code space, returns 0 (notdef).
-    /// If code not mapped, use `notdef_map` to map to a designed notdef char,
-    /// if code not in notdef_map, returns 0 (notdef).
+    /// If code out of code space, or not mapped to cid, use notdef_map to map to a designed notdef
+    /// char, if code not in notdef_map, returns 0 (notdef).
     pub fn map(&self, mut codes: &[u8]) -> Vec<CID> {
         let mut r = Vec::with_capacity(codes.len());
         while !codes.is_empty() {
             let code;
             (codes, code) = self.code_space.next_code(codes);
-            let Ok(code) = code else {
-                r.push(DEFAULT_NOTDEF);
-                continue;
-            };
+            let cid = code
+                .right_and_then(|c| self.cid_map.map(c).ok_or(c).into())
+                .map_left(|c| self.notdef_map.map(c).unwrap_or(DEFAULT_NOTDEF))
+                .into_inner();
 
-            if let Some(cid) = self.cid_map.map(code) {
-                r.push(cid);
-                continue;
-            }
-
-            if let Some(notdef) = self.notdef_map.map(code) {
-                r.push(notdef);
-                continue;
-            }
-
-            r.push(DEFAULT_NOTDEF);
+            r.push(cid);
         }
         r
     }
