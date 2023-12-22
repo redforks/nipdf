@@ -205,7 +205,7 @@ fn mapper() {
     // no matches
     assert_eq!(None, mapper.map(one(0x1f)));
 
-    // matches single cid 
+    // matches single cid
     assert_eq!(Some(CID(0x0000)), mapper.map(one(0x7f)));
 
     // single cid has high priority than range if both matches
@@ -219,32 +219,48 @@ fn mapper() {
 
 #[test]
 fn cmap() {
-    // let code_space = CodeSpace::new(vec![
-    //     CodeRange::parse("20", "7e").unwrap(),
-    //     CodeRange::parse("8140", "817e").unwrap(),
-    //     CodeRange::parse("D800DC00", "DBFFDFFF").unwrap(),
-    //     CodeRange::parse("E000", "FFFF").unwrap(),
-    // ]);
-    // let cid_map = Mapper {
-    //     ranges: vec![IncRangeMap {
-    //         range: CodeRange::parse("D800DC00", "DBFFDFFF").unwrap(),
-    //         start_cid: CID(0x9abc),
-    //     }]
-    //     .into(),
-    //     chars: vec![SingleCodeMap::new(one(0x20), CID(0x1234))].into(),
-    // };
-    // let notdef_map = Mapper {
-    //     ranges: vec![].into(),
-    //     chars: vec![SingleCodeMap::new(one(0x7f), CID(0x0000))].into(),
-    // };
+    let code_space = CodeSpace::new(vec![
+        CodeRange::parse("20", "7e").unwrap(),
+        CodeRange::parse("8140", "817e").unwrap(),
+        CodeRange::parse("D800DC00", "DBFFDFFF").unwrap(),
+        CodeRange::parse("E000", "FFFF").unwrap(),
+    ]);
+    let cid_map = Mapper {
+        ranges: vec![].into(),
+        chars: vec![SingleCodeMap::new(two(0x8144), CID(0x1234))].into(),
+    };
+    let notdef_map = Mapper {
+        ranges: vec![].into(),
+        chars: vec![
+            SingleCodeMap::new(one(0x7f), CID(1)),
+            SingleCodeMap::new(one(0x0), CID(2)),
+        ]
+        .into(),
+    };
 
-    // let cmap = CMap {
-    //     cid_system_info: Default::default(),
-    //     w_mode: Default::default(),
-    //     code_space,
-    //     cid_map,
-    //     notdef_map,
-    // };
+    let cmap = CMap {
+        cid_system_info: Default::default(),
+        w_mode: Default::default(),
+        code_space,
+        cid_map,
+        notdef_map,
+    };
+
+    assert_eq!(
+        vec![
+            // not in code space range, and not in notdef range, returns 0
+            CID(0),
+            // not in code space range, but in notdef range,
+            CID(2),
+            // cid mapped
+            CID(0x1234),
+            // in code space range, notdef mapped
+            CID(1),
+            // in code space range, no cid mapping, and notdef not mapped
+            CID(0),
+        ],
+        cmap.map(&[1u8, 0, 0x81, 0x44, 0x7f, 0x81, 0x50])
+    );
 }
 
 #[test]
