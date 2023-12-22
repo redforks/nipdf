@@ -105,7 +105,6 @@ fn code_range_next_code() {
 #[test]
 fn code_space() {
     let code_space = CodeSpace::new(vec![
-        CodeRange::parse("20", "7e").unwrap(),
         CodeRange::parse("8140", "817e").unwrap(),
         CodeRange::parse("D800DC00", "DBFFDFFF").unwrap(),
         CodeRange::parse("E000", "FFFF").unwrap(),
@@ -113,14 +112,20 @@ fn code_space() {
 
     // matches
     assert_eq!(
-        (&[0u8][..], Right(one(0x20))),
-        code_space.next_code(&[0x20, 0])
+        (&[][..], Right(two(0x8141))),
+        code_space.next_code(&[0x81, 0x41])
     );
 
     // not match
     assert_eq!(
-        (&[0u8][..], Left(one(0x1f))),
-        code_space.next_code(&[0x1f, 0])
+        (&[][..], Left(two(0x1f01))),
+        code_space.next_code(&[0x1f, 1])
+    );
+
+    // not enough bytes
+    assert_eq!(
+        (&[][..], Left(two(0x1f00))),
+        code_space.next_code(&[0x1f])
     );
 
     // four bytes matched

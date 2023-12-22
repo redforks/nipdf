@@ -165,10 +165,10 @@ impl CodeSpace {
 
     /// Take next code from input codes, return the rest codes and the next code.
     /// If next code not in code space, return `Left(next_code)`.
+    /// Returns minimal bytes of current CodeSpace, even in error cases, append zero if not
+    /// enough bytes.
     /// Panic if input codes is empty.
     fn next_code<'a>(&self, codes: &'a [u8]) -> (&'a [u8], Either<CharCode, CharCode>) {
-        // TODO: if NotMatched, returns CharCode with minimal bytes of self minimal bytes,
-        // TODO: if codes not have enough bytes, prefix with zero
         let next = self
             .0
             .iter()
@@ -180,8 +180,27 @@ impl CodeSpace {
                     CodeSpaceResult::NotMatched => None,
                 }
             })
-            .unwrap_or_else(|| Either::Left(CharCode::One(codes[0])));
-        (&codes[next.clone().into_inner().n_bytes()..], next)
+            .unwrap_or_else(|| Either::Left(CharCode::One(codes[0])))
+            .map_left(|code| {
+                let min_bytes = self.min_bytes();
+                if code.n_bytes() >= min_bytes {
+                    return code;
+                }
+
+                let mut bytes = Vec::with_capacity(min_bytes);
+                bytes.extend_from_slice(&codes[..min_bytes.min(codes.len())]);
+                bytes.resize(min_bytes, 0);
+                CharCode::from(bytes.as_slice())
+            });
+        (&codes[next.into_inner().n_bytes().min(codes.len())..], next)
+    }
+
+    fn min_bytes(&self) -> usize {
+        self.0
+            .iter()
+            .map(|r| r.n_bytes())
+            .min()
+            .expect("Should not happen")
     }
 }
 
