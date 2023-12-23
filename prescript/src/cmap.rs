@@ -369,6 +369,8 @@ impl CMapRegistry {
             cid_range_entries: vec![],
             n_cid_char: 0,
             cid_char_entries: vec![],
+            n_notdef_range: 0,
+            notdef_range_entries: vec![],
         };
         let mut m = Machine::<CMapMachinePlugin>::with_plugin(file, p);
         m.execute()?;
@@ -447,6 +449,8 @@ struct CMapMachinePlugin<'a> {
     cid_range_entries: Vec<IncRangeMap>,
     n_cid_char: usize,
     cid_char_entries: Vec<SingleCodeMap>,
+    n_notdef_range: usize,
+    notdef_range_entries: Vec<RangeMapToOne>,
 }
 
 macro_rules! built_in_ops {
@@ -541,12 +545,30 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     m.p.cid_char_entries.extend(entries.into_iter().rev());
                     ok()
                 },
-                "beginnotdefrange" => |_| {
-                    error!("TODO: beginnotdefrange");
+                "beginnotdefrange" => |m| {
+                    m.p.n_notdef_range = m.pop()?.int()? as usize;
                     ok()
                 },
-                "endnotdefrange" => |_| {
-                    error!("TODO: endnotdefrange");
+                "endnotdefrange" => |m| {
+                    let mut entries = Vec::with_capacity(m.p.n_notdef_range);
+                    for _ in 0..m.p.n_notdef_range {
+                        let cid = m.pop()?.int()? as u16;
+                        let s_upper = m.pop()?.string()?;
+                        let s_lower = m.pop()?.string()?;
+                        entries.push(RangeMapToOne {
+                            range: CodeRange::from_str_buf(
+                                &s_lower.borrow(),
+                                &s_upper.borrow(),
+                            ).ok_or_else(
+                                || {
+                                    error!("Invalid notdef range");
+                                    MachineError::TypeCheck
+                                }
+                            )?,
+                            cid: CID(cid),
+                        });
+                    }
+                    m.p.notdef_range_entries.extend(entries.into_iter().rev());
                     ok()
                 },
                 "defineresource" => |m| {
@@ -563,8 +585,11 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                         cid_map: Mapper {
                             ranges: m.p.cid_range_entries.drain(..).collect(),
                             chars: m.p.cid_char_entries.drain(..).collect(),
-                        } ,
-                        notdef_map: Mapper::default(),
+                        },
+                        notdef_map: Mapper{
+                            ranges: m.p.notdef_range_entries.drain(..).collect(),
+                            ..Default::default()
+                        },
                         use_map: None,
                     };
                     m.p.parsed = Some(cmap);

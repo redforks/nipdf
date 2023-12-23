@@ -378,4 +378,15 @@ fn parse_cmap_file() {
         },
         cmap.cid_map.ranges[664]
     );
+
+    assert_eq!(1, cmap.notdef_map.ranges.len());
+    assert_eq!(
+        RangeMapToOne {
+            range: CodeRange::parse("00", "1f").unwrap(),
+            cid: CID(1),
+        },
+        cmap.notdef_map.ranges[0]
+    );
+
+    assert_eq!(0, cmap.notdef_map.chars.len());
 }
