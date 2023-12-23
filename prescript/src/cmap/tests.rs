@@ -3,6 +3,7 @@ use crate::sname;
 use either::{Left, Right};
 use tinyvec::array_vec;
 use CharCode::*;
+use test_log::test;
 
 fn one(v: u8) -> CharCode {
     One(v)
@@ -326,4 +327,11 @@ fn use_map() {
         ],
         cmap.map(&[0x35u8, 0x30, 0x36, 0x20, 0x7f])
     );
+}
+
+#[test]
+fn parse_cmap_file() {
+    let mut reg = CMapRegistry::new();
+    let cmap_data = include_bytes!("../../cmap-resources/Adobe-Identity-0/CMap/Identity-H");
+    let cmap = reg.add_cmap_file(cmap_data).unwrap();
 }

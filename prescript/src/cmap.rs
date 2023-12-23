@@ -1,9 +1,10 @@
 //! Cmap to map CharCode to CID, used in Type0/CID font
 
 use crate::{
-    machine::{Machine, MachinePlugin},
-    Name,
+    machine::{ok, Key, Machine, MachinePlugin, RuntimeValue},
+    sname, Name,
 };
+use educe::Educe;
 use either::Either::{self, Right};
 use std::{collections::HashMap, rc::Rc};
 use tinyvec::ArrayVec;
@@ -288,7 +289,8 @@ pub enum WriteMode {
 }
 
 /// CMapRegistry contains all CMaps, access by CMap Name.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Educe)]
+#[educe(Default(new))]
 pub struct CMapRegistry(HashMap<Name, Rc<CMap>>);
 
 impl CMapRegistry {
@@ -309,9 +311,8 @@ impl CMapRegistry {
         let mut m = Machine::<CMapMachinePlugin>::with_plugin(file, p);
         m.execute()?;
         let mut p = m.take_plugin();
-        let parsed = p.parsed.take().unwrap();
+        let parsed = p.parsed.take().expect("CMap not defined in cmap file");
         let name = parsed.name.clone();
-        drop(p);
         self.add(parsed);
         self.get(&name)
             .ok_or_else(|| anyhow::anyhow!("CMap not found: {:?}", name))
@@ -380,12 +381,39 @@ struct CMapMachinePlugin<'a> {
     parsed: Option<CMap>,
 }
 
+macro_rules! built_in_ops {
+    ($($k:literal => $v:expr),* $(,)?) => {
+        std::iter::Iterator::collect(std::iter::IntoIterator::into_iter([$((Key::Name(Name::from_static($k)), RuntimeValue::BuiltInOp($v)),)*]))
+    };
+}
+
 impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
     fn find_proc_set_resource<'b, P>(
         &self,
         name: &Name,
     ) -> Option<crate::machine::RuntimeDictionary<'b, P>> {
-        todo!()
+        (name == "CIDInit").then(|| {
+            built_in_ops!(
+                // "begincmap" =>|_| ok(),
+                // "endcmap" => |_| ok(),
+                // "CMapName" => |m| {
+                //     // todo: should push defined CMapName dict value
+                //     m.push(sname("cmap-name-todo"));
+                //     ok()
+                // },
+                // "begincodespacerange" => |m| {
+                //     // pop a int from stack, the code space range entries.
+                //     m.pop()?;
+                //     ok()
+                // },
+                // "endcodespacerange" => |_| ok(),
+                // "defineresource" => |m| {
+                //     m.pop()?;
+                //     m.pop()?;
+                //     ok()
+                // }
+            )
+        })
     }
 }
 

@@ -18,7 +18,7 @@ use winnow::Parser;
 
 mod decrypt;
 use decrypt::{decrypt, EEXEC_KEY};
-use log::error;
+use log::{debug, error};
 use num_traits::ToPrimitive;
 mod cidinit;
 
@@ -737,7 +737,7 @@ impl<'a, P> Machine<'a, P> {
                 ExecState::Ok
             }
             Token::Name(name) => {
-                // debug!("{}", name);
+                // dbg!(&name);
                 let v = self.variable_stack.get(&name)?;
                 match v {
                     RuntimeValue::BuiltInOp(op) => op(self)?,
@@ -778,7 +778,7 @@ impl<'a, P> Machine<'a, P> {
         // });
     }
 
-    fn pop(&mut self) -> MachineResult<RuntimeValue<'a, P>> {
+    pub fn pop(&mut self) -> MachineResult<RuntimeValue<'a, P>> {
         let r = self.stack.pop().ok_or(MachineError::StackUnderflow);
         self.dump_stack();
         r
@@ -788,7 +788,7 @@ impl<'a, P> Machine<'a, P> {
         self.stack.last().ok_or(MachineError::StackUnderflow)
     }
 
-    fn push(&mut self, v: impl Into<RuntimeValue<'a, P>>) {
+    pub fn push(&mut self, v: impl Into<RuntimeValue<'a, P>>) {
         self.stack.push(v.into());
         self.dump_stack();
     }
@@ -821,7 +821,7 @@ macro_rules! dict {
     };
 }
 
-fn ok() -> MachineResult<ExecState> {
+pub(crate) fn ok() -> MachineResult<ExecState> {
     Ok(ExecState::Ok)
 }
 
