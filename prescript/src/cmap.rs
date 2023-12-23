@@ -371,6 +371,8 @@ impl CMapRegistry {
             cid_char_entries: vec![],
             n_notdef_range: 0,
             notdef_range_entries: vec![],
+            n_notdef_char: 0,
+            notdef_char_entries: vec![],
         };
         let mut m = Machine::<CMapMachinePlugin>::with_plugin(file, p);
         m.execute()?;
@@ -451,6 +453,8 @@ struct CMapMachinePlugin<'a> {
     cid_char_entries: Vec<SingleCodeMap>,
     n_notdef_range: usize,
     notdef_range_entries: Vec<RangeMapToOne>,
+    n_notdef_char: usize,
+    notdef_char_entries: Vec<SingleCodeMap>,
 }
 
 macro_rules! built_in_ops {
@@ -571,6 +575,23 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     m.p.notdef_range_entries.extend(entries.into_iter().rev());
                     ok()
                 },
+                "beginnotdefchar" => |m| {
+                    m.p.n_notdef_char = m.pop()?.int()? as usize;
+                    ok()
+                },
+                "endnotdefchar" => |m| {
+                    let mut entries = Vec::with_capacity(m.p.n_notdef_char);
+                    for _ in 0..m.p.n_notdef_char {
+                        let cid = m.pop()?.int()? as u16;
+                        let s_code = m.pop()?.string()?;
+                        entries.push(SingleCodeMap {
+                            code: CharCode::from_str_buf(&s_code.borrow()),
+                            cid: CID(cid),
+                        });
+                    }
+                    m.p.notdef_char_entries.extend(entries.into_iter().rev());
+                    ok()
+                },
                 "defineresource" => |m| {
                     let res_category = m.pop()?.name()?;
                     assert_eq!(res_category, sname("CMap"));
@@ -588,7 +609,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                         },
                         notdef_map: Mapper{
                             ranges: m.p.notdef_range_entries.drain(..).collect(),
-                            ..Default::default()
+                            chars: m.p.notdef_char_entries.drain(..).collect(),
                         },
                         use_map: None,
                     };

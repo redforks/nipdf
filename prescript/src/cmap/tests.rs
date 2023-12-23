@@ -333,14 +333,14 @@ fn use_map() {
 #[test]
 fn parse_cmap_file() {
     let mut reg = CMapRegistry::new();
-    let cmap_data = include_bytes!("../../cmap-resources/Adobe-CNS1-7/CMap/ETHK-B5-H");
+    let cmap_data = include_bytes!("test.cmap");
     let cmap = reg.add_cmap_file(cmap_data).unwrap();
-    assert_eq!("ETHK-B5-H", cmap.name.as_str());
+    assert_eq!("Test-H", cmap.name.as_str());
     assert_eq!(
         CIDSystemInfo {
-            registry: "Adobe".to_owned(),
-            ordering: "CNS1".to_owned(),
-            supplement: 6,
+            registry: "Testing".to_owned(),
+            ordering: "Test".to_owned(),
+            supplement: 3,
         },
         cmap.cid_system_info
     );
@@ -379,14 +379,29 @@ fn parse_cmap_file() {
         cmap.cid_map.ranges[664]
     );
 
-    assert_eq!(1, cmap.notdef_map.ranges.len());
+    assert_eq!(2, cmap.notdef_map.ranges.len());
     assert_eq!(
         RangeMapToOne {
-            range: CodeRange::parse("00", "1f").unwrap(),
+            range: CodeRange::parse("00", "0f").unwrap(),
             cid: CID(1),
         },
         cmap.notdef_map.ranges[0]
     );
+    assert_eq!(
+        RangeMapToOne {
+            range: CodeRange::parse("10", "1f").unwrap(),
+            cid: CID(2),
+        },
+        cmap.notdef_map.ranges[1]
+    );
 
-    assert_eq!(0, cmap.notdef_map.chars.len());
+    assert_eq!(2, cmap.notdef_map.chars.len());
+    assert_eq!(
+        SingleCodeMap::new(two(0x8940), CID(7717)),
+        cmap.notdef_map.chars[0]
+    );
+    assert_eq!(
+        SingleCodeMap::new(one(0x45), CID(17717)),
+        cmap.notdef_map.chars[1]
+    );
 }
