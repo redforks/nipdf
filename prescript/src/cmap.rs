@@ -355,6 +355,8 @@ impl CMapRegistry {
             parsed: None,
             code_space_entries: 0,
             code_space: None,
+            cid_range_entries: 0,
+            cid_range: vec![],
         };
         let mut m = Machine::<CMapMachinePlugin>::with_plugin(file, p);
         m.execute()?;
@@ -429,6 +431,8 @@ struct CMapMachinePlugin<'a> {
     parsed: Option<CMap>,
     code_space_entries: usize,
     code_space: Option<CodeSpace>,
+    cid_range_entries: usize,
+    cid_range: Vec<IncRangeMap>,
 }
 
 macro_rules! built_in_ops {
@@ -446,10 +450,12 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
             built_in_ops!(
                 "begincmap" => |_| {
                     error!("TODO: begincmap");
-                    ok()},
+                    ok()
+                },
                 "endcmap" => |_| {
                     error!("TODO: endcmap");
-                    ok()},
+                    ok()
+                },
                 "CMapName" => |m| {
                     let d = m.current_dict();
                     m.push(d.borrow().get(&sname("CMapName")).unwrap().clone());
@@ -478,8 +484,33 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     m.p.code_space = Some(CodeSpace::new(entries.into_iter().collect::<Result<_, _>>()?));
                     ok()
                 },
+                "begincidrange" => |m| {
+                    m.p.cid_range_entries = m.pop()?.int()? as usize;
+                    ok()
+                },
+                "endcidrange" => |m| {
+                    let mut entries = Vec::with_capacity(m.p.cid_range_entries);   
+                    for _ in 0..m.p.cid_range_entries {
+                        let cid = m.pop()?.int()? as u16;
+                        let s_upper = m.pop()?.string()?;
+                        let s_lower = m.pop()?.string()?;
+                        entries.push(IncRangeMap {
+                            range: CodeRange::from_str_buf(
+                                &s_lower.borrow(),
+                                &s_upper.borrow(),
+                            ).ok_or_else(
+                                || {
+                                    error!("Invalid cid range");
+                                    MachineError::TypeCheck
+                                }
+                            )?,
+                            start_cid: CID(cid),
+                        });
+                    }
+                    m.p.cid_range.extend(entries.into_iter().rev());
+                    ok()
+                },
                 "defineresource" => |m| {
-                    error!("TODO: defineresource");
                     let res_category = m.pop()?.name()?;
                     assert_eq!(res_category, sname("CMap"));
                     let d = m.pop()?.dict()?;
@@ -490,23 +521,19 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                         w_mode: WriteMode::parse(d_ref[&sname("WMode")].int()?)?,
                         name: cmap_name,
                         code_space: m.p.code_space.take().unwrap_or_default(),
-                        cid_map: Mapper::default(),
+                        cid_map: Mapper {
+                            ranges: m.p.cid_range.drain(..).collect(),
+                            ..Default::default()
+                        } ,
                         notdef_map: Mapper::default(),
                         use_map: None,
                     };
                     m.p.parsed = Some(cmap);
+                    // should push cmap object to stack, but cmap object not RuntimeValue
+                    // so push a dummy value. This value normally is not used and pop up immediately.
+                    m.push(sname("cmap stub"));
                     ok()
                 },
-                "begincidrange" => |m| {
-                    error!("TODO: begincidrange");
-                    // pop a int from stack, the cid range entries
-                    m.pop()?;
-                    ok()
-                },
-                "endcidrange" => |_| {
-                    error!("TODO: endcidrange");
-                    ok()
-                }
             )
         })
     }

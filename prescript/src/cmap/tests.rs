@@ -349,4 +349,20 @@ fn parse_cmap_file() {
         &CodeSpace::new(vec![CodeRange::parse("0000", "ffff").unwrap()]),
         &cmap.code_space,
     );
+    assert_eq!(0, cmap.cid_map.chars.len());
+    assert_eq!(256, cmap.cid_map.ranges.len());
+    assert_eq!(
+        IncRangeMap {
+            range: CodeRange::parse("0000", "00ff").unwrap(),
+            start_cid: CID(0),
+        },
+        cmap.cid_map.ranges[0]
+    );
+    assert_eq!(
+        IncRangeMap {
+            range: CodeRange::parse("ff00", "ffff").unwrap(),
+            start_cid: CID(65280),
+        },
+        cmap.cid_map.ranges[255]
+    );
 }

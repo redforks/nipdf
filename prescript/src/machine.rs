@@ -6,6 +6,7 @@ use crate::{
 use educe::Educe;
 use either::Either;
 use std::{
+    any::Any,
     cell::{Ref, RefCell},
     collections::HashMap,
     fmt::Display,
