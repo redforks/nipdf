@@ -343,4 +343,5 @@ fn parse_cmap_file() {
         },
         cmap.cid_system_info
     );
+    assert_eq!(WriteMode::Horizontal, cmap.w_mode);
 }

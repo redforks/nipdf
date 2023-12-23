@@ -2,12 +2,14 @@
 
 use crate::{
     machine::{
-        ok, Dictionary, Key, Machine, MachinePlugin, MachineResult, RuntimeDictionary, RuntimeValue,
+        ok, Dictionary, Key, Machine, MachineError, MachinePlugin, MachineResult,
+        RuntimeDictionary, RuntimeValue,
     },
     sname, Name,
 };
 use educe::Educe;
 use either::Either::{self, Right};
+use log::error;
 use std::{collections::HashMap, rc::Rc, str::from_utf8};
 use tinyvec::ArrayVec;
 
@@ -308,6 +310,19 @@ pub enum WriteMode {
     Vertical = 1,
 }
 
+impl WriteMode {
+    fn parse(v: i32) -> MachineResult<Self> {
+        match v {
+            0 => Ok(Self::Horizontal),
+            1 => Ok(Self::Vertical),
+            _ => {
+                error!("Invalid WriteMode: {}", v);
+                Err(MachineError::TypeCheck)
+            }
+        }
+    }
+}
+
 /// CMapRegistry contains all CMaps, access by CMap Name.
 #[derive(Debug, Clone, PartialEq, Educe)]
 #[educe(Default(new))]
@@ -445,7 +460,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     let cmap_name = m.pop()?.name()?;
                     let cmap = CMap {
                         cid_system_info: CIDSystemInfo::from_dict(&d_ref[&sname("CIDSystemInfo")].dict()?.borrow())?,
-                        w_mode: WriteMode::default(),
+                        w_mode: WriteMode::parse(d_ref[&sname("WMode")].int()?)?,
                         name: cmap_name,
                         code_space: CodeSpace::default(),
                         cid_map: Mapper::default(),
