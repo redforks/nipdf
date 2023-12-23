@@ -334,4 +334,5 @@ fn parse_cmap_file() {
     let mut reg = CMapRegistry::new();
     let cmap_data = include_bytes!("../../cmap-resources/Adobe-Identity-0/CMap/Identity-H");
     let cmap = reg.add_cmap_file(cmap_data).unwrap();
+    assert_eq!("Identity-H", cmap.name.as_str());
 }

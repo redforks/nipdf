@@ -161,7 +161,7 @@ impl CodeRange {
 }
 
 /// CodeSpace made up by CodeRanges.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct CodeSpace(Box<[CodeRange]>);
 
 impl CodeSpace {
@@ -260,7 +260,8 @@ impl CodeMap for SingleCodeMap {
 
 /// Compound mapper that combines range and single code maps.
 /// Single Code maps has higher priority than range maps.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Educe)]
+#[educe(Default)]
 struct Mapper<R> {
     ranges: Box<[R]>,
     chars: Box<[SingleCodeMap]>,
@@ -383,35 +384,67 @@ struct CMapMachinePlugin<'a> {
 
 macro_rules! built_in_ops {
     ($($k:literal => $v:expr),* $(,)?) => {
-        std::iter::Iterator::collect(std::iter::IntoIterator::into_iter([$((Key::Name(Name::from_static($k)), RuntimeValue::BuiltInOp($v)),)*]))
+        std::iter::Iterator::collect(std::iter::IntoIterator::into_iter([$((Key::Name(Name::from_static($k)), RuntimeValue::<CMapMachinePlugin>::BuiltInOp($v)),)*]))
     };
 }
 
 impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
-    fn find_proc_set_resource<'b, P>(
+    fn find_proc_set_resource<'b>(
         &self,
         name: &Name,
-    ) -> Option<crate::machine::RuntimeDictionary<'b, P>> {
-        (name == "CIDInit").then(|| {
+    ) -> Option<crate::machine::RuntimeDictionary<'b, Self>> {
+        use log::error;
+
+        (name == "CIDInit").then(|| -> HashMap<Key, RuntimeValue<'_, Self>> {
             built_in_ops!(
-                // "begincmap" =>|_| ok(),
-                // "endcmap" => |_| ok(),
-                // "CMapName" => |m| {
-                //     // todo: should push defined CMapName dict value
-                //     m.push(sname("cmap-name-todo"));
-                //     ok()
-                // },
-                // "begincodespacerange" => |m| {
-                //     // pop a int from stack, the code space range entries.
-                //     m.pop()?;
-                //     ok()
-                // },
-                // "endcodespacerange" => |_| ok(),
-                // "defineresource" => |m| {
-                //     m.pop()?;
-                //     m.pop()?;
-                //     ok()
-                // }
+                "begincmap" => |_| {
+                    error!("TODO: begincmap");
+                    ok()},
+                "endcmap" => |_| {
+                    error!("TODO: endcmap");
+                    ok()},
+                "CMapName" => |m| {
+                    let d = m.current_dict();
+                    m.push(d.borrow().get(&sname("CMapName")).unwrap().clone());
+                    ok()
+                },
+                "begincodespacerange" => |m| {
+                    error!("TODO: begincodespacerange");
+                    // pop a int from stack, the code space range entries.
+                    m.pop()?;
+                    ok()
+                },
+                "endcodespacerange" => |_| {
+                    error!("TODO: begincodespacerange");
+                    ok()},
+                "defineresource" => |m| {
+                    error!("TODO: defineresource");
+                    let res_category = m.pop()?.name()?;
+                    assert_eq!(res_category, sname("CMap"));
+                    m.pop()?;
+                    let cmap_name = m.pop()?.name()?;
+                    let cmap = CMap {
+                        cid_system_info: CIDSystemInfo::default(),
+                        w_mode: WriteMode::default(),
+                        name: cmap_name,
+                        code_space: CodeSpace::default(),
+                        cid_map: Mapper::default(),
+                        notdef_map: Mapper::default(),
+                        use_map: None,
+                    };
+                    m.p.parsed = Some(cmap);
+                    ok()
+                },
+                "begincidrange" => |m| {
+                    error!("TODO: begincidrange");
+                    // pop a int from stack, the cid range entries
+                    m.pop()?;
+                    ok()
+                },
+                "endcidrange" => |_| {
+                    error!("TODO: endcidrange");
+                    ok()
+                }
             )
         })
     }

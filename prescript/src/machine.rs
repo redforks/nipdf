@@ -568,14 +568,14 @@ impl<'a> CurrentFile<'a> {
     }
 }
 
-pub(crate) trait MachinePlugin {
+pub(crate) trait MachinePlugin: Sized {
     /// Find resource in ProcSet, return None if not found.
     /// Called on `findresource` operation.
-    fn find_proc_set_resource<'a, P>(&self, name: &Name) -> Option<RuntimeDictionary<'a, P>>;
+    fn find_proc_set_resource<'a>(&self, name: &Name) -> Option<RuntimeDictionary<'a, Self>>;
 }
 
 impl MachinePlugin for () {
-    fn find_proc_set_resource<'a, P>(&self, name: &Name) -> Option<RuntimeDictionary<'a, P>> {
+    fn find_proc_set_resource<'a>(&self, name: &Name) -> Option<RuntimeDictionary<'a, Self>> {
         None
     }
 }
@@ -586,7 +586,7 @@ pub struct Machine<'a, P> {
     variable_stack: VariableDictStack<'a, P>,
     stack: Vec<RuntimeValue<'a, P>>,
     fonts: Vec<(String, Dictionary)>,
-    p: P,
+    pub p: P,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -785,6 +785,10 @@ impl<'a, P> Machine<'a, P> {
 
     fn top(&self) -> MachineResult<&RuntimeValue<'a, P>> {
         self.stack.last().ok_or(MachineError::StackUnderflow)
+    }
+
+    pub fn current_dict(&self) -> Rc<RefCell<RuntimeDictionary<'a, P>>> {
+        self.variable_stack.top()
     }
 
     pub fn push(&mut self, v: impl Into<RuntimeValue<'a, P>>) {
