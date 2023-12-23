@@ -102,6 +102,17 @@ enum CodeSpaceResult {
 struct CodeRange(ArrayVec<[ByteRange; 4]>);
 
 impl CodeRange {
+    fn from_str_buf(lower: &[u8], upper: &[u8]) -> Option<Self> {
+        if lower.len() != upper.len() {
+            return None;
+        }
+        let mut r = ArrayVec::new();
+        for (l, u) in lower.iter().copied().zip(upper.iter().copied()) {
+            r.push(ByteRange::new(l, u));
+        }
+        Some(Self(r))
+    }
+
     /// Parse a range from string, for example:
     ///
     /// `parse("00", "08")`, returns a range that matches 1 byte, from 0x00 to 0x08.
@@ -342,6 +353,8 @@ impl CMapRegistry {
         let p = CMapMachinePlugin {
             registry: self,
             parsed: None,
+            code_space_entries: 0,
+            code_space: None,
         };
         let mut m = Machine::<CMapMachinePlugin>::with_plugin(file, p);
         m.execute()?;
@@ -414,6 +427,8 @@ impl CMap {
 struct CMapMachinePlugin<'a> {
     registry: &'a CMapRegistry,
     parsed: Option<CMap>,
+    code_space_entries: usize,
+    code_space: Option<CodeSpace>,
 }
 
 macro_rules! built_in_ops {
@@ -427,8 +442,6 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
         &self,
         name: &Name,
     ) -> Option<crate::machine::RuntimeDictionary<'b, Self>> {
-        use log::error;
-
         (name == "CIDInit").then(|| -> HashMap<Key, RuntimeValue<'_, Self>> {
             built_in_ops!(
                 "begincmap" => |_| {
@@ -443,14 +456,28 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     ok()
                 },
                 "begincodespacerange" => |m| {
-                    error!("TODO: begincodespacerange");
                     // pop a int from stack, the code space range entries.
-                    m.pop()?;
+                    m.p.code_space_entries = m.pop()?.int()? as usize;
                     ok()
                 },
-                "endcodespacerange" => |_| {
-                    error!("TODO: begincodespacerange");
-                    ok()},
+                "endcodespacerange" => |m| {
+                    let mut entries = Vec::with_capacity(m.p.code_space_entries);
+                    for _ in 0..m.p.code_space_entries {
+                        let s_upper = m.pop()?.string()?;
+                        let s_lower = m.pop()?.string()?;
+                        entries.push(CodeRange::from_str_buf(
+                            &s_lower.borrow(),
+                            &s_upper.borrow(),
+                        ).ok_or_else(
+                            || {
+                                error!("Invalid code space range");
+                                MachineError::TypeCheck
+                            }
+                        ));
+                    } 
+                    m.p.code_space = Some(CodeSpace::new(entries.into_iter().collect::<Result<_, _>>()?));
+                    ok()
+                },
                 "defineresource" => |m| {
                     error!("TODO: defineresource");
                     let res_category = m.pop()?.name()?;
@@ -462,7 +489,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                         cid_system_info: CIDSystemInfo::from_dict(&d_ref[&sname("CIDSystemInfo")].dict()?.borrow())?,
                         w_mode: WriteMode::parse(d_ref[&sname("WMode")].int()?)?,
                         name: cmap_name,
-                        code_space: CodeSpace::default(),
+                        code_space: m.p.code_space.take().unwrap_or_default(),
                         cid_map: Mapper::default(),
                         notdef_map: Mapper::default(),
                         use_map: None,

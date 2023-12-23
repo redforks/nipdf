@@ -1,6 +1,7 @@
 use super::*;
 use crate::sname;
 use either::{Left, Right};
+use std::vec;
 use test_log::test;
 use tinyvec::array_vec;
 use CharCode::*;
@@ -344,4 +345,8 @@ fn parse_cmap_file() {
         cmap.cid_system_info
     );
     assert_eq!(WriteMode::Horizontal, cmap.w_mode);
+    assert_eq!(
+        &CodeSpace::new(vec![CodeRange::parse("0000", "ffff").unwrap()]),
+        &cmap.code_space,
+    );
 }
