@@ -1,7 +1,7 @@
 use super::*;
 use crate::sname;
 use either::{Left, Right};
-use std::vec;
+use std::{vec, borrow::Borrow};
 use test_log::test;
 use tinyvec::array_vec;
 use CharCode::*;
@@ -333,7 +333,7 @@ fn use_map() {
 #[test]
 fn parse_cmap_file() {
     let mut reg = CMapRegistry::new();
-    let cmap_data = include_bytes!("test.cmap");
+    let cmap_data = include_bytes!("test-cmap.ps");
     let cmap = reg.add_cmap_file(cmap_data).unwrap();
     assert_eq!("Test-H", cmap.name.as_str());
     assert_eq!(
@@ -404,4 +404,14 @@ fn parse_cmap_file() {
         SingleCodeMap::new(one(0x45), CID(17717)),
         cmap.notdef_map.chars[1]
     );
+}
+
+#[test]
+fn parse_cmap_file_with_use() {
+    let mut reg = CMapRegistry::new();
+    let base_data = include_bytes!("test-cmap.ps");
+    let use_cmap_data = include_bytes!("use-cmap.ps");
+    let base = reg.add_cmap_file(base_data).unwrap();
+    let use_cmap = reg.add_cmap_file(use_cmap_data).unwrap();
+    assert_eq!(base, use_cmap.use_map.as_ref().unwrap().clone());
 }

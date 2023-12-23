@@ -373,6 +373,7 @@ impl CMapRegistry {
             notdef_range_entries: vec![],
             n_notdef_char: 0,
             notdef_char_entries: vec![],
+            use_cmap: None,
         };
         let mut m = Machine::<CMapMachinePlugin>::with_plugin(file, p);
         m.execute()?;
@@ -445,6 +446,7 @@ impl CMap {
 struct CMapMachinePlugin<'a> {
     registry: &'a CMapRegistry,
     parsed: Option<CMap>,
+    use_cmap: Option<Rc<CMap>>,
     n_code_space: usize,
     code_space: Option<CodeSpace>,
     n_cid_range: usize,
@@ -471,11 +473,9 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
         (name == "CIDInit").then(|| -> HashMap<Key, RuntimeValue<'_, Self>> {
             built_in_ops!(
                 "begincmap" => |_| {
-                    error!("TODO: begincmap");
                     ok()
                 },
                 "endcmap" => |_| {
-                    error!("TODO: endcmap");
                     ok()
                 },
                 "CMapName" => |m| {
@@ -611,12 +611,21 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                             ranges: m.p.notdef_range_entries.drain(..).collect(),
                             chars: m.p.notdef_char_entries.drain(..).collect(),
                         },
-                        use_map: None,
+                        use_map: m.p.use_cmap.take(),
                     };
                     m.p.parsed = Some(cmap);
                     // should push cmap object to stack, but cmap object not RuntimeValue
                     // so push a dummy value. This value normally is not used and pop up immediately.
                     m.push(sname("cmap stub"));
+                    ok()
+                },
+                "usecmap" => |m| {
+                    let name = m.pop()?.name()?;
+                    let cmap = m.p.registry.get(&name).ok_or_else(|| {
+                        error!("CMap not found: {:?}", name);
+                        MachineError::Undefined
+                    })?;
+                    m.p.use_cmap = Some(cmap.clone());
                     ok()
                 },
             )
