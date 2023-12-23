@@ -1,9 +1,9 @@
 use super::*;
 use crate::sname;
 use either::{Left, Right};
+use test_log::test;
 use tinyvec::array_vec;
 use CharCode::*;
-use test_log::test;
 
 fn one(v: u8) -> CharCode {
     One(v)
@@ -335,4 +335,12 @@ fn parse_cmap_file() {
     let cmap_data = include_bytes!("../../cmap-resources/Adobe-Identity-0/CMap/Identity-H");
     let cmap = reg.add_cmap_file(cmap_data).unwrap();
     assert_eq!("Identity-H", cmap.name.as_str());
+    assert_eq!(
+        CIDSystemInfo {
+            registry: "Adobe".to_owned(),
+            ordering: "Identity".to_owned(),
+            supplement: 0,
+        },
+        cmap.cid_system_info
+    );
 }

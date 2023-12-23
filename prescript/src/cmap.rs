@@ -1,12 +1,14 @@
 //! Cmap to map CharCode to CID, used in Type0/CID font
 
 use crate::{
-    machine::{ok, Key, Machine, MachinePlugin, RuntimeValue},
+    machine::{
+        ok, Dictionary, Key, Machine, MachinePlugin, MachineResult, RuntimeDictionary, RuntimeValue,
+    },
     sname, Name,
 };
 use educe::Educe;
 use either::Either::{self, Right};
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc, str::from_utf8};
 use tinyvec::ArrayVec;
 
 /// Convert from CharCode using cmap, use it to select glyph id
@@ -282,6 +284,23 @@ pub struct CIDSystemInfo {
     supplement: u16,
 }
 
+impl CIDSystemInfo {
+    fn from_dict<P>(d: &RuntimeDictionary<P>) -> MachineResult<Self> {
+        let registry = from_utf8(&d[&sname("Registry")].string()?.borrow())
+            .unwrap()
+            .to_owned();
+        let ordering = from_utf8(&d[&sname("Ordering")].string()?.borrow())
+            .unwrap()
+            .to_owned();
+        let supplement = d[&sname("Supplement")].int()?.try_into().unwrap();
+        Ok(Self {
+            registry,
+            ordering,
+            supplement,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WriteMode {
     #[default]
@@ -421,10 +440,11 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     error!("TODO: defineresource");
                     let res_category = m.pop()?.name()?;
                     assert_eq!(res_category, sname("CMap"));
-                    m.pop()?;
+                    let d = m.pop()?.dict()?;
+                    let d_ref = d.borrow();
                     let cmap_name = m.pop()?.name()?;
                     let cmap = CMap {
-                        cid_system_info: CIDSystemInfo::default(),
+                        cid_system_info: CIDSystemInfo::from_dict(&d_ref[&sname("CIDSystemInfo")].dict()?.borrow())?,
                         w_mode: WriteMode::default(),
                         name: cmap_name,
                         code_space: CodeSpace::default(),
