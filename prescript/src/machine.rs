@@ -618,7 +618,7 @@ impl<'a> Machine<'a, ()> {
     }
 }
 
-impl<'a, P> Machine<'a, P> {
+impl<'a, P: MachinePlugin> Machine<'a, P> {
     pub fn with_plugin(file: &'a [u8], p: P) -> Self {
         Self {
             file: Rc::new(RefCell::new(CurrentFile::new(file))),
@@ -628,7 +628,9 @@ impl<'a, P> Machine<'a, P> {
             p,
         }
     }
+}
 
+impl<'a, P> Machine<'a, P> {
     pub fn exec_as_function(&mut self, args: &[f32], n_out: usize) -> MachineResult<Vec<f32>> {
         for arg in args.iter() {
             self.push(*arg);
@@ -824,7 +826,7 @@ fn ok() -> MachineResult<ExecState> {
 }
 
 /// Create the `systemdict`
-fn system_dict<'a, P>() -> RuntimeDictionary<'a, P> {
+fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
     let mut r: RuntimeDictionary<'a, P> = built_in_ops!(
         // any1 any2 exch -> any2 any1
         sname("exch") => (|m| {
@@ -1593,10 +1595,10 @@ fn system_dict<'a, P>() -> RuntimeDictionary<'a, P> {
             let category = m.pop()?.name()?;
             let key = m.pop()?.name()?;
             assert_eq!(key.as_ref(), "CIDInit");
-            assert_eq!(category.as_ref(), "ProcSet");
-            let cid_init = Rc::new(RefCell::new(cidinit::cid_init_dict()));
-            m.variable_stack.push(cid_init.clone());
-            m.push(cid_init);
+            assert_eq!(category.as_ref(), "ProcSet", "Other kind of resources not supported");
+            let proc_set = Rc::new(RefCell::new(m.p.find_proc_set_resource(&key).unwrap()));
+            m.variable_stack.push(proc_set.clone());
+            m.push(proc_set);
             ok()
         }
     );
@@ -1667,7 +1669,7 @@ fn user_dict<'a, P>() -> RuntimeDictionary<'a, P> {
     RuntimeDictionary::new()
 }
 
-impl<'a, P> VariableDictStack<'a, P> {
+impl<'a, P: MachinePlugin> VariableDictStack<'a, P> {
     fn new() -> Self {
         Self {
             stack: vec![
@@ -1677,7 +1679,9 @@ impl<'a, P> VariableDictStack<'a, P> {
             ],
         }
     }
+}
 
+impl<'a, P> VariableDictStack<'a, P> {
     fn push_system_dict(&mut self) {
         self.stack.push(self.stack[0].clone());
     }
