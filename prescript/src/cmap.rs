@@ -2,7 +2,7 @@
 
 use crate::{
     machine::{
-        ok, Dictionary, Key, Machine, MachineError, MachinePlugin, MachineResult,
+        ok, Key, Machine, MachineError, MachinePlugin, MachineResult,
         RuntimeDictionary, RuntimeValue,
     },
     sname, Name,
@@ -28,6 +28,16 @@ enum CharCode {
 }
 
 impl CharCode {
+    fn from_str_buf(s: &[u8]) -> Self {
+        match s.len() {
+            1 => Self::One(s[0]),
+            2 => Self::Two(s[0], s[1]),
+            3 => Self::Three(s[0], s[1], s[2]),
+            4 => Self::Four(s[0], s[1], s[2], s[3]),
+            _ => panic!("invalid bytes length"),
+        }
+    }
+
     pub fn n_bytes(&self) -> usize {
         match self {
             Self::One(_) => 1,
@@ -353,10 +363,12 @@ impl CMapRegistry {
         let p = CMapMachinePlugin {
             registry: self,
             parsed: None,
-            code_space_entries: 0,
+            n_code_space: 0,
             code_space: None,
-            cid_range_entries: 0,
-            cid_range: vec![],
+            n_cid_range: 0,
+            cid_range_entries: vec![],
+            n_cid_char: 0,
+            cid_char_entries: vec![],
         };
         let mut m = Machine::<CMapMachinePlugin>::with_plugin(file, p);
         m.execute()?;
@@ -429,10 +441,12 @@ impl CMap {
 struct CMapMachinePlugin<'a> {
     registry: &'a CMapRegistry,
     parsed: Option<CMap>,
-    code_space_entries: usize,
+    n_code_space: usize,
     code_space: Option<CodeSpace>,
-    cid_range_entries: usize,
-    cid_range: Vec<IncRangeMap>,
+    n_cid_range: usize,
+    cid_range_entries: Vec<IncRangeMap>,
+    n_cid_char: usize,
+    cid_char_entries: Vec<SingleCodeMap>,
 }
 
 macro_rules! built_in_ops {
@@ -463,12 +477,12 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                 },
                 "begincodespacerange" => |m| {
                     // pop a int from stack, the code space range entries.
-                    m.p.code_space_entries = m.pop()?.int()? as usize;
+                    m.p.n_code_space = m.pop()?.int()? as usize;
                     ok()
                 },
                 "endcodespacerange" => |m| {
-                    let mut entries = Vec::with_capacity(m.p.code_space_entries);
-                    for _ in 0..m.p.code_space_entries {
+                    let mut entries = Vec::with_capacity(m.p.n_code_space);
+                    for _ in 0..m.p.n_code_space {
                         let s_upper = m.pop()?.string()?;
                         let s_lower = m.pop()?.string()?;
                         entries.push(CodeRange::from_str_buf(
@@ -481,16 +495,16 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                             }
                         ));
                     } 
-                    m.p.code_space = Some(CodeSpace::new(entries.into_iter().collect::<Result<_, _>>()?));
+                    m.p.code_space = Some(CodeSpace::new(entries.into_iter().rev().collect::<Result<_, _>>()?));
                     ok()
                 },
                 "begincidrange" => |m| {
-                    m.p.cid_range_entries = m.pop()?.int()? as usize;
+                    m.p.n_cid_range = m.pop()?.int()? as usize;
                     ok()
                 },
                 "endcidrange" => |m| {
-                    let mut entries = Vec::with_capacity(m.p.cid_range_entries);   
-                    for _ in 0..m.p.cid_range_entries {
+                    let mut entries = Vec::with_capacity(m.p.n_cid_range);   
+                    for _ in 0..m.p.n_cid_range {
                         let cid = m.pop()?.int()? as u16;
                         let s_upper = m.pop()?.string()?;
                         let s_lower = m.pop()?.string()?;
@@ -507,7 +521,32 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                             start_cid: CID(cid),
                         });
                     }
-                    m.p.cid_range.extend(entries.into_iter().rev());
+                    m.p.cid_range_entries.extend(entries.into_iter().rev());
+                    ok()
+                },
+                "begincidchar" => |m| {
+                    m.p.n_cid_char = m.pop()?.int()? as usize; 
+                    ok()
+                },
+                "endcidchar" => |m| {
+                    let mut entries = Vec::with_capacity(m.p.n_cid_char);
+                    for _ in 0..m.p.n_cid_char {
+                        let cid = m.pop()?.int()? as u16;
+                        let s_code = m.pop()?.string()?;
+                        entries.push(SingleCodeMap {
+                            code: CharCode::from_str_buf(&s_code.borrow()),
+                            cid: CID(cid),
+                        });
+                    }
+                    m.p.cid_char_entries.extend(entries.into_iter().rev());
+                    ok()
+                },
+                "beginnotdefrange" => |_| {
+                    error!("TODO: beginnotdefrange");
+                    ok()
+                },
+                "endnotdefrange" => |_| {
+                    error!("TODO: endnotdefrange");
                     ok()
                 },
                 "defineresource" => |m| {
@@ -522,8 +561,8 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                         name: cmap_name,
                         code_space: m.p.code_space.take().unwrap_or_default(),
                         cid_map: Mapper {
-                            ranges: m.p.cid_range.drain(..).collect(),
-                            ..Default::default()
+                            ranges: m.p.cid_range_entries.drain(..).collect(),
+                            chars: m.p.cid_char_entries.drain(..).collect(),
                         } ,
                         notdef_map: Mapper::default(),
                         use_map: None,

@@ -333,36 +333,49 @@ fn use_map() {
 #[test]
 fn parse_cmap_file() {
     let mut reg = CMapRegistry::new();
-    let cmap_data = include_bytes!("../../cmap-resources/Adobe-Identity-0/CMap/Identity-H");
+    let cmap_data = include_bytes!("../../cmap-resources/Adobe-CNS1-7/CMap/ETHK-B5-H");
     let cmap = reg.add_cmap_file(cmap_data).unwrap();
-    assert_eq!("Identity-H", cmap.name.as_str());
+    assert_eq!("ETHK-B5-H", cmap.name.as_str());
     assert_eq!(
         CIDSystemInfo {
             registry: "Adobe".to_owned(),
-            ordering: "Identity".to_owned(),
-            supplement: 0,
+            ordering: "CNS1".to_owned(),
+            supplement: 6,
         },
         cmap.cid_system_info
     );
     assert_eq!(WriteMode::Horizontal, cmap.w_mode);
     assert_eq!(
-        &CodeSpace::new(vec![CodeRange::parse("0000", "ffff").unwrap()]),
+        &CodeSpace::new(vec![
+            CodeRange::parse("00", "80").unwrap(),
+            CodeRange::parse("8740", "fefe").unwrap(),
+        ]),
         &cmap.code_space,
     );
-    assert_eq!(0, cmap.cid_map.chars.len());
-    assert_eq!(256, cmap.cid_map.ranges.len());
+
+    assert_eq!(544, cmap.cid_map.chars.len());
+    assert_eq!(
+        SingleCodeMap::new(two(0x8943), CID(17718)),
+        cmap.cid_map.chars[0]
+    );
+    assert_eq!(
+        SingleCodeMap::new(two(0xfedd), CID(7080)),
+        cmap.cid_map.chars[543]
+    );
+
+    assert_eq!(665, cmap.cid_map.ranges.len());
     assert_eq!(
         IncRangeMap {
-            range: CodeRange::parse("0000", "00ff").unwrap(),
-            start_cid: CID(0),
+            range: CodeRange::parse("20", "7e").unwrap(),
+            start_cid: CID(1),
         },
         cmap.cid_map.ranges[0]
     );
     assert_eq!(
         IncRangeMap {
-            range: CodeRange::parse("ff00", "ffff").unwrap(),
-            start_cid: CID(65280),
+            range: CodeRange::parse("feef", "fefe").unwrap(),
+            start_cid: CID(17144),
         },
-        cmap.cid_map.ranges[255]
+        cmap.cid_map.ranges[664]
     );
 }
