@@ -1,7 +1,7 @@
 use super::*;
-use crate::sname;
+use crate::{sname, name};
 use either::{Left, Right};
-use std::{vec, borrow::Borrow};
+use std::{borrow::Borrow, vec};
 use test_log::test;
 use tinyvec::array_vec;
 use CharCode::*;
@@ -414,4 +414,22 @@ fn parse_cmap_file_with_use() {
     let base = reg.add_cmap_file(base_data).unwrap();
     let use_cmap = reg.add_cmap_file(use_cmap_data).unwrap();
     assert_eq!(base, use_cmap.use_map.as_ref().unwrap().clone());
+}
+
+#[test]
+fn get_builtin_cmap() {
+    let reg = CMapRegistry::new();
+    let cmap = reg.get(&sname("Adobe-GB1-0")).unwrap();
+    assert_eq!("Adobe-GB1-0", cmap.name.as_str());
+
+    // get cmap that use another builtin cmap
+    let cmap = reg.get(&sname("GB-V")).unwrap();
+    assert_eq!("GB-V", cmap.name.as_str());
+    assert_eq!("GB-H", cmap.as_ref().use_map.as_ref().unwrap().name.as_str());
+
+    // assert all builtin cmaps
+    for &n in PREDEFINED_CMAPS.keys() {
+        let cmap = reg.get(&name(n)).unwrap();
+        assert_eq!(n, cmap.name.as_str());
+    }
 }

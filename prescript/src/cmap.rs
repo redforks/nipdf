@@ -12,6 +12,8 @@ use either::Either::{self, Right};
 use log::error;
 use std::{collections::HashMap, rc::Rc, str::from_utf8};
 use tinyvec::ArrayVec;
+use phf::phf_map;
+use once_cell::unsync::OnceCell;
 
 /// Convert from CharCode using cmap, use it to select glyph id
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -344,22 +346,49 @@ impl WriteMode {
     }
 }
 
+const ADOBE_GB1_0: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/Adobe-GB1-0"); 
+const GB_H: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GB-H");
+const GB_V: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GB-V");
+const ADOBE_CNS1_0: &[u8] = include_bytes!("../cmap-resources/Adobe-CNS1-7/CMap/Adobe-CNS1-0");
+// TODO: add other predefined cmaps
+static PREDEFINED_CMAPS: phf::Map<&'static str, &'static [u8]> = phf_map!{
+    "Adobe-GB1-0" => ADOBE_GB1_0,
+    "GB-H" => GB_H,
+    "GB-V" => GB_V,
+
+    "Adobe-CNS1-0" => ADOBE_CNS1_0,
+};
+
 /// CMapRegistry contains all CMaps, access by CMap Name.
-#[derive(Debug, Clone, PartialEq, Educe)]
-#[educe(Default(new))]
-pub struct CMapRegistry(HashMap<Name, Rc<CMap>>);
+#[derive(Debug)]
+pub struct CMapRegistry {
+    predefined: HashMap<&'static str, OnceCell<Rc<CMap>>>,
+     files: HashMap<Name, Rc<CMap>>
+    }
 
 impl CMapRegistry {
+    pub fn new() -> Self {
+        Self {
+            predefined: (PREDEFINED_CMAPS.keys().copied().map(|k| (k, OnceCell::new()))).collect(),
+            files: HashMap::new(),
+        }
+    }
+
     pub fn add(&mut self, cmap: CMap) {
-        self.0.insert(cmap.name.clone(), Rc::new(cmap));
+        self.files.insert(cmap.name.clone(), Rc::new(cmap));
     }
 
     pub fn get(&self, name: &Name) -> Option<Rc<CMap>> {
-        self.0.get(name).cloned()
+        self.predefined
+            .get(name.as_str())
+            .map(|c| Rc::clone(c.get_or_init(|| {
+                let file = PREDEFINED_CMAPS.get(name.as_str()).unwrap();
+                Rc::new(self.parse_cmap_file(file).unwrap())
+            })))
+            .or_else(|| self.files.get(name).cloned())
     }
 
-    /// Add a CMap file, parse it and add to registry.
-    pub fn add_cmap_file(&mut self, file: &[u8]) -> anyhow::Result<Rc<CMap>> {
+    fn parse_cmap_file(&self, file: &[u8]) -> anyhow::Result<CMap> {
         let p = CMapMachinePlugin {
             registry: self,
             parsed: None,
@@ -378,7 +407,12 @@ impl CMapRegistry {
         let mut m = Machine::<CMapMachinePlugin>::with_plugin(file, p);
         m.execute()?;
         let mut p = m.take_plugin();
-        let parsed = p.parsed.take().expect("CMap not defined in cmap file");
+        Ok(p.parsed.take().expect("CMap not defined in cmap file"))
+    }
+
+    /// Add a CMap file, parse it and add to registry.
+    pub fn add_cmap_file(&mut self, file: &[u8]) -> anyhow::Result<Rc<CMap>> {
+        let parsed = self.parse_cmap_file(file)?;
         let name = parsed.name.clone();
         self.add(parsed);
         self.get(&name)
