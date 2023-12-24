@@ -346,17 +346,12 @@ impl WriteMode {
     }
 }
 
-const ADOBE_GB1_0: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/Adobe-GB1-0"); 
-const GB_H: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GB-H");
-const GB_V: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GB-V");
-const ADOBE_CNS1_0: &[u8] = include_bytes!("../cmap-resources/Adobe-CNS1-7/CMap/Adobe-CNS1-0");
+const ETEN_B5_H: &[u8] = include_bytes!("../cmap-resources/Adobe-CNS1-7/CMap/ETen-B5-H");
+const ETEN_B5_V: &[u8] = include_bytes!("../cmap-resources/Adobe-CNS1-7/CMap/ETen-B5-V");
 // TODO: add other predefined cmaps
 static PREDEFINED_CMAPS: phf::Map<&'static str, &'static [u8]> = phf_map!{
-    "Adobe-GB1-0" => ADOBE_GB1_0,
-    "GB-H" => GB_H,
-    "GB-V" => GB_V,
-
-    "Adobe-CNS1-0" => ADOBE_CNS1_0,
+    "ETen-B5-H" => ETEN_B5_H,
+    "ETen-B5-V" => ETEN_B5_V,
 };
 
 /// CMapRegistry contains all CMaps, access by CMap Name.

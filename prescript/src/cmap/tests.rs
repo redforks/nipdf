@@ -419,13 +419,11 @@ fn parse_cmap_file_with_use() {
 #[test]
 fn get_builtin_cmap() {
     let reg = CMapRegistry::new();
-    let cmap = reg.get(&sname("Adobe-GB1-0")).unwrap();
-    assert_eq!("Adobe-GB1-0", cmap.name.as_str());
 
     // get cmap that use another builtin cmap
-    let cmap = reg.get(&sname("GB-V")).unwrap();
-    assert_eq!("GB-V", cmap.name.as_str());
-    assert_eq!("GB-H", cmap.as_ref().use_map.as_ref().unwrap().name.as_str());
+    let cmap = reg.get(&sname("ETen-B5-V")).unwrap();
+    assert_eq!("ETen-B5-V", cmap.name.as_str());
+    assert_eq!("ETen-B5-H", cmap.as_ref().use_map.as_ref().unwrap().name.as_str());
 
     // assert all builtin cmaps
     for &n in PREDEFINED_CMAPS.keys() {
