@@ -17,7 +17,7 @@ use once_cell::unsync::OnceCell;
 
 /// Convert from CharCode using cmap, use it to select glyph id
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CID(u16);
+pub struct CID(pub u16);
 
 /// Input code type, can be one/two/three/four bytes.
 /// TODO: bytes in any length
