@@ -81,6 +81,8 @@ fn test_parse_reference(buf: impl AsRef<[u8]>, name: &str) {
 #[test_case("foo", b"/foo")]
 #[test_case("a#b", b"/a#23b")]
 #[test_case("Ab", b"/#41#62")]
+#[test_case("#A5#A5", b"/#A5#A5")]
+#[test_case("a#A5#A5", b"/a#A5#A5")]
 fn name_normalize(exp: impl AsRef<str>, name: impl AsRef<[u8]>) {
     assert_eq!(normalize_name(name.as_ref()).unwrap(), exp.as_ref());
 }

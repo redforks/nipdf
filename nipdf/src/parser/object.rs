@@ -4,6 +4,7 @@ use crate::object::{
     ObjectValueError, Reference, Stream,
 };
 use either::Either;
+use log::warn;
 use nom::{
     branch::alt,
     bytes::complete::{escaped, is_not, tag, take_till, take_while, take_while1},
@@ -44,24 +45,22 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<Object> {
             if memchr::memchr(b'.', s).is_some() {
                 // from_utf8_unchecked is safe here, because the parser takes only digits
                 let s = unsafe { from_utf8_unchecked(s) };
-                f32::from_str(s)
-                    .map_or_else(
-                        |e| {
-                            // get position of 2nd occur of '.'
-                            let s = s.as_bytes();
-                            let p = memchr::memchr(b'.', s).unwrap();
-                            if let Some(p) = memchr::memchr(b'.', &s[p + 1..]) {
-                                // if there is a 2nd occur of '.', ignore it
-                                Object::Number(
-                                    f32::from_str(unsafe { from_utf8_unchecked(&s[..p + 1]) })
-                                        .unwrap(),
-                                )
-                            } else {
-                                panic!("{}", e);
-                            }
-                        },
-                        Object::Number,
-                    )
+                f32::from_str(s).map_or_else(
+                    |e| {
+                        // get position of 2nd occur of '.'
+                        let s = s.as_bytes();
+                        let p = memchr::memchr(b'.', s).unwrap();
+                        if let Some(p) = memchr::memchr(b'.', &s[p + 1..]) {
+                            // if there is a 2nd occur of '.', ignore it
+                            Object::Number(
+                                f32::from_str(unsafe { from_utf8_unchecked(&s[..p + 1]) }).unwrap(),
+                            )
+                        } else {
+                            panic!("{}", e);
+                        }
+                    },
+                    Object::Number,
+                )
             } else {
                 // from_utf8_unchecked is safe here, because the parser takes only digits
                 let s = unsafe { from_utf8_unchecked(s) };
@@ -104,7 +103,7 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<Object> {
     ))(buf)
 }
 
-/// Return `Err(ObjectValueError::InvalidNameForma)` if the name is not a valid PDF name encoding,
+/// Return `Err(ObjectValueError::InvalidNameFormat)` if the name is not a valid PDF name encoding,
 /// not two hex char after `#`.
 fn normalize_name(buf: &[u8]) -> Result<Cow<str>, ObjectValueError> {
     fn next_hex_char(iter: &mut impl Iterator<Item = u8>) -> Option<u8> {
@@ -126,24 +125,30 @@ fn normalize_name(buf: &[u8]) -> Result<Cow<str>, ObjectValueError> {
     }
 
     let s = &buf[1..];
-    if s.iter().copied().any(|b| b == b'#') {
-        let mut result = Vec::with_capacity(s.len());
-        let mut iter = s.iter().copied();
-        while let Some(next) = iter.next() {
-            if next == b'#' {
-                if let Some(c) = next_hex_char(&mut iter) {
-                    result.push(c);
-                } else {
-                    return Err(ObjectValueError::InvalidNameFormat);
-                }
-            } else {
-                result.push(next);
-            }
-        }
-        Ok(Cow::Owned(String::from_utf8(result).unwrap()))
-    } else {
-        Ok(Cow::Borrowed(from_utf8(s).unwrap()))
+    if s.iter().copied().all(|b| b != b'#') {
+        return Ok(Cow::Borrowed(from_utf8(s).unwrap()));
     }
+
+    let mut result = Vec::with_capacity(s.len());
+    let mut iter = s.iter().copied();
+    while let Some(next) = iter.next() {
+        if next == b'#' {
+            if let Some(c) = next_hex_char(&mut iter) {
+                result.push(c);
+            } else {
+                return Err(ObjectValueError::InvalidNameFormat);
+            }
+        } else {
+            result.push(next);
+        }
+    }
+    String::from_utf8(result).map_or_else(
+        |_| {
+            warn!("Invalid UTF-8 name: {:?}", s);
+            Ok(Cow::Borrowed(from_utf8(s).unwrap()))
+        },
+        |s| Ok(Cow::Owned(s)),
+    )
 }
 
 fn parse_name(input: &[u8]) -> ParseResult<Name> {
