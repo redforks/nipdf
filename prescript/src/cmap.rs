@@ -656,7 +656,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                 "endcidrange" => |m| {
                     let mut entries = Vec::with_capacity(m.p.n_cid_range);   
                     for _ in 0..m.p.n_cid_range {
-                        let cid = m.pop()?.int()? as u16;
+                        let cid = m.pop()?.int()?.try_into().unwrap();
                         let s_upper = m.pop()?.string()?;
                         let s_lower = m.pop()?.string()?;
                         entries.push(IncRangeMap {
@@ -682,12 +682,12 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                 "endcidchar" => |m| {
                     let mut entries = Vec::with_capacity(m.p.n_cid_char);
                     for _ in 0..m.p.n_cid_char {
-                        let cid = m.pop()?.int()? as u16;
+                        let cid = m.pop()?.int()?.try_into().unwrap();
                         let s_code = m.pop()?.string()?;
-                        entries.push(SingleCodeMap {
-                            code: CharCode::from_str_buf(&s_code.borrow()),
-                            cid: CID(cid),
-                        });
+                        entries.push(SingleCodeMap::new(
+                            CharCode::from_str_buf(&s_code.borrow()),
+                            CID(cid),
+                        ));
                     }
                     m.p.cid_char_entries.extend(entries.into_iter().rev());
                     ok()
@@ -699,7 +699,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                 "endnotdefrange" => |m| {
                     let mut entries = Vec::with_capacity(m.p.n_notdef_range);
                     for _ in 0..m.p.n_notdef_range {
-                        let cid = m.pop()?.int()? as u16;
+                        let cid = m.pop()?.int()?.try_into().unwrap();
                         let s_upper = m.pop()?.string()?;
                         let s_lower = m.pop()?.string()?;
                         entries.push(RangeMapToOne {
@@ -725,7 +725,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                 "endnotdefchar" => |m| {
                     let mut entries = Vec::with_capacity(m.p.n_notdef_char);
                     for _ in 0..m.p.n_notdef_char {
-                        let cid = m.pop()?.int()? as u16;
+                        let cid = m.pop()?.int()?.try_into().unwrap();
                         let s_code = m.pop()?.string()?;
                         entries.push(SingleCodeMap {
                             code: CharCode::from_str_buf(&s_code.borrow()),
