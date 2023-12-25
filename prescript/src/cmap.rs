@@ -125,24 +125,6 @@ impl CodeRange {
         Some(Self(r))
     }
 
-    /// Parse a range from string, for example:
-    ///
-    /// `parse("00", "08")`, returns a range that matches 1 byte, from 0x00 to 0x08.
-    /// `parse("0000", "0800")`, returns a range that matches 2 bytes, from 0x0000 to 0x0800.
-    fn parse(s_lower: &str, s_upper: &str) -> Option<Self> {
-        let lower = u32::from_str_radix(s_lower, 16).ok()?;
-        let upper = u32::from_str_radix(s_upper, 16).ok()?;
-        let n_bytes = s_lower.len() / 2;
-        assert_eq!(n_bytes, s_upper.len() / 2);
-        let mut r = ArrayVec::new();
-        for i in (0..n_bytes).rev() {
-            let lower = (lower >> (i * 8)) as u8;
-            let upper = (upper >> (i * 8)) as u8;
-            r.push(ByteRange::new(lower, upper));
-        }
-        Some(Self(r))
-    }
-
     /// If ch not in range, return None,
     /// else return offset from lower bound.
     fn offset(&self, ch: CharCode) -> Option<u16> {

@@ -33,18 +33,18 @@ fn char_code_as_byte_slice() {
 #[test]
 fn code_range_parse() {
     assert_eq!(
-        CodeRange::parse("20", "7e").unwrap(),
+        CodeRange::from_str_buf(&[0x20], &[0x7e]).unwrap(),
         CodeRange(array_vec!([ByteRange; 4] => ByteRange::new(0x20, 0x7e)))
     );
     assert_eq!(
-        CodeRange::parse("8140", "817e").unwrap(),
+        CodeRange::from_str_buf(&[0x81, 0x40], &[0x81, 0x7e]).unwrap(),
         CodeRange(array_vec!([ByteRange; 4] =>
             ByteRange::new(0x81, 0x81),
             ByteRange::new(0x40, 0x7e)
         ))
     );
     assert_eq!(
-        CodeRange::parse("D800DC00", "DBFFDFFF").unwrap(),
+        CodeRange::from_str_buf(&[0xD8, 0x00, 0xDC, 0x00], &[0xDB, 0xFF, 0xDF, 0xFF]).unwrap(),
         CodeRange(array_vec!([ByteRange; 4] =>
             ByteRange::new(0xD8, 0xDB),
             ByteRange::new(0x00, 0xFF),
@@ -56,7 +56,7 @@ fn code_range_parse() {
 
 #[test]
 fn code_range_in_range() {
-    let r = CodeRange::parse("20", "7e").unwrap();
+    let r = CodeRange::from_str_buf(&[0x20], &[0x7e]).unwrap();
     assert!(r.in_range(one(0x20)));
     assert!(r.in_range(one(0x7e)));
     assert!(r.in_range(one(0x21)));
@@ -64,7 +64,7 @@ fn code_range_in_range() {
     assert!(!r.in_range(one(0x7f)));
     assert!(!r.in_range(two(0x7f)));
 
-    let r = CodeRange::parse("8140", "817e").unwrap();
+    let r = CodeRange::from_str_buf(&[0x81, 0x40], &[0x81, 0x7e]).unwrap();
     assert!(r.in_range(two(0x8140)));
     assert!(r.in_range(two(0x817e)));
     assert!(r.in_range(two(0x8141)));
@@ -76,7 +76,7 @@ fn code_range_in_range() {
 #[test]
 fn code_range_next_code() {
     // one
-    let r = CodeRange::parse("20", "7e").unwrap();
+    let r = CodeRange::from_str_buf(&[0x20], &[0x7e]).unwrap();
     assert_eq!(CodeSpaceResult::Matched(one(0x20)), r.next_code(&[0x20, 0]));
     assert_eq!(CodeSpaceResult::Matched(one(0x7e)), r.next_code(&[0x7e]));
     assert_eq!(CodeSpaceResult::Matched(one(0x21)), r.next_code(&[0x21]));
@@ -84,7 +84,7 @@ fn code_range_next_code() {
     assert_eq!(CodeSpaceResult::NotMatched, r.next_code(&[0x7f]));
 
     // two
-    let r = CodeRange::parse("8140", "817e").unwrap();
+    let r = CodeRange::from_str_buf(&[0x81, 0x40], &[0x81, 0x7e]).unwrap();
     assert_eq!(
         CodeSpaceResult::Matched(two(0x8140)),
         r.next_code(&[0x81, 0x40])
@@ -108,9 +108,9 @@ fn code_range_next_code() {
 #[test]
 fn code_space() {
     let code_space = CodeSpace::new(vec![
-        CodeRange::parse("8140", "817e").unwrap(),
-        CodeRange::parse("D800DC00", "DBFFDFFF").unwrap(),
-        CodeRange::parse("E000", "FFFF").unwrap(),
+        CodeRange::from_str_buf(&[0x81, 0x40], &[0x81, 0x7e]).unwrap(),
+        CodeRange::from_str_buf(&[0xD8, 0x00, 0xDC, 0x00], &[0xDB, 0xFF, 0xDF, 0xFF]).unwrap(),
+        CodeRange::from_str_buf(&[0xE0, 0x00], &[0xFF, 0xFF]).unwrap(),
     ]);
 
     // matches
@@ -151,7 +151,7 @@ fn single_code_map() {
 #[test]
 fn range_map_to_one() {
     let m = RangeMapToOne {
-        range: CodeRange::parse("20", "7e").unwrap(),
+        range: CodeRange::from_str_buf(&[0x20], &[0x7e]).unwrap(),
         cid: CID(0x1234),
     };
     assert_eq!(Some(CID(0x1234)), m.map(one(0x20)));
@@ -164,7 +164,7 @@ fn range_map_to_one() {
 fn inc_range_map() {
     // one byte
     let m = IncRangeMap {
-        range: CodeRange::parse("20", "7e").unwrap(),
+        range: CodeRange::from_str_buf(&[0x20], &[0x7e]).unwrap(),
         start_cid: CID(1234),
     };
     assert_eq!(Some(CID(1234)), m.map(one(0x20)));
@@ -175,7 +175,7 @@ fn inc_range_map() {
 
     // two bytes
     let m = IncRangeMap {
-        range: CodeRange::parse("8100", "827f").unwrap(),
+        range: CodeRange::from_str_buf(&[0x81, 0x00], &[0x82, 0x7f]).unwrap(),
         start_cid: CID(1000),
     };
     assert_eq!(Some(CID(1000)), m.map(two(0x8100)));
@@ -189,11 +189,11 @@ fn mapper() {
     let mapper = Mapper {
         ranges: vec![
             IncRangeMap {
-                range: CodeRange::parse("20", "7e").unwrap(),
+                range: CodeRange::from_str_buf(&[0x20], &[0x7e]).unwrap(),
                 start_cid: CID(1234),
             },
             IncRangeMap {
-                range: CodeRange::parse("8100", "827f").unwrap(),
+                range: CodeRange::from_str_buf(&[0x81, 0x00], &[0x82, 0x7f]).unwrap(),
                 start_cid: CID(1000),
             },
         ]
@@ -223,10 +223,10 @@ fn mapper() {
 #[test]
 fn cmap() {
     let code_space = CodeSpace::new(vec![
-        CodeRange::parse("20", "7e").unwrap(),
-        CodeRange::parse("8140", "817e").unwrap(),
-        CodeRange::parse("D800DC00", "DBFFDFFF").unwrap(),
-        CodeRange::parse("E000", "FFFF").unwrap(),
+        CodeRange::from_str_buf(&[0x20], &[0x7e]).unwrap(),
+        CodeRange::from_str_buf(&[0x81, 0x40], &[0x81, 0x7e]).unwrap(),
+        CodeRange::from_str_buf(&[0xD8, 0x00, 0xDC, 0x00], &[0xDB, 0xFF, 0xDF, 0xFF]).unwrap(),
+        CodeRange::from_str_buf(&[0xE0, 0x00], &[0xFF, 0xFF]).unwrap(),
     ]);
     let cid_map = Mapper {
         ranges: vec![].into(),
@@ -270,8 +270,8 @@ fn cmap() {
 
 #[test]
 fn use_map() {
-    let base_code_space = CodeSpace::new(vec![CodeRange::parse("20", "30").unwrap()]);
-    let code_space = CodeSpace::new(vec![CodeRange::parse("25", "40").unwrap()]);
+    let base_code_space = CodeSpace::new(vec![CodeRange::from_str_buf(&[0x20], &[0x30]).unwrap()]);
+    let code_space = CodeSpace::new(vec![CodeRange::from_str_buf(&[0x25], &[0x40]).unwrap()]);
     let base_cid_map = Mapper {
         ranges: vec![].into(),
         chars: vec![SingleCodeMap::new(one(0x30), CID(0x500))].into(),
@@ -347,8 +347,8 @@ fn parse_cmap_file() {
     assert_eq!(WriteMode::Horizontal, cmap.w_mode);
     assert_eq!(
         &CodeSpace::new(vec![
-            CodeRange::parse("00", "80").unwrap(),
-            CodeRange::parse("8740", "fefe").unwrap(),
+            CodeRange::from_str_buf(&[0x00], &[0x80]).unwrap(),
+            CodeRange::from_str_buf(&[0x87, 0x40], &[0xfe, 0xfe]).unwrap(),
         ]),
         &cmap.code_space,
     );
@@ -366,14 +366,14 @@ fn parse_cmap_file() {
     assert_eq!(665, cmap.cid_map.ranges.len());
     assert_eq!(
         IncRangeMap {
-            range: CodeRange::parse("20", "7e").unwrap(),
+            range: CodeRange::from_str_buf(&[0x20], &[0x7e]).unwrap(),
             start_cid: CID(1),
         },
         cmap.cid_map.ranges[0]
     );
     assert_eq!(
         IncRangeMap {
-            range: CodeRange::parse("feef", "fefe").unwrap(),
+            range: CodeRange::from_str_buf(&[0xfe, 0xef], &[0xfe, 0xfe]).unwrap(),
             start_cid: CID(17144),
         },
         cmap.cid_map.ranges[664]
@@ -382,14 +382,14 @@ fn parse_cmap_file() {
     assert_eq!(2, cmap.notdef_map.ranges.len());
     assert_eq!(
         RangeMapToOne {
-            range: CodeRange::parse("00", "0f").unwrap(),
+            range: CodeRange::from_str_buf(&[0x00], &[0x0f]).unwrap(),
             cid: CID(1),
         },
         cmap.notdef_map.ranges[0]
     );
     assert_eq!(
         RangeMapToOne {
-            range: CodeRange::parse("10", "1f").unwrap(),
+            range: CodeRange::from_str_buf(&[0x10], &[0x1f]).unwrap(),
             cid: CID(2),
         },
         cmap.notdef_map.ranges[1]
