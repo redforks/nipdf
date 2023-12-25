@@ -17,7 +17,7 @@ use once_cell::unsync::OnceCell;
 
 /// Convert from CharCode using cmap, use it to select glyph id
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CID(u16);
+pub struct CID(pub u16);
 
 /// Input code type, can be one/two/three/four bytes.
 /// TODO: bytes in any length
@@ -125,24 +125,6 @@ impl CodeRange {
         Some(Self(r))
     }
 
-    /// Parse a range from string, for example:
-    ///
-    /// `parse("00", "08")`, returns a range that matches 1 byte, from 0x00 to 0x08.
-    /// `parse("0000", "0800")`, returns a range that matches 2 bytes, from 0x0000 to 0x0800.
-    fn parse(s_lower: &str, s_upper: &str) -> Option<Self> {
-        let lower = u32::from_str_radix(s_lower, 16).ok()?;
-        let upper = u32::from_str_radix(s_upper, 16).ok()?;
-        let n_bytes = s_lower.len() / 2;
-        assert_eq!(n_bytes, s_upper.len() / 2);
-        let mut r = ArrayVec::new();
-        for i in (0..n_bytes).into_iter().rev() {
-            let lower = (lower >> (i * 8)) as u8;
-            let upper = (upper >> (i * 8)) as u8;
-            r.push(ByteRange::new(lower, upper));
-        }
-        Some(Self(r))
-    }
-
     /// If ch not in range, return None,
     /// else return offset from lower bound.
     fn offset(&self, ch: CharCode) -> Option<u16> {
@@ -151,11 +133,11 @@ impl CodeRange {
         }
 
         let mut offset = 0u16;
-        for (r, c) in self.0.iter().zip(ch.as_ref().into_iter().copied()) {
+        for (r, c) in self.0.iter().zip(ch.as_ref().iter().copied()) {
             if !r.in_range(c) {
                 return None;
             }
-            offset = offset * (r.upper - r.lower + 1) as u16 + (c - r.lower) as u16;
+            offset = offset * (r.upper as u16 - r.lower as u16 + 1) + (c as u16 - r.lower as u16);
         }
         Some(offset)
     }
@@ -262,7 +244,7 @@ struct RangeMapToOne {
 
 impl CodeMap for RangeMapToOne {
     fn map(&self, code: CharCode) -> Option<CID> {
-        (self.range.in_range(code)).then(|| self.cid)
+        (self.range.in_range(code)).then_some(self.cid)
     }
 }
 
@@ -281,7 +263,7 @@ impl SingleCodeMap {
 
 impl CodeMap for SingleCodeMap {
     fn map(&self, code: CharCode) -> Option<CID> {
-        (code == self.code).then(|| self.cid)
+        (code == self.code).then_some(self.cid)
     }
 }
 
@@ -346,17 +328,138 @@ impl WriteMode {
     }
 }
 
-const ADOBE_GB1_0: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/Adobe-GB1-0"); 
-const GB_H: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GB-H");
-const GB_V: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GB-V");
-const ADOBE_CNS1_0: &[u8] = include_bytes!("../cmap-resources/Adobe-CNS1-7/CMap/Adobe-CNS1-0");
-// TODO: add other predefined cmaps
-static PREDEFINED_CMAPS: phf::Map<&'static str, &'static [u8]> = phf_map!{
-    "Adobe-GB1-0" => ADOBE_GB1_0,
-    "GB-H" => GB_H,
-    "GB-V" => GB_V,
+const GB_EUC_H: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GB-EUC-H");
+const GB_EUC_V: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GB-EUC-V");
+const GBPC_EUC_H: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBpc-EUC-H");
+const GBPC_EUC_V: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBpc-EUC-V");
+const GBK_EUC_V: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBK-EUC-H");
+const GBK_EUC_H: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBK-EUC-V");
+const GBKP_EUC_V: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBKp-EUC-H");
+const GBKP_EUC_H: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBKp-EUC-V");
+const GBK2K_H: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBK2K-H");
+const GBK2K_V: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBK2K-V");
+const UNI_GB_GCSS_H: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/UniGB-UCS2-H");
+const UNI_GB_GCSS_V: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/UniGB-UCS2-V");
+const UNI_GB_UTF16_H: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/UniGB-UTF16-H");
+const UNI_GB_UTF16_V: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/UniGB-UTF16-V");
 
-    "Adobe-CNS1-0" => ADOBE_CNS1_0,
+
+const B5PC_H: &[u8] = include_bytes!("../cmap-resources/Adobe-CNS1-7/CMap/B5pc-H");
+const B5PC_V: &[u8] = include_bytes!("../cmap-resources/Adobe-CNS1-7/CMap/B5pc-V");
+const HKSCS_B5_H: &[u8] = include_bytes!("../cmap-resources/Adobe-CNS1-7/CMap/HKscs-B5-H");
+const HKSCS_B5_V: &[u8] = include_bytes!("../cmap-resources/Adobe-CNS1-7/CMap/HKscs-B5-V");
+const ETEN_B5_H: &[u8] = include_bytes!("../cmap-resources/Adobe-CNS1-7/CMap/ETen-B5-H");
+const ETEN_B5_V: &[u8] = include_bytes!("../cmap-resources/Adobe-CNS1-7/CMap/ETen-B5-V");
+const ETENMS_B5_H: &[u8] = include_bytes!("../cmap-resources/Adobe-CNS1-7/CMap/ETenms-B5-H");
+const ETENMS_B5_V: &[u8] = include_bytes!("../cmap-resources/Adobe-CNS1-7/CMap/ETenms-B5-V");
+const CNS_EUC_H: &[u8] = include_bytes!("../cmap-resources/Adobe-CNS1-7/CMap/CNS-EUC-H");
+const CNS_EUC_V: &[u8] = include_bytes!("../cmap-resources/Adobe-CNS1-7/CMap/CNS-EUC-V");
+const UNI_CNS_UCS2_H: &[u8] = include_bytes!("../cmap-resources/Adobe-CNS1-7/CMap/UniCNS-UCS2-H");
+const UNI_CNS_UCS2_V: &[u8] = include_bytes!("../cmap-resources/Adobe-CNS1-7/CMap/UniCNS-UCS2-V");
+const UNI_CNS_UTF16_H: &[u8] = include_bytes!("../cmap-resources/Adobe-CNS1-7/CMap/UniCNS-UTF16-H");
+const UNI_CNS_UTF16_V: &[u8] = include_bytes!("../cmap-resources/Adobe-CNS1-7/CMap/UniCNS-UTF16-V");
+
+const _83PV_RKSJ_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/83pv-RKSJ-H");
+const _90MS_RKSJ_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/90ms-RKSJ-H");
+const _90MS_RKSJ_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/90ms-RKSJ-V");
+const _90MSP_RKSJ_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/90msp-RKSJ-H");
+const _90MSP_RKSJ_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/90msp-RKSJ-V");
+const _90PV_RKSJ_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/90pv-RKSJ-H");
+const ADD_RKSJ_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/Add-RKSJ-H");
+const ADD_RKSJ_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/Add-RKSJ-V");
+const EUC_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/EUC-H");
+const EUC_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/EUC-V");
+const EXT_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/Ext-RKSJ-H");
+const EXT_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/Ext-RKSJ-V");
+const H: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/H");
+const V: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/V");
+const UNI_JIS_UCS2_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/UniJIS-UCS2-H");
+const UNI_JIS_UCS2_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/UniJIS-UCS2-V");
+const UNI_JIS_UCS2_HW_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/UniJIS-UCS2-HW-H");
+const UNI_JIS_UCS2_HW_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/UniJIS-UCS2-HW-V");
+const UNI_JIS_UTF16_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/UniJIS-UTF16-H");
+const UNI_JIS_UTF16_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/UniJIS-UTF16-V");
+
+const KSC_EUC_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/KSC-EUC-H");
+const KSC_EUC_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/KSC-EUC-V");
+const KSCMS_UHC_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/KSCms-UHC-H");
+const KSCMS_UHC_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/KSCms-UHC-V");
+const KSCMS_UHC_HW_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/KSCms-UHC-HW-H");
+const KSCMS_UHC_HW_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/KSCms-UHC-HW-V");
+const KSCPC_EUC_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/KSCpc-EUC-H");
+const UNI_KS_UCS2_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/UniKS-UCS2-H");
+const UNI_KS_UCS2_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/UniKS-UCS2-V");
+const UNI_KS_UTF16_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/UniKS-UTF16-H");
+const UNI_KS_UTF16_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/UniKS-UTF16-V");
+
+const IDENTITY_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Identity-0/CMap/Identity-H");
+const IDENTITY_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Identity-0/CMap/Identity-V");
+static PREDEFINED_CMAPS: phf::Map<&'static str, &'static [u8]> = phf_map!{
+    "GB-EUC-H" => GB_EUC_H,
+    "GB-EUC-V" => GB_EUC_V,
+    "GBpc-EUC-H" => GBPC_EUC_H,
+    "GBpc-EUC-V" => GBPC_EUC_V,
+    "GBK-EUC-H" => GBK_EUC_V,
+    "GBK-EUC-V" => GBK_EUC_H,
+    "GBKp-EUC-H" => GBKP_EUC_V,
+    "GBKp-EUC-V" => GBKP_EUC_H,
+    "GBK2K-H" => GBK2K_H,
+    "GBK2K-V" => GBK2K_V,
+    "UniGB-UCS2-H" => UNI_GB_GCSS_H,
+    "UniGB-UCS2-V" => UNI_GB_GCSS_V,
+    "UniGB-UTF16-H" => UNI_GB_UTF16_H,
+    "UniGB-UTF16-V" => UNI_GB_UTF16_V,
+
+    "B5pc-H" => B5PC_H,
+    "B5pc-V" => B5PC_V,
+    "HKscs-B5-H" => HKSCS_B5_H,
+    "HKscs-B5-V" => HKSCS_B5_V,
+    "ETen-B5-H" => ETEN_B5_H,
+    "ETen-B5-V" => ETEN_B5_V,
+    "ETenms-B5-H" => ETENMS_B5_H,
+    "ETenms-B5-V" => ETENMS_B5_V,
+    "CNS-EUC-H" => CNS_EUC_H,
+    "CNS-EUC-V" => CNS_EUC_V,
+    "UniCNS-UCS2-H" => UNI_CNS_UCS2_H,
+    "UniCNS-UCS2-V" => UNI_CNS_UCS2_V,
+    "UniCNS-UTF16-H" => UNI_CNS_UTF16_H,
+    "UniCNS-UTF16-V" => UNI_CNS_UTF16_V,
+
+    "83pv-RKSJ-H" => _83PV_RKSJ_H,
+    "90ms-RKSJ-H" => _90MS_RKSJ_H,
+    "90ms-RKSJ-V" => _90MS_RKSJ_V,
+    "90msp-RKSJ-H" => _90MSP_RKSJ_H,
+    "90msp-RKSJ-V" => _90MSP_RKSJ_V,
+    "90pv-RKSJ-H" => _90PV_RKSJ_H,
+    "Add-RKSJ-H" => ADD_RKSJ_H,
+    "Add-RKSJ-V" => ADD_RKSJ_V,
+    "EUC-H" => EUC_H,
+    "EUC-V" => EUC_V,
+    "Ext-RKSJ-H" => EXT_H,
+    "Ext-RKSJ-V" => EXT_V,
+    "H" => H,
+    "V" => V,
+    "UniJIS-UCS2-H" => UNI_JIS_UCS2_H,
+    "UniJIS-UCS2-V" => UNI_JIS_UCS2_V,
+    "UniJIS-UCS2-HW-H" => UNI_JIS_UCS2_HW_H,
+    "UniJIS-UCS2-HW-V" => UNI_JIS_UCS2_HW_V,
+    "UniJIS-UTF16-H" => UNI_JIS_UTF16_H,
+    "UniJIS-UTF16-V" => UNI_JIS_UTF16_V,
+
+    "KSC-EUC-H" => KSC_EUC_H,
+    "KSC-EUC-V" => KSC_EUC_V,
+    "KSCms-UHC-H" => KSCMS_UHC_H,
+    "KSCms-UHC-V" => KSCMS_UHC_V,
+    "KSCms-UHC-HW-H" => KSCMS_UHC_HW_H,
+    "KSCms-UHC-HW-V" => KSCMS_UHC_HW_V,
+    "KSCpc-EUC-H" => KSCPC_EUC_H,
+    "UniKS-UCS2-H" => UNI_KS_UCS2_H,
+    "UniKS-UCS2-V" => UNI_KS_UCS2_V,
+    "UniKS-UTF16-H" => UNI_KS_UTF16_H,
+    "UniKS-UTF16-V" => UNI_KS_UTF16_V,
+
+    "Identity-H" => IDENTITY_H,
+    "Identity-V" => IDENTITY_V,
 };
 
 /// CMapRegistry contains all CMaps, access by CMap Name.
@@ -365,6 +468,12 @@ pub struct CMapRegistry {
     predefined: HashMap<&'static str, OnceCell<Rc<CMap>>>,
      files: HashMap<Name, Rc<CMap>>
     }
+
+impl Default for CMapRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl CMapRegistry {
     pub fn new() -> Self {
@@ -547,7 +656,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                 "endcidrange" => |m| {
                     let mut entries = Vec::with_capacity(m.p.n_cid_range);   
                     for _ in 0..m.p.n_cid_range {
-                        let cid = m.pop()?.int()? as u16;
+                        let cid = m.pop()?.int()?.try_into().unwrap();
                         let s_upper = m.pop()?.string()?;
                         let s_lower = m.pop()?.string()?;
                         entries.push(IncRangeMap {
@@ -573,12 +682,12 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                 "endcidchar" => |m| {
                     let mut entries = Vec::with_capacity(m.p.n_cid_char);
                     for _ in 0..m.p.n_cid_char {
-                        let cid = m.pop()?.int()? as u16;
+                        let cid = m.pop()?.int()?.try_into().unwrap();
                         let s_code = m.pop()?.string()?;
-                        entries.push(SingleCodeMap {
-                            code: CharCode::from_str_buf(&s_code.borrow()),
-                            cid: CID(cid),
-                        });
+                        entries.push(SingleCodeMap::new(
+                            CharCode::from_str_buf(&s_code.borrow()),
+                            CID(cid),
+                        ));
                     }
                     m.p.cid_char_entries.extend(entries.into_iter().rev());
                     ok()
@@ -590,7 +699,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                 "endnotdefrange" => |m| {
                     let mut entries = Vec::with_capacity(m.p.n_notdef_range);
                     for _ in 0..m.p.n_notdef_range {
-                        let cid = m.pop()?.int()? as u16;
+                        let cid = m.pop()?.int()?.try_into().unwrap();
                         let s_upper = m.pop()?.string()?;
                         let s_lower = m.pop()?.string()?;
                         entries.push(RangeMapToOne {
@@ -616,7 +725,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                 "endnotdefchar" => |m| {
                     let mut entries = Vec::with_capacity(m.p.n_notdef_char);
                     for _ in 0..m.p.n_notdef_char {
-                        let cid = m.pop()?.int()? as u16;
+                        let cid = m.pop()?.int()?.try_into().unwrap();
                         let s_code = m.pop()?.string()?;
                         entries.push(SingleCodeMap {
                             code: CharCode::from_str_buf(&s_code.borrow()),
@@ -659,7 +768,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                         error!("CMap not found: {:?}", name);
                         MachineError::Undefined
                     })?;
-                    m.p.use_cmap = Some(cmap.clone());
+                    m.p.use_cmap = Some(cmap);
                     ok()
                 },
             )
