@@ -155,7 +155,7 @@ impl CodeRange {
             if !r.in_range(c) {
                 return None;
             }
-            offset = offset * (r.upper - r.lower + 1) as u16 + (c - r.lower) as u16;
+            offset = offset * (r.upper as u16 - r.lower as u16 + 1) + (c as u16 - r.lower as u16);
         }
         Some(offset)
     }

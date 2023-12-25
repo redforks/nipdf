@@ -434,3 +434,10 @@ fn get_builtin_cmap() {
         assert_eq!(n, cmap.name.as_str());
     }
 }
+
+#[test]
+fn identity_h_map() {
+    let reg = CMapRegistry::new();
+    let cmap = reg.get(&sname("Identity-H")).unwrap();
+    assert_eq!(vec![CID(0x04)], cmap.map(&[0x0, 0x04u8]));
+}
