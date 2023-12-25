@@ -1002,7 +1002,8 @@ struct CIDFontType2FontOp<'a> {
     widths: Option<CIDFontWidths>,
     default_width: u32,
     units_per_em: u16,
-    cmap: Rc<CMap>,
+    // Convert as Identity-{H,V} if None
+    cmap: Option<Rc<CMap>>,
     cid_to_gid: Option<CIDToGIDMap>,
     cid_is_gid: bool,
 }
@@ -1022,8 +1023,8 @@ impl<'a> CIDFontType2FontOp<'a> {
             "todo: Vertical write mode '{}'",
             encoding_name
         );
-        dbg!(encoding_name.as_str());
-        let cmap = cmap_registry.get(&name(encoding_name)).unwrap();
+        let cmap = (!(encoding_name == "Identity-H" || encoding_name == "Identity-V"))
+            .then(|| cmap_registry.get(&name(encoding_name)).unwrap());
 
         let cid_fonts = font.descendant_fonts()?;
         let cid_font = &cid_fonts[0];
@@ -1063,7 +1064,15 @@ fn glyph_index(face: &TTFFace, ch: u32) -> Option<u16> {
 
 impl<'a> FontOp for CIDFontType2FontOp<'a> {
     fn decode_chars(&self, s: &[u8]) -> Vec<u32> {
-        self.cmap.map(s).into_iter().map(|ch| ch.0 as u32).collect()
+        self.cmap.as_ref().map_or_else(
+            || {
+                s.chunks(2)
+                    .into_iter()
+                    .map(|ch| (ch[0] as u32) << 8 | ch[1] as u32)
+                    .collect()
+            },
+            |cmap| cmap.map(s).into_iter().map(|ch| ch.0 as u32).collect(),
+        )
     }
 
     fn char_to_gid(&self, ch: u32) -> u16 {
