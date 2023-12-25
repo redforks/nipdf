@@ -7,8 +7,8 @@ use crate::{
     },
     object::{PdfObject, Stream},
     text::{
-        cmap::CMap, CIDFontType, CIDFontWidths, EncodingDict, EncodingDifferences,
-        FontDescriptorDict, FontDescriptorFlags, FontDict, FontType, Type0FontDict, Type3FontDict,
+        CIDFontType, CIDFontWidths, EncodingDict, EncodingDifferences, FontDescriptorDict,
+        FontDescriptorFlags, FontDict, FontType, Type0FontDict, Type3FontDict,
     },
 };
 use anyhow::{anyhow, bail, Ok, Result as AnyResult};
@@ -23,8 +23,11 @@ use once_cell::sync::Lazy;
 use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
 use phf::phf_map;
-use prescript::{name, sname, Encoding, Name, NOTDEF};
-use std::{collections::HashMap, ops::RangeInclusive};
+use prescript::{
+    cmap::{CMap, CMapRegistry},
+    name, sname, Encoding, Name, NOTDEF,
+};
+use std::{collections::HashMap, ops::RangeInclusive, rc::Rc};
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder, PlatformId};
 
 /// FontWidth used in Type1 and TrueType fonts
@@ -156,7 +159,7 @@ impl<'a, P: PathSink> GlyphRender<P> for Type1GlyphRender<'a> {
 
 pub trait Font<P> {
     fn font_type(&self) -> FontType;
-    fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>>;
+    fn create_op(&self, cmap_registry: &CMapRegistry) -> AnyResult<Box<dyn FontOp + '_>>;
     fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender<P> + '_>>;
     fn as_type3(&self) -> Option<&Type3Font> {
         None
@@ -356,7 +359,7 @@ impl<'a, 'b: 'a, P: PathSink> Font<P> for Type1Font<'a, 'b> {
         FontType::Type1
     }
 
-    fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
+    fn create_op(&self, _cmap_registry: &CMapRegistry) -> AnyResult<Box<dyn FontOp + '_>> {
         Ok(Box::new(Type1FontOp::new(
             &self.font_dict,
             &self.font,
@@ -477,7 +480,7 @@ impl<'a, 'b, P: PathSink> Font<P> for TTFParserFont<'a, 'b> {
         self.typ
     }
 
-    fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
+    fn create_op(&self, _cmap_registry: &CMapRegistry) -> AnyResult<Box<dyn FontOp + '_>> {
         let face = TTFFace::parse(&self.data, 0)?;
         let encoding = EncodingParser(&self.font_dict).ttf()?;
         Ok(Box::new(TTFParserFontOp::new(
@@ -661,7 +664,10 @@ struct FontCacheInner<'c, P: PathSink + 'static> {
     renders: HashMap<Name, Box<dyn GlyphRender<P> + 'this>>,
 }
 
-pub struct FontCache<'c, P: PathSink + 'static>(FontCacheInner<'c, P>);
+pub struct FontCache<'c, P: PathSink + 'static> {
+    cache: FontCacheInner<'c, P>,
+    cmap_registry: CMapRegistry,
+}
 
 impl<'c, P: PathSink + 'static> FontCache<'c, P> {
     fn load_true_type_from_os(desc: &FontDescriptorDict) -> AnyResult<Vec<u8>> {
@@ -877,35 +883,39 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
             }
         }
 
-        Ok(Self(FontCacheInner::try_new(
-            fonts,
-            |fonts| {
-                let mut ops = HashMap::with_capacity(fonts.len());
-                for (k, v) in fonts {
-                    ops.insert(k.clone(), v.create_op()?);
-                }
-                Ok(ops)
-            },
-            |fonts| {
-                let mut renders = HashMap::with_capacity(fonts.len());
-                for (k, v) in fonts {
-                    renders.insert(k.clone(), v.create_glyph_render()?);
-                }
-                Ok(renders)
-            },
-        )?))
+        let cmap_registry = CMapRegistry::new();
+        Ok(Self {
+            cache: FontCacheInner::try_new(
+                fonts,
+                |fonts| {
+                    let mut ops = HashMap::with_capacity(fonts.len());
+                    for (k, v) in fonts {
+                        ops.insert(k.clone(), v.create_op(&cmap_registry)?);
+                    }
+                    Ok(ops)
+                },
+                |fonts| {
+                    let mut renders = HashMap::with_capacity(fonts.len());
+                    for (k, v) in fonts {
+                        renders.insert(k.clone(), v.create_glyph_render()?);
+                    }
+                    Ok(renders)
+                },
+            )?,
+            cmap_registry,
+        })
     }
 
     pub fn get_font(&self, s: &Name) -> Option<&dyn Font<P>> {
-        self.0.borrow_fonts().get(s).map(|x| x.as_ref())
+        self.cache.borrow_fonts().get(s).map(|x| x.as_ref())
     }
 
     pub fn get_op(&self, s: &Name) -> Option<&(dyn FontOp)> {
-        self.0.borrow_ops().get(s).map(|x| x.as_ref())
+        self.cache.borrow_ops().get(s).map(|x| x.as_ref())
     }
 
     pub fn get_glyph_render(&self, s: &Name) -> Option<&(dyn GlyphRender<P>)> {
-        self.0.borrow_renders().get(s).map(|x| x.as_ref())
+        self.cache.borrow_renders().get(s).map(|x| x.as_ref())
     }
 }
 
@@ -992,13 +1002,18 @@ struct CIDFontType2FontOp<'a> {
     widths: Option<CIDFontWidths>,
     default_width: u32,
     units_per_em: u16,
-    cmap: CMap,
+    cmap: Rc<CMap>,
     cid_to_gid: Option<CIDToGIDMap>,
     cid_is_gid: bool,
 }
 
 impl<'a> CIDFontType2FontOp<'a> {
-    fn new(face: TTFFace<'a>, font: &Type0FontDict, is_embed: bool) -> AnyResult<Self> {
+    fn new(
+        cmap_registry: &CMapRegistry,
+        face: TTFFace<'a>,
+        font: &Type0FontDict,
+        is_embed: bool,
+    ) -> AnyResult<Self> {
         let NameOrStream::Name(encoding_name) = font.encoding()? else {
             todo!("cmap stream not supported");
         };
@@ -1007,7 +1022,8 @@ impl<'a> CIDFontType2FontOp<'a> {
             "todo: Vertical write mode '{}'",
             encoding_name
         );
-        let cmap = CMap::predefined(encoding_name.as_str())?;
+        dbg!(encoding_name.as_str());
+        let cmap = cmap_registry.get(&name(encoding_name)).unwrap();
 
         let cid_fonts = font.descendant_fonts()?;
         let cid_font = &cid_fonts[0];
@@ -1047,7 +1063,7 @@ fn glyph_index(face: &TTFFace, ch: u32) -> Option<u16> {
 
 impl<'a> FontOp for CIDFontType2FontOp<'a> {
     fn decode_chars(&self, s: &[u8]) -> Vec<u32> {
-        self.cmap.decode(s)
+        self.cmap.map(s).into_iter().map(|ch| ch.0 as u32).collect()
     }
 
     fn char_to_gid(&self, ch: u32) -> u16 {
@@ -1124,9 +1140,10 @@ impl<'a, 'b, P: PathSink + 'static> Font<P> for CIDFontType2Font<'a, 'b> {
         FontType::Type0
     }
 
-    fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
+    fn create_op(&self, cmap_registry: &CMapRegistry) -> AnyResult<Box<dyn FontOp + '_>> {
         let face = TTFFace::parse(&self.data, 0)?;
         Ok(Box::new(CIDFontType2FontOp::new(
+            cmap_registry,
             face,
             &self.font_dict.type0()?,
             self.font_is_embed,
@@ -1144,7 +1161,7 @@ impl<'a, 'b, P: PathSink + 'static> Font<P> for CIDFontType0Font<'a, 'b> {
         FontType::Type0
     }
 
-    fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
+    fn create_op(&self, _cmap_registry: &CMapRegistry) -> AnyResult<Box<dyn FontOp + '_>> {
         Ok(Box::new(CIDFontType0FontOp::new(&self.font_dict.type0()?)?))
     }
 
@@ -1264,7 +1281,7 @@ impl<'a, 'b, P: PathSink + 'static> Font<P> for Type3Font<'a, 'b> {
         FontType::Type3
     }
 
-    fn create_op(&self) -> AnyResult<Box<dyn FontOp + '_>> {
+    fn create_op(&self, _cmap_registry: &CMapRegistry) -> AnyResult<Box<dyn FontOp + '_>> {
         Ok(Box::new(Type3FontOp::new(&self.dict, &self.name_to_gid)?))
     }
 
