@@ -1,5 +1,5 @@
 use super::*;
-use crate::{sname, name};
+use crate::{name, sname};
 use either::{Left, Right};
 use std::{borrow::Borrow, vec};
 use test_log::test;
@@ -423,7 +423,10 @@ fn get_builtin_cmap() {
     // get cmap that use another builtin cmap
     let cmap = reg.get(&sname("ETen-B5-V")).unwrap();
     assert_eq!("ETen-B5-V", cmap.name.as_str());
-    assert_eq!("ETen-B5-H", cmap.as_ref().use_map.as_ref().unwrap().name.as_str());
+    assert_eq!(
+        "ETen-B5-H",
+        cmap.as_ref().use_map.as_ref().unwrap().name.as_str()
+    );
 
     // assert all builtin cmaps
     for &n in PREDEFINED_CMAPS.keys() {
