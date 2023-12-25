@@ -549,7 +549,12 @@ impl Path {
     pub fn reset(&mut self) {
         let temp = Left(PathBuilder::new());
         let p = std::mem::replace(&mut self.path, temp);
-        self.path = p.right_and_then(|p| Left(p.clear()));
+        self.path = p
+            .map_left(|mut p| {
+                p.clear();
+                p
+            })
+            .right_and_then(|p| Left(p.clear()));
     }
 
     pub fn clear(&mut self) {
