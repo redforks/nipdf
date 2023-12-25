@@ -666,7 +666,6 @@ struct FontCacheInner<'c, P: PathSink + 'static> {
 
 pub struct FontCache<'c, P: PathSink + 'static> {
     cache: FontCacheInner<'c, P>,
-    cmap_registry: CMapRegistry,
 }
 
 impl<'c, P: PathSink + 'static> FontCache<'c, P> {
@@ -902,7 +901,6 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                     Ok(renders)
                 },
             )?,
-            cmap_registry,
         })
     }
 
