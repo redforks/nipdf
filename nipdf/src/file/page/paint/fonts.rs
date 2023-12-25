@@ -745,7 +745,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
             None => (false, Self::load_true_type_from_os(&desc)?),
         };
         if font_type == FontType::Type0 {
-            Ok(Box::new(CIDFontType2Font::new(is_embed, ttf_bytes, font)))
+            Ok(Box::new(CIDFontType2Font::new(is_embed, ttf_bytes, font)?))
         } else {
             Ok(Box::new(TTFParserFont::new(
                 font.subtype()?,
@@ -1127,17 +1127,20 @@ impl<'a, 'b> CIDFontType0Font<'a, 'b> {
 
 struct CIDFontType2Font<'a, 'b> {
     data: Vec<u8>,
+    font: FontKitFont,
     font_dict: FontDict<'a, 'b>,
     font_is_embed: bool,
 }
 
 impl<'a, 'b> CIDFontType2Font<'a, 'b> {
-    fn new(font_is_embed: bool, data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> Self {
-        Self {
+    fn new(font_is_embed: bool, data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> AnyResult<Self> {
+        let font = FontKitFont::from_bytes(data.clone().into(), 0)?;
+        Ok(Self {
             data,
+            font,
             font_dict,
             font_is_embed,
-        }
+        })
     }
 }
 
@@ -1157,8 +1160,8 @@ impl<'a, 'b, P: PathSink + 'static> Font<P> for CIDFontType2Font<'a, 'b> {
     }
 
     fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender<P> + '_>> {
-        let face = TTFFace::parse(&self.data, 0)?;
-        Ok(Box::new(TTFParserGlyphRender { face }))
+        // Use FreeType, TTFParser failed render bug1734802.pdf
+        Ok(Box::new(Type1GlyphRender { font: &self.font }))
     }
 }
 
