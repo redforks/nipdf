@@ -18,32 +18,24 @@ use std::{
 /// Using `proc-macro2`, `syn`, `quote` crates to help for parsing and generating code.
 #[proc_macro_attribute]
 pub fn pdf_file_test_cases(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let cache_file = Path::new(&var("OUT_DIR").unwrap()).join("render-test.list");
-    let files = if cache_file.exists() {
-        let cache = std::fs::read_to_string(cache_file).unwrap();
-        cache
-            .lines()
-            .filter(|&l| (!l.is_empty()))
-            .map(|l| l.to_owned())
-            .collect()
-    } else {
-        let dirs = vec!["sample_files", "../../pdf", "pdf.js/test/pdfs"];
-        let patterns = vec!["**/*.pdf", "**/*.pdf.link"];
-        let files = dirs
-            .into_iter()
-            .cartesian_product(patterns)
-            .flat_map(|(dir, pattern)| {
-                let dir: PathBuf = [&var("CARGO_MANIFEST_DIR").unwrap(), dir, pattern]
-                    .iter()
-                    .collect();
-                glob(dir.to_str().unwrap())
-                    .unwrap()
-                    .map(|p| p.unwrap().to_str().unwrap().to_owned())
-            })
-            .collect_vec();
-        std::fs::write(cache_file, files.join("\n")).unwrap();
-        files
-    };
+    let dirs = vec![
+        "../nipdf/sample_files",
+        "../../pdf",
+        "../nipdf/pdf.js/test/pdfs",
+    ];
+    let patterns = vec!["**/*.pdf", "**/*.pdf.link"];
+    let files = dirs
+        .into_iter()
+        .cartesian_product(patterns)
+        .flat_map(|(dir, pattern)| {
+            let dir: PathBuf = [&var("CARGO_MANIFEST_DIR").unwrap(), dir, pattern]
+                .iter()
+                .collect();
+            glob(dir.to_str().unwrap())
+                .unwrap()
+                .map(|p| p.unwrap().to_str().unwrap().to_owned())
+        })
+        .collect_vec();
 
     let mut test_case_attrs = Vec::with_capacity(files.len());
     for file in files {
