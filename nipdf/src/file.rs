@@ -484,13 +484,13 @@ impl<'a> ObjectResolver<'a> {
     /// If its end value is array, return all elements in array.
     pub fn resolve_one_or_more_pdf_object<'b, T: PdfObject<'b, Self>>(
         &'b self,
-        id: impl Into<RuntimeObjectId>,
+        id_or_dict: &'b Object,
     ) -> Result<Vec<T>, ObjectValueError> {
-        let id = id.into();
-        let obj = self.resolve(id)?;
+        let id = id_or_dict.opt_reference().map(|id| id.id().id());
+        let obj = self.resolve_reference(id_or_dict)?;
         match obj {
-            Object::Dictionary(d) => Ok(vec![T::new(Some(id), d, self)?]),
-            Object::Stream(s) => Ok(vec![T::new(Some(id), s.as_dict(), self)?]),
+            Object::Dictionary(d) => Ok(vec![T::new(id, d, self)?]),
+            Object::Stream(s) => Ok(vec![T::new(id, s.as_dict(), self)?]),
             Object::Array(arr) => {
                 let mut res = Vec::with_capacity(arr.len());
                 for obj in arr.iter() {

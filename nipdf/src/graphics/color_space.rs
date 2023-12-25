@@ -171,7 +171,7 @@ where
                     assert_eq!(4, arr.len());
                     let alternate = ColorSpaceArgs::try_from(&arr[2])?;
                     let functions: Vec<FunctionDict> =
-                        resolver.resolve_one_or_more_pdf_object(arr[3].reference()?.id().id())?;
+                        resolver.resolve_one_or_more_pdf_object(&arr[3])?;
                     let functions: Result<Vec<_>, _> =
                         functions.into_iter().map(|f| f.func()).collect();
                     let function = NFunc::new_box(functions?)?;
