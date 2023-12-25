@@ -28,7 +28,7 @@ use prescript::{
     name, sname, Encoding, Name, NOTDEF,
 };
 use std::{collections::HashMap, ops::RangeInclusive, rc::Rc};
-use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder, PlatformId};
+use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
 
 /// FontWidth used in Type1 and TrueType fonts
 struct FirstLastFontWidth {
@@ -1067,7 +1067,6 @@ impl<'a> FontOp for CIDFontType2FontOp<'a> {
         self.cmap.as_ref().map_or_else(
             || {
                 s.chunks(2)
-                    .into_iter()
                     .map(|ch| (ch[0] as u32) << 8 | ch[1] as u32)
                     .collect()
             },

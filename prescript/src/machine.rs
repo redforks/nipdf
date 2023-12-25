@@ -6,7 +6,6 @@ use crate::{
 use educe::Educe;
 use either::Either;
 use std::{
-    any::Any,
     cell::{Ref, RefCell},
     collections::HashMap,
     fmt::Display,
@@ -401,7 +400,7 @@ impl<'a, P> From<Rc<RefCell<RuntimeDictionary<'a, P>>>> for RuntimeValue<'a, P> 
     }
 }
 
-fn into_dict<'a, P>(d: RuntimeDictionary<'a, P>) -> MachineResult<Dictionary> {
+fn into_dict<P>(d: RuntimeDictionary<'_, P>) -> MachineResult<Dictionary> {
     let mut dict = Dictionary::new();
     for (k, v) in d {
         let v = match v {
@@ -576,7 +575,7 @@ pub(crate) trait MachinePlugin: Sized {
 }
 
 impl MachinePlugin for () {
-    fn find_proc_set_resource<'a>(&self, name: &Name) -> Option<RuntimeDictionary<'a, Self>> {
+    fn find_proc_set_resource<'a>(&self, _name: &Name) -> Option<RuntimeDictionary<'a, Self>> {
         None
     }
 }

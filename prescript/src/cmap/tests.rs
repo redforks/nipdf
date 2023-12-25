@@ -1,7 +1,7 @@
 use super::*;
 use crate::{name, sname};
 use either::{Left, Right};
-use std::{borrow::Borrow, vec};
+use std::vec;
 use test_log::test;
 use tinyvec::array_vec;
 use CharCode::*;

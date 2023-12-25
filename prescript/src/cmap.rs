@@ -135,7 +135,7 @@ impl CodeRange {
         let n_bytes = s_lower.len() / 2;
         assert_eq!(n_bytes, s_upper.len() / 2);
         let mut r = ArrayVec::new();
-        for i in (0..n_bytes).into_iter().rev() {
+        for i in (0..n_bytes).rev() {
             let lower = (lower >> (i * 8)) as u8;
             let upper = (upper >> (i * 8)) as u8;
             r.push(ByteRange::new(lower, upper));
@@ -151,7 +151,7 @@ impl CodeRange {
         }
 
         let mut offset = 0u16;
-        for (r, c) in self.0.iter().zip(ch.as_ref().into_iter().copied()) {
+        for (r, c) in self.0.iter().zip(ch.as_ref().iter().copied()) {
             if !r.in_range(c) {
                 return None;
             }
@@ -262,7 +262,7 @@ struct RangeMapToOne {
 
 impl CodeMap for RangeMapToOne {
     fn map(&self, code: CharCode) -> Option<CID> {
-        (self.range.in_range(code)).then(|| self.cid)
+        (self.range.in_range(code)).then_some(self.cid)
     }
 }
 
@@ -281,7 +281,7 @@ impl SingleCodeMap {
 
 impl CodeMap for SingleCodeMap {
     fn map(&self, code: CharCode) -> Option<CID> {
-        (code == self.code).then(|| self.cid)
+        (code == self.code).then_some(self.cid)
     }
 }
 
@@ -387,7 +387,7 @@ const ADD_RKSJ_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/
 const ADD_RKSJ_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/Add-RKSJ-V");
 const EUC_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/EUC-H");
 const EUC_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/EUC-V");
-const Ext_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/Ext-RKSJ-H");
+const EXT_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/Ext-RKSJ-H");
 const EXT_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/Ext-RKSJ-V");
 const H: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/H");
 const V: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/V");
@@ -412,73 +412,72 @@ const UNI_KS_UTF16_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/C
 
 const IDENTITY_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Identity-0/CMap/Identity-H");
 const IDENTITY_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Identity-0/CMap/Identity-V");
-// TODO: add other predefined cmaps
 static PREDEFINED_CMAPS: phf::Map<&'static str, &'static [u8]> = phf_map!{
-"GB-EUC-H" => GB_EUC_H,
-"GB-EUC-V" => GB_EUC_V,
-"GBpc-EUC-H" => GBPC_EUC_H,
-"GBpc-EUC-V" => GBPC_EUC_V,
-"GBK-EUC-H" => GBK_EUC_V,
-"GBK-EUC-V" => GBK_EUC_H,
-"GBKp-EUC-H" => GBKP_EUC_V,
-"GBKp-EUC-V" => GBKP_EUC_H,
-"GBK2K-H" => GBK2K_H,
-"GBK2K-V" => GBK2K_V,
-"UniGB-UCS2-H" => UNI_GB_GCSS_H,
-"UniGB-UCS2-V" => UNI_GB_GCSS_V,
-"UniGB-UTF16-H" => UNI_GB_UTF16_H,
-"UniGB-UTF16-V" => UNI_GB_UTF16_V,
+    "GB-EUC-H" => GB_EUC_H,
+    "GB-EUC-V" => GB_EUC_V,
+    "GBpc-EUC-H" => GBPC_EUC_H,
+    "GBpc-EUC-V" => GBPC_EUC_V,
+    "GBK-EUC-H" => GBK_EUC_V,
+    "GBK-EUC-V" => GBK_EUC_H,
+    "GBKp-EUC-H" => GBKP_EUC_V,
+    "GBKp-EUC-V" => GBKP_EUC_H,
+    "GBK2K-H" => GBK2K_H,
+    "GBK2K-V" => GBK2K_V,
+    "UniGB-UCS2-H" => UNI_GB_GCSS_H,
+    "UniGB-UCS2-V" => UNI_GB_GCSS_V,
+    "UniGB-UTF16-H" => UNI_GB_UTF16_H,
+    "UniGB-UTF16-V" => UNI_GB_UTF16_V,
 
-"B5pc-H" => B5PC_H,
-"B5pc-V" => B5PC_V,
-"HKscs-B5-H" => HKSCS_B5_H,
-"HKscs-B5-V" => HKSCS_B5_V,
-"ETen-B5-H" => ETEN_B5_H,
-"ETen-B5-V" => ETEN_B5_V,
-"ETenms-B5-H" => ETENMS_B5_H,
-"ETenms-B5-V" => ETENMS_B5_V,
-"CNS-EUC-H" => CNS_EUC_H,
-"CNS-EUC-V" => CNS_EUC_V,
-"UniCNS-UCS2-H" => UNI_CNS_UCS2_H,
-"UniCNS-UCS2-V" => UNI_CNS_UCS2_V,
-"UniCNS-UTF16-H" => UNI_CNS_UTF16_H,
-"UniCNS-UTF16-V" => UNI_CNS_UTF16_V,
+    "B5pc-H" => B5PC_H,
+    "B5pc-V" => B5PC_V,
+    "HKscs-B5-H" => HKSCS_B5_H,
+    "HKscs-B5-V" => HKSCS_B5_V,
+    "ETen-B5-H" => ETEN_B5_H,
+    "ETen-B5-V" => ETEN_B5_V,
+    "ETenms-B5-H" => ETENMS_B5_H,
+    "ETenms-B5-V" => ETENMS_B5_V,
+    "CNS-EUC-H" => CNS_EUC_H,
+    "CNS-EUC-V" => CNS_EUC_V,
+    "UniCNS-UCS2-H" => UNI_CNS_UCS2_H,
+    "UniCNS-UCS2-V" => UNI_CNS_UCS2_V,
+    "UniCNS-UTF16-H" => UNI_CNS_UTF16_H,
+    "UniCNS-UTF16-V" => UNI_CNS_UTF16_V,
 
-"83pv-RKSJ-H" => _83PV_RKSJ_H,
-"90ms-RKSJ-H" => _90MS_RKSJ_H,
-"90ms-RKSJ-V" => _90MS_RKSJ_V,
-"90msp-RKSJ-H" => _90MSP_RKSJ_H,
-"90msp-RKSJ-V" => _90MSP_RKSJ_V,
-"90pv-RKSJ-H" => _90PV_RKSJ_H,
-"Add-RKSJ-H" => ADD_RKSJ_H,
-"Add-RKSJ-V" => ADD_RKSJ_V,
-"EUC-H" => EUC_H,
-"EUC-V" => EUC_V,
-"Ext-RKSJ-H" => Ext_H,
-"Ext-RKSJ-V" => EXT_V,
-"H" => H,
-"V" => V,
-"UniJIS-UCS2-H" => UNI_JIS_UCS2_H,
-"UniJIS-UCS2-V" => UNI_JIS_UCS2_V,
-"UniJIS-UCS2-HW-H" => UNI_JIS_UCS2_HW_H,
-"UniJIS-UCS2-HW-V" => UNI_JIS_UCS2_HW_V,
-"UniJIS-UTF16-H" => UNI_JIS_UTF16_H,
-"UniJIS-UTF16-V" => UNI_JIS_UTF16_V,
+    "83pv-RKSJ-H" => _83PV_RKSJ_H,
+    "90ms-RKSJ-H" => _90MS_RKSJ_H,
+    "90ms-RKSJ-V" => _90MS_RKSJ_V,
+    "90msp-RKSJ-H" => _90MSP_RKSJ_H,
+    "90msp-RKSJ-V" => _90MSP_RKSJ_V,
+    "90pv-RKSJ-H" => _90PV_RKSJ_H,
+    "Add-RKSJ-H" => ADD_RKSJ_H,
+    "Add-RKSJ-V" => ADD_RKSJ_V,
+    "EUC-H" => EUC_H,
+    "EUC-V" => EUC_V,
+    "Ext-RKSJ-H" => EXT_H,
+    "Ext-RKSJ-V" => EXT_V,
+    "H" => H,
+    "V" => V,
+    "UniJIS-UCS2-H" => UNI_JIS_UCS2_H,
+    "UniJIS-UCS2-V" => UNI_JIS_UCS2_V,
+    "UniJIS-UCS2-HW-H" => UNI_JIS_UCS2_HW_H,
+    "UniJIS-UCS2-HW-V" => UNI_JIS_UCS2_HW_V,
+    "UniJIS-UTF16-H" => UNI_JIS_UTF16_H,
+    "UniJIS-UTF16-V" => UNI_JIS_UTF16_V,
 
-"KSC-EUC-H" => KSC_EUC_H,
-"KSC-EUC-V" => KSC_EUC_V,
-"KSCms-UHC-H" => KSCMS_UHC_H,
-"KSCms-UHC-V" => KSCMS_UHC_V,
-"KSCms-UHC-HW-H" => KSCMS_UHC_HW_H,
-"KSCms-UHC-HW-V" => KSCMS_UHC_HW_V,
-"KSCpc-EUC-H" => KSCPC_EUC_H,
-"UniKS-UCS2-H" => UNI_KS_UCS2_H,
-"UniKS-UCS2-V" => UNI_KS_UCS2_V,
-"UniKS-UTF16-H" => UNI_KS_UTF16_H,
-"UniKS-UTF16-V" => UNI_KS_UTF16_V,
+    "KSC-EUC-H" => KSC_EUC_H,
+    "KSC-EUC-V" => KSC_EUC_V,
+    "KSCms-UHC-H" => KSCMS_UHC_H,
+    "KSCms-UHC-V" => KSCMS_UHC_V,
+    "KSCms-UHC-HW-H" => KSCMS_UHC_HW_H,
+    "KSCms-UHC-HW-V" => KSCMS_UHC_HW_V,
+    "KSCpc-EUC-H" => KSCPC_EUC_H,
+    "UniKS-UCS2-H" => UNI_KS_UCS2_H,
+    "UniKS-UCS2-V" => UNI_KS_UCS2_V,
+    "UniKS-UTF16-H" => UNI_KS_UTF16_H,
+    "UniKS-UTF16-V" => UNI_KS_UTF16_V,
 
-"Identity-H" => IDENTITY_H,
-"Identity-V" => IDENTITY_V,
+    "Identity-H" => IDENTITY_H,
+    "Identity-V" => IDENTITY_V,
 };
 
 /// CMapRegistry contains all CMaps, access by CMap Name.
@@ -487,6 +486,12 @@ pub struct CMapRegistry {
     predefined: HashMap<&'static str, OnceCell<Rc<CMap>>>,
      files: HashMap<Name, Rc<CMap>>
     }
+
+impl Default for CMapRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl CMapRegistry {
     pub fn new() -> Self {
@@ -781,7 +786,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                         error!("CMap not found: {:?}", name);
                         MachineError::Undefined
                     })?;
-                    m.p.use_cmap = Some(cmap.clone());
+                    m.p.use_cmap = Some(cmap);
                     ok()
                 },
             )
