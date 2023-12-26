@@ -116,8 +116,9 @@ fn resolve_one_or_more_pdf_object() {
     let buf = b"1 0 obj <</foo 2 0 R>> endobj";
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
+    let id = Object::new_ref(1);
     let list = resolver
-        .resolve_one_or_more_pdf_object::<FooDict>(1)
+        .resolve_one_or_more_pdf_object::<FooDict>(&id)
         .unwrap();
     assert_eq!(list.len(), 1);
     assert_eq!(Some(1.into()), list[0].id());
@@ -129,8 +130,9 @@ endstream
 endobj"#;
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
+    let id = Object::new_ref(1);
     let list = resolver
-        .resolve_one_or_more_pdf_object::<FooDict>(1)
+        .resolve_one_or_more_pdf_object::<FooDict>(&id)
         .unwrap();
     assert_eq!(list.len(), 1);
     assert_eq!(Some(1.into()), list[0].id());
@@ -140,8 +142,9 @@ endobj"#;
 2 0 obj<<>>endobj"#;
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
+    let id = Object::new_ref(1);
     let list = resolver
-        .resolve_one_or_more_pdf_object::<FooDict>(1)
+        .resolve_one_or_more_pdf_object::<FooDict>(&id)
         .unwrap();
     assert_eq!(list.len(), 2);
     assert_eq!(Some(2.into()), list[0].id());
