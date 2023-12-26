@@ -15,7 +15,7 @@ use winnow::{
     combinator::{alt, delimited, dispatch, fail, fold_repeat, opt, preceded, repeat, terminated},
     error::{ContextError, ErrMode},
     stream::{AsChar, Stream},
-    token::{any, one_of, tag, take_till0, take_till1, take_while},
+    token::{any, one_of, tag, take_till, take_while},
     PResult, Parser,
 };
 
@@ -29,8 +29,8 @@ use winnow::{
 /// font version.
 pub fn header(input: &mut &[u8]) -> PResult<Header> {
     preceded(tag(b"%!"), alt((b"PS-AdobeFont", b"AdobeFont"))).parse_next(input)?;
-    let spec_ver = delimited('-', take_till1(':'), b": ").parse_next(input)?;
-    let font_name = take_till1(' ').parse_next(input)?;
+    let spec_ver = delimited('-', take_till(1.., ':'), b": ").parse_next(input)?;
+    let font_name = take_till(1.., ' ').parse_next(input)?;
     let font_ver =
         delimited(' ', take_while(1.., (('0'..='9'), '.')), line_ending).parse_next(input)?;
 
@@ -44,7 +44,7 @@ pub fn header(input: &mut &[u8]) -> PResult<Header> {
 fn comment(input: &mut &[u8]) -> PResult<()> {
     preceded(
         tag(b"%"),
-        take_till0(|c| c == b'\n' || c == b'\r' || c == b'\x0c'),
+        take_till(0.., |c| c == b'\n' || c == b'\r' || c == b'\x0c'),
     )
     .parse_next(input)?;
     Ok(())
@@ -158,7 +158,7 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
     }
 
     fn literal_fragment<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>> {
-        let buf = take_till1((b'(', b')', b'\\')).parse_next(input)?;
+        let buf = take_till(1.., (b'(', b')', b'\\')).parse_next(input)?;
         Ok(StringFragment::Literal(buf))
     }
 
