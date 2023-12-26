@@ -412,7 +412,7 @@ fn handle_filter_error<V, E: Display>(
 struct LZWDeflateDecodeParams {
     predictor: i32,
     colors: i32,
-    bits_per_comonent: i32,
+    bits_per_component: i32,
     columns: i32,
     early_change: i32,
 }
@@ -427,7 +427,7 @@ impl LZWDeflateDecodeParams {
                 colors: r
                     .opt_resolve_container_value(d, &sname("Colors"))?
                     .map_or(1, |o| o.int().unwrap()),
-                bits_per_comonent: r
+                bits_per_component: r
                     .opt_resolve_container_value(d, &sname("BitsPerComponent"))?
                     .map_or(8, |o| o.int().unwrap()),
                 columns: r
@@ -441,7 +441,7 @@ impl LZWDeflateDecodeParams {
             Self {
                 predictor: d.get(&sname("Predictor")).map_or(1, |o| o.int().unwrap()),
                 colors: d.get(&sname("Colors")).map_or(1, |o| o.int().unwrap()),
-                bits_per_comonent: d
+                bits_per_component: d
                     .get(&sname("BitsPerComponent"))
                     .map_or(8, |o| o.int().unwrap()),
                 columns: d.get(&sname("Columns")).map_or(1, |o| o.int().unwrap()),
@@ -491,21 +491,28 @@ fn paeth(a: u8, b: u8, c: u8) -> u8 {
 }
 
 /// Restore data processed by png predictor.
-fn png_predictor(buf: &[u8], columns: i32) -> Result<Vec<u8>, ObjectValueError> {
-    let columns = columns as usize;
-    let first_row = vec![0u8; columns];
+fn png_predictor(
+    buf: &[u8],
+    row_bytes: usize,
+    pixel_bytes: usize,
+) -> Result<Vec<u8>, ObjectValueError> {
+    let row_with_flag_bytes = 1 + row_bytes;
+    assert_eq!(buf.len() % row_with_flag_bytes, 0);
+    let first_row = vec![0u8; row_bytes];
     let mut upper_row = &first_row[..];
-    let mut r = vec![0u8; buf.len() / (columns + 1) * columns];
-    for (cur_row, dest_row) in buf.chunks(columns + 1).zip(r.chunks_mut(columns)) {
+    let mut r = vec![0u8; buf.len() / row_with_flag_bytes * row_bytes];
+
+    for (cur_row, dest_row) in buf.chunks(row_with_flag_bytes).zip(r.chunks_mut(row_bytes)) {
         let (flag, cur_row) = cur_row.split_first().unwrap();
-        #[allow(clippy::cast_possible_truncation)]
         match flag {
             0 => dest_row.copy_from_slice(cur_row),
             1 => {
                 // left
-                dest_row[0] = cur_row[0];
-                for i in 1..dest_row.len() {
-                    dest_row[i] = cur_row[i].wrapping_add(cur_row[i - 1]);
+                for i in 0..pixel_bytes {
+                    dest_row[i] = cur_row[i];
+                }
+                for i in pixel_bytes..row_bytes {
+                    dest_row[i] = cur_row[i].wrapping_add(dest_row[i - pixel_bytes]);
                 }
             }
             2 => {
@@ -516,25 +523,26 @@ fn png_predictor(buf: &[u8], columns: i32) -> Result<Vec<u8>, ObjectValueError> 
             }
             3 => {
                 // average of left and up
-                let left_row = once(0).chain(cur_row.iter().copied());
-                for (dest, (up, (left, cur))) in dest_row
-                    .iter_mut()
-                    .zip(upper_row.iter().zip(left_row.zip(cur_row.iter())))
-                {
-                    // overflow truncate is expected behavior
-                    *dest = (*cur).wrapping_add(((left as i16 + *up as i16) / 2) as u8);
+                for i in 0..pixel_bytes {
+                    dest_row[i] = cur_row[i].wrapping_add(upper_row[i]);
+                }
+                for i in pixel_bytes..row_bytes {
+                    dest_row[i] = cur_row[i].wrapping_add(
+                        ((dest_row[i - pixel_bytes] as u16 + upper_row[i] as u16) / 2) as u8,
+                    );
                 }
             }
             4 => {
                 // paeth
-                let left_row = once(0).chain(cur_row.iter().copied());
-                let left_upper_row = once(0).chain(upper_row.iter().copied());
-                for (dest, (up, (left, (left_up, cur)))) in dest_row.iter_mut().zip(
-                    upper_row
-                        .iter()
-                        .zip(left_row.zip(left_upper_row.zip(cur_row.iter()))),
-                ) {
-                    *dest = (*cur).wrapping_add(paeth(left, *up, left_up));
+                for i in 0..pixel_bytes {
+                    dest_row[i] = cur_row[i].wrapping_add(paeth(0, upper_row[i], 0));
+                }
+                for i in pixel_bytes..row_bytes {
+                    dest_row[i] = cur_row[i].wrapping_add(paeth(
+                        dest_row[i - pixel_bytes],
+                        upper_row[i],
+                        upper_row[i - pixel_bytes],
+                    ));
                 }
             }
             _ => {
@@ -555,7 +563,8 @@ fn predictor_decode(
         1 => Ok(buf),
         10..=15 => png_predictor(
             &buf,
-            params.columns * params.bits_per_comonent / 8 * params.colors,
+            (params.columns * params.colors * params.bits_per_component + 7) as usize / 8,
+            (params.colors * params.bits_per_component + 7) as usize / 8,
         ),
         2 => todo!("predictor 2/tiff"),
         _ => {

@@ -713,10 +713,15 @@ pub(crate) fn decode_stream<
     Ok(stream.decode(&resolver)?.into_owned())
 }
 
+#[cfg(test)]
+pub(crate) fn test_file(file_path: impl AsRef<std::path::Path>) -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(file_path)
+}
+
 /// Open file for testing. `file_path` relate to current crate directory.
 #[cfg(test)]
 pub(crate) fn open_test_file(file_path: impl AsRef<std::path::Path>) -> File {
-    let file_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(file_path);
+    let file_path = test_file(file_path);
     let data = std::fs::read(file_path).unwrap();
     File::parse(data, "", "").unwrap()
 }

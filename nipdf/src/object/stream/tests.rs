@@ -1,5 +1,9 @@
 use super::*;
-use crate::{file::decode_stream, function::Domain, object::Name};
+use crate::{
+    file::{decode_stream, test_file},
+    function::Domain,
+    object::Name,
+};
 use miniz_oxide::deflate::compress_to_vec;
 use std::rc::Rc;
 use test_case::test_case;
@@ -76,41 +80,36 @@ fn test_paeth(a: u8, b: u8, c: u8) -> u8 {
 }
 
 #[test]
-fn predictor_8bit() {
-    insta::assert_debug_snapshot!(
-        &decode_stream("sample_files/filters/predictor.pdf", 7u32, |d, resolver| {
-            let params = d.get(&sname("DecodeParms")).unwrap().as_dict()?;
-            assert_eq!(
-                15,
-                resolver
-                    .resolve_container_value(params, &sname("Predictor"))?
-                    .int()?
-            );
-            Ok(())
-        })
-        .unwrap()[127..255]
-    );
-}
+fn predictor() {
+    let exp_image =
+        image::io::Reader::open(test_file("sample_files/filters/predictor-exp.png")).unwrap();
+    let exp_image = exp_image.decode().unwrap();
+    let width = exp_image.width();
+    let exp = exp_image.into_bytes();
 
-#[test]
-fn predictor_24bit() {
-    insta::assert_debug_snapshot!(
-        &decode_stream(
-            "sample_files/color-space/cal-rgb.pdf",
-            6u32,
-            |d, resolver| {
-                let params = d.get(&sname("DecodeParms")).unwrap().as_dict()?;
-                assert_eq!(
-                    15,
-                    resolver
-                        .resolve_container_value(params, &sname("Predictor"))?
-                        .int()?
-                );
-                Ok(())
-            }
-        )
-        .unwrap()[..255]
-    );
+    let decoded = decode_stream("sample_files/filters/predictor.pdf", 23, |d, resolver| {
+        let params = d.get(&sname("DecodeParms")).unwrap().as_dict()?;
+        assert_eq!(
+            15,
+            resolver
+                .resolve_container_value(params, &sname("Predictor"))?
+                .int()?
+        );
+        assert_eq!(3, params["Colors"].int().unwrap());
+        assert_eq!(8, params["BitsPerComponent"].int().unwrap());
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(exp.len(), decoded.len());
+    for (line, (exp, act)) in exp
+        .chunks(width as usize * 3)
+        .zip(decoded.chunks(width as usize * 3))
+        .enumerate()
+    {
+        let exp = hex::encode(exp);
+        let act = hex::encode(act);
+        assert_eq!(exp, act, "line {line} differs");
+    }
 }
 
 #[test]
