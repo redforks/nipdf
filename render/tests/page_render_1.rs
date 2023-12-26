@@ -20,7 +20,7 @@ use ureq::get as download;
 /// Decode pdf embed image and return the result as Vec<u8>.
 /// The image is specified by ref id.
 fn decode_image(id: u32) -> AnyResult<String> {
-    let path = "sample_files/bizarre/pdfReferenceUpdated.pdf";
+    let path = "../nipdf/sample_files/bizarre/pdfReferenceUpdated.pdf";
     let buf = std::fs::read(path)?;
     let f = File::parse(buf, "", "").unwrap_or_else(|_| panic!("failed to parse {path:?}"));
     let resolver = f.resolver()?;
