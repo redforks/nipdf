@@ -79,8 +79,8 @@ fn dump_stream(path: &str, id: u32, raw: bool, as_png: bool) -> AnyResult<()> {
     Ok(())
 }
 
-fn dump_page(
-    path: &str,
+struct DumpPageArgs {
+    path: String,
     page_no: Option<u32>,
     show_total_pages: bool,
     show_page_id: bool,
@@ -88,8 +88,21 @@ fn dump_page(
     steps: Option<usize>,
     zoom: Option<f32>,
     no_crop: bool,
-) -> AnyResult<()> {
-    let f = open(path)?;
+}
+
+fn dump_page(args: DumpPageArgs) -> AnyResult<()> {
+    let DumpPageArgs {
+        path,
+        page_no,
+        show_total_pages,
+        show_page_id,
+        to_png,
+        steps,
+        zoom,
+        no_crop,
+    } = args;
+
+    let f = open(&path)?;
     let resolver = f.resolver()?;
     let catalog = f.catalog(&resolver)?;
 
@@ -163,23 +176,23 @@ fn main() {
             sub_m.get_one::<bool>("raw").copied().unwrap_or_default(),
             sub_m.get_one::<bool>("png").copied().unwrap_or_default(),
         ),
-        Some(("page", sub_m)) => dump_page(
-            sub_m.get_one::<String>("filename").unwrap(),
-            sub_m
+        Some(("page", sub_m)) => dump_page(DumpPageArgs {
+            path: sub_m.get_one::<String>("filename").unwrap().to_owned(),
+            page_no: sub_m
                 .get_one::<String>("page_no")
                 .and_then(|s| s.parse().ok()),
-            sub_m.get_one::<bool>("pages").copied().unwrap_or_default(),
-            sub_m.get_one::<bool>("id").copied().unwrap_or_default(),
-            sub_m.get_one::<bool>("png").copied().unwrap_or_default(),
-            sub_m
+            show_total_pages: sub_m.get_one::<bool>("pages").copied().unwrap_or_default(),
+            show_page_id: sub_m.get_one::<bool>("id").copied().unwrap_or_default(),
+            to_png: sub_m.get_one::<bool>("png").copied().unwrap_or_default(),
+            steps: sub_m
                 .get_one::<String>("steps")
                 .and_then(|s| s.parse().ok()),
-            sub_m.get_one::<String>("zoom").and_then(|s| s.parse().ok()),
-            sub_m
+            zoom: sub_m.get_one::<String>("zoom").and_then(|s| s.parse().ok()),
+            no_crop: sub_m
                 .get_one::<bool>("no-crop")
                 .copied()
                 .unwrap_or_default(),
-        ),
+        }),
         Some(("object", sub_m)) => dump_object(
             sub_m.get_one::<String>("filename").unwrap(),
             sub_m

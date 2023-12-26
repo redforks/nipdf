@@ -508,9 +508,7 @@ fn png_predictor(
             0 => dest_row.copy_from_slice(cur_row),
             1 => {
                 // left
-                for i in 0..pixel_bytes {
-                    dest_row[i] = cur_row[i];
-                }
+                dest_row[..pixel_bytes].copy_from_slice(&cur_row[..pixel_bytes]);
                 for i in pixel_bytes..row_bytes {
                     dest_row[i] = cur_row[i].wrapping_add(dest_row[i - pixel_bytes]);
                 }
@@ -526,6 +524,7 @@ fn png_predictor(
                 for i in 0..pixel_bytes {
                     dest_row[i] = cur_row[i].wrapping_add(upper_row[i]);
                 }
+                #[allow(clippy::cast_possible_truncation)]
                 for i in pixel_bytes..row_bytes {
                     dest_row[i] = cur_row[i].wrapping_add(
                         ((dest_row[i - pixel_bytes] as u16 + upper_row[i] as u16) / 2) as u8,

@@ -2,10 +2,7 @@ use glob::glob;
 use itertools::Itertools;
 use proc_macro::TokenStream;
 use quote::quote;
-use std::{
-    env::var,
-    path::{Path, PathBuf},
-};
+use std::{env::var, path::PathBuf};
 
 /// Glob `*.pdf`, `*.pdf.link` files in `sample_files`, `../pdf/`, `pdf.js/test/pdfs` directories,
 /// relative to crate directory.
