@@ -1,5 +1,5 @@
 use anyhow::Result as AnyResult;
-use clap::{arg, Command};
+use clap::{arg, value_parser, Command};
 use image::ImageOutputFormat;
 use mimalloc::MiMalloc;
 use nipdf::{
@@ -10,6 +10,7 @@ use nipdf_render::{render_steps, RenderOptionBuilder};
 use std::{
     collections::HashSet,
     io::{copy, stdout, BufWriter, Cursor},
+    path::{Path, PathBuf},
 };
 
 #[global_allocator]
@@ -22,15 +23,27 @@ fn cli() -> Command {
         .subcommand(
             Command::new("stream")
                 .about("dump stream content to stdout")
-                .arg(arg!(-f <filename> "PDF file to dump"))
-                .arg(arg!(<object_id> "object ID to dump"))
+                .arg(
+                    arg!(-f <filename> "PDF file to dump")
+                        .value_parser(value_parser!(PathBuf))
+                        .required(true),
+                )
+                .arg(
+                    arg!(<object_id> "object ID to dump")
+                        .value_parser(value_parser!(u32))
+                        .required(true),
+                )
                 .arg(arg!(--raw "Skip decoding stream content"))
                 .arg(arg!(--png "Assume stream is image, decode and convert to PNG")),
         )
         .subcommand(
             Command::new("page")
                 .about("dump page content to stdout")
-                .arg(arg!(-f <filename> "PDF file to dump"))
+                .arg(
+                    arg!(-f <filename> "PDF file to dump")
+                        .value_parser(value_parser!(PathBuf))
+                        .required(true),
+                )
                 .arg(arg!(--pages "display total page numbers"))
                 .arg(arg!(--id "display page object ID"))
                 .arg(arg!(--png "Render page to PNG"))
@@ -42,17 +55,25 @@ fn cli() -> Command {
         .subcommand(
             Command::new("object")
                 .about("dump pdf object by id")
-                .arg(arg!(-f <filename> "PDF file to dump"))
-                .arg(arg!([object_id] "object ID to dump")),
+                .arg(
+                    arg!(-f <filename> "PDF file to dump")
+                        .value_parser(value_parser!(PathBuf))
+                        .required(true),
+                )
+                .arg(
+                    arg!([object_id] "object ID to dump")
+                        .value_parser(value_parser!(u32))
+                        .required(true),
+                ),
         )
 }
 
-fn open(path: &str) -> AnyResult<File> {
+fn open(path: impl AsRef<Path>) -> AnyResult<File> {
     let buf = std::fs::read(path)?;
     File::parse(buf, "").map_err(|e| e.into())
 }
 
-fn dump_stream(path: &str, id: u32, raw: bool, as_png: bool) -> AnyResult<()> {
+fn dump_stream(path: &PathBuf, id: u32, raw: bool, as_png: bool) -> AnyResult<()> {
     let f = open(path)?;
     let resolver = f.resolver()?;
     let obj = resolver.resolve(id)?;
@@ -80,7 +101,7 @@ fn dump_stream(path: &str, id: u32, raw: bool, as_png: bool) -> AnyResult<()> {
 }
 
 struct DumpPageArgs {
-    path: String,
+    path: PathBuf,
     page_no: Option<u32>,
     show_total_pages: bool,
     show_page_id: bool,
@@ -136,7 +157,7 @@ fn dump_page(args: DumpPageArgs) -> AnyResult<()> {
     Ok(())
 }
 
-fn dump_object(path: &str, id: u32) -> AnyResult<()> {
+fn dump_object(path: &PathBuf, id: u32) -> AnyResult<()> {
     let f = open(path)?;
     let resolver = f.resolver()?;
 
@@ -168,16 +189,13 @@ fn main() {
 
     match cli().get_matches().subcommand() {
         Some(("stream", sub_m)) => dump_stream(
-            sub_m.get_one::<String>("filename").unwrap(),
-            sub_m
-                .get_one::<String>("object_id")
-                .and_then(|s| s.parse().ok())
-                .unwrap(),
+            sub_m.get_one("filename").unwrap(),
+            *sub_m.get_one::<u32>("object_id").unwrap(),
             sub_m.get_one::<bool>("raw").copied().unwrap_or_default(),
             sub_m.get_one::<bool>("png").copied().unwrap_or_default(),
         ),
         Some(("page", sub_m)) => dump_page(DumpPageArgs {
-            path: sub_m.get_one::<String>("filename").unwrap().to_owned(),
+            path: sub_m.get_one::<PathBuf>("filename").unwrap().to_owned(),
             page_no: sub_m
                 .get_one::<String>("page_no")
                 .and_then(|s| s.parse().ok()),
@@ -194,11 +212,8 @@ fn main() {
                 .unwrap_or_default(),
         }),
         Some(("object", sub_m)) => dump_object(
-            sub_m.get_one::<String>("filename").unwrap(),
-            sub_m
-                .get_one::<String>("object_id")
-                .and_then(|s| s.parse().ok())
-                .unwrap(),
+            sub_m.get_one("filename").unwrap(),
+            *sub_m.get_one::<u32>("object_id").unwrap(),
         ),
         _ => todo!(),
     }
