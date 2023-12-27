@@ -237,7 +237,7 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<Either<Object, StreamPar
 
 pub fn parse_indirect_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
     let input_len = input.len();
-    let (input, (id, gen)) = separated_pair(u32, multispace1, u16)(input)?;
+    let (input, (id, gen)) = ws_prefixed(separated_pair(u32, multispace1, u16))(input)?;
     let (input, _) = ws(tag(b"obj"))(input)?;
     let offset = input_len - input.len();
     let (input, obj) = parse_object_and_stream(input)?;
