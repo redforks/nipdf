@@ -10,7 +10,7 @@ fn scan_objects() {
         let path = entry.unwrap();
         let buf = std::fs::read(&path).unwrap();
         println!("parsing {path:?}");
-        let f = File::parse(buf, "", "").unwrap_or_else(|_| panic!("failed to parse {path:?}"));
+        let f = File::parse(buf, "").unwrap_or_else(|_| panic!("failed to parse {path:?}"));
         let resolver = f.resolver().unwrap();
         for id in 1..resolver.n() {
             print!("scan object: {id}");

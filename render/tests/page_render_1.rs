@@ -22,7 +22,7 @@ use ureq::get as download;
 fn decode_image(id: u32) -> AnyResult<String> {
     let path = "../nipdf/sample_files/bizarre/pdfReferenceUpdated.pdf";
     let buf = std::fs::read(path)?;
-    let f = File::parse(buf, "", "").unwrap_or_else(|_| panic!("failed to parse {path:?}"));
+    let f = File::parse(buf, unwrap_or_else(|_| panic!("failed to parse {path:?}"));
     let resolver = f.resolver()?;
     let obj = resolver.resolve(id)?;
     let image = obj.stream()?.decode_image(&resolver, None)?;
@@ -139,7 +139,7 @@ fn render(f: &str) -> AnyResult<()> {
     }
 
     let buf = std::fs::read(file_path).unwrap();
-    let pdf = File::parse(buf, "", "").unwrap_or_else(|_| panic!("failed to parse {f:?}"));
+    let pdf = File::parse(buf, unwrap_or_else(|_| panic!("failed to parse {f:?}"));
     let resolver = pdf.resolver().unwrap();
     let catalog = pdf.catalog(&resolver)?;
     for (idx, page) in catalog.pages()?.into_iter().enumerate() {

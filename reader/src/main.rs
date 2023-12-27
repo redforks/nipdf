@@ -1,4 +1,5 @@
 use anyhow::Result;
+use clap::Parser;
 use iced::{
     alignment::Horizontal,
     executor, font,
@@ -8,7 +9,7 @@ use iced::{
 use iced_aw::{modal, Card};
 use log::error;
 use mimalloc::MiMalloc;
-use std::{env, sync::Arc};
+use std::sync::Arc;
 use view::{
     error::ErrorView,
     viewer::{Viewer, ViewerMessage},
@@ -23,13 +24,19 @@ mod view;
 
 const APP_NAME: &str = "nipdf";
 
+#[derive(Parser)]
+struct Opts {
+    #[arg(help = "PDF file name")]
+    filename: Option<String>,
+
+    #[arg(short, long, help = "Password")]
+    password: Option<String>,
+}
+
 fn main() -> iced::Result {
     env_logger::init();
 
-    let mut args: Vec<String> = env::args().collect();
-    let filename = (args.len() >= 2).then(|| args.remove(1));
-
-    App::run(Settings::with_flags(filename))
+    App::run(Settings::with_flags(Opts::parse()))
 }
 
 /// Share [u8] data, implements `AsRef<[u8]` trait, `Arc<Vec<u8>>` itself not implement the trait.
@@ -64,6 +71,7 @@ struct App {
     current: View,
     selecting_file: bool,
     file_path_selecting: String,
+    password: String,
 }
 
 impl App {
@@ -122,7 +130,7 @@ impl App {
 
     fn open_last_file(&mut self) {
         if let Some(p) = app_state::load_last_file() {
-            match Viewer::new(p) {
+            match Viewer::new(p, &self.password) {
                 Ok(v) => {
                     self.current = View::Viewer(Box::new(v));
                 }
@@ -134,8 +142,8 @@ impl App {
     }
 
     fn open(&mut self) {
-        let file_path = self.file_path_selecting.clone();
-        if let Some(viewer) = self.handle_result(Viewer::new(file_path)) {
+        let file_path = &self.file_path_selecting;
+        if let Some(viewer) = self.handle_result(Viewer::new(file_path, &self.password)) {
             self.current = View::Viewer(Box::new(viewer));
             app_state::save_last_file(&self.file_path_selecting);
         }
@@ -144,18 +152,20 @@ impl App {
 
 impl Application for App {
     type Executor = executor::Default;
-    type Flags = Option<String>;
+    type Flags = Opts;
     type Message = AppMessage;
     type Theme = Theme;
 
-    fn new(file_path: Self::Flags) -> (Self, Command<Self::Message>) {
+    fn new(flags: Self::Flags) -> (Self, Command<Self::Message>) {
         let mut r = Self {
             current: View::Welcome(Welcome),
             selecting_file: false,
             file_path_selecting: "".to_owned(),
+            password: "".to_owned(),
         };
-        if let Some(path) = file_path {
+        if let Some(path) = flags.filename {
             r.file_path_selecting = path;
+            r.password = flags.password.unwrap_or_default();
             r.open();
         } else {
             r.open_last_file();

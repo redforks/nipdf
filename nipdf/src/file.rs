@@ -580,6 +580,24 @@ pub enum FileError {
     CatalogRequired,
     #[error("missing required trailer value")]
     MissingRequiredTrailerValue,
+    #[error("invalid password")]
+    InvalidPassword,
+    #[error("invalid file")]
+    InvalidFile,
+}
+
+impl From<anyhow::Error> for FileError {
+    fn from(e: anyhow::Error) -> Self {
+        error!("other error on open file: {}", e);
+        Self::InvalidFile
+    }
+}
+
+impl From<ObjectValueError> for FileError {
+    fn from(e: ObjectValueError) -> Self {
+        error!("object value error on open file: {}", e);
+        Self::InvalidFile
+    }
 }
 
 /// Open possible encrypt file, return None if not encrypted.
@@ -587,9 +605,8 @@ fn open_encrypt(
     buf: &[u8],
     xref: &XRefTable,
     trailer: Option<&Dictionary>,
-    _owner_password: &str,
-    user_password: &str,
-) -> AnyResult<Option<EncryptInfo>> {
+    password: &str,
+) -> Result<Option<EncryptInfo>, FileError> {
     let Some(trailer) = trailer else {
         return Ok(None);
     };
@@ -618,10 +635,18 @@ fn open_encrypt(
     owner_hash_arr.copy_from_slice(&owner_hash[..32]);
     user_hash_arr.copy_from_slice(&user_hash[..32]);
 
-    if encrypt::authorize_user(
+    if encrypt::authorize_owner(
         encrypt.revison()?,
         encrypt.key_length()? as usize,
-        user_password.as_bytes(),
+        password.as_bytes(),
+        &owner_hash_arr,
+        &user_hash_arr,
+        encrypt.permission_flags()?,
+        &trailer.id()?.unwrap().0,
+    ) || encrypt::authorize_user(
+        encrypt.revison()?,
+        encrypt.key_length()? as usize,
+        password.as_bytes(),
         &owner_hash_arr,
         &user_hash_arr,
         encrypt.permission_flags()?,
@@ -630,19 +655,19 @@ fn open_encrypt(
         let key = calc_encrypt_key(
             encrypt.revison()?,
             encrypt.key_length()? as usize,
-            user_password.as_bytes(),
+            password.as_bytes(),
             &owner_hash_arr,
             encrypt.permission_flags()?,
             &trailer.id()?.unwrap().0,
         );
         Ok(Some(EncryptInfo::new(key, encrypt.crypt_filters())))
     } else {
-        Ok(None)
+        Err(FileError::InvalidPassword)
     }
 }
 
 impl File {
-    pub fn parse(buf: Vec<u8>, owner_password: &str, user_password: &str) -> AnyResult<Self> {
+    pub fn parse(buf: Vec<u8>, user_password: &str) -> Result<Self, FileError> {
         let (_, head_ver) = parse_header(&buf).unwrap();
         let (_, frame_set) = parse_frame_set(&buf).unwrap();
         let xref = XRefTable::from_frame_set(&frame_set);
@@ -652,7 +677,6 @@ impl File {
             &buf,
             &xref,
             trailers.iter().find(|d| d.contains_key(&sname("Encrypt"))),
-            owner_password,
             user_password,
         )?;
 
@@ -723,7 +747,17 @@ pub(crate) fn test_file(file_path: impl AsRef<std::path::Path>) -> std::path::Pa
 pub(crate) fn open_test_file(file_path: impl AsRef<std::path::Path>) -> File {
     let file_path = test_file(file_path);
     let data = std::fs::read(file_path).unwrap();
-    File::parse(data, "", "").unwrap()
+    File::parse(data, "").unwrap()
+}
+
+#[cfg(test)]
+pub(crate) fn open_test_file_with_password(
+    file_path: impl AsRef<std::path::Path>,
+    p: &str,
+) -> Result<File, FileError> {
+    let file_path = test_file(file_path);
+    let data = std::fs::read(file_path).unwrap();
+    File::parse(data, p)
 }
 
 #[cfg(test)]

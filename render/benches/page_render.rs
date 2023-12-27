@@ -19,7 +19,7 @@ fn read_sample_file(file_path: impl AsRef<std::path::Path>) -> Vec<u8> {
 /// `file_path` relative to '~/sample_files/'.
 fn render_page_no(file_path: impl AsRef<std::path::Path>, no: usize) -> AnyResult<RgbaImage> {
     let buf = read_sample_file(file_path);
-    let f = File::parse(buf, "", "")?;
+    let f = File::parse(buf, "")?;
     let resolver = f.resolver()?;
     let pages = f.catalog(&resolver)?.pages()?;
     let page = &pages[no];
