@@ -169,9 +169,3 @@ fn parse_file() {
     let resolver = f.resolver().unwrap();
     assert_eq!(Some("1.5".to_owned()), f.version(&resolver).unwrap());
 }
-
-#[test]
-fn open_with_password() -> AnyResult<()> {
-    open_test_file_with_password("pdf.js/test/pdfs/bug1782186.pdf", "Hello")?;
-    Ok(())
-}

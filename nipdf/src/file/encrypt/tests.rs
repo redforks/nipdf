@@ -1,4 +1,5 @@
 use super::*;
+use crate::file::open_test_file_with_password;
 use hex_literal::hex;
 
 #[test]
@@ -49,4 +50,13 @@ fn test_authorize_user_v3() {
         0xFFFF_FFE4,
         &doc_id,
     ));
+}
+
+#[test]
+fn revision_v4() -> anyhow::Result<()> {
+    let file = open_test_file_with_password("pdf.js/test/pdfs/bug1782186.pdf", "Hello")?;
+    let resolver = file.resolver()?;
+    let pages = file.catalog(&resolver)?.pages()?;
+    assert_eq!(16, pages[0].content()?.operations().len());
+    Ok(())
 }

@@ -222,7 +222,9 @@ pub fn calc_encrypt_key(
     md5.update(owner_hash);
     md5.update(permission_flags.to_le_bytes());
     md5.update(doc_id);
-    // md5.update(&[0xff, 0xff, 0xff, 0xff]);
+    if revion == StandardHandlerRevion::V4 {
+        md5.update(&[0xff, 0xff, 0xff, 0xff]);
+    }
     let mut hash = md5.finalize();
     let n = key_length / 8;
     if revion > StandardHandlerRevion::V2 {
@@ -317,7 +319,7 @@ fn calc_rc4_key(
 
 // algorithm 7
 #[allow(dead_code)]
-fn authorize_owner(
+pub fn authorize_owner(
     revion: StandardHandlerRevion,
     key_length: usize,
     owner_password: &[u8],

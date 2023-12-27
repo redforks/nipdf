@@ -605,7 +605,7 @@ fn open_encrypt(
     buf: &[u8],
     xref: &XRefTable,
     trailer: Option<&Dictionary>,
-    user_password: &str,
+    password: &str,
 ) -> Result<Option<EncryptInfo>, FileError> {
     let Some(trailer) = trailer else {
         return Ok(None);
@@ -635,10 +635,18 @@ fn open_encrypt(
     owner_hash_arr.copy_from_slice(&owner_hash[..32]);
     user_hash_arr.copy_from_slice(&user_hash[..32]);
 
-    if encrypt::authorize_user(
+    if encrypt::authorize_owner(
         encrypt.revison()?,
         encrypt.key_length()? as usize,
-        user_password.as_bytes(),
+        password.as_bytes(),
+        &owner_hash_arr,
+        &user_hash_arr,
+        encrypt.permission_flags()?,
+        &trailer.id()?.unwrap().0,
+    ) || encrypt::authorize_user(
+        encrypt.revison()?,
+        encrypt.key_length()? as usize,
+        password.as_bytes(),
         &owner_hash_arr,
         &user_hash_arr,
         encrypt.permission_flags()?,
@@ -647,7 +655,7 @@ fn open_encrypt(
         let key = calc_encrypt_key(
             encrypt.revison()?,
             encrypt.key_length()? as usize,
-            user_password.as_bytes(),
+            password.as_bytes(),
             &owner_hash_arr,
             encrypt.permission_flags()?,
             &trailer.id()?.unwrap().0,
