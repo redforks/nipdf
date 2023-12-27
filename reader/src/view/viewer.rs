@@ -178,7 +178,7 @@ impl Viewer {
     pub fn new(file_path: impl Into<String>) -> Result<Self> {
         let file_path = file_path.into();
         let file_data = std::fs::read(&file_path)?;
-        let file = PdfFile::parse(file_data, "", "")?;
+        let file = PdfFile::parse(file_data, "")?;
         let mut r = Self {
             file_path,
             page: Page {

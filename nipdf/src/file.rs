@@ -605,7 +605,6 @@ fn open_encrypt(
     buf: &[u8],
     xref: &XRefTable,
     trailer: Option<&Dictionary>,
-    _owner_password: &str,
     user_password: &str,
 ) -> Result<Option<EncryptInfo>, FileError> {
     let Some(trailer) = trailer else {
@@ -660,11 +659,7 @@ fn open_encrypt(
 }
 
 impl File {
-    pub fn parse(
-        buf: Vec<u8>,
-        owner_password: &str,
-        user_password: &str,
-    ) -> Result<Self, FileError> {
+    pub fn parse(buf: Vec<u8>, user_password: &str) -> Result<Self, FileError> {
         let (_, head_ver) = parse_header(&buf).unwrap();
         let (_, frame_set) = parse_frame_set(&buf).unwrap();
         let xref = XRefTable::from_frame_set(&frame_set);
@@ -674,7 +669,6 @@ impl File {
             &buf,
             &xref,
             trailers.iter().find(|d| d.contains_key(&sname("Encrypt"))),
-            owner_password,
             user_password,
         )?;
 
@@ -745,7 +739,7 @@ pub(crate) fn test_file(file_path: impl AsRef<std::path::Path>) -> std::path::Pa
 pub(crate) fn open_test_file(file_path: impl AsRef<std::path::Path>) -> File {
     let file_path = test_file(file_path);
     let data = std::fs::read(file_path).unwrap();
-    File::parse(data, "", "").unwrap()
+    File::parse(data, "").unwrap()
 }
 
 #[cfg(test)]
@@ -755,7 +749,7 @@ pub(crate) fn open_test_file_with_password(
 ) -> Result<File, FileError> {
     let file_path = test_file(file_path);
     let data = std::fs::read(file_path).unwrap();
-    File::parse(data, p, p)
+    File::parse(data, p)
 }
 
 #[cfg(test)]

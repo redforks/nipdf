@@ -12,7 +12,7 @@ fn open_test_file(file_path: impl AsRef<std::path::Path>) -> File {
         .join("../nipdf")
         .join(file_path);
     let data = std::fs::read(file_path).unwrap();
-    File::parse(data, "", "").unwrap()
+    File::parse(data, "").unwrap()
 }
 
 fn decode_file_page(path: &str, page_no: usize) -> AnyResult<String> {

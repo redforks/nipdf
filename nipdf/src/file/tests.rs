@@ -165,7 +165,7 @@ fn parse_file() {
     p.push("normal");
     p.push("SamplePdf1_12mb_6pages.pdf");
     let buf = std::fs::read(p).unwrap();
-    let f = File::parse(buf, "", "").unwrap();
+    let f = File::parse(buf, "").unwrap();
     let resolver = f.resolver().unwrap();
     assert_eq!(Some("1.5".to_owned()), f.version(&resolver).unwrap());
 }
