@@ -5,7 +5,7 @@ use crate::{
     object::Name,
 };
 use miniz_oxide::deflate::compress_to_vec;
-use std::rc::Rc;
+use std::{rc::Rc, str::from_utf8};
 use test_case::test_case;
 
 #[test_case([] => Ok(vec![]); "empty")]
@@ -191,4 +191,14 @@ fn test_deflate() {
     let input = compress_to_vec(&data, 1);
     let back = deflate(&input).unwrap();
     assert_eq!(data, back);
+}
+
+#[test]
+fn deflate_recover_truncated_zlib_data() {
+    let input = include_bytes!("deflate-stream-recover");
+    let exp = include_bytes!("deflate-stream-recover.exp");
+    let exp = from_utf8(exp).unwrap();
+    let data = deflate(input).unwrap();
+    let s = from_utf8(&data).unwrap();
+    assert_eq!(s, exp);
 }

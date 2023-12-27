@@ -627,7 +627,7 @@ fn deflate(input: &[u8]) -> Result<Vec<u8>, ObjectValueError> {
         let flags = flags
             | inflate_flags::TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF
             | inflate_flags::TINFL_FLAG_IGNORE_ADLER32;
-        let mut ret: Vec<u8> = vec![0; input.len().saturating_mul(2).min(MAX_OUTPUT_SIZE)];
+        let mut ret: Vec<u8> = vec![0; input.len().wrapping_mul(2).min(MAX_OUTPUT_SIZE)];
 
         let mut decomp = Box::<DecompressorOxide>::default();
 
@@ -659,6 +659,13 @@ fn deflate(input: &[u8]) -> Result<Vec<u8>, ObjectValueError> {
                 }
 
                 _ => {
+                    if status == TINFLStatus::FailedCannotMakeProgress {
+                        // ignore truncated zlib data, see deflate_recover_truncated_zlib_data()
+                        // unit test
+                        error!("inflate: need more data");
+                        ret.truncate(out_pos);
+                        return Ok(ret);
+                    }
                     error!("inflate: error: {:?}", status);
                     return Err(ObjectValueError::FilterDecodeError);
                 }
