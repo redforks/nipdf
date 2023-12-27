@@ -48,13 +48,18 @@ fn replace_dead_link(f: &str) -> Option<&'_ str> {
     dead_links.get(p.file_name()?.to_str()?).copied()
 }
 
-fn download_file(url: &str, f: impl AsRef<Path>) -> AnyResult<()> {
+fn download_file(url: &str, p: impl AsRef<Path>) -> AnyResult<()> {
     let resp = download(url).call()?;
-    let f = std::fs::File::create(f.as_ref())?;
+    let f = std::fs::File::create(p.as_ref())?;
     let mut f = BufWriter::new(f);
     let mut resp = resp.into_reader();
-    std::io::copy(&mut resp, &mut f)?;
-    Ok(())
+    if let Err(err) = std::io::copy(&mut resp, &mut f) {
+        // delete the file if download failed
+        std::fs::remove_file(p.as_ref())?;
+        Err(err)?
+    } else {
+        Ok(())
+    }
 }
 
 /// These files are very rare and odd, not to be tested
