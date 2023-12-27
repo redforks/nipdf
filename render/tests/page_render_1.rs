@@ -91,6 +91,14 @@ const IGNORED: [&str; 9] = [
     "bug1260585.pdf.link",
 ];
 
+static PASSWORD: phf::Map<&'static str, &'static str> = phf::phf_map! {
+    "bug1782186.pdf" => "Hello",
+    "issue15893_reduced.pdf" => "test",
+    "issue3371.pdf" => "ELXRTQWS",
+    "issue6010_1.pdf" => "abc",
+    "issue6010_2.pdf" => "\x00E6\x00F8\x00E5",
+};
+
 /// Read pdf file and render each page, to save test time,
 /// touch a flag file at `$CARGO_TARGET_TMPDIR/(md5(f)).ok` if succeed.
 /// If the file exist, skips the test.
@@ -139,7 +147,9 @@ fn render(f: &str) -> AnyResult<()> {
     }
 
     let buf = std::fs::read(file_path).unwrap();
-    let pdf = File::parse(buf, "").unwrap_or_else(|_| panic!("failed to parse {f:?}"));
+    let file_name = Path::new(file_path).file_name().unwrap().to_str().unwrap();
+    let pdf = File::parse(buf, PASSWORD.get(file_name).map(|s| *s).unwrap_or(""))
+        .unwrap_or_else(|_| panic!("failed to parse {f:?}"));
     let resolver = pdf.resolver().unwrap();
     let catalog = pdf.catalog(&resolver)?;
     for (idx, page) in catalog.pages()?.into_iter().enumerate() {

@@ -2454,6 +2454,7 @@ dependencies = [
  "nipdf-test-macro",
  "nom",
  "num-traits",
+ "phf",
  "prescript",
  "test-case",
  "tiny-skia 0.11.3",

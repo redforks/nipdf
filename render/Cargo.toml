@@ -29,6 +29,7 @@ nipdf-test-macro = { path = "../test-macro" }
 maplit = "1.0"
 criterion = "0.5"
 mimalloc = "0.1"
+phf = { version = "0.11", features = ["macros"] }
 
 [[bench]]
 name = "page_render"
