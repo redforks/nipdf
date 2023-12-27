@@ -21,6 +21,7 @@ notify-rust = { version = "4", default-features = false, optional = true, featur
     "d",
 ] }
 mimalloc = "0.1"
+clap = { version = "4.3", features = ["derive"] }
 
 [features]
 debug = ["notify-rust", "iced-debug", "iced_aw/menu"]
