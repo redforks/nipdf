@@ -580,6 +580,24 @@ pub enum FileError {
     CatalogRequired,
     #[error("missing required trailer value")]
     MissingRequiredTrailerValue,
+    #[error("invalid password")]
+    InvalidPassword,
+    #[error("invalid file")]
+    InvalidFile,
+}
+
+impl From<anyhow::Error> for FileError {
+    fn from(e: anyhow::Error) -> Self {
+        error!("other error on open file: {}", e);
+        Self::InvalidFile
+    }
+}
+
+impl From<ObjectValueError> for FileError {
+    fn from(e: ObjectValueError) -> Self {
+        error!("object value error on open file: {}", e);
+        Self::InvalidFile
+    }
 }
 
 /// Open possible encrypt file, return None if not encrypted.
@@ -589,7 +607,7 @@ fn open_encrypt(
     trailer: Option<&Dictionary>,
     _owner_password: &str,
     user_password: &str,
-) -> AnyResult<Option<EncryptInfo>> {
+) -> Result<Option<EncryptInfo>, FileError> {
     let Some(trailer) = trailer else {
         return Ok(None);
     };
@@ -637,12 +655,16 @@ fn open_encrypt(
         );
         Ok(Some(EncryptInfo::new(key, encrypt.crypt_filters())))
     } else {
-        Ok(None)
+        Err(FileError::InvalidPassword)
     }
 }
 
 impl File {
-    pub fn parse(buf: Vec<u8>, owner_password: &str, user_password: &str) -> AnyResult<Self> {
+    pub fn parse(
+        buf: Vec<u8>,
+        owner_password: &str,
+        user_password: &str,
+    ) -> Result<Self, FileError> {
         let (_, head_ver) = parse_header(&buf).unwrap();
         let (_, frame_set) = parse_frame_set(&buf).unwrap();
         let xref = XRefTable::from_frame_set(&frame_set);
@@ -724,6 +746,16 @@ pub(crate) fn open_test_file(file_path: impl AsRef<std::path::Path>) -> File {
     let file_path = test_file(file_path);
     let data = std::fs::read(file_path).unwrap();
     File::parse(data, "", "").unwrap()
+}
+
+#[cfg(test)]
+pub(crate) fn open_test_file_with_password(
+    file_path: impl AsRef<std::path::Path>,
+    p: &str,
+) -> Result<File, FileError> {
+    let file_path = test_file(file_path);
+    let data = std::fs::read(file_path).unwrap();
+    File::parse(data, p, p)
 }
 
 #[cfg(test)]
