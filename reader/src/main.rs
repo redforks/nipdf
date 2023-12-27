@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::{Args, Command as CommandCommand, Parser};
+use clap::Parser;
 use iced::{
     alignment::Horizontal,
     executor, font,
@@ -9,7 +9,7 @@ use iced::{
 use iced_aw::{modal, Card};
 use log::error;
 use mimalloc::MiMalloc;
-use std::{env, sync::Arc};
+use std::sync::Arc;
 use view::{
     error::ErrorView,
     viewer::{Viewer, ViewerMessage},

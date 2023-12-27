@@ -223,7 +223,7 @@ pub fn calc_encrypt_key(
     md5.update(permission_flags.to_le_bytes());
     md5.update(doc_id);
     if revion == StandardHandlerRevion::V4 {
-        md5.update(&[0xff, 0xff, 0xff, 0xff]);
+        md5.update([0xff, 0xff, 0xff, 0xff]);
     }
     let mut hash = md5.finalize();
     let n = key_length / 8;

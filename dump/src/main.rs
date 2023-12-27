@@ -115,7 +115,7 @@ struct DumpPageArgs<'a> {
     no_crop: bool,
 }
 
-fn dump_page<'a>(args: DumpPageArgs<'a>) -> AnyResult<()> {
+fn dump_page(args: DumpPageArgs<'_>) -> AnyResult<()> {
     let DumpPageArgs {
         path,
         password,
