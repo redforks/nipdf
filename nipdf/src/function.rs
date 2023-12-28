@@ -19,7 +19,7 @@ impl<T: PartialOrd + Copy> Domain<T> {
         Self { start, end }
     }
 
-    fn clamp(&self, x: T) -> T {
+    pub fn clamp(&self, x: T) -> T {
         num_traits::clamp(x, self.start, self.end)
     }
 

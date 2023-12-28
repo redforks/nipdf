@@ -1,7 +1,7 @@
 use super::ColorSpaceArgs;
 use crate::{
     file::{ObjectResolver, ResourceDict},
-    function::{Function, FunctionDict, NFunc},
+    function::{Domain, Function, FunctionDict, NFunc},
     graphics::ICCStreamDict,
     object::Object,
 };
@@ -114,6 +114,7 @@ pub enum ColorSpace<T: Debug + PartialEq = f32> {
     Separation(Box<SeparationColorSpace<T>>),
     CalRGB(Box<CalRGBColorSpace>),
     DeviceN(Box<DeviceNColorSpace<T>>),
+    Lab(LabColorSpace),
     /// Without this, complier complains T is not referenced in any of enum branches
     _Phantom(T),
 }
@@ -122,6 +123,7 @@ impl<T> ColorSpace<T>
 where
     T: ColorComp + ColorCompConvertTo<f32> + 'static,
     T: ColorCompConvertTo<u8>,
+    T: LabColorInput,
     T: Default,
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
@@ -219,10 +221,10 @@ where
                     assert!(arr.len() == 4 || arr.len() == 5);
                     let names = arr[1].arr()?;
 
-                    // A DeviceN colour space whose component colorant names are all None shall
-                    // always discard its output, just  the same as a Separation colour space for
-                    // None; it shall never revert to the alternate colour space. Reversion  shall
-                    // occur only if at least one colour component (other than None) is specified
+                    // A DeviceN color space whose component colorant names are all None shall
+                    // always discard its output, just  the same as a Separation color space for
+                    // None; it shall never revert to the alternate color space. Reversion  shall
+                    // occur only if at least one color component (other than None) is specified
                     // and is not available on the  device.
                     if names.iter().all(|n| n.name().unwrap() == sname("None")) {
                         bail!("all color component None should not render which is not supported");
@@ -266,6 +268,7 @@ impl<T> ColorSpaceTrait<T> for ColorSpace<T>
 where
     T: ColorComp + ColorCompConvertTo<f32> + 'static,
     T: ColorCompConvertTo<u8> + Debug + Default,
+    T: LabColorInput,
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
 {
@@ -279,6 +282,7 @@ where
             Self::Separation(sep) => sep.as_ref().to_rgba(color),
             Self::CalRGB(cal_rgb) => cal_rgb.to_rgba(color),
             Self::DeviceN(device_n) => device_n.to_rgba(color),
+            Self::Lab(lab) => lab.to_rgba(color),
             Self::_Phantom(_) => unreachable!(),
         }
     }
@@ -293,6 +297,7 @@ where
             Self::Separation(sep) => sep.as_ref().components(),
             Self::CalRGB(cal_rgb) => cal_rgb.components(),
             Self::DeviceN(device_n) => device_n.components(),
+            Self::Lab(lab) => lab.components(),
             Self::_Phantom(_) => unreachable!(),
         }
     }
@@ -437,6 +442,7 @@ impl<T> ColorSpaceTrait<T> for PatternColorSpace<T>
 where
     T: ColorComp + ColorCompConvertTo<f32> + 'static,
     T: ColorCompConvertTo<u8>,
+    T: LabColorInput,
     T: Default,
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
@@ -467,6 +473,7 @@ impl<T> IndexedColorSpace<T>
 where
     T: ColorComp + ColorCompConvertTo<f32> + 'static,
     T: ColorCompConvertTo<u8>,
+    T: LabColorInput,
     T: Default,
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
@@ -488,6 +495,7 @@ impl<T> ColorSpaceTrait<T> for IndexedColorSpace<T>
 where
     T: ColorComp + ColorCompConvertTo<f32> + 'static,
     T: ColorCompConvertTo<u8>,
+    T: LabColorInput,
     T: Default,
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
@@ -527,6 +535,7 @@ impl<T> ColorSpaceTrait<T> for SeparationColorSpace<T>
 where
     T: ColorComp + ColorCompConvertTo<f32> + 'static,
     T: ColorCompConvertTo<u8>,
+    T: LabColorInput,
     T: Default,
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
@@ -558,6 +567,7 @@ impl<T> ColorSpaceTrait<T> for DeviceNColorSpace<T>
 where
     T: ColorComp + ColorCompConvertTo<f32> + 'static,
     T: ColorCompConvertTo<u8> + Default,
+    T: LabColorInput,
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
 {
@@ -648,5 +658,92 @@ where
     }
 }
 
-#[cfg(test)]
+#[derive(Clone, Debug, PartialEq, Educe)]
+#[educe(Default)]
+pub struct LabColorSpace {
+    white_point: [f32; 3],
+    #[educe(Default(expression = [Domain::new(0., 100.), Domain::new(-100., 100.), Domain::new(-100., 100.)]))]
+    ranges: [Domain; 3],
+    black_point: [f32; 3],
+}
+
+trait LabColorInput {
+    fn map_input(self, range: Domain) -> f32;
+}
+
+impl LabColorInput for f32 {
+    fn map_input(self, range: Domain) -> f32 {
+        range.clamp(self)
+    }
+}
+
+impl LabColorInput for u8 {
+    fn map_input(self, range: Domain) -> f32 {
+        let Domain {
+            start: min,
+            end: max,
+        } = range;
+        let v: f32 = self.into_color_comp();
+        let v = min + (max - min) * v;
+        range.clamp(v)
+    }
+}
+
+impl<T> ColorSpaceTrait<T> for LabColorSpace
+where
+    T: ColorComp + ColorCompConvertTo<f32> + LabColorInput,
+    f32: ColorCompConvertTo<T>,
+{
+    fn to_rgba(&self, color: &[T]) -> [T; 4] {
+        fn g(x: f32) -> f32 {
+            if x > (6.0 / 29.0) {
+                x.powf(3.0)
+            } else {
+                (108.0 / 841.0) * (x - 4.0 / 29.0)
+            }
+        }
+
+        // Convert Lab color to RGB color
+        assert!(color.len() > 2);
+
+        let li = color[0].map_input(self.ranges[0]);
+        let ai = color[1].map_input(self.ranges[1]);
+        let bi = color[2].map_input(self.ranges[2]);
+
+        let m = (li + 16.0) / 116.0;
+        let l = m + ai / 500.0;
+        let n = m - bi / 200.0;
+
+        let [xw, yw, zw] = self.white_point;
+        let x = xw * g(l);
+        let y = yw * g(m);
+        let z = zw * g(n);
+
+        let r = 3.240449 * x - 1.537136 * y - 0.498531 * z;
+        let g = -0.969265 * x + 1.876011 * y + 0.041556 * z;
+        let b = 0.055643 * x - 0.204026 * y + 1.057229 * z;
+        fn to_color_comp<T>(v: f32) -> T
+        where
+            T: ColorComp,
+            f32: ColorCompConvertTo<T>,
+        {
+            if v < 0. {
+                T::min_color()
+            } else {
+                v.sqrt().into_color_comp().clamp()
+            }
+        }
+
+        [
+            to_color_comp(r),
+            to_color_comp(g),
+            to_color_comp(b),
+            T::max_color(),
+        ]
+    }
+
+    fn components(&self) -> usize {
+        3
+    }
+}
 mod tests;

@@ -330,3 +330,21 @@ endobj
     assert!(color_space.is_err());
     Ok(())
 }
+
+#[test]
+fn lab_to_rgb() {
+    let cs = LabColorSpace {
+        white_point: [1.0, 1., 1.],
+        ranges: [
+            Domain::new(0., 100.),
+            Domain::new(-128., 128.),
+            Domain::new(-128., 128.),
+        ],
+        ..Default::default()
+    };
+
+    assert_eq!([0., 0., 0., 1.], cs.to_rgba(&[0., 0., 0.]));
+    assert_eq!([0., 1., 0., 1.], cs.to_rgba(&[100., -128., 128.]));
+    assert_eq!([6, 0, 0, 255], cs.to_rgba(&[0, 128, 128]));
+    assert_eq!([0, 255, 0, 255], cs.to_rgba(&[255, 0, 255]));
+}
