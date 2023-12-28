@@ -630,6 +630,7 @@ fn open_encrypt(
 
     let owner_hash = encrypt.owner_password_hash()?;
     let user_hash = encrypt.user_password_hash()?;
+    let encrypt_metadata = encrypt.encrypt_metadata()?;
     let mut owner_hash_arr = [0u8; 32];
     let mut user_hash_arr = [0u8; 32];
     owner_hash_arr.copy_from_slice(&owner_hash[..32]);
@@ -643,6 +644,7 @@ fn open_encrypt(
         &user_hash_arr,
         encrypt.permission_flags()?,
         &trailer.id()?.unwrap().0,
+        encrypt_metadata,
     ) || encrypt::authorize_user(
         encrypt.revison()?,
         encrypt.key_length()? as usize,
@@ -651,6 +653,7 @@ fn open_encrypt(
         &user_hash_arr,
         encrypt.permission_flags()?,
         &trailer.id()?.unwrap().0,
+        encrypt_metadata,
     ) {
         let key = calc_encrypt_key(
             encrypt.revison()?,
@@ -659,6 +662,7 @@ fn open_encrypt(
             &owner_hash_arr,
             encrypt.permission_flags()?,
             &trailer.id()?.unwrap().0,
+            encrypt_metadata,
         );
         Ok(Some(EncryptInfo::new(key, encrypt.crypt_filters())))
     } else {

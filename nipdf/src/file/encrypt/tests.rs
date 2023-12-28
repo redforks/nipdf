@@ -32,6 +32,7 @@ fn test_authorize_user_v2() {
         &user_hash,
         unsafe { std::mem::transmute(-12i32) },
         &doc_id,
+        true,
     ));
 }
 
@@ -49,14 +50,33 @@ fn test_authorize_user_v3() {
         &user_hash,
         0xFFFF_FFE4,
         &doc_id,
+        true,
     ));
 }
 
 #[test]
-fn revision_v4() -> anyhow::Result<()> {
+fn revision_v4_not_encrypt_metadata() -> anyhow::Result<()> {
     let file = open_test_file_with_password("pdf.js/test/pdfs/bug1782186.pdf", "Hello")?;
     let resolver = file.resolver()?;
     let pages = file.catalog(&resolver)?.pages()?;
     assert_eq!(16, pages[0].content()?.operations().len());
     Ok(())
+}
+
+#[test]
+fn revision_v4() {
+    // test case from pdf.js bug1425312.pdf.link
+    let owner_hash = hex!("FD2C3D3CE19144D01850580C7870BD45FBA3474163AAC53F0647AD421D4D7030");
+    let user_hash = hex!("63369CBE6193F81219F8A12A38B851E928BF4E5E4E758A4164004E56FFFA0108");
+    let doc_id = hex!("998F9C0CE1FCCC9E67D0D423081C4C91");
+    assert!(authorize_user(
+        StandardHandlerRevion::V4,
+        128,
+        b"",
+        &owner_hash,
+        &user_hash,
+        0xFFFF_F2D4,
+        &doc_id,
+        true,
+    ));
 }

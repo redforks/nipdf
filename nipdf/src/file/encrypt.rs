@@ -1,10 +1,12 @@
 use crate::object::ObjectId;
 use ahash::{HashMap, HashMapExt};
 use arc4::Arc4;
+
 use log::error;
 use md5::{Digest, Md5};
 use nipdf_macro::{pdf_object, TryFromIntObject, TryFromNameObject};
 use prescript::{sname, Name};
+
 use tinyvec::{Array, ArrayVec, TinyVec};
 
 #[derive(TryFromIntObject, Default, Debug, PartialEq, Eq, Clone, Copy)]
@@ -87,6 +89,9 @@ pub trait EncryptDictTrait {
     #[key("StrF")]
     #[default_fn(identity)]
     fn string_crypt_filter(&self) -> Name;
+
+    #[default(true)]
+    fn encrypt_metadata(&self) -> bool;
 }
 
 /// Support get crypt filter by its name.
@@ -215,6 +220,7 @@ pub fn calc_encrypt_key(
     owner_hash: &[u8; 32],
     permission_flags: u32,
     doc_id: &[u8],
+    encrypt_metadata: bool,
 ) -> Box<[u8]> {
     let user_password = pad_trunc_password(user_password);
     let mut md5 = Md5::new();
@@ -222,7 +228,7 @@ pub fn calc_encrypt_key(
     md5.update(owner_hash);
     md5.update(permission_flags.to_le_bytes());
     md5.update(doc_id);
-    if revion == StandardHandlerRevion::V4 {
+    if revion == StandardHandlerRevion::V4 && !encrypt_metadata {
         md5.update([0xff, 0xff, 0xff, 0xff]);
     }
     let mut hash = md5.finalize();
@@ -243,6 +249,7 @@ fn calc_user_hash(
     owner_hash: &[u8; 32],
     permission_flags: u32,
     doc_id: &[u8],
+    encrypt_metadata: bool,
 ) -> [u8; 32] {
     let key = calc_encrypt_key(
         revion,
@@ -251,6 +258,7 @@ fn calc_user_hash(
         owner_hash,
         permission_flags,
         doc_id,
+        encrypt_metadata,
     );
 
     if revion == StandardHandlerRevion::V2 {
@@ -284,6 +292,7 @@ pub fn authorize_user(
     user_hash: &[u8; 32],
     permission_flags: u32,
     doc_id: &[u8],
+    encrypt_metadata: bool,
 ) -> bool {
     let hash = calc_user_hash(
         revion,
@@ -292,6 +301,7 @@ pub fn authorize_user(
         owner_hash,
         permission_flags,
         doc_id,
+        encrypt_metadata,
     );
 
     if revion == StandardHandlerRevion::V2 {
@@ -317,7 +327,6 @@ fn calc_rc4_key(
     (&owner_password[..(key_length / 8)]).into()
 }
 
-// algorithm 7
 #[allow(dead_code)]
 pub fn authorize_owner(
     revion: StandardHandlerRevion,
@@ -327,18 +336,19 @@ pub fn authorize_owner(
     user_hash: &[u8; 32],
     permission_flag: u32,
     doc_id: &[u8],
+    encrypt_metadata: bool,
 ) -> bool {
     let rc4_key = &calc_rc4_key(revion, key_length, owner_password);
     let mut decrypt = owner_hash.to_vec();
     if revion == StandardHandlerRevion::V2 {
         Arc4::with_key(rc4_key).encrypt(&mut decrypt);
     } else {
-        let mut tmp = rc4_key.to_vec();
-        for i in (0..19).rev() {
-            for (t, k) in tmp.as_mut_slice().iter_mut().zip(&rc4_key[..]) {
+        let mut key = vec![0u8; rc4_key.len()];
+        for i in (0..20).rev() {
+            for (t, k) in key.as_mut_slice().iter_mut().zip(&rc4_key[..]) {
                 *t = *k ^ i;
             }
-            Arc4::with_key(&tmp[..]).encrypt(&mut decrypt);
+            Arc4::with_key(&key).encrypt(&mut decrypt);
         }
     }
 
@@ -350,6 +360,7 @@ pub fn authorize_owner(
         user_hash,
         permission_flag,
         doc_id,
+        encrypt_metadata,
     )
 }
 
