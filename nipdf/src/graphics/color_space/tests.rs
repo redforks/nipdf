@@ -120,10 +120,7 @@ stream
 endstream
 endobj
 "#;
-    let xref = XRefTable::from_buf(buf);
-    let resolver = ObjectResolver::new(buf, &xref, None);
-    let args = ColorSpaceArgs::try_from(resolver.resolve(1)?)?;
-    let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None)?;
+    let color_space = parse_color_space(buf)?;
     assert_eq!(ColorSpace::DeviceGray, color_space);
 
     // if no Alternate, use Device{Gray, RGB, CMYK} by N value
@@ -145,11 +142,7 @@ endobj
 "#,
             n
         );
-        let buf = buf.as_bytes();
-        let xref = XRefTable::from_buf(buf);
-        let resolver = ObjectResolver::new(buf, &xref, None);
-        let args = ColorSpaceArgs::try_from(resolver.resolve(1)?)?;
-        let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None)?;
+        let color_space = parse_color_space(buf.as_bytes())?;
         assert_eq!(exp, color_space);
     }
 
@@ -181,10 +174,7 @@ endobj
 <</FunctionType 2/Domain [0 1]/N 1>>
 endobj
 "#;
-    let xref = XRefTable::from_buf(buf);
-    let resolver = ObjectResolver::new(buf, &xref, None);
-    let args = ColorSpaceArgs::try_from(resolver.resolve(1)?)?;
-    let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None)?;
+    let color_space = parse_color_space(buf)?;
     assert_eq!(
         ColorSpace::Separation(Box::new(SeparationColorSpace {
             alt: ColorSpace::DeviceGray,
@@ -210,8 +200,8 @@ endobj
 fn indexed(buf: &[u8]) -> AnyResult<()> {
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
-    let args = ColorSpaceArgs::try_from(resolver.resolve(1)?).unwrap();
-    let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None).unwrap();
+    let _args = ColorSpaceArgs::try_from(resolver.resolve(1)?).unwrap();
+    let color_space = parse_color_space(buf)?;
     assert_eq!(
         ColorSpace::Indexed(Box::new(IndexedColorSpace {
             base: ColorSpace::DeviceRGB,
@@ -229,10 +219,7 @@ fn cal_rgb_from_args() {
 [/CalRGB <</WhitePoint[0.9505 1.0 1.089]/BlackPoint[0.01 0.02 0.03]/Gamma[1.8 1.8 1.8]/Matrix[0.4497 0.2446 0.0252 0.3163 0.672 0.1412 0.1845 0.0833 0.9227]>>]
 endobj
 "#;
-    let xref = XRefTable::from_buf(buf);
-    let resolver = ObjectResolver::new(buf, &xref, None);
-    let args = ColorSpaceArgs::try_from(resolver.resolve(1).unwrap()).unwrap();
-    let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None).unwrap();
+    let color_space = parse_color_space(buf).unwrap();
     assert_eq!(
         ColorSpace::CalRGB(Box::new(CalRGBColorSpace {
             white_point: [0.9505, 1.0, 1.089],
@@ -252,10 +239,7 @@ fn pattern_with_cs_from_args() {
 [/Pattern /DeviceRGB]
 endobj
 "#;
-    let xref = XRefTable::from_buf(buf);
-    let resolver = ObjectResolver::new(buf, &xref, None);
-    let args = ColorSpaceArgs::try_from(resolver.resolve(1).unwrap()).unwrap();
-    let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None).unwrap();
+    let color_space = parse_color_space(buf).unwrap();
     assert_eq!(
         ColorSpace::Pattern(Box::new(PatternColorSpace(Some(ColorSpace::DeviceRGB)))),
         color_space
@@ -315,8 +299,8 @@ endobj
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
 
-    let args = ColorSpaceArgs::try_from(resolver.resolve(1)?)?;
-    let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None)?;
+    let _args = ColorSpaceArgs::try_from(resolver.resolve(1)?)?;
+    let color_space = parse_color_space(buf)?;
     assert_eq!(1, color_space.components());
     assert!(matches!(color_space, ColorSpace::DeviceN(_)));
 
@@ -328,5 +312,71 @@ endobj
     let args = ColorSpaceArgs::try_from(resolver.resolve(4)?)?;
     let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None);
     assert!(color_space.is_err());
+    Ok(())
+}
+
+#[test]
+fn lab_to_rgb() {
+    let cs = LabColorSpace {
+        white_point: [1.0, 1., 1.],
+        ranges: [
+            Domain::new(0., 100.),
+            Domain::new(-128., 128.),
+            Domain::new(-128., 128.),
+        ],
+        ..Default::default()
+    };
+
+    assert_eq!([0., 0., 0., 1.], cs.to_rgba(&[0., 0., 0.]));
+    assert_eq!([0., 1., 0., 1.], cs.to_rgba(&[100., -128., 128.]));
+    assert_eq!([6, 0, 0, 255], cs.to_rgba(&[0, 128, 128]));
+    assert_eq!([0, 255, 0, 255], cs.to_rgba(&[255, 0, 255]));
+}
+
+fn parse_color_space(buf: &[u8]) -> AnyResult<ColorSpace> {
+    let xref = XRefTable::from_buf(buf);
+    let resolver = ObjectResolver::new(buf, &xref, None);
+    let args = ColorSpaceArgs::try_from(resolver.resolve(1)?)?;
+    ColorSpace::<f32>::from_args(&args, &resolver, None)
+}
+
+#[test]
+fn lab_from_args() -> AnyResult<()> {
+    let buf = br#"1 0 obj
+[/Lab <</Range [-128 127 -128 127] /WhitePoint [0.9505 1 1.089]>>]
+endobj
+"#;
+    let color_space = parse_color_space(buf)?;
+    assert_eq!(
+        ColorSpace::Lab(LabColorSpace {
+            white_point: [0.9505, 1., 1.089],
+            ranges: [
+                Domain::new(0., 100.),
+                Domain::new(-128., 127.),
+                Domain::new(-128., 127.),
+            ],
+            ..Default::default()
+        }),
+        color_space
+    );
+
+    // default range
+    let buf = br#"1 0 obj
+[/Lab <</WhitePoint [0.9505 1 1.089]/BlackPoint [0.1 0.2 0.3]>>]
+endobj
+"#;
+    let color_space = parse_color_space(buf)?;
+    assert_eq!(
+        ColorSpace::Lab(LabColorSpace {
+            white_point: [0.9505, 1., 1.089],
+            ranges: [
+                Domain::new(0., 100.),
+                Domain::new(-100., 100.),
+                Domain::new(-100., 100.),
+            ],
+            black_point: [0.1, 0.2, 0.3],
+        }),
+        color_space
+    );
     Ok(())
 }
