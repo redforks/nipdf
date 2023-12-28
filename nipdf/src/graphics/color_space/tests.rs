@@ -8,7 +8,6 @@ use mockall::predicate::*;
 use prescript::name;
 use test_case::test_case;
 use tinyvec::tiny_vec;
-use image::EncodableLayout;
 
 #[test]
 fn device_gray_to_rgb() {
@@ -201,7 +200,7 @@ endobj
 fn indexed(buf: &[u8]) -> AnyResult<()> {
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
-    let args = ColorSpaceArgs::try_from(resolver.resolve(1)?).unwrap();
+    let _args = ColorSpaceArgs::try_from(resolver.resolve(1)?).unwrap();
     let color_space = parse_color_space(buf)?;
     assert_eq!(
         ColorSpace::Indexed(Box::new(IndexedColorSpace {
@@ -300,7 +299,7 @@ endobj
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
 
-    let args = ColorSpaceArgs::try_from(resolver.resolve(1)?)?;
+    let _args = ColorSpaceArgs::try_from(resolver.resolve(1)?)?;
     let color_space = parse_color_space(buf)?;
     assert_eq!(1, color_space.components());
     assert!(matches!(color_space, ColorSpace::DeviceN(_)));

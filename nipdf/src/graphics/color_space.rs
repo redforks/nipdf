@@ -715,7 +715,7 @@ impl LabColorInput for u8 {
             end: max,
         } = range;
         let v: f32 = self.into_color_comp();
-        let v = min + (max - min) * v;
+        let v = (max - min).mul_add(v, min);
         range.clamp(v)
     }
 }
@@ -728,7 +728,7 @@ where
     fn to_rgba(&self, color: &[T]) -> [T; 4] {
         fn g(x: f32) -> f32 {
             if x > (6.0 / 29.0) {
-                x.powf(3.0)
+                x.powi(3)
             } else {
                 (108.0 / 841.0) * (x - 4.0 / 29.0)
             }
@@ -750,9 +750,9 @@ where
         let y = yw * g(m);
         let z = zw * g(n);
 
-        let r = 3.240449 * x - 1.537136 * y - 0.498531 * z;
-        let g = -0.969265 * x + 1.876011 * y + 0.041556 * z;
-        let b = 0.055643 * x - 0.204026 * y + 1.057229 * z;
+        let r = 0.498531f32.mul_add(-z, 3.240449f32.mul_add(x, -1.537136 * y));
+        let g = 0.041556f32.mul_add(z, (-0.969265f32).mul_add(x, 1.876011 * y));
+        let b = 1.057229f32.mul_add(z, 0.055643f32.mul_add(x, -0.204026 * y));
         fn to_color_comp<T>(v: f32) -> T
         where
             T: ColorComp,
