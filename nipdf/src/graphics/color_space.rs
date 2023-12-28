@@ -1,7 +1,7 @@
 use super::ColorSpaceArgs;
 use crate::{
     file::{ObjectResolver, ResourceDict},
-    function::{Domain, Function, FunctionDict, NFunc},
+    function::{Domain, Domains, Function, FunctionDict, NFunc},
     graphics::ICCStreamDict,
     object::Object,
 };
@@ -239,6 +239,18 @@ where
                         alt: base,
                         f: Rc::new(f.func()?),
                     })))
+                }
+                "Lab" => {
+                    assert_eq!(2, arr.len());
+                    let dict: LabDict<_> = resolver.resolve_pdf_object2(&arr[1])?;
+                    let white_point = dict.white_point()?;
+                    let ranges = dict.range()?;
+                    let black_point = dict.black_point()?;
+                    Ok(Self::Lab(LabColorSpace {
+                        white_point,
+                        ranges: [Domain::new(0., 100.), ranges[0], ranges[1]],
+                        black_point,
+                    }))
                 }
                 s => todo!("ColorSpace::from_args() {} color space", s),
             },
@@ -620,6 +632,25 @@ trait CalRGBDictTrait {
     fn white_point(&self) -> [f32; 3];
 }
 
+fn default_lab_range() -> Domains {
+    Domains(vec![Domain::new(-100., 100.), Domain::new(-100., 100.)])
+}
+
+#[pdf_object(())]
+#[stub_resolver]
+trait LabDictTrait {
+    #[try_from]
+    #[default_fn(default_lab_range)]
+    fn range(&self) -> Domains;
+
+    #[try_from]
+    #[or_default]
+    fn black_point(&self) -> [f32; 3];
+
+    #[try_from]
+    fn white_point(&self) -> [f32; 3];
+}
+
 fn default_matrix() -> [f32; 9] {
     [
         1.0, 0.0, 0.0, // line 1
@@ -667,7 +698,7 @@ pub struct LabColorSpace {
     black_point: [f32; 3],
 }
 
-trait LabColorInput {
+pub trait LabColorInput {
     fn map_input(self, range: Domain) -> f32;
 }
 
@@ -746,4 +777,5 @@ where
         3
     }
 }
+
 mod tests;

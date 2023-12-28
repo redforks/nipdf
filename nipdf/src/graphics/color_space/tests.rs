@@ -348,3 +348,52 @@ fn lab_to_rgb() {
     assert_eq!([6, 0, 0, 255], cs.to_rgba(&[0, 128, 128]));
     assert_eq!([0, 255, 0, 255], cs.to_rgba(&[255, 0, 255]));
 }
+
+fn parse_color_space(buf: &[u8]) -> AnyResult<ColorSpace> {
+    let xref = XRefTable::from_buf(buf);
+    let resolver = ObjectResolver::new(buf, &xref, None);
+
+    let args = ColorSpaceArgs::try_from(resolver.resolve(1)?)?;
+    ColorSpace::<f32>::from_args(&args, &resolver, None)
+}
+
+#[test]
+fn lab_from_args() -> AnyResult<()> {
+    let buf = br#"1 0 obj
+[/Lab <</Range [-128 127 -128 127] /WhitePoint [0.9505 1 1.089]>>]
+endobj
+"#;
+    let color_space = parse_color_space(buf)?;
+    assert_eq!(
+        ColorSpace::Lab(LabColorSpace {
+            white_point: [0.9505, 1., 1.089],
+            ranges: [
+                Domain::new(0., 100.),
+                Domain::new(-128., 127.),
+                Domain::new(-128., 127.),
+            ],
+            ..Default::default()
+        }),
+        color_space
+    );
+        
+    // default range
+    let buf = br#"1 0 obj
+[/Lab <</WhitePoint [0.9505 1 1.089]/BlackPoint [0.1 0.2 0.3]>>]
+endobj
+"#;
+    let color_space = parse_color_space(buf)?;
+    assert_eq!(
+        ColorSpace::Lab(LabColorSpace {
+            white_point: [0.9505, 1., 1.089],
+            ranges: [
+                Domain::new(0., 100.),
+                Domain::new(-100., 100.),
+                Domain::new(-100., 100.),
+            ],
+            black_point: [0.1, 0.2, 0.3],
+        }),
+        color_space
+    );
+    Ok(())
+}
