@@ -330,6 +330,10 @@ impl<'a> FontOp for Type1FontOp<'a> {
             |x| GlyphLength::new(x.glyph_width(self.char_to_gid(gid) as u32) as f32),
         )
     }
+
+    fn units_per_em(&self) -> u16 {
+        self.font.metrics().units_per_em.try_into().unwrap()
+    }
 }
 
 /// Font implementation using free-type/(font-kit), to handle Type1 fonts
