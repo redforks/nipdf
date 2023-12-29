@@ -249,7 +249,11 @@ pub fn parse_frame_set(input: &[u8]) -> ParseResult<FrameSet> {
     let (buf, _) = context("move to xref", new_r_to_tag(b"startxref"))(input)?;
     let (_, pos) = context("locate frame pos", parse_startxref)(buf)?;
     info!("frame pos: {}", pos);
-    let (_, frame) = parse_frame(&input[pos as usize..])?;
+    let (_, frame) = parse_frame(input.get(pos as usize..).unwrap_or_else(|| {
+        // if pos out of range, search from the end of buf for the beginning of "xref"
+        let pos = r_find_start_object_tag(input, b"xref").unwrap();
+        &input[pos..]
+    }))?;
     let frame = Frame::new(pos, frame.0, frame.1);
     let mut prev = get_prev(&frame);
     frames.push(frame);

@@ -123,3 +123,10 @@ fn read_xref_stream_has_prev() {
     // get resolver without error
     f.resolver().unwrap();
 }
+
+#[test]
+fn find_xref_if_startxref_out_of_range() -> anyhow::Result<()> {
+    let f = open_test_file("pdf.js/test/pdfs/bug1795263.pdf");
+    assert_eq!(499, f.resolver()?.n());
+    Ok(())
+}
