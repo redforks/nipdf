@@ -434,7 +434,6 @@ impl<'a, 'b> SampledFunctionDict<'a, 'b> {
     /// Return SampledFunction instance which implements Function trait.
     pub fn func(&self) -> AnyResult<SampledFunction> {
         let f = self.function_dict()?;
-        assert_eq!(1, f.n_args(), "todo: support multi args");
         let bits_per_sample = self.bits_per_sample()?;
         assert!(bits_per_sample >= 8, "todo: support bits_per_sample < 8");
         assert_eq!(InterpolationOrder::Linear, self.order()?);
