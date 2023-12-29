@@ -63,7 +63,7 @@ fn download_file(url: &str, p: impl AsRef<Path>) -> AnyResult<()> {
 }
 
 /// These files are very rare and odd, not to be tested
-const IGNORED: [&str; 9] = [
+const IGNORED: [&str; 10] = [
     // xpdf, mupdf, are all failed to open
     "bug1020226.pdf",
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
@@ -89,6 +89,10 @@ const IGNORED: [&str; 9] = [
     "bug1606566.pdf",
     // todo: render Type 4 Shadings
     "bug1260585.pdf.link",
+    // todo: rebuild xref table, because:
+    // 1. startxref point to incorrect pos
+    // 1. xref table not correct, for example object 6 offset is wrong-
+    "bug1795263.pdf",
 ];
 
 static PASSWORD: phf::Map<&'static str, &'static str> = phf::phf_map! {
