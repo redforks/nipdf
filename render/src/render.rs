@@ -1616,22 +1616,6 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
     }
 }
 
-trait ToTextSpaceLength {
-    fn to_text_space_length(self) -> Length<f32, TextSpace>;
-}
-
-impl ToTextSpaceLength for Length<f32, TextSpace> {
-    fn to_text_space_length(self) -> Length<f32, TextSpace> {
-        self
-    }
-}
-
-impl ToTextSpaceLength for Length<f32, ThousandthsOfText> {
-    fn to_text_space_length(self) -> Length<f32, TextSpace> {
-        Length::new(self.0 / 1000.0)
-    }
-}
-
 #[derive(Educe, Clone)]
 #[educe(Debug)]
 struct TextObject {
@@ -1722,6 +1706,12 @@ impl TextObject {
     }
 
     fn move_to_next_pos(&mut self, glyph_width: GlyphLength, word_boundary: bool) {
+        dbg!((
+            glyph_width,
+            self.em_ratio,
+            self.font_size,
+            self.char_spacing
+        ));
         let mut w = glyph_width * self.em_ratio * self.font_size + self.char_spacing;
         if word_boundary {
             w += self.word_spacing;

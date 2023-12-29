@@ -326,7 +326,14 @@ impl<'a> FontOp for Type1FontOp<'a> {
 
     fn char_width(&self, gid: u32) -> GlyphLength {
         self.font_width.as_ref().either(
-            |x| x.char_width(gid),
+            |x| {
+                let r = x.char_width(gid);
+                if self.units_per_em() != 1000 {
+                    GlyphLength::new(r.0 / 1000.0 * self.units_per_em() as f32)
+                } else {
+                    r
+                }
+            },
             |x| GlyphLength::new(x.glyph_width(self.char_to_gid(gid) as u32) as f32),
         )
     }

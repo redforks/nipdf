@@ -1,0 +1,5 @@
+---
+source: render/src/render_tests.rs
+expression: "&decode_file_page(\"../render/src/type1-units-per-em-not-1000.pdf\", 0).unwrap()"
+---
+"26116dfebfbebc59e7e6f3d87d4c2eff"
