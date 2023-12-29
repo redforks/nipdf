@@ -758,11 +758,7 @@ where
             T: ColorComp,
             f32: ColorCompConvertTo<T>,
         {
-            if v < 0. {
-                T::min_color()
-            } else {
-                v.sqrt().into_color_comp().clamp()
-            }
+            v.clamp(0f32, 1f32).sqrt().into_color_comp()
         }
 
         [
