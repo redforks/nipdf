@@ -378,6 +378,7 @@ pub struct SampledFunction {
     decode: Domains,
     size: Vec<u32>,
     samples: Vec<u8>,
+    bits_per_sample: u8,
 }
 
 impl SampledFunction {
@@ -390,20 +391,34 @@ impl SampledFunction {
 impl Function for SampledFunction {
     fn inner_call(&self, args: TinyVec<[f32; 4]>) -> AnyResult<FunctionValue> {
         let mut idx = 0;
-        for (i, arg) in args.iter().enumerate() {
-            let domain = &self.signature.domain.0[i];
-            let encode = &self.encode.0[i];
+        for (arg, (domain, (encode, size))) in args
+            .iter()
+            .zip(
+                self.signature
+                    .domain
+                    .iter()
+                    .zip(self.encode.iter().zip(self.size.iter())),
+            )
+            .rev()
+        {
             let arg = (arg - domain.start) / (domain.end - domain.start);
             let arg = arg.mul_add(encode.end - encode.start, encode.start);
-            idx += arg.to_u32().unwrap().clamp(0, self.size[i] - 1);
+            idx = size * idx + arg.round().to_u32().unwrap().clamp(0, size - 1);
         }
+        let idx = idx as usize;
 
-        let n = self.signature.n_returns().unwrap();
+        let n_ret = self.signature.n_returns().unwrap();
+        let sample_size = self.bits_per_sample as usize / 8;
         let mut r = tiny_vec![];
         let decode = &self.decode.0[0];
-        for i in 0..n {
-            let sample = self.samples[idx as usize * n + i];
-            let sample = sample as f32 / 255.0;
+        for i in 0..n_ret {
+            let start_p = (idx * n_ret + i) * sample_size;
+            let mut sample = 0u32;
+            for i in 0..sample_size {
+                sample <<= 8;
+                sample |= self.samples[start_p + i] as u32;
+            }
+            let sample = sample as f32 / (2.0_f32.powi(self.bits_per_sample as i32) - 1.0);
             let sample = sample.mul_add(decode.end - decode.start, decode.start);
             r.push(sample);
         }
@@ -420,13 +435,10 @@ impl<'a, 'b> SampledFunctionDict<'a, 'b> {
     pub fn func(&self) -> AnyResult<SampledFunction> {
         let f = self.function_dict()?;
         assert_eq!(1, f.n_args(), "todo: support multi args");
-
-        assert_eq!(
-            8,
-            self.bits_per_sample()?,
-            "todo: support bits_per_sample != 8"
-        );
+        let bits_per_sample = self.bits_per_sample()?;
+        assert!(bits_per_sample >= 8, "todo: support bits_per_sample < 8");
         assert_eq!(InterpolationOrder::Linear, self.order()?);
+
         let size = self.size()?;
         let resolver = self.d.resolver();
         let stream = resolver.resolve(self.id.unwrap())?.stream()?;
@@ -449,6 +461,7 @@ impl<'a, 'b> SampledFunctionDict<'a, 'b> {
             }),
             size: self.size()?,
             samples: sample_data.into_owned(),
+            bits_per_sample: bits_per_sample.try_into().unwrap(),
         })
     }
 }

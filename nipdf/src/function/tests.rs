@@ -4,7 +4,9 @@ use crate::{
     object::PdfObject,
     parser::parse_dict,
 };
+use assert_approx_eq::assert_approx_eq;
 use mockall::predicate::eq;
+use std::slice::from_ref;
 use test_case::test_case;
 
 #[test]
@@ -174,4 +176,59 @@ fn test_n_func() {
         f.call(&[0.5_f32, 3.0_f32][..]).unwrap(),
         FunctionValue::from(&[0.6_f32, 0.8_f32][..])
     )
+}
+
+#[test]
+fn sampled_function_bits_per_sample_8() -> AnyResult<()> {
+    let f = SampledFunction {
+        bits_per_sample: 8,
+        signature: Signature {
+            domain: Domains(vec![Domain::new(0.0, 10.0), Domain::new(0.0, 2.0)]),
+            range: Some(Domains(vec![Domain::new(0.0, 1.0)])),
+        },
+        encode: Domains(vec![Domain::new(0., 1.), Domain::new(0., 2.)]),
+        decode: Domains(vec![Domain::new(0., 1.)]),
+        samples: vec![
+            /* (0, 0) */ 0, /* (1, 0) */ 192, /* (0, 1) */ 128,
+            /* (1, 1) */ 64, /* (0, 2) */ 255, /* (1, 2) */ 32,
+        ],
+        size: vec![2, 3],
+    };
+
+    let cases = vec![
+        ((0.0f32, 0.0f32), 0.0f32),
+        ((1.0f32, 1.0f32), 128.0 / 255.0),
+        ((4.0f32, 2.0f32), 255.0 / 255.0),
+        ((6.0f32, 0.0f32), 192.0 / 255.0),
+        ((7.0f32, 1.0f32), 64.0 / 255.0),
+        ((7.0f32, 2.0f32), 32.0 / 255.0),
+    ];
+    for (args, exp) in cases {
+        assert_approx_eq!(exp, f.call(&[args.0, args.1][..])?[0]);
+    }
+    Ok(())
+}
+
+#[test]
+fn sampled_function_bits_per_sample_16() {
+    let f = SampledFunction {
+        bits_per_sample: 16,
+        signature: Signature {
+            domain: Domains(vec![Domain::new(0.0, 2.0)]),
+            range: Some(Domains(vec![Domain::new(0.0, 1.0)])),
+        },
+        encode: Domains(vec![Domain::new(0., 2.)]),
+        decode: Domains(vec![Domain::new(0., 1.)]),
+        samples: vec![1, 2, 3, 4, 5, 6],
+        size: vec![3],
+    };
+
+    let cases = vec![
+        (0., 0x0102 as f32 / 65535.0),
+        (1., 0x0304 as f32 / 65535.0),
+        (2., 0x0506 as f32 / 65535.0),
+    ];
+    for (arg, exp) in cases {
+        assert_approx_eq!(exp, f.call(from_ref(&arg)).unwrap()[0]);
+    }
 }
