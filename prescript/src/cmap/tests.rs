@@ -1,3 +1,4 @@
+#![allow(clippy::cast_possible_truncation)]
 use super::*;
 use crate::{name, sname};
 use either::{Left, Right};

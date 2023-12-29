@@ -63,7 +63,6 @@ fn test_iter_filter(
 ) -> Result<Vec<(Name, Option<Dictionary>)>, ObjectValueError> {
     let dict: Dictionary = dict
         .into_iter()
-        .map(|(k, v)| (k, v))
         .collect::<Dictionary>();
     let d = FilterDict::new(&dict, None)?;
     let r: Vec<(Name, Option<Dictionary>)> =

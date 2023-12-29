@@ -148,7 +148,7 @@ fn render(f: &str) -> AnyResult<()> {
 
     let buf = std::fs::read(file_path).unwrap();
     let file_name = Path::new(file_path).file_name().unwrap().to_str().unwrap();
-    let pdf = File::parse(buf, PASSWORD.get(file_name).map(|s| *s).unwrap_or(""))
+    let pdf = File::parse(buf, PASSWORD.get(file_name).copied().unwrap_or(""))
         .unwrap_or_else(|_| panic!("failed to parse {f:?}"));
     let resolver = pdf.resolver().unwrap();
     let catalog = pdf.catalog(&resolver)?;
