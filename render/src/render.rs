@@ -1706,12 +1706,6 @@ impl TextObject {
     }
 
     fn move_to_next_pos(&mut self, glyph_width: GlyphLength, word_boundary: bool) {
-        dbg!((
-            glyph_width,
-            self.em_ratio,
-            self.font_size,
-            self.char_spacing
-        ));
         let mut w = glyph_width * self.em_ratio * self.font_size + self.char_spacing;
         if word_boundary {
             w += self.word_spacing;

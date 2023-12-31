@@ -636,10 +636,10 @@ fn parse_inline_image(input: &[u8]) -> ParseResult<InlineImage> {
 
     let mut p = 0;
     let (input, data) = loop {
-        p = (&input[p..])
+        p += (&input[p..])
             .find_substring(b"EI".as_slice())
             .ok_or_else(|| nom::Err::Error(ParseError::from_error_kind(input, ErrorKind::Tag)))?;
-        if is_white_space(input[p + 2]) {
+        if is_white_space(input[p-1]) && input.get(p + 2).map_or(true, |b| is_white_space(*b)) {
             break (&input[p + 2..], &input[..p]);
         }
         p += 2;

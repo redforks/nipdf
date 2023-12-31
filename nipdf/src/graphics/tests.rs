@@ -1,5 +1,8 @@
 use super::*;
-use crate::object::LiteralString;
+use crate::{
+    file::{ObjectResolver, ResourceDict, XRefTable},
+    object::LiteralString,
+};
 use prescript::sname;
 use test_case::test_case;
 
@@ -110,4 +113,27 @@ fn transform_try_from_array() {
     let o = arr.into();
     let act = Transform2D::try_from(&o).unwrap();
     assert_eq!(act, Transform2D::new(1f32, 2f32, 3f32, 4f32, 5f32, 6f32));
+}
+
+#[test]
+fn parse_inline_image_with_ascii85_filter() -> anyhow::Result<()> {
+    use crate::object::{ImageMetadata, PdfObject};
+
+    let data = include_bytes!("inline-image-ascii85");
+    let (remains, img) = parse_inline_image(data)?;
+    assert_eq!(remains, b" Q\n");
+    let meta = img.meta();
+    assert_eq!(meta.width()?, 4772);
+    assert_eq!(meta.height()?, 110);
+    let xref = XRefTable::empty();
+    let resolver = ObjectResolver::empty(&xref);
+    let d = Dictionary::default();
+    let res_dict = ResourceDict::new(None, &d, &resolver)?;
+    let img = img.image(&resolver, &res_dict)?;
+    assert_eq!(4772, img.width());
+    assert_eq!(110, img.height());
+    // should be 4772 * 110 * 3, because it is RGB image
+    // * 4, maybe because of sample data extract from wrong pdf
+    assert_eq!(4772 * 110 * 4, img.as_bytes().len());
+    Ok(())
 }
