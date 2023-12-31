@@ -39,9 +39,22 @@ pub fn render2(c: &mut Criterion) {
     });
 }
 
-criterion_group! {
-  name = benches;
-  config = Criterion::default();
-  targets = render1, render2
+pub fn render_inline_image(c: &mut Criterion) {
+    c.bench_function("page render", |b| {
+        b.iter(|| render_page_no("../nipdf/sample_files/xobject/inline-image.pdf", 0).unwrap())
+    });
 }
-criterion_main!(benches);
+
+criterion_group! {
+    name = benches;
+    config = Criterion::default();
+    targets = render1, render2
+}
+
+criterion_group! {
+    name = inline_image;
+    config = Criterion::default().sample_size(10);
+    targets = render_inline_image
+}
+
+criterion_main!(benches, inline_image);
