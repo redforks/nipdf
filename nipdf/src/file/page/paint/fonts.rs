@@ -170,24 +170,27 @@ struct EncodingParser<'a, 'b, 'c>(&'c FontDict<'a, 'b>);
 
 type EncodingPair<'a> = (Option<Name>, Option<EncodingDifferences<'a>>);
 impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
-    fn by_name(name: Name) -> AnyResult<Encoding> {
-        Encoding::predefined(name.clone()).ok_or_else(|| anyhow!("Unknown encoding: {}", name))
+    fn by_name(name: Name) -> Option<Encoding> {
+        let r = Encoding::predefined(name.clone());
+        if r.is_none() {
+            warn!("Unknown encoding: {}", name.as_str());
+        }
+        r
     }
 
-    fn by_font_name(&self, font_name: &Name) -> AnyResult<Option<Encoding>> {
+    fn by_font_name(&self, font_name: &Name) -> Option<Encoding> {
         let encoding_name = standard_14_type1_font_encoding(font_name);
-        encoding_name.map(Self::by_name).transpose()
+        encoding_name.and_then(Self::by_name)
     }
 
     fn resolve_by_encoding_or_font_name(
         &self,
         pair: &Option<EncodingPair>,
         font_name: &str,
-    ) -> AnyResult<Option<Encoding>> {
+    ) -> Option<Encoding> {
         pair.as_ref()
-            .and_then(|p| p.0.as_ref().map(|n| Self::by_name(n.clone())))
-            .or_else(|| self.by_font_name(&name(font_name)).transpose())
-            .transpose()
+            .and_then(|p| p.0.as_ref().and_then(|n| Self::by_name(n.clone())))
+            .or_else(|| self.by_font_name(&name(font_name)))
     }
 
     fn load_from_file(
@@ -237,7 +240,7 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
         let encoding_pair = self.encoding_pair()?;
         let font_name = self.0.font_name()?;
         let r = self
-            .resolve_by_encoding_or_font_name(&encoding_pair, font_name.as_ref())?
+            .resolve_by_encoding_or_font_name(&encoding_pair, font_name.as_ref())
             .or_else(|| Self::load_from_file(font_name.as_ref(), font_data, is_cff).unwrap())
             .or_else(|| Self::guess_by_font_name(font_name.as_ref()))
             .unwrap_or_else(|| self.default_encoding().unwrap());
@@ -247,7 +250,7 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
     pub fn type3(&self) -> AnyResult<Encoding> {
         let encoding_pair = self.encoding_pair()?;
         let r = self
-            .resolve_by_encoding_or_font_name(&encoding_pair, "")?
+            .resolve_by_encoding_or_font_name(&encoding_pair, "")
             .unwrap_or_else(|| self.default_encoding().unwrap());
         Ok(self.apply_encoding_diff(r, &encoding_pair))
     }
@@ -274,10 +277,10 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
             return Ok(None);
         };
 
-        let r = pair
-            .0
-            .as_ref()
-            .map_or_else(|| Ok(Encoding::default()), |n| Self::by_name(n.clone()))?;
+        let r = pair.0.as_ref().map_or_else(
+            || Encoding::default(),
+            |n| Self::by_name(n.clone()).unwrap_or_else(|| Encoding::default()),
+        );
         Ok(Some(self.apply_encoding_diff(r, &Some(pair))))
     }
 }
