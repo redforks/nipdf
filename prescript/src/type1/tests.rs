@@ -9,6 +9,14 @@ fn parse_pfb_file() {
 }
 
 #[test]
+fn parse_file_header_loose_ending() {
+    let data = include_bytes!("file-header-loose-ending.pfb");
+    let font = Font::parse(data).unwrap();
+    assert_eq!("NewsGothicStd-Bold", font.header.font_name);
+    assert!(font.encoding().is_some());
+}
+
+#[test]
 fn parse_pfa_file() {
     let data = include_bytes!("p052024l.pfa");
     let font = Font::parse(data).unwrap();

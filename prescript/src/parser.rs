@@ -11,7 +11,7 @@ use std::{
     str::{from_utf8, from_utf8_unchecked},
 };
 use winnow::{
-    ascii::{hex_digit1, line_ending},
+    ascii::hex_digit1,
     combinator::{alt, delimited, dispatch, fail, fold_repeat, opt, preceded, repeat, terminated},
     error::{ContextError, ErrMode},
     stream::{AsChar, Stream},
@@ -32,7 +32,7 @@ pub fn header(input: &mut &[u8]) -> PResult<Header> {
     let spec_ver = delimited('-', take_till(1.., ':'), b": ").parse_next(input)?;
     let font_name = take_till(1.., ' ').parse_next(input)?;
     let font_ver =
-        delimited(' ', take_while(1.., (('0'..='9'), '.')), line_ending).parse_next(input)?;
+        delimited(' ', take_while(1.., (('0'..='9'), '.')), loose_line_ending).parse_next(input)?;
 
     Ok(Header {
         spec_ver: String::from_utf8(spec_ver.to_owned()).unwrap(),
