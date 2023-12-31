@@ -4,7 +4,7 @@ use crate::{
         parse_operations, shading::ShadingDict, trans::FormToUserSpace, ColorArgs, ColorSpaceArgs,
         LineCapStyle, LineJoinStyle, Operation, PatternDict, Point, RenderingIntent,
     },
-    object::{Dictionary, Object, ObjectValueError, PdfObject, RuntimeObjectId, Stream},
+    object::{Dictionary, ImageMask, Object, ObjectValueError, PdfObject, RuntimeObjectId, Stream},
     text::FontDict,
 };
 use ahash::{HashMap, HashMapExt};
@@ -141,6 +141,9 @@ pub trait XObjectDictTrait {
 
     #[nested]
     fn s_mask(&self) -> Option<XObjectDict<'a, 'b>>;
+
+    #[try_from]
+    fn mask(&self) -> Option<ImageMask>;
 
     #[or_default]
     fn interpolate(&self) -> bool;

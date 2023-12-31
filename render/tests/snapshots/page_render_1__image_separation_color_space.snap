@@ -1,5 +1,5 @@
 ---
-source: nipdf/tests/page_render_1.rs
+source: render/tests/page_render_1.rs
 expression: "&decode_image(1297).unwrap()"
 ---
-"c708ccfd28ac3df5e6961b5f83ec71a5"
+"cab328195c3f1690dcbe5ca27361a669"

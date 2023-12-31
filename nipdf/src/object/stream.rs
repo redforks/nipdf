@@ -338,10 +338,7 @@ fn decode_image<'a, M: ImageMetadata>(
         }
     };
 
-    if let Some(mask) = img_meta.mask().unwrap() {
-        let ImageMask::ColorKey(color_key) = mask else {
-            todo!("image mask: {:?}", mask);
-        };
+    if let Some(ImageMask::ColorKey(color_key)) = img_meta.mask().unwrap() {
         let Some(cs) = color_space else {
             todo!("Color Space not defined when process color key mask");
         };

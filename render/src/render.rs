@@ -28,7 +28,7 @@ use nipdf::{
         ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, Operation, Point,
         RenderingIntent, TextRenderingMode,
     },
-    object::{ImageMetadata, InlineImage, Object, PdfObject, TextStringOrNumber},
+    object::{ImageMask, ImageMetadata, InlineImage, Object, PdfObject, TextStringOrNumber},
 };
 use nom::{combinator::eof, sequence::terminated};
 use num_traits::ToPrimitive;
@@ -1065,13 +1065,24 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             return Ok(());
         }
 
-        let s_mask = x_object.s_mask()?.map(|s_mask| {
-            let s_mask = s_mask.as_stream().unwrap();
-            let img = s_mask
-                .decode_image(self.resources.resolver(), Some(self.resources))
-                .unwrap();
-            Self::load_image_as_mask(img.into_rgba8(), state, true).unwrap()
-        });
+        let s_mask = x_object
+            .s_mask()?
+            .map(|s_mask| {
+                let s_mask = s_mask.as_stream().unwrap();
+                let img = s_mask
+                    .decode_image(self.resources.resolver(), Some(self.resources))
+                    .unwrap();
+                Self::load_image_as_mask(img.into_rgba8(), state, true).unwrap()
+            })
+            .or_else(|| {
+                let Some(ImageMask::Explicit(mask)) = x_object.mask().unwrap() else {
+                    return None;
+                };
+                let img = mask
+                    .decode_image(self.resources.resolver(), Some(self.resources))
+                    .unwrap();
+                Some(Self::load_image_as_mask(img.into_rgba8(), state, false).unwrap())
+            });
 
         let paint = PixmapPaint {
             opacity: state.fill_state.alpha(),
