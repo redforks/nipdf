@@ -12,6 +12,7 @@ use test_case::test_case;
 #[test_case(4294967296f32, "4294967296"; "integer out of range")]
 #[test_case(123.12, "123.12"; "number")]
 #[test_case(-123.12, "-123.12"; "negative number")]
+#[test_case(0f32, "-"; "negative symbol only")]
 #[test_case(123.12, "+123.12"; "number prefixed with +")]
 #[test_case(4.0, "4.0"; "number end with dot")]
 #[test_case(4.589_849_5, "4.58984938980.04"; "number ignore 2nd dot")]

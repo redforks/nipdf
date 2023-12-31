@@ -66,7 +66,7 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<Object> {
                 let s = unsafe { from_utf8_unchecked(s) };
                 i32::from_str(s)
                     .map(Object::Integer)
-                    .unwrap_or_else(|_| Object::Number(f32::from_str(s).unwrap()))
+                    .unwrap_or_else(|_| Object::Number(f32::from_str(s).unwrap_or_default()))
             }
         },
     );
