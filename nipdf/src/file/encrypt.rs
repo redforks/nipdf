@@ -1,12 +1,11 @@
-use crate::object::ObjectId;
+use crate::object::{ObjectId, TrailerDict};
 use ahash::{HashMap, HashMapExt};
+use anyhow::Result as AnyResult;
 use arc4::Arc4;
-
 use log::error;
 use md5::{Digest, Md5};
 use nipdf_macro::{pdf_object, TryFromIntObject, TryFromNameObject};
 use prescript::{sname, Name};
-
 use tinyvec::{Array, ArrayVec, TinyVec};
 
 #[derive(TryFromIntObject, Default, Debug, PartialEq, Eq, Clone, Copy)]
@@ -20,7 +19,7 @@ pub enum Algorithm {
 }
 
 #[derive(TryFromIntObject, PartialEq, Eq, Debug, Clone, Copy, PartialOrd, Ord)]
-pub enum StandardHandlerRevion {
+pub enum StandardHandlerRevision {
     V2 = 2,
     V3 = 3,
     V4 = 4,
@@ -65,7 +64,7 @@ pub trait EncryptDictTrait {
 
     #[key("R")]
     #[try_from]
-    fn revison(&self) -> StandardHandlerRevion;
+    fn revison(&self) -> StandardHandlerRevision;
 
     /// 32-byte long string.
     #[key("O")]
@@ -155,7 +154,7 @@ impl<'a, 'b> EncryptDict<'a, 'b> {
         use anyhow::Result;
 
         fn _do(this: &EncryptDict) -> Result<CryptFilters> {
-            if this.revison()? != StandardHandlerRevion::V4 {
+            if this.revison()? != StandardHandlerRevision::V4 {
                 return Ok(CryptFilters::rc4());
             }
 
@@ -210,158 +209,6 @@ const PADDING: [u8; 32] = [
 fn pad_trunc_password(s: &[u8]) -> [u8; 32] {
     let mut iter = s.iter().copied().chain(PADDING).take(32);
     std::array::from_fn(|_| iter.next().unwrap())
-}
-
-// algorithm 2
-pub fn calc_encrypt_key(
-    revion: StandardHandlerRevion,
-    key_length: usize,
-    user_password: &[u8],
-    owner_hash: &[u8; 32],
-    permission_flags: u32,
-    doc_id: &[u8],
-    encrypt_metadata: bool,
-) -> Box<[u8]> {
-    let user_password = pad_trunc_password(user_password);
-    let mut md5 = Md5::new();
-    md5.update(user_password);
-    md5.update(owner_hash);
-    md5.update(permission_flags.to_le_bytes());
-    md5.update(doc_id);
-    if revion == StandardHandlerRevion::V4 && !encrypt_metadata {
-        md5.update([0xff, 0xff, 0xff, 0xff]);
-    }
-    let mut hash = md5.finalize();
-    let n = key_length / 8;
-    if revion > StandardHandlerRevion::V2 {
-        for _ in 0..50 {
-            hash = Md5::digest(&hash[..n]);
-        }
-    }
-    (&hash[..n]).into()
-}
-
-// algorithm 4 and 5
-fn calc_user_hash(
-    revion: StandardHandlerRevion,
-    key_length: usize,
-    user_password: &[u8],
-    owner_hash: &[u8; 32],
-    permission_flags: u32,
-    doc_id: &[u8],
-    encrypt_metadata: bool,
-) -> [u8; 32] {
-    let key = calc_encrypt_key(
-        revion,
-        key_length,
-        user_password,
-        owner_hash,
-        permission_flags,
-        doc_id,
-        encrypt_metadata,
-    );
-
-    if revion == StandardHandlerRevion::V2 {
-        let mut r = PADDING.to_owned();
-        Arc4::with_key(&key).encrypt(&mut r);
-        r
-    } else {
-        let mut md5 = Md5::new();
-        md5.update(PADDING);
-        md5.update(doc_id);
-        let mut hash = md5.finalize();
-        let mut tmp = key.to_vec();
-        for i in 0..=19 {
-            for (t, k) in tmp.as_mut_slice().iter_mut().zip(&key[..]) {
-                *t = *k ^ i;
-            }
-            Arc4::with_key(&tmp[..]).encrypt(&mut hash);
-        }
-        let mut r = [0u8; 32];
-        r[..16].copy_from_slice(&hash[..]);
-        r
-    }
-}
-
-// algorithm 6
-pub fn authorize_user(
-    revion: StandardHandlerRevion,
-    key_length: usize,
-    user_password: &[u8],
-    owner_hash: &[u8; 32],
-    user_hash: &[u8; 32],
-    permission_flags: u32,
-    doc_id: &[u8],
-    encrypt_metadata: bool,
-) -> bool {
-    let hash = calc_user_hash(
-        revion,
-        key_length,
-        user_password,
-        owner_hash,
-        permission_flags,
-        doc_id,
-        encrypt_metadata,
-    );
-
-    if revion == StandardHandlerRevion::V2 {
-        &hash[..] == user_hash
-    } else {
-        hash[..16] == user_hash[..16]
-    }
-}
-
-/// algorithm 3 step a to d
-#[allow(dead_code)]
-fn calc_rc4_key(
-    revion: StandardHandlerRevion,
-    key_length: usize,
-    owner_password: &[u8],
-) -> Box<[u8]> {
-    let mut owner_password = Md5::digest(pad_trunc_password(owner_password));
-    if revion > StandardHandlerRevion::V2 {
-        for _ in 0..50 {
-            owner_password = Md5::digest(&owner_password[..]);
-        }
-    }
-    (&owner_password[..(key_length / 8)]).into()
-}
-
-#[allow(dead_code)]
-pub fn authorize_owner(
-    revion: StandardHandlerRevion,
-    key_length: usize,
-    owner_password: &[u8],
-    owner_hash: &[u8; 32],
-    user_hash: &[u8; 32],
-    permission_flag: u32,
-    doc_id: &[u8],
-    encrypt_metadata: bool,
-) -> bool {
-    let rc4_key = &calc_rc4_key(revion, key_length, owner_password);
-    let mut decrypt = owner_hash.to_vec();
-    if revion == StandardHandlerRevion::V2 {
-        Arc4::with_key(rc4_key).encrypt(&mut decrypt);
-    } else {
-        let mut key = vec![0u8; rc4_key.len()];
-        for i in (0..20).rev() {
-            for (t, k) in key.as_mut_slice().iter_mut().zip(&rc4_key[..]) {
-                *t = *k ^ i;
-            }
-            Arc4::with_key(&key).encrypt(&mut decrypt);
-        }
-    }
-
-    authorize_user(
-        revion,
-        key_length,
-        &decrypt,
-        owner_hash,
-        user_hash,
-        permission_flag,
-        doc_id,
-        encrypt_metadata,
-    )
 }
 
 pub trait VecLike {
@@ -462,6 +309,127 @@ impl Decryptor for AesDecryptor {
         Aes128CbcDec::new(self.0.as_ref().into(), &iv.into())
             .decrypt_padded_mut::<Pkcs7>(data.as_mut_slice())
             .unwrap();
+    }
+}
+
+pub struct Authorizer {
+    revision: StandardHandlerRevision,
+    key_length: usize,
+    owner_hash: [u8; 32],
+    user_hash: [u8; 32],
+    permission_flags: u32,
+    doc_id: Box<[u8]>,
+    encrypt_metadata: bool,
+}
+
+impl Authorizer {
+    pub fn new(d: &EncryptDict, trailer: &TrailerDict) -> AnyResult<Self> {
+        let mut owner_hash = [0u8; 32];
+        let mut user_hash = [0u8; 32];
+        owner_hash.copy_from_slice(&d.owner_password_hash()?[..32]);
+        user_hash.copy_from_slice(&d.user_password_hash()?[..32]);
+        Ok(Self {
+            revision: d.revison()?,
+            key_length: d.key_length()? as usize,
+            owner_hash,
+            user_hash,
+            permission_flags: d.permission_flags()?,
+            doc_id: trailer.id()?.unwrap().0,
+            encrypt_metadata: d.encrypt_metadata()?,
+        })
+    }
+
+    /// Try authorize by owner password first, if failed, try user password.
+    /// Returns authorize key if succeed.
+    pub fn authorize(&self, password: &[u8]) -> Option<Box<[u8]>> {
+        (self.authorize_owner(password) || self.authorize_user(password))
+            .then(|| self.calc_encrypt_key(password))
+    }
+
+    fn authorize_user(&self, password: &[u8]) -> bool {
+        let hash = self.calc_user_hash(password);
+
+        if self.revision == StandardHandlerRevision::V2 {
+            hash[..] == self.user_hash
+        } else {
+            hash[..16] == self.user_hash[..16]
+        }
+    }
+
+    fn authorize_owner(&self, password: &[u8]) -> bool {
+        let rc4_key = &self.calc_rc4_key(password);
+        let mut decrypt = self.owner_hash.to_vec();
+        if self.revision == StandardHandlerRevision::V2 {
+            Arc4::with_key(rc4_key).encrypt(&mut decrypt);
+        } else {
+            let mut key = vec![0u8; rc4_key.len()];
+            for i in (0..20).rev() {
+                for (t, k) in key.as_mut_slice().iter_mut().zip(&rc4_key[..]) {
+                    *t = *k ^ i;
+                }
+                Arc4::with_key(&key).encrypt(&mut decrypt);
+            }
+        }
+
+        self.authorize_user(&decrypt)
+    }
+
+    // algorithm 2
+    fn calc_encrypt_key(&self, password: &[u8]) -> Box<[u8]> {
+        let user_password = pad_trunc_password(password);
+        let mut md5 = Md5::new();
+        md5.update(user_password);
+        md5.update(self.owner_hash);
+        md5.update(self.permission_flags.to_le_bytes());
+        md5.update(&self.doc_id);
+        if self.revision == StandardHandlerRevision::V4 && !self.encrypt_metadata {
+            md5.update([0xff, 0xff, 0xff, 0xff]);
+        }
+        let mut hash = md5.finalize();
+        let n = self.key_length / 8;
+        if self.revision > StandardHandlerRevision::V2 {
+            for _ in 0..50 {
+                hash = Md5::digest(&hash[..n]);
+            }
+        }
+        (&hash[..n]).into()
+    }
+
+    // algorithm 4 and 5
+    fn calc_user_hash(&self, password: &[u8]) -> [u8; 32] {
+        let key = self.calc_encrypt_key(password);
+
+        if self.revision == StandardHandlerRevision::V2 {
+            let mut r = PADDING.to_owned();
+            Arc4::with_key(&key).encrypt(&mut r);
+            r
+        } else {
+            let mut md5 = Md5::new();
+            md5.update(PADDING);
+            md5.update(&self.doc_id);
+            let mut hash = md5.finalize();
+            let mut tmp = key.to_vec();
+            for i in 0..=19 {
+                for (t, k) in tmp.as_mut_slice().iter_mut().zip(&key[..]) {
+                    *t = *k ^ i;
+                }
+                Arc4::with_key(&tmp[..]).encrypt(&mut hash);
+            }
+            let mut r = [0u8; 32];
+            r[..16].copy_from_slice(&hash[..]);
+            r
+        }
+    }
+
+    /// algorithm 3 step a to d
+    fn calc_rc4_key(&self, password: &[u8]) -> Box<[u8]> {
+        let mut owner_password = Md5::digest(pad_trunc_password(password));
+        if self.revision > StandardHandlerRevision::V2 {
+            for _ in 0..50 {
+                owner_password = Md5::digest(&owner_password[..]);
+            }
+        }
+        (&owner_password[..(self.key_length / 8)]).into()
     }
 }
 

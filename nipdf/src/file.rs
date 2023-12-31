@@ -1,7 +1,7 @@
 //! Contains types of PDF file structures.
 
 use crate::{
-    file::encrypt::calc_encrypt_key,
+    file::encrypt::Authorizer,
     object::{
         Array, Dictionary, Entry, FrameSet, HexString, LiteralString, Object, ObjectId,
         ObjectValueError, PdfObject, Resolver, RuntimeObjectId, Stream, TrailerDict,
@@ -628,46 +628,12 @@ fn open_encrypt(
         "unsupported security handler (SubFilter)"
     );
 
-    let owner_hash = encrypt.owner_password_hash()?;
-    let user_hash = encrypt.user_password_hash()?;
-    let encrypt_metadata = encrypt.encrypt_metadata()?;
-    let mut owner_hash_arr = [0u8; 32];
-    let mut user_hash_arr = [0u8; 32];
-    owner_hash_arr.copy_from_slice(&owner_hash[..32]);
-    user_hash_arr.copy_from_slice(&user_hash[..32]);
+    let authorizer = Authorizer::new(&encrypt, &trailer)?;
 
-    if encrypt::authorize_owner(
-        encrypt.revison()?,
-        encrypt.key_length()? as usize,
-        password.as_bytes(),
-        &owner_hash_arr,
-        &user_hash_arr,
-        encrypt.permission_flags()?,
-        &trailer.id()?.unwrap().0,
-        encrypt_metadata,
-    ) || encrypt::authorize_user(
-        encrypt.revison()?,
-        encrypt.key_length()? as usize,
-        password.as_bytes(),
-        &owner_hash_arr,
-        &user_hash_arr,
-        encrypt.permission_flags()?,
-        &trailer.id()?.unwrap().0,
-        encrypt_metadata,
-    ) {
-        let key = calc_encrypt_key(
-            encrypt.revison()?,
-            encrypt.key_length()? as usize,
-            password.as_bytes(),
-            &owner_hash_arr,
-            encrypt.permission_flags()?,
-            &trailer.id()?.unwrap().0,
-            encrypt_metadata,
-        );
-        Ok(Some(EncryptInfo::new(key, encrypt.crypt_filters())))
-    } else {
-        Err(FileError::InvalidPassword)
-    }
+    authorizer.authorize(password.as_bytes()).map_or_else(
+        || Err(FileError::InvalidPassword),
+        |k| Ok(Some(EncryptInfo::new(k, encrypt.crypt_filters()))),
+    )
 }
 
 impl File {
