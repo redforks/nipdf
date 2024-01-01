@@ -264,6 +264,26 @@ impl EntryParser<IncRangeMap> for IncRangeMapParser {
     }
 }
 
+struct BFIncRangeMapParser;
+
+impl EntryParser<IncRangeMap> for BFIncRangeMapParser {
+    fn parse_entry<P>(&self, m: &mut Machine<P>) -> Result<IncRangeMap, MachineError> {
+        let cid = parse_cid_from_str_buf(&m.pop()?.string()?.borrow());
+        let s_upper = m.pop()?.string()?;
+        let s_lower = m.pop()?.string()?;
+        let range = CodeRange::from_str_buf(&s_lower.borrow(), &s_upper.borrow()).ok_or_else(
+            || {
+                error!("Invalid code range");
+                MachineError::TypeCheck
+            },
+        )?;
+        Ok(IncRangeMap {
+            range,
+            start_cid: cid,
+        })
+    }
+}
+
 /// Maps a range of codes to CID, all codes in range map to `cid`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct RangeMapToOne {
@@ -696,7 +716,7 @@ struct CMapMachinePlugin<'a> {
     cid_char_entries: EntriesParser<SingleCodeMap>,
 
     bf_char_parsing: Option<EntriesParsing<SingleCodeMap>>,
-    bf_range_parsing: Option<EntriesParser<IncRangeMap>>,
+    bf_range_parsing: Option<EntriesParsing<IncRangeMap>>,
 
     n_notdef_range: usize,
     notdef_range_entries: Vec<RangeMapToOne>,
@@ -757,6 +777,15 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                 },
                 "endcidrange" => |m| {
                     let entries = m.p.cid_range_parsing.take().unwrap().on_end(IncRangeMapParser, m)?;
+                    m.p.cid_range_entries.extend(entries);
+                    ok()
+                },
+                "beginbfrange" => |m| {
+                    m.p.bf_range_parsing = Some(EntriesParsing::new(m)?);
+                    ok()
+                },
+                "endbfrange" => |m| {
+                    let entries = m.p.bf_range_parsing.take().unwrap().on_end(BFIncRangeMapParser, m)?;
                     m.p.cid_range_entries.extend(entries);
                     ok()
                 },
