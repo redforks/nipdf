@@ -114,7 +114,7 @@ fn loose_line_ending(input: &mut &[u8]) -> PResult<()> {
 
 fn int_or_float(input: &mut &[u8]) -> PResult<Either<i32, f32>> {
     let buf = (
-        one_of(('0'..='9', '+', '-')),
+        one_of(('0'..='9', '+', '-', '.')),
         take_while(0.., ('0'..='9', 'a'..='z', 'A'..='Z', '.', '-', '+', '#')),
     )
         .recognize()

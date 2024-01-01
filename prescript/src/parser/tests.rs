@@ -79,6 +79,7 @@ fn parse_loose_line_ending(buf: &[u8], remains: &[u8]) {
 #[test_case(b"0" => Left(0))]
 #[test_case(b"+17" => Left(17))]
 #[test_case(b"-.002" => Right(-0.002))]
+#[test_case(b".002" => Right(0.002); "start with dot")]
 #[test_case(b"34.5" => Right(34.5))]
 #[test_case(b"-3.62" => Right(-3.62))]
 #[test_case(b"123.6e10" => Right(123.6e10))]
