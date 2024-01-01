@@ -1,6 +1,6 @@
 use nom::{
     branch::alt,
-    combinator::value,
+    combinator::{opt, value},
     error::{ErrorKind, ParseError as NomParseError},
     multi::many0_count,
     sequence::{delimited, preceded, terminated},
@@ -31,12 +31,14 @@ pub enum FileError {
 
 fn comment(buf: &[u8]) -> ParseResult<'_, ()> {
     let (buf, _) = nom::bytes::complete::tag(b"%")(buf)?;
-    let (buf, content) = nom::bytes::complete::is_not("\n\r")(buf)?;
-    if content.starts_with(b"PDF-") || content.starts_with(b"%EOF") {
-        return Err(nom::Err::Error(ParseError::from_error_kind(
-            buf,
-            ErrorKind::Fail,
-        )));
+    let (buf, content) = opt(nom::bytes::complete::is_not("\n\r"))(buf)?;
+    if let Some(content) = content {
+        if content.starts_with(b"PDF-") || content.starts_with(b"%EOF") {
+            return Err(nom::Err::Error(ParseError::from_error_kind(
+                buf,
+                ErrorKind::Fail,
+            )));
+        }
     }
     Ok((buf, ()))
 }

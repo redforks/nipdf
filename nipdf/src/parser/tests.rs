@@ -7,6 +7,7 @@ use test_case::test_case;
 
 #[test_case("%foo\n" => "\n"; "end with \n")]
 #[test_case("%foo\r\n" => "\r\n"; "end without \r")]
+#[test_case("%\r\n" => "\r\n"; "empty comment")]
 fn test_comment(input: &str) -> &str {
     let (input, v) = comment(input.as_bytes()).unwrap();
     fn is_unit<T: ?Sized + Any>(_v: &T) -> bool {
