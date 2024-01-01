@@ -63,7 +63,7 @@ fn download_file(url: &str, p: impl AsRef<Path>) -> AnyResult<()> {
 }
 
 /// These files are very rare and odd, not to be tested
-const IGNORED: [&str; 11] = [
+const IGNORED: [&str; 12] = [
     // xpdf, mupdf, are all failed to open
     "bug1020226.pdf",
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
@@ -96,6 +96,28 @@ const IGNORED: [&str; 11] = [
     // contains jpeg2k image using cmyk color space,
     // `jpeg2k` crate failed handle it
     "bug1199237.pdf.link",
+    // CMap stream /CM10 incorrect:
+    //
+    // ```
+    // /CIDSystemInfo 3 dict dup begin
+    // /Registry (Adobe) def
+    // /Ordering (Identity) def
+    // /Supplement 0 def
+    //
+    // % missing: "end def" here
+    //
+    // /CMapName /CM10 def
+    // /CMapVersion 1.0 def
+    // ```
+    //
+    // pdf.js/xpdf uses regex to extract information,
+    // but I use full postscript VM,
+    // I think the pdf file is create for this specific commit, and is incorrect,
+    // it happened not trigger error in their code.
+    // this kind of error should not exist in a normal pdf file that generate
+    // by a pdf writer.
+    // TODO: fix this pdf file after nipdf support write pdf file
+    "bug920426.pdf",
 ];
 
 static PASSWORD: phf::Map<&'static str, &'static str> = phf::phf_map! {
