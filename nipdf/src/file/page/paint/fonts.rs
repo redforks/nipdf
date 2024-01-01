@@ -720,9 +720,11 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         if let Some(stretch) = desc.font_stretch()? {
             q.stretch = stretch.into();
         }
+        debug!("load ttf font from OS, using query: {:?}", &q);
 
         let id = SYSTEM_FONTS.query(&q).expect("font not found in system");
         let face = SYSTEM_FONTS.face(id).unwrap();
+        debug!("loaded ttf font: {:?}", &face.source);
         assert_eq!(face.index, 0, "Only one face supported");
         match face.source {
             Source::File(ref path) => Ok(std::fs::read(path)?),
