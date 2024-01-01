@@ -10,7 +10,7 @@ use crate::{
 use educe::Educe;
 use either::Either::{self, Right};
 use log::error;
-use std::{collections::HashMap, rc::Rc, str::from_utf8};
+use std::{collections::HashMap, rc::Rc, str::from_utf8, marker::PhantomData};
 use tinyvec::ArrayVec;
 use phf::phf_map;
 use once_cell::unsync::OnceCell;
@@ -244,6 +244,24 @@ impl CodeMap for IncRangeMap {
     }
 }
 
+impl EntryParse for IncRangeMap {
+    fn parse_entry<P>(m: &mut Machine<P>) -> Result<Self, MachineError> {
+        let cid = m.pop()?.int()?.try_into().unwrap();
+        let s_upper = m.pop()?.string()?;
+        let s_lower = m.pop()?.string()?;
+        let range = CodeRange::from_str_buf(&s_lower.borrow(), &s_upper.borrow()).ok_or_else(
+            || {
+                error!("Invalid code range");
+                MachineError::TypeCheck
+            },
+        )?;
+        Ok(Self {
+            range,
+            start_cid: CID(cid),
+        })
+    }
+}
+
 /// Maps a range of codes to CID, all codes in range map to `cid`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct RangeMapToOne {
@@ -273,6 +291,15 @@ impl SingleCodeMap {
 impl CodeMap for SingleCodeMap {
     fn map(&self, code: CharCode) -> Option<CID> {
         (code == self.code).then_some(self.cid)
+    }
+}
+
+impl EntryParse for SingleCodeMap {
+    fn parse_entry<P>(m: &mut Machine<P>) -> Result<Self, MachineError> {
+        let cid = m.pop()?.int()?.try_into().unwrap();
+        let s_code = m.pop()?.string()?;
+        let code = CharCode::from_str_buf(&s_code.borrow());
+        Ok(Self::new(code, CID(cid)))
     }
 }
 
@@ -512,11 +539,11 @@ impl CMapRegistry {
             parsed: None,
             n_code_space: 0,
             code_space: None,
-            n_cid_range: 0,
-            cid_range_entries: vec![],
-            n_cid_char: 0,
-            n_bf_char: 0,
-            cid_char_entries: vec![],
+            cid_range_parsing: None,
+            cid_range_entries: Default::default(),
+            cid_char_parsing: None,
+            cid_char_entries: Default::default(),
+            bf_char_parsing: None,
             n_notdef_range: 0,
             notdef_range_entries: vec![],
             n_notdef_char: 0,
@@ -595,6 +622,49 @@ impl CMap {
     }
 }
 
+trait EntryParse: Sized {
+    fn parse_entry<P>(m: &mut Machine<P>) -> Result<Self, MachineError>; 
+}
+
+struct EntriesParsing<T> {
+    n: usize,
+    _phantom: PhantomData<T>,
+}
+
+impl<T: EntryParse> EntriesParsing<T> {
+    fn new<P>(m: &mut Machine<P>) -> Result<Self, MachineError> {
+Ok(Self {
+                    n: m.pop()?.int()? as usize,
+                    _phantom: PhantomData,
+                })
+    } 
+    
+    fn on_end<P>(self, m: &mut Machine<P>) -> Result<Vec<T>, MachineError> {
+        let mut entries = Vec::with_capacity(self.n);
+        for _ in 0..self.n {
+            entries.push(T::parse_entry(m)?);
+        }
+        entries.reverse();
+        Ok(entries)
+    }
+}
+
+#[derive(Educe)]
+#[educe(Default)]
+struct EntriesParser<T> {
+    entries: Vec<T>,
+}
+
+impl<T: EntryParse> EntriesParser<T> {
+    fn extend(&mut self, entries: Vec<T>) {
+        self.entries.extend(entries);
+    }
+    
+    fn take(&mut self) -> Vec<T> {
+        std::mem::replace(&mut self.entries, vec![])
+    }
+}
+
 /// CMap Machine plugin.
 struct CMapMachinePlugin<'a> {
     registry: &'a CMapRegistry,
@@ -602,11 +672,15 @@ struct CMapMachinePlugin<'a> {
     use_cmap: Option<Rc<CMap>>,
     n_code_space: usize,
     code_space: Option<CodeSpace>,
-    n_cid_range: usize,
-    cid_range_entries: Vec<IncRangeMap>,
-    n_cid_char: u8,
-    n_bf_char: u8,
-    cid_char_entries: Vec<SingleCodeMap>,
+
+    cid_range_parsing: Option<EntriesParsing<IncRangeMap>>,
+    cid_range_entries: EntriesParser<IncRangeMap>,
+
+    cid_char_parsing: Option<EntriesParsing<SingleCodeMap>>,
+    cid_char_entries: EntriesParser<SingleCodeMap>,
+
+    bf_char_parsing: Option<EntriesParsing<SingleCodeMap>>,
+
     n_notdef_range: usize,
     notdef_range_entries: Vec<RangeMapToOne>,
     n_notdef_char: usize,
@@ -661,65 +735,30 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     ok()
                 },
                 "begincidrange" => |m| {
-                    m.p.n_cid_range = m.pop()?.int()? as usize;
+                    m.p.cid_range_parsing = Some(EntriesParsing::new(m)?);
                     ok()
                 },
                 "endcidrange" => |m| {
-                    let mut entries = Vec::with_capacity(m.p.n_cid_range);   
-                    for _ in 0..m.p.n_cid_range {
-                        let cid = m.pop()?.int()?.try_into().unwrap();
-                        let s_upper = m.pop()?.string()?;
-                        let s_lower = m.pop()?.string()?;
-                        entries.push(IncRangeMap {
-                            range: CodeRange::from_str_buf(
-                                &s_lower.borrow(),
-                                &s_upper.borrow(),
-                            ).ok_or_else(
-                                || {
-                                    error!("Invalid cid range");
-                                    MachineError::TypeCheck
-                                }
-                            )?,
-                            start_cid: CID(cid),
-                        });
-                    }
-                    m.p.cid_range_entries.extend(entries.into_iter().rev());
+                    let entries = m.p.cid_range_parsing.take().unwrap().on_end(m)?;
+                    m.p.cid_range_entries.extend(entries);
                     ok()
                 },
                 "begincidchar" => |m| {
-                    m.p.n_cid_char = m.pop()?.int()?.try_into().unwrap(); 
-                    ok()
-                },
-                "beginbfchar" => |m| {
-                    m.p.n_bf_char = m.pop()?.int()?.try_into().unwrap();
-                    ok()
-                },
-                "endbfchar" => |m| {
-                    let n = m.p.n_bf_char;
-                    let mut entries = Vec::with_capacity(n as usize);
-                    for _ in 0..n as usize {
-                        let cid = parse_cid_from_str_buf(&m.pop()?.string()?.borrow());
-                        let s_code = m.pop()?.string()?;
-                        entries.push(SingleCodeMap::new(
-                            CharCode::from_str_buf(&s_code.borrow()),
-                            cid,
-                        ));
-                    }
-                    m.p.cid_char_entries.extend(entries.into_iter().rev());
+                    m.p.cid_char_parsing = Some(EntriesParsing::new(m)?);
                     ok()
                 },
                 "endcidchar" => |m| {
-                    let n= m.p.n_cid_char ;
-                    let mut entries = Vec::with_capacity(n as usize);
-                    for _ in 0..n as usize {
-                        let cid = m.pop()?.int()?.try_into().unwrap();
-                        let s_code = m.pop()?.string()?;
-                        entries.push(SingleCodeMap::new(
-                            CharCode::from_str_buf(&s_code.borrow()),
-                            CID(cid),
-                        ));
-                    }
-                    m.p.cid_char_entries.extend(entries.into_iter().rev());
+                    let entries = m.p.cid_char_parsing.take().unwrap().on_end(m)?;
+                    m.p.cid_char_entries.extend(entries);
+                    ok()
+                },
+                "beginbfchar" => |m| {
+                    m.p.bf_char_parsing = Some(EntriesParsing::new(m)?);
+                    ok()
+                },
+                "endbfchar" => |m| {
+                    let entries = m.p.bf_char_parsing.take().unwrap().on_end(m)?;
+                    m.p.cid_char_entries.extend(entries);
                     ok()
                 },
                 "beginnotdefrange" => |m| {
@@ -777,8 +816,8 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                         name: cmap_name,
                         code_space: m.p.code_space.take().unwrap_or_default(),
                         cid_map: Mapper {
-                            ranges: m.p.cid_range_entries.drain(..).collect(),
-                            chars: m.p.cid_char_entries.drain(..).collect(),
+                            ranges: m.p.cid_range_entries.take().into(),
+                            chars: m.p.cid_char_entries.take().into(),
                         },
                         notdef_map: Mapper{
                             ranges: m.p.notdef_range_entries.drain(..).collect(),
