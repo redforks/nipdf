@@ -28,7 +28,7 @@ use winnow::{
 /// conforms to. The second token is the font name. The third token is the
 /// font version.
 pub fn header(input: &mut &[u8]) -> PResult<Header> {
-    preceded(tag(b"%!"), alt((b"PS-AdobeFont", b"AdobeFont"))).parse_next(input)?;
+    preceded(tag(b"%!"), alt((b"PS-AdobeFont", b"AdobeFont", b"FontType1"))).parse_next(input)?;
     let spec_ver = delimited('-', take_till(1.., ':'), b": ").parse_next(input)?;
     let font_name = take_till(1.., ' ').parse_next(input)?;
     let font_ver = delimited(

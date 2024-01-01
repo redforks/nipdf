@@ -35,14 +35,23 @@ fn test_parse_header() {
     );
 
     let buf = b"%!PS-AdobeFont-1.0: NimbusSanL-Regu 1.05a\r";
-    let header = header.parse(buf).unwrap();
     assert_eq!(
         Header {
             spec_ver: "1.0".to_owned(),
             font_name: "NimbusSanL-Regu".to_owned(),
             font_ver: "1.05a".to_owned(),
         },
-        header
+        header.parse(buf).unwrap()
+    );
+
+    let buf = b"%!FontType1-1.0: DUTCH.801.ROMAN.-.SWA..TM. 001.000\n";
+    assert_eq!(
+        Header {
+            spec_ver: "1.0".to_owned(),
+            font_name: "DUTCH.801.ROMAN.-.SWA..TM.".to_owned(),
+            font_ver: "001.000".to_owned(),
+        },
+        header.parse(buf).unwrap()
     );
 }
 
