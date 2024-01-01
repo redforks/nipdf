@@ -32,6 +32,15 @@ fn char_code_as_byte_slice() {
 }
 
 #[test]
+fn test_parse_cid_from_str_buf() {
+    assert_eq!(parse_cid_from_str_buf(&[0x0u8]), CID(0));
+    assert_eq!(parse_cid_from_str_buf(&[0x1u8]), CID(1));
+    assert_eq!(parse_cid_from_str_buf(&[0x10u8]), CID(16));
+    // two bytes
+    assert_eq!(parse_cid_from_str_buf(&[0x81, 0x40]), CID(0x8140));
+}
+
+#[test]
 fn code_range_parse() {
     assert_eq!(
         CodeRange::from_str_buf(&[0x20], &[0x7e]).unwrap(),
@@ -415,6 +424,76 @@ fn parse_cmap_file_with_use() {
     let base = reg.add_cmap_file(base_data).unwrap();
     let use_cmap = reg.add_cmap_file(use_cmap_data).unwrap();
     assert_eq!(base, use_cmap.use_map.as_ref().unwrap().clone());
+}
+
+#[test]
+fn parse_bf_char() {
+    let mut reg = CMapRegistry::new();
+
+    let cmap_data = br#"
+/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+
+/CIDSystemInfo 3 dict dup begin
+  /Registry (Testing) def
+  /Ordering (Test) def
+  /Supplement 3 def
+end def
+
+/CMapName /Test-H def
+/CMapVersion 2.009 def
+/CMapType 1 def
+/XUID [1 10 25582] def
+/WMode 0 def
+
+2 begincodespacerange
+  <00>   <80>
+  <8740> <FEFE>
+endcodespacerange
+
+2 beginbfchar
+<03> <00>
+<04> <01>
+endbfchar
+
+endcmap
+CMapName currentdict /CMap defineresource pop
+end
+end
+"#;
+    let cmap = reg.add_cmap_file(cmap_data).unwrap();
+    assert_eq!(2, cmap.cid_map.chars.len());
+    assert_eq!(SingleCodeMap::new(one(0x03), CID(0)), cmap.cid_map.chars[0]);
+    assert_eq!(SingleCodeMap::new(one(0x04), CID(1)), cmap.cid_map.chars[1]);
+}
+
+#[test]
+fn parse_bf_range() {
+    let mut reg = CMapRegistry::new();
+
+    let cmap_data = br#"
+2 beginbfrange
+<03> <05> <00>
+<06> <08> <01>
+endbfrange
+"#;
+    let cmap = reg.add_cmap_file(cmap_data).unwrap();
+    assert_eq!(2, cmap.cid_map.ranges.len());
+    assert_eq!(
+        IncRangeMap {
+            range: CodeRange::from_str_buf(&[0x03], &[0x05]).unwrap(),
+            start_cid: CID(0),
+        },
+        cmap.cid_map.ranges[0]
+    );
+    assert_eq!(
+        IncRangeMap {
+            range: CodeRange::from_str_buf(&[0x06], &[0x08]).unwrap(),
+            start_cid: CID(1),
+        },
+        cmap.cid_map.ranges[1]
+    );
 }
 
 #[test]

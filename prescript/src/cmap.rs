@@ -50,6 +50,15 @@ impl CharCode {
     }
 }
 
+fn parse_cid_from_str_buf(s: &[u8]) -> CID {
+    let bytes = match s.len() {
+        1 => [0, s[0]],
+        2 => [s[0], s[1]],
+        _ => unreachable!(),
+    };
+    CID(u16::from_be_bytes(bytes))
+}
+
 impl AsRef<[u8]> for CharCode {
     fn as_ref(&self) -> &[u8] {
         use std::slice::from_raw_parts;
@@ -506,6 +515,7 @@ impl CMapRegistry {
             n_cid_range: 0,
             cid_range_entries: vec![],
             n_cid_char: 0,
+            n_bf_char: 0,
             cid_char_entries: vec![],
             n_notdef_range: 0,
             notdef_range_entries: vec![],
@@ -594,7 +604,8 @@ struct CMapMachinePlugin<'a> {
     code_space: Option<CodeSpace>,
     n_cid_range: usize,
     cid_range_entries: Vec<IncRangeMap>,
-    n_cid_char: usize,
+    n_cid_char: u8,
+    n_bf_char: u8,
     cid_char_entries: Vec<SingleCodeMap>,
     n_notdef_range: usize,
     notdef_range_entries: Vec<RangeMapToOne>,
@@ -676,12 +687,31 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     ok()
                 },
                 "begincidchar" => |m| {
-                    m.p.n_cid_char = m.pop()?.int()? as usize; 
+                    m.p.n_cid_char = m.pop()?.int()?.try_into().unwrap(); 
+                    ok()
+                },
+                "beginbfchar" => |m| {
+                    m.p.n_bf_char = m.pop()?.int()?.try_into().unwrap();
+                    ok()
+                },
+                "endbfchar" => |m| {
+                    let n = m.p.n_bf_char;
+                    let mut entries = Vec::with_capacity(n as usize);
+                    for _ in 0..n as usize {
+                        let cid = parse_cid_from_str_buf(&m.pop()?.string()?.borrow());
+                        let s_code = m.pop()?.string()?;
+                        entries.push(SingleCodeMap::new(
+                            CharCode::from_str_buf(&s_code.borrow()),
+                            cid,
+                        ));
+                    }
+                    m.p.cid_char_entries.extend(entries.into_iter().rev());
                     ok()
                 },
                 "endcidchar" => |m| {
-                    let mut entries = Vec::with_capacity(m.p.n_cid_char);
-                    for _ in 0..m.p.n_cid_char {
+                    let n= m.p.n_cid_char ;
+                    let mut entries = Vec::with_capacity(n as usize);
+                    for _ in 0..n as usize {
                         let cid = m.pop()?.int()?.try_into().unwrap();
                         let s_code = m.pop()?.string()?;
                         entries.push(SingleCodeMap::new(
