@@ -2,18 +2,18 @@
 
 use crate::{
     machine::{
-        ok, Key, Machine, MachineError, MachinePlugin, MachineResult,
-        RuntimeDictionary, RuntimeValue,
+        ok, Key, Machine, MachineError, MachinePlugin, MachineResult, RuntimeDictionary,
+        RuntimeValue,
     },
     sname, Name,
 };
 use educe::Educe;
 use either::Either::{self, Right};
 use log::error;
-use std::{collections::HashMap, rc::Rc, str::from_utf8, marker::PhantomData};
-use tinyvec::ArrayVec;
-use phf::phf_map;
 use once_cell::unsync::OnceCell;
+use phf::phf_map;
+use std::{collections::HashMap, rc::Rc, str::from_utf8};
+use tinyvec::ArrayVec;
 
 /// Convert from CharCode using cmap, use it to select glyph id
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -178,6 +178,20 @@ impl CodeRange {
     }
 }
 
+struct CodeRangeParser;
+
+impl EntryParser<CodeRange> for CodeRangeParser {
+    fn parse_entry<P>(&self, m: &mut Machine<P>) -> Result<CodeRange, MachineError> {
+        let s_upper = m.pop()?.string()?;
+        let s_lower = m.pop()?.string()?;
+        let r = CodeRange::from_str_buf(&s_lower.borrow(), &s_upper.borrow()).ok_or_else(|| {
+            error!("Invalid code range");
+            MachineError::TypeCheck
+        });
+        r
+    }
+}
+
 /// CodeSpace made up by CodeRanges.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct CodeSpace(Box<[CodeRange]>);
@@ -251,12 +265,11 @@ impl EntryParser<IncRangeMap> for IncRangeMapParser {
         let cid = m.pop()?.int()?.try_into().unwrap();
         let s_upper = m.pop()?.string()?;
         let s_lower = m.pop()?.string()?;
-        let range = CodeRange::from_str_buf(&s_lower.borrow(), &s_upper.borrow()).ok_or_else(
-            || {
+        let range =
+            CodeRange::from_str_buf(&s_lower.borrow(), &s_upper.borrow()).ok_or_else(|| {
                 error!("Invalid code range");
                 MachineError::TypeCheck
-            },
-        )?;
+            })?;
         Ok(IncRangeMap {
             range,
             start_cid: CID(cid),
@@ -271,12 +284,11 @@ impl EntryParser<IncRangeMap> for BFIncRangeMapParser {
         let cid = parse_cid_from_str_buf(&m.pop()?.string()?.borrow());
         let s_upper = m.pop()?.string()?;
         let s_lower = m.pop()?.string()?;
-        let range = CodeRange::from_str_buf(&s_lower.borrow(), &s_upper.borrow()).ok_or_else(
-            || {
+        let range =
+            CodeRange::from_str_buf(&s_lower.borrow(), &s_upper.borrow()).ok_or_else(|| {
                 error!("Invalid code range");
                 MachineError::TypeCheck
-            },
-        )?;
+            })?;
         Ok(IncRangeMap {
             range,
             start_cid: cid,
@@ -294,6 +306,25 @@ struct RangeMapToOne {
 impl CodeMap for RangeMapToOne {
     fn map(&self, code: CharCode) -> Option<CID> {
         (self.range.in_range(code)).then_some(self.cid)
+    }
+}
+
+struct RangeMapToOneParser;
+
+impl EntryParser<RangeMapToOne> for RangeMapToOneParser {
+    fn parse_entry<P>(&self, m: &mut Machine<P>) -> Result<RangeMapToOne, MachineError> {
+        let cid = m.pop()?.int()?.try_into().unwrap();
+        let s_upper = m.pop()?.string()?;
+        let s_lower = m.pop()?.string()?;
+        let range =
+            CodeRange::from_str_buf(&s_lower.borrow(), &s_upper.borrow()).ok_or_else(|| {
+                error!("Invalid notdef range");
+                MachineError::TypeCheck
+            })?;
+        Ok(RangeMapToOne {
+            range,
+            cid: CID(cid),
+        })
     }
 }
 
@@ -327,7 +358,7 @@ impl EntryParser<SingleCodeMap> for SingleCodeMapParser {
     }
 }
 
-struct BFSingleCodeMapParser; 
+struct BFSingleCodeMapParser;
 
 impl EntryParser<SingleCodeMap> for BFSingleCodeMapParser {
     fn parse_entry<P>(&self, m: &mut Machine<P>) -> Result<SingleCodeMap, MachineError> {
@@ -335,7 +366,7 @@ impl EntryParser<SingleCodeMap> for BFSingleCodeMapParser {
         let s_code = m.pop()?.string()?;
         let code = CharCode::from_str_buf(&s_code.borrow());
         Ok(SingleCodeMap::new(code, cid))
-    }     
+    }
 }
 
 /// Compound mapper that combines range and single code maps.
@@ -399,21 +430,20 @@ impl WriteMode {
     }
 }
 
-const GB_EUC_H: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GB-EUC-H");
-const GB_EUC_V: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GB-EUC-V");
-const GBPC_EUC_H: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBpc-EUC-H");
-const GBPC_EUC_V: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBpc-EUC-V");
-const GBK_EUC_V: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBK-EUC-H");
-const GBK_EUC_H: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBK-EUC-V");
-const GBKP_EUC_V: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBKp-EUC-H");
-const GBKP_EUC_H: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBKp-EUC-V");
-const GBK2K_H: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBK2K-H");
-const GBK2K_V: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBK2K-V");
-const UNI_GB_GCSS_H: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/UniGB-UCS2-H");
-const UNI_GB_GCSS_V: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/UniGB-UCS2-V");
-const UNI_GB_UTF16_H: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/UniGB-UTF16-H");
-const UNI_GB_UTF16_V: &[u8] =include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/UniGB-UTF16-V");
-
+const GB_EUC_H: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GB-EUC-H");
+const GB_EUC_V: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GB-EUC-V");
+const GBPC_EUC_H: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBpc-EUC-H");
+const GBPC_EUC_V: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBpc-EUC-V");
+const GBK_EUC_V: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBK-EUC-H");
+const GBK_EUC_H: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBK-EUC-V");
+const GBKP_EUC_V: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBKp-EUC-H");
+const GBKP_EUC_H: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBKp-EUC-V");
+const GBK2K_H: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBK2K-H");
+const GBK2K_V: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/GBK2K-V");
+const UNI_GB_GCSS_H: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/UniGB-UCS2-H");
+const UNI_GB_GCSS_V: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/UniGB-UCS2-V");
+const UNI_GB_UTF16_H: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/UniGB-UTF16-H");
+const UNI_GB_UTF16_V: &[u8] = include_bytes!("../cmap-resources/Adobe-GB1-6/CMap/UniGB-UTF16-V");
 
 const B5PC_H: &[u8] = include_bytes!("../cmap-resources/Adobe-CNS1-7/CMap/B5pc-H");
 const B5PC_V: &[u8] = include_bytes!("../cmap-resources/Adobe-CNS1-7/CMap/B5pc-V");
@@ -446,17 +476,23 @@ const H: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/H");
 const V: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/V");
 const UNI_JIS_UCS2_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/UniJIS-UCS2-H");
 const UNI_JIS_UCS2_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/UniJIS-UCS2-V");
-const UNI_JIS_UCS2_HW_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/UniJIS-UCS2-HW-H");
-const UNI_JIS_UCS2_HW_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/UniJIS-UCS2-HW-V");
-const UNI_JIS_UTF16_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/UniJIS-UTF16-H");
-const UNI_JIS_UTF16_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/UniJIS-UTF16-V");
+const UNI_JIS_UCS2_HW_H: &[u8] =
+    include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/UniJIS-UCS2-HW-H");
+const UNI_JIS_UCS2_HW_V: &[u8] =
+    include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/UniJIS-UCS2-HW-V");
+const UNI_JIS_UTF16_H: &[u8] =
+    include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/UniJIS-UTF16-H");
+const UNI_JIS_UTF16_V: &[u8] =
+    include_bytes!("../cmap-resources/Adobe-Japan1-7/CMap/UniJIS-UTF16-V");
 
 const KSC_EUC_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/KSC-EUC-H");
 const KSC_EUC_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/KSC-EUC-V");
 const KSCMS_UHC_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/KSCms-UHC-H");
 const KSCMS_UHC_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/KSCms-UHC-V");
-const KSCMS_UHC_HW_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/KSCms-UHC-HW-H");
-const KSCMS_UHC_HW_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/KSCms-UHC-HW-V");
+const KSCMS_UHC_HW_H: &[u8] =
+    include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/KSCms-UHC-HW-H");
+const KSCMS_UHC_HW_V: &[u8] =
+    include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/KSCms-UHC-HW-V");
 const KSCPC_EUC_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/KSCpc-EUC-H");
 const UNI_KS_UCS2_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/UniKS-UCS2-H");
 const UNI_KS_UCS2_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/CMap/UniKS-UCS2-V");
@@ -465,7 +501,7 @@ const UNI_KS_UTF16_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Korea1-2/C
 
 const IDENTITY_H: &[u8] = include_bytes!("../cmap-resources/Adobe-Identity-0/CMap/Identity-H");
 const IDENTITY_V: &[u8] = include_bytes!("../cmap-resources/Adobe-Identity-0/CMap/Identity-V");
-static PREDEFINED_CMAPS: phf::Map<&'static str, &'static [u8]> = phf_map!{
+static PREDEFINED_CMAPS: phf::Map<&'static str, &'static [u8]> = phf_map! {
     "GB-EUC-H" => GB_EUC_H,
     "GB-EUC-V" => GB_EUC_V,
     "GBpc-EUC-H" => GBPC_EUC_H,
@@ -537,8 +573,8 @@ static PREDEFINED_CMAPS: phf::Map<&'static str, &'static [u8]> = phf_map!{
 #[derive(Debug)]
 pub struct CMapRegistry {
     predefined: HashMap<&'static str, OnceCell<Rc<CMap>>>,
-     files: HashMap<Name, Rc<CMap>>
-    }
+    files: HashMap<Name, Rc<CMap>>,
+}
 
 impl Default for CMapRegistry {
     fn default() -> Self {
@@ -549,7 +585,11 @@ impl Default for CMapRegistry {
 impl CMapRegistry {
     pub fn new() -> Self {
         Self {
-            predefined: (PREDEFINED_CMAPS.keys().copied().map(|k| (k, OnceCell::new()))).collect(),
+            predefined: (PREDEFINED_CMAPS
+                .keys()
+                .copied()
+                .map(|k| (k, OnceCell::new())))
+            .collect(),
             files: HashMap::new(),
         }
     }
@@ -561,10 +601,12 @@ impl CMapRegistry {
     pub fn get(&self, name: &Name) -> Option<Rc<CMap>> {
         self.predefined
             .get(name.as_str())
-            .map(|c| Rc::clone(c.get_or_init(|| {
-                let file = PREDEFINED_CMAPS.get(name.as_str()).unwrap();
-                Rc::new(self.parse_cmap_file(file).unwrap())
-            })))
+            .map(|c| {
+                Rc::clone(c.get_or_init(|| {
+                    let file = PREDEFINED_CMAPS.get(name.as_str()).unwrap();
+                    Rc::new(self.parse_cmap_file(file).unwrap())
+                }))
+            })
             .or_else(|| self.files.get(name).cloned())
     }
 
@@ -572,18 +614,12 @@ impl CMapRegistry {
         let p = CMapMachinePlugin {
             registry: self,
             parsed: None,
-            n_code_space: 0,
-            code_space: None,
-            cid_range_parsing: None,
+            entries_parsing: None,
+            code_space_entries: Default::default(),
             cid_range_entries: Default::default(),
-            cid_char_parsing: None,
             cid_char_entries: Default::default(),
-            bf_char_parsing: None,
-            bf_range_parsing: None,
-            n_notdef_range: 0,
-            notdef_range_entries: vec![],
-            n_notdef_char: 0,
-            notdef_char_entries: vec![],
+            notdef_range_entries: Default::default(),
+            notdef_char_entries: Default::default(),
             use_cmap: None,
         };
         let mut m = Machine::<CMapMachinePlugin>::with_plugin(file, p);
@@ -662,20 +698,22 @@ trait EntryParser<T> {
     fn parse_entry<P>(&self, m: &mut Machine<P>) -> Result<T, MachineError>;
 }
 
-struct EntriesParsing<T> {
+struct EntriesParsing {
     n: usize,
-    _t: PhantomData<T>,
 }
 
-impl<T> EntriesParsing<T> {
+impl EntriesParsing {
     fn new<P>(m: &mut Machine<P>) -> Result<Self, MachineError> {
-Ok(Self {
-                    n: m.pop()?.int()? as usize,
-            _t: PhantomData,
-                })
+        Ok(Self {
+            n: m.pop()?.int()? as usize,
+        })
     }
 
-    fn on_end<P>(self, parser: impl EntryParser<T>, m: &mut Machine<P>) -> Result<Vec<T>, MachineError> {
+    fn on_end<P, EP: EntryParser<T>, T>(
+        self,
+        parser: EP,
+        m: &mut Machine<P>,
+    ) -> Result<Vec<T>, MachineError> {
         let mut entries = Vec::with_capacity(self.n);
         for _ in 0..self.n {
             entries.push(parser.parse_entry(m)?);
@@ -695,7 +733,7 @@ impl<T> EntriesParser<T> {
     fn extend(&mut self, entries: Vec<T>) {
         self.entries.extend(entries);
     }
-    
+
     fn take(&mut self) -> Vec<T> {
         std::mem::replace(&mut self.entries, vec![])
     }
@@ -706,22 +744,12 @@ struct CMapMachinePlugin<'a> {
     registry: &'a CMapRegistry,
     parsed: Option<CMap>,
     use_cmap: Option<Rc<CMap>>,
-    n_code_space: usize,
-    code_space: Option<CodeSpace>,
-
-    cid_range_parsing: Option<EntriesParsing<IncRangeMap>>,
+    entries_parsing: Option<EntriesParsing>,
+    code_space_entries: EntriesParser<CodeRange>,
     cid_range_entries: EntriesParser<IncRangeMap>,
-
-    cid_char_parsing: Option<EntriesParsing<SingleCodeMap>>,
     cid_char_entries: EntriesParser<SingleCodeMap>,
-
-    bf_char_parsing: Option<EntriesParsing<SingleCodeMap>>,
-    bf_range_parsing: Option<EntriesParsing<IncRangeMap>>,
-
-    n_notdef_range: usize,
-    notdef_range_entries: Vec<RangeMapToOne>,
-    n_notdef_char: usize,
-    notdef_char_entries: Vec<SingleCodeMap>,
+    notdef_range_entries: EntriesParser<RangeMapToOne>,
+    notdef_char_entries: EntriesParser<SingleCodeMap>,
 }
 
 macro_rules! built_in_ops {
@@ -749,105 +777,66 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     ok()
                 },
                 "begincodespacerange" => |m| {
-                    // pop a int from stack, the code space range entries.
-                    m.p.n_code_space = m.pop()?.int()? as usize;
+                    m.p.entries_parsing = Some(EntriesParsing::new(m)?);
                     ok()
                 },
                 "endcodespacerange" => |m| {
-                    let mut entries = Vec::with_capacity(m.p.n_code_space);
-                    for _ in 0..m.p.n_code_space {
-                        let s_upper = m.pop()?.string()?;
-                        let s_lower = m.pop()?.string()?;
-                        entries.push(CodeRange::from_str_buf(
-                            &s_lower.borrow(),
-                            &s_upper.borrow(),
-                        ).ok_or_else(
-                            || {
-                                error!("Invalid code space range");
-                                MachineError::TypeCheck
-                            }
-                        ));
-                    } 
-                    m.p.code_space = Some(CodeSpace::new(entries.into_iter().rev().collect::<Result<_, _>>()?));
+                    let entries = m.p.entries_parsing.take().unwrap().on_end(CodeRangeParser, m)?;
+                    m.p.code_space_entries.extend(entries);
                     ok()
                 },
                 "begincidrange" => |m| {
-                    m.p.cid_range_parsing = Some(EntriesParsing::new(m)?);
+                    m.p.entries_parsing = Some(EntriesParsing::new(m)?);
                     ok()
                 },
                 "endcidrange" => |m| {
-                    let entries = m.p.cid_range_parsing.take().unwrap().on_end(IncRangeMapParser, m)?;
+                    let entries = m.p.entries_parsing.take().unwrap().on_end(IncRangeMapParser, m)?;
                     m.p.cid_range_entries.extend(entries);
                     ok()
                 },
                 "beginbfrange" => |m| {
-                    m.p.bf_range_parsing = Some(EntriesParsing::new(m)?);
+                    m.p.entries_parsing = Some(EntriesParsing::new(m)?);
                     ok()
                 },
                 "endbfrange" => |m| {
-                    let entries = m.p.bf_range_parsing.take().unwrap().on_end(BFIncRangeMapParser, m)?;
+                    let entries = m.p.entries_parsing.take().unwrap().on_end(BFIncRangeMapParser, m)?;
                     m.p.cid_range_entries.extend(entries);
                     ok()
                 },
                 "begincidchar" => |m| {
-                    m.p.cid_char_parsing = Some(EntriesParsing::new(m)?);
+                    m.p.entries_parsing = Some(EntriesParsing::new(m)?);
                     ok()
                 },
                 "endcidchar" => |m| {
-                    let entries = m.p.cid_char_parsing.take().unwrap().on_end(SingleCodeMapParser, m)?;
+                    let entries = m.p.entries_parsing.take().unwrap().on_end(SingleCodeMapParser, m)?;
                     m.p.cid_char_entries.extend(entries);
                     ok()
                 },
                 "beginbfchar" => |m| {
-                    m.p.bf_char_parsing = Some(EntriesParsing::new(m)?);
+                    m.p.entries_parsing = Some(EntriesParsing::new(m)?);
                     ok()
                 },
                 "endbfchar" => |m| {
-                    let entries = m.p.bf_char_parsing.take().unwrap().on_end(BFSingleCodeMapParser, m)?;
+                    let entries = m.p.entries_parsing.take().unwrap().on_end(BFSingleCodeMapParser, m)?;
                     m.p.cid_char_entries.extend(entries);
                     ok()
                 },
                 "beginnotdefrange" => |m| {
-                    m.p.n_notdef_range = m.pop()?.int()? as usize;
+                    m.p.entries_parsing = Some(EntriesParsing::new(m)?);
                     ok()
                 },
                 "endnotdefrange" => |m| {
-                    let mut entries = Vec::with_capacity(m.p.n_notdef_range);
-                    for _ in 0..m.p.n_notdef_range {
-                        let cid = m.pop()?.int()?.try_into().unwrap();
-                        let s_upper = m.pop()?.string()?;
-                        let s_lower = m.pop()?.string()?;
-                        entries.push(RangeMapToOne {
-                            range: CodeRange::from_str_buf(
-                                &s_lower.borrow(),
-                                &s_upper.borrow(),
-                            ).ok_or_else(
-                                || {
-                                    error!("Invalid notdef range");
-                                    MachineError::TypeCheck
-                                }
-                            )?,
-                            cid: CID(cid),
-                        });
-                    }
-                    m.p.notdef_range_entries.extend(entries.into_iter().rev());
+                    let entries = m.p.entries_parsing.take().unwrap().on_end(RangeMapToOneParser, m)?;
+                    m.p.notdef_range_entries.extend(entries);
                     ok()
                 },
                 "beginnotdefchar" => |m| {
-                    m.p.n_notdef_char = m.pop()?.int()? as usize;
+                    m.p.entries_parsing = Some(EntriesParsing::new(m)?);
                     ok()
                 },
                 "endnotdefchar" => |m| {
-                    let mut entries = Vec::with_capacity(m.p.n_notdef_char);
-                    for _ in 0..m.p.n_notdef_char {
-                        let cid = m.pop()?.int()?.try_into().unwrap();
-                        let s_code = m.pop()?.string()?;
-                        entries.push(SingleCodeMap {
-                            code: CharCode::from_str_buf(&s_code.borrow()),
-                            cid: CID(cid),
-                        });
-                    }
-                    m.p.notdef_char_entries.extend(entries.into_iter().rev());
+                    let entries = m.p.entries_parsing.take().unwrap().on_end(SingleCodeMapParser, m)?;
+                    m.p.notdef_char_entries.extend(entries);
                     ok()
                 },
                 "defineresource" => |m| {
@@ -860,14 +849,14 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                         cid_system_info: CIDSystemInfo::from_dict(&d_ref[&sname("CIDSystemInfo")].dict()?.borrow())?,
                         w_mode: WriteMode::parse(d_ref[&sname("WMode")].int()?)?,
                         name: cmap_name,
-                        code_space: m.p.code_space.take().unwrap_or_default(),
+                        code_space: CodeSpace::new(m.p.code_space_entries.take()),
                         cid_map: Mapper {
                             ranges: m.p.cid_range_entries.take().into(),
                             chars: m.p.cid_char_entries.take().into(),
                         },
                         notdef_map: Mapper{
-                            ranges: m.p.notdef_range_entries.drain(..).collect(),
-                            chars: m.p.notdef_char_entries.drain(..).collect(),
+                            ranges: m.p.notdef_range_entries.take().into(),
+                            chars: m.p.notdef_char_entries.take().into(),
                         },
                         use_map: m.p.use_cmap.take(),
                     };
