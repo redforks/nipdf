@@ -68,6 +68,17 @@ pub trait Type0FontDictTrait {
     #[nested]
     fn descendant_fonts(&self) -> Vec<CIDFontDict<'a, 'b>>;
     fn to_unicode(&self) -> Option<&'b Stream>;
+
+    /// Don't call this unless `self.encoding()` is stream
+    #[nested]
+    #[key("Encoding")]
+    fn cmap_stream_dict(&self) -> CMapDict<'a, 'b>;
+}
+
+#[pdf_object("CMap")]
+pub trait CMapDictTrait {
+    #[try_from]
+    fn use_cmap(&self) -> Option<NameOrStream<'b>>;
 }
 
 /// For standard 14 fonts, font_descriptor/first_char/last_char/widths may not exist.
