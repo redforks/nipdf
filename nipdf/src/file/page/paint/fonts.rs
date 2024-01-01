@@ -903,6 +903,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                 |fonts| {
                     let mut ops = HashMap::with_capacity(fonts.len());
                     for (k, v) in fonts {
+                        debug!("Create {} font_op", k.as_str());
                         ops.insert(k.clone(), v.create_op(&mut cmap_registry)?);
                     }
                     Ok(ops)
