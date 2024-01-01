@@ -426,11 +426,9 @@ fn parse_cmap_file_with_use() {
     assert_eq!(base, use_cmap.use_map.as_ref().unwrap().clone());
 }
 
-#[test]
-fn parse_bf_char() {
-    let mut reg = CMapRegistry::new();
-
-    let cmap_data = br#"
+fn create_test_cmap_data(inner: &str) -> Vec<u8> {
+    format!(
+        r#"
 /CIDInit /ProcSet findresource begin
 12 dict begin
 begincmap
@@ -452,17 +450,30 @@ end def
   <8740> <FEFE>
 endcodespacerange
 
-2 beginbfchar
-<03> <00>
-<04> <01>
-endbfchar
+{inner}
 
 endcmap
 CMapName currentdict /CMap defineresource pop
 end
 end
-"#;
-    let cmap = reg.add_cmap_file(cmap_data).unwrap();
+"#
+    )
+    .into_bytes()
+}
+
+#[test]
+fn parse_bf_char() {
+    let mut reg = CMapRegistry::new();
+
+    let cmap_data = create_test_cmap_data(
+        r#"
+2 beginbfchar
+<03> <00>
+<04> <01>
+endbfchar
+"#,
+    );
+    let cmap = reg.add_cmap_file(&cmap_data).unwrap();
     assert_eq!(2, cmap.cid_map.chars.len());
     assert_eq!(SingleCodeMap::new(one(0x03), CID(0)), cmap.cid_map.chars[0]);
     assert_eq!(SingleCodeMap::new(one(0x04), CID(1)), cmap.cid_map.chars[1]);
@@ -472,13 +483,15 @@ end
 fn parse_bf_range() {
     let mut reg = CMapRegistry::new();
 
-    let cmap_data = br#"
+    let cmap_data = create_test_cmap_data(
+        r#"
 2 beginbfrange
 <03> <05> <00>
 <06> <08> <01>
 endbfrange
-"#;
-    let cmap = reg.add_cmap_file(cmap_data).unwrap();
+"#,
+    );
+    let cmap = reg.add_cmap_file(&cmap_data).unwrap();
     assert_eq!(2, cmap.cid_map.ranges.len());
     assert_eq!(
         IncRangeMap {
