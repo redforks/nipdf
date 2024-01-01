@@ -380,3 +380,33 @@ endobj
     );
     Ok(())
 }
+
+#[test]
+fn cal_gray_to_rgb() {
+    let cs = CalGrayColorSpace {
+        white_point: [1.0, 1., 1.],
+        black_point: [0.1, 0.2, 0.3],
+        gamma: 1.8,
+    };
+
+    assert_eq!([0., 0., 0., 1.], cs.to_rgba(&[0.]));
+    assert_eq!([1., 1., 1., 1.], cs.to_rgba(&[1.]));
+}
+
+#[test]
+fn cal_gray_from_args() -> AnyResult<()>{
+    let buf = br#"1 0 obj
+[/CalGray <</WhitePoint [0.9505 1 1.089]/BlackPoint [0.1 0.2 0.3]/Gamma 1.8>>]
+endobj
+"#;
+    let color_space = parse_color_space(buf)?;
+    assert_eq!(
+        ColorSpace::CalGray(CalGrayColorSpace {
+            white_point: [0.9505, 1., 1.089],
+            black_point: [0.1, 0.2, 0.3],
+            gamma: 1.8,
+        }),
+        color_space
+    );
+    Ok(()) 
+}

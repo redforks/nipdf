@@ -115,6 +115,7 @@ pub enum ColorSpace<T: Debug + PartialEq = f32> {
     CalRGB(Box<CalRGBColorSpace>),
     DeviceN(Box<DeviceNColorSpace<T>>),
     Lab(LabColorSpace),
+    CalGray(CalGrayColorSpace),
     /// Without this, complier complains T is not referenced in any of enum branches
     _Phantom(T),
 }
@@ -252,6 +253,18 @@ where
                         black_point,
                     }))
                 }
+                "CalGray" => {
+                    assert_eq!(2, arr.len());
+                    let dict: CalGrayDict<_> = resolver.resolve_pdf_object2(&arr[1])?;
+                    let gamma = dict.gamma()?;
+                    let white_point = dict.white_point()?;
+                    let black_point = dict.black_point()?;
+                    Ok(Self::CalGray(CalGrayColorSpace {
+                        gamma,
+                        white_point,
+                        black_point,
+                    }))
+                }
                 s => todo!("ColorSpace::from_args() {} color space", s),
             },
         }
@@ -295,6 +308,7 @@ where
             Self::CalRGB(cal_rgb) => cal_rgb.to_rgba(color),
             Self::DeviceN(device_n) => device_n.to_rgba(color),
             Self::Lab(lab) => lab.to_rgba(color),
+            Self::CalGray(cal_gray) => cal_gray.to_rgba(color),
             Self::_Phantom(_) => unreachable!(),
         }
     }
@@ -310,6 +324,7 @@ where
             Self::CalRGB(cal_rgb) => cal_rgb.components(),
             Self::DeviceN(device_n) => device_n.components(),
             Self::Lab(lab) => lab.components(),
+            Self::CalGray(cal_gray) => cal_gray.components(),
             Self::_Phantom(_) => unreachable!(),
         }
     }
@@ -651,6 +666,20 @@ trait LabDictTrait {
     fn white_point(&self) -> [f32; 3];
 }
 
+#[pdf_object(())]
+#[stub_resolver]
+trait CalGrayDictTrait {
+    #[default_lit(1.0f32)]
+    fn gamma(&self) -> f32;
+
+    #[try_from]
+    #[or_default]
+    fn black_point(&self) -> [f32; 3];
+
+    #[try_from]
+    fn white_point(&self) -> [f32; 3];
+}
+
 fn default_matrix() -> [f32; 9] {
     [
         1.0, 0.0, 0.0, // line 1
@@ -771,6 +800,41 @@ where
 
     fn components(&self) -> usize {
         3
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Educe)]
+#[educe(Default)]
+pub struct CalGrayColorSpace {
+    #[educe(Default(expression = 1.0f32))]
+    gamma: f32,
+    white_point: [f32; 3],
+    black_point: [f32; 3],
+}
+
+impl<T> ColorSpaceTrait<T> for CalGrayColorSpace
+where
+    T: ColorComp + ColorCompConvertTo<f32> + LabColorInput,
+    f32: ColorCompConvertTo<T>,
+{
+    fn to_rgba(&self, color: &[T]) -> [T; 4] {
+        assert!(color.len() > 0);
+        let a: f32 = color[0].into_color_comp();
+        let ag = a.powf(self.gamma);
+        let [xw, yw, zw] = self.white_point;
+        let x = xw * ag;
+        let y = yw * ag;
+        let z = zw * ag;
+        [
+            x.into_color_comp(),
+            y.into_color_comp(),
+            z.into_color_comp(),
+            T::max_color(),
+        ]
+    }
+
+    fn components(&self) -> usize {
+        1
     }
 }
 
