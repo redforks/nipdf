@@ -27,7 +27,7 @@ enum Code {
     Horizontal(PictualElement, PictualElement), // a0a1, a1a2
     Vertical(i8),
     Extension(u8),
-    EndOfFassimileBlock,
+    EndOfFacsimileBlock,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -35,10 +35,11 @@ enum PictualElement {
     Black(u16),
     White(u16),
     MakeUp(u16),
+
+    // used in Group3_1D
     EOL,
 
-    /// Unused code in huffman tree
-    Unused,
+    NotDef,
 }
 
 impl PictualElement {
@@ -77,12 +78,12 @@ pub enum DecodeError {
 
 type Result<T> = std::result::Result<T, DecodeError>;
 
-struct RunHuffamnTree {
+struct RunHuffmanTree {
     black: Box<[ReadHuffmanTree<BigEndian, PictualElement>]>,
     white: Box<[ReadHuffmanTree<BigEndian, PictualElement>]>,
 }
 
-impl RunHuffamnTree {
+impl RunHuffmanTree {
     fn get(&self, color: Color) -> &[ReadHuffmanTree<BigEndian, PictualElement>] {
         match color {
             Color::Black => &self.black,
@@ -91,8 +92,46 @@ impl RunHuffamnTree {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Group4Code {
+    Pass,
+    Horizontal,
+    // negative is left, position is right
+    Vertical(i8),
+    Extension,
+    EOFB,
+
+    NotDef,
+}
+
 #[rustfmt::skip]
-fn build_run_huffman(algo: Algorithm) -> RunHuffamnTree {
+fn build_group4_huffman_tree() -> Box<[ReadHuffmanTree<BigEndian, Group4Code>]> {
+    compile_read_tree(vec![
+        (Group4Code::Vertical(0),  vec![1]),
+
+        (Group4Code::Horizontal,   vec![0, 0, 1]),
+        (Group4Code::Vertical(-1), vec![0, 1, 0]),
+        (Group4Code::Vertical(1),  vec![0, 1, 1]),
+
+        (Group4Code::Pass,         vec![0, 0, 0, 1]),
+
+        (Group4Code::Vertical(-2), vec![0, 0, 0, 0, 1, 0]),
+        (Group4Code::Vertical(2),  vec![0, 0, 0, 0, 1, 1]),
+        (Group4Code::Extension,    vec![0, 0, 0, 0, 0, 0, 1]),
+        (Group4Code::Vertical(-3), vec![0, 0, 0, 0, 0, 1, 0]),
+        (Group4Code::Vertical(3),  vec![0, 0, 0, 0, 0, 1, 1]),
+        (Group4Code::EOFB,         vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]),
+        (Group4Code::NotDef,       vec![0, 0, 0, 0, 0, 0, 0, 1]),
+        (Group4Code::NotDef,       vec![0, 0, 0, 0, 0, 0, 0, 0, 1]),
+        (Group4Code::NotDef,       vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 1]),
+        (Group4Code::NotDef,       vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]),
+        (Group4Code::NotDef,       vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+    ])
+    .unwrap()
+}
+
+#[rustfmt::skip]
+fn build_run_huffman(algo: Algorithm) -> RunHuffmanTree {
     let mut white_codes = vec![
             (PictualElement::White(0), vec![0, 0, 1, 1, 0, 1, 0, 1]),
             (PictualElement::White(1), vec![0, 0, 0, 1, 1, 1]),
@@ -198,7 +237,7 @@ fn build_run_huffman(algo: Algorithm) -> RunHuffamnTree {
             (PictualElement::MakeUp(2432), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1]),
             (PictualElement::MakeUp(2496), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0]),
             (PictualElement::MakeUp(2560), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]),
-            (PictualElement::Unused, vec![0, 0, 0, 0, 0, 0, 0, 0]),
+            (PictualElement::NotDef, vec![0, 0, 0, 0, 0, 0, 0, 0]),
         ];
 
     let mut black_codes = vec![
@@ -306,21 +345,21 @@ fn build_run_huffman(algo: Algorithm) -> RunHuffamnTree {
             (PictualElement::MakeUp(2432), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1]),
             (PictualElement::MakeUp(2496), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0]),
             (PictualElement::MakeUp(2560), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]),
-            (PictualElement::Unused, vec![0, 0, 0, 0, 0, 0, 0, 0]),
+            (PictualElement::NotDef, vec![0, 0, 0, 0, 0, 0, 0, 0]),
         ];
     
     match algo {
         Algorithm::Group3_1D => {
             let len = white_codes.len();
-            white_codes[len - 1]=(PictualElement::EOL, vec![0,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+            white_codes[len - 1]=(PictualElement::EOL, vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
             let len = black_codes.len();
-            black_codes[len - 1] = (PictualElement::EOL, vec![0,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+            black_codes[len - 1] = (PictualElement::EOL, vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
         }
         Algorithm::Group3_2D(_) => todo!(),
-        Algorithm::Group4 => {},
+        Algorithm::Group4 => { },
     }
 
-    RunHuffamnTree {
+    RunHuffmanTree {
         white: compile_read_tree(white_codes).unwrap(),
         black: compile_read_tree(black_codes).unwrap(),
     }
@@ -328,7 +367,7 @@ fn build_run_huffman(algo: Algorithm) -> RunHuffamnTree {
 
 fn next_run(
     reader: &mut impl HuffmanRead<BigEndian>,
-    huffman: &RunHuffamnTree,
+    huffman: &RunHuffmanTree,
     color: Color,
 ) -> Result<PictualElement> {
     let tree = huffman.get(color);
@@ -347,9 +386,9 @@ fn iter_code(
     algo: Algorithm,
     buf: &[u8],
 ) -> impl FnMut(State, &Flags) -> Option<Result<Code>> + '_ {
-    let huffman = build_run_huffman(algo);
     fn next(
-        huffman: &RunHuffamnTree,
+        group4_huffman: &Box<[ReadHuffmanTree<BigEndian, Group4Code>]>,
+        huffman: &RunHuffmanTree,
         reader: &mut (impl BitRead + HuffmanRead<BigEndian>),
         state: State,
         flags: &Flags,
@@ -358,61 +397,33 @@ fn iter_code(
             reader.byte_align();
         }
 
-        if reader.read_bit()? {
-            // 1
-            return Ok(Code::Vertical(0));
-        }
-
-        match reader.read::<u8>(2)? {
-            0b11 => Ok(Code::Vertical(1)),  // 011
-            0b10 => Ok(Code::Vertical(-1)), // 010
-            0b01 => {
+        match reader.read_huffman(group4_huffman)? {
+            Group4Code::Pass => return Ok(Code::Pass),
+            Group4Code::Horizontal => {
                 let a0a1 = next_run(reader, huffman, state.color)?;
                 let a1a2 = next_run(reader, huffman, state.color.toggle())?;
-                Ok(Code::Horizontal(a0a1, a1a2))
+                return Ok(Code::Horizontal(a0a1, a1a2));
             }
-            0b00 => {
-                if reader.read_bit()? {
-                    // 0001
-                    Ok(Code::Pass)
-                } else {
-                    // 0000
-                    match reader.read::<u8>(2)? {
-                        0b11 => Ok(Code::Vertical(2)), // 000011
-                        0b01 => match reader.read_bit()? {
-                            // 0000_01
-                            true => Ok(Code::Vertical(3)),   // 0000011
-                            false => Ok(Code::Vertical(-3)), // 0000010
-                        },
-                        0b00 => match reader.read_bit()? {
-                            true => {
-                                // 0000_001
-                                let ext = reader.read::<u8>(3)?;
-                                Ok(Code::Extension(ext))
-                            }
-                            false => {
-                                // 0000_000
-                                if reader.read::<u8>(5)? == 1
-                                    && reader.read::<u8>(4)? == 0
-                                    && reader.read::<u8>(8)? == 1
-                                {
-                                    Ok(Code::EndOfFassimileBlock)
-                                } else {
-                                    Err(DecodeError::InvalidCode)
-                                }
-                            }
-                        },
-                        0b10 => Ok(Code::Vertical(-2)), // 000010
-                        _ => unreachable!(),
-                    }
-                }
+            Group4Code::Vertical(n) => {
+                return Ok(Code::Vertical(n));
             }
-            _ => unreachable!(),
+            Group4Code::EOFB => {
+                assert_eq!(reader.read_huffman(group4_huffman)?, Group4Code::EOFB);
+                return Ok(Code::EndOfFacsimileBlock);
+            }
+            Group4Code::Extension => {
+                return Ok(Code::Extension(reader.read(3)?));
+            }
+            Group4Code::NotDef => {
+                return Err(DecodeError::InvalidCode);
+            }
         }
     }
 
+    let huffman = build_run_huffman(algo);
+    let group4_huffman = build_group4_huffman_tree();
     let mut reader = BitReader::endian(buf, BigEndian);
-    move |state, flags| match next(&huffman, &mut reader, state, flags) {
+    move |state, flags| match next(&group4_huffman, &huffman, &mut reader, state, flags) {
         Ok(v) => Some(Ok(v)),
         Err(e) => match e {
             DecodeError::IOError(io_err) => {
@@ -498,14 +509,14 @@ impl State {
     }
 }
 
-struct CoderGroup4<'a> {
+struct LineDecoder<'a> {
     last: LineBuf<'a>,
     cur: &'a mut BitSlice<u8, Msb0>,
     cur_color: Color,
     pos: Option<usize>,
 }
 
-impl<'a> CoderGroup4<'a> {
+impl<'a> LineDecoder<'a> {
     fn new(last: &'a BitSlice<u8, Msb0>, cur: &'a mut BitSlice<u8, Msb0>) -> Self {
         debug_assert!(last.len() == cur.len());
         Self {
@@ -530,7 +541,6 @@ impl<'a> CoderGroup4<'a> {
     }
 
     pub fn state(&self) -> State {
-        // TODO: state to be a field of CoderGroup4
         State {
             color: self.cur_color,
             is_new_line: self.is_new_line(),
@@ -595,35 +605,29 @@ impl Decoder {
         );
         let mut line_buf: BitVec<u8, Msb0> = repeat(true).take(self.width as usize).collect();
         let mut next_code = iter_code(self.algorithm, buf);
-        let mut coder = CoderGroup4::new(last_line, &mut line_buf);
+        let mut coder = LineDecoder::new(last_line, &mut line_buf);
         loop {
-            let code = next_code(coder.state(), &self.flags);
-            match code {
-                None => break,
-                Some(code) => match code? {
-                    Code::Extension(_) => todo!(),
-                    Code::EndOfFassimileBlock
-                        if self.flags.end_of_block && self.algorithm == Algorithm::Group4 =>
-                    {
-                        break;
-                    }
-                    code => {
-                        if coder.decode(code)? {
-                            r.extend(line_buf.iter());
-                            if !self.flags.end_of_block {
-                                if let Some(rows) = self.rows {
-                                    if rows as usize == r.len() / self.width as usize {
-                                        break;
-                                    }
+            let Some(code) = next_code(coder.state(), &self.flags) else {
+                break;
+            };
+
+            match code? {
+                Code::Extension(_) => todo!(),
+                Code::EndOfFacsimileBlock => break,
+                code => {
+                    if coder.decode(code)? {
+                        r.extend(line_buf.iter());
+                        if !self.flags.end_of_block {
+                            if let Some(rows) = self.rows {
+                                if rows as usize == r.len() / self.width as usize {
+                                    break;
                                 }
                             }
-                            coder = CoderGroup4::new(
-                                &r[r.len() - self.width as usize..],
-                                &mut line_buf,
-                            );
                         }
+                        coder =
+                            LineDecoder::new(&r[r.len() - self.width as usize..], &mut line_buf);
                     }
-                },
+                }
             }
         }
 

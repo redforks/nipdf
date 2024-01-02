@@ -85,7 +85,7 @@ fn group4_false_end_of_block() {
     &[0b001_00011, 0b1110_0000]
 )]
 #[test_case(
-    &[Code::EndOfFassimileBlock],
+    &[Code::EndOfFacsimileBlock],
     &[0b0, 0b0001_0000, 0b0000_0001]
 )]
 fn test_iter_code_group4(exp: &[Code], buf: &[u8]) {
