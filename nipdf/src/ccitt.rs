@@ -24,45 +24,46 @@ pub enum Algorithm {
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum Code {
     Pass,
-    Horizontal(Run, Run), // a0a1, a1a2
+    Horizontal(PictualElement, PictualElement), // a0a1, a1a2
     Vertical(i8),
     Extension(u8),
     EndOfFassimileBlock,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-struct Run {
-    color: u8,
-    bytes: u16,
+enum PictualElement {
+    Black(u16),
+    White(u16),
+    MakeUp(u16),
+    EOL,
+
+    /// Unused code in huffman tree
+    Unused,
 }
 
-impl Run {
-    fn from(color: Color, bytes: u16) -> Self {
-        Self::new(
-            match color {
-                Color::White => WHITE,
-                Color::Black => BLACK,
-            },
-            bytes,
-        )
+impl PictualElement {
+    pub fn from_color(color: Color, bytes: u16) -> Self {
+        match color {
+            Color::Black => Self::Black(bytes),
+            Color::White => Self::White(bytes),
+        }
     }
 
-    fn new(color: u8, bytes: u16) -> Self {
-        Self { color, bytes }
+    pub fn is_white(&self) -> bool {
+        match self {
+            Self::White(_) => true,
+            Self::Black(_) => false,
+            _ => unreachable!(),
+        }
     }
 
-    fn b_color(&self) -> bool {
-        self.color == WHITE
+    pub fn len(self) -> u16 {
+        match self {
+            Self::Black(len) | Self::White(len) | Self::MakeUp(len) => len,
+            _ => unreachable!(),
+        }
     }
 }
-
-const BLACK: u8 = 0;
-const B_BLACK: bool = false;
-const WHITE: u8 = 255;
-const B_WHITE: bool = true;
-const GRAY: u8 = 128;
-const NOT_USED: u8 = 100;
-const EOL: u8 = 101;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DecodeError {
@@ -77,12 +78,12 @@ pub enum DecodeError {
 type Result<T> = std::result::Result<T, DecodeError>;
 
 struct RunHuffamnTree {
-    black: Box<[ReadHuffmanTree<BigEndian, Run>]>,
-    white: Box<[ReadHuffmanTree<BigEndian, Run>]>,
+    black: Box<[ReadHuffmanTree<BigEndian, PictualElement>]>,
+    white: Box<[ReadHuffmanTree<BigEndian, PictualElement>]>,
 }
 
 impl RunHuffamnTree {
-    fn get(&self, color: Color) -> &[ReadHuffmanTree<BigEndian, Run>] {
+    fn get(&self, color: Color) -> &[ReadHuffmanTree<BigEndian, PictualElement>] {
         match color {
             Color::Black => &self.black,
             Color::White => &self.white,
@@ -93,227 +94,227 @@ impl RunHuffamnTree {
 #[rustfmt::skip]
 fn build_run_huffman(algo: Algorithm) -> RunHuffamnTree {
     let mut white_codes = vec![
-            (Run::new(WHITE, 0), vec![0, 0, 1, 1, 0, 1, 0, 1]),
-            (Run::new(WHITE, 1), vec![0, 0, 0, 1, 1, 1]),
-            (Run::new(WHITE, 2), vec![0, 1, 1, 1]),
-            (Run::new(WHITE, 3), vec![1, 0, 0, 0]),
-            (Run::new(WHITE, 4), vec![1, 0, 1, 1]),
-            (Run::new(WHITE, 5), vec![1, 1, 0, 0]),
-            (Run::new(WHITE, 6), vec![1, 1, 1, 0]),
-            (Run::new(WHITE, 7), vec![1, 1, 1, 1]),
-            (Run::new(WHITE, 8), vec![1, 0, 0, 1, 1]),
-            (Run::new(WHITE, 9), vec![1, 0, 1, 0, 0]),
-            (Run::new(WHITE, 10), vec![0, 0, 1, 1, 1]),
-            (Run::new(WHITE, 11), vec![0, 1, 0, 0, 0]),
-            (Run::new(WHITE, 12), vec![0, 0, 1, 0, 0, 0]),
-            (Run::new(WHITE, 13), vec![0, 0, 0, 0, 1, 1]),
-            (Run::new(WHITE, 14), vec![1, 1, 0, 1, 0, 0]),
-            (Run::new(WHITE, 15), vec![1, 1, 0, 1, 0, 1]),
-            (Run::new(WHITE, 16), vec![1, 0, 1, 0, 1, 0]),
-            (Run::new(WHITE, 17), vec![1, 0, 1, 0, 1, 1]),
-            (Run::new(WHITE, 18), vec![0, 1, 0, 0, 1, 1, 1]),
-            (Run::new(WHITE, 19), vec![0, 0, 0, 1, 1, 0, 0]),
-            (Run::new(WHITE, 20), vec![0, 0, 0, 1, 0, 0, 0]),
-            (Run::new(WHITE, 21), vec![0, 0, 1, 0, 1, 1, 1]),
-            (Run::new(WHITE, 22), vec![0, 0, 0, 0, 0, 1, 1]),
-            (Run::new(WHITE, 23), vec![0, 0, 0, 0, 1, 0, 0]),
-            (Run::new(WHITE, 24), vec![0, 1, 0, 1, 0, 0, 0]),
-            (Run::new(WHITE, 25), vec![0, 1, 0, 1, 0, 1, 1]),
-            (Run::new(WHITE, 26), vec![0, 0, 1, 0, 0, 1, 1]),
-            (Run::new(WHITE, 27), vec![0, 1, 0, 0, 1, 0, 0]),
-            (Run::new(WHITE, 28), vec![0, 0, 1, 1, 0, 0, 0]),
-            (Run::new(WHITE, 29), vec![0, 0, 0, 0, 0, 0, 1, 0]),
-            (Run::new(WHITE, 30), vec![0, 0, 0, 0, 0, 0, 1, 1]),
-            (Run::new(WHITE, 31), vec![0, 0, 0, 1, 1, 0, 1, 0]),
-            (Run::new(WHITE, 32), vec![0, 0, 0, 1, 1, 0, 1, 1]),
-            (Run::new(WHITE, 33), vec![0, 0, 0, 1, 0, 0, 1, 0]),
-            (Run::new(WHITE, 34), vec![0, 0, 0, 1, 0, 0, 1, 1]),
-            (Run::new(WHITE, 35), vec![0, 0, 0, 1, 0, 1, 0, 0]),
-            (Run::new(WHITE, 36), vec![0, 0, 0, 1, 0, 1, 0, 1]),
-            (Run::new(WHITE, 37), vec![0, 0, 0, 1, 0, 1, 1, 0]),
-            (Run::new(WHITE, 38), vec![0, 0, 0, 1, 0, 1, 1, 1]),
-            (Run::new(WHITE, 39), vec![0, 0, 1, 0, 1, 0, 0, 0]),
-            (Run::new(WHITE, 40), vec![0, 0, 1, 0, 1, 0, 0, 1]),
-            (Run::new(WHITE, 41), vec![0, 0, 1, 0, 1, 0, 1, 0]),
-            (Run::new(WHITE, 42), vec![0, 0, 1, 0, 1, 0, 1, 1]),
-            (Run::new(WHITE, 43), vec![0, 0, 1, 0, 1, 1, 0, 0]),
-            (Run::new(WHITE, 44), vec![0, 0, 1, 0, 1, 1, 0, 1]),
-            (Run::new(WHITE, 45), vec![0, 0, 0, 0, 0, 1, 0, 0]),
-            (Run::new(WHITE, 46), vec![0, 0, 0, 0, 0, 1, 0, 1]),
-            (Run::new(WHITE, 47), vec![0, 0, 0, 0, 1, 0, 1, 0]),
-            (Run::new(WHITE, 48), vec![0, 0, 0, 0, 1, 0, 1, 1]),
-            (Run::new(WHITE, 49), vec![0, 1, 0, 1, 0, 0, 1, 0]),
-            (Run::new(WHITE, 50), vec![0, 1, 0, 1, 0, 0, 1, 1]),
-            (Run::new(WHITE, 51), vec![0, 1, 0, 1, 0, 1, 0, 0]),
-            (Run::new(WHITE, 52), vec![0, 1, 0, 1, 0, 1, 0, 1]),
-            (Run::new(WHITE, 53), vec![0, 0, 1, 0, 0, 1, 0, 0]),
-            (Run::new(WHITE, 54), vec![0, 0, 1, 0, 0, 1, 0, 1]),
-            (Run::new(WHITE, 55), vec![0, 1, 0, 1, 1, 0, 0, 0]),
-            (Run::new(WHITE, 56), vec![0, 1, 0, 1, 1, 0, 0, 1]),
-            (Run::new(WHITE, 57), vec![0, 1, 0, 1, 1, 0, 1, 0]),
-            (Run::new(WHITE, 58), vec![0, 1, 0, 1, 1, 0, 1, 1]),
-            (Run::new(WHITE, 59), vec![0, 1, 0, 0, 1, 0, 1, 0]),
-            (Run::new(WHITE, 60), vec![0, 1, 0, 0, 1, 0, 1, 1]),
-            (Run::new(WHITE, 61), vec![0, 0, 1, 1, 0, 0, 1, 0]),
-            (Run::new(WHITE, 62), vec![0, 0, 1, 1, 0, 0, 1, 1]),
-            (Run::new(WHITE, 63), vec![0, 0, 1, 1, 0, 1, 0, 0]),
-            (Run::new(WHITE, 64), vec![1, 1, 0, 1, 1]),
-            (Run::new(WHITE, 128), vec![1, 0, 0, 1, 0]),
-            (Run::new(WHITE, 192), vec![0, 1, 0, 1, 1, 1]),
-            (Run::new(WHITE, 256), vec![0, 1, 1, 0, 1, 1, 1]),
-            (Run::new(WHITE, 320), vec![0, 0, 1, 1, 0, 1, 1, 0]),
-            (Run::new(WHITE, 384), vec![0, 0, 1, 1, 0, 1, 1, 1]),
-            (Run::new(WHITE, 448), vec![0, 1, 1, 0, 0, 1, 0, 0]),
-            (Run::new(WHITE, 512), vec![0, 1, 1, 0, 0, 1, 0, 1]),
-            (Run::new(WHITE, 576), vec![0, 1, 1, 0, 1, 0, 0, 0]),
-            (Run::new(WHITE, 640), vec![0, 1, 1, 0, 0, 1, 1, 1]),
-            (Run::new(WHITE, 704), vec![0, 1, 1, 0, 0, 1, 1, 0, 0]),
-            (Run::new(WHITE, 768), vec![0, 1, 1, 0, 0, 1, 1, 0, 1]),
-            (Run::new(WHITE, 832), vec![0, 1, 1, 0, 1, 0, 0, 1, 0]),
-            (Run::new(WHITE, 896), vec![0, 1, 1, 0, 1, 0, 0, 1, 1]),
-            (Run::new(WHITE, 960), vec![0, 1, 1, 0, 1, 0, 1, 0, 0]),
-            (Run::new(WHITE, 1024), vec![0, 1, 1, 0, 1, 0, 1, 0, 1]),
-            (Run::new(WHITE, 1088), vec![0, 1, 1, 0, 1, 0, 1, 1, 0]),
-            (Run::new(WHITE, 1152), vec![0, 1, 1, 0, 1, 0, 1, 1, 1]),
-            (Run::new(WHITE, 1216), vec![0, 1, 1, 0, 1, 1, 0, 0, 0]),
-            (Run::new(WHITE, 1280), vec![0, 1, 1, 0, 1, 1, 0, 0, 1]),
-            (Run::new(WHITE, 1344), vec![0, 1, 1, 0, 1, 1, 0, 1, 0]),
-            (Run::new(WHITE, 1408), vec![0, 1, 1, 0, 1, 1, 0, 1, 1]),
-            (Run::new(WHITE, 1472), vec![0, 1, 0, 0, 1, 1, 0, 0, 0]),
-            (Run::new(WHITE, 1536), vec![0, 1, 0, 0, 1, 1, 0, 0, 1]),
-            (Run::new(WHITE, 1600), vec![0, 1, 0, 0, 1, 1, 0, 1, 0]),
-            (Run::new(WHITE, 1664), vec![0, 1, 1, 0, 0, 0]),
-            (Run::new(WHITE, 1728), vec![0, 1, 0, 0, 1, 1, 0, 1, 1]),
-            (Run::new(GRAY, 1792), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0]),
-            (Run::new(GRAY, 1856), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0]),
-            (Run::new(GRAY, 1920), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1]),
-            (Run::new(GRAY, 1984), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0]),
-            (Run::new(GRAY, 2048), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1]),
-            (Run::new(GRAY, 2112), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0]),
-            (Run::new(GRAY, 2176), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1]),
-            (Run::new(GRAY, 2240), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0]),
-            (Run::new(GRAY, 2304), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1]),
-            (Run::new(GRAY, 2368), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0]),
-            (Run::new(GRAY, 2432), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1]),
-            (Run::new(GRAY, 2496), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0]),
-            (Run::new(GRAY, 2560), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]),
-            (Run::new(NOT_USED, 0), vec![0, 0, 0, 0, 0, 0, 0, 0]),
+            (PictualElement::White(0), vec![0, 0, 1, 1, 0, 1, 0, 1]),
+            (PictualElement::White(1), vec![0, 0, 0, 1, 1, 1]),
+            (PictualElement::White(2), vec![0, 1, 1, 1]),
+            (PictualElement::White(3), vec![1, 0, 0, 0]),
+            (PictualElement::White(4), vec![1, 0, 1, 1]),
+            (PictualElement::White(5), vec![1, 1, 0, 0]),
+            (PictualElement::White(6), vec![1, 1, 1, 0]),
+            (PictualElement::White(7), vec![1, 1, 1, 1]),
+            (PictualElement::White(8), vec![1, 0, 0, 1, 1]),
+            (PictualElement::White(9), vec![1, 0, 1, 0, 0]),
+            (PictualElement::White(10), vec![0, 0, 1, 1, 1]),
+            (PictualElement::White(11), vec![0, 1, 0, 0, 0]),
+            (PictualElement::White(12), vec![0, 0, 1, 0, 0, 0]),
+            (PictualElement::White(13), vec![0, 0, 0, 0, 1, 1]),
+            (PictualElement::White(14), vec![1, 1, 0, 1, 0, 0]),
+            (PictualElement::White(15), vec![1, 1, 0, 1, 0, 1]),
+            (PictualElement::White(16), vec![1, 0, 1, 0, 1, 0]),
+            (PictualElement::White(17), vec![1, 0, 1, 0, 1, 1]),
+            (PictualElement::White(18), vec![0, 1, 0, 0, 1, 1, 1]),
+            (PictualElement::White(19), vec![0, 0, 0, 1, 1, 0, 0]),
+            (PictualElement::White(20), vec![0, 0, 0, 1, 0, 0, 0]),
+            (PictualElement::White(21), vec![0, 0, 1, 0, 1, 1, 1]),
+            (PictualElement::White(22), vec![0, 0, 0, 0, 0, 1, 1]),
+            (PictualElement::White(23), vec![0, 0, 0, 0, 1, 0, 0]),
+            (PictualElement::White(24), vec![0, 1, 0, 1, 0, 0, 0]),
+            (PictualElement::White(25), vec![0, 1, 0, 1, 0, 1, 1]),
+            (PictualElement::White(26), vec![0, 0, 1, 0, 0, 1, 1]),
+            (PictualElement::White(27), vec![0, 1, 0, 0, 1, 0, 0]),
+            (PictualElement::White(28), vec![0, 0, 1, 1, 0, 0, 0]),
+            (PictualElement::White(29), vec![0, 0, 0, 0, 0, 0, 1, 0]),
+            (PictualElement::White(30), vec![0, 0, 0, 0, 0, 0, 1, 1]),
+            (PictualElement::White(31), vec![0, 0, 0, 1, 1, 0, 1, 0]),
+            (PictualElement::White(32), vec![0, 0, 0, 1, 1, 0, 1, 1]),
+            (PictualElement::White(33), vec![0, 0, 0, 1, 0, 0, 1, 0]),
+            (PictualElement::White(34), vec![0, 0, 0, 1, 0, 0, 1, 1]),
+            (PictualElement::White(35), vec![0, 0, 0, 1, 0, 1, 0, 0]),
+            (PictualElement::White(36), vec![0, 0, 0, 1, 0, 1, 0, 1]),
+            (PictualElement::White(37), vec![0, 0, 0, 1, 0, 1, 1, 0]),
+            (PictualElement::White(38), vec![0, 0, 0, 1, 0, 1, 1, 1]),
+            (PictualElement::White(39), vec![0, 0, 1, 0, 1, 0, 0, 0]),
+            (PictualElement::White(40), vec![0, 0, 1, 0, 1, 0, 0, 1]),
+            (PictualElement::White(41), vec![0, 0, 1, 0, 1, 0, 1, 0]),
+            (PictualElement::White(42), vec![0, 0, 1, 0, 1, 0, 1, 1]),
+            (PictualElement::White(43), vec![0, 0, 1, 0, 1, 1, 0, 0]),
+            (PictualElement::White(44), vec![0, 0, 1, 0, 1, 1, 0, 1]),
+            (PictualElement::White(45), vec![0, 0, 0, 0, 0, 1, 0, 0]),
+            (PictualElement::White(46), vec![0, 0, 0, 0, 0, 1, 0, 1]),
+            (PictualElement::White(47), vec![0, 0, 0, 0, 1, 0, 1, 0]),
+            (PictualElement::White(48), vec![0, 0, 0, 0, 1, 0, 1, 1]),
+            (PictualElement::White(49), vec![0, 1, 0, 1, 0, 0, 1, 0]),
+            (PictualElement::White(50), vec![0, 1, 0, 1, 0, 0, 1, 1]),
+            (PictualElement::White(51), vec![0, 1, 0, 1, 0, 1, 0, 0]),
+            (PictualElement::White(52), vec![0, 1, 0, 1, 0, 1, 0, 1]),
+            (PictualElement::White(53), vec![0, 0, 1, 0, 0, 1, 0, 0]),
+            (PictualElement::White(54), vec![0, 0, 1, 0, 0, 1, 0, 1]),
+            (PictualElement::White(55), vec![0, 1, 0, 1, 1, 0, 0, 0]),
+            (PictualElement::White(56), vec![0, 1, 0, 1, 1, 0, 0, 1]),
+            (PictualElement::White(57), vec![0, 1, 0, 1, 1, 0, 1, 0]),
+            (PictualElement::White(58), vec![0, 1, 0, 1, 1, 0, 1, 1]),
+            (PictualElement::White(59), vec![0, 1, 0, 0, 1, 0, 1, 0]),
+            (PictualElement::White(60), vec![0, 1, 0, 0, 1, 0, 1, 1]),
+            (PictualElement::White(61), vec![0, 0, 1, 1, 0, 0, 1, 0]),
+            (PictualElement::White(62), vec![0, 0, 1, 1, 0, 0, 1, 1]),
+            (PictualElement::White(63), vec![0, 0, 1, 1, 0, 1, 0, 0]),
+            (PictualElement::White(64), vec![1, 1, 0, 1, 1]),
+            (PictualElement::White(128), vec![1, 0, 0, 1, 0]),
+            (PictualElement::White(192), vec![0, 1, 0, 1, 1, 1]),
+            (PictualElement::White(256), vec![0, 1, 1, 0, 1, 1, 1]),
+            (PictualElement::White(320), vec![0, 0, 1, 1, 0, 1, 1, 0]),
+            (PictualElement::White(384), vec![0, 0, 1, 1, 0, 1, 1, 1]),
+            (PictualElement::White(448), vec![0, 1, 1, 0, 0, 1, 0, 0]),
+            (PictualElement::White(512), vec![0, 1, 1, 0, 0, 1, 0, 1]),
+            (PictualElement::White(576), vec![0, 1, 1, 0, 1, 0, 0, 0]),
+            (PictualElement::White(640), vec![0, 1, 1, 0, 0, 1, 1, 1]),
+            (PictualElement::White(704), vec![0, 1, 1, 0, 0, 1, 1, 0, 0]),
+            (PictualElement::White(768), vec![0, 1, 1, 0, 0, 1, 1, 0, 1]),
+            (PictualElement::White(832), vec![0, 1, 1, 0, 1, 0, 0, 1, 0]),
+            (PictualElement::White(896), vec![0, 1, 1, 0, 1, 0, 0, 1, 1]),
+            (PictualElement::White(960), vec![0, 1, 1, 0, 1, 0, 1, 0, 0]),
+            (PictualElement::White(1024), vec![0, 1, 1, 0, 1, 0, 1, 0, 1]),
+            (PictualElement::White(1088), vec![0, 1, 1, 0, 1, 0, 1, 1, 0]),
+            (PictualElement::White(1152), vec![0, 1, 1, 0, 1, 0, 1, 1, 1]),
+            (PictualElement::White(1216), vec![0, 1, 1, 0, 1, 1, 0, 0, 0]),
+            (PictualElement::White(1280), vec![0, 1, 1, 0, 1, 1, 0, 0, 1]),
+            (PictualElement::White(1344), vec![0, 1, 1, 0, 1, 1, 0, 1, 0]),
+            (PictualElement::White(1408), vec![0, 1, 1, 0, 1, 1, 0, 1, 1]),
+            (PictualElement::White(1472), vec![0, 1, 0, 0, 1, 1, 0, 0, 0]),
+            (PictualElement::White(1536), vec![0, 1, 0, 0, 1, 1, 0, 0, 1]),
+            (PictualElement::White(1600), vec![0, 1, 0, 0, 1, 1, 0, 1, 0]),
+            (PictualElement::White(1664), vec![0, 1, 1, 0, 0, 0]),
+            (PictualElement::White(1728), vec![0, 1, 0, 0, 1, 1, 0, 1, 1]),
+            (PictualElement::MakeUp(1792), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0]),
+            (PictualElement::MakeUp(1856), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0]),
+            (PictualElement::MakeUp(1920), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1]),
+            (PictualElement::MakeUp(1984), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0]),
+            (PictualElement::MakeUp(2048), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1]),
+            (PictualElement::MakeUp(2112), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0]),
+            (PictualElement::MakeUp(2176), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1]),
+            (PictualElement::MakeUp(2240), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0]),
+            (PictualElement::MakeUp(2304), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1]),
+            (PictualElement::MakeUp(2368), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0]),
+            (PictualElement::MakeUp(2432), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1]),
+            (PictualElement::MakeUp(2496), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0]),
+            (PictualElement::MakeUp(2560), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]),
+            (PictualElement::Unused, vec![0, 0, 0, 0, 0, 0, 0, 0]),
         ];
 
     let mut black_codes = vec![
-            (Run::new(BLACK, 0), vec![0, 0, 0, 0, 1, 1, 0, 1, 1, 1]),
-            (Run::new(BLACK, 1), vec![0, 1, 0]),
-            (Run::new(BLACK, 2), vec![1, 1]),
-            (Run::new(BLACK, 3), vec![1, 0]),
-            (Run::new(BLACK, 4), vec![0, 1, 1]),
-            (Run::new(BLACK, 5), vec![0, 0, 1, 1]),
-            (Run::new(BLACK, 6), vec![0, 0, 1, 0]),
-            (Run::new(BLACK, 7), vec![0, 0, 0, 1, 1]),
-            (Run::new(BLACK, 8), vec![0, 0, 0, 1, 0, 1]),
-            (Run::new(BLACK, 9), vec![0, 0, 0, 1, 0, 0]),
-            (Run::new(BLACK, 10), vec![0, 0, 0, 0, 1, 0, 0]),
-            (Run::new(BLACK, 11), vec![0, 0, 0, 0, 1, 0, 1]),
-            (Run::new(BLACK, 12), vec![0, 0, 0, 0, 1, 1, 1]),
-            (Run::new(BLACK, 13), vec![0, 0, 0, 0, 0, 1, 0, 0]),
-            (Run::new(BLACK, 14), vec![0, 0, 0, 0, 0, 1, 1, 1]),
-            (Run::new(BLACK, 15), vec![0, 0, 0, 0, 1, 1, 0, 0, 0]),
-            (Run::new(BLACK, 16), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 1]),
-            (Run::new(BLACK, 17), vec![0, 0, 0, 0, 0, 1, 1, 0, 0, 0]),
-            (Run::new(BLACK, 18), vec![0, 0, 0, 0, 0, 0, 1, 0, 0, 0]),
-            (Run::new(BLACK, 19), vec![0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1]),
-            (Run::new(BLACK, 20), vec![0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0]),
-            (Run::new(BLACK, 21), vec![0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0]),
-            (Run::new(BLACK, 22), vec![0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1]),
-            (Run::new(BLACK, 23), vec![0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0]),
-            (Run::new(BLACK, 24), vec![0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1]),
-            (Run::new(BLACK, 25), vec![0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0]),
-            (Run::new(BLACK, 26), vec![0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 0]),
-            (Run::new(BLACK, 27), vec![0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1]),
-            (Run::new(BLACK, 28), vec![0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0]),
-            (Run::new(BLACK, 29), vec![0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1]),
-            (Run::new(BLACK, 30), vec![0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0]),
-            (Run::new(BLACK, 31), vec![0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1]),
-            (Run::new(BLACK, 32), vec![0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 0]),
-            (Run::new(BLACK, 33), vec![0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1]),
-            (Run::new(BLACK, 34), vec![0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0]),
-            (Run::new(BLACK, 35), vec![0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1]),
-            (Run::new(BLACK, 36), vec![0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0]),
-            (Run::new(BLACK, 37), vec![0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1]),
-            (Run::new(BLACK, 38), vec![0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0]),
-            (Run::new(BLACK, 39), vec![0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1]),
-            (Run::new(BLACK, 40), vec![0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0]),
-            (Run::new(BLACK, 41), vec![0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1]),
-            (Run::new(BLACK, 42), vec![0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0]),
-            (Run::new(BLACK, 43), vec![0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 1]),
-            (Run::new(BLACK, 44), vec![0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0]),
-            (Run::new(BLACK, 45), vec![0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1]),
-            (Run::new(BLACK, 46), vec![0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0]),
-            (Run::new(BLACK, 47), vec![0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 1]),
-            (Run::new(BLACK, 48), vec![0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0]),
-            (Run::new(BLACK, 49), vec![0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1]),
-            (Run::new(BLACK, 50), vec![0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0]),
-            (Run::new(BLACK, 51), vec![0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1]),
-            (Run::new(BLACK, 52), vec![0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0]),
-            (Run::new(BLACK, 53), vec![0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1]),
-            (Run::new(BLACK, 54), vec![0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0]),
-            (Run::new(BLACK, 55), vec![0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1]),
-            (Run::new(BLACK, 56), vec![0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0]),
-            (Run::new(BLACK, 57), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0]),
-            (Run::new(BLACK, 58), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1]),
-            (Run::new(BLACK, 59), vec![0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1]),
-            (Run::new(BLACK, 60), vec![0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0]),
-            (Run::new(BLACK, 61), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0]),
-            (Run::new(BLACK, 62), vec![0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0]),
-            (Run::new(BLACK, 63), vec![0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1]),
-            (Run::new(BLACK, 64), vec![0, 0, 0, 0, 0, 0, 1, 1, 1, 1]),
-            (Run::new(BLACK, 128), vec![0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0]),
-            (Run::new(BLACK, 192), vec![0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1]),
-            (Run::new(BLACK, 256), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1]),
-            (Run::new(BLACK, 320), vec![0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1]),
-            (Run::new(BLACK, 384), vec![0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0]),
-            (Run::new(BLACK, 448), vec![0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1]),
-            (Run::new(BLACK, 512), vec![0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0]),
-            (Run::new(BLACK, 576), vec![0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1]),
-            (Run::new(BLACK, 640), vec![0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0]),
-            (Run::new(BLACK, 704), vec![0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1]),
-            (Run::new(BLACK, 768), vec![0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0]),
-            (Run::new(BLACK, 832), vec![0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1]),
-            (Run::new(BLACK, 896), vec![0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 0]),
-            (Run::new(BLACK, 960), vec![0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1]),
-            (Run::new(BLACK, 1024), vec![0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0]),
-            (Run::new(BLACK, 1088), vec![0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1]),
-            (Run::new(BLACK, 1152), vec![0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 0]),
-            (Run::new(BLACK, 1216), vec![0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1]),
-            (Run::new(BLACK, 1280), vec![0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0]),
-            (Run::new(BLACK, 1344), vec![0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1]),
-            (Run::new(BLACK, 1408), vec![0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0]),
-            (Run::new(BLACK, 1472), vec![0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1]),
-            (Run::new(BLACK, 1536), vec![0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0]),
-            (Run::new(BLACK, 1600), vec![0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1]),
-            (Run::new(BLACK, 1664), vec![0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0]),
-            (Run::new(BLACK, 1728), vec![0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1]),
-            (Run::new(GRAY, 1792), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0]),
-            (Run::new(GRAY, 1856), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0]),
-            (Run::new(GRAY, 1920), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1]),
-            (Run::new(GRAY, 1984), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0]),
-            (Run::new(GRAY, 2048), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1]),
-            (Run::new(GRAY, 2112), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0]),
-            (Run::new(GRAY, 2176), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1]),
-            (Run::new(GRAY, 2240), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0]),
-            (Run::new(GRAY, 2304), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1]),
-            (Run::new(GRAY, 2368), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0]),
-            (Run::new(GRAY, 2432), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1]),
-            (Run::new(GRAY, 2496), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0]),
-            (Run::new(GRAY, 2560), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]),
-            (Run::new(NOT_USED, 0), vec![0, 0, 0, 0, 0, 0, 0, 0]),
+            (PictualElement::Black(0), vec![0, 0, 0, 0, 1, 1, 0, 1, 1, 1]),
+            (PictualElement::Black(1), vec![0, 1, 0]),
+            (PictualElement::Black(2), vec![1, 1]),
+            (PictualElement::Black(3), vec![1, 0]),
+            (PictualElement::Black(4), vec![0, 1, 1]),
+            (PictualElement::Black(5), vec![0, 0, 1, 1]),
+            (PictualElement::Black(6), vec![0, 0, 1, 0]),
+            (PictualElement::Black(7), vec![0, 0, 0, 1, 1]),
+            (PictualElement::Black(8), vec![0, 0, 0, 1, 0, 1]),
+            (PictualElement::Black(9), vec![0, 0, 0, 1, 0, 0]),
+            (PictualElement::Black(10), vec![0, 0, 0, 0, 1, 0, 0]),
+            (PictualElement::Black(11), vec![0, 0, 0, 0, 1, 0, 1]),
+            (PictualElement::Black(12), vec![0, 0, 0, 0, 1, 1, 1]),
+            (PictualElement::Black(13), vec![0, 0, 0, 0, 0, 1, 0, 0]),
+            (PictualElement::Black(14), vec![0, 0, 0, 0, 0, 1, 1, 1]),
+            (PictualElement::Black(15), vec![0, 0, 0, 0, 1, 1, 0, 0, 0]),
+            (PictualElement::Black(16), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 1]),
+            (PictualElement::Black(17), vec![0, 0, 0, 0, 0, 1, 1, 0, 0, 0]),
+            (PictualElement::Black(18), vec![0, 0, 0, 0, 0, 0, 1, 0, 0, 0]),
+            (PictualElement::Black(19), vec![0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1]),
+            (PictualElement::Black(20), vec![0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0]),
+            (PictualElement::Black(21), vec![0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0]),
+            (PictualElement::Black(22), vec![0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1]),
+            (PictualElement::Black(23), vec![0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0]),
+            (PictualElement::Black(24), vec![0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1]),
+            (PictualElement::Black(25), vec![0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0]),
+            (PictualElement::Black(26), vec![0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 0]),
+            (PictualElement::Black(27), vec![0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1]),
+            (PictualElement::Black(28), vec![0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0]),
+            (PictualElement::Black(29), vec![0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1]),
+            (PictualElement::Black(30), vec![0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0]),
+            (PictualElement::Black(31), vec![0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1]),
+            (PictualElement::Black(32), vec![0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 0]),
+            (PictualElement::Black(33), vec![0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1]),
+            (PictualElement::Black(34), vec![0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0]),
+            (PictualElement::Black(35), vec![0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1]),
+            (PictualElement::Black(36), vec![0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0]),
+            (PictualElement::Black(37), vec![0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1]),
+            (PictualElement::Black(38), vec![0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0]),
+            (PictualElement::Black(39), vec![0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1]),
+            (PictualElement::Black(40), vec![0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0]),
+            (PictualElement::Black(41), vec![0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1]),
+            (PictualElement::Black(42), vec![0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0]),
+            (PictualElement::Black(43), vec![0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 1]),
+            (PictualElement::Black(44), vec![0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0]),
+            (PictualElement::Black(45), vec![0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1]),
+            (PictualElement::Black(46), vec![0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0]),
+            (PictualElement::Black(47), vec![0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 1]),
+            (PictualElement::Black(48), vec![0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0]),
+            (PictualElement::Black(49), vec![0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1]),
+            (PictualElement::Black(50), vec![0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0]),
+            (PictualElement::Black(51), vec![0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1]),
+            (PictualElement::Black(52), vec![0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0]),
+            (PictualElement::Black(53), vec![0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1]),
+            (PictualElement::Black(54), vec![0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0]),
+            (PictualElement::Black(55), vec![0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1]),
+            (PictualElement::Black(56), vec![0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0]),
+            (PictualElement::Black(57), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0]),
+            (PictualElement::Black(58), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1]),
+            (PictualElement::Black(59), vec![0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1]),
+            (PictualElement::Black(60), vec![0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0]),
+            (PictualElement::Black(61), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0]),
+            (PictualElement::Black(62), vec![0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0]),
+            (PictualElement::Black(63), vec![0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1]),
+            (PictualElement::Black(64), vec![0, 0, 0, 0, 0, 0, 1, 1, 1, 1]),
+            (PictualElement::Black(128), vec![0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0]),
+            (PictualElement::Black(192), vec![0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1]),
+            (PictualElement::Black(256), vec![0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1]),
+            (PictualElement::Black(320), vec![0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1]),
+            (PictualElement::Black(384), vec![0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0]),
+            (PictualElement::Black(448), vec![0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1]),
+            (PictualElement::Black(512), vec![0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0]),
+            (PictualElement::Black(576), vec![0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1]),
+            (PictualElement::Black(640), vec![0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0]),
+            (PictualElement::Black(704), vec![0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1]),
+            (PictualElement::Black(768), vec![0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0]),
+            (PictualElement::Black(832), vec![0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1]),
+            (PictualElement::Black(896), vec![0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 0]),
+            (PictualElement::Black(960), vec![0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1]),
+            (PictualElement::Black(1024), vec![0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0]),
+            (PictualElement::Black(1088), vec![0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1]),
+            (PictualElement::Black(1152), vec![0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 0]),
+            (PictualElement::Black(1216), vec![0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1]),
+            (PictualElement::Black(1280), vec![0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0]),
+            (PictualElement::Black(1344), vec![0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1]),
+            (PictualElement::Black(1408), vec![0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0]),
+            (PictualElement::Black(1472), vec![0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1]),
+            (PictualElement::Black(1536), vec![0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0]),
+            (PictualElement::Black(1600), vec![0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1]),
+            (PictualElement::Black(1664), vec![0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0]),
+            (PictualElement::Black(1728), vec![0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1]),
+            (PictualElement::MakeUp(1792), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0]),
+            (PictualElement::MakeUp(1856), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0]),
+            (PictualElement::MakeUp(1920), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1]),
+            (PictualElement::MakeUp(1984), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0]),
+            (PictualElement::MakeUp(2048), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1]),
+            (PictualElement::MakeUp(2112), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0]),
+            (PictualElement::MakeUp(2176), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1]),
+            (PictualElement::MakeUp(2240), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0]),
+            (PictualElement::MakeUp(2304), vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1]),
+            (PictualElement::MakeUp(2368), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0]),
+            (PictualElement::MakeUp(2432), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1]),
+            (PictualElement::MakeUp(2496), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0]),
+            (PictualElement::MakeUp(2560), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]),
+            (PictualElement::Unused, vec![0, 0, 0, 0, 0, 0, 0, 0]),
         ];
     
     match algo {
         Algorithm::Group3_1D => {
             let len = white_codes.len();
-            white_codes[len - 1]=(Run::new(EOL, 0), vec![0,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+            white_codes[len - 1]=(PictualElement::EOL, vec![0,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
             let len = black_codes.len();
-            black_codes[len - 1] = (Run::new(EOL, 0), vec![0,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+            black_codes[len - 1] = (PictualElement::EOL, vec![0,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
         }
         Algorithm::Group3_2D(_) => todo!(),
         Algorithm::Group4 => {},
@@ -329,27 +330,15 @@ fn next_run(
     reader: &mut impl HuffmanRead<BigEndian>,
     huffman: &RunHuffamnTree,
     color: Color,
-) -> Result<Run> {
+) -> Result<PictualElement> {
     let tree = huffman.get(color);
-    let mut r = Run::from(color, 0);
+    let mut bytes = 0;
     loop {
-        let run = reader.read_huffman(tree)?;
-        match run.color {
-            GRAY => {}
-            BLACK | WHITE => {
-                let b_color = match color {
-                    Color::Black => BLACK,
-                    Color::White => WHITE,
-                };
-                if !(run.color == BLACK || run.color == WHITE || run.color == b_color) {
-                    return Err(DecodeError::HorizontalRunColorMismatch);
-                }
-            }
-            _ => unreachable!(),
-        }
-        r.bytes += run.bytes;
-        if run.bytes < 64 {
-            return Ok(r);
+        let pe = reader.read_huffman(tree)?;
+        let n = pe.len();
+        bytes += n;
+        if n < 64 {
+            return Ok(PictualElement::from_color(color, bytes));
         }
     }
 }
@@ -481,6 +470,10 @@ impl Color {
             Color::Black => Color::White,
         }
     }
+
+    pub fn is_white(self) -> bool {
+        self == Color::White
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Default)]
@@ -527,14 +520,10 @@ impl<'a> CoderGroup4<'a> {
         self.pos.is_none()
     }
 
-    fn cur_color(&self) -> bool {
-        self.cur_color == Color::White
-    }
-
-    fn fill(&mut self, run: Run) {
+    fn fill(&mut self, pe: PictualElement) {
         let mut pos = self.pos.unwrap_or_default();
-        for _ in 0..run.bytes {
-            self.cur.set(pos, run.b_color());
+        for _ in 0..pe.len() {
+            self.cur.set(pos, pe.is_white());
             pos += 1;
         }
         self.pos = Some(pos);
@@ -557,17 +546,17 @@ impl<'a> CoderGroup4<'a> {
                 self.fill(a1a2);
             }
             Code::Vertical(n) => {
-                let b1 = self.last.b1(self.pos, self.cur_color == Color::White);
-                self.fill(Run::from(
+                let b1 = self.last.b1(self.pos, self.cur_color.is_white());
+                self.fill(PictualElement::from_color(
                     self.cur_color,
                     (b1 as i16 - self.pos.unwrap_or_default() as i16 + n as i16) as u16,
                 ));
                 self.cur_color = self.cur_color.toggle();
             }
             Code::Pass => {
-                let b1 = self.last.b1(self.pos, self.cur_color == Color::White);
+                let b1 = self.last.b1(self.pos, self.cur_color.is_white());
                 let b2 = self.last.next_flip(Some(b1));
-                self.fill(Run::from(
+                self.fill(PictualElement::from_color(
                     self.cur_color,
                     (b2 - self.pos.unwrap_or_default()) as u16,
                 ));
@@ -599,7 +588,7 @@ pub struct Decoder {
 impl Decoder {
     pub fn decode(&self, buf: &[u8]) -> Result<Vec<u8>> {
         assert!(!matches!(self.algorithm, Algorithm::Group3_2D(_)));
-        let image_line: BitVec<u8, Msb0> = repeat(B_WHITE).take(self.width as usize).collect();
+        let image_line: BitVec<u8, Msb0> = repeat(true).take(self.width as usize).collect();
         let last_line = &image_line[..];
         let mut r = BitVec::<u8, Msb0>::with_capacity(
             self.rows.unwrap_or(30) as usize * self.width as usize,
@@ -644,21 +633,6 @@ impl Decoder {
             }
         }
         Ok(r.into_vec())
-    }
-}
-
-#[allow(dead_code)]
-fn write_buf(buf: &[u8], width: usize) {
-    // write buf content to /tmp/foo, white as '1', black as '0'
-    use std::{fs::File, io::Write};
-
-    let mut f = File::create("/tmp/foo").unwrap();
-    for line in buf.chunks(width) {
-        for &c in line {
-            let c = if c == WHITE { '1' } else { '0' };
-            write!(f, "{}", c).unwrap();
-        }
-        writeln!(f).unwrap();
     }
 }
 
