@@ -55,6 +55,22 @@ fn group4_false_end_of_block() {
     );
 }
 
+// #[test]
+// fn group3_1d() {
+//     let flags = Flags {
+//         end_of_block: false,
+//         ..Default::default()
+//     };
+//     let decoder = Decoder {
+//         algorithm: Algorithm::Group3_1D,
+//         flags,
+//         width: 81,
+//         rows: Some(26),
+//     };
+//     // extracted by `dump-pdf stream -f pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf 8 --raw`
+//     insta::assert_debug_snapshot!(decoder.decode(include_bytes!("ccitt-group3-1D")).unwrap());
+// }
+
 #[test_case(&[], &[]; "empty")]
 #[test_case(&[Code::Pass], &[0b0001_0000]; "pass")]
 #[test_case(&[Code::Vertical(0)], &[0b1000_0000])]
@@ -72,18 +88,17 @@ fn group4_false_end_of_block() {
     &[Code::EndOfFassimileBlock],
     &[0b0, 0b0001_0000, 0b0000_0001]
 )]
-fn test_iter_code(exp: &[Code], buf: &[u8]) {
+fn test_iter_code_group4(exp: &[Code], buf: &[u8]) {
     let flags = Flags::default();
-    let mut next_code = iter_code(buf);
+    let mut next_code = iter_code(Algorithm::Group4, buf);
     let last_buf = repeat(false).take(4).collect::<BitVec<u8, Msb0>>();
     let mut cur_buf = repeat(false).take(4).collect::<BitVec<u8, Msb0>>();
-    let mut coder = Coder::new(&last_buf, &mut cur_buf);
-    coder.pos = Some(0); // disable new_line flag
+    let state = State::default();
     for e in exp {
-        assert_eq!(next_code(&mut coder, &flags).unwrap().unwrap(), *e);
+        assert_eq!(next_code(state, &flags).unwrap().unwrap(), *e);
     }
-    assert!(next_code(&mut coder, &flags).is_none());
-    assert!(next_code(&mut coder, &flags).is_none());
+    assert!(next_code(state, &flags).is_none());
+    assert!(next_code(state, &flags).is_none());
 }
 
 #[test_case(B_WHITE, 0, &[0b0011_0101] ; "white 0")]
@@ -93,9 +108,13 @@ fn test_iter_code(exp: &[Code], buf: &[u8]) {
 #[test_case(B_BLACK, 0, &[0b0000_1101, 0b1100_0000])]
 fn test_parse_next_run(color: bool, exp: u16, buf: &[u8]) {
     let mut reader = BitReader::endian(buf, BigEndian);
-    let huffman = build_run_huffman();
+    let huffman = build_run_huffman(Algorithm::Group4);
+    let color = match color {
+        B_WHITE => Color::White,
+        B_BLACK => Color::Black,
+    };
     assert_eq!(
-        Run::new(if color { WHITE } else { BLACK }, exp),
+        Run::from(color, exp),
         next_run(&mut reader, &huffman, color).unwrap()
     );
 }

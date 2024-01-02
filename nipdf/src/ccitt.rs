@@ -37,8 +37,14 @@ struct Run {
 }
 
 impl Run {
-    fn from_bool(color: bool, bytes: u16) -> Self {
-        Self::new(if color { WHITE } else { BLACK }, bytes)
+    fn from(color: Color, bytes: u16) -> Self {
+        Self::new(
+            match color {
+                Color::White => WHITE,
+                Color::Black => BLACK,
+            },
+            bytes,
+        )
     }
 
     fn new(color: u8, bytes: u16) -> Self {
@@ -56,6 +62,7 @@ const WHITE: u8 = 255;
 const B_WHITE: bool = true;
 const GRAY: u8 = 128;
 const NOT_USED: u8 = 100;
+const EOL: u8 = 101;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DecodeError {
@@ -75,18 +82,17 @@ struct RunHuffamnTree {
 }
 
 impl RunHuffamnTree {
-    fn get(&self, color: bool) -> &[ReadHuffmanTree<BigEndian, Run>] {
+    fn get(&self, color: Color) -> &[ReadHuffmanTree<BigEndian, Run>] {
         match color {
-            B_BLACK => &self.black,
-            B_WHITE => &self.white,
+            Color::Black => &self.black,
+            Color::White => &self.white,
         }
     }
 }
 
 #[rustfmt::skip]
-fn build_run_huffman() -> RunHuffamnTree {
-    RunHuffamnTree {
-        white: compile_read_tree(vec![
+fn build_run_huffman(algo: Algorithm) -> RunHuffamnTree {
+    let mut white_codes = vec![
             (Run::new(WHITE, 0), vec![0, 0, 1, 1, 0, 1, 0, 1]),
             (Run::new(WHITE, 1), vec![0, 0, 0, 1, 1, 1]),
             (Run::new(WHITE, 2), vec![0, 1, 1, 1]),
@@ -192,9 +198,9 @@ fn build_run_huffman() -> RunHuffamnTree {
             (Run::new(GRAY, 2496), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0]),
             (Run::new(GRAY, 2560), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]),
             (Run::new(NOT_USED, 0), vec![0, 0, 0, 0, 0, 0, 0, 0]),
-        ])
-        .unwrap(),
-        black: compile_read_tree(vec![
+        ];
+
+    let mut black_codes = vec![
             (Run::new(BLACK, 0), vec![0, 0, 0, 0, 1, 1, 0, 1, 1, 1]),
             (Run::new(BLACK, 1), vec![0, 1, 0]),
             (Run::new(BLACK, 2), vec![1, 1]),
@@ -300,24 +306,42 @@ fn build_run_huffman() -> RunHuffamnTree {
             (Run::new(GRAY, 2496), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0]),
             (Run::new(GRAY, 2560), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]),
             (Run::new(NOT_USED, 0), vec![0, 0, 0, 0, 0, 0, 0, 0]),
-        ])
-        .unwrap(),
+        ];
+    
+    match algo {
+        Algorithm::Group3_1D => {
+            let len = white_codes.len();
+            white_codes[len - 1]=(Run::new(EOL, 0), vec![0,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+            let len = black_codes.len();
+            black_codes[len - 1] = (Run::new(EOL, 0), vec![0,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        }
+        Algorithm::Group3_2D(_) => todo!(),
+        Algorithm::Group4 => {},
+    }
+
+    RunHuffamnTree {
+        white: compile_read_tree(white_codes).unwrap(),
+        black: compile_read_tree(black_codes).unwrap(),
     }
 }
 
 fn next_run(
     reader: &mut impl HuffmanRead<BigEndian>,
     huffman: &RunHuffamnTree,
-    color: bool,
+    color: Color,
 ) -> Result<Run> {
     let tree = huffman.get(color);
-    let mut r = Run::from_bool(color, 0);
+    let mut r = Run::from(color, 0);
     loop {
         let run = reader.read_huffman(tree)?;
         match run.color {
             GRAY => {}
             BLACK | WHITE => {
-                if !(run.color == BLACK || run.color == WHITE || (run.color == WHITE) == color) {
+                let b_color = match color {
+                    Color::Black => BLACK,
+                    Color::White => WHITE,
+                };
+                if !(run.color == BLACK || run.color == WHITE || run.color == b_color) {
                     return Err(DecodeError::HorizontalRunColorMismatch);
                 }
             }
@@ -330,15 +354,18 @@ fn next_run(
     }
 }
 
-fn iter_code(buf: &[u8]) -> impl FnMut(&Coder, &Flags) -> Option<Result<Code>> + '_ {
-    let huffman = build_run_huffman();
+fn iter_code(
+    algo: Algorithm,
+    buf: &[u8],
+) -> impl FnMut(State, &Flags) -> Option<Result<Code>> + '_ {
+    let huffman = build_run_huffman(algo);
     fn next(
         huffman: &RunHuffamnTree,
         reader: &mut (impl BitRead + HuffmanRead<BigEndian>),
-        ctx: &Coder,
+        state: State,
         flags: &Flags,
     ) -> Result<Code> {
-        if flags.encoded_byte_align && ctx.is_new_line() {
+        if flags.encoded_byte_align && state.is_new_line {
             reader.byte_align();
         }
 
@@ -351,8 +378,8 @@ fn iter_code(buf: &[u8]) -> impl FnMut(&Coder, &Flags) -> Option<Result<Code>> +
             0b11 => Ok(Code::Vertical(1)),  // 011
             0b10 => Ok(Code::Vertical(-1)), // 010
             0b01 => {
-                let a0a1 = next_run(reader, huffman, ctx.cur_color())?;
-                let a1a2 = next_run(reader, huffman, !ctx.cur_color())?;
+                let a0a1 = next_run(reader, huffman, state.color)?;
+                let a1a2 = next_run(reader, huffman, state.color.toggle())?;
                 Ok(Code::Horizontal(a0a1, a1a2))
             }
             0b00 => {
@@ -396,7 +423,7 @@ fn iter_code(buf: &[u8]) -> impl FnMut(&Coder, &Flags) -> Option<Result<Code>> +
     }
 
     let mut reader = BitReader::endian(buf, BigEndian);
-    move |ctx, flags| match next(&huffman, &mut reader, ctx, flags) {
+    move |state, flags| match next(&huffman, &mut reader, state, flags) {
         Ok(v) => Some(Ok(v)),
         Err(e) => match e {
             DecodeError::IOError(io_err) => {
@@ -440,20 +467,58 @@ impl<'a> LineBuf<'a> {
     }
 }
 
-struct Coder<'a> {
+#[derive(Copy, Clone, PartialEq, Eq, Default, Debug)]
+enum Color {
+    Black,
+    #[default]
+    White,
+}
+
+impl Color {
+    pub fn toggle(self) -> Self {
+        match self {
+            Color::White => Color::Black,
+            Color::Black => Color::White,
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Default)]
+struct State {
+    color: Color,
+    is_new_line: bool,
+}
+
+impl State {
+    pub fn toggle_color(self) -> Self {
+        Self {
+            color: self.color.toggle(),
+            is_new_line: self.is_new_line,
+        }
+    }
+
+    pub fn toggle_is_new_line(self) -> Self {
+        Self {
+            color: self.color,
+            is_new_line: !self.is_new_line,
+        }
+    }
+}
+
+struct CoderGroup4<'a> {
     last: LineBuf<'a>,
     cur: &'a mut BitSlice<u8, Msb0>,
-    cur_color: bool,
+    cur_color: Color,
     pos: Option<usize>,
 }
 
-impl<'a> Coder<'a> {
+impl<'a> CoderGroup4<'a> {
     fn new(last: &'a BitSlice<u8, Msb0>, cur: &'a mut BitSlice<u8, Msb0>) -> Self {
         debug_assert!(last.len() == cur.len());
         Self {
             last: LineBuf(last),
             cur,
-            cur_color: B_WHITE,
+            cur_color: Color::White,
             pos: None,
         }
     }
@@ -463,7 +528,7 @@ impl<'a> Coder<'a> {
     }
 
     fn cur_color(&self) -> bool {
-        self.cur_color
+        self.cur_color == Color::White
     }
 
     fn fill(&mut self, run: Run) {
@@ -475,6 +540,14 @@ impl<'a> Coder<'a> {
         self.pos = Some(pos);
     }
 
+    pub fn state(&self) -> State {
+        // TODO: state to be a field of CoderGroup4
+        State {
+            color: self.cur_color,
+            is_new_line: self.is_new_line(),
+        }
+    }
+
     // return true if current line filled.
     #[allow(clippy::cast_possible_truncation)]
     fn decode(&mut self, code: Code) -> Result<bool> {
@@ -484,18 +557,18 @@ impl<'a> Coder<'a> {
                 self.fill(a1a2);
             }
             Code::Vertical(n) => {
-                let b1 = self.last.b1(self.pos, self.cur_color);
-                self.fill(Run::new(
-                    if self.cur_color { WHITE } else { BLACK },
+                let b1 = self.last.b1(self.pos, self.cur_color == Color::White);
+                self.fill(Run::from(
+                    self.cur_color,
                     (b1 as i16 - self.pos.unwrap_or_default() as i16 + n as i16) as u16,
                 ));
-                self.cur_color = !self.cur_color;
+                self.cur_color = self.cur_color.toggle();
             }
             Code::Pass => {
-                let b1 = self.last.b1(self.pos, self.cur_color);
+                let b1 = self.last.b1(self.pos, self.cur_color == Color::White);
                 let b2 = self.last.next_flip(Some(b1));
-                self.fill(Run::new(
-                    if self.cur_color { WHITE } else { BLACK },
+                self.fill(Run::from(
+                    self.cur_color,
                     (b2 - self.pos.unwrap_or_default()) as u16,
                 ));
                 debug_assert_eq!(self.pos.unwrap(), b2);
@@ -525,22 +598,24 @@ pub struct Decoder {
 
 impl Decoder {
     pub fn decode(&self, buf: &[u8]) -> Result<Vec<u8>> {
-        assert_eq!(self.algorithm, Algorithm::Group4);
+        assert!(!matches!(self.algorithm, Algorithm::Group3_2D(_)));
         let image_line: BitVec<u8, Msb0> = repeat(B_WHITE).take(self.width as usize).collect();
         let last_line = &image_line[..];
         let mut r = BitVec::<u8, Msb0>::with_capacity(
             self.rows.unwrap_or(30) as usize * self.width as usize,
         );
         let mut line_buf: BitVec<u8, Msb0> = repeat(true).take(self.width as usize).collect();
-        let mut next_code = iter_code(buf);
-        let mut coder = Coder::new(last_line, &mut line_buf);
+        let mut next_code = iter_code(self.algorithm, buf);
+        let mut coder = CoderGroup4::new(last_line, &mut line_buf);
         loop {
-            let code = next_code(&coder, &self.flags);
+            let code = next_code(coder.state(), &self.flags);
             match code {
                 None => break,
                 Some(code) => match code? {
                     Code::Extension(_) => todo!(),
-                    Code::EndOfFassimileBlock if self.flags.end_of_block => {
+                    Code::EndOfFassimileBlock
+                        if self.flags.end_of_block && self.algorithm == Algorithm::Group4 =>
+                    {
                         break;
                     }
                     code => {
@@ -553,7 +628,10 @@ impl Decoder {
                                     }
                                 }
                             }
-                            coder = Coder::new(&r[r.len() - self.width as usize..], &mut line_buf);
+                            coder = CoderGroup4::new(
+                                &r[r.len() - self.width as usize..],
+                                &mut line_buf,
+                            );
                         }
                     }
                 },
