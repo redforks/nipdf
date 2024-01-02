@@ -504,7 +504,6 @@ pub struct Flags {
 }
 
 pub fn decode(buf: &[u8], width: u16, rows: Option<usize>, flags: Flags) -> Result<Vec<u8>> {
-    assert!(flags.end_of_block);
     let image_line: BitVec<u8, Msb0> = repeat(B_WHITE).take(width as usize).collect();
     let last_line = &image_line[..];
     let mut r = BitVec::<u8, Msb0>::with_capacity(rows.unwrap_or(30) * width as usize);
@@ -517,12 +516,19 @@ pub fn decode(buf: &[u8], width: u16, rows: Option<usize>, flags: Flags) -> Resu
             None => break,
             Some(code) => match code? {
                 Code::Extension(_) => todo!(),
-                Code::EndOfFassimileBlock => {
+                Code::EndOfFassimileBlock if flags.end_of_block => {
                     break;
                 }
                 code => {
                     if coder.decode(code)? {
                         r.extend(line_buf.iter());
+                        if !flags.end_of_block {
+                            if let Some(rows) = rows {
+                                if rows == r.len() / width as usize {
+                                    break;
+                                }
+                            }
+                        }
                         coder = Coder::new(&r[r.len() - width as usize..], &mut line_buf);
                     }
                 }

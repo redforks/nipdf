@@ -22,6 +22,24 @@ fn inverse_black_white() {
     insta::assert_debug_snapshot!(decode(include_bytes!("./ccitt-1"), 24, None, flags).unwrap());
 }
 
+#[test]
+fn false_end_of_block() {
+    let flags = Flags {
+        end_of_block: false,
+        ..Default::default()
+    };
+    // ccitt-1 extracted by `dump-pdf stream -f pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf 6 --raw`
+    insta::assert_debug_snapshot!(
+        decode(
+            include_bytes!("ccitt-false-end-of-block"),
+            81,
+            Some(26),
+            flags
+        )
+        .unwrap()
+    );
+}
+
 #[test_case(&[], &[]; "empty")]
 #[test_case(&[Code::Pass], &[0b0001_0000]; "pass")]
 #[test_case(&[Code::Vertical(0)], &[0b1000_0000])]
