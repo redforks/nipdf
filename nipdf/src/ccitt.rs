@@ -27,7 +27,7 @@ enum Code {
     Horizontal(PictualElement, PictualElement), // a0a1, a1a2
     Vertical(i8),
     Extension(u8),
-    EndOfFacsimileBlock,
+    EndOfBlock,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -382,34 +382,45 @@ fn next_run(
     }
 }
 
-fn iter_code(
-    algo: Algorithm,
-    buf: &[u8],
-) -> impl FnMut(State, &Flags) -> Option<Result<Code>> + '_ {
-    fn next(
-        group4_huffman: &Box<[ReadHuffmanTree<BigEndian, Group4Code>]>,
-        huffman: &RunHuffmanTree,
-        reader: &mut (impl BitRead + HuffmanRead<BigEndian>),
-        state: State,
-        flags: &Flags,
-    ) -> Result<Code> {
-        if flags.encoded_byte_align && state.is_new_line {
+trait CodeIterator {
+    fn next_code(&self, reader: &mut BitReader<&[u8], BigEndian>, state: State) -> Result<Code>;
+}
+
+struct Group4CodeIterator {
+    huffman: RunHuffmanTree,
+    group4_huffman: Box<[ReadHuffmanTree<BigEndian, Group4Code>]>,
+    flags: Flags,
+}
+
+impl Group4CodeIterator {
+    fn new(flags: Flags) -> Self {
+        Self {
+            huffman: build_run_huffman(Algorithm::Group4),
+            group4_huffman: build_group4_huffman_tree(),
+            flags,
+        }
+    }
+}
+
+impl CodeIterator for Group4CodeIterator {
+    fn next_code(&self, reader: &mut BitReader<&[u8], BigEndian>, state: State) -> Result<Code> {
+        if self.flags.encoded_byte_align && state.is_new_line {
             reader.byte_align();
         }
 
-        match reader.read_huffman(group4_huffman)? {
+        match reader.read_huffman(&self.group4_huffman)? {
             Group4Code::Pass => return Ok(Code::Pass),
             Group4Code::Horizontal => {
-                let a0a1 = next_run(reader, huffman, state.color)?;
-                let a1a2 = next_run(reader, huffman, state.color.toggle())?;
+                let a0a1 = next_run(reader, &self.huffman, state.color)?;
+                let a1a2 = next_run(reader, &self.huffman, state.color.toggle())?;
                 return Ok(Code::Horizontal(a0a1, a1a2));
             }
             Group4Code::Vertical(n) => {
                 return Ok(Code::Vertical(n));
             }
             Group4Code::EOFB => {
-                assert_eq!(reader.read_huffman(group4_huffman)?, Group4Code::EOFB);
-                return Ok(Code::EndOfFacsimileBlock);
+                assert_eq!(reader.read_huffman(&self.group4_huffman)?, Group4Code::EOFB);
+                return Ok(Code::EndOfBlock);
             }
             Group4Code::Extension => {
                 return Ok(Code::Extension(reader.read(3)?));
@@ -419,11 +430,14 @@ fn iter_code(
             }
         }
     }
+}
 
-    let huffman = build_run_huffman(algo);
-    let group4_huffman = build_group4_huffman_tree();
+fn iter_code<I: CodeIterator + 'static>(
+    buf: &[u8],
+    i: I,
+) -> impl FnMut(State) -> Option<Result<Code>> + '_ {
     let mut reader = BitReader::endian(buf, BigEndian);
-    move |state, flags| match next(&group4_huffman, &huffman, &mut reader, state, flags) {
+    move |state| match i.next_code(&mut reader, state) {
         Ok(v) => Some(Ok(v)),
         Err(e) => match e {
             DecodeError::IOError(io_err) => {
@@ -511,13 +525,13 @@ impl State {
 
 struct LineDecoder<'a> {
     last: LineBuf<'a>,
-    cur: &'a mut BitSlice<u8, Msb0>,
+    cur: BitVec<u8, Msb0>,
     cur_color: Color,
     pos: Option<usize>,
 }
 
 impl<'a> LineDecoder<'a> {
-    fn new(last: &'a BitSlice<u8, Msb0>, cur: &'a mut BitSlice<u8, Msb0>) -> Self {
+    fn new(last: &'a BitSlice<u8, Msb0>, cur: BitVec<u8, Msb0>) -> Self {
         debug_assert!(last.len() == cur.len());
         Self {
             last: LineBuf(last),
@@ -549,7 +563,7 @@ impl<'a> LineDecoder<'a> {
 
     // return true if current line filled.
     #[allow(clippy::cast_possible_truncation)]
-    fn decode(&mut self, code: Code) -> Result<bool> {
+    pub fn decode(&mut self, code: Code) -> Result<bool> {
         match code {
             Code::Horizontal(a0a1, a1a2) => {
                 self.fill(a0a1);
@@ -577,9 +591,13 @@ impl<'a> LineDecoder<'a> {
         debug_assert!(self.pos.unwrap_or_default() <= self.cur.len());
         Ok(self.pos.unwrap_or_default() == self.cur.len())
     }
+
+    pub fn take(self) -> BitVec<u8, Msb0> {
+        self.cur
+    }
 }
 
-#[derive(Debug, Educe)]
+#[derive(Debug, Educe, Copy, Clone)]
 #[educe(Default)]
 pub struct Flags {
     pub encoded_byte_align: bool,
@@ -598,25 +616,28 @@ pub struct Decoder {
 impl Decoder {
     pub fn decode(&self, buf: &[u8]) -> Result<Vec<u8>> {
         assert!(!matches!(self.algorithm, Algorithm::Group3_2D(_)));
-        let image_line: BitVec<u8, Msb0> = repeat(true).take(self.width as usize).collect();
-        let last_line = &image_line[..];
+
         let mut r = BitVec::<u8, Msb0>::with_capacity(
             self.rows.unwrap_or(30) as usize * self.width as usize,
         );
-        let mut line_buf: BitVec<u8, Msb0> = repeat(true).take(self.width as usize).collect();
-        let mut next_code = iter_code(self.algorithm, buf);
-        let mut coder = LineDecoder::new(last_line, &mut line_buf);
+        let imagnation_line: BitVec<u8, Msb0> = repeat(true).take(self.width as usize).collect();
+        let mut line_decoder = LineDecoder::new(
+            &imagnation_line[..],
+            repeat(true).take(self.width as usize).collect(),
+        );
+        let mut next_code = iter_code(buf, Group4CodeIterator::new(self.flags));
         loop {
-            let Some(code) = next_code(coder.state(), &self.flags) else {
+            let Some(code) = next_code(line_decoder.state()) else {
                 break;
             };
 
             match code? {
                 Code::Extension(_) => todo!(),
-                Code::EndOfFacsimileBlock => break,
+                Code::EndOfBlock => break,
                 code => {
-                    if coder.decode(code)? {
-                        r.extend(line_buf.iter());
+                    if line_decoder.decode(code)? {
+                        let line = line_decoder.take();
+                        r.extend(&line);
                         if !self.flags.end_of_block {
                             if let Some(rows) = self.rows {
                                 if rows as usize == r.len() / self.width as usize {
@@ -624,8 +645,7 @@ impl Decoder {
                                 }
                             }
                         }
-                        coder =
-                            LineDecoder::new(&r[r.len() - self.width as usize..], &mut line_buf);
+                        line_decoder = LineDecoder::new(&r[r.len() - self.width as usize..], line);
                     }
                 }
             }

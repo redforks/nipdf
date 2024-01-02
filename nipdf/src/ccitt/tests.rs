@@ -85,18 +85,17 @@ fn group4_false_end_of_block() {
     &[0b001_00011, 0b1110_0000]
 )]
 #[test_case(
-    &[Code::EndOfFacsimileBlock],
+    &[Code::EndOfBlock],
     &[0b0, 0b0001_0000, 0b0000_0001]
 )]
 fn test_iter_code_group4(exp: &[Code], buf: &[u8]) {
-    let flags = Flags::default();
-    let mut next_code = iter_code(Algorithm::Group4, buf);
+    let mut next_code = iter_code(buf, Group4CodeIterator::new(Flags::default()));
     let state = State::default();
     for e in exp {
-        assert_eq!(next_code(state, &flags).unwrap().unwrap(), *e);
+        assert_eq!(next_code(state).unwrap().unwrap(), *e);
     }
-    assert!(next_code(state, &flags).is_none());
-    assert!(next_code(state, &flags).is_none());
+    assert!(next_code(state).is_none());
+    assert!(next_code(state).is_none());
 }
 
 #[test_case(Color::White, 0, &[0b0011_0101] ; "white 0")]
