@@ -503,7 +503,7 @@ pub struct Flags {
     pub end_of_block: bool,
 }
 
-pub fn decode(buf: &[u8], width: u16, rows: Option<usize>, flags: Flags) -> Result<Vec<u8>> {
+pub fn decode_group4(buf: &[u8], width: u16, rows: Option<usize>, flags: Flags) -> Result<Vec<u8>> {
     let image_line: BitVec<u8, Msb0> = repeat(B_WHITE).take(width as usize).collect();
     let last_line = &image_line[..];
     let mut r = BitVec::<u8, Msb0>::with_capacity(rows.unwrap_or(30) * width as usize);

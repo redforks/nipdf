@@ -896,11 +896,11 @@ fn decode_ccitt<'a: 'b, 'b>(
     input: &[u8],
     params: CCITTFaxDecodeParamsDict,
 ) -> Result<Vec<u8>, ObjectValueError> {
-    use crate::ccitt::decode;
+    use crate::ccitt::decode_group4;
 
     assert_eq!(params.k().unwrap(), CCITTFGroup::Group4);
     let image = handle_filter_error(
-        decode(
+        decode_group4(
             input,
             params.columns().unwrap(),
             Some(params.rows().unwrap() as usize),

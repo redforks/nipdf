@@ -2,35 +2,39 @@ use super::*;
 use test_case::test_case;
 
 #[test_log::test]
-fn test_decode() {
+fn test_decode_group4() {
     let flags = Flags {
         encoded_byte_align: true,
         ..Default::default()
     };
     // ccitt-1 extracted by `dump-pdf stream -f sample_files/normal/pdfreference1.0.pdf 643 --raw`
-    insta::assert_debug_snapshot!(decode(include_bytes!("./ccitt-1"), 24, None, flags).unwrap());
+    insta::assert_debug_snapshot!(
+        decode_group4(include_bytes!("./ccitt-1"), 24, None, flags).unwrap()
+    );
 }
 
 #[test]
-fn inverse_black_white() {
+fn group4_inverse_black_white() {
     let flags = Flags {
         encoded_byte_align: true,
         inverse_black_white: true,
         ..Default::default()
     };
     // ccitt-1 extracted by `dump-pdf stream -f sample_files/normal/pdfreference1.0.pdf 643 --raw`
-    insta::assert_debug_snapshot!(decode(include_bytes!("./ccitt-1"), 24, None, flags).unwrap());
+    insta::assert_debug_snapshot!(
+        decode_group4(include_bytes!("./ccitt-1"), 24, None, flags).unwrap()
+    );
 }
 
 #[test]
-fn false_end_of_block() {
+fn group4_false_end_of_block() {
     let flags = Flags {
         end_of_block: false,
         ..Default::default()
     };
-    // ccitt-1 extracted by `dump-pdf stream -f pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf 6 --raw`
+    // extracted by `dump-pdf stream -f pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf 6 --raw`
     insta::assert_debug_snapshot!(
-        decode(
+        decode_group4(
             include_bytes!("ccitt-false-end-of-block"),
             81,
             Some(26),
