@@ -7,10 +7,15 @@ fn test_decode_group4() {
         encoded_byte_align: true,
         ..Default::default()
     };
+    let decoder = Decoder {
+        algorithm: Algorithm::Group4,
+        flags,
+        width: 24,
+        rows: None,
+    };
+
     // ccitt-1 extracted by `dump-pdf stream -f sample_files/normal/pdfreference1.0.pdf 643 --raw`
-    insta::assert_debug_snapshot!(
-        decode_group4(include_bytes!("./ccitt-1"), 24, None, flags).unwrap()
-    );
+    insta::assert_debug_snapshot!(decoder.decode(include_bytes!("./ccitt-1")).unwrap());
 }
 
 #[test]
@@ -20,10 +25,14 @@ fn group4_inverse_black_white() {
         inverse_black_white: true,
         ..Default::default()
     };
+    let decoder = Decoder {
+        algorithm: Algorithm::Group4,
+        flags,
+        width: 24,
+        rows: None,
+    };
     // ccitt-1 extracted by `dump-pdf stream -f sample_files/normal/pdfreference1.0.pdf 643 --raw`
-    insta::assert_debug_snapshot!(
-        decode_group4(include_bytes!("./ccitt-1"), 24, None, flags).unwrap()
-    );
+    insta::assert_debug_snapshot!(decoder.decode(include_bytes!("./ccitt-1")).unwrap());
 }
 
 #[test]
@@ -32,15 +41,17 @@ fn group4_false_end_of_block() {
         end_of_block: false,
         ..Default::default()
     };
+    let decoder = Decoder {
+        algorithm: Algorithm::Group4,
+        flags,
+        width: 81,
+        rows: Some(26),
+    };
     // extracted by `dump-pdf stream -f pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf 6 --raw`
     insta::assert_debug_snapshot!(
-        decode_group4(
-            include_bytes!("ccitt-false-end-of-block"),
-            81,
-            Some(26),
-            flags
-        )
-        .unwrap()
+        decoder
+            .decode(include_bytes!("ccitt-false-end-of-block"))
+            .unwrap()
     );
 }
 

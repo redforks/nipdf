@@ -1,6 +1,6 @@
 use super::{Dictionary, Object, ObjectId, ObjectValueError};
 use crate::{
-    ccitt::{CCITTAlgorithm, Flags},
+    ccitt::{Algorithm as CCITTAlgorithm, Flags},
     file::{EncryptInfo, ObjectResolver, ResourceDict},
     function::Domains,
     graphics::{
@@ -887,18 +887,15 @@ fn decode_ccitt<'a: 'b, 'b>(
     input: &[u8],
     params: CCITTFaxDecodeParamsDict,
 ) -> Result<Vec<u8>, ObjectValueError> {
-    use crate::ccitt::decode_group4;
+    use crate::ccitt::Decoder;
 
-    assert_eq!(params.k().unwrap(), CCITTAlgorithm::Group4);
-    let image = handle_filter_error(
-        decode_group4(
-            input,
-            params.columns().unwrap(),
-            Some(params.rows().unwrap() as usize),
-            (&params).try_into().unwrap(),
-        ),
-        &FILTER_CCITT_FAX,
-    )?;
+    let decoder = Decoder {
+        algorithm: params.k().unwrap(),
+        width: params.columns().unwrap(),
+        rows: Some(params.rows().unwrap().try_into().unwrap()),
+        flags: (&params).try_into().unwrap(),
+    };
+    let image = handle_filter_error(decoder.decode(input), &FILTER_CCITT_FAX)?;
     Ok(image)
 }
 

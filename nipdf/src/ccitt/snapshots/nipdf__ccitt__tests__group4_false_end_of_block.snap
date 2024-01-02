@@ -1,6 +1,6 @@
 ---
 source: nipdf/src/ccitt/tests.rs
-expression: "decode(include_bytes!(\"ccitt-false-end-of-block\"), 81, Some(26),\n        flags).unwrap()"
+expression: "decoder.decode(include_bytes!(\"ccitt-false-end-of-block\")).unwrap()"
 ---
 [
     0,

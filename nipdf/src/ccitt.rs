@@ -9,7 +9,7 @@ use log::error;
 use std::iter::repeat;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CCITTAlgorithm {
+pub enum Algorithm {
     Group3_1D,
 
     /// Mixed one- and two-dimensional encoding (Group 3,
@@ -516,45 +516,57 @@ pub struct Flags {
     pub end_of_block: bool,
 }
 
-pub fn decode_group4(buf: &[u8], width: u16, rows: Option<usize>, flags: Flags) -> Result<Vec<u8>> {
-    let image_line: BitVec<u8, Msb0> = repeat(B_WHITE).take(width as usize).collect();
-    let last_line = &image_line[..];
-    let mut r = BitVec::<u8, Msb0>::with_capacity(rows.unwrap_or(30) * width as usize);
-    let mut line_buf: BitVec<u8, Msb0> = repeat(true).take(width as usize).collect();
-    let mut next_code = iter_code(buf);
-    let mut coder = Coder::new(last_line, &mut line_buf);
-    loop {
-        let code = next_code(&coder, &flags);
-        match code {
-            None => break,
-            Some(code) => match code? {
-                Code::Extension(_) => todo!(),
-                Code::EndOfFassimileBlock if flags.end_of_block => {
-                    break;
-                }
-                code => {
-                    if coder.decode(code)? {
-                        r.extend(line_buf.iter());
-                        if !flags.end_of_block {
-                            if let Some(rows) = rows {
-                                if rows == r.len() / width as usize {
-                                    break;
+pub struct Decoder {
+    pub algorithm: Algorithm,
+    pub width: u16,
+    pub rows: Option<u16>,
+    pub flags: Flags,
+}
+
+impl Decoder {
+    pub fn decode(&self, buf: &[u8]) -> Result<Vec<u8>> {
+        assert_eq!(self.algorithm, Algorithm::Group4);
+        let image_line: BitVec<u8, Msb0> = repeat(B_WHITE).take(self.width as usize).collect();
+        let last_line = &image_line[..];
+        let mut r = BitVec::<u8, Msb0>::with_capacity(
+            self.rows.unwrap_or(30) as usize * self.width as usize,
+        );
+        let mut line_buf: BitVec<u8, Msb0> = repeat(true).take(self.width as usize).collect();
+        let mut next_code = iter_code(buf);
+        let mut coder = Coder::new(last_line, &mut line_buf);
+        loop {
+            let code = next_code(&coder, &self.flags);
+            match code {
+                None => break,
+                Some(code) => match code? {
+                    Code::Extension(_) => todo!(),
+                    Code::EndOfFassimileBlock if self.flags.end_of_block => {
+                        break;
+                    }
+                    code => {
+                        if coder.decode(code)? {
+                            r.extend(line_buf.iter());
+                            if !self.flags.end_of_block {
+                                if let Some(rows) = self.rows {
+                                    if rows as usize == r.len() / self.width as usize {
+                                        break;
+                                    }
                                 }
                             }
+                            coder = Coder::new(&r[r.len() - self.width as usize..], &mut line_buf);
                         }
-                        coder = Coder::new(&r[r.len() - width as usize..], &mut line_buf);
                     }
-                }
-            },
+                },
+            }
         }
-    }
 
-    if flags.inverse_black_white {
-        for byte in r.as_raw_mut_slice() {
-            *byte = !*byte;
+        if self.flags.inverse_black_white {
+            for byte in r.as_raw_mut_slice() {
+                *byte = !*byte;
+            }
         }
+        Ok(r.into_vec())
     }
-    Ok(r.into_vec())
 }
 
 #[allow(dead_code)]

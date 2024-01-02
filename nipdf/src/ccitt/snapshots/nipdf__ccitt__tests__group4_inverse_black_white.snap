@@ -1,6 +1,6 @@
 ---
 source: nipdf/src/ccitt/tests.rs
-expression: "decode(include_bytes!(\"./ccitt-1\"), 24, None, flags).unwrap()"
+expression: "decoder.decode(include_bytes!(\"./ccitt-1\")).unwrap()"
 ---
 [
     255,
