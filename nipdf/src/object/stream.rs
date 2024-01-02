@@ -1,6 +1,6 @@
 use super::{Dictionary, Object, ObjectId, ObjectValueError};
 use crate::{
-    ccitt::Flags,
+    ccitt::{CCITTAlgorithm, Flags},
     file::{EncryptInfo, ObjectResolver, ResourceDict},
     function::Domains,
     graphics::{
@@ -770,7 +770,7 @@ pub(crate) trait ImageDictTrait {
 #[pdf_object(())]
 trait CCITTFaxDecodeParamsDictTrait {
     #[try_from]
-    fn k(&self) -> CCITTFGroup;
+    fn k(&self) -> CCITTAlgorithm;
     #[or_default]
     fn end_of_line(&self) -> bool;
     #[or_default]
@@ -802,22 +802,13 @@ impl<'a: 'b, 'b> TryFrom<&CCITTFaxDecodeParamsDict<'a, 'b>> for Flags {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum CCITTFGroup {
-    #[allow(dead_code)]
-    Group3_1D,
-    #[allow(dead_code)]
-    Group3_2D(i32),
-    Group4,
-}
-
-impl<'b> TryFrom<&'b Object> for CCITTFGroup {
+impl<'b> TryFrom<&'b Object> for CCITTAlgorithm {
     type Error = ObjectValueError;
 
     fn try_from(v: &'b Object) -> Result<Self, Self::Error> {
         Ok(match v.int()? {
             0 => Self::Group3_1D,
-            k @ 1.. => Self::Group3_2D(k),
+            k @ 1.. => Self::Group3_2D(k.try_into().unwrap()),
             ..=-1 => Self::Group4,
         })
     }
@@ -898,7 +889,7 @@ fn decode_ccitt<'a: 'b, 'b>(
 ) -> Result<Vec<u8>, ObjectValueError> {
     use crate::ccitt::decode_group4;
 
-    assert_eq!(params.k().unwrap(), CCITTFGroup::Group4);
+    assert_eq!(params.k().unwrap(), CCITTAlgorithm::Group4);
     let image = handle_filter_error(
         decode_group4(
             input,

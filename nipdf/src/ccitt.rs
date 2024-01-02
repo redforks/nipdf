@@ -8,6 +8,19 @@ use educe::Educe;
 use log::error;
 use std::iter::repeat;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CCITTAlgorithm {
+    Group3_1D,
+
+    /// Mixed one- and two-dimensional encoding (Group 3,
+    /// 2-D), in which a line encoded one-dimensionally may
+    /// be followed by at most K − 1 lines encoded two-
+    /// dimensionally
+    Group3_2D(u16),
+
+    Group4,
+}
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum Code {
     Pass,
