@@ -792,12 +792,12 @@ impl<'a: 'b, 'b> TryFrom<&CCITTFaxDecodeParamsDict<'a, 'b>> for Flags {
 
     fn try_from(params: &CCITTFaxDecodeParamsDict<'a, 'b>) -> Result<Self, Self::Error> {
         assert!(!params.end_of_line()?);
-        assert!(params.end_of_block()?);
         assert_eq!(0, params.damaged_rows_before_error()?);
 
         Ok(Flags {
             encoded_byte_align: params.encoded_byte_align()?,
             inverse_black_white: params.black_is1()?,
+            end_of_block: params.end_of_block()?,
         })
     }
 }

@@ -4,6 +4,7 @@ use bitstream_io::{
     BigEndian, HuffmanRead,
 };
 use bitvec::{prelude::Msb0, slice::BitSlice, vec::BitVec};
+use educe::Educe;
 use log::error;
 use std::iter::repeat;
 
@@ -493,13 +494,17 @@ impl<'a> Coder<'a> {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Educe)]
+#[educe(Default)]
 pub struct Flags {
     pub encoded_byte_align: bool,
     pub inverse_black_white: bool,
+    #[educe(Default = true)]
+    pub end_of_block: bool,
 }
 
 pub fn decode(buf: &[u8], width: u16, rows: Option<usize>, flags: Flags) -> Result<Vec<u8>> {
+    assert!(flags.end_of_block);
     let image_line: BitVec<u8, Msb0> = repeat(B_WHITE).take(width as usize).collect();
     let last_line = &image_line[..];
     let mut r = BitVec::<u8, Msb0>::with_capacity(rows.unwrap_or(30) * width as usize);

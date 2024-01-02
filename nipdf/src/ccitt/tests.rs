@@ -16,6 +16,7 @@ fn inverse_black_white() {
     let flags = Flags {
         encoded_byte_align: true,
         inverse_black_white: true,
+        ..Default::default()
     };
     // ccitt-1 extracted by `dump-pdf stream -f sample_files/normal/pdfreference1.0.pdf 643 --raw`
     insta::assert_debug_snapshot!(decode(include_bytes!("./ccitt-1"), 24, None, flags).unwrap());
