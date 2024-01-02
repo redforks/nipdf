@@ -7,6 +7,7 @@ use bitvec::{prelude::Msb0, slice::BitSlice, vec::BitVec};
 use educe::Educe;
 use log::error;
 use std::iter::repeat;
+use tinyvec::{array_vec, ArrayVec};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Algorithm {
@@ -30,7 +31,8 @@ enum Code {
     EndOfBlock,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Educe)]
+#[educe(Default)]
 enum PictualElement {
     Black(u16),
     White(u16),
@@ -39,6 +41,7 @@ enum PictualElement {
     // used in Group3_1D
     EOL,
 
+    #[educe(Default)]
     NotDef,
 }
 
@@ -523,6 +526,56 @@ impl State {
     }
 }
 
+type PictualElementArray = [PictualElement; 2];
+type PictualElementVec = ArrayVec<PictualElementArray>;
+
+trait CodeDecoder {
+    fn decode(
+        &self,
+        last: &LineBuf,
+        cur_color: Color,
+        cur_pos: Option<usize>,
+        code: Code,
+    ) -> Result<(Color, PictualElementVec)>;
+}
+
+#[derive(Copy, Clone)]
+struct Group4CodeDecoder;
+
+impl CodeDecoder for Group4CodeDecoder {
+    fn decode(
+        &self,
+        last: &LineBuf,
+        cur_color: Color,
+        cur_pos: Option<usize>,
+        code: Code,
+    ) -> Result<(Color, PictualElementVec)> {
+        match code {
+            Code::Horizontal(a0a1, a1a2) => {
+                Ok((cur_color, array_vec!(PictualElementArray => a0a1, a1a2)))
+            }
+            Code::Vertical(n) => {
+                let b1 = last.b1(cur_pos, cur_color.is_white());
+                let pe = array_vec!(PictualElementArray=> PictualElement::from_color(
+                    cur_color,
+                    (b1 as i16 - cur_pos.unwrap_or_default() as i16 + n as i16) as u16,
+                ));
+                Ok((cur_color.toggle(), pe))
+            }
+            Code::Pass => {
+                let b1 = last.b1(cur_pos, cur_color.is_white());
+                let b2 = last.next_flip(Some(b1));
+                let pe = array_vec!(PictualElementArray =>  PictualElement::from_color(
+                    cur_color,
+                    (b2 - cur_pos.unwrap_or_default()) as u16,
+                ));
+                Ok((cur_color, pe))
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
 struct LineDecoder<'a> {
     last: LineBuf<'a>,
     cur: BitVec<u8, Msb0>,
@@ -562,32 +615,12 @@ impl<'a> LineDecoder<'a> {
     }
 
     // return true if current line filled.
-    #[allow(clippy::cast_possible_truncation)]
-    pub fn decode(&mut self, code: Code) -> Result<bool> {
-        match code {
-            Code::Horizontal(a0a1, a1a2) => {
-                self.fill(a0a1);
-                self.fill(a1a2);
-            }
-            Code::Vertical(n) => {
-                let b1 = self.last.b1(self.pos, self.cur_color.is_white());
-                self.fill(PictualElement::from_color(
-                    self.cur_color,
-                    (b1 as i16 - self.pos.unwrap_or_default() as i16 + n as i16) as u16,
-                ));
-                self.cur_color = self.cur_color.toggle();
-            }
-            Code::Pass => {
-                let b1 = self.last.b1(self.pos, self.cur_color.is_white());
-                let b2 = self.last.next_flip(Some(b1));
-                self.fill(PictualElement::from_color(
-                    self.cur_color,
-                    (b2 - self.pos.unwrap_or_default()) as u16,
-                ));
-                debug_assert_eq!(self.pos.unwrap(), b2);
-            }
-            _ => unreachable!(),
-        };
+    pub fn decode(&mut self, code_decoder: impl CodeDecoder, code: Code) -> Result<bool> {
+        let (color, pe) = code_decoder.decode(&self.last, self.cur_color, self.pos, code)?;
+        self.cur_color = color;
+        for pe in pe {
+            self.fill(pe);
+        }
         debug_assert!(self.pos.unwrap_or_default() <= self.cur.len());
         Ok(self.pos.unwrap_or_default() == self.cur.len())
     }
@@ -614,9 +647,12 @@ pub struct Decoder {
 }
 
 impl Decoder {
-    pub fn decode(&self, buf: &[u8]) -> Result<Vec<u8>> {
-        assert!(!matches!(self.algorithm, Algorithm::Group3_2D(_)));
-
+    fn do_decode(
+        &self,
+        code_decoder: impl CodeDecoder + Copy + 'static,
+        code_iterator: impl CodeIterator + 'static,
+        buf: &[u8],
+    ) -> Result<BitVec<u8, Msb0>> {
         let mut r = BitVec::<u8, Msb0>::with_capacity(
             self.rows.unwrap_or(30) as usize * self.width as usize,
         );
@@ -625,7 +661,7 @@ impl Decoder {
             &imagnation_line[..],
             repeat(true).take(self.width as usize).collect(),
         );
-        let mut next_code = iter_code(buf, Group4CodeIterator::new(self.flags));
+        let mut next_code = iter_code(buf, code_iterator);
         loop {
             let Some(code) = next_code(line_decoder.state()) else {
                 break;
@@ -635,7 +671,7 @@ impl Decoder {
                 Code::Extension(_) => todo!(),
                 Code::EndOfBlock => break,
                 code => {
-                    if line_decoder.decode(code)? {
+                    if line_decoder.decode(code_decoder, code)? {
                         let line = line_decoder.take();
                         r.extend(&line);
                         if !self.flags.end_of_block {
@@ -650,7 +686,13 @@ impl Decoder {
                 }
             }
         }
+        Ok(r)
+    }
 
+    pub fn decode(&self, buf: &[u8]) -> Result<Vec<u8>> {
+        assert!(!matches!(self.algorithm, Algorithm::Group3_2D(_)));
+
+        let mut r = self.do_decode(Group4CodeDecoder, Group4CodeIterator::new(self.flags), buf)?;
         if self.flags.inverse_black_white {
             for byte in r.as_raw_mut_slice() {
                 *byte = !*byte;
