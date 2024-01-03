@@ -71,6 +71,22 @@ fn group3_1d() {
     insta::assert_debug_snapshot!(decoder.decode(include_bytes!("group3-1d")).unwrap());
 }
 
+// #[test]
+// fn group3_2d() {
+//     let flags = Flags {
+//         end_of_block: false,
+//         ..Default::default()
+//     };
+//     let decoder = Decoder {
+//         algorithm: Algorithm::Group3_2D(1),
+//         flags,
+//         width: 81,
+//         rows: Some(26),
+//     };
+//     // extracted by `dump-pdf stream -f pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf 9 --raw`
+//     insta::assert_debug_snapshot!(decoder.decode(include_bytes!("group3-2d")).unwrap());
+// }
+
 #[test_case(&[], &[]; "empty")]
 #[test_case(&[Code::Pass], &[0b0001_0000]; "pass")]
 #[test_case(&[Code::Vertical(0)], &[0b1000_0000])]

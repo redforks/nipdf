@@ -590,18 +590,12 @@ struct State {
 }
 
 impl State {
-    pub fn toggle_color(self) -> Self {
-        Self {
-            color: self.color.toggle(),
-            is_new_line: self.is_new_line,
-        }
+    pub fn toggle_color(&mut self) {
+        self.color = self.color.toggle();
     }
 
-    pub fn toggle_is_new_line(self) -> Self {
-        Self {
-            color: self.color,
-            is_new_line: !self.is_new_line,
-        }
+    pub fn toggle_is_new_line(&mut self) {
+        self.is_new_line = !self.is_new_line;
     }
 }
 
@@ -611,11 +605,11 @@ type PictualElementVec = ArrayVec<PictualElementArray>;
 trait CodeDecoder {
     fn decode(
         &self,
+        state: &mut State,
         last: &LineBuf,
-        cur_color: Color,
         cur_pos: Option<usize>,
         code: Code,
-    ) -> Result<(Color, PictualElementVec)>;
+    ) -> Result<PictualElementVec>;
 }
 
 #[derive(Copy, Clone)]
@@ -624,31 +618,30 @@ struct Group4CodeDecoder;
 impl CodeDecoder for Group4CodeDecoder {
     fn decode(
         &self,
+        state: &mut State,
         last: &LineBuf,
-        cur_color: Color,
         cur_pos: Option<usize>,
         code: Code,
-    ) -> Result<(Color, PictualElementVec)> {
+    ) -> Result<PictualElementVec> {
         match code {
-            Code::Horizontal(a0a1, a1a2) => {
-                Ok((cur_color, array_vec!(PictualElementArray => a0a1, a1a2)))
-            }
+            Code::Horizontal(a0a1, a1a2) => Ok(array_vec!(PictualElementArray => a0a1, a1a2)),
             Code::Vertical(n) => {
-                let b1 = last.b1(cur_pos, cur_color.is_white());
+                let b1 = last.b1(cur_pos, state.color.is_white());
                 let pe = array_vec!(PictualElementArray=> PictualElement::from_color(
-                    cur_color,
+                    state.color,
                     (b1 as i16 - cur_pos.unwrap_or_default() as i16 + n as i16) as u16,
                 ));
-                Ok((cur_color.toggle(), pe))
+                state.toggle_color();
+                Ok(pe)
             }
             Code::Pass => {
-                let b1 = last.b1(cur_pos, cur_color.is_white());
+                let b1 = last.b1(cur_pos, state.color.is_white());
                 let b2 = last.next_flip(Some(b1));
                 let pe = array_vec!(PictualElementArray =>  PictualElement::from_color(
-                    cur_color,
+                        state.color,
                     (b2 - cur_pos.unwrap_or_default()) as u16,
                 ));
-                Ok((cur_color, pe))
+                Ok(pe)
             }
             _ => unreachable!(),
         }
@@ -661,34 +654,36 @@ struct Group3_1DCodeDecoder;
 impl CodeDecoder for Group3_1DCodeDecoder {
     fn decode(
         &self,
+        state: &mut State,
         last: &LineBuf,
-        cur_color: Color,
         cur_pos: Option<usize>,
         code: Code,
-    ) -> Result<(Color, PictualElementVec)> {
+    ) -> Result<PictualElementVec> {
         match code {
             Code::Black(n) => {
                 let pe = array_vec!(PictualElementArray => PictualElement::from_color(
                     Color::Black,
                     n,
                 ));
-                Ok((Color::White, pe))
+                state.color = Color::White;
+                Ok(pe)
             }
             Code::While(n) => {
                 let pe = array_vec!(PictualElementArray => PictualElement::from_color(
                     Color::White,
                     n,
                 ));
-                Ok((Color::Black, pe))
+                state.color = Color::Black;
+                Ok(pe)
             }
             _ => unreachable!(),
         }
     }
 }
 struct LineDecoder<'a> {
+    state: State,
     last: LineBuf<'a>,
     cur: BitVec<u8, Msb0>,
-    cur_color: Color,
     pos: Option<usize>,
 }
 
@@ -696,9 +691,9 @@ impl<'a> LineDecoder<'a> {
     fn new(last: &'a BitSlice<u8, Msb0>, cur: BitVec<u8, Msb0>) -> Self {
         debug_assert!(last.len() == cur.len());
         Self {
+            state: State::default(),
             last: LineBuf(last),
             cur,
-            cur_color: Color::White,
             pos: None,
         }
     }
@@ -718,15 +713,15 @@ impl<'a> LineDecoder<'a> {
 
     pub fn state(&self) -> State {
         State {
-            color: self.cur_color,
             is_new_line: self.is_new_line(),
+            ..self.state
         }
     }
 
     // return true if current line filled.
     pub fn decode(&mut self, code_decoder: impl CodeDecoder, code: Code) -> Result<bool> {
-        let (color, pe) = code_decoder.decode(&self.last, self.cur_color, self.pos, code)?;
-        self.cur_color = color;
+        self.state.is_new_line = self.is_new_line();
+        let pe = code_decoder.decode(&mut self.state, &self.last, self.pos, code)?;
         for pe in pe {
             self.fill(pe);
         }
