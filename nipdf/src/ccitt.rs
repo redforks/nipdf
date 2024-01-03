@@ -431,7 +431,7 @@ impl CodeIterator for Group3_1DCodeIterator {
         reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
         state: State,
     ) -> Result<Code> {
-        if self.flags.encoded_byte_align && state.is_new_line {
+        if self.flags.encoded_byte_align && state.is_new_line() {
             reader.byte_align();
         }
 
@@ -486,7 +486,7 @@ impl CodeIterator for Group4CodeIterator {
         reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
         state: State,
     ) -> Result<Code> {
-        if self.flags.encoded_byte_align && state.is_new_line {
+        if self.flags.encoded_byte_align && state.is_new_line() {
             reader.byte_align();
         }
 
@@ -537,8 +537,8 @@ fn iter_code<I: CodeIterator + 'static>(
 struct LineBuf<'a>(&'a BitSlice<u8, Msb0>);
 
 impl<'a> LineBuf<'a> {
-    fn b1(&self, pos: Option<usize>, pos_color: bool) -> usize {
-        let pos = self.next_flip(pos);
+    fn b1(&self, pos: Option<u32>, pos_color: bool) -> usize {
+        let pos = self.next_flip(pos.map(|v| v as usize));
         if pos < self.0.len() && self.0[pos] == pos_color {
             self.next_flip(Some(pos))
         } else {
@@ -586,7 +586,7 @@ impl Color {
 #[derive(Copy, Clone, PartialEq, Eq, Default)]
 struct State {
     color: Color,
-    is_new_line: bool,
+    pos: Option<u32>,
 }
 
 impl State {
@@ -594,8 +594,12 @@ impl State {
         self.color = self.color.toggle();
     }
 
-    pub fn toggle_is_new_line(&mut self) {
-        self.is_new_line = !self.is_new_line;
+    pub fn is_new_line(&self) -> bool {
+        self.pos.is_none()
+    }
+
+    pub fn pos(&self) -> usize {
+        self.pos.unwrap_or_default() as usize
     }
 }
 
@@ -603,43 +607,31 @@ type PictualElementArray = [PictualElement; 2];
 type PictualElementVec = ArrayVec<PictualElementArray>;
 
 trait CodeDecoder {
-    fn decode(
-        &self,
-        state: &mut State,
-        last: &LineBuf,
-        cur_pos: Option<usize>,
-        code: Code,
-    ) -> Result<PictualElementVec>;
+    fn decode(&self, state: &mut State, last: &LineBuf, code: Code) -> Result<PictualElementVec>;
 }
 
 #[derive(Copy, Clone)]
 struct Group4CodeDecoder;
 
 impl CodeDecoder for Group4CodeDecoder {
-    fn decode(
-        &self,
-        state: &mut State,
-        last: &LineBuf,
-        cur_pos: Option<usize>,
-        code: Code,
-    ) -> Result<PictualElementVec> {
+    fn decode(&self, state: &mut State, last: &LineBuf, code: Code) -> Result<PictualElementVec> {
         match code {
             Code::Horizontal(a0a1, a1a2) => Ok(array_vec!(PictualElementArray => a0a1, a1a2)),
             Code::Vertical(n) => {
-                let b1 = last.b1(cur_pos, state.color.is_white());
+                let b1 = last.b1(state.pos, state.color.is_white());
                 let pe = array_vec!(PictualElementArray=> PictualElement::from_color(
                     state.color,
-                    (b1 as i16 - cur_pos.unwrap_or_default() as i16 + n as i16) as u16,
+                    (b1 as i16 - state.pos.unwrap_or_default() as i16 + n as i16) as u16,
                 ));
                 state.toggle_color();
                 Ok(pe)
             }
             Code::Pass => {
-                let b1 = last.b1(cur_pos, state.color.is_white());
+                let b1 = last.b1(state.pos, state.color.is_white());
                 let b2 = last.next_flip(Some(b1));
                 let pe = array_vec!(PictualElementArray =>  PictualElement::from_color(
                         state.color,
-                    (b2 - cur_pos.unwrap_or_default()) as u16,
+                    (b2 - state.pos()) as u16,
                 ));
                 Ok(pe)
             }
@@ -652,13 +644,7 @@ impl CodeDecoder for Group4CodeDecoder {
 struct Group3_1DCodeDecoder;
 
 impl CodeDecoder for Group3_1DCodeDecoder {
-    fn decode(
-        &self,
-        state: &mut State,
-        last: &LineBuf,
-        cur_pos: Option<usize>,
-        code: Code,
-    ) -> Result<PictualElementVec> {
+    fn decode(&self, state: &mut State, last: &LineBuf, code: Code) -> Result<PictualElementVec> {
         match code {
             Code::Black(n) => {
                 let pe = array_vec!(PictualElementArray => PictualElement::from_color(
@@ -684,7 +670,6 @@ struct LineDecoder<'a> {
     state: State,
     last: LineBuf<'a>,
     cur: BitVec<u8, Msb0>,
-    pos: Option<usize>,
 }
 
 impl<'a> LineDecoder<'a> {
@@ -694,39 +679,30 @@ impl<'a> LineDecoder<'a> {
             state: State::default(),
             last: LineBuf(last),
             cur,
-            pos: None,
         }
     }
 
-    fn is_new_line(&self) -> bool {
-        self.pos.is_none()
-    }
-
     fn fill(&mut self, pe: PictualElement) {
-        let mut pos = self.pos.unwrap_or_default();
+        let mut pos = self.state.pos();
         for _ in 0..pe.run_length().unwrap() {
             self.cur.set(pos, pe.is_white());
             pos += 1;
         }
-        self.pos = Some(pos);
+        self.state.pos = Some(pos.try_into().unwrap());
     }
 
     pub fn state(&self) -> State {
-        State {
-            is_new_line: self.is_new_line(),
-            ..self.state
-        }
+        self.state
     }
 
     // return true if current line filled.
     pub fn decode(&mut self, code_decoder: impl CodeDecoder, code: Code) -> Result<bool> {
-        self.state.is_new_line = self.is_new_line();
-        let pe = code_decoder.decode(&mut self.state, &self.last, self.pos, code)?;
+        let pe = code_decoder.decode(&mut self.state, &self.last, code)?;
         for pe in pe {
             self.fill(pe);
         }
-        debug_assert!(self.pos.unwrap_or_default() <= self.cur.len());
-        Ok(self.pos.unwrap_or_default() == self.cur.len())
+        debug_assert!(self.state.pos() <= self.cur.len());
+        Ok(self.state.pos() == self.cur.len())
     }
 
     pub fn take(self) -> BitVec<u8, Msb0> {
