@@ -407,7 +407,7 @@ trait CodeIterator {
     fn next_code(
         &self,
         reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
-        state: State,
+        state: &State,
     ) -> Result<Code>;
 }
 
@@ -429,7 +429,7 @@ impl CodeIterator for Group3_1DCodeIterator {
     fn next_code(
         &self,
         reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
-        state: State,
+        state: &State,
     ) -> Result<Code> {
         if self.flags.encoded_byte_align && state.is_new_line() {
             reader.byte_align();
@@ -484,7 +484,7 @@ impl CodeIterator for Group4CodeIterator {
     fn next_code(
         &self,
         reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
-        state: State,
+        state: &State,
     ) -> Result<Code> {
         if self.flags.encoded_byte_align && state.is_new_line() {
             reader.byte_align();
@@ -517,7 +517,7 @@ impl CodeIterator for Group4CodeIterator {
 fn iter_code<I: CodeIterator + 'static>(
     buf: &[u8],
     i: I,
-) -> impl FnMut(State) -> Option<Result<Code>> + '_ {
+) -> impl FnMut(&State) -> Option<Result<Code>> + '_ {
     let mut reader = BitReader::endian(Cursor::new(buf), BigEndian);
     move |state| match i.next_code(&mut reader, state) {
         Ok(v) => Some(Ok(v)),
@@ -583,7 +583,7 @@ impl Color {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Default)]
+#[derive(PartialEq, Eq, Default)]
 struct State {
     color: Color,
     pos: Option<u32>,
@@ -691,8 +691,8 @@ impl<'a> LineDecoder<'a> {
         self.state.pos = Some(pos.try_into().unwrap());
     }
 
-    pub fn state(&self) -> State {
-        self.state
+    pub fn state(&self) -> &State {
+        &self.state
     }
 
     // return true if current line filled.
