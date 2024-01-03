@@ -6,7 +6,10 @@ use bitstream_io::{
 use bitvec::{prelude::Msb0, slice::BitSlice, vec::BitVec};
 use educe::Educe;
 use log::error;
-use std::iter::repeat;
+use std::{
+    io::{Cursor, SeekFrom},
+    iter::repeat,
+};
 use tinyvec::{array_vec, ArrayVec};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,10 +28,13 @@ pub enum Algorithm {
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum Code {
     Pass,
+    Black(u16),
+    While(u16),
     Horizontal(PictualElement, PictualElement), // a0a1, a1a2
     Vertical(i8),
     Extension(u8),
     EndOfBlock,
+    EndOfLine,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Educe)]
@@ -61,10 +67,10 @@ impl PictualElement {
         }
     }
 
-    pub fn len(self) -> u16 {
+    pub fn run_length(self) -> Option<u16> {
         match self {
-            Self::Black(len) | Self::White(len) | Self::MakeUp(len) => len,
-            _ => unreachable!(),
+            Self::Black(len) | Self::White(len) | Self::MakeUp(len) => Some(len),
+            _ => None,
         }
     }
 }
@@ -354,9 +360,18 @@ fn build_run_huffman(algo: Algorithm) -> RunHuffmanTree {
     match algo {
         Algorithm::Group3_1D => {
             let len = white_codes.len();
-            white_codes[len - 1]=(PictualElement::EOL, vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+            white_codes[len - 1]=(PictualElement::EOL, vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1]);
+            white_codes.push((PictualElement::NotDef,  vec![0, 0, 0, 0,  0, 0, 0, 0,  1]));
+            white_codes.push((PictualElement::NotDef,  vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 1]));
+            white_codes.push((PictualElement::NotDef,  vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 1]));
+            white_codes.push((PictualElement::NotDef,  vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0]));
+
             let len = black_codes.len();
-            black_codes[len - 1] = (PictualElement::EOL, vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+            black_codes[len - 1] = (PictualElement::EOL, vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1]);
+            black_codes.push((PictualElement::NotDef,    vec![0, 0, 0, 0,  0, 0, 0, 0,  1]));
+            black_codes.push((PictualElement::NotDef,    vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 1]));
+            black_codes.push((PictualElement::NotDef,    vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 1]));
+            black_codes.push((PictualElement::NotDef,    vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0]));
         }
         Algorithm::Group3_2D(_) => todo!(),
         Algorithm::Group4 => { },
@@ -374,19 +389,79 @@ fn next_run(
     color: Color,
 ) -> Result<PictualElement> {
     let tree = huffman.get(color);
-    let mut bytes = 0;
-    loop {
+    let pe = reader.read_huffman(tree)?;
+    let Some(mut n) = pe.run_length() else {
+        return Ok(pe);
+    };
+    let mut bytes = n;
+
+    while n >= 64 {
         let pe = reader.read_huffman(tree)?;
-        let n = pe.len();
+        n = pe.run_length().ok_or(DecodeError::InvalidCode)?;
         bytes += n;
-        if n < 64 {
-            return Ok(PictualElement::from_color(color, bytes));
+    }
+    return Ok(PictualElement::from_color(color, bytes));
+}
+
+trait CodeIterator {
+    fn next_code(
+        &self,
+        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
+        state: State,
+    ) -> Result<Code>;
+}
+
+struct Group3_1DCodeIterator {
+    flags: Flags,
+    huffman: RunHuffmanTree,
+}
+
+impl Group3_1DCodeIterator {
+    fn new(flags: Flags) -> Self {
+        Self {
+            flags,
+            huffman: build_run_huffman(Algorithm::Group3_1D),
         }
     }
 }
 
-trait CodeIterator {
-    fn next_code(&self, reader: &mut BitReader<&[u8], BigEndian>, state: State) -> Result<Code>;
+impl CodeIterator for Group3_1DCodeIterator {
+    fn next_code(
+        &self,
+        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
+        state: State,
+    ) -> Result<Code> {
+        if self.flags.encoded_byte_align && state.is_new_line {
+            reader.byte_align();
+        }
+
+        match next_run(reader, &self.huffman, state.color)? {
+            PictualElement::Black(n) => Ok(Code::Black(n)),
+            PictualElement::White(n) => Ok(Code::While(n)),
+            PictualElement::MakeUp(n) => Ok(match state.color {
+                Color::Black => Code::Black(n),
+                Color::White => Code::While(n),
+            }),
+            PictualElement::EOL => {
+                let pos = reader.position_in_bits()?;
+                let next = next_run(reader, &self.huffman, state.color)?;
+                if next != PictualElement::EOL {
+                    reader.seek_bits(SeekFrom::Start(pos))?;
+                    Ok(Code::EndOfLine)
+                } else {
+                    for _ in 0..4 {
+                        assert_eq!(
+                            PictualElement::EOL,
+                            next_run(reader, &self.huffman, state.color)?
+                        );
+                    }
+                    // six continuous EOLs is end of block
+                    Ok(Code::EndOfBlock)
+                }
+            }
+            PictualElement::NotDef => unreachable!(),
+        }
+    }
 }
 
 struct Group4CodeIterator {
@@ -406,7 +481,11 @@ impl Group4CodeIterator {
 }
 
 impl CodeIterator for Group4CodeIterator {
-    fn next_code(&self, reader: &mut BitReader<&[u8], BigEndian>, state: State) -> Result<Code> {
+    fn next_code(
+        &self,
+        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
+        state: State,
+    ) -> Result<Code> {
         if self.flags.encoded_byte_align && state.is_new_line {
             reader.byte_align();
         }
@@ -439,7 +518,7 @@ fn iter_code<I: CodeIterator + 'static>(
     buf: &[u8],
     i: I,
 ) -> impl FnMut(State) -> Option<Result<Code>> + '_ {
-    let mut reader = BitReader::endian(buf, BigEndian);
+    let mut reader = BitReader::endian(Cursor::new(buf), BigEndian);
     move |state| match i.next_code(&mut reader, state) {
         Ok(v) => Some(Ok(v)),
         Err(e) => match e {
@@ -576,6 +655,36 @@ impl CodeDecoder for Group4CodeDecoder {
     }
 }
 
+#[derive(Copy, Clone)]
+struct Group3_1DCodeDecoder;
+
+impl CodeDecoder for Group3_1DCodeDecoder {
+    fn decode(
+        &self,
+        last: &LineBuf,
+        cur_color: Color,
+        cur_pos: Option<usize>,
+        code: Code,
+    ) -> Result<(Color, PictualElementVec)> {
+        match code {
+            Code::Black(n) => {
+                let pe = array_vec!(PictualElementArray => PictualElement::from_color(
+                    Color::Black,
+                    n,
+                ));
+                Ok((Color::White, pe))
+            }
+            Code::While(n) => {
+                let pe = array_vec!(PictualElementArray => PictualElement::from_color(
+                    Color::White,
+                    n,
+                ));
+                Ok((Color::Black, pe))
+            }
+            _ => unreachable!(),
+        }
+    }
+}
 struct LineDecoder<'a> {
     last: LineBuf<'a>,
     cur: BitVec<u8, Msb0>,
@@ -600,7 +709,7 @@ impl<'a> LineDecoder<'a> {
 
     fn fill(&mut self, pe: PictualElement) {
         let mut pos = self.pos.unwrap_or_default();
-        for _ in 0..pe.len() {
+        for _ in 0..pe.run_length().unwrap() {
             self.cur.set(pos, pe.is_white());
             pos += 1;
         }
@@ -690,9 +799,18 @@ impl Decoder {
     }
 
     pub fn decode(&self, buf: &[u8]) -> Result<Vec<u8>> {
-        assert!(!matches!(self.algorithm, Algorithm::Group3_2D(_)));
+        let mut r = match self.algorithm {
+            Algorithm::Group4 => {
+                self.do_decode(Group4CodeDecoder, Group4CodeIterator::new(self.flags), buf)?
+            }
+            Algorithm::Group3_1D => self.do_decode(
+                Group3_1DCodeDecoder,
+                Group3_1DCodeIterator::new(self.flags),
+                buf,
+            )?,
+            _ => todo!(),
+        };
 
-        let mut r = self.do_decode(Group4CodeDecoder, Group4CodeIterator::new(self.flags), buf)?;
         if self.flags.inverse_black_white {
             for byte in r.as_raw_mut_slice() {
                 *byte = !*byte;

@@ -55,21 +55,21 @@ fn group4_false_end_of_block() {
     );
 }
 
-// #[test]
-// fn group3_1d() {
-//     let flags = Flags {
-//         end_of_block: false,
-//         ..Default::default()
-//     };
-//     let decoder = Decoder {
-//         algorithm: Algorithm::Group3_1D,
-//         flags,
-//         width: 81,
-//         rows: Some(26),
-//     };
-//     // extracted by `dump-pdf stream -f pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf 8 --raw`
-//     insta::assert_debug_snapshot!(decoder.decode(include_bytes!("ccitt-group3-1D")).unwrap());
-// }
+#[test]
+fn group3_1d() {
+    let flags = Flags {
+        end_of_block: false,
+        ..Default::default()
+    };
+    let decoder = Decoder {
+        algorithm: Algorithm::Group3_1D,
+        flags,
+        width: 81,
+        rows: Some(26),
+    };
+    // extracted by `dump-pdf stream -f pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf 8 --raw`
+    insta::assert_debug_snapshot!(decoder.decode(include_bytes!("group3-1d")).unwrap());
+}
 
 #[test_case(&[], &[]; "empty")]
 #[test_case(&[Code::Pass], &[0b0001_0000]; "pass")]
