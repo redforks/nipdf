@@ -106,12 +106,14 @@ fn group3_1d() {
 )]
 fn test_iter_code_group4(exp: &[Code], buf: &[u8]) {
     let mut next_code = iter_code(buf, Group4CodeIterator::new(Flags::default()));
-    let state = State::default();
+    let last: BitVec<u8, Msb0> = repeat(true).take(10).collect();
+    let cur = last.clone();
+    let line_decoder = LineDecoder::new(&last, cur);
     for e in exp {
-        assert_eq!(next_code(&state).unwrap().unwrap(), *e);
+        assert_eq!(next_code(&line_decoder).unwrap().unwrap(), *e);
     }
-    assert!(next_code(&state).is_none());
-    assert!(next_code(&state).is_none());
+    assert!(next_code(&line_decoder).is_none());
+    assert!(next_code(&line_decoder).is_none());
 }
 
 #[test_case(Color::White, 0, &[0b0011_0101] ; "white 0")]
