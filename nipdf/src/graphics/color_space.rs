@@ -818,7 +818,7 @@ where
     f32: ColorCompConvertTo<T>,
 {
     fn to_rgba(&self, color: &[T]) -> [T; 4] {
-        assert!(color.len() > 0);
+        assert!(!color.is_empty());
         let a: f32 = color[0].into_color_comp();
         let ag = a.powf(self.gamma);
         let [xw, yw, zw] = self.white_point;

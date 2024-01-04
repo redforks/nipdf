@@ -35,11 +35,7 @@ enum PictualElement {
     MakeUp(u16),
 
     // used in Group3, 1D and 2D
-    EOL,
-
-    // used in Group3-2D
-    NextLine1D,
-    NextLine2D,
+    Eol,
 
     #[educe(Default)]
     NotDef(u8),
@@ -78,8 +74,8 @@ impl PictualElement {
 pub enum DecodeError {
     #[error("IOError: {0}")]
     IOError(#[from] std::io::Error),
-    #[error("Horizontal run color mismatch")]
-    HorizontalRunColorMismatch,
+    // #[error("Horizontal run color mismatch")]
+    // HorizontalRunColorMismatch,
     #[error("Unknown code")]
     InvalidCode,
 }
@@ -107,7 +103,7 @@ enum Group4Code {
     // negative is left, position is right
     Vertical(i8),
     Extension,
-    EOFB,
+    EndOfBlock,
 
     NotDef,
 }
@@ -128,7 +124,7 @@ fn build_group4_huffman_tree() -> Box<[ReadHuffmanTree<BigEndian, Group4Code>]> 
         (Group4Code::Extension,    vec![0, 0, 0, 0, 0, 0, 1]),
         (Group4Code::Vertical(-3), vec![0, 0, 0, 0, 0, 1, 0]),
         (Group4Code::Vertical(3),  vec![0, 0, 0, 0, 0, 1, 1]),
-        (Group4Code::EOFB,         vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]),
+        (Group4Code::EndOfBlock,         vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]),
         (Group4Code::NotDef,       vec![0, 0, 0, 0, 0, 0, 0, 1]),
         (Group4Code::NotDef,       vec![0, 0, 0, 0, 0, 0, 0, 0, 1]),
         (Group4Code::NotDef,       vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 1]),
@@ -359,14 +355,14 @@ fn build_run_huffman(algo: Algorithm) -> RunHuffmanTree {
     match algo {
         Algorithm::Group3_1D => {
             let len = white_codes.len();
-            white_codes[len - 1]=(PictualElement::EOL, vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1]);
+            white_codes[len - 1]=(PictualElement::Eol, vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1]);
             white_codes.push((PictualElement::NotDef(1),  vec![0, 0, 0, 0,  0, 0, 0, 0,  1]));
             white_codes.push((PictualElement::NotDef(2),  vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 1]));
             white_codes.push((PictualElement::NotDef(3),  vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 1]));
             white_codes.push((PictualElement::TwelveZeros,  vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0]));
 
             let len = black_codes.len();
-            black_codes[len - 1] = (PictualElement::EOL, vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1]);
+            black_codes[len - 1] = (PictualElement::Eol, vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1]);
             black_codes.push((PictualElement::NotDef(1),    vec![0, 0, 0, 0,  0, 0, 0, 0,  1]));
             black_codes.push((PictualElement::NotDef(2),    vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 1]));
             black_codes.push((PictualElement::NotDef(3),    vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 1]));
@@ -399,7 +395,7 @@ fn next_run(
         n = pe.run_length().ok_or(DecodeError::InvalidCode)?;
         bytes += n;
     }
-    return Ok(PictualElement::from_color(color, bytes));
+    Ok(PictualElement::from_color(color, bytes))
 }
 
 struct LastLine<'a>(&'a BitSlice<u8, Msb0>);
@@ -465,19 +461,19 @@ enum ProcessPEResult {
 }
 
 trait LineDecoder {
-    fn process_next_pe<'a>(
+    fn process_next_pe(
         &mut self,
         reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
-        line: &LineBuffer<'a>,
+        line: &LineBuffer<'_>,
     ) -> Result<ProcessPEResult>;
 
     fn reset(&mut self);
 
     /// Return true if hit EndOfBlock
-    fn decode_line<'a>(
+    fn decode_line(
         &mut self,
         reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
-        line: &mut LineBuffer<'a>,
+        line: &mut LineBuffer<'_>,
     ) -> Result<DecodeLineResult> {
         loop {
             match self.process_next_pe(reader, line)? {
@@ -527,10 +523,10 @@ impl LineDecoder for Group4LineDecoder {
         self.color = Color::default();
     }
 
-    fn process_next_pe<'a>(
+    fn process_next_pe(
         &mut self,
         reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
-        line: &LineBuffer<'a>,
+        line: &LineBuffer<'_>,
     ) -> Result<ProcessPEResult> {
         use ProcessPEResult::*;
 
@@ -549,22 +545,23 @@ impl LineDecoder for Group4LineDecoder {
                 let b1 = line.last.b1(line.pos, self.color.is_white());
                 let pe = (
                     self.color,
-                    (b1 as i16 - line.pos.unwrap_or_default() as i16 + n as i16) as u16,
+                    (b1 - line.pos() + n as usize).try_into().unwrap(),
                 );
                 self.color = self.color.toggle();
                 Ok(Pixels1(pe))
             }
-            Group4Code::EOFB => {
-                assert_eq!(reader.read_huffman(&self.group4_huffman)?, Group4Code::EOFB);
-                return Ok(EndOfBlock);
+            Group4Code::EndOfBlock => {
+                assert_eq!(
+                    reader.read_huffman(&self.group4_huffman)?,
+                    Group4Code::EndOfBlock
+                );
+                Ok(EndOfBlock)
             }
             Group4Code::Extension => {
                 let ext_bits: u8 = reader.read(3)?;
                 todo!("Extension ({ext_bits})");
             }
-            Group4Code::NotDef => {
-                return Err(DecodeError::InvalidCode);
-            }
+            Group4Code::NotDef => Err(DecodeError::InvalidCode),
         }
     }
 }
@@ -628,10 +625,10 @@ impl Group3_2DLineDecoder {
 }
 
 impl LineDecoder for Group3_2DLineDecoder {
-    fn process_next_pe<'a>(
+    fn process_next_pe(
         &mut self,
         reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
-        line: &LineBuffer<'a>,
+        line: &LineBuffer<'_>,
     ) -> Result<ProcessPEResult> {
         if !self.use_inner {
             read_eol_with_fill_padding(0, reader)?;
@@ -658,10 +655,10 @@ impl LineDecoder for Group3_1DLineDecoder {
         self.color = Color::default();
     }
 
-    fn process_next_pe<'a>(
+    fn process_next_pe(
         &mut self,
         reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
-        line: &LineBuffer<'a>,
+        line: &LineBuffer<'_>,
     ) -> Result<ProcessPEResult> {
         use ProcessPEResult::*;
 
@@ -674,7 +671,7 @@ impl LineDecoder for Group3_1DLineDecoder {
                 self.color = Color::Black;
                 Ok(Pixels1((Color::White, n)))
             }
-            PictualElement::EOL => {
+            PictualElement::Eol => {
                 let px = (
                     Color::White,
                     (line.last.0.len() - line.pos()).try_into().unwrap(),
@@ -800,7 +797,6 @@ impl Decoder {
             Algorithm::Group4 => self.do_decode(Group4LineDecoder::new(), buf)?,
             Algorithm::Group3_1D => self.do_decode(Group3_1DLineDecoder::new(), buf)?,
             Algorithm::Group3_2D(_) => self.do_decode(Group3_2DLineDecoder::new(), buf)?,
-            _ => todo!(),
         };
 
         if self.flags.inverse_black_white {

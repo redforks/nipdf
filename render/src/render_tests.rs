@@ -202,5 +202,7 @@ fn text_clip_path() {
 
 #[test]
 fn type1_font_units_per_em_not_1000() {
-    assert_ron_snapshot!(&decode_file_page("../render/src/type1-units-per-em-not-1000.pdf", 0).unwrap())
+    assert_ron_snapshot!(
+        &decode_file_page("../render/src/type1-units-per-em-not-1000.pdf", 0).unwrap()
+    )
 }
