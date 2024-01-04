@@ -44,11 +44,18 @@ enum PictualElement {
     White(u16),
     MakeUp(u16),
 
-    // used in Group3_1D
+    // used in Group3, 1D and 2D
     EOL,
 
+    // used in Group3-2D
+    NextLine1D,
+    NextLine2D,
+
     #[educe(Default)]
-    NotDef,
+    NotDef(u8),
+
+    // Possible Group3 fill bits
+    TwelveZeros,
 }
 
 impl PictualElement {
@@ -246,7 +253,7 @@ fn build_run_huffman(algo: Algorithm) -> RunHuffmanTree {
             (PictualElement::MakeUp(2432), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1]),
             (PictualElement::MakeUp(2496), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0]),
             (PictualElement::MakeUp(2560), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]),
-            (PictualElement::NotDef, vec![0, 0, 0, 0, 0, 0, 0, 0]),
+            (PictualElement::NotDef(0), vec![0, 0, 0, 0, 0, 0, 0, 0]),
         ];
 
     let mut black_codes = vec![
@@ -354,24 +361,24 @@ fn build_run_huffman(algo: Algorithm) -> RunHuffmanTree {
             (PictualElement::MakeUp(2432), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1]),
             (PictualElement::MakeUp(2496), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0]),
             (PictualElement::MakeUp(2560), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]),
-            (PictualElement::NotDef, vec![0, 0, 0, 0, 0, 0, 0, 0]),
+            (PictualElement::NotDef(0), vec![0, 0, 0, 0, 0, 0, 0, 0]),
         ];
     
     match algo {
         Algorithm::Group3_1D => {
             let len = white_codes.len();
             white_codes[len - 1]=(PictualElement::EOL, vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1]);
-            white_codes.push((PictualElement::NotDef,  vec![0, 0, 0, 0,  0, 0, 0, 0,  1]));
-            white_codes.push((PictualElement::NotDef,  vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 1]));
-            white_codes.push((PictualElement::NotDef,  vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 1]));
-            white_codes.push((PictualElement::NotDef,  vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0]));
+            white_codes.push((PictualElement::NotDef(1),  vec![0, 0, 0, 0,  0, 0, 0, 0,  1]));
+            white_codes.push((PictualElement::NotDef(2),  vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 1]));
+            white_codes.push((PictualElement::NotDef(3),  vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 1]));
+            white_codes.push((PictualElement::TwelveZeros,  vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0]));
 
             let len = black_codes.len();
             black_codes[len - 1] = (PictualElement::EOL, vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1]);
-            black_codes.push((PictualElement::NotDef,    vec![0, 0, 0, 0,  0, 0, 0, 0,  1]));
-            black_codes.push((PictualElement::NotDef,    vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 1]));
-            black_codes.push((PictualElement::NotDef,    vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 1]));
-            black_codes.push((PictualElement::NotDef,    vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0]));
+            black_codes.push((PictualElement::NotDef(1),    vec![0, 0, 0, 0,  0, 0, 0, 0,  1]));
+            black_codes.push((PictualElement::NotDef(2),    vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 1]));
+            black_codes.push((PictualElement::NotDef(3),    vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 1]));
+            black_codes.push((PictualElement::TwelveZeros,    vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0]));
         }
         Algorithm::Group3_2D(_) => todo!(),
         Algorithm::Group4 => { },
@@ -423,6 +430,40 @@ impl Group3_1DCodeIterator {
             huffman: build_run_huffman(Algorithm::Group3_1D),
         }
     }
+
+    fn read_eol_with_fill_padding(
+        &self,
+        mut zeros_hit: u16,
+        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
+    ) -> Result<Code> {
+        while !reader.read_bit()? {
+            zeros_hit += 1;
+        }
+        dbg!(zeros_hit);
+        if zeros_hit < 11 {
+            return Err(DecodeError::InvalidCode);
+        }
+        Ok(Code::EndOfLine)
+    }
+
+    fn read_eol_or_eob(
+        &self,
+        n_eols: u8,
+        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
+    ) -> Result<Code> {
+        let pos = reader.position_in_bits()?;
+        for _ in 0..n_eols {
+            match reader.read::<u16>(12) {
+                Ok(1) => continue,
+                _ => {
+                    reader.seek_bits(SeekFrom::Start(pos))?;
+                    return Ok(Code::EndOfLine);
+                }
+            }
+        }
+        // six continuous EOLs is end of block
+        Ok(Code::EndOfBlock)
+    }
 }
 
 impl CodeIterator for Group3_1DCodeIterator {
@@ -435,6 +476,11 @@ impl CodeIterator for Group3_1DCodeIterator {
             reader.byte_align();
         }
 
+        if line_decoder.line_fullfilled() {
+            self.read_eol_with_fill_padding(0, reader)?;
+            return self.read_eol_or_eob(5, reader);
+        }
+
         match next_run(reader, &self.huffman, line_decoder.color)? {
             PictualElement::Black(n) => Ok(Code::Black(n)),
             PictualElement::White(n) => Ok(Code::While(n)),
@@ -442,24 +488,12 @@ impl CodeIterator for Group3_1DCodeIterator {
                 Color::Black => Code::Black(n),
                 Color::White => Code::While(n),
             }),
-            PictualElement::EOL => {
-                let pos = reader.position_in_bits()?;
-                let next = next_run(reader, &self.huffman, line_decoder.color)?;
-                if next != PictualElement::EOL {
-                    reader.seek_bits(SeekFrom::Start(pos))?;
-                    Ok(Code::EndOfLine)
-                } else {
-                    for _ in 0..4 {
-                        assert_eq!(
-                            PictualElement::EOL,
-                            next_run(reader, &self.huffman, line_decoder.color)?
-                        );
-                    }
-                    // six continuous EOLs is end of block
-                    Ok(Code::EndOfBlock)
-                }
+            PictualElement::EOL => self.read_eol_or_eob(5, reader),
+            PictualElement::TwelveZeros => {
+                self.read_eol_with_fill_padding(12, reader)?;
+                self.read_eol_or_eob(5, reader)
             }
-            PictualElement::NotDef => unreachable!(),
+            PictualElement::NotDef(n) => unreachable!("NotDef({n})"),
         }
     }
 }
@@ -520,7 +554,7 @@ fn iter_code<I: CodeIterator + 'static>(
 ) -> impl for<'a> FnMut(&LineDecoder<'a>) -> Option<Result<Code>> + '_ {
     let mut reader = BitReader::endian(Cursor::new(buf), BigEndian);
     move |line_decoder| match i.next_code(&mut reader, line_decoder) {
-        Ok(v) => Some(Ok(v)),
+        Ok(v) => Some(Ok(dbg!(v))),
         Err(e) => match e {
             DecodeError::IOError(io_err) => {
                 if io_err.kind() == std::io::ErrorKind::UnexpectedEof {
@@ -658,7 +692,8 @@ impl CodeDecoder for Group3_1DCodeDecoder {
                 line_decoder.color = Color::Black;
                 Ok(pe)
             }
-            _ => unreachable!(),
+            Code::EndOfLine => Ok(array_vec!(PictualElementArray => PictualElement::EOL)),
+            c => unreachable!("{:?}", c),
         }
     }
 }
@@ -688,6 +723,11 @@ impl<'a> LineDecoder<'a> {
         self.pos.is_none()
     }
 
+    pub fn line_fullfilled(&self) -> bool {
+        debug_assert!(self.pos() <= self.cur.len());
+        self.pos() == self.cur.len()
+    }
+
     pub fn pos(&self) -> usize {
         self.pos.unwrap_or_default() as usize
     }
@@ -703,12 +743,14 @@ impl<'a> LineDecoder<'a> {
 
     // return true if current line filled.
     pub fn decode(&mut self, code_decoder: impl CodeDecoder, code: Code) -> Result<bool> {
-        let pe = code_decoder.decode(self, code)?;
-        for pe in pe {
+        for pe in code_decoder.decode(self, code)? {
+            if pe == PictualElement::EOL {
+                return Ok(true);
+            }
             self.fill(pe);
         }
         debug_assert!(self.pos() <= self.cur.len());
-        Ok(self.pos() == self.cur.len())
+        Ok(self.line_fullfilled())
     }
 
     pub fn take(self) -> BitVec<u8, Msb0> {
@@ -780,7 +822,7 @@ impl Decoder {
             Algorithm::Group4 => {
                 self.do_decode(Group4CodeDecoder, Group4CodeIterator::new(self.flags), buf)?
             }
-            Algorithm::Group3_1D => self.do_decode(
+            Algorithm::Group3_1D | Algorithm::Group3_2D(1) => self.do_decode(
                 Group3_1DCodeDecoder,
                 Group3_1DCodeIterator::new(self.flags),
                 buf,
