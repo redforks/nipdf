@@ -1434,6 +1434,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let option = RenderOptionBuilder::default()
             .zoom(zoom)
             .page_box(&b_box, 0)
+            .background_color(SkiaColor::TRANSPARENT)
             .build();
         let mut canvas = option.create_canvas();
         let mut render = Render::new(&mut canvas, option, &resources);
