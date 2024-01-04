@@ -56,6 +56,24 @@ fn group4_false_end_of_block() {
 }
 
 #[test]
+fn group4_actual_no_end_block() {
+    // /DecodeParms <</Columns 81 /EndOfBlock true /K 1 /Rows 26>>
+    // extracted by `dump-pdf stream -f pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf 11 --raw`
+    let flags = Flags::default();
+    let decoder = Decoder {
+        algorithm: Algorithm::Group3_2D(1),
+        flags,
+        width: 81,
+        rows: Some(26),
+    };
+    let data = decoder
+        .decode(include_bytes!("group4-actual-no-end-block"))
+        .unwrap();
+    assert_eq!((81 * 26 + 7) / 8, data.len());
+    insta::assert_debug_snapshot!(&data);
+}
+
+#[test]
 fn group3_1d() {
     let flags = Flags {
         ..Default::default()
@@ -85,14 +103,11 @@ fn group3_1d_false_end_of_block() {
         rows: Some(26),
     };
     // extracted by `dump-pdf stream -f pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf 8 --raw`
-    let data = 
-        decoder
-            .decode(include_bytes!("group3-1d-false-end-of-block"))
-            .unwrap();
+    let data = decoder
+        .decode(include_bytes!("group3-1d-false-end-of-block"))
+        .unwrap();
     assert_eq!((81 * 26 + 7) / 8, data.len());
-    insta::assert_debug_snapshot!(
-        data
-    );
+    insta::assert_debug_snapshot!(data);
 }
 
 #[test]

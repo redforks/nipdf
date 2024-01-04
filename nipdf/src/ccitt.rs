@@ -11,7 +11,6 @@ use std::{
     io::{Cursor, SeekFrom},
     iter::repeat,
 };
-use tinyvec::{array_vec, ArrayVec};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Algorithm {
@@ -21,7 +20,7 @@ pub enum Algorithm {
     /// 2-D), in which a line encoded one-dimensionally may
     /// be followed by at most K − 1 lines encoded two-
     /// dimensionally
-    Group3_2D(u16),
+    Group3_2D(u8),
 
     Group4,
 }
@@ -582,41 +581,35 @@ impl Group3_1DLineDecoder {
             color: Color::default(),
         }
     }
+}
 
-    fn read_eol_with_fill_padding(
-        &self,
-        mut zeros_hit: u16,
-        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
-    ) -> Result<()> {
-        while !reader.read_bit()? {
-            zeros_hit += 1;
-        }
-        dbg!(zeros_hit);
-        if zeros_hit < 11 {
-            return Err(DecodeError::InvalidCode);
-        }
-        Ok(())
+fn read_eol_with_fill_padding(
+    mut zeros_hit: u16,
+    reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
+) -> Result<()> {
+    while !reader.read_bit()? {
+        zeros_hit += 1;
     }
+    if zeros_hit < 11 {
+        return Err(DecodeError::InvalidCode);
+    }
+    Ok(())
+}
 
-    /// return true if eol, false if eob
-    fn read_eol_or_eob(
-        &self,
-        n_eols: u8,
-        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
-    ) -> Result<bool> {
-        let pos = reader.position_in_bits()?;
-        for _ in 0..n_eols {
-            match reader.read::<u16>(12) {
-                Ok(1) => continue,
-                _ => {
-                    reader.seek_bits(SeekFrom::Start(pos))?;
-                    return Ok(true);
-                }
+/// return true if eol, false if eob
+fn read_eol_or_eob(n_eols: u8, reader: &mut BitReader<Cursor<&[u8]>, BigEndian>) -> Result<bool> {
+    let pos = reader.position_in_bits()?;
+    for _ in 0..n_eols {
+        match reader.read::<u16>(12) {
+            Ok(1) => continue,
+            _ => {
+                reader.seek_bits(SeekFrom::Start(pos))?;
+                return Ok(true);
             }
         }
-        // six continuous EOLs is end of block
-        Ok(false)
     }
+    // six continuous EOLs is end of block
+    Ok(false)
 }
 
 struct Group3_2DLineDecoder {
@@ -632,43 +625,6 @@ impl Group3_2DLineDecoder {
             inner: Either::Left(Group3_1DLineDecoder::new()),
         }
     }
-
-    // TODO: merge with Group3_1DLineDecoder and move to mod level
-    fn read_eol_with_fill_padding(
-        &self,
-        mut zeros_hit: u16,
-        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
-    ) -> Result<()> {
-        while !reader.read_bit()? {
-            zeros_hit += 1;
-        }
-        dbg!(zeros_hit);
-        if zeros_hit < 11 {
-            return Err(DecodeError::InvalidCode);
-        }
-        Ok(())
-    }
-
-    // TODO: merge with Group3_1DLineDecoder and move to mod level
-    /// return true if eol, false if eob
-    fn read_eol_or_eob(
-        &self,
-        n_eols: u8,
-        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
-    ) -> Result<bool> {
-        let pos = reader.position_in_bits()?;
-        for _ in 0..n_eols {
-            match reader.read::<u16>(12) {
-                Ok(1) => continue,
-                _ => {
-                    reader.seek_bits(SeekFrom::Start(pos))?;
-                    return Ok(true);
-                }
-            }
-        }
-        // six continuous EOLs is end of block
-        Ok(false)
-    }
 }
 
 impl LineDecoder for Group3_2DLineDecoder {
@@ -678,7 +634,7 @@ impl LineDecoder for Group3_2DLineDecoder {
         line: &LineBuffer<'a>,
     ) -> Result<ProcessPEResult> {
         if !self.use_inner {
-            self.read_eol_with_fill_padding(0, reader)?;
+            read_eol_with_fill_padding(0, reader)?;
             self.use_inner = true;
             self.inner = match reader.read_bit()? {
                 true => Either::Left(Group3_1DLineDecoder::new()),
@@ -723,7 +679,7 @@ impl LineDecoder for Group3_1DLineDecoder {
                     Color::White,
                     (line.last.0.len() - line.pos()).try_into().unwrap(),
                 );
-                if self.read_eol_or_eob(5, reader)? {
+                if read_eol_or_eob(5, reader)? {
                     Ok(Pixels1(px))
                 } else {
                     Ok(EndOfBlock)
@@ -734,8 +690,8 @@ impl LineDecoder for Group3_1DLineDecoder {
                     Color::White,
                     (line.last.0.len() - line.pos()).try_into().unwrap(),
                 );
-                self.read_eol_with_fill_padding(12, reader)?;
-                if self.read_eol_or_eob(5, reader)? {
+                read_eol_with_fill_padding(12, reader)?;
+                if read_eol_or_eob(5, reader)? {
                     Ok(Pixels1(px))
                 } else {
                     Ok(EndOfBlock)
@@ -765,7 +721,6 @@ impl<'a> LineBuffer<'a> {
 
     pub fn line_fullfilled(&self) -> bool {
         debug_assert!(self.pos() <= self.last.0.len());
-        dbg!((self.pos(), self.last.0.len()));
         self.pos() == self.last.0.len()
     }
 
@@ -774,7 +729,6 @@ impl<'a> LineBuffer<'a> {
     }
 
     pub fn push_pixels(&mut self, color: Color, counts: u16) {
-        dbg!((color, counts));
         let pos = self.pos();
         for i in pos..(pos + counts as usize) {
             self.cur.set(i, color.is_white());
@@ -826,16 +780,13 @@ impl Decoder {
                 DecodeLineResult::EndOfBlockNoLine => break,
             };
             let line = line_buffer.take();
-            dbg!(line.len());
             r.extend(&line);
             if finished {
                 break;
             }
-            if !self.flags.end_of_block {
-                if let Some(rows) = self.rows {
-                    if rows as usize == r.len() / self.width as usize {
-                        break;
-                    }
+            if let Some(rows) = self.rows {
+                if rows as usize == r.len() / self.width as usize {
+                    break;
                 }
             }
             line_buffer = LineBuffer::new(&r[r.len() - self.width as usize..], line);
