@@ -37,6 +37,8 @@ enum Code {
     EndOfLine,
 }
 
+type Pixels = (Color, u16);
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Educe)]
 #[educe(Default)]
 enum PictualElement {
@@ -58,19 +60,21 @@ enum PictualElement {
     TwelveZeros,
 }
 
+impl From<PictualElement> for Pixels {
+    fn from(p: PictualElement) -> Self {
+        match p {
+            PictualElement::Black(len) => (Color::Black, len),
+            PictualElement::White(len) => (Color::White, len),
+            _ => unreachable!(),
+        }
+    }
+}
+
 impl PictualElement {
     pub fn from_color(color: Color, bytes: u16) -> Self {
         match color {
             Color::Black => Self::Black(bytes),
             Color::White => Self::White(bytes),
-        }
-    }
-
-    pub fn is_white(&self) -> bool {
-        match self {
-            Self::White(_) => true,
-            Self::Black(_) => false,
-            _ => unreachable!(),
         }
     }
 
@@ -410,179 +414,9 @@ fn next_run(
     return Ok(PictualElement::from_color(color, bytes));
 }
 
-trait CodeIterator {
-    fn next_code<'a>(
-        &self,
-        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
-        state: &LineDecoder<'a>,
-    ) -> Result<Code>;
-}
+struct LastLine<'a>(&'a BitSlice<u8, Msb0>);
 
-struct Group3_1DCodeIterator {
-    huffman: RunHuffmanTree,
-}
-
-impl Group3_1DCodeIterator {
-    fn new() -> Self {
-        Self {
-            huffman: build_run_huffman(Algorithm::Group3_1D),
-        }
-    }
-
-    fn read_eol_with_fill_padding(
-        &self,
-        mut zeros_hit: u16,
-        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
-    ) -> Result<Code> {
-        while !reader.read_bit()? {
-            zeros_hit += 1;
-        }
-        dbg!(zeros_hit);
-        if zeros_hit < 11 {
-            return Err(DecodeError::InvalidCode);
-        }
-        Ok(Code::EndOfLine)
-    }
-
-    fn read_eol_or_eob(
-        &self,
-        n_eols: u8,
-        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
-    ) -> Result<Code> {
-        let pos = reader.position_in_bits()?;
-        for _ in 0..n_eols {
-            match reader.read::<u16>(12) {
-                Ok(1) => continue,
-                _ => {
-                    reader.seek_bits(SeekFrom::Start(pos))?;
-                    return Ok(Code::EndOfLine);
-                }
-            }
-        }
-        // six continuous EOLs is end of block
-        Ok(Code::EndOfBlock)
-    }
-}
-
-impl CodeIterator for Group3_1DCodeIterator {
-    fn next_code<'a>(
-        &self,
-        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
-        line_decoder: &LineDecoder<'a>,
-    ) -> Result<Code> {
-        if line_decoder.line_fullfilled() {
-            self.read_eol_with_fill_padding(0, reader)?;
-            return self.read_eol_or_eob(5, reader);
-        }
-
-        match next_run(reader, &self.huffman, line_decoder.color)? {
-            PictualElement::Black(n) => Ok(Code::Black(n)),
-            PictualElement::White(n) => Ok(Code::While(n)),
-            PictualElement::MakeUp(n) => Ok(match line_decoder.color {
-                Color::Black => Code::Black(n),
-                Color::White => Code::While(n),
-            }),
-            PictualElement::EOL => self.read_eol_or_eob(5, reader),
-            PictualElement::TwelveZeros => {
-                self.read_eol_with_fill_padding(12, reader)?;
-                self.read_eol_or_eob(5, reader)
-            }
-            PictualElement::NotDef(n) => unreachable!("NotDef({n})"),
-            c => todo!("{:?}", c),
-        }
-    }
-}
-
-struct Group4CodeIterator {
-    huffman: RunHuffmanTree,
-    group4_huffman: Box<[ReadHuffmanTree<BigEndian, Group4Code>]>,
-}
-
-impl Group4CodeIterator {
-    fn new() -> Self {
-        Self {
-            huffman: build_run_huffman(Algorithm::Group4),
-            group4_huffman: build_group4_huffman_tree(),
-        }
-    }
-}
-
-impl CodeIterator for Group4CodeIterator {
-    fn next_code<'a>(
-        &self,
-        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
-        line_decoder: &LineDecoder<'a>,
-    ) -> Result<Code> {
-        match reader.read_huffman(&self.group4_huffman)? {
-            Group4Code::Pass => return Ok(Code::Pass),
-            Group4Code::Horizontal => {
-                let a0a1 = next_run(reader, &self.huffman, line_decoder.color)?;
-                let a1a2 = next_run(reader, &self.huffman, line_decoder.color.toggle())?;
-                return Ok(Code::Horizontal(a0a1, a1a2));
-            }
-            Group4Code::Vertical(n) => {
-                return Ok(Code::Vertical(n));
-            }
-            Group4Code::EOFB => {
-                assert_eq!(reader.read_huffman(&self.group4_huffman)?, Group4Code::EOFB);
-                return Ok(Code::EndOfBlock);
-            }
-            Group4Code::Extension => {
-                return Ok(Code::Extension(reader.read(3)?));
-            }
-            Group4Code::NotDef => {
-                return Err(DecodeError::InvalidCode);
-            }
-        }
-    }
-}
-
-/// Skip bits if the current position is line boundary,
-/// call inner otherwise.
-struct ByteAlignCodeIterator<Inner>(bool, Inner);
-
-impl<Inner> ByteAlignCodeIterator<Inner> {
-    pub fn new(flag: Flags, inner: Inner) -> Self {
-        Self(flag.encoded_byte_align, inner)
-    }
-}
-
-impl<Inner: CodeIterator> CodeIterator for ByteAlignCodeIterator<Inner> {
-    fn next_code<'a>(
-        &self,
-        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
-        state: &LineDecoder<'a>,
-    ) -> Result<Code> {
-        if self.0 && state.is_new_line() {
-            reader.byte_align();
-        }
-        self.1.next_code(reader, state)
-    }
-}
-
-fn iter_code<I: CodeIterator + 'static>(
-    buf: &[u8],
-    i: I,
-) -> impl for<'a> FnMut(&LineDecoder<'a>) -> Option<Result<Code>> + '_ {
-    let mut reader = BitReader::endian(Cursor::new(buf), BigEndian);
-    move |line_decoder| match i.next_code(&mut reader, line_decoder) {
-        Ok(v) => Some(Ok(dbg!(v))),
-        Err(e) => match e {
-            DecodeError::IOError(io_err) => {
-                if io_err.kind() == std::io::ErrorKind::UnexpectedEof {
-                    None
-                } else {
-                    Some(Err(io_err.into()))
-                }
-            }
-            _ => Some(Err(e)),
-        },
-    }
-}
-
-struct LineBuf<'a>(&'a BitSlice<u8, Msb0>);
-
-impl<'a> LineBuf<'a> {
+impl<'a> LastLine<'a> {
     fn b1(&self, pos: Option<u32>, pos_color: bool) -> usize {
         let pos = self.next_flip(pos.map(|v| v as usize));
         if pos < self.0.len() && self.0[pos] == pos_color {
@@ -629,140 +463,267 @@ impl Color {
     }
 }
 
-type PictualElementArray = [PictualElement; 2];
-type PictualElementVec = ArrayVec<PictualElementArray>;
-
-trait CodeDecoder {
-    fn decode<'a>(
-        &self,
-        line_decoder: &mut LineDecoder<'a>,
-        code: Code,
-    ) -> Result<PictualElementVec>;
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+enum DecodeLineResult {
+    EndOfBlock,
+    EndOfBlockNoLine,
+    LineFullfilled,
 }
 
-#[derive(Copy, Clone)]
-struct Group4CodeDecoder;
+trait LineDecoder {
+    fn next_code<'a>(
+        &mut self,
+        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
+        line: &LineBuffer<'a>,
+    ) -> Result<Code>;
 
-impl CodeDecoder for Group4CodeDecoder {
-    fn decode<'a>(
-        &self,
-        line_decoder: &mut LineDecoder<'a>,
+    fn code_to_pixels<'a>(
+        &mut self,
+        line: &LineBuffer<'a>,
         code: Code,
-    ) -> Result<PictualElementVec> {
+    ) -> Result<ArrayVec<[(Color, u16); 2]>>;
+
+    fn reset(&mut self);
+
+    /// Return true if hit EndOfBlock
+    fn decode_line<'a>(
+        &mut self,
+        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
+        line: &mut LineBuffer<'a>,
+    ) -> Result<DecodeLineResult> {
+        loop {
+            let code = self.next_code(reader, line)?;
+            if code == Code::EndOfBlock {
+                return match line.pos() {
+                    0 => Ok(DecodeLineResult::EndOfBlockNoLine),
+                    _ if line.line_fullfilled() => Ok(DecodeLineResult::EndOfBlock),
+                    _ => unreachable!(),
+                };
+            }
+
+            for (color, n) in self.code_to_pixels(line, code)? {
+                line.push_pixels(color, n);
+            }
+
+            if line.line_fullfilled() {
+                return Ok(DecodeLineResult::LineFullfilled);
+            }
+        }
+    }
+}
+
+struct Group4LineDecoder {
+    huffman: RunHuffmanTree,
+    group4_huffman: Box<[ReadHuffmanTree<BigEndian, Group4Code>]>,
+    color: Color,
+}
+
+impl Group4LineDecoder {
+    fn new() -> Self {
+        Self {
+            huffman: build_run_huffman(Algorithm::Group4),
+            group4_huffman: build_group4_huffman_tree(),
+            color: Color::default(),
+        }
+    }
+}
+
+impl LineDecoder for Group4LineDecoder {
+    fn next_code<'a>(
+        &mut self,
+        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
+        _line: &LineBuffer<'a>,
+    ) -> Result<Code> {
+        match reader.read_huffman(&self.group4_huffman)? {
+            Group4Code::Pass => return Ok(Code::Pass),
+            Group4Code::Horizontal => {
+                let a0a1 = next_run(reader, &self.huffman, self.color)?;
+                let a1a2 = next_run(reader, &self.huffman, self.color.toggle())?;
+                return Ok(Code::Horizontal(a0a1, a1a2));
+            }
+            Group4Code::Vertical(n) => {
+                return Ok(Code::Vertical(n));
+            }
+            Group4Code::EOFB => {
+                assert_eq!(reader.read_huffman(&self.group4_huffman)?, Group4Code::EOFB);
+                return Ok(Code::EndOfBlock);
+            }
+            Group4Code::Extension => {
+                return Ok(Code::Extension(reader.read(3)?));
+            }
+            Group4Code::NotDef => {
+                return Err(DecodeError::InvalidCode);
+            }
+        }
+    }
+
+    fn code_to_pixels<'a>(
+        &mut self,
+        line: &LineBuffer<'a>,
+        code: Code,
+    ) -> Result<ArrayVec<[Pixels; 2]>> {
         match code {
-            Code::Horizontal(a0a1, a1a2) => Ok(array_vec!(PictualElementArray => a0a1, a1a2)),
+            Code::Horizontal(a0a1, a1a2) => Ok(array_vec!([Pixels; 2] => a0a1.into(), a1a2.into())),
             Code::Vertical(n) => {
-                let b1 = line_decoder
-                    .last
-                    .b1(line_decoder.pos, line_decoder.color.is_white());
-                let pe = array_vec!(PictualElementArray=> PictualElement::from_color(
-                    line_decoder.color,
-                    (b1 as i16 - line_decoder.pos.unwrap_or_default() as i16 + n as i16) as u16,
+                let b1 = line.last.b1(line.pos, self.color.is_white());
+                let pe = array_vec!([Pixels; 2] => (
+                    self.color,
+                    (b1 as i16 - line.pos.unwrap_or_default() as i16 + n as i16) as u16,
                 ));
-                line_decoder.toggle_color();
+                self.color = self.color.toggle();
                 Ok(pe)
             }
             Code::Pass => {
-                let b1 = line_decoder
-                    .last
-                    .b1(line_decoder.pos, line_decoder.color.is_white());
-                let b2 = line_decoder.last.next_flip(Some(b1));
-                let pe = array_vec!(PictualElementArray =>  PictualElement::from_color(
-                        line_decoder.color,
-                    (b2 - line_decoder.pos()) as u16,
-                ));
-                Ok(pe)
+                let b1 = line.last.b1(line.pos, self.color.is_white());
+                let b2 = line.last.next_flip(Some(b1));
+                Ok(array_vec!([Pixels; 2] => (self.color, (b2 - line.pos()).try_into().unwrap())))
             }
             _ => unreachable!(),
         }
     }
-}
 
-#[derive(Copy, Clone)]
-struct Group3_1DCodeDecoder;
-
-impl CodeDecoder for Group3_1DCodeDecoder {
-    fn decode<'a>(
-        &self,
-        line_decoder: &mut LineDecoder<'a>,
-        code: Code,
-    ) -> Result<PictualElementVec> {
-        match code {
-            Code::Black(n) => {
-                let pe = array_vec!(PictualElementArray => PictualElement::from_color(
-                    Color::Black,
-                    n,
-                ));
-                line_decoder.color = Color::White;
-                Ok(pe)
-            }
-            Code::While(n) => {
-                let pe = array_vec!(PictualElementArray => PictualElement::from_color(
-                    Color::White,
-                    n,
-                ));
-                line_decoder.color = Color::Black;
-                Ok(pe)
-            }
-            Code::EndOfLine => Ok(array_vec!(PictualElementArray => PictualElement::EOL)),
-            c => unreachable!("{:?}", c),
-        }
+    fn reset(&mut self) {
+        self.color = Color::default();
     }
 }
-struct LineDecoder<'a> {
-    last: LineBuf<'a>,
-    cur: BitVec<u8, Msb0>,
+
+struct Group3_1DLineDecoder {
+    huffman: RunHuffmanTree,
     color: Color,
-    pos: Option<u32>,
 }
 
-impl<'a> LineDecoder<'a> {
-    fn new(last: &'a BitSlice<u8, Msb0>, cur: BitVec<u8, Msb0>) -> Self {
-        debug_assert_eq!(last.len(), cur.len());
+impl Group3_1DLineDecoder {
+    fn new() -> Self {
         Self {
-            last: LineBuf(last),
-            cur,
-            pos: None,
+            huffman: build_run_huffman(Algorithm::Group3_1D),
             color: Color::default(),
         }
     }
 
-    pub fn toggle_color(&mut self) {
-        self.color = self.color.toggle();
+    fn read_eol_with_fill_padding(
+        &self,
+        mut zeros_hit: u16,
+        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
+    ) -> Result<Code> {
+        while !reader.read_bit()? {
+            zeros_hit += 1;
+        }
+        dbg!(zeros_hit);
+        if zeros_hit < 11 {
+            return Err(DecodeError::InvalidCode);
+        }
+        Ok(Code::EndOfLine)
     }
 
-    pub fn is_new_line(&self) -> bool {
-        self.pos.is_none()
+    fn read_eol_or_eob(
+        &self,
+        n_eols: u8,
+        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
+    ) -> Result<Code> {
+        let pos = reader.position_in_bits()?;
+        for _ in 0..n_eols {
+            match reader.read::<u16>(12) {
+                Ok(1) => continue,
+                _ => {
+                    reader.seek_bits(SeekFrom::Start(pos))?;
+                    return Ok(Code::EndOfLine);
+                }
+            }
+        }
+        // six continuous EOLs is end of block
+        Ok(Code::EndOfBlock)
+    }
+}
+
+impl LineDecoder for Group3_1DLineDecoder {
+    fn next_code<'a>(
+        &mut self,
+        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
+        line: &LineBuffer<'a>,
+    ) -> Result<Code> {
+        if line.line_fullfilled() {
+            self.read_eol_with_fill_padding(0, reader)?;
+            return self.read_eol_or_eob(5, reader);
+        }
+
+        match next_run(reader, &self.huffman, self.color)? {
+            PictualElement::Black(n) => Ok(Code::Black(n)),
+            PictualElement::White(n) => Ok(Code::While(n)),
+            PictualElement::MakeUp(n) => Ok(match self.color {
+                Color::Black => Code::Black(n),
+                Color::White => Code::While(n),
+            }),
+            PictualElement::EOL => self.read_eol_or_eob(5, reader),
+            PictualElement::TwelveZeros => {
+                self.read_eol_with_fill_padding(12, reader)?;
+                self.read_eol_or_eob(5, reader)
+            }
+            PictualElement::NotDef(n) => unreachable!("NotDef({n})"),
+            c => todo!("{:?}", c),
+        }
+    }
+
+    fn code_to_pixels<'a>(
+        &mut self,
+        line: &LineBuffer<'a>,
+        code: Code,
+    ) -> Result<ArrayVec<[(Color, u16); 2]>> {
+        match code {
+            Code::Black(n) => {
+                self.color = Color::White;
+                Ok(array_vec!([Pixels; 2] => (Color::Black, n)))
+            }
+            Code::While(n) => {
+                self.color = Color::Black;
+                Ok(array_vec!([Pixels; 2] => (Color::White, n)))
+            }
+            Code::EndOfLine => Ok(array_vec!([Pixels; 2] => (
+                Color::White,
+                (line.last.0.len() - line.pos()).try_into().unwrap()
+            ))),
+            c => unreachable!("{:?}", c),
+        }
+    }
+
+    fn reset(&mut self) {
+        self.color = Color::default();
+    }
+}
+
+struct LineBuffer<'a> {
+    last: LastLine<'a>,
+    cur: BitVec<u8, Msb0>,
+    pos: Option<u32>,
+}
+
+impl<'a> LineBuffer<'a> {
+    fn new(last: &'a BitSlice<u8, Msb0>, cur: BitVec<u8, Msb0>) -> Self {
+        debug_assert_eq!(last.len(), cur.len());
+        Self {
+            last: LastLine(last),
+            cur,
+            pos: None,
+        }
     }
 
     pub fn line_fullfilled(&self) -> bool {
-        debug_assert!(self.pos() <= self.cur.len());
-        self.pos() == self.cur.len()
+        debug_assert!(self.pos() <= self.last.0.len());
+        dbg!((self.pos(), self.last.0.len()));
+        self.pos() == self.last.0.len()
     }
 
     pub fn pos(&self) -> usize {
         self.pos.unwrap_or_default() as usize
     }
 
-    fn fill(&mut self, pe: PictualElement) {
-        let mut pos = self.pos();
-        for _ in 0..pe.run_length().unwrap() {
-            self.cur.set(pos, pe.is_white());
-            pos += 1;
+    pub fn push_pixels(&mut self, color: Color, counts: u16) {
+        dbg!((color, counts));
+        let pos = self.pos();
+        for i in pos..(pos + counts as usize) {
+            self.cur.set(i, color.is_white());
         }
-        self.pos = Some(pos.try_into().unwrap());
-    }
-
-    // return true if current line filled.
-    pub fn decode(&mut self, code_decoder: impl CodeDecoder, code: Code) -> Result<bool> {
-        for pe in code_decoder.decode(self, code)? {
-            if pe == PictualElement::EOL {
-                return Ok(true);
-            }
-            self.fill(pe);
-        }
-        debug_assert!(self.pos() <= self.cur.len());
-        Ok(self.line_fullfilled())
+        self.pos = Some((self.pos() + counts as usize).try_into().unwrap());
+        debug_assert!(self.pos() <= self.last.0.len());
     }
 
     pub fn take(self) -> BitVec<u8, Msb0> {
@@ -787,55 +748,50 @@ pub struct Decoder {
 }
 
 impl Decoder {
-    fn do_decode(
-        &self,
-        code_decoder: impl CodeDecoder + Copy + 'static,
-        code_iterator: impl CodeIterator + 'static,
-        buf: &[u8],
-    ) -> Result<BitVec<u8, Msb0>> {
+    fn do_decode<LD: LineDecoder>(&self, mut ld: LD, buf: &[u8]) -> Result<BitVec<u8, Msb0>> {
         let mut r = BitVec::<u8, Msb0>::with_capacity(
             self.rows.unwrap_or(30) as usize * self.width as usize,
         );
         let imagnation_line: BitVec<u8, Msb0> = repeat(true).take(self.width as usize).collect();
-        let mut line_decoder = LineDecoder::new(
+        let mut line_buffer = LineBuffer::new(
             &imagnation_line[..],
             repeat(true).take(self.width as usize).collect(),
         );
-        let mut next_code = iter_code(buf, ByteAlignCodeIterator::new(self.flags, code_iterator));
+        let mut reader = BitReader::endian(Cursor::new(buf), BigEndian);
         loop {
-            let Some(code) = next_code(&line_decoder) else {
-                break;
-            };
+            if self.flags.encoded_byte_align {
+                reader.byte_align();
+            }
 
-            match code? {
-                Code::Extension(_) => todo!(),
-                Code::EndOfBlock => break,
-                code => {
-                    if line_decoder.decode(code_decoder, code)? {
-                        let line = line_decoder.take();
-                        r.extend(&line);
-                        if !self.flags.end_of_block {
-                            if let Some(rows) = self.rows {
-                                if rows as usize == r.len() / self.width as usize {
-                                    break;
-                                }
-                            }
-                        }
-                        line_decoder = LineDecoder::new(&r[r.len() - self.width as usize..], line);
+            let finished = match ld.decode_line(&mut reader, &mut line_buffer)? {
+                DecodeLineResult::LineFullfilled => false,
+                DecodeLineResult::EndOfBlock => true,
+                DecodeLineResult::EndOfBlockNoLine => break,
+            };
+            let line = line_buffer.take();
+            dbg!(line.len());
+            r.extend(&line);
+            if finished {
+                break;
+            }
+            if !self.flags.end_of_block {
+                if let Some(rows) = self.rows {
+                    if rows as usize == r.len() / self.width as usize {
+                        break;
                     }
                 }
             }
+            line_buffer = LineBuffer::new(&r[r.len() - self.width as usize..], line);
+            ld.reset();
         }
         Ok(r)
     }
 
     pub fn decode(&self, buf: &[u8]) -> Result<Vec<u8>> {
         let mut r = match self.algorithm {
-            Algorithm::Group4 => {
-                self.do_decode(Group4CodeDecoder, Group4CodeIterator::new(), buf)?
-            }
+            Algorithm::Group4 => self.do_decode(Group4LineDecoder::new(), buf)?,
             Algorithm::Group3_1D | Algorithm::Group3_2D(1) => {
-                self.do_decode(Group3_1DCodeDecoder, Group3_1DCodeIterator::new(), buf)?
+                self.do_decode(Group3_1DLineDecoder::new(), buf)?
             }
             _ => todo!(),
         };

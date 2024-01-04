@@ -87,34 +87,6 @@ fn group3_2d() {
     insta::assert_debug_snapshot!(decoder.decode(include_bytes!("group3-2d")).unwrap());
 }
 
-#[test_case(&[], &[]; "empty")]
-#[test_case(&[Code::Pass], &[0b0001_0000]; "pass")]
-#[test_case(&[Code::Vertical(0)], &[0b1000_0000])]
-#[test_case(&[Code::Vertical(1)], &[0b0110_0000])]
-#[test_case(&[Code::Vertical(2)], &[0b0000_1100])]
-#[test_case(&[Code::Vertical(-1)], &[0b0100_0000])]
-#[test_case(&[Code::Vertical(-2)], &[0b0000_1000])]
-#[test_case(&[Code::Vertical(-3)], &[0b0000_0100])]
-#[test_case(&[Code::Vertical(0), Code::Vertical(0)], &[0b1100_0000])]
-#[test_case(
-    &[Code::Horizontal(PictualElement::from_color(Color::White, 1), PictualElement::from_color(Color::Black, 2))],
-    &[0b001_00011, 0b1110_0000]
-)]
-#[test_case(
-    &[Code::EndOfBlock],
-    &[0b0, 0b0001_0000, 0b0000_0001]
-)]
-fn test_iter_code_group4(exp: &[Code], buf: &[u8]) {
-    let mut next_code = iter_code(buf, Group4CodeIterator::new());
-    let last: BitVec<u8, Msb0> = repeat(true).take(10).collect();
-    let line_decoder = LineDecoder::new(&last, last.clone());
-    for e in exp {
-        assert_eq!(next_code(&line_decoder).unwrap().unwrap(), *e);
-    }
-    assert!(next_code(&line_decoder).is_none());
-    assert!(next_code(&line_decoder).is_none());
-}
-
 #[test_case(Color::White, 0, &[0b0011_0101] ; "white 0")]
 #[test_case(Color::White, 1, &[0b0001_1100] ; "white 1")]
 #[test_case(Color::White, 64, &[0b1101_1001, 0b1010_1000]; "white 64")]
