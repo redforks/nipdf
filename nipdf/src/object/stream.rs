@@ -892,7 +892,7 @@ fn decode_ccitt<'a: 'b, 'b>(
     let decoder = Decoder {
         algorithm: params.k().unwrap(),
         width: params.columns().unwrap(),
-        rows: Some(params.rows().unwrap().try_into().unwrap()),
+        rows: Some(params.rows().unwrap()),
         flags: (&params).try_into().unwrap(),
     };
     let image = handle_filter_error(decoder.decode(input), &FILTER_CCITT_FAX)?;

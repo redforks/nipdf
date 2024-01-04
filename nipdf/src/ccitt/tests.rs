@@ -48,54 +48,94 @@ fn group4_false_end_of_block() {
         rows: Some(26),
     };
     // extracted by `dump-pdf stream -f pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf 6 --raw`
-    insta::assert_debug_snapshot!(
-        decoder
-            .decode(include_bytes!("ccitt-false-end-of-block"))
-            .unwrap()
-    );
+    let data = decoder
+        .decode(include_bytes!("ccitt-false-end-of-block"))
+        .unwrap();
+    assert_eq!((81 * 26 + 7) / 8, data.len());
+    insta::assert_debug_snapshot!(&data);
 }
 
-#[test_case(&[], &[]; "empty")]
-#[test_case(&[Code::Pass], &[0b0001_0000]; "pass")]
-#[test_case(&[Code::Vertical(0)], &[0b1000_0000])]
-#[test_case(&[Code::Vertical(1)], &[0b0110_0000])]
-#[test_case(&[Code::Vertical(2)], &[0b0000_1100])]
-#[test_case(&[Code::Vertical(-1)], &[0b0100_0000])]
-#[test_case(&[Code::Vertical(-2)], &[0b0000_1000])]
-#[test_case(&[Code::Vertical(-3)], &[0b0000_0100])]
-#[test_case(&[Code::Vertical(0), Code::Vertical(0)], &[0b1100_0000])]
-#[test_case(
-    &[Code::Horizontal(Run::new(WHITE, 1), Run::new(BLACK, 2))],
-    &[0b001_00011, 0b1110_0000]
-)]
-#[test_case(
-    &[Code::EndOfFassimileBlock],
-    &[0b0, 0b0001_0000, 0b0000_0001]
-)]
-fn test_iter_code(exp: &[Code], buf: &[u8]) {
+#[test]
+fn group4_actual_no_end_block() {
+    // /DecodeParms <</Columns 81 /EndOfBlock true /K 1 /Rows 26>>
+    // extracted by `dump-pdf stream -f pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf 11 --raw`
     let flags = Flags::default();
-    let mut next_code = iter_code(buf);
-    let last_buf = repeat(false).take(4).collect::<BitVec<u8, Msb0>>();
-    let mut cur_buf = repeat(false).take(4).collect::<BitVec<u8, Msb0>>();
-    let mut coder = Coder::new(&last_buf, &mut cur_buf);
-    coder.pos = Some(0); // disable new_line flag
-    for e in exp {
-        assert_eq!(next_code(&mut coder, &flags).unwrap().unwrap(), *e);
-    }
-    assert!(next_code(&mut coder, &flags).is_none());
-    assert!(next_code(&mut coder, &flags).is_none());
+    let decoder = Decoder {
+        algorithm: Algorithm::Group3_2D(1),
+        flags,
+        width: 81,
+        rows: Some(26),
+    };
+    let data = decoder
+        .decode(include_bytes!("group4-actual-no-end-block"))
+        .unwrap();
+    assert_eq!((81 * 26 + 7) / 8, data.len());
+    insta::assert_debug_snapshot!(&data);
 }
 
-#[test_case(B_WHITE, 0, &[0b0011_0101] ; "white 0")]
-#[test_case(B_WHITE, 1, &[0b0001_1100] ; "white 1")]
-#[test_case(B_WHITE, 64, &[0b1101_1001, 0b1010_1000]; "white 64")]
-#[test_case(B_WHITE, 4005, &[0b0000_0001, 0b1111_0110, 0b1101_1000, 0b1011_0000]; "white 2560+1408+37")]
-#[test_case(B_BLACK, 0, &[0b0000_1101, 0b1100_0000])]
-fn test_parse_next_run(color: bool, exp: u16, buf: &[u8]) {
+#[test]
+fn group3_1d() {
+    let flags = Flags {
+        ..Default::default()
+    };
+    let decoder = Decoder {
+        algorithm: Algorithm::Group3_1D,
+        flags,
+        width: 81,
+        rows: Some(26),
+    };
+    // extracted by `dump-pdf stream -f pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf 9 --raw`
+    let data = decoder.decode(include_bytes!("./group3-1d")).unwrap();
+    assert_eq!((81 * 26 + 7) / 8, data.len());
+    insta::assert_debug_snapshot!(&data);
+}
+
+#[test]
+fn group3_1d_false_end_of_block() {
+    let flags = Flags {
+        end_of_block: false,
+        ..Default::default()
+    };
+    let decoder = Decoder {
+        algorithm: Algorithm::Group3_1D,
+        flags,
+        width: 81,
+        rows: Some(26),
+    };
+    // extracted by `dump-pdf stream -f pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf 8 --raw`
+    let data = decoder
+        .decode(include_bytes!("group3-1d-false-end-of-block"))
+        .unwrap();
+    assert_eq!((81 * 26 + 7) / 8, data.len());
+    insta::assert_debug_snapshot!(data);
+}
+
+#[test]
+fn group3_2d() {
+    let flags = Flags {
+        end_of_block: false,
+        ..Default::default()
+    };
+    let decoder = Decoder {
+        algorithm: Algorithm::Group3_2D(1),
+        flags,
+        width: 81,
+        rows: Some(26),
+    };
+    // extracted by `dump-pdf stream -f pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf 10 --raw`
+    insta::assert_debug_snapshot!(decoder.decode(include_bytes!("group3-2d")).unwrap());
+}
+
+#[test_case(Color::White, 0, &[0b0011_0101] ; "white 0")]
+#[test_case(Color::White, 1, &[0b0001_1100] ; "white 1")]
+#[test_case(Color::White, 64, &[0b1101_1001, 0b1010_1000]; "white 64")]
+#[test_case(Color::White, 4005, &[0b0000_0001, 0b1111_0110, 0b1101_1000, 0b1011_0000]; "white 2560+1408+37")]
+#[test_case(Color::Black, 0, &[0b0000_1101, 0b1100_0000])]
+fn test_parse_next_run(color: Color, exp: u16, buf: &[u8]) {
     let mut reader = BitReader::endian(buf, BigEndian);
-    let huffman = build_run_huffman();
+    let huffman = build_run_huffman(Algorithm::Group4);
     assert_eq!(
-        Run::new(if color { WHITE } else { BLACK }, exp),
+        PictualElement::from_color(color, exp),
         next_run(&mut reader, &huffman, color).unwrap()
     );
 }

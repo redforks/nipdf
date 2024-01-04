@@ -735,7 +735,7 @@ impl<T> EntriesParser<T> {
     }
 
     fn take(&mut self) -> Vec<T> {
-        std::mem::replace(&mut self.entries, vec![])
+        std::mem::take(&mut self.entries)
     }
 }
 

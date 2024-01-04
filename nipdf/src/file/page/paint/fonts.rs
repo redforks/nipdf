@@ -278,8 +278,8 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
         };
 
         let r = pair.0.as_ref().map_or_else(
-            || Encoding::default(),
-            |n| Self::by_name(n.clone()).unwrap_or_else(|| Encoding::default()),
+            Encoding::default,
+            |n| Self::by_name(n.clone()).unwrap_or_else(Encoding::default),
         );
         Ok(Some(self.apply_encoding_diff(r, &Some(pair))))
     }
