@@ -419,14 +419,12 @@ trait CodeIterator {
 }
 
 struct Group3_1DCodeIterator {
-    flags: Flags,
     huffman: RunHuffmanTree,
 }
 
 impl Group3_1DCodeIterator {
-    fn new(flags: Flags) -> Self {
+    fn new() -> Self {
         Self {
-            flags,
             huffman: build_run_huffman(Algorithm::Group3_1D),
         }
     }
@@ -472,10 +470,6 @@ impl CodeIterator for Group3_1DCodeIterator {
         reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
         line_decoder: &LineDecoder<'a>,
     ) -> Result<Code> {
-        if self.flags.encoded_byte_align && line_decoder.is_new_line() {
-            reader.byte_align();
-        }
-
         if line_decoder.line_fullfilled() {
             self.read_eol_with_fill_padding(0, reader)?;
             return self.read_eol_or_eob(5, reader);
@@ -494,6 +488,7 @@ impl CodeIterator for Group3_1DCodeIterator {
                 self.read_eol_or_eob(5, reader)
             }
             PictualElement::NotDef(n) => unreachable!("NotDef({n})"),
+            c => todo!("{:?}", c),
         }
     }
 }
@@ -501,15 +496,13 @@ impl CodeIterator for Group3_1DCodeIterator {
 struct Group4CodeIterator {
     huffman: RunHuffmanTree,
     group4_huffman: Box<[ReadHuffmanTree<BigEndian, Group4Code>]>,
-    flags: Flags,
 }
 
 impl Group4CodeIterator {
-    fn new(flags: Flags) -> Self {
+    fn new() -> Self {
         Self {
             huffman: build_run_huffman(Algorithm::Group4),
             group4_huffman: build_group4_huffman_tree(),
-            flags,
         }
     }
 }
@@ -520,10 +513,6 @@ impl CodeIterator for Group4CodeIterator {
         reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
         line_decoder: &LineDecoder<'a>,
     ) -> Result<Code> {
-        if self.flags.encoded_byte_align && line_decoder.is_new_line() {
-            reader.byte_align();
-        }
-
         match reader.read_huffman(&self.group4_huffman)? {
             Group4Code::Pass => return Ok(Code::Pass),
             Group4Code::Horizontal => {
@@ -545,6 +534,29 @@ impl CodeIterator for Group4CodeIterator {
                 return Err(DecodeError::InvalidCode);
             }
         }
+    }
+}
+
+/// Skip bits if the current position is line boundary,
+/// call inner otherwise.
+struct ByteAlignCodeIterator<Inner>(bool, Inner);
+
+impl<Inner> ByteAlignCodeIterator<Inner> {
+    pub fn new(flag: Flags, inner: Inner) -> Self {
+        Self(flag.encoded_byte_align, inner)
+    }
+}
+
+impl<Inner: CodeIterator> CodeIterator for ByteAlignCodeIterator<Inner> {
+    fn next_code<'a>(
+        &self,
+        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
+        state: &LineDecoder<'a>,
+    ) -> Result<Code> {
+        if self.0 && state.is_new_line() {
+            reader.byte_align();
+        }
+        self.1.next_code(reader, state)
     }
 }
 
@@ -789,7 +801,7 @@ impl Decoder {
             &imagnation_line[..],
             repeat(true).take(self.width as usize).collect(),
         );
-        let mut next_code = iter_code(buf, code_iterator);
+        let mut next_code = iter_code(buf, ByteAlignCodeIterator::new(self.flags, code_iterator));
         loop {
             let Some(code) = next_code(&line_decoder) else {
                 break;
@@ -820,13 +832,11 @@ impl Decoder {
     pub fn decode(&self, buf: &[u8]) -> Result<Vec<u8>> {
         let mut r = match self.algorithm {
             Algorithm::Group4 => {
-                self.do_decode(Group4CodeDecoder, Group4CodeIterator::new(self.flags), buf)?
+                self.do_decode(Group4CodeDecoder, Group4CodeIterator::new(), buf)?
             }
-            Algorithm::Group3_1D | Algorithm::Group3_2D(1) => self.do_decode(
-                Group3_1DCodeDecoder,
-                Group3_1DCodeIterator::new(self.flags),
-                buf,
-            )?,
+            Algorithm::Group3_1D | Algorithm::Group3_2D(1) => {
+                self.do_decode(Group3_1DCodeDecoder, Group3_1DCodeIterator::new(), buf)?
+            }
             _ => todo!(),
         };
 

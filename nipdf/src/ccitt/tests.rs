@@ -71,21 +71,21 @@ fn group3_1d() {
     insta::assert_debug_snapshot!(decoder.decode(include_bytes!("group3-1d")).unwrap());
 }
 
-// #[test]
-// fn group3_2d() {
-//     let flags = Flags {
-//         end_of_block: false,
-//         ..Default::default()
-//     };
-//     let decoder = Decoder {
-//         algorithm: Algorithm::Group3_2D(1),
-//         flags,
-//         width: 81,
-//         rows: Some(26),
-//     };
-//     // extracted by `dump-pdf stream -f pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf 9 --raw`
-//     insta::assert_debug_snapshot!(decoder.decode(include_bytes!("group3-2d")).unwrap());
-// }
+#[test]
+fn group3_2d() {
+    let flags = Flags {
+        end_of_block: false,
+        ..Default::default()
+    };
+    let decoder = Decoder {
+        algorithm: Algorithm::Group3_2D(1),
+        flags,
+        width: 81,
+        rows: Some(26),
+    };
+    // extracted by `dump-pdf stream -f pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf 10 --raw`
+    insta::assert_debug_snapshot!(decoder.decode(include_bytes!("group3-2d")).unwrap());
+}
 
 #[test_case(&[], &[]; "empty")]
 #[test_case(&[Code::Pass], &[0b0001_0000]; "pass")]
@@ -105,10 +105,9 @@ fn group3_1d() {
     &[0b0, 0b0001_0000, 0b0000_0001]
 )]
 fn test_iter_code_group4(exp: &[Code], buf: &[u8]) {
-    let mut next_code = iter_code(buf, Group4CodeIterator::new(Flags::default()));
+    let mut next_code = iter_code(buf, Group4CodeIterator::new());
     let last: BitVec<u8, Msb0> = repeat(true).take(10).collect();
-    let cur = last.clone();
-    let line_decoder = LineDecoder::new(&last, cur);
+    let line_decoder = LineDecoder::new(&last, last.clone());
     for e in exp {
         assert_eq!(next_code(&line_decoder).unwrap().unwrap(), *e);
     }
