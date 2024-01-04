@@ -1,6 +1,6 @@
 ---
 source: nipdf/src/ccitt/tests.rs
-expression: "&data"
+expression: "decoder.decode(include_bytes!(\"ccitt-group3-1D\")).unwrap()"
 ---
 [
     0,

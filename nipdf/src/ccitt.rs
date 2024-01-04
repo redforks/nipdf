@@ -11,6 +11,7 @@ use std::{
     io::{Cursor, SeekFrom},
     iter::repeat,
 };
+use tinyvec::{array_vec, ArrayVec};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Algorithm {
@@ -717,17 +718,25 @@ impl LineDecoder for Group3_1DLineDecoder {
                 self.color = Color::Black;
                 Ok(Pixels1((Color::White, n)))
             }
-            PictualElement::EOL => Ok(Pixels1((
-                Color::White,
-                (line.last.0.len() - line.pos()).try_into().unwrap(),
-            ))),
+            PictualElement::EOL => {
+                let px = (
+                    Color::White,
+                    (line.last.0.len() - line.pos()).try_into().unwrap(),
+                );
+                if self.read_eol_or_eob(5, reader)? {
+                    Ok(Pixels1(px))
+                } else {
+                    Ok(EndOfBlock)
+                }
+            }
             PictualElement::TwelveZeros => {
+                let px = (
+                    Color::White,
+                    (line.last.0.len() - line.pos()).try_into().unwrap(),
+                );
                 self.read_eol_with_fill_padding(12, reader)?;
                 if self.read_eol_or_eob(5, reader)? {
-                    Ok(Pixels1((
-                        Color::White,
-                        (line.last.0.len() - line.pos()).try_into().unwrap(),
-                    )))
+                    Ok(Pixels1(px))
                 } else {
                     Ok(EndOfBlock)
                 }

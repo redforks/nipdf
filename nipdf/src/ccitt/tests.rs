@@ -48,15 +48,32 @@ fn group4_false_end_of_block() {
         rows: Some(26),
     };
     // extracted by `dump-pdf stream -f pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf 6 --raw`
-    insta::assert_debug_snapshot!(
-        decoder
-            .decode(include_bytes!("ccitt-false-end-of-block"))
-            .unwrap()
-    );
+    let data = decoder
+        .decode(include_bytes!("ccitt-false-end-of-block"))
+        .unwrap();
+    assert_eq!((81 * 26 + 7) / 8, data.len());
+    insta::assert_debug_snapshot!(&data);
 }
 
 #[test]
 fn group3_1d() {
+    let flags = Flags {
+        ..Default::default()
+    };
+    let decoder = Decoder {
+        algorithm: Algorithm::Group3_1D,
+        flags,
+        width: 81,
+        rows: Some(26),
+    };
+    // extracted by `dump-pdf stream -f pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf 9 --raw`
+    let data = decoder.decode(include_bytes!("./group3-1d")).unwrap();
+    assert_eq!((81 * 26 + 7) / 8, data.len());
+    insta::assert_debug_snapshot!(&data);
+}
+
+#[test]
+fn group3_1d_false_end_of_block() {
     let flags = Flags {
         end_of_block: false,
         ..Default::default()
@@ -68,7 +85,14 @@ fn group3_1d() {
         rows: Some(26),
     };
     // extracted by `dump-pdf stream -f pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf 8 --raw`
-    insta::assert_debug_snapshot!(decoder.decode(include_bytes!("group3-1d")).unwrap());
+    let data = 
+        decoder
+            .decode(include_bytes!("group3-1d-false-end-of-block"))
+            .unwrap();
+    assert_eq!((81 * 26 + 7) / 8, data.len());
+    insta::assert_debug_snapshot!(
+        data
+    );
 }
 
 #[test]
