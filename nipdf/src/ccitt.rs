@@ -5,6 +5,7 @@ use bitstream_io::{
 };
 use bitvec::{prelude::Msb0, slice::BitSlice, vec::BitVec};
 use educe::Educe;
+use either::Either;
 use log::error;
 use std::{
     io::{Cursor, SeekFrom},
@@ -617,6 +618,84 @@ impl Group3_1DLineDecoder {
     }
 }
 
+struct Group3_2DLineDecoder {
+    // use inner to process if true
+    use_inner: bool,
+    inner: Either<Group3_1DLineDecoder, Group4LineDecoder>,
+}
+
+impl Group3_2DLineDecoder {
+    fn new() -> Self {
+        Self {
+            use_inner: false,
+            inner: Either::Left(Group3_1DLineDecoder::new()),
+        }
+    }
+
+    // TODO: merge with Group3_1DLineDecoder and move to mod level
+    fn read_eol_with_fill_padding(
+        &self,
+        mut zeros_hit: u16,
+        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
+    ) -> Result<()> {
+        while !reader.read_bit()? {
+            zeros_hit += 1;
+        }
+        dbg!(zeros_hit);
+        if zeros_hit < 11 {
+            return Err(DecodeError::InvalidCode);
+        }
+        Ok(())
+    }
+
+    // TODO: merge with Group3_1DLineDecoder and move to mod level
+    /// return true if eol, false if eob
+    fn read_eol_or_eob(
+        &self,
+        n_eols: u8,
+        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
+    ) -> Result<bool> {
+        let pos = reader.position_in_bits()?;
+        for _ in 0..n_eols {
+            match reader.read::<u16>(12) {
+                Ok(1) => continue,
+                _ => {
+                    reader.seek_bits(SeekFrom::Start(pos))?;
+                    return Ok(true);
+                }
+            }
+        }
+        // six continuous EOLs is end of block
+        Ok(false)
+    }
+}
+
+impl LineDecoder for Group3_2DLineDecoder {
+    fn process_next_pe<'a>(
+        &mut self,
+        reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
+        line: &LineBuffer<'a>,
+    ) -> Result<ProcessPEResult> {
+        if !self.use_inner {
+            self.read_eol_with_fill_padding(0, reader)?;
+            self.use_inner = true;
+            self.inner = match reader.read_bit()? {
+                true => Either::Left(Group3_1DLineDecoder::new()),
+                false => Either::Right(Group4LineDecoder::new()),
+            };
+        }
+
+        match self.inner.as_mut() {
+            Either::Left(inner) => inner.process_next_pe(reader, line),
+            Either::Right(inner) => inner.process_next_pe(reader, line),
+        }
+    }
+
+    fn reset(&mut self) {
+        self.use_inner = false;
+    }
+}
+
 impl LineDecoder for Group3_1DLineDecoder {
     fn reset(&mut self) {
         self.color = Color::default();
@@ -759,9 +838,8 @@ impl Decoder {
     pub fn decode(&self, buf: &[u8]) -> Result<Vec<u8>> {
         let mut r = match self.algorithm {
             Algorithm::Group4 => self.do_decode(Group4LineDecoder::new(), buf)?,
-            Algorithm::Group3_1D | Algorithm::Group3_2D(1) => {
-                self.do_decode(Group3_1DLineDecoder::new(), buf)?
-            }
+            Algorithm::Group3_1D => self.do_decode(Group3_1DLineDecoder::new(), buf)?,
+            Algorithm::Group3_2D(_) => self.do_decode(Group3_2DLineDecoder::new(), buf)?,
             _ => todo!(),
         };
 
