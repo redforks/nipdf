@@ -12,6 +12,7 @@ use educe::Educe;
 use log::error;
 use nipdf_macro::{pdf_object, TryFromNameObject};
 use nom::Finish;
+use once_cell::unsync::Lazy;
 use prescript::{sname, Name};
 use std::iter::once;
 
@@ -255,6 +256,7 @@ impl<'a, 'b> PageDict<'a, 'b> {
 
 #[derive(Debug)]
 pub struct Page<'a, 'b> {
+    empty_dict: Lazy<Dictionary>,
     d: PageDict<'a, 'b>,
     parents_to_root: Vec<PageDict<'a, 'b>>,
 }
@@ -289,10 +291,14 @@ impl<'a, 'b: 'a> Page<'a, 'b> {
         r
     }
 
-    pub fn resources(&self) -> ResourceDict<'a, 'b> {
+    pub fn resources(&self) -> ResourceDict<'_, '_> {
         self.iter_to_root()
             .find_map(|d| d.resources().unwrap())
-            .expect("page must have resources")
+            .unwrap_or_else(|| {
+                // although document says resource dictionary is required, but some pdf file
+                // doesn't have it.
+                ResourceDict::new(None, &self.empty_dict, self.d.resolver()).unwrap()
+            })
     }
 
     pub fn content(&self) -> Result<PageContent, ObjectValueError> {
@@ -340,6 +346,7 @@ impl<'a, 'b: 'a> Page<'a, 'b> {
         Ok(Self {
             d: d.clone(),
             parents_to_root: parents,
+            empty_dict: Lazy::new(Default::default),
         })
     }
 }
