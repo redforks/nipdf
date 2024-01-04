@@ -283,6 +283,8 @@ pub(super) struct State {
     text_object: TextObject,
     stroke_state: ColorState,
     fill_state: ColorState,
+    /// If not None, update mask with path on end_path
+    clipping: Option<FillRule>,
 }
 
 impl State {
@@ -298,6 +300,7 @@ impl State {
             text_object: TextObject::new(),
             stroke_state: ColorState::default(),
             fill_state: ColorState::default(),
+            clipping: None,
         };
 
         r.set_ctm(UserToLogicDeviceSpace::identity());
@@ -439,18 +442,6 @@ impl State {
         // }
     }
 
-    /// Apply current path to mask. Create mask if None, otherwise intersect with current path,
-    /// using Winding fill rule.
-    fn clip_non_zero(&mut self, path: impl CloneOrMove<Target = SkiaPath>, flip_y: bool) {
-        self.update_mask(path, FillRule::Winding, flip_y);
-    }
-
-    /// Apply current path to mask. Create mask if None, otherwise intersect with current path,
-    /// using Even-Odd fill rule.
-    fn clip_even_odd(&mut self, path: impl CloneOrMove<Target = SkiaPath>, flip_y: bool) {
-        self.update_mask(path, FillRule::EvenOdd, flip_y);
-    }
-
     fn set_text_knockout_flag(&mut self, knockout: bool) {
         self.text_object.knockout = knockout;
         todo!("text knockout");
@@ -462,7 +453,7 @@ impl State {
         let p = self.text_object.text_clipping_path.finish();
         if let Some(p) = p {
             let p = p.to_owned();
-            self.clip_non_zero(p, false);
+            self.update_mask(p, FillRule::Winding, false);
             self.text_object.text_clipping_path.reset();
         }
     }
@@ -556,10 +547,6 @@ impl Path {
             })
             .right_and_then(|p| Left(p.clear()));
     }
-
-    pub fn clear(&mut self) {
-        self.reset();
-    }
 }
 
 struct SkiaPathSink(PathBuilder);
@@ -627,7 +614,11 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         };
 
         if let Some(rect) = option.crop {
-            state.clip_non_zero(PathBuilder::from_rect(rect.into_skia()), true);
+            state.update_mask(
+                PathBuilder::from_rect(rect.into_skia()),
+                FillRule::Winding,
+                true,
+            );
         }
 
         Self {
@@ -722,15 +713,11 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             // Clipping Path Operations
             Operation::ClipNonZero => {
                 let state = self.stack.last_mut().unwrap();
-                if let Some(p) = self.path.finish() {
-                    state.clip_non_zero(p, true);
-                }
+                state.clipping = Some(FillRule::Winding);
             }
             Operation::ClipEvenOdd => {
                 let state = self.stack.last_mut().unwrap();
-                if let Some(p) = self.path.finish() {
-                    state.clip_even_odd(p, true);
-                }
+                state.clipping = Some(FillRule::EvenOdd);
             }
 
             // Text Object Operations
@@ -888,11 +875,18 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         } else {
             debug!("stroke: empty or invalid path");
         }
-        self.path.reset();
+        self.end_path();
     }
 
     fn end_path(&mut self) {
-        self.path.clear();
+        let state = self.stack.last_mut().unwrap();
+        if let Some(rule) = state.clipping {
+            if let Some(p) = self.path.finish() {
+                state.update_mask(p, rule, true);
+            }
+            state.clipping = None;
+        }
+        self.path.reset();
     }
 
     fn close_path(&mut self) {
@@ -916,7 +910,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             );
         }
         if reset_path {
-            self.path.reset();
+            self.end_path();
         }
     }
 
