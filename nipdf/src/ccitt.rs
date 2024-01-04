@@ -543,9 +543,10 @@ impl LineDecoder for Group4LineDecoder {
             }
             Group4Code::Vertical(n) => {
                 let b1 = line.last.b1(line.pos, self.color.is_white());
+                #[allow(clippy::cast_possible_truncation)]
                 let pe = (
                     self.color,
-                    (b1 - line.pos() + n as usize).try_into().unwrap(),
+                    (b1 as i16 - line.pos() as i16 + n as i16) as u16,
                 );
                 self.color = self.color.toggle();
                 Ok(Pixels1(pe))
