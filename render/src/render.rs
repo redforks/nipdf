@@ -70,7 +70,7 @@ impl<T: Clone> CloneOrMove for &T {
 enum PaintCreator {
     Color(SkiaColor),
     Gradient((Shading, UserToLogicDeviceSpace)),
-    Tile((Pixmap, PatternToUserSpace)),
+    Tile((Pixmap, PatternToUserSpace, bool)), // 3rd argument: no-repeat
 }
 
 impl PaintCreator {
@@ -89,13 +89,17 @@ impl PaintCreator {
                 ..Default::default()
             }),
 
-            PaintCreator::Tile((p, matrix)) => {
+            PaintCreator::Tile((p, matrix, no_repeat)) => {
                 let mut r = Paint::default();
                 let transform =
                     f_flip::<PatternSpace, PatternSpace>(p.height() as f32).then(matrix);
                 r.shader = tiny_skia::Pattern::new(
                     p.as_ref(),
-                    tiny_skia::SpreadMode::Repeat,
+                    if *no_repeat {
+                        tiny_skia::SpreadMode::Pad
+                    } else {
+                        tiny_skia::SpreadMode::Repeat
+                    },
                     FilterQuality::Bicubic,
                     alpha,
                     transform.into_skia(),
@@ -1444,7 +1448,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         }
         ops.into_iter().for_each(|op| render.exec(op));
         drop(render);
-        color_state.paint = PaintCreator::Tile((canvas, matrix));
+        color_state.paint = PaintCreator::Tile((canvas, matrix, tile.x_step()? > b_box.width()));
         Ok(())
     }
 
