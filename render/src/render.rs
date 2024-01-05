@@ -1456,10 +1456,13 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let bytes = stream.decode(tile.resolver())?;
         let (_, ops) = terminated(parse_operations, eof)(bytes.as_ref()).unwrap();
         let b_box = tile.b_box()?;
-        assert!(b_box.width() <= tile.x_step()?, "x_step not supported");
-        assert!(b_box.height() <= tile.y_step()?, "y_step not supported");
+        assert!(tile.x_step()? > 0.0, "negative x_step not supported");
+        assert!(tile.y_step()? > 0.0, "negative y_step not supported");
         let mut zoom = 1.0f32;
-        let (mut w, mut h) = (b_box.width(), b_box.height());
+        let (mut w, mut h) = (
+            b_box.width().min(tile.x_step()?),
+            b_box.height().min(tile.y_step()?),
+        );
         let mut matrix = tile.matrix()?;
         while w > canvas_size.width && h > canvas_size.height {
             w /= 2.0;
