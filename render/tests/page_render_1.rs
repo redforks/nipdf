@@ -63,7 +63,7 @@ fn download_file(url: &str, p: impl AsRef<Path>) -> AnyResult<()> {
 }
 
 /// These files are very rare and odd, not to be tested
-const IGNORED: [&str; 13] = [
+const IGNORED: [&str; 14] = [
     // xpdf, mupdf, are all failed to open
     "bug1020226.pdf",
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
@@ -120,6 +120,8 @@ const IGNORED: [&str; 13] = [
     "bug920426.pdf",
     // Same as bug1260585.pdf.link
     "close-path-bug.pdf",
+    // encrypted by pdf 2.0, Revision 6
+    "empty_protected.pdf",
 ];
 
 static PASSWORD: phf::Map<&'static str, &'static str> = phf::phf_map! {
