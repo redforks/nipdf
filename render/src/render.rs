@@ -8,7 +8,7 @@ use educe::Educe;
 use either::Either::{self, Left, Right};
 use euclid::{default::Size2D, Length, Scale, Transform2D};
 use image::RgbaImage;
-use log::{debug, info};
+use log::{debug, info, warn};
 use nipdf::{
     file::{
         paint::fonts::{FontCache, GlyphRender, PathSink},
@@ -592,6 +592,7 @@ impl PathSink for SkiaPathSink {
 #[derive(Educe)]
 #[educe(Debug)]
 pub struct Render<'a, 'b, 'c> {
+    nested_level: u16,
     canvas: &'c mut Pixmap,
     stack: Vec<State>,
     path: Path,
@@ -602,7 +603,8 @@ pub struct Render<'a, 'b, 'c> {
 }
 
 impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
-    pub fn new(
+    fn create(
+        nested_level: u16,
         canvas: &'c mut Pixmap,
         option: RenderOption,
         resources: &'c ResourceDict<'a, 'b>,
@@ -626,6 +628,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         }
 
         Self {
+            nested_level,
             canvas,
             stack: vec![state],
             path: Path::default(),
@@ -633,6 +636,33 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             resources,
             dimension: option.dimension,
         }
+    }
+
+    /// Return None if nested level is greater than 10, to avoid infinite loop
+    fn new_nested(
+        cur_level: u16,
+        canvas: &'c mut Pixmap,
+        option: RenderOption,
+        resources: &'c ResourceDict<'a, 'b>,
+    ) -> Option<Self> {
+        if cur_level < 10 {
+            Some(Self::create(cur_level + 1, canvas, option, resources))
+        } else {
+            warn!("nested level is greater than 10");
+            None
+        }
+    }
+
+    pub fn new(
+        canvas: &'c mut Pixmap,
+        option: RenderOption,
+        resources: &'c ResourceDict<'a, 'b>,
+    ) -> Self
+    where
+        'a: 'c,
+        'b: 'c,
+    {
+        Self::create(0, canvas, option, resources)
     }
 
     fn device_width(&self) -> u32 {
@@ -1130,7 +1160,8 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         let mut inner_state = state.clone();
         let ctm = matrix.then(&state.ctm).with_destination().with_source();
         inner_state.set_ctm(ctm);
-        let mut render = Render::new(
+        let Some(mut render) = Render::new_nested(
+            self.nested_level,
             self.canvas,
             RenderOptionBuilder::default()
                 .dimension(self.dimension)
@@ -1139,7 +1170,9 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                 .state(inner_state)
                 .build(),
             resources,
-        );
+        ) else {
+            return Ok(());
+        };
         content
             .operations()
             .into_iter()
@@ -1338,9 +1371,9 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                             self.dimension.canvas_width() as f32,
                             self.dimension.canvas_height() as f32,
                         );
-                        Self::tiling_pattern(
+                        self.tiling_pattern(
                             &dimension,
-                            get_state(self),
+                            get_state,
                             pattern.tiling_pattern()?,
                             color_args.as_ref(),
                         )
@@ -1409,8 +1442,9 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
     }
 
     fn tiling_pattern(
+        &mut self,
         canvas_size: &Size2D<f32>,
-        color_state: &mut ColorState,
+        mut get_state: impl FnMut(&mut Self) -> &mut ColorState,
         tile: TilingPatternDict<'a, 'b>,
         color_args: Option<&ColorArgs>,
     ) -> AnyResult<()>
@@ -1441,7 +1475,12 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             .background_color(SkiaColor::TRANSPARENT)
             .build();
         let mut canvas = option.create_canvas();
-        let mut render = Render::new(&mut canvas, option, &resources);
+        let Some(mut render) =
+            Render::new_nested(self.nested_level, &mut canvas, option, &resources)
+        else {
+            return Ok(());
+        };
+        let color_state = get_state(self);
         if let Some(args) = color_args {
             // set color used for paint matrix image
             color_state.set_color_args(args);
@@ -1542,7 +1581,8 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         if let Some(type3_font) = font.as_type3() {
             let font_matrix = type3_font.matrix().unwrap();
             let resources = type3_font.resources().unwrap();
-            let mut render = Render::new(
+            let Some(mut render) = Render::new_nested(
+                self.nested_level,
                 self.canvas,
                 RenderOptionBuilder::default()
                     .dimension(self.dimension)
@@ -1550,7 +1590,9 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                     .state(state.clone())
                     .build(),
                 resources.as_ref().unwrap_or(self.resources),
-            );
+            ) else {
+                return;
+            };
 
             for ch in op.decode_chars(text) {
                 render.current_mut().set_ctm(
