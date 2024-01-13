@@ -2,6 +2,8 @@
 name = "nipdf-macro"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "A macro for nipdf crate"
 
 [lib]
 proc-macro = true
