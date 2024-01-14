@@ -17,6 +17,10 @@ most PDF files without problem.
   function, type1 font, cmap, etc.
 - `cff-parser`: CFF font parser.
 
+## Start
+
+Run `cargo run -p nipdf-reader -- path-of-pdf-file`
+
 ## Screenshot
 ![screenshot](./screenshot.png)
 
