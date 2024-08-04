@@ -1,6 +1,6 @@
 use anyhow::Result as AnyResult;
 use clap::{arg, value_parser, Command};
-use image::ImageOutputFormat;
+use image::ImageFormat;
 use mimalloc::MiMalloc;
 use nipdf::{
     file::File,
@@ -89,7 +89,7 @@ fn dump_stream(path: &PathBuf, password: &str, id: u32, raw: bool, as_png: bool)
             } else if as_png {
                 let img = s.decode_image(&resolver, None)?;
                 let mut buf = Cursor::new(Vec::new());
-                img.write_to(&mut buf, ImageOutputFormat::Png)?;
+                img.write_to(&mut buf, ImageFormat::Png)?;
                 png_buffer = buf.into_inner();
                 &png_buffer
             } else {
@@ -149,7 +149,7 @@ fn dump_page(args: DumpPageArgs<'_>) -> AnyResult<()> {
         )?;
         let mut buf = vec![];
         let mut cursor = Cursor::new(&mut buf);
-        image.write_to(&mut cursor, ImageOutputFormat::Png)?;
+        image.write_to(&mut cursor, ImageFormat::Png)?;
         copy(&mut &buf[..], &mut BufWriter::new(&mut stdout()))?;
     } else if let Some(page_no) = page_no {
         let page = &catalog.pages()?[page_no as usize];

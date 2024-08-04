@@ -12,10 +12,10 @@ use std::{
 };
 use winnow::{
     ascii::hex_digit1,
-    combinator::{alt, delimited, dispatch, fail, fold_repeat, opt, preceded, repeat, terminated},
+    combinator::{alt, delimited, dispatch, fail, opt, preceded, repeat, terminated},
     error::{ContextError, ErrMode},
     stream::{AsChar, Stream},
-    token::{any, one_of, tag, take_till, take_while},
+    token::{any, literal, one_of, take_till, take_while},
     PResult, Parser,
 };
 
@@ -28,7 +28,11 @@ use winnow::{
 /// conforms to. The second token is the font name. The third token is the
 /// font version.
 pub fn header(input: &mut &[u8]) -> PResult<Header> {
-    preceded(tag(b"%!"), alt((b"PS-AdobeFont", b"AdobeFont", b"FontType1"))).parse_next(input)?;
+    preceded(
+        literal(b"%!"),
+        alt((b"PS-AdobeFont", b"AdobeFont", b"FontType1")),
+    )
+    .parse_next(input)?;
     let spec_ver = delimited('-', take_till(1.., ':'), b": ").parse_next(input)?;
     let font_name = take_till(1.., ' ').parse_next(input)?;
     let font_ver = delimited(
@@ -47,7 +51,7 @@ pub fn header(input: &mut &[u8]) -> PResult<Header> {
 
 fn comment(input: &mut &[u8]) -> PResult<()> {
     preceded(
-        tag(b"%"),
+        literal(b"%"),
         take_till(0.., |c| c == b'\n' || c == b'\r' || c == b'\x0c'),
     )
     .parse_next(input)?;
@@ -117,7 +121,7 @@ fn int_or_float(input: &mut &[u8]) -> PResult<Either<i32, f32>> {
         one_of(('0'..='9', '+', '-', '.')),
         take_while(0.., ('0'..='9', 'a'..='z', 'A'..='Z', '.', '-', '+', '#')),
     )
-        .recognize()
+        .take()
         .parse_next(input)?;
     if let Some(pos) = memchr::memchr(b'#', buf) {
         let (radix, num) = buf.split_at(pos);
@@ -174,7 +178,7 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
         }
 
         let c = preceded(
-            tag(b"\\"),
+            literal(b"\\"),
             alt((
                 b'n'.value(b'\n'),
                 b'r'.value(b'\r'),
@@ -191,24 +195,25 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
     }
 
     fn escaped_newline<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>> {
-        preceded(tag(b"\\"), loose_line_ending).parse_next(input)?;
+        preceded(literal(b"\\"), loose_line_ending).parse_next(input)?;
         Ok(StringFragment::EscapedNewLine)
     }
 
     fn build_string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
-        fold_repeat(0.., fragment, Vec::new, |mut r, frag| {
-            match frag {
-                StringFragment::Literal(s) => r.extend_from_slice(s),
-                StringFragment::EscapedChar(c) => r.push(c),
-                StringFragment::EscapedNewLine => (),
-                StringFragment::Nested(s) => {
-                    r.extend(once(b'(').chain(s.iter().copied()).chain(once(b')')))
+        repeat(0.., fragment)
+            .fold(Vec::new, |mut r, frag| {
+                match frag {
+                    StringFragment::Literal(s) => r.extend_from_slice(s),
+                    StringFragment::EscapedChar(c) => r.push(c),
+                    StringFragment::EscapedNewLine => (),
+                    StringFragment::Nested(s) => {
+                        r.extend(once(b'(').chain(s.iter().copied()).chain(once(b')')))
+                    }
                 }
-            }
-            r
-        })
-        .parse_next(input)
-        .map(|x| x.into())
+                r
+            })
+            .parse_next(input)
+            .map(|x| x.into())
     }
 
     fn nested<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>> {
@@ -230,30 +235,27 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
     /// String encoded in hex wrapped in "<>", e.g. <0123456789ABCDEF>
     /// White space are ignored, if last byte is missing, it is assumed to be 0.
     fn hex_string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
-        let bytes = fold_repeat(
-            0..,
-            alt((hex_digit1, white_space)),
-            Vec::new,
-            |mut bytes, frag| {
+        let bytes = repeat(0.., alt((hex_digit1, white_space)))
+            .fold(Vec::new, |mut bytes, frag| {
                 if !is_white_space(frag[0]) {
                     bytes.extend(frag)
                 }
                 bytes
-            },
-        )
-        .map(|mut s| {
-            if s.len() % 2 != 0 {
-                s.push(b'0');
-            }
+            })
+            .map(|mut s| {
+                if s.len() % 2 != 0 {
+                    s.push(b'0');
+                }
 
-            let mut bytes = Vec::with_capacity(s.len() / 2);
-            for i in (0..s.len()).step_by(2) {
-                bytes.push(
-                    u8::from_str_radix(unsafe { from_utf8_unchecked(&s[i..i + 2]) }, 16).unwrap(),
-                );
-            }
-            bytes.into()
-        });
+                let mut bytes = Vec::with_capacity(s.len() / 2);
+                for i in (0..s.len()).step_by(2) {
+                    bytes.push(
+                        u8::from_str_radix(unsafe { from_utf8_unchecked(&s[i..i + 2]) }, 16)
+                            .unwrap(),
+                    );
+                }
+                bytes.into()
+            });
 
         terminated(bytes, b'>').parse_next(input)
     }

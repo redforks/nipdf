@@ -8,9 +8,7 @@ expression: parse_dict(buf.as_ref()).unwrap()
         {
             "id": LiteralString(
                 LiteralString(
-                    [
-                        ,
-                    ],
+                    [],
                 ),
             ),
         },

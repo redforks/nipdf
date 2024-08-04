@@ -11,22 +11,22 @@ description = "nipdf-render is a PDF renderer written in Rust."
 nipdf = { path = "../nipdf" }
 prescript = { path = "../prescript" }
 log = "0.4"
-anyhow = "1.0.71"
+anyhow = "1.0.86"
 ahash = { version = "0.8", features = ["no-rng"] }
-tiny-skia = "0.11.2"
-either = "1.9.0"
-euclid = "0.22.9"
-image = { version = "0.24.6", default-features = false, features = ["png"] }
-educe = "0.5.5"
+tiny-skia = "0.11.4"
+either = "1.13.0"
+euclid = "0.22.10"
+image = { version = "0.25.2", default-features = false, features = ["png"] }
+educe = "0.6.0"
 nom = "7.1.3"
 num-traits = "0.2"
 
 [dev-dependencies]
-insta = { version = "1.29.0", features = ["ron"] }
-test-case = "3.1.0"
+insta = { version = "1.39.0", features = ["ron"] }
+test-case = "3.3.1"
 md-5 = "0.10"
 hex = { version = "0.4.3" }
-ureq = "2.8"
+ureq = "2.10"
 nipdf-test-macro = { path = "../test-macro" }
 maplit = "1.0"
 criterion = "0.5"

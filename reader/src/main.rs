@@ -173,7 +173,7 @@ impl Application for App {
         (
             r,
             // load icon font for iced_aw, without this modal close button icon will not show.
-            font::load(iced_aw::graphics::icons::ICON_FONT_BYTES).map(|_| AppMessage::Initialized),
+            font::load(iced_aw::core::icons::BOOTSTRAP_FONT_BYTES).map(|_| AppMessage::Initialized),
         )
     }
 

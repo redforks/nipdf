@@ -27,7 +27,7 @@ pub type TokenArray = Vec<Token>;
 type OperatorFn<P> = fn(&mut Machine<P>) -> MachineResult<ExecState>;
 
 #[derive(Educe)]
-#[educe(Debug, PartialEq, Clone)]
+#[educe(Debug(bound()), PartialEq(bound()), Clone(bound()))]
 pub enum Value {
     Null,
     Bool(bool),
@@ -42,7 +42,7 @@ pub enum Value {
 }
 
 #[derive(Educe)]
-#[educe(Debug, PartialEq, Clone)]
+#[educe(Debug(bound()), PartialEq(bound()), Clone(bound()))]
 pub(crate) enum RuntimeValue<'a, P> {
     Value(Value),
     /// Mark stack position

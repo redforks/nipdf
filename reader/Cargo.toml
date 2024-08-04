@@ -10,20 +10,20 @@ description = "iced pdf GUI reader"
 [dependencies]
 nipdf = { path = "../nipdf" }
 nipdf-render = { path = "../render" }
-env_logger = { version = "0.10.0" }
-iced = { version = "0.10.0", features = ["image"] }
-anyhow = "1.0.75"
-iced_aw = { version = "0.7.0", default-features = false, features = [
+env_logger = { version = "0.11.5" }
+iced = { version = "0.12.1", features = ["image"] }
+anyhow = "1.0.86"
+iced_aw = { version = "0.9.3", default-features = false, features = [
     "modal",
     "card",
 ] }
 directories-next = "2.0.0"
-log = "0.4.20"
+log = "0.4.22"
 notify-rust = { version = "4", default-features = false, optional = true, features = [
     "d",
 ] }
 mimalloc = "0.1"
-clap = { version = "4.3", features = ["derive"] }
+clap = { version = "4.5", features = ["derive"] }
 
 [features]
 debug = ["notify-rust", "iced-debug", "iced_aw/menu"]

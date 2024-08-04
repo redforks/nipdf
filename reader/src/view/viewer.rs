@@ -14,7 +14,7 @@ use iced::{
         scrollable::{Direction, Properties},
         text, text_input,
     },
-    Color, Element, Length,
+    Border, Color, Element, Length,
 };
 #[cfg(feature = "debug")]
 use iced_aw::{
@@ -506,14 +506,14 @@ impl Viewer {
                 // can not use row! macro, it has compile problems because of #[cfg] attribute on
                 // some of items
                 button("Open...").on_press(AppMessage::SelectFile).into(),
-                horizontal_space(16).into(),
+                horizontal_space().width(16).into(),
                 text_input("Page", &self.cur_page_editing)
                     .width(60)
                     .on_input(|s| AppMessage::Viewer(ViewerMessage::CurPageChange(s)))
                     .on_submit(AppMessage::Viewer(ViewerMessage::CurPageChanged))
                     .into(),
                 text(format!("/{}", self.navi.total_pages)).into(),
-                horizontal_space(16).into(),
+                horizontal_space().width(16).into(),
                 button("Prev")
                     .on_press_maybe(
                         self.navi
@@ -528,14 +528,14 @@ impl Viewer {
                             .then_some(AppMessage::Viewer(ViewerMessage::NextPage))
                     )
                     .into(),
-                horizontal_space(16).into(),
+                horizontal_space().width(16).into(),
                 button("Zoom In")
                     .on_press(AppMessage::Viewer(ViewerMessage::ZoomIn))
                     .into(),
                 button("Zoom Out")
                     .on_press(AppMessage::Viewer(ViewerMessage::ZoomOut))
                     .into(),
-                horizontal_space(Length::Fill).into(),
+                horizontal_space().width(Length::Fill).into(),
                 #[cfg(feature = "debug")]
                 text(format!("{} ms", self.render_time.as_millis())).into(),
                 #[cfg(feature = "debug")]
@@ -609,7 +609,10 @@ impl button::StyleSheet for ButtonStyle {
     fn active(&self, style: &Self::Style) -> button::Appearance {
         button::Appearance {
             text_color: style.extended_palette().background.base.text,
-            border_radius: [4.0; 4].into(),
+            border: Border {
+                radius: [4.0; 4].into(),
+                ..Default::default()
+            },
             background: Some(Color::TRANSPARENT.into()),
             ..Default::default()
         }
