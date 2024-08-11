@@ -117,9 +117,9 @@ impl CrossReferenceStreamDict {
 /// Return nom parser to parse u32 value by byte length (0, 1, 2, 3, 4),
 /// if n is 0, return parser takes 0 bytes and returns 0.
 /// if n > 1, n32 stored in big endian n bytes.
-fn segment_parser<'a, I: 'a>(n: u32) -> Box<dyn Parser<I, u32, nom::error::VerboseError<I>> + 'a>
+fn segment_parser<'a, I>(n: u32) -> Box<dyn Parser<I, u32, nom::error::VerboseError<I>> + 'a>
 where
-    I: InputIter<Item = u8> + InputLength + InputTake + Slice<RangeFrom<usize>>,
+    I: InputIter<Item = u8> + InputLength + InputTake + Slice<RangeFrom<usize>> + 'a,
 {
     match n {
         0 => Box::new(|v| Ok((v, 0_u32))),

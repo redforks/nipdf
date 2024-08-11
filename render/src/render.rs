@@ -353,10 +353,12 @@ impl State {
         self.stroke.miter_limit = limit;
     }
 
+    #[allow(clippy::needless_pass_by_ref_mut)]
     fn set_flatness(&mut self, flatness: f32) {
         info!("not implemented: flatness: {}", flatness);
     }
 
+    #[allow(clippy::needless_pass_by_ref_mut)]
     fn set_render_intent(&mut self, intent: RenderingIntent) {
         info!("not implemented: render intent: {}", intent);
     }
@@ -1140,8 +1142,8 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
     /// 1. Create a sub Render to paint the form, set transparent as background
     /// 1. Clone current state to sub render to use exist state
     /// 1. Sub render concatenate form's Matrix to ctm
-    /// 1. Assert form b_box start point is (0, 0), because I'm not sure what
-    /// will happen, wait for an example pdf file that b_box start point is not (0, 0)
+    /// 1. Assert form b_box start point is (0, 0), because I'm not sure what will happen, wait for
+    ///    an example pdf file that b_box start point is not (0, 0)
     /// 1. Paints the graphics objects specified in the form object's stream in sub render.
     /// 1. Paint the rendered image on parent render
     fn paint_form_x_object(&mut self, x_object: &XObjectDict<'a, 'b>) -> AnyResult<()> {

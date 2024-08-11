@@ -277,10 +277,9 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
             return Ok(None);
         };
 
-        let r = pair.0.as_ref().map_or_else(
-            Encoding::default,
-            |n| Self::by_name(n.clone()).unwrap_or_else(Encoding::default),
-        );
+        let r = pair.0.as_ref().map_or_else(Encoding::default, |n| {
+            Self::by_name(n.clone()).unwrap_or_else(Encoding::default)
+        });
         Ok(Some(self.apply_encoding_diff(r, &Some(pair))))
     }
 }
@@ -775,7 +774,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
     /// by TrueType fonts scanned from current OS. Because Type1 fonts are not
     /// supported by swash, and the only crate support Type1 fonts is `font`, which
     /// I am not familiar with.
-    fn load_type1_font<'a, 'b: 'a>(font: FontDict<'a, 'b>) -> AnyResult<Type1Font<'a, 'b>>
+    fn load_type1_font<'a, 'b>(font: FontDict<'a, 'b>) -> AnyResult<Type1Font<'a, 'b>>
     where
         'a: 'c,
         'b: 'c,

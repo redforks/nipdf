@@ -14,7 +14,7 @@ use iced::{
         scrollable::{Direction, Properties},
         text, text_input,
     },
-    Border, Color, Element, Length,
+    Element, Length,
 };
 #[cfg(feature = "debug")]
 use iced_aw::{
@@ -602,18 +602,20 @@ fn new_menu_item(label: &str, message: ViewerMessage) -> MenuTree<AppMessage, ic
     )
 }
 
+#[cfg(feature = "debug")]
 struct ButtonStyle;
+#[cfg(feature = "debug")]
 impl button::StyleSheet for ButtonStyle {
     type Style = iced::Theme;
 
     fn active(&self, style: &Self::Style) -> button::Appearance {
         button::Appearance {
             text_color: style.extended_palette().background.base.text,
-            border: Border {
+            border: iced::Border {
                 radius: [4.0; 4].into(),
                 ..Default::default()
             },
-            background: Some(Color::TRANSPARENT.into()),
+            background: Some(icod::Color::TRANSPARENT.into()),
             ..Default::default()
         }
     }
