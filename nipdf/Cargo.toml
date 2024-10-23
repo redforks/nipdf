@@ -58,7 +58,7 @@ test-case.workspace = true
 test-log.workspace = true
 mockall = "0.13"
 hex-literal.workspace = true
-image = { workspace = true, features = ["png"] }
+image.workspace = true
 
 [lints]
 workspace = true

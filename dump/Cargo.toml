@@ -11,7 +11,7 @@ nipdf-render = { path = "../render" }
 env_logger.workspace = true
 clap.workspace = true
 anyhow.workspace = true
-image = { workspace = true, features = [ "png", "jpeg" ] }
+image = { workspace = true }
 mimalloc.workspace = true
 
 [lints]
