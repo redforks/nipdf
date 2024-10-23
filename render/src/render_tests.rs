@@ -1,6 +1,6 @@
 //! Test page render result using `insta` to ensure that the rendering result is not changed.
 //! This file checks file pdfreference1.0.pdf
-use crate::{render_page, RenderOptionBuilder};
+use crate::{RenderOptionBuilder, render_page};
 use anyhow::Result as AnyResult;
 use insta::assert_ron_snapshot;
 use md5::{Digest, Md5};
