@@ -1,18 +1,18 @@
 //! Cmap to map CharCode to CID, used in Type0/CID font
 
 use crate::{
+    Name,
     machine::{
-        ok, Key, Machine, MachineError, MachinePlugin, MachineResult, RuntimeDictionary,
-        RuntimeValue,
+        Key, Machine, MachineError, MachinePlugin, MachineResult, RuntimeDictionary, RuntimeValue,
+        ok,
     },
-    sname, Name,
+    sname,
 };
 use educe::Educe;
 use either::Either::{self, Right};
 use log::error;
-use once_cell::unsync::OnceCell;
 use phf::phf_map;
-use std::{collections::HashMap, rc::Rc, str::from_utf8};
+use std::{cell::OnceCell, collections::HashMap, rc::Rc, str::from_utf8};
 use tinyvec::ArrayVec;
 
 /// Convert from CharCode using cmap, use it to select glyph id

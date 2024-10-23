@@ -3229,7 +3229,6 @@ dependencies = [
  "log",
  "memchr",
  "num-traits",
- "once_cell",
  "phf",
  "static_assertions",
  "test-case",
