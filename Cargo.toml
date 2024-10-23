@@ -84,6 +84,7 @@ kstring = { version = "2.0", features = ["max_inline"] }
 itertools = "0.13"
 clap = { version = "4.5", features = ["derive"] }
 mimalloc = "0.1"
+snafu = { version = "0.8.5" }
 
 [workspace.lints.clippy]
 empty_structs_with_brackets = "warn"
