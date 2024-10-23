@@ -13,7 +13,7 @@ nipdf-render = { path = "../render" }
 env_logger.workspace = true
 iced = { version = "0.12.1", features = ["image"] }
 anyhow.workspace = true
-iced_aw = { version = "0.9.3", default-features = false, features = [ "modal", "card" ] }
+iced_aw = { version = "0.9", default-features = false, features = [ "modal", "card" ] }
 directories-next = "2.0.0"
 log.workspace = true
 notify-rust = { version = "4", default-features = false, optional = true, features = [ "d" ] }

@@ -32,7 +32,7 @@ opt-level = 3
 [workspace.dependencies]
 hex = { version = "0.4" }
 thiserror = "1.0"
-once_cell = "1.19"
+once_cell = "1.20"
 nom = "7.1"
 num-traits = "0.2"
 memchr = "2.7"
@@ -48,13 +48,13 @@ jpeg2k = "0.9"
 educe = "0.6"
 pretty = "0.12"
 bitflags = "2.6"
-fontdb = "0.20"
+fontdb = "0.23"
 font-kit = { version = "0.14", features = ["loader-freetype"] }
 pathfinder_geometry = "0.5"
 weezl = "0.1"
 either = "1.13"
 euclid = "0.22"
-ttf-parser = { version = "0.24", features = ["gvar-alloc"] }
+ttf-parser = { version = "0.25", features = ["gvar-alloc"] }
 ouroboros = "0.18"
 md-5 = "0.10"
 arc4 = "0.1"
@@ -65,11 +65,11 @@ static_assertions = "1.1"
 aes = "0.8"
 cbc = "0.1"
 phf = { version = "0.11", features = ["macros"] }
-miniz_oxide = "0.7"
+miniz_oxide = "0.8"
 encoding_rs = "0.8"
 env_logger = "0.11"
 glob = "0.3"
-insta = { version = "1.39", features = ["ron"] }
+insta = { version = "1.40", features = ["ron"] }
 assert_approx_eq = "1.1"
 test-case = "3.3"
 test-log = "0.2"
