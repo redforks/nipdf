@@ -5,6 +5,7 @@ use crate::{
 };
 use educe::Educe;
 use either::Either;
+use snafu::prelude::*;
 use std::{
     cell::{Ref, RefCell},
     collections::HashMap,
@@ -444,22 +445,22 @@ macro_rules! rt_values {
     }
 }
 
-#[derive(Debug, PartialEq, thiserror::Error)]
+#[derive(Debug, PartialEq, Snafu)]
 pub enum MachineError {
-    #[error("stack underflow")]
+    #[snafu(display("stack underflow"))]
     StackUnderflow,
-    #[error("type check error")]
+    #[snafu(display("type check error"))]
     TypeCheck,
-    #[error("undefined")]
+    #[snafu(display("undefined"))]
     Undefined,
-    #[error("unmatched mark")]
+    #[snafu(display("unmatched mark"))]
     UnMatchedMark,
     #[allow(dead_code)]
-    #[error("invalid access")]
+    #[snafu(display("invalid access"))]
     InvalidAccess,
-    #[error("range check error")]
+    #[snafu(display("range check error"))]
     RangeCheck,
-    #[error("syntax error")]
+    #[snafu(display("syntax error"))]
     SyntaxError,
 }
 

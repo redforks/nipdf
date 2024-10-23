@@ -3234,7 +3234,6 @@ dependencies = [
  "static_assertions",
  "test-case",
  "test-log",
- "thiserror",
  "tinyvec",
  "winnow 0.6.18",
 ]
