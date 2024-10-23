@@ -18,7 +18,6 @@ use fontdb::{Database, Family, Query, Source, Weight};
 use heck::ToTitleCase;
 use log::{debug, error, info, warn};
 use num_traits::ToPrimitive;
-use once_cell::sync::Lazy;
 use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
 use phf::phf_map;
@@ -27,7 +26,7 @@ use prescript::{
     cmap::{CMap, CMapRegistry},
     name, sname,
 };
-use std::{collections::HashMap, ops::RangeInclusive, rc::Rc};
+use std::{collections::HashMap, ops::RangeInclusive, rc::Rc, sync::LazyLock};
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
 
 /// FontWidth used in Type1 and TrueType fonts
@@ -509,7 +508,7 @@ impl<'a, 'b, P: PathSink> Font<P> for TTFParserFont<'a, 'b> {
     }
 }
 
-static SYSTEM_FONTS: Lazy<Database> = Lazy::new(|| {
+static SYSTEM_FONTS: LazyLock<Database> = LazyLock::new(|| {
     let mut db = Database::new();
     db.load_system_fonts();
     db

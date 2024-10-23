@@ -20,10 +20,10 @@ use jpeg_decoder::PixelFormat;
 use log::error;
 use nipdf_macro::pdf_object;
 use num_traits::ToPrimitive;
-use once_cell::unsync::Lazy;
 use prescript::{Name, sname};
 use std::{
     borrow::{Borrow, Cow},
+    cell::LazyCell,
     fmt::Display,
     iter::{once, repeat},
     num::NonZeroU32,
@@ -907,7 +907,7 @@ fn filter<'a: 'b, 'b>(
     id: Option<ObjectId>,
     encrypt_info: Option<&EncryptInfo>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
-    let empty_dict = Lazy::new(Dictionary::new);
+    let empty_dict = LazyCell::new(Dictionary::new);
     #[allow(clippy::match_ref_pats)]
     match filter_name.as_str() {
         S_FILTER_CRYPT => {

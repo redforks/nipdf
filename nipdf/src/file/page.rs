@@ -12,9 +12,8 @@ use educe::Educe;
 use log::error;
 use nipdf_macro::{TryFromNameObject, pdf_object};
 use nom::Finish;
-use once_cell::unsync::Lazy;
 use prescript::{Name, sname};
-use std::iter::once;
+use std::{cell::LazyCell, iter::once};
 
 pub mod paint;
 
@@ -256,7 +255,7 @@ impl<'a, 'b> PageDict<'a, 'b> {
 
 #[derive(Debug)]
 pub struct Page<'a, 'b> {
-    empty_dict: Lazy<Dictionary>,
+    empty_dict: LazyCell<Dictionary>,
     d: PageDict<'a, 'b>,
     parents_to_root: Vec<PageDict<'a, 'b>>,
 }
@@ -346,7 +345,7 @@ impl<'a, 'b: 'a> Page<'a, 'b> {
         Ok(Self {
             d: d.clone(),
             parents_to_root: parents,
-            empty_dict: Lazy::new(Default::default),
+            empty_dict: LazyCell::new(Default::default),
         })
     }
 }
