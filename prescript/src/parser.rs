@@ -11,12 +11,12 @@ use std::{
     str::{from_utf8, from_utf8_unchecked},
 };
 use winnow::{
+    PResult, Parser,
     ascii::hex_digit1,
     combinator::{alt, delimited, dispatch, fail, opt, preceded, repeat, terminated},
     error::{ContextError, ErrMode},
     stream::{AsChar, Stream},
     token::{any, literal, one_of, take_till, take_while},
-    PResult, Parser,
 };
 
 /// Parses the header of a Type 1 font. The header is the first line of the

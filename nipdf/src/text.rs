@@ -1,15 +1,15 @@
 use crate::{
     file::{Rectangle, ResourceDict},
-    graphics::{trans::GlyphToTextSpace, NameOrDictByRef, NameOrStream},
+    graphics::{NameOrDictByRef, NameOrStream, trans::GlyphToTextSpace},
     object::{Object, ObjectValueError, Stream},
 };
 use ahash::{HashMap, HashMapExt};
 use anyhow::Result as AnyResult;
 use bitflags::bitflags;
 use log::warn;
-use nipdf_macro::{pdf_object, TryFromIntObjectForBitflags, TryFromNameObject};
+use nipdf_macro::{TryFromIntObjectForBitflags, TryFromNameObject, pdf_object};
 use num_traits::ToPrimitive;
-use prescript::{name, Encoding, Name};
+use prescript::{Encoding, Name, name};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, TryFromNameObject)]
 pub enum FontType {

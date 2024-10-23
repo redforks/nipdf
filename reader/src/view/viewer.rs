@@ -4,9 +4,8 @@ use anyhow::Result;
 use iced::alignment::Horizontal;
 #[cfg(feature = "debug")]
 use iced::widget::{Button, Row, Text};
-#[cfg(feature = "debug")]
-use iced::{alignment, widget::horizontal_rule};
 use iced::{
+    Element, Length,
     widget::{
         button, column, horizontal_space,
         image::{Handle, Image},
@@ -14,18 +13,19 @@ use iced::{
         scrollable::{Direction, Properties},
         text, text_input,
     },
-    Element, Length,
 };
+#[cfg(feature = "debug")]
+use iced::{alignment, widget::horizontal_rule};
+#[cfg(feature = "debug")]
+use iced_aw::{Card, modal};
 #[cfg(feature = "debug")]
 use iced_aw::{
     menu_bar,
     native::helpers::menu_tree,
     native::menu::{ItemHeight, MenuTree},
 };
-#[cfg(feature = "debug")]
-use iced_aw::{modal, Card};
 use nipdf::file::File as PdfFile;
-use nipdf_render::{render_page, RenderOptionBuilder};
+use nipdf_render::{RenderOptionBuilder, render_page};
 #[cfg(feature = "debug")]
 use std::time::{Duration, Instant};
 
@@ -541,20 +541,17 @@ impl Viewer {
                 #[cfg(feature = "debug")]
                 horizontal_space(8).into(),
                 #[cfg(feature = "debug")]
-                menu_bar!(menu_tree(
-                    text("Debug"),
-                    vec![
-                        new_menu_item("Page Object id", ViewerMessage::ShowPageId),
-                        MenuTree::new(horizontal_rule(4)),
-                        new_menu_item("Page Object", ViewerMessage::DumpPageObject),
-                        new_menu_item("Page Content", ViewerMessage::DumpPageContent),
-                        new_menu_item("Page Stream", ViewerMessage::DumpPageStream),
-                        new_menu_item("Page Render Log", ViewerMessage::DumpPageRenderLog),
-                        MenuTree::new(horizontal_rule(4)),
-                        new_menu_item("Dump Page and open", ViewerMessage::DumpPage),
-                        new_menu_item("Dump Page", ViewerMessage::DumpPageWithoutGvim),
-                    ]
-                ))
+                menu_bar!(menu_tree(text("Debug"), vec![
+                    new_menu_item("Page Object id", ViewerMessage::ShowPageId),
+                    MenuTree::new(horizontal_rule(4)),
+                    new_menu_item("Page Object", ViewerMessage::DumpPageObject),
+                    new_menu_item("Page Content", ViewerMessage::DumpPageContent),
+                    new_menu_item("Page Stream", ViewerMessage::DumpPageStream),
+                    new_menu_item("Page Render Log", ViewerMessage::DumpPageRenderLog),
+                    MenuTree::new(horizontal_rule(4)),
+                    new_menu_item("Dump Page and open", ViewerMessage::DumpPage),
+                    new_menu_item("Dump Page", ViewerMessage::DumpPageWithoutGvim),
+                ]))
                 .item_height(ItemHeight::Dynamic(24))
                 .into()
             ])

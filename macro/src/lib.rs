@@ -2,8 +2,8 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
 use syn::{
-    parse_macro_input, parse_quote, Arm, Expr, ExprLit, Fields, FieldsUnnamed, Ident, ItemEnum,
-    ItemStruct, Lit, LitStr, Meta, Pat, Token,
+    Arm, Expr, ExprLit, Fields, FieldsUnnamed, Ident, ItemEnum, ItemStruct, Lit, LitStr, Meta, Pat,
+    Token, parse_macro_input, parse_quote,
 };
 
 /// Generate `impl TryFrom` for enum that convert Object::Name to enum variant

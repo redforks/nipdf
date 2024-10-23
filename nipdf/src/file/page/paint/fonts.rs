@@ -1,9 +1,8 @@
 use crate::{
-    file::{page::ResourceDict, ObjectResolver},
+    file::{ObjectResolver, page::ResourceDict},
     graphics::{
-        parse_operations,
+        NameOrDictByRef, NameOrStream, Operation, Point, parse_operations,
         trans::{GlyphLength, GlyphToTextSpace},
-        NameOrDictByRef, NameOrStream, Operation, Point,
     },
     object::{PdfObject, Stream},
     text::{
@@ -11,7 +10,7 @@ use crate::{
         FontDescriptorFlags, FontDict, FontType, Type0FontDict, Type3FontDict,
     },
 };
-use anyhow::{anyhow, bail, Ok, Result as AnyResult};
+use anyhow::{Ok, Result as AnyResult, anyhow, bail};
 use cff_parser::{File as CffFile, Font as CffFont};
 use either::Either;
 use font_kit::loaders::freetype::Font as FontKitFont;
@@ -24,8 +23,9 @@ use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
 use phf::phf_map;
 use prescript::{
+    Encoding, NOTDEF, Name,
     cmap::{CMap, CMapRegistry},
-    name, sname, Encoding, Name, NOTDEF,
+    name, sname,
 };
 use std::{collections::HashMap, ops::RangeInclusive, rc::Rc};
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};

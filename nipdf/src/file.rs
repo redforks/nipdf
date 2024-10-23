@@ -7,8 +7,8 @@ use crate::{
         ObjectValueError, PdfObject, Resolver, RuntimeObjectId, Stream, TrailerDict,
     },
     parser::{
-        parse_frame_set, parse_header, parse_indirect_object, parse_indirect_stream, parse_object,
-        ws_terminated, ParseResult,
+        ParseResult, parse_frame_set, parse_header, parse_indirect_object, parse_indirect_stream,
+        parse_object, ws_terminated,
     },
 };
 use ahash::{HashMap, HashMapExt};
@@ -18,7 +18,7 @@ use log::error;
 use nipdf_macro::pdf_object;
 use nom::Finish;
 use once_cell::unsync::OnceCell;
-use prescript::{sname, Name};
+use prescript::{Name, sname};
 use std::{iter::repeat_with, rc::Rc};
 
 pub mod page;
@@ -64,13 +64,10 @@ fn parse_object_stream(n: usize, buf: &[u8]) -> ParseResult<ObjectStream> {
 
     let (buf, nums) = count(ws_terminated(separated_pair(u32, space1, u16)), n)(buf)?;
     let offsets = nums.into_iter().map(|(_, n)| n).collect();
-    Ok((
-        buf,
-        ObjectStream {
-            buf: buf.to_owned(),
-            offsets,
-        },
-    ))
+    Ok((buf, ObjectStream {
+        buf: buf.to_owned(),
+        offsets,
+    }))
 }
 
 impl ObjectStream {

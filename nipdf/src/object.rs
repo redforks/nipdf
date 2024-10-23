@@ -8,7 +8,7 @@ use prescript::Name;
 use std::{
     borrow::{Borrow, Cow},
     fmt::{Debug, Display},
-    iter::{repeat, Peekable},
+    iter::{Peekable, repeat},
     rc::Rc,
     str::from_utf8,
 };

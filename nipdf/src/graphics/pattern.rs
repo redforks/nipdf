@@ -3,7 +3,7 @@ use crate::{
     file::{GraphicsStateParameterDict, Rectangle, ResourceDict},
     graphics::{shading::ShadingDict, trans::UserToLogicDeviceSpace},
 };
-use nipdf_macro::{pdf_object, TryFromIntObject};
+use nipdf_macro::{TryFromIntObject, pdf_object};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromIntObject)]
 pub enum PatternType {

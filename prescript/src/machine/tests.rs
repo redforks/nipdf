@@ -86,10 +86,10 @@ fn test_dict() {
 
 #[test]
 fn test_begin() {
-    assert_op(
-        "0 0 dict begin",
-        asserts![0, VariableStack(RuntimeDictionary::new())],
-    );
+    assert_op("0 0 dict begin", asserts![
+        0,
+        VariableStack(RuntimeDictionary::new())
+    ]);
 }
 
 #[test]

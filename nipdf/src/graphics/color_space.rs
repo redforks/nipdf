@@ -5,7 +5,7 @@ use crate::{
     graphics::ICCStreamDict,
     object::Object,
 };
-use anyhow::{anyhow, bail, Result as AnyResult};
+use anyhow::{Result as AnyResult, anyhow, bail};
 use educe::Educe;
 use nipdf_macro::pdf_object;
 use num_traits::ToPrimitive;

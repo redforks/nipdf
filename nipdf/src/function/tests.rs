@@ -63,18 +63,12 @@ fn test_exponential_function() {
     let resolver = ObjectResolver::empty(&xref);
     let f = ExponentialInterpolationFunctionDict::new(None, &d, &resolver).unwrap();
     let f = f.func().unwrap();
-    assert_eq!(
-        f.call(&[0.0]).unwrap(),
-        tiny_vec![0.1_f32, 0.2_f32] as FunctionValue
-    );
-    assert_eq!(
-        f.call(&[1.0]).unwrap(),
-        tiny_vec![0.2_f32, 0.4_f32] as FunctionValue
-    );
-    assert_eq!(
-        f.call(&[0.5]).unwrap(),
-        tiny_vec![0.15_f32, 0.3_f32] as FunctionValue
-    );
+    assert_eq!(f.call(&[0.0]).unwrap(), tiny_vec![0.1_f32, 0.2_f32]
+        as FunctionValue);
+    assert_eq!(f.call(&[1.0]).unwrap(), tiny_vec![0.2_f32, 0.4_f32]
+        as FunctionValue);
+    assert_eq!(f.call(&[0.5]).unwrap(), tiny_vec![0.15_f32, 0.3_f32]
+        as FunctionValue);
 }
 
 #[test]
@@ -139,10 +133,8 @@ fn stitching_function() {
     let resolver = ObjectResolver::empty(&xref);
     let f = StitchingFunctionDict::new(None, &d, &resolver).unwrap();
     let f = f.func().unwrap();
-    assert_eq!(
-        f.call(&[0f32]).unwrap(),
-        tiny_vec![0.2_f32, 0.4_f32] as FunctionValue
-    );
+    assert_eq!(f.call(&[0f32]).unwrap(), tiny_vec![0.2_f32, 0.4_f32]
+        as FunctionValue);
 }
 
 #[test]

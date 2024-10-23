@@ -1,6 +1,5 @@
 use super::{Object, ObjectId, RuntimeObjectId};
 
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct IndirectObject(ObjectId, Object);
 

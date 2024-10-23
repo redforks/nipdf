@@ -2,8 +2,8 @@ use euclid::Transform2D;
 use nipdf::{
     file::Rectangle,
     graphics::{
-        color_space::{convert_color_to, ColorComp, ColorCompConvertTo, ColorSpaceTrait},
         LineCapStyle, LineJoinStyle, Point,
+        color_space::{ColorComp, ColorCompConvertTo, ColorSpaceTrait, convert_color_to},
     },
 };
 

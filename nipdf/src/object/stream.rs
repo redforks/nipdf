@@ -4,11 +4,11 @@ use crate::{
     file::{EncryptInfo, ObjectResolver, ResourceDict},
     function::Domains,
     graphics::{
-        color_space::{
-            color_to_rgba, convert_color_to, ColorCompConvertTo, ColorSpace, ColorSpaceTrait,
-            DeviceCMYK,
-        },
         ColorSpaceArgs,
+        color_space::{
+            ColorCompConvertTo, ColorSpace, ColorSpaceTrait, DeviceCMYK, color_to_rgba,
+            convert_color_to,
+        },
     },
     object::PdfObject,
     parser::is_white_space,
@@ -21,7 +21,7 @@ use log::error;
 use nipdf_macro::pdf_object;
 use num_traits::ToPrimitive;
 use once_cell::unsync::Lazy;
-use prescript::{sname, Name};
+use prescript::{Name, sname};
 use std::{
     borrow::{Borrow, Cow},
     fmt::Display,
@@ -571,7 +571,7 @@ fn predictor_decode(
 }
 
 fn decode_lzw(buf: &[u8], params: LZWDeflateDecodeParams) -> Result<Vec<u8>, ObjectValueError> {
-    use weezl::{decode::Decoder, BitOrder};
+    use weezl::{BitOrder, decode::Decoder};
     let is_early_change = params.early_change == 1;
     let mut decoder = if is_early_change {
         Decoder::with_tiff_size_switch(BitOrder::Msb, 8)
@@ -614,8 +614,8 @@ fn crypt_filter(
 /// Max output buffer size is 128MB, return error if output buffer size exceed this limit.
 fn deflate(input: &[u8]) -> Result<Vec<u8>, ObjectValueError> {
     use miniz_oxide::inflate::{
-        core::{decompress, inflate_flags, DecompressorOxide},
         TINFLStatus,
+        core::{DecompressorOxide, decompress, inflate_flags},
     };
 
     fn _deflate(input: &[u8], flags: u32) -> Result<Vec<u8>, ObjectValueError> {

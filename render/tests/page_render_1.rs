@@ -7,7 +7,7 @@ use log::info;
 use maplit::hashmap;
 use md5::{Digest, Md5};
 use nipdf::file::File;
-use nipdf_render::{render_page, RenderOptionBuilder};
+use nipdf_render::{RenderOptionBuilder, render_page};
 use nipdf_test_macro::pdf_file_test_cases;
 use std::{
     collections::hash_map::HashMap,

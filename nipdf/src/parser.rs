@@ -1,10 +1,10 @@
 use nom::{
+    IResult, InputTakeAtPosition, Parser,
     branch::alt,
     combinator::{opt, value},
     error::{ErrorKind, ParseError as NomParseError},
     multi::many0_count,
     sequence::{delimited, preceded, terminated},
-    IResult, InputTakeAtPosition, Parser,
 };
 
 mod file;

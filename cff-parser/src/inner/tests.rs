@@ -89,15 +89,12 @@ fn test_parse_header() {
     buf[3] = 1;
     let (remains, r) = parse_header(&buf[..]).unwrap();
     assert_eq!(remains.len(), 0);
-    assert_eq!(
-        r,
-        Header {
-            major: 1,
-            minor: 0,
-            hdr_size: 4,
-            off_size: OffSize::One,
-        }
-    );
+    assert_eq!(r, Header {
+        major: 1,
+        minor: 0,
+        hdr_size: 4,
+        off_size: OffSize::One,
+    });
 }
 
 #[test_case(&[0x1c, 0x27, 0x10] => Operand::Integer(10000))]

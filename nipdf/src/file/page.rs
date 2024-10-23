@@ -1,8 +1,8 @@
 use crate::{
     function::Domains,
     graphics::{
-        parse_operations, shading::ShadingDict, trans::FormToUserSpace, ColorArgs, ColorSpaceArgs,
-        LineCapStyle, LineJoinStyle, Operation, PatternDict, Point, RenderingIntent,
+        ColorArgs, ColorSpaceArgs, LineCapStyle, LineJoinStyle, Operation, PatternDict, Point,
+        RenderingIntent, parse_operations, shading::ShadingDict, trans::FormToUserSpace,
     },
     object::{Dictionary, ImageMask, Object, ObjectValueError, PdfObject, RuntimeObjectId, Stream},
     text::FontDict,
@@ -10,10 +10,10 @@ use crate::{
 use ahash::{HashMap, HashMapExt};
 use educe::Educe;
 use log::error;
-use nipdf_macro::{pdf_object, TryFromNameObject};
+use nipdf_macro::{TryFromNameObject, pdf_object};
 use nom::Finish;
 use once_cell::unsync::Lazy;
-use prescript::{sname, Name};
+use prescript::{Name, sname};
 use std::iter::once;
 
 pub mod paint;

@@ -1,11 +1,11 @@
 use super::Point;
 use crate::{
     file::Rectangle,
-    function::{default_domain, Domain, FunctionDict},
+    function::{Domain, FunctionDict, default_domain},
     graphics::{ColorArgs, ColorSpaceArgs},
     object::{Object, ObjectValueError},
 };
-use nipdf_macro::{pdf_object, TryFromIntObject};
+use nipdf_macro::{TryFromIntObject, pdf_object};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromIntObject)]
 pub enum ShadingType {

@@ -4,8 +4,8 @@ use anyhow::Result as AnyResult;
 use arc4::Arc4;
 use log::error;
 use md5::{Digest, Md5};
-use nipdf_macro::{pdf_object, TryFromIntObject, TryFromNameObject};
-use prescript::{sname, Name};
+use nipdf_macro::{TryFromIntObject, TryFromNameObject, pdf_object};
+use prescript::{Name, sname};
 use tinyvec::{Array, ArrayVec, TinyVec};
 
 #[derive(TryFromIntObject, Default, Debug, PartialEq, Eq, Clone, Copy)]
@@ -163,14 +163,11 @@ impl<'a, 'b> EncryptDict<'a, 'b> {
                 .into_iter()
                 .map(|(k, d)| {
                     d.decrypt_method().map(|m| {
-                        (
-                            k,
-                            match m {
-                                DecryptMethod::None => CryptFilter::Identity,
-                                DecryptMethod::V2 => CryptFilter::Rc4,
-                                DecryptMethod::AESV2 => CryptFilter::Aes,
-                            },
-                        )
+                        (k, match m {
+                            DecryptMethod::None => CryptFilter::Identity,
+                            DecryptMethod::V2 => CryptFilter::Rc4,
+                            DecryptMethod::AESV2 => CryptFilter::Aes,
+                        })
                     })
                 })
                 .collect::<Result<_>>()?;
@@ -300,7 +297,7 @@ impl Decryptor for AesDecryptor {
     /// of the encrypted data.
     /// Pad the data using the PKCS#5 padding scheme.
     fn decrypt<V: VecLike>(&self, data: &mut V) {
-        use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
+        use aes::cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7};
         type Aes128CbcDec = cbc::Decryptor<aes::Aes128>;
 
         let iv_data = data.drain(0..16);

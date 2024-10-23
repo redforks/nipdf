@@ -1,7 +1,7 @@
 use bitstream_io::{
-    huffman::{compile_read_tree, ReadHuffmanTree},
-    read::{BitRead, BitReader},
     BigEndian, HuffmanRead,
+    huffman::{ReadHuffmanTree, compile_read_tree},
+    read::{BitRead, BitReader},
 };
 use bitvec::{prelude::Msb0, slice::BitSlice, vec::BitVec};
 use educe::Educe;

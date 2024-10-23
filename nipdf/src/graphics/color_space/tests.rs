@@ -70,17 +70,15 @@ fn convert_color_com_f32_to_u8() {
 fn test_color_to_rgba() {
     // DeviceGray u8 to u8 rgba
     let color_space = DeviceGray;
-    assert_eq!(
-        color_to_rgba::<_, u8, _>(&color_space, &[0x80]),
-        [0x80, 0x80, 0x80, 0xff]
-    );
+    assert_eq!(color_to_rgba::<_, u8, _>(&color_space, &[0x80]), [
+        0x80, 0x80, 0x80, 0xff
+    ]);
 
     // DeviceGray u8 to f32 rgba
     let color_space = DeviceGray;
-    assert_eq!(
-        color_to_rgba::<_, f32, _>(&color_space, &[51]),
-        [0.2f32, 0.2f32, 0.2f32, 1.0f32]
-    );
+    assert_eq!(color_to_rgba::<_, f32, _>(&color_space, &[51]), [
+        0.2f32, 0.2f32, 0.2f32, 1.0f32
+    ]);
 }
 
 #[test]
@@ -394,7 +392,7 @@ fn cal_gray_to_rgb() {
 }
 
 #[test]
-fn cal_gray_from_args() -> AnyResult<()>{
+fn cal_gray_from_args() -> AnyResult<()> {
     let buf = br#"1 0 obj
 [/CalGray <</WhitePoint [0.9505 1 1.089]/BlackPoint [0.1 0.2 0.3]/Gamma 1.8>>]
 endobj
@@ -408,5 +406,5 @@ endobj
         }),
         color_space
     );
-    Ok(()) 
+    Ok(())
 }

@@ -1,7 +1,7 @@
 #![allow(clippy::suboptimal_flops)]
 
 use super::*;
-use euclid::{approxeq::ApproxEq, default::Transform2D as Transform, Angle, Point2D};
+use euclid::{Angle, Point2D, approxeq::ApproxEq, default::Transform2D as Transform};
 
 fn new_assert<S, T, SP: Into<Point2D<f32, S>>, TP: Into<Point2D<f32, T>>>(
     m: Transform2D<f32, S, T>,

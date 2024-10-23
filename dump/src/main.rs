@@ -1,15 +1,15 @@
 use anyhow::Result as AnyResult;
-use clap::{arg, value_parser, Command};
+use clap::{Command, arg, value_parser};
 use image::ImageFormat;
 use mimalloc::MiMalloc;
 use nipdf::{
     file::File,
     object::{Object, RuntimeObjectId},
 };
-use nipdf_render::{render_steps, RenderOptionBuilder};
+use nipdf_render::{RenderOptionBuilder, render_steps};
 use std::{
     collections::HashSet,
-    io::{copy, stdout, BufWriter, Cursor},
+    io::{BufWriter, Cursor, copy, stdout},
     path::{Path, PathBuf},
 };
 

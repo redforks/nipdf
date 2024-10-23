@@ -1,4 +1,5 @@
 use nom::{
+    IResult, Parser,
     bits::{
         bits,
         complete::{tag as bit_tag, take as bit_take},
@@ -7,13 +8,12 @@ use nom::{
     bytes::complete::take,
     combinator::{cond, fail, iterator},
     error::Error as NomError,
-    multi::{count, length_count, many1, many_till},
-    number::complete::{be_u16, be_u8},
+    multi::{count, length_count, many_till, many1},
+    number::complete::{be_u8, be_u16},
     sequence::pair,
-    IResult, Parser,
 };
 use paste::paste;
-use prescript::{name, sname, Encoding, Name};
+use prescript::{Encoding, Name, name, sname};
 use std::{
     collections::HashMap,
     hash::Hash,
@@ -698,15 +698,12 @@ pub fn parse_header(buf: &[u8]) -> ParseResult<Header> {
     let (buf, hdr_size) = take(1usize)(buf)?;
     let hdr_size = hdr_size[0];
     let (buf, off_size) = parse_off_size(buf)?;
-    Ok((
-        buf,
-        Header {
-            major,
-            minor,
-            hdr_size,
-            off_size,
-        },
-    ))
+    Ok((buf, Header {
+        major,
+        minor,
+        hdr_size,
+        off_size,
+    }))
 }
 
 /// Font name index, stores font names in Index.
@@ -1179,7 +1176,7 @@ impl Encodings {
                 let mut encodings = [NOTDEF; 256];
                 for (i, code) in codes.iter().enumerate() {
                     if let Some(v) = charsets
-                        .resolve_sid((i+1).try_into().unwrap())
+                        .resolve_sid((i + 1).try_into().unwrap())
                         .map(|sid| string_index.get(sid))
                     {
                         encodings[*code as usize] = name(v);

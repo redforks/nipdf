@@ -1,4 +1,4 @@
-use crate::{into_skia::to_skia_color, IntoSkia};
+use crate::{IntoSkia, into_skia::to_skia_color};
 use anyhow::Result as AnyResult;
 use educe::Educe;
 use log::error;
@@ -6,10 +6,10 @@ use nipdf::{
     file::{Rectangle, ResourceDict},
     function::{Domain, Function, FunctionDict, Type as FunctionType},
     graphics::{
+        Extend, Point, RadialCircle,
         color_space::ColorSpace,
         shading::{AxialCoords, RadialCoords, ShadingDict, ShadingType},
         trans::UserToLogicDeviceSpace,
-        Extend, Point, RadialCircle,
     },
     object::PdfObject,
 };

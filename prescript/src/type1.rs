@@ -1,11 +1,12 @@
 use crate::{
+    Encoding,
     machine::{Array, Machine, Value},
     parser::header,
-    sname, Encoding,
+    sname,
 };
 use anyhow::Result as AnyResult;
 use std::{array::from_fn, borrow::Cow};
-use winnow::{binary::le_u32, combinator::preceded, error::ContextError, token::any, Parser};
+use winnow::{Parser, binary::le_u32, combinator::preceded, error::ContextError, token::any};
 
 #[derive(Debug, PartialEq)]
 pub struct Header {

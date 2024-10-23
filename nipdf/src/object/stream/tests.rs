@@ -61,9 +61,7 @@ use test_case::test_case;
 fn test_iter_filter(
     dict: impl IntoIterator<Item = (Name, Object)>,
 ) -> Result<Vec<(Name, Option<Dictionary>)>, ObjectValueError> {
-    let dict: Dictionary = dict
-        .into_iter()
-        .collect::<Dictionary>();
+    let dict: Dictionary = dict.into_iter().collect::<Dictionary>();
     let d = FilterDict::new(&dict, None)?;
     let r: Vec<(Name, Option<Dictionary>)> =
         iter_filters(d)?.map(|(k, v)| (k, v.cloned())).collect();

@@ -1,4 +1,4 @@
-use super::{name, Name};
+use super::{Name, name};
 use crate::sname;
 use educe::Educe;
 use std::array::from_fn;

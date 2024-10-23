@@ -5,22 +5,22 @@ use crate::{
         Stream, TextString, TextStringOrNumber,
     },
     parser::{
-        is_white_space, parse_dict_entries, parse_object, whitespace_or_comment, ws_prefixed,
-        ws_terminated, ParseError, ParseResult,
+        ParseError, ParseResult, is_white_space, parse_dict_entries, parse_object,
+        whitespace_or_comment, ws_prefixed, ws_terminated,
     },
 };
 use euclid::{Length, Point2D, Transform2D};
 use log::{error, warn};
-use nipdf_macro::{pdf_object, OperationParser, TryFromIntObject, TryFromNameObject};
+use nipdf_macro::{OperationParser, TryFromIntObject, TryFromNameObject, pdf_object};
 use nom::{
+    Err, FindSubstring, Parser,
     branch::alt,
     bytes::complete::{is_not, tag},
     combinator::map_res,
     error::{ErrorKind, FromExternalError, ParseError as NomParseError},
     sequence::terminated,
-    Err, FindSubstring, Parser,
 };
-use prescript::{sname, Name};
+use prescript::{Name, sname};
 
 pub mod color_space;
 pub mod pattern;
@@ -639,7 +639,7 @@ fn parse_inline_image(input: &[u8]) -> ParseResult<InlineImage> {
         p += (&input[p..])
             .find_substring(b"EI".as_slice())
             .ok_or_else(|| nom::Err::Error(ParseError::from_error_kind(input, ErrorKind::Tag)))?;
-        if is_white_space(input[p-1]) && input.get(p + 2).map_or(true, |b| is_white_space(*b)) {
+        if is_white_space(input[p - 1]) && input.get(p + 2).map_or(true, |b| is_white_space(*b)) {
             break (&input[p + 2..], &input[..p]);
         }
         p += 2;

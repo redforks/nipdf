@@ -1,32 +1,32 @@
 use crate::{
-    into_skia::to_skia_color,
-    shading::{build_shading, Axial, Radial, Shading},
     IntoSkia, PageDimension, RenderOption, RenderOptionBuilder,
+    into_skia::to_skia_color,
+    shading::{Axial, Radial, Shading, build_shading},
 };
 use anyhow::Result as AnyResult;
 use educe::Educe;
 use either::Either::{self, Left, Right};
-use euclid::{default::Size2D, Length, Scale, Transform2D};
+use euclid::{Length, Scale, Transform2D, default::Size2D};
 use image::RgbaImage;
 use log::{debug, info, warn};
 use nipdf::{
     file::{
-        paint::fonts::{FontCache, GlyphRender, PathSink},
         GraphicsStateParameterDict, PageContent, Rectangle, ResourceDict, XObjectDict, XObjectType,
+        paint::fonts::{FontCache, GlyphRender, PathSink},
     },
     function::Domain,
     graphics::{
+        ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, Operation, Point,
+        RenderingIntent, TextRenderingMode,
         color_space::{ColorSpace, ColorSpaceTrait},
         parse_operations,
         pattern::{PatternType, ShadingPatternDict, TilingPatternDict},
         trans::{
-            f_flip, image_to_user_space, move_text_space_pos, move_text_space_right, GlyphLength,
-            GlyphSpace, GlyphToTextSpace, GlyphToUserSpace, ImageToDeviceSpace, PatternSpace,
-            PatternToUserSpace, TextPoint, TextSpace, TextToUserSpace, ThousandthsOfText,
-            UserToDeviceSpace, UserToLogicDeviceSpace, UserToUserSpace,
+            GlyphLength, GlyphSpace, GlyphToTextSpace, GlyphToUserSpace, ImageToDeviceSpace,
+            PatternSpace, PatternToUserSpace, TextPoint, TextSpace, TextToUserSpace,
+            ThousandthsOfText, UserToDeviceSpace, UserToLogicDeviceSpace, UserToUserSpace, f_flip,
+            image_to_user_space, move_text_space_pos, move_text_space_right,
         },
-        ColorArgs, ColorArgsOrName, LineCapStyle, LineJoinStyle, NameOfDict, Operation, Point,
-        RenderingIntent, TextRenderingMode,
     },
     object::{ImageMask, ImageMetadata, InlineImage, Object, PdfObject, TextStringOrNumber},
 };

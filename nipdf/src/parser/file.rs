@@ -1,4 +1,4 @@
-use super::{ws_terminated, FileError, ParseError, ParseResult};
+use super::{FileError, ParseError, ParseResult, ws_terminated};
 use crate::{
     function::{Domain, Domains},
     object::{Dictionary, Entry, Frame, FrameSet, ObjectValueError, RuntimeObjectId, XRefSection},
@@ -7,15 +7,15 @@ use crate::{
 use log::{error, info};
 use memchr::memmem::rfind;
 use nom::{
+    InputIter, InputLength, InputTake, Parser, Slice,
     branch::alt,
     bytes::complete::tag,
     character::complete::{char, satisfy, u32},
     combinator::{complete, map, map_res, opt, recognize},
-    error::{context, ErrorKind, ParseError as NomParseError},
+    error::{ErrorKind, ParseError as NomParseError, context},
     multi::{count, fold_many1, many0},
-    number::complete::{be_u16, be_u24, be_u32, be_u8},
+    number::complete::{be_u8, be_u16, be_u24, be_u32},
     sequence::{preceded, separated_pair, tuple},
-    InputIter, InputLength, InputTake, Parser, Slice,
 };
 use prescript::sname;
 use std::{fmt::Display, ops::RangeFrom, str::from_utf8_unchecked};

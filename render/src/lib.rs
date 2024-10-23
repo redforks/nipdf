@@ -3,7 +3,7 @@ use euclid::Angle;
 use image::RgbaImage;
 use nipdf::{
     file::{Page, Rectangle},
-    graphics::trans::{logic_device_to_device, LogicDeviceToDeviceSpace, UserToUserSpace},
+    graphics::trans::{LogicDeviceToDeviceSpace, UserToUserSpace, logic_device_to_device},
     object::ObjectValueError,
 };
 use tiny_skia::{Color, Pixmap};

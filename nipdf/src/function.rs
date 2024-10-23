@@ -3,10 +3,10 @@ use anyhow::Result as AnyResult;
 use educe::Educe;
 #[cfg(test)]
 use mockall::automock;
-use nipdf_macro::{pdf_object, TryFromIntObject};
+use nipdf_macro::{TryFromIntObject, pdf_object};
 use num_traits::ToPrimitive;
 use prescript::PdfFunc;
-use tinyvec::{tiny_vec, TinyVec};
+use tinyvec::{TinyVec, tiny_vec};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Domain<T = f32> {

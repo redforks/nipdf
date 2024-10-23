@@ -1,7 +1,7 @@
 use crate::{
-    name,
+    Name, name,
     parser::{token as token_parser, white_space, white_space_or_comment, ws_prefixed},
-    sname, Name,
+    sname,
 };
 use educe::Educe;
 use either::Either;
@@ -17,7 +17,7 @@ use std::{
 use winnow::Parser;
 
 mod decrypt;
-use decrypt::{decrypt, EEXEC_KEY};
+use decrypt::{EEXEC_KEY, decrypt};
 use log::error;
 use num_traits::ToPrimitive;
 

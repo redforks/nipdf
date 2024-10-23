@@ -1,4 +1,4 @@
-use super::{whitespace_or_comment, ws, ws_prefixed, ws_terminated, ParseError, ParseResult};
+use super::{ParseError, ParseResult, whitespace_or_comment, ws, ws_prefixed, ws_terminated};
 use crate::object::{
     Array, BufPos, Dictionary, HexString, IndirectObject, LiteralString, Object, ObjectId,
     ObjectValueError, Reference, Stream,
@@ -18,12 +18,12 @@ use nom::{
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
 };
 use num_traits::ToPrimitive;
-use prescript::{sname, Name};
+use prescript::{Name, sname};
 use std::{
     borrow::Cow,
     num::NonZeroU32,
     rc::Rc,
-    str::{from_utf8, from_utf8_unchecked, FromStr},
+    str::{FromStr, from_utf8, from_utf8_unchecked},
 };
 
 /// Unwrap the result of nom parser to a *normal* result.

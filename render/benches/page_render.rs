@@ -1,9 +1,9 @@
 use anyhow::Result as AnyResult;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use image::RgbaImage;
 use mimalloc::MiMalloc;
 use nipdf::file::File;
-use nipdf_render::{render_page, RenderOptionBuilder};
+use nipdf_render::{RenderOptionBuilder, render_page};
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;

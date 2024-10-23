@@ -2,10 +2,10 @@ use core::panic;
 use either::{Either, Left, Right};
 use proc_macro::TokenStream;
 use proc_macro2::Ident;
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use syn::{
-    parse_macro_input, parse_quote, Attribute, Expr, ExprCall, ExprLit, ExprPath, ExprTuple,
-    ItemTrait, Lit, LitStr, Meta, ReturnType, TraitItem, TraitItemFn, Type,
+    Attribute, Expr, ExprCall, ExprLit, ExprPath, ExprTuple, ItemTrait, Lit, LitStr, Meta,
+    ReturnType, TraitItem, TraitItemFn, Type, parse_macro_input, parse_quote,
 };
 
 /// If `#[key("key")]` attribute defined, return key value

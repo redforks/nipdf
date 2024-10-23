@@ -1,12 +1,12 @@
 use anyhow::Result;
 use clap::Parser;
 use iced::{
+    Application, Command, Element, Length, Settings, Theme,
     alignment::Horizontal,
     executor, font,
-    widget::{text_input, Button, Row, Text},
-    Application, Command, Element, Length, Settings, Theme,
+    widget::{Button, Row, Text, text_input},
 };
-use iced_aw::{modal, Card};
+use iced_aw::{Card, modal};
 use log::error;
 use mimalloc::MiMalloc;
 use std::sync::Arc;

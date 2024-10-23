@@ -1,11 +1,11 @@
 #![allow(clippy::cast_possible_truncation)]
 use super::*;
 use crate::{name, sname};
+use CharCode::*;
 use either::{Left, Right};
 use std::vec;
 use test_log::test;
 use tinyvec::array_vec;
-use CharCode::*;
 
 fn one(v: u8) -> CharCode {
     One(v)

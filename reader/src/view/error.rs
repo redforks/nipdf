@@ -2,8 +2,8 @@
 
 use crate::AppMessage;
 use iced::{
-    widget::{button, row, Text},
     Element,
+    widget::{Text, button, row},
 };
 
 /// View on application has error

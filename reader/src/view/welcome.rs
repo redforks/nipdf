@@ -2,8 +2,8 @@
 
 use crate::AppMessage;
 use iced::{
-    widget::{button, column, container, text},
     Element, Length,
+    widget::{button, column, container, text},
 };
 
 /// Welcome view when no file is opened.

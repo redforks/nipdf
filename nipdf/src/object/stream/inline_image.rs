@@ -1,7 +1,7 @@
 //! Inline Image and Inline Image Stream
 //!
 //! InlineImage decode from InlineImageStream
-use super::{decode_image, decode_stream, AnyResult, ImageMetadata};
+use super::{AnyResult, ImageMetadata, decode_image, decode_stream};
 use crate::{
     file::{ObjectResolver, ResourceDict},
     graphics::ConvertFromObject,
@@ -9,7 +9,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use image::DynamicImage;
-use prescript::{sname, Name};
+use prescript::{Name, sname};
 
 struct InlineStreamDict<'a>(&'a Dictionary);
 
