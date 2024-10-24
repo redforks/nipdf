@@ -4,7 +4,7 @@ use crate::{
     Name,
     machine::{
         Key, Machine, MachineError, MachinePlugin, MachineResult, RuntimeDictionary, RuntimeValue,
-        ok,
+        TypeCheckSnafu, UndefinedSnafu, ok,
     },
     sname,
 };
@@ -12,6 +12,7 @@ use educe::Educe;
 use either::Either::{self, Right};
 use log::error;
 use phf::phf_map;
+use snafu::{Whatever, prelude::*};
 use std::{cell::OnceCell, collections::HashMap, rc::Rc, str::from_utf8};
 use tinyvec::ArrayVec;
 
@@ -183,12 +184,10 @@ struct CodeRangeParser;
 impl EntryParser<CodeRange> for CodeRangeParser {
     fn parse_entry<P>(&self, m: &mut Machine<P>) -> Result<CodeRange, MachineError> {
         let s_upper = m.pop()?.string()?;
+        let s_upper = s_upper.borrow();
         let s_lower = m.pop()?.string()?;
-        let r = CodeRange::from_str_buf(&s_lower.borrow(), &s_upper.borrow()).ok_or_else(|| {
-            error!("Invalid code range");
-            MachineError::TypeCheck
-        });
-        r
+        let s_lower = s_lower.borrow();
+        CodeRange::from_str_buf(&s_lower, &s_upper).context(TypeCheckSnafu)
     }
 }
 
@@ -265,11 +264,8 @@ impl EntryParser<IncRangeMap> for IncRangeMapParser {
         let cid = m.pop()?.int()?.try_into().unwrap();
         let s_upper = m.pop()?.string()?;
         let s_lower = m.pop()?.string()?;
-        let range =
-            CodeRange::from_str_buf(&s_lower.borrow(), &s_upper.borrow()).ok_or_else(|| {
-                error!("Invalid code range");
-                MachineError::TypeCheck
-            })?;
+        let range = CodeRange::from_str_buf(&s_lower.borrow(), &s_upper.borrow())
+            .context(TypeCheckSnafu)?;
         Ok(IncRangeMap {
             range,
             start_cid: CID(cid),
@@ -284,11 +280,8 @@ impl EntryParser<IncRangeMap> for BFIncRangeMapParser {
         let cid = parse_cid_from_str_buf(&m.pop()?.string()?.borrow());
         let s_upper = m.pop()?.string()?;
         let s_lower = m.pop()?.string()?;
-        let range =
-            CodeRange::from_str_buf(&s_lower.borrow(), &s_upper.borrow()).ok_or_else(|| {
-                error!("Invalid code range");
-                MachineError::TypeCheck
-            })?;
+        let range = CodeRange::from_str_buf(&s_lower.borrow(), &s_upper.borrow())
+            .context(TypeCheckSnafu)?;
         Ok(IncRangeMap {
             range,
             start_cid: cid,
@@ -316,11 +309,8 @@ impl EntryParser<RangeMapToOne> for RangeMapToOneParser {
         let cid = m.pop()?.int()?.try_into().unwrap();
         let s_upper = m.pop()?.string()?;
         let s_lower = m.pop()?.string()?;
-        let range =
-            CodeRange::from_str_buf(&s_lower.borrow(), &s_upper.borrow()).ok_or_else(|| {
-                error!("Invalid notdef range");
-                MachineError::TypeCheck
-            })?;
+        let range = CodeRange::from_str_buf(&s_lower.borrow(), &s_upper.borrow())
+            .context(TypeCheckSnafu)?;
         Ok(RangeMapToOne {
             range,
             cid: CID(cid),
@@ -424,7 +414,7 @@ impl WriteMode {
             1 => Ok(Self::Vertical),
             _ => {
                 error!("Invalid WriteMode: {}", v);
-                Err(MachineError::TypeCheck)
+                Err(TypeCheckSnafu.build())
             }
         }
     }
@@ -610,7 +600,7 @@ impl CMapRegistry {
             .or_else(|| self.files.get(name).cloned())
     }
 
-    fn parse_cmap_file(&self, file: &[u8]) -> anyhow::Result<CMap> {
+    fn parse_cmap_file(&self, file: &[u8]) -> Result<CMap, MachineError> {
         let p = CMapMachinePlugin {
             registry: self,
             parsed: None,
@@ -629,12 +619,14 @@ impl CMapRegistry {
     }
 
     /// Add a CMap file, parse it and add to registry.
-    pub fn add_cmap_file(&mut self, file: &[u8]) -> anyhow::Result<Rc<CMap>> {
-        let parsed = self.parse_cmap_file(file)?;
+    pub fn add_cmap_file(&mut self, file: &[u8]) -> Result<Rc<CMap>, Whatever> {
+        let parsed = self
+            .parse_cmap_file(file)
+            .whatever_context("parse cmap file")?;
         let name = parsed.name.clone();
         self.add(parsed);
         self.get(&name)
-            .ok_or_else(|| anyhow::anyhow!("CMap not found: {:?}", name))
+            .with_whatever_context(|| format!("CMap not found: {:?}", name))
     }
 }
 
@@ -868,10 +860,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                 },
                 "usecmap" => |m| {
                     let name = m.pop()?.name()?;
-                    let cmap = m.p.registry.get(&name).ok_or_else(|| {
-                        error!("CMap not found: {:?}", name);
-                        MachineError::Undefined
-                    })?;
+                    let cmap = m.p.registry.get(&name).context(UndefinedSnafu)?;
                     m.p.use_cmap = Some(cmap);
                     ok()
                 },

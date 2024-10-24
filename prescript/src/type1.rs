@@ -4,7 +4,7 @@ use crate::{
     parser::header,
     sname,
 };
-use anyhow::Result as AnyResult;
+use snafu::{FromString, Whatever, prelude::*};
 use std::{array::from_fn, borrow::Cow};
 use winnow::{Parser, binary::le_u32, combinator::preceded, error::ContextError, token::any};
 
@@ -22,11 +22,10 @@ pub struct Font {
     encoding: Option<Encoding>,
 }
 
-fn parse_header(mut data: &[u8]) -> AnyResult<Header> {
-    match header.parse_next(&mut data) {
-        Ok(header) => Ok(header),
-        Err(e) => Err(anyhow::anyhow!("Failed to parse header: {}", e)),
-    }
+fn parse_header(mut data: &[u8]) -> Result<Header, Whatever> {
+    header
+        .parse_next(&mut data)
+        .map_err(|e| Whatever::without_source(format!("Failed to parse header: {}", e)))
 }
 
 fn parse_vec_encoding(arr: &Array) -> Encoding {
@@ -38,17 +37,19 @@ fn parse_vec_encoding(arr: &Array) -> Encoding {
 }
 
 impl Font {
-    pub fn parse(data: &[u8]) -> AnyResult<Self> {
+    pub fn parse(data: &[u8]) -> Result<Self, Whatever> {
         let data = normalize_pfb(data);
         let header = parse_header(&data)?;
         assert!(header.spec_ver.starts_with("1."), "Not Type1 font");
 
         let mut machine = Machine::new(&data);
-        let encoding = machine.execute_for_encoding()?;
+        let encoding = machine
+            .execute_for_encoding()
+            .whatever_context("execute for encoding")?;
         let encoding = match encoding {
             Value::Array(arr) => parse_vec_encoding(&arr.borrow()),
             Value::PredefinedEncoding(encoding) => Encoding::predefined(encoding).unwrap(),
-            _ => anyhow::bail!("Invalid encoding type"),
+            _ => whatever!("Invalid encoding type"),
         };
 
         Ok(Font {

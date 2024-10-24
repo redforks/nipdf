@@ -14,7 +14,6 @@ either.workspace = true
 memchr.workspace = true
 ascii85.workspace = true
 educe.workspace = true
-anyhow.workspace = true
 hex.workspace = true
 kstring.workspace = true
 num-traits.workspace = true

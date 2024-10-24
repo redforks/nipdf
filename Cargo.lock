@@ -3218,7 +3218,6 @@ dependencies = [
 name = "prescript"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "ascii85",
  "assert_approx_eq",
  "educe",

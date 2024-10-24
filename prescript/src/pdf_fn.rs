@@ -1,6 +1,5 @@
 //! Implement Pdf Type4 PostScript function
-use crate::machine::Machine;
-use anyhow::Result;
+use crate::machine::{Machine, MachineError};
 
 pub struct PdfFunc {
     script: Box<[u8]>,
@@ -22,9 +21,9 @@ impl PdfFunc {
     ///
     /// `args` pushed to stack before execution.
     /// return numbers of stack after execution.
-    pub fn exec(&self, args: &[f32]) -> Result<Vec<f32>> {
+    pub fn exec(&self, args: &[f32]) -> Result<Vec<f32>, MachineError> {
         let mut m = Machine::new(self.script.as_ref());
-        Ok(m.exec_as_function(args, self.n_out)?)
+        m.exec_as_function(args, self.n_out)
     }
 }
 

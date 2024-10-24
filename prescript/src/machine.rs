@@ -5,7 +5,7 @@ use crate::{
 };
 use educe::Educe;
 use either::Either;
-use snafu::prelude::*;
+use snafu::{ResultExt, Whatever, prelude::*};
 use std::{
     cell::{Ref, RefCell},
     collections::HashMap,
@@ -198,7 +198,7 @@ impl<'a, P> RuntimeValue<'a, P> {
     }
 
     pub fn number(&self) -> MachineResult<Either<i32, f32>> {
-        self.opt_number().ok_or(MachineError::TypeCheck)
+        self.opt_number().context(TypeCheckSnafu)
     }
 }
 
@@ -225,7 +225,7 @@ impl<'a, P> TryFrom<RuntimeValue<'a, P>> for Key {
             RuntimeValue::Value(Value::String(s)) => {
                 Ok(Self::Name(name(from_utf8(&s.borrow()).unwrap())))
             }
-            _ => Err(MachineError::TypeCheck),
+            _ => Err(TypeCheckSnafu.build()),
         }
     }
 }
@@ -298,7 +298,7 @@ impl<'a, P> TryFrom<RuntimeValue<'a, P>> for Token {
                     Rc::try_unwrap(d).map_or_else(|d| d.borrow().clone(), |d| d.into_inner());
                 Ok(Self::Literal(Value::Dictionary(into_dict(d)?)))
             }
-            _ => Err(MachineError::TypeCheck),
+            _ => Err(TypeCheckSnafu.build()),
         }
     }
 }
@@ -314,7 +314,7 @@ impl<'a, P> TryFrom<RuntimeValue<'a, P>> for Value {
     fn try_from(v: RuntimeValue<'a, P>) -> Result<Self, Self::Error> {
         match v {
             RuntimeValue::Value(v) => Ok(v),
-            _ => Err(MachineError::TypeCheck),
+            _ => Err(TypeCheckSnafu.build()),
         }
     }
 }
@@ -411,7 +411,7 @@ fn into_dict<P>(d: RuntimeDictionary<'_, P>) -> MachineResult<Dictionary> {
                     Rc::try_unwrap(d).map_or_else(|d| d.borrow().clone(), |d| d.into_inner());
                 Value::Dictionary(into_dict(d)?)
             }
-            _ => return Err(MachineError::TypeCheck),
+            _ => return Err(TypeCheckSnafu.build()),
         };
         dict.insert(k, v);
     }
@@ -445,7 +445,8 @@ macro_rules! rt_values {
     }
 }
 
-#[derive(Debug, PartialEq, Snafu)]
+#[derive(Debug, Snafu)]
+#[snafu(visibility(pub(crate)))]
 pub enum MachineError {
     #[snafu(display("stack underflow"))]
     StackUnderflow,
@@ -454,14 +455,17 @@ pub enum MachineError {
     #[snafu(display("undefined"))]
     Undefined,
     #[snafu(display("unmatched mark"))]
-    UnMatchedMark,
+    UnMatchedMark {
+        #[snafu(source(from(MachineError, Box::new)))]
+        source: Box<MachineError>,
+    },
     #[allow(dead_code)]
     #[snafu(display("invalid access"))]
     InvalidAccess,
     #[snafu(display("range check error"))]
     RangeCheck,
     #[snafu(display("syntax error"))]
-    SyntaxError,
+    SyntaxError { source: Whatever },
 }
 
 pub type MachineResult<T> = Result<T, MachineError>;
@@ -645,7 +649,7 @@ impl<'a, P> Machine<'a, P> {
             }
             RuntimeValue::Value(Value::Real(v)) => r.push(v),
             RuntimeValue::Value(Value::Integer(v)) => r.push(v as f32),
-            _ => return Err(MachineError::TypeCheck),
+            _ => return Err(TypeCheckSnafu.build()),
         }
 
         r.extend(
@@ -654,9 +658,7 @@ impl<'a, P> Machine<'a, P> {
                 .take(n_out)
                 .map(|v| v.number().unwrap().map_left(|v| v as f32).into_inner()),
         );
-        if r.len() != n_out {
-            return Err(MachineError::StackUnderflow);
-        }
+        ensure!(r.len() == n_out, StackUnderflowSnafu);
         Ok(r)
     }
 
@@ -722,7 +724,7 @@ impl<'a, P> Machine<'a, P> {
         }
         // assert that remains are all white space or comment
         self.file.borrow_mut().finish();
-        Err(MachineError::Undefined)
+        Err(UndefinedSnafu.build())
     }
 
     #[allow(dead_code)]
@@ -779,13 +781,13 @@ impl<'a, P> Machine<'a, P> {
     }
 
     pub fn pop(&mut self) -> MachineResult<RuntimeValue<'a, P>> {
-        let r = self.stack.pop().ok_or(MachineError::StackUnderflow);
+        let r = self.stack.pop().context(StackUnderflowSnafu);
         self.dump_stack();
         r
     }
 
     fn top(&self) -> MachineResult<&RuntimeValue<'a, P>> {
-        self.stack.last().ok_or(MachineError::StackUnderflow)
+        self.stack.last().context(StackUnderflowSnafu)
     }
 
     pub fn current_dict(&self) -> Rc<RefCell<RuntimeDictionary<'a, P>>> {
@@ -879,7 +881,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
         sname("index") => |m| {
             let index = m.pop()?.int()?;
             m.push(m.stack.get(m.stack.len() - index as usize - 1)
-                .ok_or(MachineError::StackUnderflow)?
+                .context(StackUnderflowSnafu)?
                 .clone());
             ok()
         },
@@ -912,7 +914,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
         // Mark obj1 .. obj(n) cleartomark -> -
         sname("cleartomark") => |m| {
             while m.pop()
-                .map_err(|e| if e == MachineError::StackUnderflow {MachineError::UnMatchedMark } else {e})?
+                .context(UnMatchedMarkSnafu)?
                  != RuntimeValue::Mark {}
             ok()
         },
@@ -940,7 +942,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
                 (RuntimeValue::Value(Value::Integer(a)), RuntimeValue::Value(Value::Integer(b))) => {
                     m.push(a & b)
                 }
-                _ => return Err(MachineError::TypeCheck),
+                _ => return Err(TypeCheckSnafu.build()),
             }
             ok()
         },
@@ -956,7 +958,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
                 (RuntimeValue::Value(Value::Integer(a)), RuntimeValue::Value(Value::Integer(b))) => {
                     m.push(a | b)
                 }
-                _ => return Err(MachineError::TypeCheck),
+                _ => return Err(TypeCheckSnafu.build()),
             }
             ok()
         },
@@ -967,7 +969,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
             match v {
                 RuntimeValue::Value(Value::Bool(b)) => m.push(!b),
                 RuntimeValue::Value(Value::Integer(i)) => m.push(!i),
-                _ => return Err(MachineError::TypeCheck),
+                _ => return Err(TypeCheckSnafu.build()),
             }
             ok()
         },
@@ -983,7 +985,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
                 (RuntimeValue::Value(Value::Integer(a)), RuntimeValue::Value(Value::Integer(b))) => {
                     m.push(a ^ b)
                 }
-                _ => return Err(MachineError::TypeCheck),
+                _ => return Err(TypeCheckSnafu.build()),
             }
             ok()
         },
@@ -1240,15 +1242,13 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
             let v = m.pop()?;
             let v = match v {
                 RuntimeValue::Value(Value::Integer(v)) => v,
-                RuntimeValue::Value(Value::Real(v)) => v.to_i32().ok_or(MachineError::RangeCheck)?,
+                RuntimeValue::Value(Value::Real(v)) => v.to_i32().context(RangeCheckSnafu)?,
                 RuntimeValue::Value(Value::String(v)) =>  {
                     let v = v.borrow();
-                    let v = std::str::from_utf8(&v).map_err(|_| MachineError::SyntaxError)?;
-                    v.parse::<f32>()
-                    .map_err(|_| MachineError::SyntaxError)
-                    .and_then(|v| v.to_i32().ok_or(MachineError::RangeCheck))?
+                    let v = std::str::from_utf8(&v).whatever_context("convert from utf8").context(SyntaxSnafu)?;
+                    v.parse::<f32>().whatever_context("parse f32").context(SyntaxSnafu)?.to_i32().context(RangeCheckSnafu)?
                 }
-                _ => return Err(MachineError::TypeCheck),
+                _ => return Err(TypeCheckSnafu.build()),
             };
             m.push(v);
             ok()
@@ -1262,11 +1262,10 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
                 RuntimeValue::Value(Value::Real(v)) => v,
                 RuntimeValue::Value(Value::String(v)) =>  {
                     let v = v.borrow();
-                    let v = std::str::from_utf8(&v).map_err(|_| MachineError::SyntaxError)?;
-                    v.parse::<f32>()
-                    .map_err(|_| MachineError::SyntaxError)?
+                    let v = std::str::from_utf8(&v).whatever_context("convert from utf8").context(SyntaxSnafu)?;
+                    v.parse::<f32>().whatever_context("parse f32").context(SyntaxSnafu)?
                 }
-                _ => return Err(MachineError::TypeCheck),
+                _ => return Err(TypeCheckSnafu.build()),
             };
             m.push(v);
             ok()
@@ -1302,7 +1301,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
                 match m.pop()? {
                     RuntimeValue::ArrayMark => break,
                     RuntimeValue::Value(v) => array.push(v),
-                    _ => return Err(MachineError::TypeCheck),
+                    _ => return Err(TypeCheckSnafu.build()),
                 }
             }
             array.reverse();
@@ -1394,9 +1393,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
                     let index = key.int()?;
                     let mut array = array.borrow_mut();
                     let index = index as usize;
-                    if index >= array.len() {
-                        return Err(MachineError::RangeCheck);
-                    }
+                    ensure!(index < array.len(), RangeCheckSnafu);
                     array[index] = value.try_into()?;
                 }
                 RuntimeValue::Value(Value::String(s)) =>
@@ -1404,9 +1401,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
                     let index = key.int()?;
                     let mut s = s.borrow_mut();
                     let index = index as usize;
-                    if index >= s.len() {
-                        return Err(MachineError::RangeCheck);
-                    }
+                    ensure!(index < s.len(), RangeCheckSnafu);
                     #[allow(clippy::cast_possible_truncation)]
                     {
                         s[index] = value.int()? as u8;
@@ -1416,14 +1411,12 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
                     let index = key.int()?;
                     let mut arr = arr.borrow_mut();
                     let index = index as usize;
-                    if index >= arr.len() {
-                        return Err(MachineError::RangeCheck);
-                    }
+                    ensure!(index < arr.len(), RangeCheckSnafu);
                     arr[index] = value.try_into()?;
                 }
                 v => {
                     error!("put on non-dict/array/string: {:?}, key: {:?}, value: {:?}", v, key, value);
-                    return Err(MachineError::TypeCheck);
+                    return Err(TypeCheckSnafu.build());
                 }
             };
             ok()
@@ -1436,29 +1429,29 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
             match m.pop()? {
                 RuntimeValue::Dictionary(dict) => {
                     let key: Key = key.try_into()?;
-                    let v = dict.borrow().get(&key).cloned().ok_or(MachineError::Undefined)?;
+                    let v = dict.borrow().get(&key).cloned().context(UndefinedSnafu)?;
                     m.push(v);
                 }
                 RuntimeValue::Value(Value::Array(array)) => {
                     let index = key.int()?;
                     let array = array.borrow();
-                    let v = array.get(index as usize).cloned().ok_or(MachineError::RangeCheck)?;
+                    let v = array.get(index as usize).cloned().context(RangeCheckSnafu)?;
                     m.push(v);
                 }
                 RuntimeValue::Value(Value::Procedure(p)) => {
                     let index = key.int()?;
-                    let v = p.borrow().get(index as usize).cloned().ok_or(MachineError::RangeCheck)?;
+                    let v = p.borrow().get(index as usize).cloned().context(RangeCheckSnafu)?;
                     m.push(v);
                 }
                 RuntimeValue::Value(Value::String(s)) => {
                     let index = key.int()?;
                     let s = s.borrow();
-                    let v = s.get(index as usize).cloned().ok_or(MachineError::RangeCheck)?;
+                    let v = s.get(index as usize).cloned().context(RangeCheckSnafu)?;
                     m.push(v as i32);
                 }
                 v => {
                     error!("get on non-dict/array/string: {:?}, key: {:?}", v, key);
-                    return Err(MachineError::TypeCheck);
+                    return Err(TypeCheckSnafu.build());
                 }
             };
             ok()
@@ -1543,13 +1536,13 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
             match proc {
                 RuntimeValue::Value(Value::Procedure(p)) => m.execute_procedure(p),
                 v@RuntimeValue::Dictionary(_) => {m.push(v); ok()}
-                _ => Err(MachineError::TypeCheck),
+                _ => Err(TypeCheckSnafu.build()),
             }
         },
         // file closefile -
         sname("closefile") => |m| {
             let RuntimeValue::CurrentFile(_f) = m.pop()? else {
-                return Err(MachineError::TypeCheck);
+                return Err(TypeCheckSnafu.build());
             };
             Ok(ExecState::EndEExec)
         },
@@ -1631,7 +1624,7 @@ fn object_gt<'a, P>(a: &RuntimeValue<'a, P>, b: &RuntimeValue<'a, P>) -> Machine
         (RuntimeValue::Value(Value::String(a)), RuntimeValue::Value(Value::String(b))) => {
             a.borrow().as_slice() > b.borrow().as_slice()
         }
-        _ => return Err(MachineError::TypeCheck),
+        _ => return Err(TypeCheckSnafu.build()),
     })
 }
 
@@ -1695,7 +1688,7 @@ impl<'a, P> VariableDictStack<'a, P> {
             .stack
             .iter()
             .find_map(|dict| dict.borrow().get(name).cloned())
-            .ok_or(MachineError::Undefined);
+            .context(UndefinedSnafu);
         #[cfg(debug_assertions)]
         if r.is_err() {
             error!("name not found: {:?}", name);
