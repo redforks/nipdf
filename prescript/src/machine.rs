@@ -1,6 +1,8 @@
 use crate::{
     Name, name,
-    parser::{token as token_parser, white_space, white_space_or_comment, ws_prefixed},
+    parser::{
+        perror_to_whatever, token as token_parser, white_space, white_space_or_comment, ws_prefixed,
+    },
     sname,
 };
 use educe::Educe;
@@ -466,6 +468,15 @@ pub enum MachineError {
     RangeCheck,
     #[snafu(display("syntax error"))]
     SyntaxError { source: Whatever },
+    #[snafu(whatever, display("{message}"))]
+    Whatever {
+        message: String,
+
+        // Having a `source` is optional, but if it is present, it must
+        // have this specific attribute and type:
+        #[snafu(source(from(Box<dyn std::error::Error>, Some)))]
+        source: Option<Box<dyn std::error::Error>>,
+    },
 }
 
 pub type MachineResult<T> = Result<T, MachineError>;
@@ -506,46 +517,53 @@ impl<'a> CurrentFile<'a> {
         }
     }
 
-    pub fn skip_white_space(&mut self) {
+    pub fn skip_white_space(&mut self) -> Result<(), Whatever> {
         match self.decryped {
             Some(ref data) => {
                 let mut buf = &data[self.decryped_pos..];
-                white_space.parse_next(&mut buf).unwrap();
+                white_space
+                    .parse_next(&mut buf)
+                    .map_err(|e| perror_to_whatever(e, "skip whitespace"))?;
                 self.decryped_pos = data.len() - buf.len();
             }
             None => {
                 let mut remains = &self.data[self.remains_pos..];
-                white_space.parse_next(&mut remains).unwrap();
+                white_space
+                    .parse_next(&mut remains)
+                    .map_err(|e| perror_to_whatever(e, "skip whitespace 2"))?;
                 self.remains_pos = self.data.len() - remains.len();
             }
         }
+        Ok(())
     }
 
-    pub fn start_decrypt(&mut self) {
+    pub fn start_decrypt(&mut self) -> Result<(), Whatever> {
         assert!(self.decryped.is_none());
-        self.skip_white_space();
+        self.skip_white_space()?;
         let remains = &self.data[self.remains_pos..];
         let decrypted;
         (self.hex_form, decrypted) = decrypt(EEXEC_KEY, 4, remains);
         self.decryped = Some(decrypted);
         self.remains_pos += 4;
         self.decryped_pos = 0;
+        Ok(())
     }
 
-    pub fn stop_decrypt(&mut self) {
+    pub fn stop_decrypt(&mut self) -> Result<(), Whatever> {
         assert!(self.decryped.is_some());
-        self.skip_white_space();
+        self.skip_white_space()?;
         self.remains_pos += if self.hex_form {
             self.decryped_pos * 2
         } else {
             self.decryped_pos
         };
         self.decryped = None;
+        Ok(())
     }
 
-    pub fn read(&mut self, buf: &mut [u8]) -> usize {
-        self.skip_white_space();
-        match self.decryped {
+    pub fn read(&mut self, buf: &mut [u8]) -> Result<usize, Whatever> {
+        self.skip_white_space()?;
+        Ok(match self.decryped {
             Some(ref data) => {
                 let len = buf.len().min(data.len() - self.decryped_pos);
                 buf[..len].copy_from_slice(&data[self.decryped_pos..(self.decryped_pos + len)]);
@@ -558,7 +576,7 @@ impl<'a> CurrentFile<'a> {
                 self.remains_pos += len;
                 len
             }
-        }
+        })
     }
 
     /// Check file read complete
@@ -675,10 +693,16 @@ impl<'a, P> Machine<'a, P> {
             match self.exec(token)? {
                 ExecState::Ok => {}
                 ExecState::StartEExec => {
-                    self.file.borrow_mut().start_decrypt();
+                    self.file
+                        .borrow_mut()
+                        .start_decrypt()
+                        .whatever_context("start decrypt")?;
                 }
                 ExecState::EndEExec => {
-                    self.file.borrow_mut().stop_decrypt();
+                    self.file
+                        .borrow_mut()
+                        .stop_decrypt()
+                        .whatever_context("stop decrypt")?;
                 }
                 ExecState::DefinesEncoding => {}
             }
@@ -706,10 +730,16 @@ impl<'a, P> Machine<'a, P> {
             match self.exec(token)? {
                 ExecState::Ok => {}
                 ExecState::StartEExec => {
-                    self.file.borrow_mut().start_decrypt();
+                    self.file
+                        .borrow_mut()
+                        .start_decrypt()
+                        .whatever_context("start decrypt")?;
                 }
                 ExecState::EndEExec => {
-                    self.file.borrow_mut().stop_decrypt();
+                    self.file
+                        .borrow_mut()
+                        .stop_decrypt()
+                        .whatever_context("stop decrypt")?;
                 }
                 ExecState::DefinesEncoding => {
                     return self
@@ -1487,7 +1517,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
             let f = m.pop()?.current_file()?;
             let mut borrow = s.borrow_mut();
             let buf = &mut borrow[..];
-            let eof = f.borrow_mut().read(buf) < buf.len();
+            let eof = f.borrow_mut().read(buf).whatever_context("check eof")? < buf.len();
             drop(borrow);
             m.push(s);
             m.push(!eof);
