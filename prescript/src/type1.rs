@@ -1,10 +1,10 @@
 use crate::{
     Encoding,
     machine::{Array, Machine, Value},
-    parser::header,
+    parser::{header, perror_to_whatever},
     sname,
 };
-use snafu::{FromString, Whatever, prelude::*};
+use snafu::{Whatever, prelude::*};
 use std::{array::from_fn, borrow::Cow};
 use winnow::{Parser, binary::le_u32, combinator::preceded, error::ContextError, token::any};
 
@@ -25,7 +25,7 @@ pub struct Font {
 fn parse_header(mut data: &[u8]) -> Result<Header, Whatever> {
     header
         .parse_next(&mut data)
-        .map_err(|e| Whatever::without_source(format!("Failed to parse header: {}", e)))
+        .map_err(|e| perror_to_whatever(e, "parse header"))
 }
 
 fn parse_vec_encoding(arr: &Array) -> Encoding {

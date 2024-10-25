@@ -4,6 +4,7 @@ use crate::{
     type1::Header,
 };
 use either::Either;
+use snafu::{FromString as _, Whatever, prelude::*};
 use std::{
     cell::RefCell,
     iter::once,
@@ -14,10 +15,63 @@ use winnow::{
     PResult, Parser,
     ascii::hex_digit1,
     combinator::{alt, delimited, dispatch, fail, opt, preceded, repeat, terminated},
-    error::{ContextError, ErrMode},
+    error::{AddContext, ErrMode, ErrorKind, ParserError as _, StrContext},
     stream::{AsChar, Stream},
     token::{any, literal, one_of, take_till, take_while},
 };
+
+#[derive(Snafu, Debug)]
+pub enum ParserError<C: 'static = StrContext> {
+    Leaf {
+        kind: ErrorKind,
+        context: Option<C>,
+    },
+    Inter {
+        #[snafu(source(from(ParserError<C>, Box::new)))]
+        source: Box<ParserError<C>>,
+        kind: ErrorKind,
+        context: Option<C>,
+    },
+}
+
+pub(crate) fn perror_to_whatever(err: ErrMode<ParserError>, msg: impl Into<String>) -> Whatever {
+    match err.into_inner() {
+        Some(err) => Whatever::with_source(Box::new(err), msg.into()),
+        None => unreachable!(),
+    }
+}
+
+impl<I: Stream, C> AddContext<I, C> for ParserError<C> {
+    fn add_context(
+        mut self,
+        _input: &I,
+        _token_start: &<I as Stream>::Checkpoint,
+        context: C,
+    ) -> Self {
+        match &mut self {
+            Self::Leaf { context: c, .. } => *c = Some(context),
+            Self::Inter { context: c, .. } => *c = Some(context),
+        }
+        self
+    }
+}
+
+impl<I: Stream> winnow::error::ParserError<I> for ParserError {
+    fn from_error_kind(_input: &I, kind: ErrorKind) -> Self {
+        Self::Leaf {
+            kind,
+            context: None,
+        }
+    }
+
+    fn append(self, _input: &I, _token_start: &<I as Stream>::Checkpoint, kind: ErrorKind) -> Self {
+        Self::Inter {
+            source: Box::new(self),
+            kind,
+            context: None,
+        }
+    }
+}
 
 /// Parses the header of a Type 1 font. The header is the first line of the
 /// file, and is of the form:
@@ -27,7 +81,7 @@ use winnow::{
 /// The first token is the version of the Type 1 specification that the font
 /// conforms to. The second token is the font name. The third token is the
 /// font version.
-pub fn header(input: &mut &[u8]) -> PResult<Header> {
+pub fn header(input: &mut &[u8]) -> PResult<Header, ParserError> {
     preceded(
         literal(b"%!"),
         alt((b"PS-AdobeFont", b"AdobeFont", b"FontType1")),
@@ -49,7 +103,7 @@ pub fn header(input: &mut &[u8]) -> PResult<Header> {
     })
 }
 
-fn comment(input: &mut &[u8]) -> PResult<()> {
+fn comment(input: &mut &[u8]) -> PResult<(), ParserError> {
     preceded(
         literal(b"%"),
         take_till(0.., |c| c == b'\n' || c == b'\r' || c == b'\x0c'),
@@ -82,24 +136,24 @@ fn is_regular_char(b: u8) -> bool {
 }
 
 /// Parses one or more white space bytes
-pub fn white_space<'a>(input: &mut &'a [u8]) -> PResult<&'a [u8]> {
+pub fn white_space<'a>(input: &mut &'a [u8]) -> PResult<&'a [u8], ParserError> {
     take_while(1.., is_white_space).parse_next(input)
 }
 
-pub fn white_space_or_comment(input: &mut &[u8]) -> PResult<()> {
+pub fn white_space_or_comment(input: &mut &[u8]) -> PResult<(), ParserError> {
     alt((white_space.value(()), comment)).parse_next(input)
 }
 
 /// Ignore preceded whitespace and/or comments
-pub fn ws_prefixed<'a, P, O>(p: P) -> impl Parser<&'a [u8], O, ContextError>
+pub fn ws_prefixed<'a, P, O>(p: P) -> impl Parser<&'a [u8], O, ParserError>
 where
-    P: Parser<&'a [u8], O, ContextError>,
+    P: Parser<&'a [u8], O, ParserError>,
 {
     preceded(repeat::<_, _, (), _, _>(.., white_space_or_comment), p)
 }
 
 /// Matches '\n', '\r', '\r\n'
-fn loose_line_ending(input: &mut &[u8]) -> PResult<()> {
+fn loose_line_ending(input: &mut &[u8]) -> PResult<(), ParserError> {
     match input.first() {
         Some(b'\n') => {
             input.next_token();
@@ -116,7 +170,7 @@ fn loose_line_ending(input: &mut &[u8]) -> PResult<()> {
     }
 }
 
-fn int_or_float(input: &mut &[u8]) -> PResult<Either<i32, f32>> {
+fn int_or_float(input: &mut &[u8]) -> PResult<Either<i32, f32>, ParserError> {
     let buf = (
         one_of(('0'..='9', '+', '-', '.')),
         take_while(0.., ('0'..='9', 'a'..='z', 'A'..='Z', '.', '-', '+', '#')),
@@ -126,38 +180,38 @@ fn int_or_float(input: &mut &[u8]) -> PResult<Either<i32, f32>> {
     if let Some(pos) = memchr::memchr(b'#', buf) {
         let (radix, num) = buf.split_at(pos);
         let radix = unsafe {
-            from_utf8_unchecked(radix)
-                .parse::<u32>()
-                .map_err(|_| ErrMode::Backtrack(ContextError::new()))?
+            from_utf8_unchecked(radix).parse::<u32>().map_err(|_| {
+                ErrMode::Backtrack(ParserError::from_error_kind(input, ErrorKind::Tag))
+            })?
         };
         let num = unsafe {
-            i32::from_str_radix(from_utf8_unchecked(&num[1..]), radix)
-                .map_err(|_| ErrMode::Backtrack(ContextError::new()))?
+            i32::from_str_radix(from_utf8_unchecked(&num[1..]), radix).map_err(|_| {
+                ErrMode::Backtrack(ParserError::from_error_kind(input, ErrorKind::Tag))
+            })?
         };
         return Ok(Either::Left(num));
     }
 
     if memchr::memchr3(b'.', b'e', b'E', buf).is_some() {
         Ok(Either::Right(unsafe {
-            from_utf8_unchecked(buf)
-                .parse::<f32>()
-                .map_err(|_| ErrMode::Backtrack(ContextError::new()))?
+            from_utf8_unchecked(buf).parse::<f32>().map_err(|_| {
+                ErrMode::Backtrack(ParserError::from_error_kind(input, ErrorKind::Tag))
+            })?
         }))
     } else {
         Ok(unsafe {
             let s = from_utf8_unchecked(buf);
             match s.parse::<i32>() {
                 Ok(v) => Either::Left(v),
-                Err(_) => Either::Right(
-                    s.parse::<f32>()
-                        .map_err(|_| ErrMode::Backtrack(ContextError::new()))?,
-                ),
+                Err(_) => Either::Right(s.parse::<f32>().map_err(|_| {
+                    ErrMode::Backtrack(ParserError::from_error_kind(input, ErrorKind::Tag))
+                })?),
             }
         })
     }
 }
 
-fn string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
+fn string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
     enum StringFragment<'a> {
         Literal(&'a [u8]),
         EscapedChar(u8),
@@ -165,13 +219,13 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
         Nested(Box<[u8]>),
     }
 
-    fn literal_fragment<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>> {
+    fn literal_fragment<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>, ParserError> {
         let buf = take_till(1.., (b'(', b')', b'\\')).parse_next(input)?;
         Ok(StringFragment::Literal(buf))
     }
 
-    fn escaped_char<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>> {
-        fn parse_oct_byte(input: &mut &[u8]) -> PResult<u8> {
+    fn escaped_char<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>, ParserError> {
+        fn parse_oct_byte(input: &mut &[u8]) -> PResult<u8, ParserError> {
             let buf = take_while(1..=3, |c: u8| c.is_oct_digit()).parse_next(input)?;
             #[allow(clippy::cast_possible_truncation)]
             Ok(unsafe { u16::from_str_radix(from_utf8_unchecked(buf), 8).unwrap() as u8 })
@@ -194,12 +248,12 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
         Ok(StringFragment::EscapedChar(c))
     }
 
-    fn escaped_newline<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>> {
+    fn escaped_newline<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>, ParserError> {
         preceded(literal(b"\\"), loose_line_ending).parse_next(input)?;
         Ok(StringFragment::EscapedNewLine)
     }
 
-    fn build_string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
+    fn build_string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
         repeat(0.., fragment)
             .fold(Vec::new, |mut r, frag| {
                 match frag {
@@ -216,7 +270,7 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
             .map(|x| x.into())
     }
 
-    fn nested<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>> {
+    fn nested<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>, ParserError> {
         let frag = delimited(b'(', opt(build_string), b')').parse_next(input)?;
         Ok(StringFragment::Nested(match frag {
             Some(s) => s,
@@ -224,17 +278,17 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
         }))
     }
 
-    fn fragment<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>> {
+    fn fragment<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>, ParserError> {
         alt((literal_fragment, escaped_char, escaped_newline, nested)).parse_next(input)
     }
 
-    fn literal_string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
+    fn literal_string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
         terminated(build_string, b')').parse_next(input)
     }
 
     /// String encoded in hex wrapped in "<>", e.g. <0123456789ABCDEF>
     /// White space are ignored, if last byte is missing, it is assumed to be 0.
-    fn hex_string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
+    fn hex_string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
         let bytes = repeat(0.., alt((hex_digit1, white_space)))
             .fold(Vec::new, |mut bytes, frag| {
                 if !is_white_space(frag[0]) {
@@ -260,7 +314,7 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
         terminated(bytes, b'>').parse_next(input)
     }
 
-    fn ascii85(input: &mut &[u8]) -> PResult<Box<[u8]>> {
+    fn ascii85(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
         delimited(
             b'~',
             take_while(0.., |c| c != b'~').map(|v: &[u8]| {
@@ -273,7 +327,7 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
         .parse_next(input)
     }
 
-    fn hex_or_85(input: &mut &[u8]) -> PResult<Box<[u8]>> {
+    fn hex_or_85(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
         alt((hex_string, ascii85)).parse_next(input)
     }
 
@@ -285,13 +339,13 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>> {
     .parse_next(input)
 }
 
-fn executable_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str> {
+fn executable_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str, ParserError> {
     take_while(1.., is_regular_char)
         .map(|s| from_utf8(s).unwrap())
         .parse_next(input)
 }
 
-fn literal_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str> {
+fn literal_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str, ParserError> {
     preceded(
         '/',
         take_while(0.., is_regular_char).map(|s| from_utf8(s).unwrap()),
@@ -299,17 +353,17 @@ fn literal_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str> {
     .parse_next(input)
 }
 
-fn procedure(input: &mut &[u8]) -> PResult<TokenArray> {
+fn procedure(input: &mut &[u8]) -> PResult<TokenArray, ParserError> {
     delimited(b'{', repeat(0.., ws_prefixed(token)), ws_prefixed(b'}')).parse_next(input)
 }
 
 /// Parses '[', ']', '<<', '>>' and convert them to String.
-fn special_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str> {
+fn special_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str, ParserError> {
     let buf = take_while(1..=2, (b'[', ']', b"<<", b">>")).parse_next(input)?;
     Ok(unsafe { from_utf8_unchecked(buf) })
 }
 
-pub fn token(input: &mut &[u8]) -> PResult<Token> {
+pub fn token(input: &mut &[u8]) -> PResult<Token, ParserError> {
     alt((
         int_or_float.map(|v| Token::Literal(v.either(Value::Integer, Value::Real))),
         string.map(|s| Token::Literal(Vec::from(s).into())),
