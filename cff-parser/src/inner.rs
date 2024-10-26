@@ -14,13 +14,13 @@ use nom::{
 };
 use paste::paste;
 use prescript::{Encoding, Name, name, sname};
+use snafu::prelude::*;
 use std::{
     collections::HashMap,
     hash::Hash,
     ops::{Deref, Range, RangeInclusive},
     str::from_utf8,
 };
-use thiserror::Error as ThisError;
 
 mod predefined_charsets;
 mod predefined_encodings;
@@ -360,32 +360,34 @@ fn parse_operator(buf: &[u8]) -> ParseResult<Operator> {
 }
 
 /// Error may returned in this crate.
-#[derive(PartialEq, Eq, Debug, Clone, ThisError)]
+#[derive(PartialEq, Eq, Debug, Clone, Snafu)]
 pub enum Error {
-    #[error("Dict value not Integer")]
+    #[snafu(display("Dict value not Integer"))]
     ExpectInt,
-    #[error("Dict value not Real")]
+    #[snafu(display("Dict value not Real"))]
     ExpectReal,
-    #[error("Dict value not Integer Array")]
+    #[snafu(display("Dict value not Integer Array"))]
     ExpectIntArray,
-    #[error("Dict value not Real Array")]
+    #[snafu(display("Dict value not Real Array"))]
     ExpectRealArray,
-    #[error("Dict value not Bool")]
+    #[snafu(display("Dict value not Bool"))]
     ExpectBool,
 
-    #[error("Invalid offsets data")]
+    #[snafu(display("Invalid offsets data"))]
     InvalidOffsetsData,
 
-    #[error("Parse error: {0}")]
-    ParseError(String),
+    #[snafu(display("Parse error: {message}"))]
+    ParseError { message: String },
 
-    #[error("Required top dict value missing")]
+    #[snafu(display("Required top dict value missing"))]
     RequiredDictValueMissing,
 }
 
 impl<E: std::fmt::Debug> From<nom::Err<E>> for Error {
     fn from(e: nom::Err<E>) -> Self {
-        Self::ParseError(format!("{}", e))
+        Self::ParseError {
+            message: format!("{}", e),
+        }
     }
 }
 
@@ -477,22 +479,22 @@ macro_rules! access_methods {
 }
 
 impl Dict {
-    access_methods!(int, |v| v.int().ok_or(Error::ExpectInt), i32);
+    access_methods!(int, |v| v.int().context(ExpectIntSnafu), i32);
 
-    access_methods!(real, |v| v.real().ok_or(Error::ExpectReal), f32);
+    access_methods!(real, |v| v.real().context(ExpectRealSnafu), f32);
 
-    access_methods!(bool, |v| v.bool().ok_or(Error::ExpectBool), bool);
+    access_methods!(bool, |v| v.bool().context(ExpectBoolSnafu), bool);
 
     access_methods!(
         int_array,
-        |v| v.int_array().ok_or(Error::ExpectIntArray),
+        |v| v.int_array().context(ExpectIntArraySnafu),
         &[i32],
         &'static [i32]
     );
 
     access_methods!(
         real_array,
-        |v| v.real_array().ok_or(Error::ExpectRealArray),
+        |v| v.real_array().context(ExpectRealArraySnafu),
         &[f32],
         &'static [f32]
     );
@@ -546,11 +548,10 @@ impl<'a> Offsets<'a> {
     /// Return `Error::InvalidOffsetsData` if first offset is not 1.
     /// Assume data byte length is multiple of off_size.
     pub fn new(off_size: OffSize, data: &'a [u8]) -> Result<Self> {
-        let (_, first) = Self::_get(data, off_size, 0)
-            .map_err(|e| Error::ParseError(format!("parse first offset failed: {:?}", e)))?;
-        if first != 1 {
-            return Err(Error::InvalidOffsetsData);
-        }
+        let (_, first) = Self::_get(data, off_size, 0).map_err(|e| Error::ParseError {
+            message: format!("parse first offset failed: {:?}", e),
+        })?;
+        ensure!(first == 1, InvalidOffsetsDataSnafu);
         Ok(Self(off_size, data))
     }
 
@@ -618,7 +619,9 @@ impl<'a> IndexedData<'a> {
         f.parse(buf)
             .map_err(|e| {
                 log::error!("parse data failed: {:?}", e);
-                Error::ParseError(format!("parse data failed: {:?}", e))
+                Error::ParseError {
+                    message: format!("parse data failed: {:?}", e),
+                }
             })
             .map(|(_, v)| v)
     }
@@ -833,7 +836,7 @@ impl<'a> Deref for SIDDict<'a> {
 impl<'a> SIDDict<'a> {
     fn resolve_sid(&self, v: &Operand) -> Result<&str> {
         v.int()
-            .ok_or(Error::ExpectInt)
+            .context(ExpectIntSnafu)
             .map(|v| self.strings.get(v.try_into().unwrap()))
     }
 

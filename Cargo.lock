@@ -502,8 +502,8 @@ dependencies = [
  "nom",
  "paste",
  "prescript",
+ "snafu",
  "test-case",
- "thiserror",
 ]
 
 [[package]]
