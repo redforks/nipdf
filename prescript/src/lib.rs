@@ -1,4 +1,5 @@
 #![warn(clippy::unwrap_used)]
+#![cfg_attr(test, allow(clippy::unwrap_used))]
 
 pub(crate) mod machine;
 pub(crate) mod parser;

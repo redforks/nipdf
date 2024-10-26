@@ -514,7 +514,7 @@ fn get_builtin_cmap() {
     let reg = CMapRegistry::new();
 
     // get cmap that use another builtin cmap
-    let cmap = reg.get(&sname("ETen-B5-V")).unwrap();
+    let cmap = reg.get(&sname("ETen-B5-V")).unwrap().unwrap();
     assert_eq!("ETen-B5-V", cmap.name.as_str());
     assert_eq!(
         "ETen-B5-H",
@@ -523,7 +523,7 @@ fn get_builtin_cmap() {
 
     // assert all builtin cmaps
     for &n in PREDEFINED_CMAPS.keys() {
-        let cmap = reg.get(&name(n)).unwrap();
+        let cmap = reg.get(&name(n)).unwrap().unwrap();
         assert_eq!(n, cmap.name.as_str());
     }
 }
@@ -531,6 +531,6 @@ fn get_builtin_cmap() {
 #[test]
 fn identity_h_map() {
     let reg = CMapRegistry::new();
-    let cmap = reg.get(&sname("Identity-H")).unwrap();
+    let cmap = reg.get(&sname("Identity-H")).unwrap().unwrap();
     assert_eq!(vec![CID(0x04)], cmap.map(&[0x0, 0x04u8]));
 }

@@ -20,7 +20,7 @@ impl Decryptor {
 }
 
 /// Returns (true, _) if data in hex form, (false, _) if in binary form.
-pub fn decrypt(key: u16, n: usize, buf: &[u8]) -> (bool, Vec<u8>) {
+pub fn decrypt(key: u16, n: usize, buf: &[u8]) -> Result<(bool, Vec<u8>), hex::FromHexError> {
     // check first 8 bytes of buf to see its format, assert that it is not ascii hex form
     let decoded_hex;
     let is_hex;
@@ -28,7 +28,7 @@ pub fn decrypt(key: u16, n: usize, buf: &[u8]) -> (bool, Vec<u8>) {
         is_hex = true;
         // take slice until non ascii_hexdigit, if in odd number, trunk last digit
         let n = buf.iter().take_while(|b| b.is_ascii_hexdigit()).count();
-        decoded_hex = decode(&buf[..n / 2 * 2]).unwrap();
+        decoded_hex = decode(&buf[..n / 2 * 2])?;
         &decoded_hex[..]
     } else {
         is_hex = false;
@@ -40,12 +40,12 @@ pub fn decrypt(key: u16, n: usize, buf: &[u8]) -> (bool, Vec<u8>) {
         decryptor.decrypt(*b);
     }
 
-    (
+    Ok((
         is_hex,
         buf[n..]
             .iter()
             .cloned()
             .map(|b| decryptor.decrypt(b))
             .collect(),
-    )
+    ))
 }

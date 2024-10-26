@@ -20,6 +20,7 @@ num-traits.workspace = true
 tinyvec.workspace = true
 phf.workspace = true
 snafu.workspace = true
+once_cell.workspace = true
 
 [dev-dependencies]
 test-case.workspace = true

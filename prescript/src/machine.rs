@@ -7,7 +7,7 @@ use crate::{
 };
 use educe::Educe;
 use either::Either;
-use snafu::{FromString, Whatever, prelude::*};
+use snafu::{FromString, ResultExt, Whatever, prelude::*};
 use std::{
     cell::{Ref, RefCell},
     collections::HashMap,
@@ -542,7 +542,7 @@ impl<'a> CurrentFile<'a> {
         self.skip_white_space()?;
         let remains = &self.data[self.remains_pos..];
         let decrypted;
-        (self.hex_form, decrypted) = decrypt(EEXEC_KEY, 4, remains);
+        (self.hex_form, decrypted) = decrypt(EEXEC_KEY, 4, remains).whatever_context("decrypt")?;
         self.decryped = Some(decrypted);
         self.remains_pos += 4;
         self.decryped_pos = 0;

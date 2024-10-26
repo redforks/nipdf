@@ -11,9 +11,10 @@ use crate::{
 use educe::Educe;
 use either::Either::{self, Right};
 use log::error;
+use once_cell::unsync::OnceCell;
 use phf::phf_map;
 use snafu::{ResultExt, Whatever, prelude::*};
-use std::{cell::OnceCell, collections::HashMap, rc::Rc, str::from_utf8};
+use std::{collections::HashMap, rc::Rc, str::from_utf8};
 use tinyvec::ArrayVec;
 
 /// Convert from CharCode using cmap, use it to select glyph id
@@ -591,16 +592,17 @@ impl CMapRegistry {
         self.files.insert(cmap.name.clone(), Rc::new(cmap));
     }
 
-    pub fn get(&self, name: &Name) -> Option<Rc<CMap>> {
+    pub fn get(&self, name: &Name) -> Result<Option<Rc<CMap>>, MachineError> {
         self.predefined
             .get(name.as_str())
             .map(|c| {
-                Rc::clone(c.get_or_init(|| {
+                Ok(Rc::clone(c.get_or_try_init(|| {
                     let file = PREDEFINED_CMAPS[name.as_str()];
-                    Rc::new(self.parse_cmap_file(file).unwrap())
-                }))
+                    Ok(Rc::new(self.parse_cmap_file(file)?))
+                })?))
             })
-            .or_else(|| self.files.get(name).cloned())
+            .or_else(|| Ok::<_, MachineError>(self.files.get(name).cloned()).transpose())
+            .transpose()
     }
 
     fn parse_cmap_file(&self, file: &[u8]) -> Result<CMap, MachineError> {
@@ -629,7 +631,8 @@ impl CMapRegistry {
         let name = parsed.name.clone();
         self.add(parsed);
         self.get(&name)
-            .with_whatever_context(|| format!("CMap not found: {:?}", name))
+            .with_whatever_context(|_| format!("get cmap: {}", name))?
+            .with_whatever_context(|| format!("CMap not found: {}", name))
     }
 }
 
@@ -863,7 +866,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                 },
                 "usecmap" => |m| {
                     let name = m.pop()?.name()?;
-                    let cmap = m.p.registry.get(&name).context(UndefinedSnafu)?;
+                    let cmap = m.p.registry.get(&name).with_whatever_context(|_|format!("get cmap: {}", name))?.context(UndefinedSnafu)?;
                     m.p.use_cmap = Some(cmap);
                     ok()
                 },
