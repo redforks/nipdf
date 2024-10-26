@@ -1,12 +1,12 @@
 use crate::{
     Encoding,
     machine::{Array, Machine, Value},
-    parser::{header, perror_to_whatever},
+    parser::{ParserError, header, parse_error_to_whatever, perror_to_whatever},
     sname,
 };
 use snafu::{Whatever, prelude::*};
 use std::{array::from_fn, borrow::Cow};
-use winnow::{Parser, binary::le_u32, combinator::preceded, error::ContextError, token::any};
+use winnow::{Parser, binary::le_u32, combinator::preceded, token::any};
 
 #[derive(Debug, PartialEq)]
 pub struct Header {
@@ -28,17 +28,17 @@ fn parse_header(mut data: &[u8]) -> Result<Header, Whatever> {
         .map_err(|e| perror_to_whatever(e, "parse header"))
 }
 
-fn parse_vec_encoding(arr: &Array) -> Encoding {
+fn parse_vec_encoding(arr: &Array) -> Result<Encoding, Whatever> {
     let mut names = from_fn(|_| sname(".notdef"));
     for (i, v) in arr.iter().enumerate() {
-        names[i] = v.name().unwrap();
+        names[i] = v.name().whatever_context("get encoding name")?;
     }
-    Encoding::new(names)
+    Ok(Encoding::new(names))
 }
 
 impl Font {
     pub fn parse(data: &[u8]) -> Result<Self, Whatever> {
-        let data = normalize_pfb(data);
+        let data = normalize_pfb(data)?;
         let header = parse_header(&data)?;
         assert!(header.spec_ver.starts_with("1."), "Not Type1 font");
 
@@ -47,8 +47,12 @@ impl Font {
             .execute_for_encoding()
             .whatever_context("execute for encoding")?;
         let encoding = match encoding {
-            Value::Array(arr) => parse_vec_encoding(&arr.borrow()),
-            Value::PredefinedEncoding(encoding) => Encoding::predefined(encoding).unwrap(),
+            Value::Array(arr) => {
+                parse_vec_encoding(&arr.borrow()).whatever_context("parse encodings")?
+            }
+            Value::PredefinedEncoding(encoding) => {
+                Encoding::predefined(encoding).whatever_context("get predefined encoding")?
+            }
             _ => whatever!("Invalid encoding type"),
         };
 
@@ -70,25 +74,27 @@ impl Font {
 }
 
 /// If file is pfb file, remove pfb section bytes
-fn normalize_pfb(data: &[u8]) -> Cow<[u8]> {
+fn normalize_pfb(data: &[u8]) -> Result<Cow<[u8]>, Whatever> {
     if data.len() < 100 || data[0] != 0x80 {
-        return Cow::Borrowed(data);
+        return Ok(Cow::Borrowed(data));
     }
 
     let mut data = data.to_vec();
     let mut pos = 0;
     for _ in 0..3 {
-        let section_len = preceded((0x80u8, any), le_u32::<_, ContextError>)
+        let section_len = preceded((0x80u8, any), le_u32::<_, ParserError>)
             .parse(&data[pos..(6 + pos)])
-            .unwrap() as usize;
+            .map_err(|e| parse_error_to_whatever(e, "get pfb section len"))?
+            as usize;
         data.drain(pos..(pos + 6));
         pos += section_len;
     }
 
-    Parser::<_, _, ContextError>::parse(&mut &b"\x80\x03"[..], &data[pos..]).unwrap();
+    Parser::<_, _, ParserError>::parse(&mut &b"\x80\x03"[..], &data[pos..])
+        .map_err(|e| parse_error_to_whatever(e, "skip pfb tag"))?;
     data.drain(pos..);
 
-    data.into()
+    Ok(data.into())
 }
 
 #[cfg(test)]

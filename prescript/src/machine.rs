@@ -7,7 +7,7 @@ use crate::{
 };
 use educe::Educe;
 use either::Either;
-use snafu::{ResultExt, Whatever, prelude::*};
+use snafu::{FromString, Whatever, prelude::*};
 use std::{
     cell::{Ref, RefCell},
     collections::HashMap,
@@ -224,9 +224,9 @@ impl<'a, P> TryFrom<RuntimeValue<'a, P>> for Key {
             RuntimeValue::Value(Value::Bool(b)) => Ok(Self::Bool(b)),
             RuntimeValue::Value(Value::Integer(i)) => Ok(Self::Integer(i)),
             RuntimeValue::Value(Value::Name(n)) => Ok(Self::Name(n)),
-            RuntimeValue::Value(Value::String(s)) => {
-                Ok(Self::Name(name(from_utf8(&s.borrow()).unwrap())))
-            }
+            RuntimeValue::Value(Value::String(s)) => Ok(Self::Name(name(
+                from_utf8(&s.borrow()).whatever_context("name not utf8")?,
+            ))),
             _ => Err(TypeCheckSnafu.build()),
         }
     }
@@ -580,14 +580,18 @@ impl<'a> CurrentFile<'a> {
     }
 
     /// Check file read complete
-    pub fn finish(&mut self) {
+    pub fn finish(&mut self) -> Result<(), MachineError> {
         use winnow::combinator::repeat;
 
         let remains = &self.data[self.remains_pos..];
         repeat::<_, _, (), _, _>(.., white_space_or_comment)
             .parse(remains)
-            .unwrap();
+            .map_err(|e| {
+                let e = e.into_inner();
+                MachineError::with_source(Box::new(e), "skip white_space_or_comment".to_owned())
+            })?;
         self.remains_pos = self.data.len() - remains.len();
+        Ok(())
     }
 }
 
@@ -670,12 +674,13 @@ impl<'a, P> Machine<'a, P> {
             _ => return Err(TypeCheckSnafu.build()),
         }
 
-        r.extend(
-            self.stack
-                .drain(..)
-                .take(n_out)
-                .map(|v| v.number().unwrap().map_left(|v| v as f32).into_inner()),
-        );
+        let remains: Vec<_> = self
+            .stack
+            .drain(..)
+            .take(n_out)
+            .map(|v| v.number().map(|v| v.map_left(|v| v as f32).into_inner()))
+            .collect::<Result<Vec<_>, _>>()?;
+        r.extend(remains);
         ensure!(r.len() == n_out, StackUnderflowSnafu);
         Ok(r)
     }
@@ -708,7 +713,7 @@ impl<'a, P> Machine<'a, P> {
             }
         }
         // assert that remains are all white space or comment
-        self.file.borrow_mut().finish();
+        self.file.borrow_mut().finish()?;
 
         Ok(())
     }
@@ -744,16 +749,16 @@ impl<'a, P> Machine<'a, P> {
                 ExecState::DefinesEncoding => {
                     return self
                         .variable_stack
-                        .top()
+                        .top()?
                         .borrow_mut()
                         .remove(&sname("Encoding"))
-                        .unwrap()
+                        .whatever_context("remove name Encoding")?
                         .try_into();
                 }
             }
         }
         // assert that remains are all white space or comment
-        self.file.borrow_mut().finish();
+        self.file.borrow_mut().finish()?;
         Err(UndefinedSnafu.build())
     }
 
@@ -820,7 +825,7 @@ impl<'a, P> Machine<'a, P> {
         self.stack.last().context(StackUnderflowSnafu)
     }
 
-    pub fn current_dict(&self) -> Rc<RefCell<RuntimeDictionary<'a, P>>> {
+    pub fn current_dict(&self) -> MachineResult<Rc<RefCell<RuntimeDictionary<'a, P>>>> {
         self.variable_stack.top()
     }
 
@@ -885,6 +890,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
         },
         // Push counts of items in stack to stack
         sname("count") => |m| {
+            #[allow(clippy::unwrap_used)]
             let len: i32 = m.stack.len().try_into().unwrap();
             m.push(len);
             ok()
@@ -1307,9 +1313,9 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
             let num = m.pop()?.int()?;
             m.push(
                 if shift < 0 {
-                    num.wrapping_shr(u32::try_from(-shift).unwrap())
+                    num.wrapping_shr(u32::try_from(-shift).whatever_context("bitshift right out of range")?)
                 } else {
-                    num.wrapping_shl(shift.try_into().unwrap())
+                    num.wrapping_shl(shift.try_into().whatever_context("bitshift left out of range")?)
                 }
             );
             ok()
@@ -1385,7 +1391,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
         sname("def") => |m| {
             let value = m.pop()?;
             let key = m.pop()?;
-            let dict = m.variable_stack.top();
+            let dict = m.variable_stack.top()?;
             let is_encoding = if let RuntimeValue::Value(Value::Name(ref name)) = key {
                 name == &sname("Encoding")
             } else {
@@ -1496,7 +1502,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
 
         // push current variable stack to operand stack
         sname("currentdict") => |m| {
-            m.push(m.variable_stack.top());
+            m.push(m.variable_stack.top()?);
             ok()
         },
         // push systemdict to operand stack
@@ -1623,7 +1629,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
             let key = m.pop()?.name()?;
             assert_eq!(key.as_ref(), "CIDInit");
             assert_eq!(category.as_ref(), "ProcSet", "Other kind of resources not supported");
-            let proc_set = Rc::new(RefCell::new(m.p.find_proc_set_resource(&key).unwrap()));
+            let proc_set = Rc::new(RefCell::new(m.p.find_proc_set_resource(&key).with_whatever_context(|| format!("find proc_set_resource {}", &key))?));
             m.variable_stack.push(proc_set.clone());
             m.push(proc_set);
             ok()
@@ -1736,8 +1742,12 @@ impl<'a, P> VariableDictStack<'a, P> {
         (self.stack.len() > 3).then(|| self.stack.pop()).flatten()
     }
 
-    fn top(&self) -> Rc<RefCell<RuntimeDictionary<'a, P>>> {
-        self.stack.last().unwrap().clone()
+    fn top(&self) -> Result<Rc<RefCell<RuntimeDictionary<'a, P>>>, MachineError> {
+        Ok(self
+            .stack
+            .last()
+            .whatever_context("get variable dict stack top")?
+            .clone())
     }
 
     fn lock_system_dict(&self) -> Ref<RuntimeDictionary<'a, P>> {

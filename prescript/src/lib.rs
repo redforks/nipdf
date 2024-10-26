@@ -1,3 +1,5 @@
+#![warn(clippy::unwrap_used)]
+
 pub(crate) mod machine;
 pub(crate) mod parser;
 

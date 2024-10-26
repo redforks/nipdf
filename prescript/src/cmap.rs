@@ -12,7 +12,7 @@ use educe::Educe;
 use either::Either::{self, Right};
 use log::error;
 use phf::phf_map;
-use snafu::{Whatever, prelude::*};
+use snafu::{ResultExt, Whatever, prelude::*};
 use std::{cell::OnceCell, collections::HashMap, rc::Rc, str::from_utf8};
 use tinyvec::ArrayVec;
 
@@ -261,7 +261,7 @@ struct IncRangeMapParser;
 
 impl EntryParser<IncRangeMap> for IncRangeMapParser {
     fn parse_entry<P>(&self, m: &mut Machine<P>) -> Result<IncRangeMap, MachineError> {
-        let cid = m.pop()?.int()?.try_into().unwrap();
+        let cid = m.pop()?.int()?.try_into().whatever_context("Cast to cid")?;
         let s_upper = m.pop()?.string()?;
         let s_lower = m.pop()?.string()?;
         let range = CodeRange::from_str_buf(&s_lower.borrow(), &s_upper.borrow())
@@ -306,7 +306,7 @@ struct RangeMapToOneParser;
 
 impl EntryParser<RangeMapToOne> for RangeMapToOneParser {
     fn parse_entry<P>(&self, m: &mut Machine<P>) -> Result<RangeMapToOne, MachineError> {
-        let cid = m.pop()?.int()?.try_into().unwrap();
+        let cid = m.pop()?.int()?.try_into().whatever_context("cast to cid")?;
         let s_upper = m.pop()?.string()?;
         let s_lower = m.pop()?.string()?;
         let range = CodeRange::from_str_buf(&s_lower.borrow(), &s_upper.borrow())
@@ -341,7 +341,7 @@ struct SingleCodeMapParser;
 
 impl EntryParser<SingleCodeMap> for SingleCodeMapParser {
     fn parse_entry<P>(&self, m: &mut Machine<P>) -> Result<SingleCodeMap, MachineError> {
-        let cid = m.pop()?.int()?.try_into().unwrap();
+        let cid = m.pop()?.int()?.try_into().whatever_context("cast to cid")?;
         let s_code = m.pop()?.string()?;
         let code = CharCode::from_str_buf(&s_code.borrow());
         Ok(SingleCodeMap::new(code, CID(cid)))
@@ -386,12 +386,15 @@ pub struct CIDSystemInfo {
 impl CIDSystemInfo {
     fn from_dict<P>(d: &RuntimeDictionary<P>) -> MachineResult<Self> {
         let registry = from_utf8(&d[&sname("Registry")].string()?.borrow())
-            .unwrap()
+            .whatever_context("Read Registry name from utf8")?
             .to_owned();
         let ordering = from_utf8(&d[&sname("Ordering")].string()?.borrow())
-            .unwrap()
+            .whatever_context("Read Ordering name from utf8")?
             .to_owned();
-        let supplement = d[&sname("Supplement")].int()?.try_into().unwrap();
+        let supplement = d[&sname("Supplement")]
+            .int()?
+            .try_into()
+            .whatever_context("Read Supplement name from utf8")?;
         Ok(Self {
             registry,
             ordering,
@@ -593,7 +596,7 @@ impl CMapRegistry {
             .get(name.as_str())
             .map(|c| {
                 Rc::clone(c.get_or_init(|| {
-                    let file = PREDEFINED_CMAPS.get(name.as_str()).unwrap();
+                    let file = PREDEFINED_CMAPS[name.as_str()];
                     Rc::new(self.parse_cmap_file(file).unwrap())
                 }))
             })
@@ -764,8 +767,8 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     ok()
                 },
                 "CMapName" => |m| {
-                    let d = m.current_dict();
-                    m.push(d.borrow().get(&sname("CMapName")).unwrap().clone());
+                    let d = m.current_dict()?;
+                    m.push(d.borrow().get(&sname("CMapName")).whatever_context("get CMapName")?.clone());
                     ok()
                 },
                 "begincodespacerange" => |m| {
@@ -773,7 +776,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     ok()
                 },
                 "endcodespacerange" => |m| {
-                    let entries = m.p.entries_parsing.take().unwrap().on_end(CodeRangeParser, m)?;
+                    let entries = m.p.entries_parsing.take().whatever_context("take entries_parsing")?.on_end(CodeRangeParser, m)?;
                     m.p.code_space_entries.extend(entries);
                     ok()
                 },
@@ -782,7 +785,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     ok()
                 },
                 "endcidrange" => |m| {
-                    let entries = m.p.entries_parsing.take().unwrap().on_end(IncRangeMapParser, m)?;
+                    let entries = m.p.entries_parsing.take().whatever_context("take entries_parsing")?.on_end(IncRangeMapParser, m)?;
                     m.p.cid_range_entries.extend(entries);
                     ok()
                 },
@@ -791,7 +794,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     ok()
                 },
                 "endbfrange" => |m| {
-                    let entries = m.p.entries_parsing.take().unwrap().on_end(BFIncRangeMapParser, m)?;
+                    let entries = m.p.entries_parsing.take().whatever_context("take entries_parsing")?.on_end(BFIncRangeMapParser, m)?;
                     m.p.cid_range_entries.extend(entries);
                     ok()
                 },
@@ -800,7 +803,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     ok()
                 },
                 "endcidchar" => |m| {
-                    let entries = m.p.entries_parsing.take().unwrap().on_end(SingleCodeMapParser, m)?;
+                    let entries = m.p.entries_parsing.take().whatever_context("take entries_parsing")?.on_end(SingleCodeMapParser, m)?;
                     m.p.cid_char_entries.extend(entries);
                     ok()
                 },
@@ -809,7 +812,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     ok()
                 },
                 "endbfchar" => |m| {
-                    let entries = m.p.entries_parsing.take().unwrap().on_end(BFSingleCodeMapParser, m)?;
+                    let entries = m.p.entries_parsing.take().whatever_context("take entries_parsing")?.on_end(BFSingleCodeMapParser, m)?;
                     m.p.cid_char_entries.extend(entries);
                     ok()
                 },
@@ -818,7 +821,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     ok()
                 },
                 "endnotdefrange" => |m| {
-                    let entries = m.p.entries_parsing.take().unwrap().on_end(RangeMapToOneParser, m)?;
+                    let entries = m.p.entries_parsing.take().whatever_context("take entries_parsing")?.on_end(RangeMapToOneParser, m)?;
                     m.p.notdef_range_entries.extend(entries);
                     ok()
                 },
@@ -827,7 +830,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     ok()
                 },
                 "endnotdefchar" => |m| {
-                    let entries = m.p.entries_parsing.take().unwrap().on_end(SingleCodeMapParser, m)?;
+                    let entries = m.p.entries_parsing.take().whatever_context("take entries_parsing")?.on_end(SingleCodeMapParser, m)?;
                     m.p.notdef_char_entries.extend(entries);
                     ok()
                 },
