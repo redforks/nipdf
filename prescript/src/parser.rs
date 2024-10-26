@@ -8,7 +8,7 @@ use snafu::{FromString, Whatever, prelude::*};
 use std::{
     cell::RefCell,
     iter::once,
-    num::{ParseIntError, TryFromIntError},
+    num::ParseIntError,
     rc::Rc,
     str::{Utf8Error, from_utf8, from_utf8_unchecked},
     string::FromUtf8Error,
@@ -17,7 +17,9 @@ use winnow::{
     PResult, Parser,
     ascii::hex_digit1,
     combinator::{alt, delimited, dispatch, fail, opt, preceded, repeat, terminated},
-    error::{AddContext, ErrMode, ErrorKind, ParseError, ParserError as _, StrContext},
+    error::{
+        AddContext, ErrMode, ErrorKind, FromExternalError, ParseError, ParserError as _, StrContext,
+    },
     stream::{AsChar, Stream},
     token::{any, literal, one_of, take_till, take_while},
 };
@@ -46,10 +48,81 @@ pub enum ParserError<C: 'static = StrContext> {
         source: ParseIntError,
         context: Option<C>,
     },
-    IntCast {
-        source: TryFromIntError,
+    Ascii85 {
+        source: Box<dyn std::error::Error>,
         context: Option<C>,
     },
+}
+
+impl<C: 'static, I> FromExternalError<I, Utf8Error> for ParserError<C> {
+    fn from_external_error(_input: &I, kind: ErrorKind, e: Utf8Error) -> Self {
+        Self::Inter {
+            source: Box::new(Self::StrEncoding {
+                source: e,
+                context: None,
+            }),
+            kind,
+            context: None,
+        }
+    }
+}
+
+enum PossibleError {
+    Utf8(Utf8Error),
+    Utf8Str(FromUtf8Error),
+    Int(ParseIntError),
+    Ascii85(Box<dyn std::error::Error>),
+}
+
+impl From<Utf8Error> for PossibleError {
+    fn from(err: Utf8Error) -> Self {
+        PossibleError::Utf8(err)
+    }
+}
+
+impl From<FromUtf8Error> for PossibleError {
+    fn from(err: FromUtf8Error) -> Self {
+        PossibleError::Utf8Str(err)
+    }
+}
+
+impl From<ParseIntError> for PossibleError {
+    fn from(err: ParseIntError) -> Self {
+        PossibleError::Int(err)
+    }
+}
+
+impl From<Box<dyn std::error::Error>> for PossibleError {
+    fn from(value: Box<dyn std::error::Error>) -> Self {
+        PossibleError::Ascii85(value)
+    }
+}
+
+impl<C: 'static, I> FromExternalError<I, PossibleError> for ParserError<C> {
+    fn from_external_error(_input: &I, kind: ErrorKind, e: PossibleError) -> Self {
+        Self::Inter {
+            source: Box::new(match e {
+                PossibleError::Utf8(e) => Self::StrEncoding {
+                    source: e,
+                    context: None,
+                },
+                PossibleError::Utf8Str(e) => Self::StringEncoding {
+                    source: e,
+                    context: None,
+                },
+                PossibleError::Int(e) => Self::ParseInt {
+                    source: e,
+                    context: None,
+                },
+                PossibleError::Ascii85(e) => Self::Ascii85 {
+                    source: e,
+                    context: None,
+                },
+            }),
+            kind,
+            context: None,
+        }
+    }
 }
 
 pub(crate) fn perror_to_whatever(err: ErrMode<ParserError>, msg: impl Into<String>) -> Whatever {
@@ -80,7 +153,7 @@ impl<I: Stream, C> AddContext<I, C> for ParserError<C> {
             Self::StringEncoding { context: c, .. } => *c = Some(context),
             Self::StrEncoding { context: c, .. } => *c = Some(context),
             Self::ParseInt { context: c, .. } => *c = Some(context),
-            Self::IntCast { context: c, .. } => *c = Some(context),
+            Self::Ascii85 { context: c, .. } => *c = Some(context),
         }
         self
     }
@@ -247,14 +320,6 @@ fn int_or_float(input: &mut &[u8]) -> PResult<Either<i32, f32>, ParserError> {
     }
 }
 
-fn parse_u8_from_bin_arr(buf: &[u8], radix: u32) -> Result<u8, ParserError> {
-    u8::from_str_radix(
-        from_utf8(buf).context(StrEncodingSnafu { context: None })?,
-        radix,
-    )
-    .context(ParseIntSnafu { context: None })
-}
-
 fn string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
     enum StringFragment<'a> {
         Literal(&'a [u8]),
@@ -269,10 +334,9 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
     }
 
     fn escaped_char<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>, ParserError> {
-        fn parse_oct_byte(input: &mut &[u8]) -> PResult<u8, ParserError> {
-            let buf = take_while(1..=3, |c: u8| c.is_oct_digit()).parse_next(input)?;
-            parse_u8_from_bin_arr(buf, 8).map_err(|e| ErrMode::Backtrack(e))
-        }
+        let parse_oct_byte = take_while(1..=3, |c: u8| c.is_oct_digit()).try_map(|buf| {
+            Ok::<_, PossibleError>((u16::from_str_radix(from_utf8(buf)?, 8)? & 0xff) as u8)
+        });
 
         let c = preceded(
             literal(b"\\"),
@@ -339,16 +403,16 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
                 }
                 bytes
             })
-            .map(|mut s| {
+            .try_map(|mut s| {
                 if s.len() % 2 != 0 {
                     s.push(b'0');
                 }
 
                 let mut bytes = Vec::with_capacity(s.len() / 2);
                 for i in (0..s.len()).step_by(2) {
-                    bytes.push(parse_u8_from_bin_arr(&s[i..i + 2], 16).unwrap());
+                    bytes.push(u8::from_str_radix(from_utf8(&s[i..i + 2])?, 16)?);
                 }
-                Box::<[u8]>::from(bytes)
+                Ok::<_, PossibleError>(Box::<[u8]>::from(bytes))
             });
 
         terminated(bytes, b'>').parse_next(input)
@@ -357,11 +421,8 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
     fn ascii85(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
         delimited(
             b'~',
-            take_while(0.., |c| c != b'~').map(|v: &[u8]| {
-                ascii85::decode(unsafe { from_utf8_unchecked(v) })
-                    .unwrap()
-                    .into()
-            }),
+            take_while(0.., |c| c != b'~')
+                .try_map(|v: &[u8]| Ok::<_, PossibleError>(ascii85::decode(from_utf8(v)?)?.into())),
             b"~>",
         )
         .parse_next(input)
@@ -381,16 +442,12 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
 
 fn executable_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str, ParserError> {
     take_while(1.., is_regular_char)
-        .map(|s| from_utf8(s).unwrap())
+        .try_map(from_utf8)
         .parse_next(input)
 }
 
 fn literal_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str, ParserError> {
-    preceded(
-        '/',
-        take_while(0.., is_regular_char).map(|s| from_utf8(s).unwrap()),
-    )
-    .parse_next(input)
+    preceded('/', take_while(0.., is_regular_char).try_map(from_utf8)).parse_next(input)
 }
 
 fn procedure(input: &mut &[u8]) -> PResult<TokenArray, ParserError> {

@@ -69,7 +69,7 @@ struct VariableStack<'a, P>(RuntimeDictionary<'a, P>);
 
 impl<'a, P> Assert<'a, P> for VariableStack<'a, P> {
     fn assert(&self, m: &Machine<'a, P>) {
-        assert_eq!(&*m.variable_stack.top().borrow(), &self.0);
+        assert_eq!(&*m.variable_stack.top().unwrap().borrow(), &self.0);
     }
 }
 
