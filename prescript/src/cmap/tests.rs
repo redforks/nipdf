@@ -126,28 +126,31 @@ fn code_space() {
     // matches
     assert_eq!(
         (&[][..], Right(two(0x8141))),
-        code_space.next_code(&[0x81, 0x41])
+        code_space.next_code(&[0x81, 0x41]).unwrap()
     );
 
     // not match
     assert_eq!(
         (&[][..], Left(two(0x1f01))),
-        code_space.next_code(&[0x1f, 1])
+        code_space.next_code(&[0x1f, 1]).unwrap()
     );
 
     // not enough bytes
-    assert_eq!((&[][..], Left(two(0x1f00))), code_space.next_code(&[0x1f]));
+    assert_eq!(
+        (&[][..], Left(two(0x1f00))),
+        code_space.next_code(&[0x1f]).unwrap()
+    );
 
     // four bytes matched
     assert_eq!(
         (&[][..], Right(four(0xD800DC00))),
-        code_space.next_code(&[0xD8, 0x00, 0xDC, 0x00])
+        code_space.next_code(&[0xD8, 0x00, 0xDC, 0x00]).unwrap()
     );
 
     // two bytes partial matched
     assert_eq!(
         (&[][..], Left(two(0x817f))),
-        code_space.next_code(&[0x81, 0x7f]),
+        code_space.next_code(&[0x81, 0x7f]).unwrap(),
     );
 }
 
@@ -274,7 +277,7 @@ fn cmap() {
             // in code space range, no cid mapping, and notdef not mapped
             CID(0),
         ],
-        cmap.map(&[1u8, 0, 0x81, 0x44, 0x7f, 0x81, 0x50])
+        cmap.map(&[1u8, 0, 0x81, 0x44, 0x7f, 0x81, 0x50]).unwrap()
     );
 }
 
@@ -336,7 +339,7 @@ fn use_map() {
             // use default undef, if both cid and notdef failed
             CID(0),
         ],
-        cmap.map(&[0x35u8, 0x30, 0x36, 0x20, 0x7f])
+        cmap.map(&[0x35u8, 0x30, 0x36, 0x20, 0x7f]).unwrap()
     );
 }
 
@@ -532,5 +535,5 @@ fn get_builtin_cmap() {
 fn identity_h_map() {
     let reg = CMapRegistry::new();
     let cmap = reg.get(&sname("Identity-H")).unwrap().unwrap();
-    assert_eq!(vec![CID(0x04)], cmap.map(&[0x0, 0x04u8]));
+    assert_eq!(vec![CID(0x04)], cmap.map(&[0x0, 0x04u8]).unwrap());
 }

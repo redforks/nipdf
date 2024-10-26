@@ -13,7 +13,7 @@ use either::Either::{self, Right};
 use log::error;
 use once_cell::unsync::OnceCell;
 use phf::phf_map;
-use snafu::{ResultExt, Whatever, prelude::*};
+use snafu::{OptionExt, Whatever, prelude::*};
 use std::{collections::HashMap, rc::Rc, str::from_utf8};
 use tinyvec::ArrayVec;
 
@@ -205,40 +205,43 @@ impl CodeSpace {
     /// If next code not in code space, return `Left(next_code)`.
     /// Returns minimal bytes of current CodeSpace, even in error cases, append zero if not
     /// enough bytes.
-    /// Panic if input codes is empty.
-    fn next_code<'a>(&self, codes: &'a [u8]) -> (&'a [u8], Either<CharCode, CharCode>) {
+    fn next_code<'a>(
+        &self,
+        codes: &'a [u8],
+    ) -> Result<(&'a [u8], Either<CharCode, CharCode>), Whatever> {
         let next = self
             .0
             .iter()
             .find_map(|r| {
                 let r = r.next_code(codes);
                 match r {
-                    CodeSpaceResult::Matched(code) => Some(Either::Right(code)),
+                    CodeSpaceResult::Matched(code) => Some(Either::Right(Ok(code))),
                     CodeSpaceResult::Partial(code) => Some(Either::Left(code)),
                     CodeSpaceResult::NotMatched => None,
                 }
             })
             .unwrap_or_else(|| Either::Left(CharCode::One(codes[0])))
             .map_left(|code| {
-                let min_bytes = self.min_bytes();
+                let min_bytes = self.min_bytes()?;
                 if code.n_bytes() >= min_bytes {
-                    return code;
+                    return Ok(code);
                 }
 
                 let mut bytes = Vec::with_capacity(min_bytes);
                 bytes.extend_from_slice(&codes[..min_bytes.min(codes.len())]);
                 bytes.resize(min_bytes, 0);
-                CharCode::from(bytes.as_slice())
-            });
-        (&codes[next.into_inner().n_bytes().min(codes.len())..], next)
+                Ok(CharCode::from(bytes.as_slice()))
+            })
+            .factor_err()?;
+        Ok((&codes[next.into_inner().n_bytes().min(codes.len())..], next))
     }
 
-    fn min_bytes(&self) -> usize {
+    fn min_bytes(&self) -> Result<usize, Whatever> {
         self.0
             .iter()
             .map(|r| r.n_bytes())
             .min()
-            .expect("Should not happen")
+            .whatever_context("Should not happen")
     }
 }
 
@@ -620,7 +623,9 @@ impl CMapRegistry {
         let mut m = Machine::<CMapMachinePlugin>::with_plugin(file, p);
         m.execute()?;
         let mut p = m.take_plugin();
-        Ok(p.parsed.take().expect("CMap not defined in cmap file"))
+        p.parsed
+            .take()
+            .whatever_context("CMap not defined in cmap file")
     }
 
     /// Add a CMap file, parse it and add to registry.
@@ -655,30 +660,33 @@ impl CMap {
     /// Map(Decode) char codes to CIDs.
     /// If code out of code space, or not mapped to cid, use notdef_map to map to a designed notdef
     /// char, if code not in notdef_map, returns 0 (notdef).
-    pub fn map(&self, mut codes: &[u8]) -> Vec<CID> {
+    pub fn map(&self, mut codes: &[u8]) -> Result<Vec<CID>, Whatever> {
         let mut r = Vec::with_capacity(codes.len());
         while !codes.is_empty() {
             let code;
-            (codes, code) = self.next_cid(codes);
+            (codes, code) = self.next_cid(codes)?;
             let cid = code.map_left(|c| self.map_undef(c)).into_inner();
 
             r.push(cid);
         }
-        r
+        Ok(r)
     }
 
     /// Get next cid, update codes buffer, without map notdef.
     /// If use_map not null, recover codes buffer, call next_cid.
-    fn next_cid<'a>(&self, codes: &'a [u8]) -> (&'a [u8], Either<CharCode, CID>) {
-        let (new_codes, code) = self.code_space.next_code(codes);
+    fn next_cid<'a>(&self, codes: &'a [u8]) -> Result<(&'a [u8], Either<CharCode, CID>), Whatever> {
+        let (new_codes, code) = self.code_space.next_code(codes)?;
         let cid_or_code = code.right_and_then(|c| self.cid_map.map(c).ok_or(c).into());
 
         let Some(use_map) = self.use_map.as_ref() else {
-            return (new_codes, cid_or_code);
+            return Ok((new_codes, cid_or_code));
         };
 
         cid_or_code
-            .map_either(|_| use_map.next_cid(codes), |cid| (new_codes, Right(cid)))
+            .map_either(
+                |_| use_map.next_cid(codes),
+                |cid| Ok((new_codes, Right(cid))),
+            )
             .into_inner()
     }
 

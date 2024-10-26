@@ -897,7 +897,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
         },
         // any1 .. any(n) n copy any1 .. any(n) any1 .. any(n)
         sname("copy") => |m| {
-            let count = m.pop()?.int().expect("merge dict/array/string not implemented");
+            let count = m.pop()?.int().whatever_context("merge dict/array/string not implemented")?;
             let mut items = Vec::new();
             for _ in 0..count {
                 items.push(m.pop()?);
