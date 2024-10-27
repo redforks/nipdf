@@ -615,7 +615,7 @@ enum ObjectOrOperator<'a> {
 fn parse_operator(input: &[u8]) -> ParseResult<ObjectOrOperator> {
     let p = is_not(b" \t\n\r%[<(/".as_slice());
     map_res(p, |op| {
-        let op = unsafe { std::str::from_utf8_unchecked(op) };
+        let op = std::str::from_utf8(op).unwrap();
         Ok::<_, ParseError>(ObjectOrOperator::Operator(op))
     })(input)
 }

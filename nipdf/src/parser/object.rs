@@ -23,7 +23,7 @@ use std::{
     borrow::Cow,
     num::NonZeroU32,
     rc::Rc,
-    str::{FromStr, from_utf8, from_utf8_unchecked},
+    str::{FromStr, from_utf8},
 };
 
 /// Unwrap the result of nom parser to a *normal* result.
@@ -43,8 +43,7 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<Object> {
         take_while1(|c| is_digit(c) || c == b'.' || c == b'+' || c == b'-'),
         |s| {
             if memchr::memchr(b'.', s).is_some() {
-                // from_utf8_unchecked is safe here, because the parser takes only digits
-                let s = unsafe { from_utf8_unchecked(s) };
+                let s = from_utf8(s).unwrap();
                 f32::from_str(s).map_or_else(
                     |e| {
                         // get position of 2nd occur of '.'
@@ -52,9 +51,7 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<Object> {
                         let p = memchr::memchr(b'.', s).unwrap();
                         if let Some(p) = memchr::memchr(b'.', &s[p + 1..]) {
                             // if there is a 2nd occur of '.', ignore it
-                            Object::Number(
-                                f32::from_str(unsafe { from_utf8_unchecked(&s[..p + 1]) }).unwrap(),
-                            )
+                            Object::Number(f32::from_str(from_utf8(&s[..p + 1]).unwrap()).unwrap())
                         } else {
                             panic!("{}", e);
                         }
@@ -63,7 +60,7 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<Object> {
                 )
             } else {
                 // from_utf8_unchecked is safe here, because the parser takes only digits
-                let s = unsafe { from_utf8_unchecked(s) };
+                let s = from_utf8(s).unwrap();
                 i32::from_str(s)
                     .map(Object::Integer)
                     .unwrap_or_else(|_| Object::Number(f32::from_str(s).unwrap_or_default()))

@@ -18,7 +18,7 @@ use nom::{
     sequence::{preceded, separated_pair, tuple},
 };
 use prescript::sname;
-use std::{fmt::Display, ops::RangeFrom, str::from_utf8_unchecked};
+use std::{fmt::Display, ops::RangeFrom, str::from_utf8};
 
 /// Return `None`` if file not start with `%PDF-`
 pub fn parse_header(buf: &[u8]) -> ParseResult<Option<&str>> {
@@ -32,7 +32,7 @@ pub fn parse_header(buf: &[u8]) -> ParseResult<Option<&str>> {
             })
         } else {
             // safe to call from_utf8_unchecked(), because buf is checked for ascii digits
-            Ok(Some(unsafe { from_utf8_unchecked(buf) }))
+            Ok(Some(from_utf8(buf).unwrap()))
         }
     }
 

@@ -149,8 +149,7 @@ struct Type1GlyphRender<'a> {
 
 impl<'a, P: PathSink> GlyphRender<P> for Type1GlyphRender<'a> {
     fn render(&self, gid: u16, sink: &mut P) -> Result<()> {
-        self
-            .font
+        self.font
             .outline(
                 gid as u32,
                 font_kit::hinting::HintingOptions::None,
@@ -436,9 +435,7 @@ impl<'a> FontOp for TTFParserFontOp<'a> {
                     // If glyph_name not in font CMap, convert to unicode then resolve by unicode
                     // use Adobe Glyph List to convert glyph name to unicode
                     if let Some(unicode) = GLYPH_NAME_TO_UNICODE.get(glyph_name) {
-                        if let Some(gid) = self
-                            .face
-                            .glyph_index(unsafe { char::from_u32_unchecked(*unicode) })
+                        if let Some(gid) = self.face.glyph_index(char::from_u32(*unicode).unwrap())
                         {
                             return gid.0;
                         }
