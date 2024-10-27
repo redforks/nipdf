@@ -27,9 +27,9 @@ pub fn parse_header(buf: &[u8]) -> ParseResult<Option<&str>> {
     fn new_header(buf: &[u8]) -> std::result::Result<Option<&str>, FileError> {
         assert_eq!(3, buf.len());
         if buf[0] != b'1' {
-            Err(FileError::UnsupportedVersion(
-                String::from_utf8_lossy(buf).to_string(),
-            ))
+            Err(FileError::UnsupportedVersion {
+                version: String::from_utf8_lossy(buf).to_string(),
+            })
         } else {
             // safe to call from_utf8_unchecked(), because buf is checked for ascii digits
             Ok(Some(unsafe { from_utf8_unchecked(buf) }))
