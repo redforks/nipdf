@@ -19,6 +19,7 @@ use nipdf_macro::pdf_object;
 use nom::Finish;
 use once_cell::unsync::OnceCell;
 use prescript::{Name, sname};
+use snafu::Snafu;
 use std::{iter::repeat_with, rc::Rc};
 
 pub mod page;
@@ -571,15 +572,15 @@ pub struct File {
     encrypt_info: Option<EncryptInfo>,
 }
 
-#[derive(Debug, Clone, thiserror::Error)]
+#[derive(Debug, Clone, Copy, Snafu)]
 pub enum FileError {
-    #[error("catalog object is required")]
+    #[snafu(display("catalog object is required"))]
     CatalogRequired,
-    #[error("missing required trailer value")]
+    #[snafu(display("missing required trailer value"))]
     MissingRequiredTrailerValue,
-    #[error("invalid password")]
+    #[snafu(display("invalid password"))]
     InvalidPassword,
-    #[error("invalid file")]
+    #[snafu(display("invalid file"))]
     InvalidFile,
 }
 

@@ -2551,6 +2551,7 @@ dependencies = [
  "phf",
  "prescript",
  "pretty",
+ "snafu",
  "static_assertions",
  "strum",
  "test-case",
