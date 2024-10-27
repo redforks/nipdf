@@ -149,14 +149,14 @@ struct Type1GlyphRender<'a> {
 
 impl<'a, P: PathSink> GlyphRender<P> for Type1GlyphRender<'a> {
     fn render(&self, gid: u16, sink: &mut P) -> Result<()> {
-        Ok(self
+        self
             .font
             .outline(
                 gid as u32,
                 font_kit::hinting::HintingOptions::None,
                 &mut PathSinkWrap(sink),
             )
-            .whatever_context("get glyph outline")?)
+            .whatever_context("get glyph outline")
     }
 }
 

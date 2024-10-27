@@ -4,7 +4,6 @@ use crate::{
     parser::parse_dict,
 };
 use prescript::sname;
-use snafu::ResultExt;
 use std::path::PathBuf;
 
 #[test]

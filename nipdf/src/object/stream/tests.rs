@@ -80,7 +80,7 @@ fn test_paeth(a: u8, b: u8, c: u8) -> u8 {
 #[test]
 fn predictor() {
     let exp_image =
-        image::io::Reader::open(test_file("sample_files/filters/predictor-exp.png")).unwrap();
+        image::ImageReader::open(test_file("sample_files/filters/predictor-exp.png")).unwrap();
     let exp_image = exp_image.decode().unwrap();
     let width = exp_image.width();
     let exp = exp_image.into_bytes();

@@ -148,13 +148,13 @@ impl InlineImage {
     ) -> Result<DynamicImage> {
         let decoded_data = decode_stream(&self.0, &self.1, Some(resolver), None, None)
             .whatever_context("decode stream")?;
-        Ok(decode_image(
+        decode_image(
             decoded_data,
             &InlineStreamDict(&self.0),
             resolver,
             Some(resources),
         )
-        .whatever_context("decode image")?)
+        .whatever_context("decode image")
     }
 }
 
