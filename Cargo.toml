@@ -84,6 +84,9 @@ clap = { version = "4.5", features = ["derive"] }
 mimalloc = "0.1"
 snafu = { version = "0.8.5" }
 
+[workspace.lints.rust]
+unsafe_code = "deny"
+
 [workspace.lints.clippy]
 empty_structs_with_brackets = "warn"
 dbg_macro = "deny"

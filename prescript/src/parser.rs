@@ -10,7 +10,7 @@ use std::{
     iter::once,
     num::ParseIntError,
     rc::Rc,
-    str::{Utf8Error, from_utf8, from_utf8_unchecked},
+    str::{Utf8Error, from_utf8},
     string::FromUtf8Error,
 };
 use winnow::{
@@ -288,35 +288,50 @@ fn int_or_float(input: &mut &[u8]) -> PResult<Either<i32, f32>, ParserError> {
         .parse_next(input)?;
     if let Some(pos) = memchr::memchr(b'#', buf) {
         let (radix, num) = buf.split_at(pos);
-        let radix = unsafe {
-            from_utf8_unchecked(radix).parse::<u32>().map_err(|_| {
-                ErrMode::Backtrack(ParserError::from_error_kind(input, ErrorKind::Tag))
-            })?
-        };
-        let num = unsafe {
-            i32::from_str_radix(from_utf8_unchecked(&num[1..]), radix).map_err(|_| {
-                ErrMode::Backtrack(ParserError::from_error_kind(input, ErrorKind::Tag))
-            })?
-        };
+        let radix = from_utf8(radix)
+            .context(StrEncodingSnafu { context: None })
+            .map_err(ErrMode::Backtrack)?
+            .parse::<u32>()
+            .map_err(|_| ErrMode::Backtrack(ParserError::from_error_kind(input, ErrorKind::Tag)))?;
+        let num = i32::from_str_radix(
+            from_utf8(&num[1..])
+                .context(StrEncodingSnafu { context: None })
+                .map_err(ErrMode::Backtrack)?,
+            radix,
+        )
+        .map_err(|_| ErrMode::Backtrack(ParserError::from_error_kind(input, ErrorKind::Tag)))?;
         return Ok(Either::Left(num));
     }
 
     if memchr::memchr3(b'.', b'e', b'E', buf).is_some() {
-        Ok(Either::Right(unsafe {
-            from_utf8_unchecked(buf).parse::<f32>().map_err(|_| {
-                ErrMode::Backtrack(ParserError::from_error_kind(input, ErrorKind::Tag))
-            })?
-        }))
-    } else {
-        Ok(unsafe {
-            let s = from_utf8_unchecked(buf);
-            match s.parse::<i32>() {
-                Ok(v) => Either::Left(v),
-                Err(_) => Either::Right(s.parse::<f32>().map_err(|_| {
+        Ok(Either::Right(
+            from_utf8(buf)
+                .context(StrEncodingSnafu { context: None })
+                .map_err(ErrMode::Backtrack)?
+                .parse::<f32>()
+                .map_err(|_| {
                     ErrMode::Backtrack(ParserError::from_error_kind(input, ErrorKind::Tag))
-                })?),
-            }
-        })
+                })?,
+        ))
+    } else {
+        Ok(
+            match from_utf8(buf)
+                .context(StrEncodingSnafu { context: None })
+                .map_err(ErrMode::Backtrack)?
+                .parse::<i32>()
+            {
+                Ok(v) => Either::Left(v),
+                Err(_) => Either::Right(
+                    from_utf8(buf)
+                        .context(StrEncodingSnafu { context: None })
+                        .map_err(ErrMode::Backtrack)?
+                        .parse::<f32>()
+                        .map_err(|_| {
+                            ErrMode::Backtrack(ParserError::from_error_kind(input, ErrorKind::Tag))
+                        })?,
+                ),
+            },
+        )
     }
 }
 
@@ -457,7 +472,9 @@ fn procedure(input: &mut &[u8]) -> PResult<TokenArray, ParserError> {
 /// Parses '[', ']', '<<', '>>' and convert them to String.
 fn special_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str, ParserError> {
     let buf = take_while(1..=2, (b'[', ']', b"<<", b">>")).parse_next(input)?;
-    Ok(unsafe { from_utf8_unchecked(buf) })
+    from_utf8(buf)
+        .context(StrEncodingSnafu { context: None })
+        .map_err(ErrMode::Backtrack)
 }
 
 pub fn token(input: &mut &[u8]) -> PResult<Token, ParserError> {

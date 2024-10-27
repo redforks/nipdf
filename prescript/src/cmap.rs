@@ -25,19 +25,19 @@ pub struct CID(pub u16);
 /// TODO: bytes in any length
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CharCode {
-    One(u8),
-    Two(u8, u8),
-    Three(u8, u8, u8),
-    Four(u8, u8, u8, u8),
+    One([u8; 1]),
+    Two([u8; 2]),
+    Three([u8; 3]),
+    Four([u8; 4]),
 }
 
 impl CharCode {
     fn from_str_buf(s: &[u8]) -> Self {
         match s.len() {
-            1 => Self::One(s[0]),
-            2 => Self::Two(s[0], s[1]),
-            3 => Self::Three(s[0], s[1], s[2]),
-            4 => Self::Four(s[0], s[1], s[2], s[3]),
+            1 => Self::One([s[0]]),
+            2 => Self::Two([s[0], s[1]]),
+            3 => Self::Three([s[0], s[1], s[2]]),
+            4 => Self::Four([s[0], s[1], s[2], s[3]]),
             _ => panic!("invalid bytes length"),
         }
     }
@@ -45,9 +45,9 @@ impl CharCode {
     pub fn n_bytes(&self) -> usize {
         match self {
             Self::One(_) => 1,
-            Self::Two(_, _) => 2,
-            Self::Three(_, _, _) => 3,
-            Self::Four(_, _, _, _) => 4,
+            Self::Two(_) => 2,
+            Self::Three(_) => 3,
+            Self::Four(_) => 4,
         }
     }
 }
@@ -63,12 +63,11 @@ fn parse_cid_from_str_buf(s: &[u8]) -> CID {
 
 impl AsRef<[u8]> for CharCode {
     fn as_ref(&self) -> &[u8] {
-        use std::slice::from_raw_parts;
         match self {
-            Self::One(b) => std::slice::from_ref(b),
-            Self::Two(b1, _) => unsafe { from_raw_parts(b1, 2) },
-            Self::Three(b1, _, _) => unsafe { from_raw_parts(b1, 3) },
-            Self::Four(b1, _, _, _) => unsafe { from_raw_parts(b1, 4) },
+            Self::One(b) => b,
+            Self::Two(b) => b,
+            Self::Three(b) => b,
+            Self::Four(b) => b,
         }
     }
 }
@@ -76,10 +75,10 @@ impl AsRef<[u8]> for CharCode {
 impl From<&[u8]> for CharCode {
     fn from(bytes: &[u8]) -> Self {
         match bytes.len() {
-            1 => Self::One(bytes[0]),
-            2 => Self::Two(bytes[0], bytes[1]),
-            3 => Self::Three(bytes[0], bytes[1], bytes[2]),
-            4 => Self::Four(bytes[0], bytes[1], bytes[2], bytes[3]),
+            1 => Self::One([bytes[0]]),
+            2 => Self::Two([bytes[0], bytes[1]]),
+            3 => Self::Three([bytes[0], bytes[1], bytes[2]]),
+            4 => Self::Four([bytes[0], bytes[1], bytes[2], bytes[3]]),
             _ => panic!("invalid bytes length"),
         }
     }
@@ -220,7 +219,7 @@ impl CodeSpace {
                     CodeSpaceResult::NotMatched => None,
                 }
             })
-            .unwrap_or_else(|| Either::Left(CharCode::One(codes[0])))
+            .unwrap_or_else(|| Either::Left(CharCode::One([codes[0]])))
             .map_left(|code| {
                 let min_bytes = self.min_bytes()?;
                 if code.n_bytes() >= min_bytes {

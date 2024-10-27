@@ -8,19 +8,19 @@ use test_log::test;
 use tinyvec::array_vec;
 
 fn one(v: u8) -> CharCode {
-    One(v)
+    One([v])
 }
 
 fn two(v: u16) -> CharCode {
-    Two((v >> 8) as u8, v as u8)
+    Two([(v >> 8) as u8, v as u8])
 }
 
 fn three(v: u32) -> CharCode {
-    Three((v >> 16) as u8, (v >> 8) as u8, v as u8)
+    Three([(v >> 16) as u8, (v >> 8) as u8, v as u8])
 }
 
 fn four(v: u32) -> CharCode {
-    Four((v >> 24) as u8, (v >> 16) as u8, (v >> 8) as u8, v as u8)
+    Four([(v >> 24) as u8, (v >> 16) as u8, (v >> 8) as u8, v as u8])
 }
 
 #[test]
