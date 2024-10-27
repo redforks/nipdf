@@ -597,7 +597,6 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 #[doc = #doc]
                 pub fn #name(&self) -> std::result::Result<#rt, snafu::Whatever> {
                     use snafu::ResultExt as _;
-                    use snafu::OptionExt as _;
                     #method.whatever_context::<_, snafu::Whatever>(#key)
                 }
             }
@@ -605,7 +604,6 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             quote! {
                 pub fn #name(&self) -> std::result::Result<#rt, snafu::Whatever> {
                     use snafu::ResultExt as _;
-                    use snafu::OptionExt as _;
                     #method.whatever_context::<_, snafu::Whatever>(#key)
                 }
             }
