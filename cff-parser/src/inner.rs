@@ -84,7 +84,7 @@ impl Operand {
     }
 }
 
-fn parse_integer(buf: &[u8]) -> ParseResult<i32> {
+fn parse_integer(buf: &[u8]) -> ParseResult<'_, i32> {
     let (buf, b0) = take(1usize)(buf)?;
     let b0 = b0[0];
     if (32..=246).contains(&b0) {
@@ -142,7 +142,7 @@ fn parse_integer(buf: &[u8]) -> ParseResult<i32> {
 /// always padded to a full byte. Thus, the value –2.25 is  encoded by the byte
 /// sequence (1e e2 a2 5f) and the value  0.140541E–3 by the sequence (1e 0a 14
 /// 05 41 c3 ff).
-fn parse_real(buf: &[u8]) -> ParseResult<f32> {
+fn parse_real(buf: &[u8]) -> ParseResult<'_, f32> {
     #[derive(PartialEq, Eq, Debug)]
     enum NumberState {
         Int,
@@ -215,7 +215,7 @@ fn parse_real(buf: &[u8]) -> ParseResult<f32> {
 /// Operand maybe integer/real/bool/intArray/realArray, if multiple operands
 /// are provided, item types must be same, either int or real, returned as
 /// intArray/realArray.
-fn parse_operand(buf: &[u8]) -> ParseResult<Operand> {
+fn parse_operand(buf: &[u8]) -> ParseResult<'_, Operand> {
     let (buf, mut values) = many1(alt((
         parse_integer.map(Operand::Integer),
         parse_real.map(Operand::Real),
@@ -347,7 +347,7 @@ impl Hash for Operator {
     }
 }
 
-fn parse_operator(buf: &[u8]) -> ParseResult<Operator> {
+fn parse_operator(buf: &[u8]) -> ParseResult<'_, Operator> {
     let (buf, b0) = take(1usize)(buf)?;
     let b0 = b0[0];
     if b0 == 12 {
@@ -503,7 +503,7 @@ impl Dict {
 /// Parse Dict.
 /// Dict stored as a sequence of operators and operands. The operands are
 /// stored before the operators.
-fn parse_dict(buf: &[u8]) -> ParseResult<Dict> {
+fn parse_dict(buf: &[u8]) -> ParseResult<'_, Dict> {
     let parse_item = pair(parse_operand, parse_operator).map(|(v, k)| (k, v));
     let (buf, items) = many1(parse_item)(buf)?;
     let dict = items.into_iter().collect();
@@ -527,7 +527,7 @@ impl OffSize {
     }
 }
 
-fn parse_off_size(buf: &[u8]) -> ParseResult<OffSize> {
+fn parse_off_size(buf: &[u8]) -> ParseResult<'_, OffSize> {
     let (buf, b0) = take(1usize)(buf)?;
     let b0 = b0[0];
     match b0 {
@@ -576,7 +576,7 @@ impl<'a> Offsets<'a> {
 
     fn offset_parser<'b>(off_size: OffSize) -> impl Parser<&'b [u8], u32, NomError<&'b [u8]>> {
         use nom::number::complete::{be_u24, be_u32};
-        move |buf| -> ParseResult<u32> {
+        move |buf| -> ParseResult<'_, u32> {
             match off_size {
                 OffSize::One => be_u8.map(|v| v as u32).parse(buf),
                 OffSize::Two => be_u16.map(|v| v as u32).parse(buf),
@@ -587,7 +587,7 @@ impl<'a> Offsets<'a> {
     }
 
     /// Get offset of `ith` element
-    fn _get(data: &[u8], off_size: OffSize, ith: usize) -> ParseResult<u32> {
+    fn _get(data: &[u8], off_size: OffSize, ith: usize) -> ParseResult<'_, u32> {
         // skip ith off_size bytes
         let buf = &data[ith * off_size.len()..];
         Self::offset_parser(off_size).parse(buf)
@@ -655,7 +655,7 @@ impl<'a> IndexedData<'a> {
 /// ---+-----------------------+------------------------------------------
 /// 3 | data                  | Data
 /// ---+-----------------------+------------------------------------------
-pub fn parse_indexed_data(buf: &[u8]) -> ParseResult<IndexedData<'_>> {
+pub fn parse_indexed_data(buf: &[u8]) -> ParseResult<'_, IndexedData<'_>> {
     let (buf, n) = be_u16(buf)?;
     let (buf, off_size) = parse_off_size(buf)?;
 
@@ -672,15 +672,15 @@ pub fn parse_indexed_data(buf: &[u8]) -> ParseResult<IndexedData<'_>> {
     Ok((buf, IndexedData { offsets, data }))
 }
 
-pub fn parse_name_index(buf: &[u8]) -> ParseResult<NameIndex<'_>> {
+pub fn parse_name_index(buf: &[u8]) -> ParseResult<'_, NameIndex<'_>> {
     parse_indexed_data.map(NameIndex).parse(buf)
 }
 
-pub fn parse_string_index(buf: &[u8]) -> ParseResult<StringIndex<'_>> {
+pub fn parse_string_index(buf: &[u8]) -> ParseResult<'_, StringIndex<'_>> {
     parse_indexed_data.map(StringIndex).parse(buf)
 }
 
-pub fn parse_top_dict_index(buf: &[u8]) -> ParseResult<TopDictIndex<'_>> {
+pub fn parse_top_dict_index(buf: &[u8]) -> ParseResult<'_, TopDictIndex<'_>> {
     parse_indexed_data.map(TopDictIndex).parse(buf)
 }
 
@@ -693,7 +693,7 @@ pub struct Header {
     pub off_size: OffSize,
 }
 
-pub fn parse_header(buf: &[u8]) -> ParseResult<Header> {
+pub fn parse_header(buf: &[u8]) -> ParseResult<'_, Header> {
     let (buf, major) = take(1usize)(buf)?;
     let major = major[0];
     let (buf, minor) = take(1usize)(buf)?;
@@ -866,7 +866,7 @@ impl<'a> TopDictData<'a> {
         r
     }
 
-    pub fn string_index(&self) -> StringIndex {
+    pub fn string_index(&self) -> StringIndex<'_> {
         self.0.strings
     }
 
@@ -1074,7 +1074,7 @@ impl Charsets {
 /// 2: format2, n_ranges (first, n_left: u16) SID
 ///
 /// Predefined charsets has no format byte, handled by TopDict::charsets().
-fn parse_charsets(buf: &[u8], n_glyphs: u16) -> ParseResult<Charsets> {
+fn parse_charsets(buf: &[u8], n_glyphs: u16) -> ParseResult<'_, Charsets> {
     let n_glyphs = n_glyphs - 1; // 0 is always .notdef, not exist in charsets
 
     fn covers(r: &[RangeInclusive<Sid>]) -> i32 {
@@ -1144,7 +1144,7 @@ impl EncodingSupplement {
         Self { code, sid }
     }
 
-    pub fn apply(&self, strings: StringIndex, encodings: &mut Encoding) {
+    pub fn apply(&self, strings: StringIndex<'_>, encodings: &mut Encoding) {
         encodings[self.code as usize] = name(strings.get(self.sid));
     }
 }
@@ -1218,7 +1218,7 @@ impl Encodings {
 /// If first byte highest bit is 1, EncodingSuppliments exists after Format0 or Format 1.
 /// EncodingSuppliments is a sequence of code (u8) and sid (u16) preceeded with `nSups` (u8),
 /// which is the count of EncodingSuppliment.
-fn parse_encodings(buf: &[u8]) -> ParseResult<(Encodings, Option<Vec<EncodingSupplement>>)> {
+fn parse_encodings(buf: &[u8]) -> ParseResult<'_, (Encodings, Option<Vec<EncodingSupplement>>)> {
     let (buf, format) = be_u8(buf)?;
     let (buf, encodings) = match format & 0x7f {
         0 => length_count(be_u8, be_u8)

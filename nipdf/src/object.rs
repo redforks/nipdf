@@ -106,7 +106,7 @@ impl TypeValueGetter for NameTypeValueGetter {
 }
 
 pub trait TypeValueCheck<V>: Clone + Debug {
-    fn schema_type(&self) -> Cow<str>;
+    fn schema_type(&self) -> Cow<'_, str>;
     fn check(&self, v: Option<V>) -> bool;
 
     /// Convert current checker to `OptionTypeValueChecker`, return `true` if value is `None`.
@@ -130,7 +130,7 @@ impl<R: Debug + Clone> EqualTypeValueChecker<R> {
 }
 
 impl TypeValueCheck<Name> for EqualTypeValueChecker<Name> {
-    fn schema_type(&self) -> Cow<str> {
+    fn schema_type(&self) -> Cow<'_, str> {
         Cow::Borrowed(self.value.as_str())
     }
 
@@ -140,7 +140,7 @@ impl TypeValueCheck<Name> for EqualTypeValueChecker<Name> {
 }
 
 impl TypeValueCheck<i32> for EqualTypeValueChecker<i32> {
-    fn schema_type(&self) -> Cow<str> {
+    fn schema_type(&self) -> Cow<'_, str> {
         Cow::Owned(self.value.to_string())
     }
 
@@ -156,7 +156,7 @@ pub struct OptionTypeValueChecker<Inner: Sized + Clone + Debug>(pub Inner);
 impl<Inner: TypeValueCheck<V> + Clone + Debug, V> TypeValueCheck<V>
     for OptionTypeValueChecker<Inner>
 {
-    fn schema_type(&self) -> Cow<str> {
+    fn schema_type(&self) -> Cow<'_, str> {
         self.0.schema_type()
     }
 
@@ -179,7 +179,7 @@ impl<R: Clone + Debug> OneOfTypeValueChecker<R> {
 }
 
 impl<V: Display + PartialEq + Clone + Debug> TypeValueCheck<V> for OneOfTypeValueChecker<V> {
-    fn schema_type(&self) -> Cow<str> {
+    fn schema_type(&self) -> Cow<'_, str> {
         Cow::Owned(
             self.values
                 .iter()
@@ -890,7 +890,7 @@ pub enum ObjectValueError {
 }
 
 impl<'a> From<parser::ParseError<'a>> for ObjectValueError {
-    fn from(e: parser::ParseError) -> Self {
+    fn from(e: parser::ParseError<'_>) -> Self {
         Self::ParseError {
             message: format!("{:?}", e),
         }
@@ -1118,7 +1118,7 @@ use pretty::RcDoc;
 use static_assertions::assert_eq_size;
 
 impl Object {
-    pub fn to_doc(&self) -> RcDoc {
+    pub fn to_doc(&self) -> RcDoc<'_> {
         fn name_to_doc(n: &Name) -> RcDoc<'_> {
             RcDoc::text("/").append(RcDoc::text(n.as_str()))
         }

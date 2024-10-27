@@ -612,22 +612,22 @@ enum ObjectOrOperator<'a> {
     Operator(&'a str),
 }
 
-fn parse_operator(input: &[u8]) -> ParseResult<ObjectOrOperator> {
+fn parse_operator(input: &[u8]) -> ParseResult<'_, ObjectOrOperator<'_>> {
     let p = is_not(b" \t\n\r%[<(/".as_slice());
     map_res(p, |op| {
         let op = std::str::from_utf8(op).unwrap();
-        Ok::<_, ParseError>(ObjectOrOperator::Operator(op))
+        Ok::<_, ParseError<'_>>(ObjectOrOperator::Operator(op))
     })(input)
 }
 
-fn parse_object_or_operator(input: &[u8]) -> ParseResult<ObjectOrOperator> {
+fn parse_object_or_operator(input: &[u8]) -> ParseResult<'_, ObjectOrOperator<'_>> {
     alt((parse_object.map(ObjectOrOperator::Object), parse_operator))(input)
 }
 
 /// Parses `Operation::PaintInlineImage` operation.
 /// `input` start after `BI`, parses dictionary and image data, consumes EI.
-fn parse_inline_image(input: &[u8]) -> ParseResult<InlineImage> {
-    fn parse_dict(input: &[u8]) -> ParseResult<Dictionary> {
+fn parse_inline_image(input: &[u8]) -> ParseResult<'_, InlineImage> {
+    fn parse_dict(input: &[u8]) -> ParseResult<'_, Dictionary> {
         terminated(parse_dict_entries, ws_terminated(tag(b"ID")))
             .map(|v| v.into_iter().collect())
             .parse(input)

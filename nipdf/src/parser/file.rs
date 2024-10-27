@@ -21,7 +21,7 @@ use prescript::sname;
 use std::{fmt::Display, ops::RangeFrom, str::from_utf8};
 
 /// Return `None`` if file not start with `%PDF-`
-pub fn parse_header(buf: &[u8]) -> ParseResult<Option<&str>> {
+pub fn parse_header(buf: &[u8]) -> ParseResult<'_, Option<&str>> {
     let one_digit = || satisfy(|c| c.is_ascii_digit());
 
     fn new_header(buf: &[u8]) -> std::result::Result<Option<&str>, FileError> {
@@ -83,7 +83,7 @@ fn new_r_to_tag<'a>(tag: &'static [u8]) -> impl FnMut(&'a [u8]) -> ParseResult<'
     }
 }
 
-fn parse_trailer(buf: &[u8]) -> ParseResult<Dictionary> {
+fn parse_trailer(buf: &[u8]) -> ParseResult<'_, Dictionary> {
     preceded(ws_terminated(tag(b"trailer")), ws_terminated(parse_dict))(buf)
 }
 
@@ -132,7 +132,7 @@ where
 }
 
 /// Parse xref from cross-reference streams
-fn parse_xref_stream(input: &[u8]) -> ParseResult<(XRefSection, Dictionary)> {
+fn parse_xref_stream(input: &[u8]) -> ParseResult<'_, (XRefSection, Dictionary)> {
     fn to_parse_error<E: Display>(e: E) -> nom::Err<ParseError<'static>> {
         error!("should be xref table stream: {}", e);
         nom::Err::Error(ParseError::from_error_kind(b"", ErrorKind::Fail))
@@ -182,7 +182,7 @@ fn parse_xref_stream(input: &[u8]) -> ParseResult<(XRefSection, Dictionary)> {
 }
 
 // Assumes buf start from xref
-fn parse_xref_table(buf: &[u8]) -> ParseResult<XRefSection> {
+fn parse_xref_table(buf: &[u8]) -> ParseResult<'_, XRefSection> {
     let record_count_parser = context(
         "record count",
         ws_terminated(separated_pair(u32, tag(b" "), u32)),
@@ -222,12 +222,12 @@ fn parse_xref_table(buf: &[u8]) -> ParseResult<XRefSection> {
     preceded(context("xref", ws_terminated(tag(b"xref"))), parser)(buf)
 }
 
-fn parse_startxref(buf: &[u8]) -> ParseResult<u32> {
+fn parse_startxref(buf: &[u8]) -> ParseResult<'_, u32> {
     preceded(ws_terminated(tag(b"startxref")), ws_terminated(u32))(buf)
 }
 
 // Assumes buf start from xref
-fn parse_frame(buf: &[u8]) -> ParseResult<(Dictionary, XRefSection)> {
+fn parse_frame(buf: &[u8]) -> ParseResult<'_, (Dictionary, XRefSection)> {
     map(
         alt((
             tuple((
@@ -240,7 +240,7 @@ fn parse_frame(buf: &[u8]) -> ParseResult<(Dictionary, XRefSection)> {
     )(buf)
 }
 
-pub fn parse_frame_set(input: &[u8]) -> ParseResult<FrameSet> {
+pub fn parse_frame_set(input: &[u8]) -> ParseResult<'_, FrameSet<'_>> {
     fn get_prev(frame: &Frame) -> Option<i32> {
         frame.trailer.get(&sname("Prev")).map(|o| o.int().unwrap())
     }

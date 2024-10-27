@@ -74,7 +74,7 @@ endobj
     let d = resolver.resolve(1).unwrap().as_dict().unwrap();
     let d = SchemaDict::new(d, &resolver, ()).unwrap();
     assert!(
-        d.resolve_one_or_more_pdf_object::<FooDict>(&sname("foo"))
+        d.resolve_one_or_more_pdf_object::<FooDict<'_, '_>>(&sname("foo"))
             .unwrap()
             .is_empty()
     );
@@ -90,7 +90,7 @@ endobj
     let d = resolver.resolve(1).unwrap().as_dict().unwrap();
     let d = SchemaDict::new(d, &resolver, ()).unwrap();
     let list = d
-        .resolve_one_or_more_pdf_object::<FooDict>(&sname("foo"))
+        .resolve_one_or_more_pdf_object::<FooDict<'_, '_>>(&sname("foo"))
         .unwrap();
     assert_eq!(list.len(), 1);
     assert_eq!(Some(2.into()), list[0].id());
@@ -106,7 +106,7 @@ endobj
     let d = resolver.resolve(1).unwrap().as_dict().unwrap();
     let d = SchemaDict::new(d, &resolver, ()).unwrap();
     let list = d
-        .resolve_one_or_more_pdf_object::<FooDict>(&sname("foo"))
+        .resolve_one_or_more_pdf_object::<FooDict<'_, '_>>(&sname("foo"))
         .unwrap();
     assert_eq!(list.len(), 2);
     assert_eq!(None, list[0].id());
@@ -123,7 +123,7 @@ fn resolve_one_or_more_pdf_object() {
     let resolver = ObjectResolver::new(buf, &xref, None);
     let id = Object::new_ref(1);
     let list = resolver
-        .resolve_one_or_more_pdf_object::<FooDict>(&id)
+        .resolve_one_or_more_pdf_object::<FooDict<'_, '_>>(&id)
         .unwrap();
     assert_eq!(list.len(), 1);
     assert_eq!(Some(1.into()), list[0].id());
@@ -137,7 +137,7 @@ endobj"#;
     let resolver = ObjectResolver::new(buf, &xref, None);
     let id = Object::new_ref(1);
     let list = resolver
-        .resolve_one_or_more_pdf_object::<FooDict>(&id)
+        .resolve_one_or_more_pdf_object::<FooDict<'_, '_>>(&id)
         .unwrap();
     assert_eq!(list.len(), 1);
     assert_eq!(Some(1.into()), list[0].id());
@@ -149,7 +149,7 @@ endobj"#;
     let resolver = ObjectResolver::new(buf, &xref, None);
     let id = Object::new_ref(1);
     let list = resolver
-        .resolve_one_or_more_pdf_object::<FooDict>(&id)
+        .resolve_one_or_more_pdf_object::<FooDict<'_, '_>>(&id)
         .unwrap();
     assert_eq!(list.len(), 2);
     assert_eq!(Some(2.into()), list[0].id());

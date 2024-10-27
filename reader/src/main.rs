@@ -214,7 +214,7 @@ impl Application for App {
         Command::none()
     }
 
-    fn view(&self) -> Element<AppMessage> {
+    fn view(&self) -> Element<'_, AppMessage> {
         let main = match &self.current {
             View::Viewer(v) => v.view(),
             View::Error(v) => v.view(),

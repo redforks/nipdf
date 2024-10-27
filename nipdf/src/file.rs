@@ -56,7 +56,7 @@ struct ObjectStream {
     offsets: Vec<u16>,
 }
 
-fn parse_object_stream(n: usize, buf: &[u8]) -> ParseResult<ObjectStream> {
+fn parse_object_stream(n: usize, buf: &[u8]) -> ParseResult<'_, ObjectStream> {
     use nom::{
         character::complete::{space1, u16, u32},
         multi::count,
@@ -157,7 +157,7 @@ impl XRefTable {
         Self::new(id_offset)
     }
 
-    fn scan(frame_set: &FrameSet) -> IDOffsetMap {
+    fn scan(frame_set: &FrameSet<'_>) -> IDOffsetMap {
         let mut r = IDOffsetMap::with_capacity(5000);
         for (id, entry) in frame_set.iter().rev().flat_map(|f| f.xref_section.iter()) {
             if entry.is_used() {
@@ -169,7 +169,7 @@ impl XRefTable {
         r
     }
 
-    pub fn from_frame_set(frame_set: &FrameSet) -> Self {
+    pub fn from_frame_set(frame_set: &FrameSet<'_>) -> Self {
         Self::new(Self::scan(frame_set))
     }
 

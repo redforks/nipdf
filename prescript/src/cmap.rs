@@ -182,7 +182,7 @@ impl CodeRange {
 struct CodeRangeParser;
 
 impl EntryParser<CodeRange> for CodeRangeParser {
-    fn parse_entry<P>(&self, m: &mut Machine<P>) -> Result<CodeRange, MachineError> {
+    fn parse_entry<P>(&self, m: &mut Machine<'_, P>) -> Result<CodeRange, MachineError> {
         let s_upper = m.pop()?.string()?;
         let s_upper = s_upper.borrow();
         let s_lower = m.pop()?.string()?;
@@ -263,7 +263,7 @@ impl CodeMap for IncRangeMap {
 struct IncRangeMapParser;
 
 impl EntryParser<IncRangeMap> for IncRangeMapParser {
-    fn parse_entry<P>(&self, m: &mut Machine<P>) -> Result<IncRangeMap, MachineError> {
+    fn parse_entry<P>(&self, m: &mut Machine<'_, P>) -> Result<IncRangeMap, MachineError> {
         let cid = m.pop()?.int()?.try_into().whatever_context("Cast to cid")?;
         let s_upper = m.pop()?.string()?;
         let s_lower = m.pop()?.string()?;
@@ -279,7 +279,7 @@ impl EntryParser<IncRangeMap> for IncRangeMapParser {
 struct BFIncRangeMapParser;
 
 impl EntryParser<IncRangeMap> for BFIncRangeMapParser {
-    fn parse_entry<P>(&self, m: &mut Machine<P>) -> Result<IncRangeMap, MachineError> {
+    fn parse_entry<P>(&self, m: &mut Machine<'_, P>) -> Result<IncRangeMap, MachineError> {
         let cid = parse_cid_from_str_buf(&m.pop()?.string()?.borrow());
         let s_upper = m.pop()?.string()?;
         let s_lower = m.pop()?.string()?;
@@ -308,7 +308,7 @@ impl CodeMap for RangeMapToOne {
 struct RangeMapToOneParser;
 
 impl EntryParser<RangeMapToOne> for RangeMapToOneParser {
-    fn parse_entry<P>(&self, m: &mut Machine<P>) -> Result<RangeMapToOne, MachineError> {
+    fn parse_entry<P>(&self, m: &mut Machine<'_, P>) -> Result<RangeMapToOne, MachineError> {
         let cid = m.pop()?.int()?.try_into().whatever_context("cast to cid")?;
         let s_upper = m.pop()?.string()?;
         let s_lower = m.pop()?.string()?;
@@ -343,7 +343,7 @@ impl CodeMap for SingleCodeMap {
 struct SingleCodeMapParser;
 
 impl EntryParser<SingleCodeMap> for SingleCodeMapParser {
-    fn parse_entry<P>(&self, m: &mut Machine<P>) -> Result<SingleCodeMap, MachineError> {
+    fn parse_entry<P>(&self, m: &mut Machine<'_, P>) -> Result<SingleCodeMap, MachineError> {
         let cid = m.pop()?.int()?.try_into().whatever_context("cast to cid")?;
         let s_code = m.pop()?.string()?;
         let code = CharCode::from_str_buf(&s_code.borrow());
@@ -354,7 +354,7 @@ impl EntryParser<SingleCodeMap> for SingleCodeMapParser {
 struct BFSingleCodeMapParser;
 
 impl EntryParser<SingleCodeMap> for BFSingleCodeMapParser {
-    fn parse_entry<P>(&self, m: &mut Machine<P>) -> Result<SingleCodeMap, MachineError> {
+    fn parse_entry<P>(&self, m: &mut Machine<'_, P>) -> Result<SingleCodeMap, MachineError> {
         let cid = parse_cid_from_str_buf(&m.pop()?.string()?.borrow());
         let s_code = m.pop()?.string()?;
         let code = CharCode::from_str_buf(&s_code.borrow());
@@ -387,7 +387,7 @@ pub struct CIDSystemInfo {
 }
 
 impl CIDSystemInfo {
-    fn from_dict<P>(d: &RuntimeDictionary<P>) -> MachineResult<Self> {
+    fn from_dict<P>(d: &RuntimeDictionary<'_, P>) -> MachineResult<Self> {
         let registry = from_utf8(&d[&sname("Registry")].string()?.borrow())
             .whatever_context("Read Registry name from utf8")?
             .to_owned();
@@ -619,7 +619,7 @@ impl CMapRegistry {
             notdef_char_entries: Default::default(),
             use_cmap: None,
         };
-        let mut m = Machine::<CMapMachinePlugin>::with_plugin(file, p);
+        let mut m = Machine::<'_, CMapMachinePlugin<'_>>::with_plugin(file, p);
         m.execute()?;
         let mut p = m.take_plugin();
         p.parsed
@@ -700,7 +700,7 @@ impl CMap {
 }
 
 trait EntryParser<T> {
-    fn parse_entry<P>(&self, m: &mut Machine<P>) -> Result<T, MachineError>;
+    fn parse_entry<P>(&self, m: &mut Machine<'_, P>) -> Result<T, MachineError>;
 }
 
 struct EntriesParsing {
@@ -708,7 +708,7 @@ struct EntriesParsing {
 }
 
 impl EntriesParsing {
-    fn new<P>(m: &mut Machine<P>) -> Result<Self, MachineError> {
+    fn new<P>(m: &mut Machine<'_, P>) -> Result<Self, MachineError> {
         Ok(Self {
             n: m.pop()?.int()? as usize,
         })
@@ -717,7 +717,7 @@ impl EntriesParsing {
     fn on_end<P, EP: EntryParser<T>, T>(
         self,
         parser: EP,
-        m: &mut Machine<P>,
+        m: &mut Machine<'_, P>,
     ) -> Result<Vec<T>, MachineError> {
         let mut entries = Vec::with_capacity(self.n);
         for _ in 0..self.n {
@@ -759,7 +759,7 @@ struct CMapMachinePlugin<'a> {
 
 macro_rules! built_in_ops {
     ($($k:literal => $v:expr),* $(,)?) => {
-        std::iter::Iterator::collect(std::iter::IntoIterator::into_iter([$((Key::Name(Name::from_static($k)), RuntimeValue::<CMapMachinePlugin>::BuiltInOp($v)),)*]))
+        std::iter::Iterator::collect(std::iter::IntoIterator::into_iter([$((Key::Name(Name::from_static($k)), RuntimeValue::<'_, CMapMachinePlugin<'_>>::BuiltInOp($v)),)*]))
     };
 }
 

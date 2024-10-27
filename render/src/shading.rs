@@ -111,7 +111,7 @@ pub fn build_shading<'a, 'b>(
     )
 }
 
-fn build_axial(d: &ShadingDict, resources: &ResourceDict) -> Result<Option<Axial>> {
+fn build_axial(d: &ShadingDict<'_, '_>, resources: &ResourceDict<'_, '_>) -> Result<Option<Axial>> {
     let axial = d.axial().whatever_context("get axial")?;
     let AxialCoords { start, end } = axial.coords().whatever_context("get coords")?;
     if start == end {
@@ -179,7 +179,7 @@ fn build_radial<'a, 'b>(
 fn build_stops(
     cs: &ColorSpace,
     domain: Domain,
-    mut f: Vec<FunctionDict>,
+    mut f: Vec<FunctionDict<'_, '_>>,
 ) -> Result<Vec<(f32, Color)>> {
     assert!(f.len() == 1, "todo: support functions");
 

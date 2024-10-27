@@ -886,7 +886,7 @@ fn decode_run_length(buf: &[u8], params: Option<&Dictionary>) -> Vec<u8> {
 
 fn decode_ccitt<'a: 'b, 'b>(
     input: &[u8],
-    params: CCITTFaxDecodeParamsDict,
+    params: CCITTFaxDecodeParamsDict<'_, '_>,
 ) -> Result<Vec<u8>, ObjectValueError> {
     use crate::ccitt::Decoder;
 
@@ -1034,7 +1034,7 @@ impl Stream {
 
     fn buf_range(
         &self,
-        resolver: Option<&ObjectResolver>,
+        resolver: Option<&ObjectResolver<'_>>,
     ) -> Result<Range<usize>, ObjectValueError> {
         self.1.range(|| {
             let l = self

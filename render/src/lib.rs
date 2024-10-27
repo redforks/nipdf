@@ -158,14 +158,14 @@ impl RenderOptionBuilder {
 }
 
 pub fn render_page(
-    page: &Page,
+    page: &Page<'_, '_>,
     option: RenderOptionBuilder,
 ) -> Result<RgbaImage, ObjectValueError> {
     render_steps(page, option, None, false)
 }
 
 pub fn render_steps(
-    page: &Page,
+    page: &Page<'_, '_>,
     option: RenderOptionBuilder,
     steps: Option<usize>,
     no_crop: bool,

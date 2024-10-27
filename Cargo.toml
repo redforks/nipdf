@@ -86,6 +86,7 @@ snafu = { version = "0.8.5" }
 
 [workspace.lints.rust]
 unsafe_code = "deny"
+elided-lifetimes-in-paths = "warn"
 
 [workspace.lints.clippy]
 empty_structs_with_brackets = "warn"

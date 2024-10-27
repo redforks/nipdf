@@ -165,7 +165,7 @@ where
                 "ICCBased" => {
                     assert_eq!(2, arr.len());
                     let id = arr[1].reference().whatever_context("get reference")?;
-                    let d: ICCStreamDict = resolver
+                    let d: ICCStreamDict<'_, '_> = resolver
                         .resolve_pdf_object(id.id().id())
                         .whatever_context("resolve pdf object")?;
                     match d.alternate()?.as_ref() {
@@ -182,7 +182,7 @@ where
                     assert_eq!(4, arr.len());
                     let alternate =
                         ColorSpaceArgs::try_from(&arr[2]).whatever_context("parse alternate")?;
-                    let functions: Vec<FunctionDict> = resolver
+                    let functions: Vec<FunctionDict<'_, '_>> = resolver
                         .resolve_one_or_more_pdf_object(&arr[3])
                         .whatever_context("parse functions")?;
                     let functions: Result<Vec<_>, _> =
@@ -206,7 +206,7 @@ where
                 }
                 "CalRGB" => {
                     assert_eq!(2, arr.len());
-                    let dict: CalRGBDict<_> = resolver
+                    let dict: CalRGBDict<'_, _> = resolver
                         .resolve_pdf_object2(&arr[1])
                         .whatever_context("resolve pdf object")?;
                     let gamma = dict.gamma()?;
@@ -249,7 +249,7 @@ where
                     let n = names.len();
                     let alternate = ColorSpaceArgs::try_from(&arr[2])
                         .whatever_context("parse alternate colorspace")?;
-                    let f: FunctionDict = resolver
+                    let f: FunctionDict<'_, '_> = resolver
                         .resolve_pdf_object2(&arr[3])
                         .whatever_context("resolve pdf object")?;
                     let base = Self::from_args(&alternate, resolver, resources)?;
@@ -261,7 +261,7 @@ where
                 }
                 "Lab" => {
                     assert_eq!(2, arr.len());
-                    let dict: LabDict<_> = resolver
+                    let dict: LabDict<'_, _> = resolver
                         .resolve_pdf_object2(&arr[1])
                         .whatever_context("resolve pdf object")?;
                     let white_point = dict.white_point()?;
@@ -275,7 +275,7 @@ where
                 }
                 "CalGray" => {
                     assert_eq!(2, arr.len());
-                    let dict: CalGrayDict<_> = resolver
+                    let dict: CalGrayDict<'_, _> = resolver
                         .resolve_pdf_object2(&arr[1])
                         .whatever_context("resolve pdf object")?;
                     let gamma = dict.gamma()?;
@@ -294,7 +294,7 @@ where
 }
 
 /// Resolve data for indexed color space, it may exist in stream or HexString or LiteralString
-fn resolve_index_data(o: &Object, resolver: &ObjectResolver) -> Result<Vec<u8>> {
+fn resolve_index_data(o: &Object, resolver: &ObjectResolver<'_>) -> Result<Vec<u8>> {
     Ok(match o {
         Object::HexString(s) => s.as_bytes().into(),
         Object::LiteralString(s) => s.as_bytes().into(),

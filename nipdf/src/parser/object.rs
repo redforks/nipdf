@@ -35,7 +35,7 @@ pub fn unwrap_parse_result<'a, T: 'a>(obj: ParseResult<'a, T>) -> Result<T, Pars
     }
 }
 
-pub fn parse_object(buf: &[u8]) -> ParseResult<Object> {
+pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
     let null = value(Object::Null, tag(b"null"));
     let true_parser = value(Object::Bool(true), tag(b"true"));
     let false_parser = value(Object::Bool(false), tag(b"false"));
@@ -68,7 +68,7 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<Object> {
         },
     );
 
-    fn parse_quoted_string(input: &[u8]) -> ParseResult<&[u8]> {
+    fn parse_quoted_string(input: &[u8]) -> ParseResult<'_, &[u8]> {
         let esc = escaped(is_not("\\()"), '\\', anychar);
         let inner_parser = alt((esc, parse_quoted_string));
         let mut parser = recognize(delimited(tag(b"("), many0_count(inner_parser), tag(b")")));
@@ -102,7 +102,7 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<Object> {
 
 /// Return `Err(ObjectValueError::InvalidNameFormat)` if the name is not a valid PDF name encoding,
 /// not two hex char after `#`.
-fn normalize_name(buf: &[u8]) -> Result<Cow<str>, ObjectValueError> {
+fn normalize_name(buf: &[u8]) -> Result<Cow<'_, str>, ObjectValueError> {
     fn next_hex_char(iter: &mut impl Iterator<Item = u8>) -> Option<u8> {
         let mut result = 0;
         for _ in 0..2 {
@@ -148,7 +148,7 @@ fn normalize_name(buf: &[u8]) -> Result<Cow<str>, ObjectValueError> {
     )
 }
 
-fn parse_name(input: &[u8]) -> ParseResult<Name> {
+fn parse_name(input: &[u8]) -> ParseResult<'_, Name> {
     let (input, buf) = recognize(preceded(
         tag(b"/"),
         take_till(|c: u8| {
@@ -167,7 +167,7 @@ fn parse_name(input: &[u8]) -> ParseResult<Name> {
     Ok((input, name))
 }
 
-pub fn parse_array(input: &[u8]) -> ParseResult<Array> {
+pub fn parse_array(input: &[u8]) -> ParseResult<'_, Array> {
     let (input, arr) = delimited(
         ws(tag(b"[")),
         many0(ws(parse_object)),
@@ -177,11 +177,11 @@ pub fn parse_array(input: &[u8]) -> ParseResult<Array> {
     Ok((input, arr.into()))
 }
 
-pub fn parse_dict_entries(input: &[u8]) -> ParseResult<Vec<(Name, Object)>> {
+pub fn parse_dict_entries(input: &[u8]) -> ParseResult<'_, Vec<(Name, Object)>> {
     many0(tuple((parse_name, ws(parse_object))))(input)
 }
 
-pub fn parse_dict(input: &[u8]) -> ParseResult<Dictionary> {
+pub fn parse_dict(input: &[u8]) -> ParseResult<'_, Dictionary> {
     map(
         delimited(
             ws(tag(b"<<".as_slice())),
@@ -194,7 +194,7 @@ pub fn parse_dict(input: &[u8]) -> ParseResult<Dictionary> {
 
 type StreamParts = (Dictionary, u32, Option<NonZeroU32>);
 
-fn parse_object_and_stream(input: &[u8]) -> ParseResult<Either<Object, StreamParts>> {
+fn parse_object_and_stream(input: &[u8]) -> ParseResult<'_, Either<Object, StreamParts>> {
     let input_len = input.len();
     let (data, o) = parse_object(input)?;
     match o {
@@ -252,7 +252,7 @@ pub fn parse_indirect_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
 
 /// Parse stream wrapped in indirect object tag,
 /// different from `parse_indirect_object()`, buf will after the end of `endobj`
-pub fn parse_indirect_stream(input: &[u8]) -> ParseResult<Stream> {
+pub fn parse_indirect_stream(input: &[u8]) -> ParseResult<'_, Stream> {
     let (input, o) = parse_indirect_object(input)?;
     let Object::Stream(s) = o.take() else {
         return Err(nom::Err::Failure(ParseError::from_error_kind(
@@ -263,7 +263,7 @@ pub fn parse_indirect_stream(input: &[u8]) -> ParseResult<Stream> {
     Ok((input, Rc::into_inner(s).unwrap()))
 }
 
-fn parse_reference(input: &[u8]) -> ParseResult<Reference> {
+fn parse_reference(input: &[u8]) -> ParseResult<'_, Reference> {
     let (input, (id, gen)) = terminated(
         separated_pair(u32, multispace1, u16),
         // `not(peek(tag("G")))` to detect `RG` graphics operation,

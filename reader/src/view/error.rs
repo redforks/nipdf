@@ -14,7 +14,7 @@ impl ErrorView {
         Self(err.to_string())
     }
 
-    pub(crate) fn view(&self) -> Element<AppMessage> {
+    pub(crate) fn view(&self) -> Element<'_, AppMessage> {
         row![
             Text::new(self.0.to_string()),
             button("Open a new file...").on_press(AppMessage::SelectFile),

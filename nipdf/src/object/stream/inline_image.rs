@@ -143,8 +143,8 @@ impl InlineImage {
 
     pub fn image(
         &self,
-        resolver: &ObjectResolver,
-        resources: &ResourceDict,
+        resolver: &ObjectResolver<'_>,
+        resources: &ResourceDict<'_, '_>,
     ) -> Result<DynamicImage> {
         let decoded_data = decode_stream(&self.0, &self.1, Some(resolver), None, None)
             .whatever_context("decode stream")?;

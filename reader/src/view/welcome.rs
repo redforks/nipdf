@@ -10,7 +10,7 @@ use iced::{
 pub struct Welcome;
 
 impl Welcome {
-    pub(crate) fn view(&self) -> Element<AppMessage> {
+    pub(crate) fn view(&self) -> Element<'_, AppMessage> {
         let content = column![
             text("Welcome to nipdf!"),
             button("Open a pdf file").on_press(AppMessage::SelectFile),

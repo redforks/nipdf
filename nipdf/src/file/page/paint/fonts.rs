@@ -38,7 +38,7 @@ struct FirstLastFontWidth {
 }
 
 impl FirstLastFontWidth {
-    pub fn from(font: &FontDict) -> Result<Option<Self>> {
+    pub fn from(font: &FontDict<'_, '_>) -> Result<Option<Self>> {
         let widths = font.widths()?;
         let first_char = font.first_char()?;
         let last_char = font.last_char()?;
@@ -163,7 +163,7 @@ pub trait Font<P> {
     fn font_type(&self) -> FontType;
     fn create_op(&self, cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>>;
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>>;
-    fn as_type3(&self) -> Option<&Type3Font> {
+    fn as_type3(&self) -> Option<&Type3Font<'_, '_>> {
         None
     }
 }
@@ -187,7 +187,7 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
 
     fn resolve_by_encoding_or_font_name(
         &self,
-        pair: &Option<EncodingPair>,
+        pair: &Option<EncodingPair<'_>>,
         font_name: &str,
     ) -> Option<Encoding> {
         pair.as_ref()
@@ -198,8 +198,9 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
     fn load_from_file(font_name: &str, font_data: &[u8], is_cff: bool) -> Result<Option<Encoding>> {
         if is_cff {
             info!("scan encoding from cff font. ({})", font_name);
-            let cff_file: CffFile = CffFile::open(font_data).whatever_context("Open cff file")?;
-            let font: CffFont = cff_file
+            let cff_file: CffFile<'_> =
+                CffFile::open(font_data).whatever_context("Open cff file")?;
+            let font: CffFont<'_> = cff_file
                 .iter()
                 .whatever_context("iter fonts from cff file")?
                 .next()
@@ -234,7 +235,7 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
         Ok(Encoding::STANDARD)
     }
 
-    fn apply_encoding_diff(&self, encoding: Encoding, pair: &Option<EncodingPair>) -> Encoding {
+    fn apply_encoding_diff(&self, encoding: Encoding, pair: &Option<EncodingPair<'_>>) -> Encoding {
         if let Some((_, Some(diff))) = pair {
             return diff.apply_differences(encoding);
         }
@@ -263,7 +264,7 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
         Ok(self.apply_encoding_diff(r, &encoding_pair))
     }
 
-    fn encoding_pair(&self) -> Result<Option<EncodingPair>> {
+    fn encoding_pair(&self) -> Result<Option<EncodingPair<'_>>> {
         let encoding = self.0.encoding()?;
         let Some(encoding) = encoding else {
             return Ok(None);
@@ -301,7 +302,7 @@ struct Type1FontOp<'a> {
 
 impl<'a> Type1FontOp<'a> {
     fn new(
-        font_dict: &FontDict,
+        font_dict: &FontDict<'_, '_>,
         font: &'a FontKitFont,
         is_cff: bool,
         font_data: &'a [u8],
@@ -690,7 +691,7 @@ pub struct FontCache<'c, P: PathSink + 'static> {
 }
 
 impl<'c, P: PathSink + 'static> FontCache<'c, P> {
-    fn load_true_type_from_os(desc: &FontDescriptorDict) -> Result<Vec<u8>> {
+    fn load_true_type_from_os(desc: &FontDescriptorDict<'_, '_>) -> Result<Vec<u8>> {
         let font_name = desc.font_name()?;
         let font_name = normalize_true_type_font_name(&font_name);
         let font_name = font_name.to_title_case();
@@ -962,7 +963,7 @@ struct CIDFontType0FontOp {
 }
 
 impl CIDFontType0FontOp {
-    fn new(font: &Type0FontDict) -> Result<Self> {
+    fn new(font: &Type0FontDict<'_, '_>) -> Result<Self> {
         if let NameOrStream::Name(encoding) = font.encoding()? {
             assert_eq!(encoding, "Identity-H");
         } else {
@@ -1038,7 +1039,7 @@ impl<'a> CIDFontType2FontOp<'a> {
     fn new(
         cmap_registry: &mut CMapRegistry,
         face: TTFFace<'a>,
-        font: &Type0FontDict,
+        font: &Type0FontDict<'_, '_>,
         is_embed: bool,
     ) -> Result<Self> {
         let cmap = match font.encoding()? {
@@ -1090,7 +1091,7 @@ impl<'a> CIDFontType2FontOp<'a> {
 // TTFFace::glyph_index() ignores non unicode cmap table,
 // some non-cjk pdf file use non unicode cmap table. This function
 // try to find glyph id from all cmap tables
-fn glyph_index(face: &TTFFace, ch: u32) -> Option<u16> {
+fn glyph_index(face: &TTFFace<'_>, ch: u32) -> Option<u16> {
     for subtable in face.tables().cmap.unwrap().subtables {
         if let Some(id) = subtable.glyph_index(ch) {
             return Some(id.0);
@@ -1245,7 +1246,7 @@ struct Type3FontOp<'a> {
 }
 
 impl<'a> Type3FontOp<'a> {
-    fn new(font_dict: &FontDict, name_to_gid: &'a HashMap<Name, u16>) -> Result<Self> {
+    fn new(font_dict: &FontDict<'_, '_>, name_to_gid: &'a HashMap<Name, u16>) -> Result<Self> {
         let encoding = EncodingParser(font_dict).type3()?;
         let type3 = font_dict.type3()?;
         let matrix = type3.matrix()?;
@@ -1290,7 +1291,7 @@ pub struct Type3Font<'a, 'b> {
 }
 
 impl<'a, 'b> Type3Font<'a, 'b> {
-    fn parse_glyphs(d: &Type3FontDict) -> Result<Vec<(Name, Type3Glyph)>> {
+    fn parse_glyphs(d: &Type3FontDict<'_, '_>) -> Result<Vec<(Name, Type3Glyph)>> {
         let procs = d.char_procs()?;
         let mut r = Vec::with_capacity(procs.len());
         for (name, stream) in procs.iter() {
@@ -1325,7 +1326,7 @@ impl<'a, 'b> Type3Font<'a, 'b> {
         })
     }
 
-    pub fn resources(&self) -> Result<Option<ResourceDict>> {
+    pub fn resources(&self) -> Result<Option<ResourceDict<'_, '_>>> {
         self.dict.type3()?.resources()
     }
 

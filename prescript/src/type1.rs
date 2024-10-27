@@ -74,7 +74,7 @@ impl Font {
 }
 
 /// If file is pfb file, remove pfb section bytes
-fn normalize_pfb(data: &[u8]) -> Result<Cow<[u8]>, Whatever> {
+fn normalize_pfb(data: &[u8]) -> Result<Cow<'_, [u8]>, Whatever> {
     if data.len() < 100 || data[0] != 0x80 {
         return Ok(Cow::Borrowed(data));
     }

@@ -94,7 +94,7 @@ impl PageInput {
         Ok(())
     }
 
-    pub fn view(&self) -> Element<AppMessage> {
+    pub fn view(&self) -> Element<'_, AppMessage> {
         Card::new(
             Text::new(crate::APP_NAME),
             text_input(&self.place_holder, &self.value)
@@ -503,8 +503,8 @@ impl Viewer {
         }
     }
 
-    pub(crate) fn view(&self) -> Element<AppMessage> {
-        let main: Element<AppMessage> = column![
+    pub(crate) fn view(&self) -> Element<'_, AppMessage> {
+        let main: Element<'_, AppMessage> = column![
             row(vec![
                 // can not use row! macro, it has compile problems because of #[cfg] attribute on
                 // some of items

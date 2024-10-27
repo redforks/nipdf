@@ -27,7 +27,7 @@ use num_traits::ToPrimitive;
 pub type Array = Vec<Value>;
 pub type TokenArray = Vec<Token>;
 
-type OperatorFn<P> = fn(&mut Machine<P>) -> MachineResult<ExecState>;
+type OperatorFn<P> = fn(&mut Machine<'_, P>) -> MachineResult<ExecState>;
 
 #[derive(Educe)]
 #[educe(Debug(bound()), PartialEq(bound()), Clone(bound()))]
@@ -296,7 +296,7 @@ impl<'a, P> TryFrom<RuntimeValue<'a, P>> for Token {
             RuntimeValue::Value(Value::Name(n)) => Ok(Self::Name(n)),
             RuntimeValue::Value(v) => Ok(Self::Literal(v)),
             RuntimeValue::Dictionary(d) => {
-                let d: RuntimeDictionary<P> =
+                let d: RuntimeDictionary<'_, P> =
                     Rc::try_unwrap(d).map_or_else(|d| d.borrow().clone(), |d| d.into_inner());
                 Ok(Self::Literal(Value::Dictionary(into_dict(d)?)))
             }
@@ -409,7 +409,7 @@ fn into_dict<P>(d: RuntimeDictionary<'_, P>) -> MachineResult<Dictionary> {
         let v = match v {
             RuntimeValue::Value(v) => v,
             RuntimeValue::Dictionary(d) => {
-                let d: RuntimeDictionary<P> =
+                let d: RuntimeDictionary<'_, P> =
                     Rc::try_unwrap(d).map_or_else(|d| d.borrow().clone(), |d| d.into_inner());
                 Value::Dictionary(into_dict(d)?)
             }
@@ -443,7 +443,7 @@ macro_rules! rt_values {
         Array::new()
     };
     ($($e:expr),*) => {
-        vec![$(Into::<RuntimeValue::<_>>::into($e)),*]
+        vec![$(Into::<RuntimeValue::<'_, _>>::into($e)),*]
     }
 }
 
@@ -858,7 +858,7 @@ macro_rules! dict {
         RuntimeDictionary::new()
     };
     ($($k:expr => $v:expr),* $(,)?) => {
-        std::iter::Iterator::collect::<RuntimeDictionary<_>>(std::iter::IntoIterator::into_iter([$((Key::Name($k), RuntimeValue::from($v)),)*]))
+        std::iter::Iterator::collect::<RuntimeDictionary<'_, _>>(std::iter::IntoIterator::into_iter([$((Key::Name($k), RuntimeValue::from($v)),)*]))
     };
 }
 
@@ -1750,7 +1750,7 @@ impl<'a, P> VariableDictStack<'a, P> {
             .clone())
     }
 
-    fn lock_system_dict(&self) -> Ref<RuntimeDictionary<'a, P>> {
+    fn lock_system_dict(&self) -> Ref<'_, RuntimeDictionary<'a, P>> {
         self.stack[0].borrow()
     }
 }

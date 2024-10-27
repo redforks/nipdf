@@ -79,7 +79,7 @@ pub trait EncryptDictTrait {
     #[key("CF")]
     #[one_or_more]
     #[nested]
-    fn crypt_filter_params(&self) -> HashMap<Name, CryptFilterDict>;
+    fn crypt_filter_params(&self) -> HashMap<Name, CryptFilterDict<'_, '_>>;
 
     /// Crypt filter used if Crypt field not set on Stream dictionary
     #[key("StmF")]
@@ -153,7 +153,7 @@ impl CryptFilters {
 
 impl<'a, 'b> EncryptDict<'a, 'b> {
     pub fn crypt_filters(&self) -> CryptFilters {
-        fn _do(this: &EncryptDict) -> Result<CryptFilters> {
+        fn _do(this: &EncryptDict<'_, '_>) -> Result<CryptFilters> {
             if this.revison()? != StandardHandlerRevision::V4 {
                 return Ok(CryptFilters::rc4());
             }
@@ -320,7 +320,7 @@ pub struct Authorizer {
 }
 
 impl Authorizer {
-    pub fn new(d: &EncryptDict, trailer: &TrailerDict) -> Result<Self> {
+    pub fn new(d: &EncryptDict<'_, '_>, trailer: &TrailerDict<'_, '_>) -> Result<Self> {
         let mut owner_hash = [0u8; 32];
         let mut user_hash = [0u8; 32];
         owner_hash.copy_from_slice(&d.owner_password_hash()?[..32]);

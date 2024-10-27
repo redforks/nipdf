@@ -379,11 +379,11 @@ impl State {
         image_to_user_space(img_w, img_h).then(&self.user_to_device)
     }
 
-    fn get_mask(&self) -> Option<Ref<Mask>> {
+    fn get_mask(&self) -> Option<Ref<'_, Mask>> {
         self.mask.as_ref().map(|m| m.1.borrow())
     }
 
-    fn set_graphics_state(&mut self, res: &GraphicsStateParameterDict) {
+    fn set_graphics_state(&mut self, res: &GraphicsStateParameterDict<'_, '_>) {
         for key in res.dict().keys() {
             match key.as_str() {
                 "LW" => self.set_line_width(res.line_width().unwrap().unwrap()),

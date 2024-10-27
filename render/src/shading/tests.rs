@@ -12,7 +12,7 @@ use test_case::test_case;
 fn build_invalid_radial(buf: &[u8]) -> Result<(), Whatever> {
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
-    let d: ShadingDict = resolver
+    let d: ShadingDict<'_, '_> = resolver
         .resolve_pdf_object(1)
         .whatever_context("resolve pdf object")?;
     let empty_d = Dictionary::new();
