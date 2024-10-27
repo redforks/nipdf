@@ -1,5 +1,4 @@
-use crate::{AppMessage, ShardedData};
-use anyhow::Result;
+use crate::{AppMessage, Result, ShardedData};
 #[cfg(feature = "debug")]
 use iced::alignment::Horizontal;
 #[cfg(feature = "debug")]
@@ -26,6 +25,7 @@ use iced_aw::{
 };
 use nipdf::file::File as PdfFile;
 use nipdf_render::{RenderOptionBuilder, render_page};
+use snafu::ResultExt;
 #[cfg(feature = "debug")]
 use std::time::{Duration, Instant};
 
@@ -178,8 +178,8 @@ impl Viewer {
     pub fn new(file_path: impl Into<String>, password: impl Into<String>) -> Result<Self> {
         let file_path = file_path.into();
         let password = password.into();
-        let file_data = std::fs::read(&file_path)?;
-        let file = PdfFile::parse(file_data, &password)?;
+        let file_data = std::fs::read(&file_path).whatever_context("read pdf file content")?;
+        let file = PdfFile::parse(file_data, &password).whatever_context("parse pdf file")?;
         let mut r = Self {
             file_path,
             page: Page {
@@ -216,12 +216,15 @@ impl Viewer {
     fn load_page(&mut self, no: u32) -> Result<()> {
         #[cfg(feature = "debug")]
         let now = Instant::now();
-        let resolver = self.file.resolver()?;
-        let catalog = self.file.catalog(&resolver)?;
-        let pages = catalog.pages()?;
+        let resolver = self.file.resolver().whatever_context("parse resolver")?;
+        let catalog = self
+            .file
+            .catalog(&resolver)
+            .whatever_context("parse catalog")?;
+        let pages = catalog.pages().whatever_context("parse page tree")?;
         let page = &pages[no as usize];
         let option = RenderOptionBuilder::new().zoom(self.zoom);
-        let image = render_page(page, option)?;
+        let image = render_page(page, option).whatever_context("render page")?;
         self.page = Page {
             width: image.width(),
             height: image.height(),

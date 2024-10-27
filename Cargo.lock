@@ -2588,7 +2588,6 @@ dependencies = [
 name = "nipdf-reader"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "clap",
  "directories-next",
  "env_logger",
@@ -2599,6 +2598,7 @@ dependencies = [
  "nipdf",
  "nipdf-render",
  "notify-rust",
+ "snafu",
 ]
 
 [[package]]

@@ -1,4 +1,3 @@
-use anyhow::Result;
 use clap::Parser;
 use iced::{
     Application, Command, Element, Length, Settings, Theme,
@@ -9,6 +8,7 @@ use iced::{
 use iced_aw::{Card, modal};
 use log::error;
 use mimalloc::MiMalloc;
+use snafu::Whatever;
 use std::sync::Arc;
 use view::{
     error::ErrorView,
@@ -21,6 +21,8 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 mod app_state;
 mod view;
+
+type Result<T, E = Whatever> = std::result::Result<T, E>;
 
 const APP_NAME: &str = "nipdf";
 
@@ -117,7 +119,7 @@ impl App {
         .into()
     }
 
-    fn handle_result<T>(&mut self, rv: Result<T>) -> Option<T> {
+    fn handle_result<T, E: std::fmt::Display>(&mut self, rv: Result<T, E>) -> Option<T> {
         match rv {
             Ok(v) => Some(v),
             Err(e) => {
