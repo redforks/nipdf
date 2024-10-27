@@ -1,10 +1,10 @@
 use crate::{
+    Result,
     file::{Rectangle, ResourceDict},
     graphics::{NameOrDictByRef, NameOrStream, trans::GlyphToTextSpace},
     object::{Object, ObjectValueError, Stream},
 };
 use ahash::{HashMap, HashMapExt};
-use anyhow::Result as AnyResult;
 use bitflags::bitflags;
 use log::warn;
 use nipdf_macro::{TryFromIntObjectForBitflags, TryFromNameObject, pdf_object};
@@ -101,7 +101,7 @@ pub trait Type1FontDictTrait {
 }
 
 impl<'a, 'b> FontDict<'a, 'b> {
-    fn resolve_name(&self) -> anyhow::Result<Name> {
+    fn resolve_name(&self) -> Result<Name> {
         if let Some(desc) = self.font_descriptor()? {
             return desc.font_name();
         }
@@ -109,7 +109,7 @@ impl<'a, 'b> FontDict<'a, 'b> {
         self.base_font()
     }
 
-    pub fn font_name(&self) -> anyhow::Result<String> {
+    pub fn font_name(&self) -> Result<String> {
         let r = self.resolve_name()?;
         let r = r.as_ref();
 
@@ -122,7 +122,7 @@ impl<'a, 'b> FontDict<'a, 'b> {
         }
     }
 
-    pub fn default_width(&self) -> AnyResult<u32> {
+    pub fn default_width(&self) -> Result<u32> {
         if self.subtype()? == FontType::Type3 {
             return Ok(0);
         }

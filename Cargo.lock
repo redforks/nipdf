@@ -2513,7 +2513,6 @@ version = "0.1.0"
 dependencies = [
  "aes",
  "ahash",
- "anyhow",
  "arc4",
  "assert_approx_eq",
  "bitflags 2.6.0",

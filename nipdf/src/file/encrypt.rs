@@ -1,6 +1,8 @@
-use crate::object::{ObjectId, TrailerDict};
+use crate::{
+    Result,
+    object::{ObjectId, TrailerDict},
+};
 use ahash::{HashMap, HashMapExt};
-use anyhow::Result as AnyResult;
 use arc4::Arc4;
 use log::error;
 use md5::{Digest, Md5};
@@ -151,8 +153,6 @@ impl CryptFilters {
 
 impl<'a, 'b> EncryptDict<'a, 'b> {
     pub fn crypt_filters(&self) -> CryptFilters {
-        use anyhow::Result;
-
         fn _do(this: &EncryptDict) -> Result<CryptFilters> {
             if this.revison()? != StandardHandlerRevision::V4 {
                 return Ok(CryptFilters::rc4());
@@ -320,7 +320,7 @@ pub struct Authorizer {
 }
 
 impl Authorizer {
-    pub fn new(d: &EncryptDict, trailer: &TrailerDict) -> AnyResult<Self> {
+    pub fn new(d: &EncryptDict, trailer: &TrailerDict) -> Result<Self> {
         let mut owner_hash = [0u8; 32];
         let mut user_hash = [0u8; 32];
         owner_hash.copy_from_slice(&d.owner_password_hash()?[..32]);

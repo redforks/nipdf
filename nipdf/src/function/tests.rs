@@ -171,7 +171,7 @@ fn test_n_func() {
 }
 
 #[test]
-fn sampled_function_bits_per_sample_8() -> AnyResult<()> {
+fn sampled_function_bits_per_sample_8() -> Result<()> {
     let f = SampledFunction {
         bits_per_sample: 8,
         signature: Signature {

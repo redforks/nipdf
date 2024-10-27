@@ -4,6 +4,7 @@ use crate::{
     parser::parse_dict,
 };
 use prescript::sname;
+use snafu::ResultExt;
 use std::path::PathBuf;
 
 #[test]
@@ -63,7 +64,7 @@ fn object_resolver_resolve_container_value() {
 trait FooDictTrait {}
 
 #[test]
-fn resolve_container_one_or_more_pdf_object() -> AnyResult<()> {
+fn resolve_container_one_or_more_pdf_object() -> Result<()> {
     // field not exist
     let buf = br#"1 0 obj
 <<>>
@@ -71,10 +72,11 @@ endobj
 "#;
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
-    let d = resolver.resolve(1)?.as_dict()?;
-    let d = SchemaDict::new(d, &resolver, ())?;
+    let d = resolver.resolve(1).unwrap().as_dict().unwrap();
+    let d = SchemaDict::new(d, &resolver, ()).unwrap();
     assert!(
-        d.resolve_one_or_more_pdf_object::<FooDict>(&sname("foo"))?
+        d.resolve_one_or_more_pdf_object::<FooDict>(&sname("foo"))
+            .unwrap()
             .is_empty()
     );
 
@@ -86,9 +88,11 @@ endobj
 "#;
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
-    let d = resolver.resolve(1)?.as_dict()?;
-    let d = SchemaDict::new(d, &resolver, ())?;
-    let list = d.resolve_one_or_more_pdf_object::<FooDict>(&sname("foo"))?;
+    let d = resolver.resolve(1).unwrap().as_dict().unwrap();
+    let d = SchemaDict::new(d, &resolver, ()).unwrap();
+    let list = d
+        .resolve_one_or_more_pdf_object::<FooDict>(&sname("foo"))
+        .unwrap();
     assert_eq!(list.len(), 1);
     assert_eq!(Some(2.into()), list[0].id());
 
@@ -100,9 +104,11 @@ endobj
 "#;
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
-    let d = resolver.resolve(1)?.as_dict()?;
-    let d = SchemaDict::new(d, &resolver, ())?;
-    let list = d.resolve_one_or_more_pdf_object::<FooDict>(&sname("foo"))?;
+    let d = resolver.resolve(1).unwrap().as_dict().unwrap();
+    let d = SchemaDict::new(d, &resolver, ()).unwrap();
+    let list = d
+        .resolve_one_or_more_pdf_object::<FooDict>(&sname("foo"))
+        .unwrap();
     assert_eq!(list.len(), 2);
     assert_eq!(None, list[0].id());
     assert_eq!(Some(3.into()), list[1].id());

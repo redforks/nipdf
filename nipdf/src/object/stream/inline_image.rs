@@ -1,15 +1,16 @@
 //! Inline Image and Inline Image Stream
 //!
 //! InlineImage decode from InlineImageStream
-use super::{AnyResult, ImageMetadata, decode_image, decode_stream};
+use super::{ImageMetadata, decode_image, decode_stream};
 use crate::{
+    Result,
     file::{ObjectResolver, ResourceDict},
     graphics::ConvertFromObject,
     object::{Dictionary, Object, ObjectValueError},
 };
-use anyhow::anyhow;
 use image::DynamicImage;
 use prescript::{Name, sname};
+use snafu::{OptionExt, ResultExt};
 
 struct InlineStreamDict<'a>(&'a Dictionary);
 
@@ -37,40 +38,43 @@ impl<'a> InlineStreamDict<'a> {
 }
 
 impl<'a> ImageMetadata for InlineStreamDict<'a> {
-    fn width(&self) -> AnyResult<u32> {
-        self.alt_get(&sname("Width"), &sname("W"), |o| o.int().map(|v| v as u32))?
-            .ok_or_else(|| anyhow!("Missing Width"))
+    fn width(&self) -> Result<u32> {
+        self.alt_get(&sname("Width"), &sname("W"), |o| o.int().map(|v| v as u32))
+            .whatever_context("get width")?
+            .whatever_context("Missing Width")
     }
 
-    fn height(&self) -> AnyResult<u32> {
-        self.alt_get(&sname("Height"), &sname("H"), |o| o.int().map(|v| v as u32))?
-            .ok_or_else(|| anyhow!("Missing Height"))
+    fn height(&self) -> Result<u32> {
+        self.alt_get(&sname("Height"), &sname("H"), |o| o.int().map(|v| v as u32))
+            .whatever_context("get height")?
+            .whatever_context("Missing Height")
     }
 
-    fn bits_per_component(&self) -> AnyResult<Option<u8>> {
+    fn bits_per_component(&self) -> Result<Option<u8>> {
         self.alt_get(&sname("BitsPerComponent"), &sname("BPC"), |o| {
             o.int().map(|v| v.try_into().unwrap())
         })
-        .map_err(|e| e.into())
+        .whatever_context("get BitsPerComponent")
     }
 
-    fn color_space(&self) -> AnyResult<Option<crate::graphics::ColorSpaceArgs>> {
+    fn color_space(&self) -> Result<Option<crate::graphics::ColorSpaceArgs>> {
         self.try_from(&sname("ColorSpace"), &sname("CS"))
-            .map_err(|e| e.into())
+            .whatever_context("get ColorSpace")
     }
 
-    fn mask(&self) -> AnyResult<Option<super::ImageMask>> {
+    fn mask(&self) -> Result<Option<super::ImageMask>> {
         Ok(None)
     }
 
-    fn decode(&self) -> AnyResult<Option<crate::function::Domains>> {
+    fn decode(&self) -> Result<Option<crate::function::Domains>> {
         self.try_from(&sname("Decode"), &sname("D"))
-            .map_err(|e| e.into())
+            .whatever_context("get Decode")
     }
 
-    fn image_mask(&self) -> AnyResult<bool> {
+    fn image_mask(&self) -> Result<bool> {
         Ok(self
-            .alt_get(&sname("ImageMask"), &sname("IM"), |o| o.bool())?
+            .alt_get(&sname("ImageMask"), &sname("IM"), |o| o.bool())
+            .whatever_context("get ImageMask")?
             .unwrap_or(false))
     }
 }
@@ -123,7 +127,7 @@ impl<'a> InlineStream<'a> {
         Self { d, data }
     }
 
-    pub fn decode_image(self) -> AnyResult<InlineImage> {
+    pub fn decode_image(self) -> Result<InlineImage> {
         Ok(InlineImage(self.d, self.data.to_owned()))
     }
 }
@@ -141,14 +145,16 @@ impl InlineImage {
         &self,
         resolver: &ObjectResolver,
         resources: &ResourceDict,
-    ) -> AnyResult<DynamicImage> {
-        let decoded_data = decode_stream(&self.0, &self.1, Some(resolver), None, None)?;
+    ) -> Result<DynamicImage> {
+        let decoded_data = decode_stream(&self.0, &self.1, Some(resolver), None, None)
+            .whatever_context("decode stream")?;
         Ok(decode_image(
             decoded_data,
             &InlineStreamDict(&self.0),
             resolver,
             Some(resources),
-        )?)
+        )
+        .whatever_context("decode image")?)
     }
 }
 

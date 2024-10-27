@@ -1,6 +1,7 @@
 use super::*;
 use crate::file::open_test_file_with_password;
 use hex_literal::hex;
+use snafu::{ResultExt, report};
 
 #[test]
 fn test_pad_trunc_password() {
@@ -55,12 +56,25 @@ fn test_authorize_user_v3() {
     assert!(auth.authorize(b"").is_some());
 }
 
+#[report]
 #[test]
-fn revision_v4_not_encrypt_metadata() -> anyhow::Result<()> {
-    let file = open_test_file_with_password("pdf.js/test/pdfs/bug1782186.pdf", "Hello")?;
+fn revision_v4_not_encrypt_metadata() -> Result<()> {
+    let file = open_test_file_with_password("pdf.js/test/pdfs/bug1782186.pdf", "Hello")
+        .whatever_context("open test file with password")?;
     let resolver = file.resolver()?;
-    let pages = file.catalog(&resolver)?.pages()?;
-    assert_eq!(16, pages[0].content()?.operations().len());
+    let pages = file
+        .catalog(&resolver)
+        .whatever_context("parse catalog")?
+        .pages()
+        .whatever_context("parse pages")?;
+    assert_eq!(
+        16,
+        pages[0]
+            .content()
+            .whatever_context("get page content")?
+            .operations()
+            .len()
+    );
     Ok(())
 }
 

@@ -1,4 +1,5 @@
 use crate::{
+    Result,
     file::{ObjectResolver, page::ResourceDict},
     graphics::{
         NameOrDictByRef, NameOrStream, Operation, Point, parse_operations,
@@ -10,7 +11,6 @@ use crate::{
         FontDescriptorFlags, FontDict, FontType, Type0FontDict, Type3FontDict,
     },
 };
-use anyhow::{Ok, Result as AnyResult, anyhow, bail};
 use cff_parser::{File as CffFile, Font as CffFont};
 use either::Either;
 use font_kit::loaders::freetype::Font as FontKitFont;
@@ -26,6 +26,7 @@ use prescript::{
     cmap::{CMap, CMapRegistry},
     name, sname,
 };
+use snafu::{FromString, ResultExt, Whatever, whatever};
 use std::{collections::HashMap, ops::RangeInclusive, rc::Rc, sync::LazyLock};
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
 
@@ -37,7 +38,7 @@ struct FirstLastFontWidth {
 }
 
 impl FirstLastFontWidth {
-    pub fn from(font: &FontDict) -> AnyResult<Option<Self>> {
+    pub fn from(font: &FontDict) -> Result<Option<Self>> {
         let widths = font.widths()?;
         let first_char = font.first_char()?;
         let last_char = font.last_char()?;
@@ -139,7 +140,7 @@ impl<'a, S: PathSink> OutlineBuilder for PathSinkWrap<'a, S> {
     }
 }
 pub trait GlyphRender<P> {
-    fn render(&self, gid: u16, sink: &mut P) -> AnyResult<()>;
+    fn render(&self, gid: u16, sink: &mut P) -> Result<()>;
 }
 
 struct Type1GlyphRender<'a> {
@@ -147,19 +148,22 @@ struct Type1GlyphRender<'a> {
 }
 
 impl<'a, P: PathSink> GlyphRender<P> for Type1GlyphRender<'a> {
-    fn render(&self, gid: u16, sink: &mut P) -> AnyResult<()> {
-        Ok(self.font.outline(
-            gid as u32,
-            font_kit::hinting::HintingOptions::None,
-            &mut PathSinkWrap(sink),
-        )?)
+    fn render(&self, gid: u16, sink: &mut P) -> Result<()> {
+        Ok(self
+            .font
+            .outline(
+                gid as u32,
+                font_kit::hinting::HintingOptions::None,
+                &mut PathSinkWrap(sink),
+            )
+            .whatever_context("get glyph outline")?)
     }
 }
 
 pub trait Font<P> {
     fn font_type(&self) -> FontType;
-    fn create_op(&self, cmap_registry: &mut CMapRegistry) -> AnyResult<Box<dyn FontOp + '_>>;
-    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender<P> + '_>>;
+    fn create_op(&self, cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>>;
+    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>>;
     fn as_type3(&self) -> Option<&Type3Font> {
         None
     }
@@ -192,19 +196,22 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
             .or_else(|| self.by_font_name(&name(font_name)))
     }
 
-    fn load_from_file(
-        font_name: &str,
-        font_data: &[u8],
-        is_cff: bool,
-    ) -> AnyResult<Option<Encoding>> {
+    fn load_from_file(font_name: &str, font_data: &[u8], is_cff: bool) -> Result<Option<Encoding>> {
         if is_cff {
             info!("scan encoding from cff font. ({})", font_name);
-            let cff_file: CffFile = CffFile::open(font_data)?;
-            let font: CffFont = cff_file.iter()?.next().expect("no font in cff?");
-            Ok(Some(font.encodings()?))
+            let cff_file: CffFile = CffFile::open(font_data).whatever_context("Open cff file")?;
+            let font: CffFont = cff_file
+                .iter()
+                .whatever_context("iter fonts from cff file")?
+                .next()
+                .expect("no font in cff?");
+            Ok(Some(
+                font.encodings()
+                    .whatever_context("parse cff file encodings")?,
+            ))
         } else {
             info!("scan encoding from type1 font. ({})", font_name);
-            let type1_font = prescript::Font::parse(font_data).map_err(|e| anyhow!("{}", e))?;
+            let type1_font = prescript::Font::parse(font_data)?;
             Ok(type1_font.encoding().cloned())
         }
     }
@@ -218,7 +225,7 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
         }
     }
 
-    fn default_encoding(&self) -> AnyResult<Encoding> {
+    fn default_encoding(&self) -> Result<Encoding> {
         if let Some(desc) = self.0.font_descriptor()? {
             if desc.flags()?.contains(FontDescriptorFlags::SYMBOLIC) {
                 panic!("Symbolic font must have encoding, but not found in font file");
@@ -235,9 +242,12 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
         encoding
     }
 
-    pub fn type1(&self, is_cff: bool, font_data: &[u8]) -> AnyResult<Encoding> {
+    pub fn type1(&self, is_cff: bool, font_data: &[u8]) -> Result<Encoding> {
         let encoding_pair = self.encoding_pair()?;
-        let font_name = self.0.font_name()?;
+        let font_name = self
+            .0
+            .font_name()
+            .whatever_context("parse type1 font name")?;
         let r = self
             .resolve_by_encoding_or_font_name(&encoding_pair, font_name.as_ref())
             .or_else(|| Self::load_from_file(font_name.as_ref(), font_data, is_cff).unwrap())
@@ -246,7 +256,7 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
         Ok(self.apply_encoding_diff(r, &encoding_pair))
     }
 
-    pub fn type3(&self) -> AnyResult<Encoding> {
+    pub fn type3(&self) -> Result<Encoding> {
         let encoding_pair = self.encoding_pair()?;
         let r = self
             .resolve_by_encoding_or_font_name(&encoding_pair, "")
@@ -254,7 +264,7 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
         Ok(self.apply_encoding_diff(r, &encoding_pair))
     }
 
-    fn encoding_pair(&self) -> AnyResult<Option<EncodingPair>> {
+    fn encoding_pair(&self) -> Result<Option<EncodingPair>> {
         let encoding = self.0.encoding()?;
         let Some(encoding) = encoding else {
             return Ok(None);
@@ -263,14 +273,15 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
         Ok(Some(match encoding {
             NameOrDictByRef::Name(name) => (Some(name.clone()), None),
             NameOrDictByRef::Dict(d) => {
-                let encoding_dict = EncodingDict::new(None, d, self.0.resolver())?;
+                let encoding_dict = EncodingDict::new(None, d, self.0.resolver())
+                    .whatever_context("create EncodingDict")?;
                 let encoding_name = encoding_dict.base_encoding()?;
                 (encoding_name, encoding_dict.differences()?)
             }
         }))
     }
 
-    pub fn ttf(&self) -> AnyResult<Option<Encoding>> {
+    pub fn ttf(&self) -> Result<Option<Encoding>> {
         let pair = self.encoding_pair()?;
         let Some(pair) = pair else {
             return Ok(None);
@@ -295,7 +306,7 @@ impl<'a> Type1FontOp<'a> {
         font: &'a FontKitFont,
         is_cff: bool,
         font_data: &'a [u8],
-    ) -> AnyResult<Self> {
+    ) -> Result<Self> {
         let font_width = FirstLastFontWidth::from(font_dict)?
             .map_or_else(|| Either::Right(FreeTypeFontWidth::new(font)), Either::Left);
         let encoding = EncodingParser(font_dict).type1(is_cff, font_data)?;
@@ -353,10 +364,11 @@ struct Type1Font<'a, 'b> {
 }
 
 impl<'a, 'b> Type1Font<'a, 'b> {
-    fn new(is_cff: bool, data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> AnyResult<Self> {
+    fn new(is_cff: bool, data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> Result<Self> {
         debug_assert_eq!(data.capacity(), data.len());
 
-        let font = FontKitFont::from_bytes(data.clone().into(), 0)?;
+        let font = FontKitFont::from_bytes(data.clone().into(), 0)
+            .whatever_context("create FontKitFont")?;
         Ok(Self {
             font_data: data,
             is_cff,
@@ -371,7 +383,7 @@ impl<'a, 'b: 'a, P: PathSink> Font<P> for Type1Font<'a, 'b> {
         FontType::Type1
     }
 
-    fn create_op(&self, _cmap_registry: &mut CMapRegistry) -> AnyResult<Box<dyn FontOp + '_>> {
+    fn create_op(&self, _cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
         Ok(Box::new(Type1FontOp::new(
             &self.font_dict,
             &self.font,
@@ -380,7 +392,7 @@ impl<'a, 'b: 'a, P: PathSink> Font<P> for Type1Font<'a, 'b> {
         )?))
     }
 
-    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender<P> + '_>> {
+    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
         Ok(Box::new(Type1GlyphRender { font: &self.font }))
     }
 }
@@ -397,7 +409,7 @@ impl<'a> TTFParserFontOp<'a> {
         face: TTFFace<'a>,
         encoding: Option<Encoding>,
         font_width: Option<FirstLastFontWidth>,
-    ) -> AnyResult<Self> {
+    ) -> Result<Self> {
         Ok(Self {
             units_per_em: face.units_per_em(),
             face,
@@ -463,7 +475,7 @@ struct TTFParserGlyphRender<'a> {
 }
 
 impl<'a, P: PathSink> GlyphRender<P> for TTFParserGlyphRender<'a> {
-    fn render(&self, gid: u16, sink: &mut P) -> AnyResult<()> {
+    fn render(&self, gid: u16, sink: &mut P) -> Result<()> {
         self.face
             .outline_glyph(GlyphId(gid), &mut PathSinkWrap(sink));
         Ok(())
@@ -492,8 +504,8 @@ impl<'a, 'b, P: PathSink> Font<P> for TTFParserFont<'a, 'b> {
         self.typ
     }
 
-    fn create_op(&self, _cmap_registry: &mut CMapRegistry) -> AnyResult<Box<dyn FontOp + '_>> {
-        let face = TTFFace::parse(&self.data, 0)?;
+    fn create_op(&self, _cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
+        let face = TTFFace::parse(&self.data, 0).whatever_context("parse TTFFace")?;
         let encoding = EncodingParser(&self.font_dict).ttf()?;
         Ok(Box::new(TTFParserFontOp::new(
             face,
@@ -502,8 +514,8 @@ impl<'a, 'b, P: PathSink> Font<P> for TTFParserFont<'a, 'b> {
         )?))
     }
 
-    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender<P> + '_>> {
-        let face = TTFFace::parse(&self.data, 0)?;
+    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
+        let face = TTFFace::parse(&self.data, 0).whatever_context("parse TTFFace")?;
         Ok(Box::new(TTFParserGlyphRender { face }))
     }
 }
@@ -681,7 +693,7 @@ pub struct FontCache<'c, P: PathSink + 'static> {
 }
 
 impl<'c, P: PathSink + 'static> FontCache<'c, P> {
-    fn load_true_type_from_os(desc: &FontDescriptorDict) -> AnyResult<Vec<u8>> {
+    fn load_true_type_from_os(desc: &FontDescriptorDict) -> Result<Vec<u8>> {
         let font_name = desc.font_name()?;
         let font_name = normalize_true_type_font_name(&font_name);
         let font_name = font_name.to_title_case();
@@ -725,21 +737,25 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         debug!("loaded ttf font: {:?}", &face.source);
         assert_eq!(face.index, 0, "Only one face supported");
         match face.source {
-            Source::File(ref path) => Ok(std::fs::read(path)?),
+            Source::File(ref path) => {
+                Ok(std::fs::read(path).whatever_context("read ttf file from OS")?)
+            }
             Source::Binary(ref bytes) => Ok(bytes.as_ref().as_ref().to_owned()),
             Source::SharedFile(_, ref bytes) => Ok(bytes.as_ref().as_ref().to_owned()),
         }
     }
 
-    fn load_embed_font_bytes(resolver: &ObjectResolver<'_>, s: &Stream) -> AnyResult<Vec<u8>> {
-        Ok(s.decode(resolver)?.into_owned())
+    fn load_embed_font_bytes(resolver: &ObjectResolver<'_>, s: &Stream) -> Result<Vec<u8>> {
+        Ok(s.decode(resolver)
+            .whatever_context("decode stream")?
+            .into_owned())
     }
 
     fn load_ttf_parser_font<'a, 'b>(
         font_type: FontType,
         font: FontDict<'a, 'b>,
         desc: FontDescriptorDict<'a, 'b>,
-    ) -> AnyResult<Box<dyn Font<P> + 'b>> {
+    ) -> Result<Box<dyn Font<P> + 'b>> {
         let (is_embed, ttf_bytes) = match desc.font_file2()? {
             Some(stream) => {
                 // if font is invalid, load from os
@@ -773,7 +789,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
     /// by TrueType fonts scanned from current OS. Because Type1 fonts are not
     /// supported by swash, and the only crate support Type1 fonts is `font`, which
     /// I am not familiar with.
-    fn load_type1_font<'a, 'b>(font: FontDict<'a, 'b>) -> AnyResult<Type1Font<'a, 'b>>
+    fn load_type1_font<'a, 'b>(font: FontDict<'a, 'b>) -> Result<Type1Font<'a, 'b>>
     where
         'a: 'c,
         'b: 'c,
@@ -782,7 +798,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         let font_name = font.font_name()?;
         let desc = f.font_descriptor()?;
         let font_data = desc
-            .map(|desc| -> AnyResult<_> {
+            .map(|desc| -> Result<_> {
                 let r = desc
                     .font_file()
                     .map(|s| s.map(|s| (false, s)))
@@ -802,7 +818,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                 if let Some(font_data) = standard_14_type1_font_data(font_name.as_ref()) {
                     font_data.to_owned()
                 } else {
-                    bail!("Standard 14 type1 font not found: {}", font_name)
+                    whatever!("Standard 14 type1 font not found: {}", font_name)
                 },
             ),
         };
@@ -810,7 +826,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         Type1Font::new(is_cff, bytes, font)
     }
 
-    fn scan_font<'a, 'b>(font: FontDict<'a, 'b>) -> AnyResult<Option<Box<dyn Font<P> + 'c>>>
+    fn scan_font<'a, 'b>(font: FontDict<'a, 'b>) -> Result<Option<Box<dyn Font<P> + 'c>>>
     where
         'a: 'c,
         'b: 'c,
@@ -880,7 +896,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         }
     }
 
-    pub fn new<'a, 'b>(resource: &'c ResourceDict<'a, 'b>) -> anyhow::Result<Self>
+    pub fn new<'a, 'b>(resource: &'c ResourceDict<'a, 'b>) -> Result<Self>
     where
         'a: 'c,
         'b: 'c,
@@ -949,7 +965,7 @@ struct CIDFontType0FontOp {
 }
 
 impl CIDFontType0FontOp {
-    fn new(font: &Type0FontDict) -> AnyResult<Self> {
+    fn new(font: &Type0FontDict) -> Result<Self> {
         if let NameOrStream::Name(encoding) = font.encoding()? {
             assert_eq!(encoding, "Identity-H");
         } else {
@@ -1027,7 +1043,7 @@ impl<'a> CIDFontType2FontOp<'a> {
         face: TTFFace<'a>,
         font: &Type0FontDict,
         is_embed: bool,
-    ) -> AnyResult<Self> {
+    ) -> Result<Self> {
         let cmap = match font.encoding()? {
             NameOrStream::Name(encoding_name) => {
                 assert!(
@@ -1043,12 +1059,10 @@ impl<'a> CIDFontType2FontOp<'a> {
                     font.cmap_stream_dict()?.use_cmap()?.is_none(),
                     "font_dict.use_cmap not supported"
                 );
-                let data = s.decode(font.resolver())?;
-                Some(
-                    cmap_registry
-                        .add_cmap_file(data.as_ref())
-                        .map_err(|e| anyhow!("{}", e))?,
-                )
+                let data = s
+                    .decode(font.resolver())
+                    .whatever_context("decode cmap from stream")?;
+                Some(cmap_registry.add_cmap_file(data.as_ref())?)
             }
         };
 
@@ -1057,7 +1071,9 @@ impl<'a> CIDFontType2FontOp<'a> {
         let cid_to_gid = match cid_font.cid_to_gid_map()? {
             NameOrStream::Name(_) => None,
             NameOrStream::Stream(s) => Some(CIDToGIDMap::new(
-                s.decode(cid_font.resolver())?.into_owned(),
+                s.decode(cid_font.resolver())
+                    .whatever_context("decode stream")?
+                    .into_owned(),
             )),
         };
         let widths = cid_font.w()?;
@@ -1153,8 +1169,9 @@ struct CIDFontType0Font<'a, 'b> {
 }
 
 impl<'a, 'b> CIDFontType0Font<'a, 'b> {
-    fn new(font_dict: FontDict<'a, 'b>, data: Vec<u8>) -> AnyResult<Self> {
-        let font = FontKitFont::from_bytes(data.into(), 0)?;
+    fn new(font_dict: FontDict<'a, 'b>, data: Vec<u8>) -> Result<Self> {
+        let font = FontKitFont::from_bytes(data.into(), 0)
+            .whatever_context("decode FontKitFont for Type0")?;
         Ok(Self { font_dict, font })
     }
 }
@@ -1167,8 +1184,9 @@ struct CIDFontType2Font<'a, 'b> {
 }
 
 impl<'a, 'b> CIDFontType2Font<'a, 'b> {
-    fn new(font_is_embed: bool, data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> AnyResult<Self> {
-        let font = FontKitFont::from_bytes(data.clone().into(), 0)?;
+    fn new(font_is_embed: bool, data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> Result<Self> {
+        let font = FontKitFont::from_bytes(data.clone().into(), 0)
+            .whatever_context("decode FontKitFont for Type2")?;
         Ok(Self {
             data,
             font,
@@ -1183,8 +1201,9 @@ impl<'a, 'b, P: PathSink + 'static> Font<P> for CIDFontType2Font<'a, 'b> {
         FontType::Type0
     }
 
-    fn create_op(&self, cmap_registry: &mut CMapRegistry) -> AnyResult<Box<dyn FontOp + '_>> {
-        let face = TTFFace::parse(&self.data, 0)?;
+    fn create_op(&self, cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
+        let face = TTFFace::parse(&self.data, 0)
+            .whatever_context("decode TTFFace font for CIDFontType2")?;
         Ok(Box::new(CIDFontType2FontOp::new(
             cmap_registry,
             face,
@@ -1193,7 +1212,7 @@ impl<'a, 'b, P: PathSink + 'static> Font<P> for CIDFontType2Font<'a, 'b> {
         )?))
     }
 
-    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender<P> + '_>> {
+    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
         // Use FreeType, TTFParser failed render bug1734802.pdf
         Ok(Box::new(Type1GlyphRender { font: &self.font }))
     }
@@ -1204,11 +1223,11 @@ impl<'a, 'b, P: PathSink + 'static> Font<P> for CIDFontType0Font<'a, 'b> {
         FontType::Type0
     }
 
-    fn create_op(&self, _cmap_registry: &mut CMapRegistry) -> AnyResult<Box<dyn FontOp + '_>> {
+    fn create_op(&self, _cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
         Ok(Box::new(CIDFontType0FontOp::new(&self.font_dict.type0()?)?))
     }
 
-    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender<P> + '_>> {
+    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
         Ok(Box::new(Type1GlyphRender { font: &self.font }))
     }
 }
@@ -1229,7 +1248,7 @@ struct Type3FontOp<'a> {
 }
 
 impl<'a> Type3FontOp<'a> {
-    fn new(font_dict: &FontDict, name_to_gid: &'a HashMap<Name, u16>) -> AnyResult<Self> {
+    fn new(font_dict: &FontDict, name_to_gid: &'a HashMap<Name, u16>) -> Result<Self> {
         let encoding = EncodingParser(font_dict).type3()?;
         let type3 = font_dict.type3()?;
         let matrix = type3.matrix()?;
@@ -1274,21 +1293,24 @@ pub struct Type3Font<'a, 'b> {
 }
 
 impl<'a, 'b> Type3Font<'a, 'b> {
-    fn parse_glyphs(d: &Type3FontDict) -> AnyResult<Vec<(Name, Type3Glyph)>> {
+    fn parse_glyphs(d: &Type3FontDict) -> Result<Vec<(Name, Type3Glyph)>> {
         let procs = d.char_procs()?;
         let mut r = Vec::with_capacity(procs.len());
         for (name, stream) in procs.iter() {
             debug!("parse Type3 glyph: {}", name.as_str());
-            let data = stream.decode(d.resolver())?;
-            let (_, ops) = parse_operations(&data[..])
-                .map_err(|e| anyhow!("parse type3 operation error: {}", e))?;
+            let data = stream
+                .decode(d.resolver())
+                .map_err(|_| Whatever::without_source("decode stream".to_owned()))?;
+            let (_, ops) = parse_operations(&data[..]).map_err(|e| {
+                Whatever::without_source(format!("parse type3 operation error: {}", e))
+            })?;
             r.push((name.clone(), Type3Glyph(ops.into())))
         }
 
         Ok(r)
     }
 
-    pub fn new(dict: FontDict<'a, 'b>) -> AnyResult<Self> {
+    pub fn new(dict: FontDict<'a, 'b>) -> Result<Self> {
         let type3 = dict.type3()?;
         let glyph_and_names = Self::parse_glyphs(&type3)?;
         let mut glyphs = Vec::with_capacity(glyph_and_names.len());
@@ -1306,7 +1328,7 @@ impl<'a, 'b> Type3Font<'a, 'b> {
         })
     }
 
-    pub fn resources(&self) -> AnyResult<Option<ResourceDict>> {
+    pub fn resources(&self) -> Result<Option<ResourceDict>> {
         self.dict.type3()?.resources()
     }
 
@@ -1314,7 +1336,7 @@ impl<'a, 'b> Type3Font<'a, 'b> {
         self.glyphs.get(gid as usize)
     }
 
-    pub fn matrix(&self) -> AnyResult<GlyphToTextSpace> {
+    pub fn matrix(&self) -> Result<GlyphToTextSpace> {
         self.dict.type3()?.matrix()
     }
 }
@@ -1324,15 +1346,15 @@ impl<'a, 'b, P: PathSink + 'static> Font<P> for Type3Font<'a, 'b> {
         FontType::Type3
     }
 
-    fn create_op(&self, _cmap_registry: &mut CMapRegistry) -> AnyResult<Box<dyn FontOp + '_>> {
+    fn create_op(&self, _cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
         Ok(Box::new(Type3FontOp::new(&self.dict, &self.name_to_gid)?))
     }
 
-    fn create_glyph_render(&self) -> AnyResult<Box<dyn GlyphRender<P> + '_>> {
+    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
         struct StubGlyphRender;
 
         impl<P> GlyphRender<P> for StubGlyphRender {
-            fn render(&self, _gid: u16, _sink: &mut P) -> AnyResult<()> {
+            fn render(&self, _gid: u16, _sink: &mut P) -> Result<()> {
                 // Paint::show_texts() do not use GlyphRender to render glyphs
                 unreachable!()
             }

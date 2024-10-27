@@ -1,11 +1,14 @@
-use crate::object::{Object, ObjectValueError};
-use anyhow::{Result as AnyResult, anyhow};
+use crate::{
+    Result,
+    object::{Object, ObjectValueError},
+};
 use educe::Educe;
 #[cfg(test)]
 use mockall::automock;
 use nipdf_macro::{TryFromIntObject, pdf_object};
 use num_traits::ToPrimitive;
 use prescript::PdfFunc;
+use snafu::{ResultExt, whatever};
 use tinyvec::{TinyVec, tiny_vec};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -110,7 +113,7 @@ pub type FunctionValue = TinyVec<[f32; 4]>;
 
 #[cfg_attr(test, automock)]
 pub trait Function {
-    fn call(&self, args: &[f32]) -> AnyResult<FunctionValue> {
+    fn call(&self, args: &[f32]) -> Result<FunctionValue> {
         let args = self.signature().clip_args(args);
         let r = self.inner_call(args)?;
         for v in &r {
@@ -122,11 +125,11 @@ pub trait Function {
     fn signature(&self) -> &Signature;
 
     /// Called by `self.call()`, args and return value are clipped by signature.
-    fn inner_call(&self, args: FunctionValue) -> AnyResult<FunctionValue>;
+    fn inner_call(&self, args: FunctionValue) -> Result<FunctionValue>;
 }
 
 impl Function for Box<dyn Function> {
-    fn call(&self, args: &[f32]) -> AnyResult<FunctionValue> {
+    fn call(&self, args: &[f32]) -> Result<FunctionValue> {
         self.as_ref().call(args)
     }
 
@@ -134,7 +137,7 @@ impl Function for Box<dyn Function> {
         self.as_ref().signature()
     }
 
-    fn inner_call(&self, _args: TinyVec<[f32; 4]>) -> AnyResult<FunctionValue> {
+    fn inner_call(&self, _args: TinyVec<[f32; 4]>) -> Result<FunctionValue> {
         unreachable!()
     }
 }
@@ -147,7 +150,7 @@ pub struct NFunc(Vec<Box<dyn Function>>, Signature);
 impl NFunc {
     /// If one element in `functions`, returns it directly.
     /// Returns `NFunc` otherwise.
-    pub fn new_box(functions: Vec<Box<dyn Function>>) -> AnyResult<Box<dyn Function>> {
+    pub fn new_box(functions: Vec<Box<dyn Function>>) -> Result<Box<dyn Function>> {
         if functions.len() == 1 {
             Ok(functions.into_iter().next().unwrap())
         } else {
@@ -156,14 +159,17 @@ impl NFunc {
     }
 
     /// Returns error if any of the functions has more than one return value.
-    pub fn new(functions: Vec<Box<dyn Function>>) -> AnyResult<Self> {
+    pub fn new(functions: Vec<Box<dyn Function>>) -> Result<Self> {
         if functions.is_empty() {
-            anyhow::bail!("at least one function is required")
+            whatever!("at least one function is required")
         }
 
         for f in &functions {
             if f.signature().n_returns().unwrap_or(1) != 1 {
-                return Err(ObjectValueError::UnexpectedType.into());
+                whatever!(
+                    Err(ObjectValueError::UnexpectedType),
+                    "check function signature returns"
+                );
             }
         }
         let signature = Signature {
@@ -177,7 +183,7 @@ impl NFunc {
 }
 
 impl Function for NFunc {
-    fn call(&self, args: &[f32]) -> AnyResult<FunctionValue> {
+    fn call(&self, args: &[f32]) -> Result<FunctionValue> {
         let mut r = FunctionValue::new();
         for f in &self.0 {
             r.extend_from_slice(&f.call(args)?);
@@ -185,7 +191,7 @@ impl Function for NFunc {
         Ok(r)
     }
 
-    fn inner_call(&self, _args: FunctionValue) -> AnyResult<FunctionValue> {
+    fn inner_call(&self, _args: FunctionValue) -> Result<FunctionValue> {
         unreachable!()
     }
 
@@ -243,15 +249,15 @@ impl Function for PostScriptFunction {
     }
 
     #[doc = " Called by `self.call()`, args and return value are clipped by signature."]
-    fn inner_call(&self, args: FunctionValue) -> AnyResult<FunctionValue> {
+    fn inner_call(&self, args: FunctionValue) -> Result<FunctionValue> {
         let args = args.into_iter().collect::<Vec<_>>();
-        let r = self.f.exec(&args).map_err(|e| anyhow!("{}", e))?;
+        let r = self.f.exec(&args).whatever_context("exec function")?;
         Ok(r.into_iter().collect())
     }
 }
 
 impl<'a, 'b> FunctionDict<'a, 'b> {
-    fn signature(&self) -> AnyResult<Signature> {
+    fn signature(&self) -> Result<Signature> {
         Ok(Signature {
             domain: self.domain()?,
             range: self.range()?,
@@ -266,12 +272,16 @@ impl<'a, 'b> FunctionDict<'a, 'b> {
         self.range().unwrap().map(|range| range.n())
     }
 
-    pub fn post_script_func(&self) -> AnyResult<PostScriptFunction> {
+    pub fn post_script_func(&self) -> Result<PostScriptFunction> {
         assert_eq!(self.function_type()?, Type::PostScriptCalculator);
         let signature = self.signature()?;
         let resolver = self.d.resolver();
-        let stream = resolver.resolve(self.id.unwrap())?.stream()?;
-        let script = stream.decode(resolver)?;
+        let stream = resolver
+            .resolve(self.id.unwrap())
+            .whatever_context("resolve")?
+            .stream()
+            .whatever_context("get as stream")?;
+        let script = stream.decode(resolver).whatever_context("decode stream")?;
         Ok(PostScriptFunction::new(
             signature,
             script.into_owned().into_boxed_slice(),
@@ -279,7 +289,7 @@ impl<'a, 'b> FunctionDict<'a, 'b> {
     }
 
     /// Create boxed Function for this Function dict.
-    pub fn func(&self) -> AnyResult<Box<dyn Function>> {
+    pub fn func(&self) -> Result<Box<dyn Function>> {
         match self.function_type()? {
             Type::Sampled => Ok(Box::new(self.sampled()?.func()?)),
             Type::ExponentialInterpolation => {
@@ -389,7 +399,7 @@ impl SampledFunction {
 }
 
 impl Function for SampledFunction {
-    fn inner_call(&self, args: TinyVec<[f32; 4]>) -> AnyResult<FunctionValue> {
+    fn inner_call(&self, args: TinyVec<[f32; 4]>) -> Result<FunctionValue> {
         let mut idx = 0;
         for (arg, (domain, (encode, size))) in args
             .iter()
@@ -432,7 +442,7 @@ impl Function for SampledFunction {
 
 impl<'a, 'b> SampledFunctionDict<'a, 'b> {
     /// Return SampledFunction instance which implements Function trait.
-    pub fn func(&self) -> AnyResult<SampledFunction> {
+    pub fn func(&self) -> Result<SampledFunction> {
         let f = self.function_dict()?;
         let bits_per_sample = self.bits_per_sample()?;
         assert!(bits_per_sample >= 8, "todo: support bits_per_sample < 8");
@@ -440,8 +450,12 @@ impl<'a, 'b> SampledFunctionDict<'a, 'b> {
 
         let size = self.size()?;
         let resolver = self.d.resolver();
-        let stream = resolver.resolve(self.id.unwrap())?.stream()?;
-        let sample_data = stream.decode(resolver)?;
+        let stream = resolver
+            .resolve(self.id.unwrap())
+            .whatever_context("resolve object")?
+            .stream()
+            .whatever_context("get as stream")?;
+        let sample_data = stream.decode(resolver).whatever_context("decode stream")?;
         let signature = f.signature()?;
         assert!(sample_data.len() >= size[0] as usize * signature.n_returns().unwrap());
         Ok(SampledFunction {
@@ -488,7 +502,7 @@ pub struct ExponentialInterpolationFunction {
 }
 
 impl Function for ExponentialInterpolationFunction {
-    fn inner_call(&self, args: TinyVec<[f32; 4]>) -> AnyResult<FunctionValue> {
+    fn inner_call(&self, args: TinyVec<[f32; 4]>) -> Result<FunctionValue> {
         let x = args[0];
         let r = (0..self.c0.len())
             .map(|i| x.powf(self.n).mul_add(self.c1[i] - self.c0[i], self.c0[i]))
@@ -502,7 +516,7 @@ impl Function for ExponentialInterpolationFunction {
 }
 
 impl<'a, 'b> ExponentialInterpolationFunctionDict<'a, 'b> {
-    pub fn func(&self) -> AnyResult<ExponentialInterpolationFunction> {
+    pub fn func(&self) -> Result<ExponentialInterpolationFunction> {
         let f = self.function_dict()?;
         Ok(ExponentialInterpolationFunction {
             c0: self.c0()?,
@@ -532,12 +546,12 @@ pub trait StitchingFunctionDictTrait {
 }
 
 impl<'a, 'b> StitchingFunctionDict<'a, 'b> {
-    pub fn func(&self) -> AnyResult<StitchingFunction> {
+    pub fn func(&self) -> Result<StitchingFunction> {
         let functions = self
             .functions()?
             .into_iter()
             .map(|f| f.func())
-            .collect::<AnyResult<_>>()?;
+            .collect::<Result<_>>()?;
         let bounds = self.bounds()?;
         let encode = self.encode()?;
         let f = self.function_dict()?;
@@ -596,7 +610,7 @@ impl StitchingFunction {
 }
 
 impl Function for StitchingFunction {
-    fn inner_call(&self, args: TinyVec<[f32; 4]>) -> AnyResult<FunctionValue> {
+    fn inner_call(&self, args: TinyVec<[f32; 4]>) -> Result<FunctionValue> {
         assert_eq!(args.len(), 1);
 
         let x = args[0];

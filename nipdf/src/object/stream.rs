@@ -1,5 +1,6 @@
 use super::{Dictionary, Object, ObjectId, ObjectValueError};
 use crate::{
+    Result,
     ccitt::{Algorithm as CCITTAlgorithm, Flags},
     file::{EncryptInfo, ObjectResolver, ResourceDict},
     function::Domains,
@@ -13,7 +14,6 @@ use crate::{
     object::PdfObject,
     parser::is_white_space,
 };
-use anyhow::Result as AnyResult;
 use bitstream_io::{BigEndian, BitReader};
 use image::{DynamicImage, GrayImage, Luma, RgbImage, Rgba, RgbaImage};
 use jpeg_decoder::PixelFormat;
@@ -21,6 +21,7 @@ use log::error;
 use nipdf_macro::pdf_object;
 use num_traits::ToPrimitive;
 use prescript::{Name, sname};
+use snafu::Whatever;
 use std::{
     borrow::{Borrow, Cow},
     cell::LazyCell,
@@ -236,13 +237,13 @@ fn decode_stream<'a, 'b>(
 
 /// Abstract image metadata.for decode image from `Stream` and `InlineStream`
 pub trait ImageMetadata {
-    fn width(&self) -> AnyResult<u32>;
-    fn height(&self) -> AnyResult<u32>;
-    fn bits_per_component(&self) -> AnyResult<Option<u8>>;
-    fn color_space(&self) -> AnyResult<Option<ColorSpaceArgs>>;
-    fn image_mask(&self) -> AnyResult<bool>;
-    fn mask(&self) -> AnyResult<Option<ImageMask>>;
-    fn decode(&self) -> AnyResult<Option<Domains>>;
+    fn width(&self) -> Result<u32>;
+    fn height(&self) -> Result<u32>;
+    fn bits_per_component(&self) -> Result<Option<u8>>;
+    fn color_space(&self) -> Result<Option<ColorSpaceArgs>>;
+    fn image_mask(&self) -> Result<bool>;
+    fn mask(&self) -> Result<Option<ImageMask>>;
+    fn decode(&self) -> Result<Option<Domains>>;
 }
 
 fn decode_image<'a, M: ImageMetadata>(
@@ -358,31 +359,31 @@ fn decode_image<'a, M: ImageMetadata>(
 }
 
 impl<'a, 'b> ImageMetadata for ImageDict<'a, 'b> {
-    fn width(&self) -> AnyResult<u32> {
+    fn width(&self) -> Result<u32> {
         self.width()
     }
 
-    fn height(&self) -> AnyResult<u32> {
+    fn height(&self) -> Result<u32> {
         self.height()
     }
 
-    fn bits_per_component(&self) -> AnyResult<Option<u8>> {
+    fn bits_per_component(&self) -> Result<Option<u8>> {
         self.bits_per_component()
     }
 
-    fn color_space(&self) -> AnyResult<Option<ColorSpaceArgs>> {
+    fn color_space(&self) -> Result<Option<ColorSpaceArgs>> {
         self.color_space()
     }
 
-    fn image_mask(&self) -> AnyResult<bool> {
+    fn image_mask(&self) -> Result<bool> {
         self.image_mask()
     }
 
-    fn mask(&self) -> AnyResult<Option<ImageMask>> {
+    fn mask(&self) -> Result<Option<ImageMask>> {
         self.mask()
     }
 
-    fn decode(&self) -> AnyResult<Option<Domains>> {
+    fn decode(&self) -> Result<Option<Domains>> {
         self.decode()
     }
 }
@@ -788,7 +789,7 @@ trait CCITTFaxDecodeParamsDictTrait {
 }
 
 impl<'a: 'b, 'b> TryFrom<&CCITTFaxDecodeParamsDict<'a, 'b>> for Flags {
-    type Error = anyhow::Error;
+    type Error = Whatever;
 
     fn try_from(params: &CCITTFaxDecodeParamsDict<'a, 'b>) -> Result<Self, Self::Error> {
         assert!(!params.end_of_line()?);
@@ -945,7 +946,7 @@ fn filter<'a: 'b, 'b>(
     }
 }
 
-fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> AnyResult<DynamicImage> {
+fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> Result<DynamicImage> {
     fn image_color_space(img: &DynamicImage) -> ColorSpace {
         match img {
             DynamicImage::ImageLuma8(_) => ColorSpace::DeviceGray,
@@ -954,8 +955,8 @@ fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> AnyResult<
         }
     }
 
-    fn transform(img: DynamicImage, from: &ColorSpace, to: &ColorSpace) -> AnyResult<DynamicImage> {
-        fn convert_cs(img: GrayImage, cs: &impl ColorSpaceTrait<f32>) -> AnyResult<RgbaImage> {
+    fn transform(img: DynamicImage, from: &ColorSpace, to: &ColorSpace) -> Result<DynamicImage> {
+        fn convert_cs(img: GrayImage, cs: &impl ColorSpaceTrait<f32>) -> Result<RgbaImage> {
             let mut r = RgbaImage::new(img.width(), img.height());
             for (p, dest_p) in img.pixels().zip(r.pixels_mut()) {
                 let color: [u8; 4] = color_to_rgba(cs, &[p[0].into_color_comp()]);

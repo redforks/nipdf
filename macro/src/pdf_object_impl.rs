@@ -266,11 +266,11 @@ fn gen_option_method(
     match ty {
         Left(t) => {
             let body = f_left(unwrap_option_type(t));
-            quote! ( #body.context(#key) )
+            quote! ( #body.whatever_context::<_, snafu::Whatever>(#key) )
         }
         Right(t) => {
             let body = f_right(t);
-            quote! ( #body.context(#key) )
+            quote! ( #body.whatever_context::<_, snafu::Whatever>(#key) )
         }
     }
 }
@@ -563,7 +563,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 try_from_type,
                 &key,
                 |ty| {
-                    quote! { self.d.opt_object(&prescript::sname(#key)).context(#key)?.map(|d| <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from(d)).transpose() }
+                    quote! { self.d.opt_object(&prescript::sname(#key)).whatever_context::<_, snafu::Whatever>(#key)?.map(|d| <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from(d)).transpose() }
                 },
                 |ty| {
                     quote! { <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from( self.d.required_object(&prescript::sname(#key)).unwrap()) }
@@ -597,14 +597,16 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 #[doc = #doc]
                 pub fn #name(&self) -> std::result::Result<#rt, snafu::Whatever> {
                     use snafu::ResultExt as _;
-                    #method.context(#key)
+                    use snafu::OptionExt as _;
+                    #method.whatever_context::<_, snafu::Whatever>(#key)
                 }
             }
         } else {
             quote! {
                 pub fn #name(&self) -> std::result::Result<#rt, snafu::Whatever> {
                     use snafu::ResultExt as _;
-                    #method.context(#key)
+                    use snafu::OptionExt as _;
+                    #method.whatever_context::<_, snafu::Whatever>(#key)
                 }
             }
         };

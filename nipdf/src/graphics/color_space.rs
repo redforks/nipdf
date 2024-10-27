@@ -1,15 +1,16 @@
 use super::ColorSpaceArgs;
 use crate::{
+    Result,
     file::{ObjectResolver, ResourceDict},
     function::{Domain, Domains, Function, FunctionDict, NFunc},
     graphics::ICCStreamDict,
     object::Object,
 };
-use anyhow::{Result as AnyResult, anyhow, bail};
 use educe::Educe;
 use nipdf_macro::pdf_object;
 use num_traits::ToPrimitive;
 use prescript::sname;
+use snafu::{OptionExt, ResultExt, ensure_whatever, whatever};
 use std::{fmt::Debug, iter::repeat, rc::Rc};
 use tinyvec::TinyVec;
 
@@ -135,11 +136,12 @@ where
         args: &ColorSpaceArgs,
         resolver: &ObjectResolver<'a>,
         resources: Option<&ResourceDict<'a, '_>>,
-    ) -> AnyResult<Self> {
+    ) -> Result<Self> {
         match args {
             ColorSpaceArgs::Ref(id) => {
-                let obj = resolver.resolve(*id)?;
-                let args = ColorSpaceArgs::try_from(obj)?;
+                let obj = resolver.resolve(*id).whatever_context("resolve object")?;
+                let args =
+                    ColorSpaceArgs::try_from(obj).whatever_context("parse ColorSpaceArgs")?;
                 Self::from_args(&args, resolver, resources)
             }
             ColorSpaceArgs::Name(name) => match name.as_str() {
@@ -151,15 +153,21 @@ where
                     let color_spaces = resources.unwrap().color_space()?;
                     let args = color_spaces
                         .get(name)
-                        .ok_or_else(|| anyhow!("ColorSpace::from_args() color space not found"))?;
+                        .whatever_context("ColorSpace::from_args() color space not found")?;
                     Self::from_args(args, resolver, resources)
                 }
             },
-            ColorSpaceArgs::Array(arr) => match arr[0].name()?.as_str() {
+            ColorSpaceArgs::Array(arr) => match arr[0]
+                .name()
+                .whatever_context("get ColorSpace name")?
+                .as_str()
+            {
                 "ICCBased" => {
                     assert_eq!(2, arr.len());
-                    let id = arr[1].reference()?;
-                    let d: ICCStreamDict = resolver.resolve_pdf_object(id.id().id())?;
+                    let id = arr[1].reference().whatever_context("get reference")?;
+                    let d: ICCStreamDict = resolver
+                        .resolve_pdf_object(id.id().id())
+                        .whatever_context("resolve pdf object")?;
                     match d.alternate()?.as_ref() {
                         Some(args) => Self::from_args(args, resolver, resources),
                         None => match d.n()? {
@@ -172,9 +180,11 @@ where
                 }
                 "Separation" => {
                     assert_eq!(4, arr.len());
-                    let alternate = ColorSpaceArgs::try_from(&arr[2])?;
-                    let functions: Vec<FunctionDict> =
-                        resolver.resolve_one_or_more_pdf_object(&arr[3])?;
+                    let alternate =
+                        ColorSpaceArgs::try_from(&arr[2]).whatever_context("parse alternate")?;
+                    let functions: Vec<FunctionDict> = resolver
+                        .resolve_one_or_more_pdf_object(&arr[3])
+                        .whatever_context("parse functions")?;
                     let functions: Result<Vec<_>, _> =
                         functions.into_iter().map(|f| f.func()).collect();
                     let function = NFunc::new_box(functions?)?;
@@ -186,16 +196,19 @@ where
                 }
                 "Indexed" => {
                     assert_eq!(4, arr.len());
-                    let base = ColorSpaceArgs::try_from(&arr[1])?;
-                    let base: ColorSpace<T> = Self::from_args(&base, resolver, resources)?;
-                    let hival = arr[2].int()?;
+                    let base = ColorSpaceArgs::try_from(&arr[1]).whatever_context("parse base")?;
+                    let base: ColorSpace<T> = Self::from_args(&base, resolver, resources)
+                        .whatever_context("parse base color space")?;
+                    let hival = arr[2].int().whatever_context("convert hival")?;
                     let data = resolve_index_data(&arr[3], resolver)?;
                     assert!(data.len() >= (hival + 1) as usize * base.components());
                     Ok(Self::Indexed(Box::new(IndexedColorSpace { base, data })))
                 }
                 "CalRGB" => {
                     assert_eq!(2, arr.len());
-                    let dict: CalRGBDict<_> = resolver.resolve_pdf_object2(&arr[1])?;
+                    let dict: CalRGBDict<_> = resolver
+                        .resolve_pdf_object2(&arr[1])
+                        .whatever_context("resolve pdf object")?;
                     let gamma = dict.gamma()?;
                     let matrix = dict.matrix()?;
                     let black_point = dict.black_point()?;
@@ -212,7 +225,8 @@ where
                     let base = arr
                         .get(1)
                         .map(|args| {
-                            let base = ColorSpaceArgs::try_from(args)?;
+                            let base =
+                                ColorSpaceArgs::try_from(args).whatever_context("parse base")?;
                             Self::from_args(&base, resolver, resources)
                         })
                         .transpose()?;
@@ -220,20 +234,24 @@ where
                 }
                 "DeviceN" => {
                     assert!(arr.len() == 4 || arr.len() == 5);
-                    let names = arr[1].arr()?;
+                    let names = arr[1].arr().whatever_context("get names")?;
 
                     // A DeviceN color space whose component colorant names are all None shall
                     // always discard its output, just  the same as a Separation color space for
                     // None; it shall never revert to the alternate color space. Reversion  shall
                     // occur only if at least one color component (other than None) is specified
                     // and is not available on the  device.
-                    if names.iter().all(|n| n.name().unwrap() == sname("None")) {
-                        bail!("all color component None should not render which is not supported");
-                    }
+                    ensure_whatever!(
+                        !names.iter().all(|n| n.name().unwrap() == sname("None")),
+                        "all color component None should not render which is not supported"
+                    );
 
                     let n = names.len();
-                    let alternate = ColorSpaceArgs::try_from(&arr[2])?;
-                    let f: FunctionDict = resolver.resolve_pdf_object2(&arr[3])?;
+                    let alternate = ColorSpaceArgs::try_from(&arr[2])
+                        .whatever_context("parse alternate colorspace")?;
+                    let f: FunctionDict = resolver
+                        .resolve_pdf_object2(&arr[3])
+                        .whatever_context("resolve pdf object")?;
                     let base = Self::from_args(&alternate, resolver, resources)?;
                     Ok(Self::DeviceN(Box::new(DeviceNColorSpace {
                         n: n.try_into().unwrap(),
@@ -243,7 +261,9 @@ where
                 }
                 "Lab" => {
                     assert_eq!(2, arr.len());
-                    let dict: LabDict<_> = resolver.resolve_pdf_object2(&arr[1])?;
+                    let dict: LabDict<_> = resolver
+                        .resolve_pdf_object2(&arr[1])
+                        .whatever_context("resolve pdf object")?;
                     let white_point = dict.white_point()?;
                     let ranges = dict.range()?;
                     let black_point = dict.black_point()?;
@@ -255,7 +275,9 @@ where
                 }
                 "CalGray" => {
                     assert_eq!(2, arr.len());
-                    let dict: CalGrayDict<_> = resolver.resolve_pdf_object2(&arr[1])?;
+                    let dict: CalGrayDict<_> = resolver
+                        .resolve_pdf_object2(&arr[1])
+                        .whatever_context("resolve pdf object")?;
                     let gamma = dict.gamma()?;
                     let white_point = dict.white_point()?;
                     let black_point = dict.black_point()?;
@@ -272,20 +294,25 @@ where
 }
 
 /// Resolve data for indexed color space, it may exist in stream or HexString or LiteralString
-fn resolve_index_data(o: &Object, resolver: &ObjectResolver) -> AnyResult<Vec<u8>> {
+fn resolve_index_data(o: &Object, resolver: &ObjectResolver) -> Result<Vec<u8>> {
     Ok(match o {
         Object::HexString(s) => s.as_bytes().into(),
         Object::LiteralString(s) => s.as_bytes().into(),
         Object::Reference(id) => {
-            let o = resolver.resolve(id.id().id())?;
+            let o = resolver
+                .resolve(id.id().id())
+                .whatever_context("resolve object")?;
             match o {
                 Object::HexString(s) => s.as_bytes().into(),
                 Object::LiteralString(s) => s.as_bytes().into(),
-                Object::Stream(s) => s.decode(resolver)?.into_owned(),
-                _ => bail!("Unexpected object type when resolve indexed color space data"),
+                Object::Stream(s) => s
+                    .decode(resolver)
+                    .whatever_context("decode stream")?
+                    .into_owned(),
+                _ => whatever!("Unexpected object type when resolve indexed color space data"),
             }
         }
-        _ => bail!("Unexpected object type when resolve indexed color space data"),
+        _ => whatever!("Unexpected object type when resolve indexed color space data"),
     })
 }
 

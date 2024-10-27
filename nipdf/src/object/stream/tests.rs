@@ -5,6 +5,7 @@ use crate::{
     object::Name,
 };
 use miniz_oxide::deflate::compress_to_vec;
+use snafu::ResultExt;
 use std::{rc::Rc, str::from_utf8};
 use test_case::test_case;
 
@@ -85,12 +86,18 @@ fn predictor() {
     let exp = exp_image.into_bytes();
 
     let decoded = decode_stream("sample_files/filters/predictor.pdf", 23, |d, resolver| {
-        let params = d.get(&sname("DecodeParms")).unwrap().as_dict()?;
+        let params = d
+            .get(&sname("DecodeParms"))
+            .unwrap()
+            .as_dict()
+            .whatever_context("get DecodeParms dict")?;
         assert_eq!(
             15,
             resolver
-                .resolve_container_value(params, &sname("Predictor"))?
-                .int()?
+                .resolve_container_value(params, &sname("Predictor"))
+                .whatever_context("get Predictor")?
+                .int()
+                .whatever_context("convert predictor to int")?
         );
         assert_eq!(3, params["Colors"].int().unwrap());
         assert_eq!(8, params["BitsPerComponent"].int().unwrap());

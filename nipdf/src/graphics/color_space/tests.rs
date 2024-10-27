@@ -106,7 +106,7 @@ fn simple_color_space_from_args(nm: &str) -> ColorSpace<f32> {
 }
 
 #[test]
-fn icc_based() -> AnyResult<()> {
+fn icc_based() -> Result<()> {
     // use Alternate color space
     let buf = br#"
 1 0 obj
@@ -162,7 +162,7 @@ fn separation_color_space() {
 }
 
 #[test]
-fn separation() -> AnyResult<()> {
+fn separation() -> Result<()> {
     // use Alternate color space
     let buf = br#"
 1 0 obj
@@ -195,10 +195,10 @@ endobj
 "; "stream")]
 #[test_case(b"1 0 obj[/Indexed/DeviceRGB 1(\x01\x02\x03\x04\x05\x06)]endobj"; "Literal String")]
 #[test_case(b"1 0 obj[/Indexed/DeviceRGB 1<010203040506>]endobj"; "Hex String")]
-fn indexed(buf: &[u8]) -> AnyResult<()> {
+fn indexed(buf: &[u8]) -> Result<()> {
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
-    let _args = ColorSpaceArgs::try_from(resolver.resolve(1)?).unwrap();
+    let _args = ColorSpaceArgs::try_from(resolver.resolve(1).unwrap()).unwrap();
     let color_space = parse_color_space(buf)?;
     assert_eq!(
         ColorSpace::Indexed(Box::new(IndexedColorSpace {
@@ -278,7 +278,7 @@ fn pattern_color_space() {
 }
 
 #[test]
-fn device_n_from_args() -> AnyResult<()> {
+fn device_n_from_args() -> Result<()> {
     let buf = br#"1 0 obj
 [/DeviceN [/foo] /DeviceRGB 2 0 R]
 endobj
@@ -297,17 +297,17 @@ endobj
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
 
-    let _args = ColorSpaceArgs::try_from(resolver.resolve(1)?)?;
+    let _args = ColorSpaceArgs::try_from(resolver.resolve(1).unwrap()).unwrap();
     let color_space = parse_color_space(buf)?;
     assert_eq!(1, color_space.components());
     assert!(matches!(color_space, ColorSpace::DeviceN(_)));
 
-    let args = ColorSpaceArgs::try_from(resolver.resolve(3)?)?;
+    let args = ColorSpaceArgs::try_from(resolver.resolve(3).unwrap()).unwrap();
     let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None)?;
     assert_eq!(2, color_space.components());
     assert!(matches!(color_space, ColorSpace::DeviceN(_)));
 
-    let args = ColorSpaceArgs::try_from(resolver.resolve(4)?)?;
+    let args = ColorSpaceArgs::try_from(resolver.resolve(4).unwrap()).unwrap();
     let color_space = ColorSpace::<f32>::from_args(&args, &resolver, None);
     assert!(color_space.is_err());
     Ok(())
@@ -331,15 +331,15 @@ fn lab_to_rgb() {
     assert_eq!([0, 255, 0, 255], cs.to_rgba(&[255, 0, 255]));
 }
 
-fn parse_color_space(buf: &[u8]) -> AnyResult<ColorSpace> {
+fn parse_color_space(buf: &[u8]) -> Result<ColorSpace> {
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
-    let args = ColorSpaceArgs::try_from(resolver.resolve(1)?)?;
+    let args = ColorSpaceArgs::try_from(resolver.resolve(1).unwrap()).unwrap();
     ColorSpace::<f32>::from_args(&args, &resolver, None)
 }
 
 #[test]
-fn lab_from_args() -> AnyResult<()> {
+fn lab_from_args() -> Result<()> {
     let buf = br#"1 0 obj
 [/Lab <</Range [-128 127 -128 127] /WhitePoint [0.9505 1 1.089]>>]
 endobj
@@ -392,7 +392,7 @@ fn cal_gray_to_rgb() {
 }
 
 #[test]
-fn cal_gray_from_args() -> AnyResult<()> {
+fn cal_gray_from_args() -> Result<()> {
     let buf = br#"1 0 obj
 [/CalGray <</WhitePoint [0.9505 1 1.089]/BlackPoint [0.1 0.2 0.3]/Gamma 1.8>>]
 endobj

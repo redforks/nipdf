@@ -1,9 +1,11 @@
 use super::*;
 use crate::{
+    Result,
     file::{ObjectResolver, ResourceDict, XRefTable},
     object::LiteralString,
 };
 use prescript::sname;
+use snafu::{ResultExt, report};
 use test_case::test_case;
 
 #[test_case("w ", "w")]
@@ -115,12 +117,13 @@ fn transform_try_from_array() {
     assert_eq!(act, Transform2D::new(1f32, 2f32, 3f32, 4f32, 5f32, 6f32));
 }
 
+#[report]
 #[test]
-fn parse_inline_image_with_ascii85_filter() -> anyhow::Result<()> {
+fn parse_inline_image_with_ascii85_filter() -> Result<()> {
     use crate::object::{ImageMetadata, PdfObject};
 
     let data = include_bytes!("inline-image-ascii85");
-    let (remains, img) = parse_inline_image(data)?;
+    let (remains, img) = parse_inline_image(data).whatever_context("parse inline image")?;
     assert_eq!(remains, b" Q\n");
     let meta = img.meta();
     assert_eq!(meta.width()?, 4772);
@@ -128,7 +131,7 @@ fn parse_inline_image_with_ascii85_filter() -> anyhow::Result<()> {
     let xref = XRefTable::empty();
     let resolver = ObjectResolver::empty(&xref);
     let d = Dictionary::default();
-    let res_dict = ResourceDict::new(None, &d, &resolver)?;
+    let res_dict = ResourceDict::new(None, &d, &resolver).whatever_context("parse ResourceDict")?;
     let img = img.image(&resolver, &res_dict)?;
     assert_eq!(4772, img.width());
     assert_eq!(110, img.height());
