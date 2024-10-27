@@ -254,18 +254,18 @@ impl<'a, 'b> PageDict<'a, 'b> {
 }
 
 #[derive(Debug)]
-pub struct Page<'a, 'b> {
+pub struct Page<'a> {
     empty_dict: LazyCell<Dictionary>,
-    d: PageDict<'a, 'b>,
-    parents_to_root: Vec<PageDict<'a, 'b>>,
+    d: PageDict<'a, 'a>,
+    parents_to_root: Vec<PageDict<'a, 'a>>,
 }
 
-impl<'a, 'b: 'a> Page<'a, 'b> {
+impl<'a> Page<'a> {
     pub fn id(&self) -> RuntimeObjectId {
         self.d.id().unwrap()
     }
 
-    fn iter_to_root(&self) -> impl Iterator<Item = &PageDict<'a, 'b>> {
+    fn iter_to_root(&self) -> impl Iterator<Item = &PageDict<'a, 'a>> {
         once(&self.d).chain(self.parents_to_root.iter())
     }
 
@@ -312,13 +312,13 @@ impl<'a, 'b: 'a> Page<'a, 'b> {
     }
 
     /// Parse page tree to get all pages
-    pub(crate) fn parse(root: PageDict<'a, 'b>) -> Result<Vec<Self>, ObjectValueError> {
+    pub(crate) fn parse(root: PageDict<'a, 'a>) -> Result<Vec<Self>, ObjectValueError> {
         let mut pages = Vec::new();
         let mut parents = Vec::new();
-        fn handle<'a, 'b: 'a, 'c>(
-            node: PageDict<'a, 'b>,
-            pages: &'c mut Vec<Page<'a, 'b>>,
-            parents: &'c mut Vec<PageDict<'a, 'b>>,
+        fn handle<'a, 'c>(
+            node: PageDict<'a, 'a>,
+            pages: &'c mut Vec<Page<'a>>,
+            parents: &'c mut Vec<PageDict<'a, 'a>>,
         ) -> Result<(), ObjectValueError> {
             if node.is_leaf() {
                 pages.push(Page::from_leaf(&node, &parents[..])?);
@@ -336,8 +336,8 @@ impl<'a, 'b: 'a> Page<'a, 'b> {
     }
 
     fn from_leaf(
-        d: &PageDict<'a, 'b>,
-        parents: &[PageDict<'a, 'b>],
+        d: &PageDict<'a, 'a>,
+        parents: &[PageDict<'a, 'a>],
     ) -> Result<Self, ObjectValueError> {
         let mut parents = parents.to_vec();
         parents.reverse();

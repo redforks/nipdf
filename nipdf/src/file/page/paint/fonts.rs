@@ -356,15 +356,15 @@ impl<'a> FontOp for Type1FontOp<'a> {
 }
 
 /// Font implementation using free-type/(font-kit), to handle Type1 fonts
-struct Type1Font<'a, 'b> {
+struct Type1Font<'a> {
     font_data: Vec<u8>,
     is_cff: bool,
     font: FontKitFont,
-    font_dict: FontDict<'a, 'b>,
+    font_dict: FontDict<'a, 'a>,
 }
 
-impl<'a, 'b> Type1Font<'a, 'b> {
-    fn new(is_cff: bool, data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> Result<Self> {
+impl<'a> Type1Font<'a> {
+    fn new(is_cff: bool, data: Vec<u8>, font_dict: FontDict<'a, 'a>) -> Result<Self> {
         debug_assert_eq!(data.capacity(), data.len());
 
         let font = FontKitFont::from_bytes(data.clone().into(), 0)
@@ -378,7 +378,7 @@ impl<'a, 'b> Type1Font<'a, 'b> {
     }
 }
 
-impl<'a, 'b: 'a, P: PathSink> Font<P> for Type1Font<'a, 'b> {
+impl<'a, P: PathSink> Font<P> for Type1Font<'a> {
     fn font_type(&self) -> FontType {
         FontType::Type1
     }
@@ -787,10 +787,9 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
     /// by TrueType fonts scanned from current OS. Because Type1 fonts are not
     /// supported by swash, and the only crate support Type1 fonts is `font`, which
     /// I am not familiar with.
-    fn load_type1_font<'a, 'b>(font: FontDict<'a, 'b>) -> Result<Type1Font<'a, 'b>>
+    fn load_type1_font<'a>(font: FontDict<'a, 'a>) -> Result<Type1Font<'a>>
     where
         'a: 'c,
-        'b: 'c,
     {
         let f = font.type1()?;
         let font_name = font.font_name()?;
@@ -824,11 +823,9 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         Type1Font::new(is_cff, bytes, font)
     }
 
-    fn scan_font<'a, 'b>(font: FontDict<'a, 'b>) -> Result<Option<Box<dyn Font<P> + 'c>>>
+    fn scan_font<'a>(font: FontDict<'a, 'a>) -> Result<Option<Box<dyn Font<P> + 'c>>>
     where
         'a: 'c,
-        'b: 'c,
-        'b: 'a,
     {
         match font.subtype()? {
             FontType::TrueType => {
@@ -894,11 +891,9 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         }
     }
 
-    pub fn new<'a, 'b>(resource: &'c ResourceDict<'a, 'b>) -> Result<Self>
+    pub fn new<'a>(resource: &'c ResourceDict<'a, 'a>) -> Result<Self>
     where
         'a: 'c,
-        'b: 'c,
-        'b: 'a,
     {
         let font_res = resource.font()?;
         let mut fonts = HashMap::with_capacity(font_res.len());

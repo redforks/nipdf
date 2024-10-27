@@ -545,21 +545,21 @@ trait CatalogDictTrait {
 }
 
 #[derive(Debug)]
-pub struct Catalog<'a, 'b> {
-    d: CatalogDict<'a, 'b>,
+pub struct Catalog<'a> {
+    d: CatalogDict<'a, 'a>,
 }
 
-impl<'a, 'b: 'a> Catalog<'a, 'b> {
+impl<'a> Catalog<'a> {
     fn parse(
         id: impl Into<RuntimeObjectId>,
-        resolver: &'b ObjectResolver<'a>,
+        resolver: &'a ObjectResolver<'a>,
     ) -> Result<Self, ObjectValueError> {
         Ok(Self {
             d: resolver.resolve_pdf_object(id)?,
         })
     }
 
-    pub fn pages(&self) -> Result<Vec<Page<'a, 'b>>, ObjectValueError> {
+    pub fn pages(&self) -> Result<Vec<Page<'a>>, ObjectValueError> {
         Page::parse(self.d.pages().unwrap())
     }
 
@@ -679,10 +679,10 @@ impl File {
             .unwrap_or_else(|| self.head_ver.clone()))
     }
 
-    pub fn catalog<'a, 'b: 'a>(
+    pub fn catalog<'a>(
         &self,
-        resolver: &'b ObjectResolver<'a>,
-    ) -> Result<Catalog<'a, 'b>, ObjectValueError> {
+        resolver: &'a ObjectResolver<'a>,
+    ) -> Result<Catalog<'a>, ObjectValueError> {
         Catalog::parse(self.root_id, resolver)
     }
 }

@@ -593,27 +593,26 @@ impl PathSink for SkiaPathSink {
 
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct Render<'a, 'b, 'c> {
+pub struct Render<'a, 'c> {
     nested_level: u16,
     canvas: &'c mut Pixmap,
     stack: Vec<State>,
     path: Path,
     #[educe(Debug(ignore))]
     font_cache: FontCache<'c, SkiaPathSink>,
-    resources: &'c ResourceDict<'a, 'b>,
+    resources: &'c ResourceDict<'a, 'a>,
     dimension: PageDimension,
 }
 
-impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
+impl<'a, 'c> Render<'a, 'c> {
     fn create(
         nested_level: u16,
         canvas: &'c mut Pixmap,
         option: RenderOption,
-        resources: &'c ResourceDict<'a, 'b>,
+        resources: &'c ResourceDict<'a, 'a>,
     ) -> Self
     where
         'a: 'c,
-        'b: 'c,
     {
         let mut state = if let Some(state) = option.state {
             state
@@ -645,7 +644,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         cur_level: u16,
         canvas: &'c mut Pixmap,
         option: RenderOption,
-        resources: &'c ResourceDict<'a, 'b>,
+        resources: &'c ResourceDict<'a, 'a>,
     ) -> Option<Self> {
         if cur_level < 10 {
             Some(Self::create(cur_level + 1, canvas, option, resources))
@@ -658,11 +657,10 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
     pub fn new(
         canvas: &'c mut Pixmap,
         option: RenderOption,
-        resources: &'c ResourceDict<'a, 'b>,
+        resources: &'c ResourceDict<'a, 'a>,
     ) -> Self
     where
         'a: 'c,
-        'b: 'c,
     {
         Self::create(0, canvas, option, resources)
     }
@@ -1157,7 +1155,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
     ///    an example pdf file that b_box start point is not (0, 0)
     /// 1. Paints the graphics objects specified in the form object's stream in sub render.
     /// 1. Paint the rendered image on parent render
-    fn paint_form_x_object(&mut self, x_object: &XObjectDict<'a, 'b>) -> Result<()> {
+    fn paint_form_x_object(&mut self, x_object: &XObjectDict<'a, 'a>) -> Result<()> {
         debug!("Render form");
 
         let form = x_object
@@ -1445,7 +1443,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
     fn shading_pattern(
         &mut self,
-        pattern: ShadingPatternDict<'a, 'b>,
+        pattern: ShadingPatternDict<'a, 'a>,
     ) -> Result<Option<(PaintCreator, Option<SkiaColor>)>> {
         struct RestoreState<F>(Option<F>)
         where
@@ -1499,12 +1497,9 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         &mut self,
         canvas_size: &Size2D<f32>,
         mut get_state: impl FnMut(&mut Self) -> &mut ColorState,
-        tile: TilingPatternDict<'a, 'b>,
+        tile: TilingPatternDict<'a, 'a>,
         color_args: Option<&ColorArgs>,
-    ) -> Result<()>
-    where
-        'a: 'b,
-    {
+    ) -> Result<()> {
         let stream: &Object = tile
             .resolver()
             .resolve(tile.id().unwrap())
