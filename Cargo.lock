@@ -2556,7 +2556,6 @@ dependencies = [
  "strum",
  "test-case",
  "test-log",
- "thiserror",
  "tinyvec",
  "ttf-parser 0.25.0",
  "weezl",
