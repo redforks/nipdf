@@ -1,8 +1,7 @@
 //! object mod contains data structure map to low level pdf objects
 use ahash::{HashMap, HashMapExt};
-use anyhow::Context;
+use anyhow::Context as _;
 use educe::Educe;
-use log::error;
 use paste::paste;
 use prescript::Name;
 use std::{
@@ -19,6 +18,7 @@ pub use indirect_object::IndirectObject;
 mod stream;
 pub use stream::*;
 pub type Array = Rc<[Object]>;
+use snafu::Snafu;
 
 #[derive(PartialEq, Debug, Clone, Default, Educe)]
 #[educe(Deref, DerefMut)]
@@ -203,9 +203,9 @@ pub trait TypeValidator: Debug + Clone {
         if self.check(d)? {
             Ok(())
         } else {
-            Err(ObjectValueError::DictSchemaUnExpectedType(
-                self.schema_type(),
-            ))
+            Err(ObjectValueError::DictSchemaUnExpectedType {
+                schema: self.schema_type(),
+            })
         }
     }
 }
@@ -442,7 +442,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
             .do_resolve_container_value(self.d, id)
             .map(Some)
             .or_else(|e| match e {
-                ObjectValueError::ObjectIDNotFound(_) | ObjectValueError::DictKeyNotFound => {
+                ObjectValueError::ObjectIDNotFound { .. } | ObjectValueError::DictKeyNotFound => {
                     Ok(None)
                 }
                 _ => Err(e),
@@ -455,7 +455,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
             .map(|(_, o)| o)
             .map(Some)
             .or_else(|e| match e {
-                ObjectValueError::ObjectIDNotFound(_) | ObjectValueError::DictKeyNotFound => {
+                ObjectValueError::ObjectIDNotFound { .. } | ObjectValueError::DictKeyNotFound => {
                     Ok(None)
                 }
                 _ => Err(e),
@@ -511,7 +511,10 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
 
     pub fn required_f32(&self, id: &Name) -> Result<f32, ObjectValueError> {
         self.opt_get(id)?
-            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id.clone()))?
+            .ok_or_else(|| ObjectValueError::DictSchemaError {
+                schema: self.t.schema_type(),
+                key: id.clone(),
+            })?
             .as_number()
     }
 
@@ -525,7 +528,10 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
 
     pub fn required_object(&self, id: &Name) -> Result<&'b Object, ObjectValueError> {
         self.opt_object(id)?
-            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id.clone()))
+            .ok_or_else(|| ObjectValueError::DictSchemaError {
+                schema: self.t.schema_type(),
+                key: id.clone(),
+            })
     }
 
     /// Return empty vec if not exist, error if not array
@@ -552,7 +558,10 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
         f: impl Fn(&Object) -> Result<V, ObjectValueError>,
     ) -> Result<Vec<V>, ObjectValueError> {
         self.opt_get(id)?
-            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id.clone()))?
+            .ok_or_else(|| ObjectValueError::DictSchemaError {
+                schema: self.t.schema_type(),
+                key: id.clone(),
+            })?
             .arr()?
             .iter()
             .map(f)
@@ -593,14 +602,20 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
 
     pub fn required_dict(&self, id: &Name) -> Result<&'b Dictionary, ObjectValueError> {
         self.opt_dict(id).and_then(|o| {
-            o.ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id.clone()))
+            o.ok_or_else(|| ObjectValueError::DictSchemaError {
+                schema: self.t.schema_type(),
+                key: id.clone(),
+            })
         })
     }
 
     pub fn required_ref(&self, id: &Name) -> Result<RuntimeObjectId, ObjectValueError> {
         self.d
             .get(id)
-            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id.clone()))?
+            .ok_or_else(|| ObjectValueError::DictSchemaError {
+                schema: self.t.schema_type(),
+                key: id.clone(),
+            })?
             .reference()
             .map(|r| r.id().id())
     }
@@ -640,7 +655,10 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
 
     pub fn required_str(&self, id: &Name) -> Result<&str, ObjectValueError> {
         self.opt_get(id)?
-            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id.clone()))?
+            .ok_or_else(|| ObjectValueError::DictSchemaError {
+                schema: self.t.schema_type(),
+                key: id.clone(),
+            })?
             .as_string()
     }
 
@@ -760,7 +778,10 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
 
     pub fn as_byte_string(&self, id: &Name) -> Result<&[u8], ObjectValueError> {
         self.opt_get(id)?
-            .ok_or_else(|| ObjectValueError::DictSchemaError(self.t.schema_type(), id.clone()))?
+            .ok_or_else(|| ObjectValueError::DictSchemaError {
+                schema: self.t.schema_type(),
+                key: id.clone(),
+            })?
             .as_byte_string()
     }
 }
@@ -826,47 +847,49 @@ mod frame;
 use crate::{file::DataContainer, graphics::trans::ThousandthsOfText, parser};
 pub use frame::*;
 
-#[derive(Clone, PartialEq, Debug, thiserror::Error)]
+#[derive(Clone, PartialEq, Debug, Snafu)]
 pub enum ObjectValueError {
-    #[error("unexpected type")]
+    #[snafu(display("unexpected type"))]
     UnexpectedType,
-    #[error("invalid hex string")]
+    #[snafu(display("invalid hex string"))]
     InvalidHexString,
-    #[error("invalid name format")]
+    #[snafu(display("invalid name format"))]
     InvalidNameFormat,
-    #[error("Name not in dictionary")]
+    #[snafu(display("Name not in dictionary"))]
     DictNameMissing,
-    #[error("Reference target not found")]
+    #[snafu(display("Reference target not found"))]
     ReferenceTargetNotFound,
-    #[error("External stream not supported")]
+    #[snafu(display("External stream not supported"))]
     ExternalStreamNotSupported,
-    #[error("Unknown filter")]
+    #[snafu(display("Unknown filter"))]
     UnknownFilter,
-    #[error("Filter decode error")]
+    #[snafu(display("Filter decode error"))]
     FilterDecodeError,
-    #[error("Stream not image")]
+    #[snafu(display("Stream not image"))]
     StreamNotImage,
-    #[error("Stream is not bytes")]
+    #[snafu(display("Stream is not bytes"))]
     StreamIsNotBytes,
-    #[error("Stream length not defined")]
+    #[snafu(display("Stream length not defined"))]
     StreamLengthNotDefined,
-    #[error("Object not found by id {0}")]
-    ObjectIDNotFound(RuntimeObjectId),
-    #[error("Parse error: {0}")]
-    ParseError(String),
-    #[error("Unexpected dict schema type, schema: {0}")]
-    DictSchemaUnExpectedType(String),
-    #[error("Dict schema error, schema: {0}, key: {1}")]
-    DictSchemaError(String, Name),
-    #[error("Graphics operation schema error")]
+    #[snafu(display("Object not found by id {id}"))]
+    ObjectIDNotFound { id: RuntimeObjectId },
+    #[snafu(display("Parse error: {message}"))]
+    ParseError { message: String },
+    #[snafu(display("Unexpected dict schema type, schema: {schema}"))]
+    DictSchemaUnExpectedType { schema: String },
+    #[snafu(display("Dict schema error, schema: {schema}, key: {key}"))]
+    DictSchemaError { schema: String, key: Name },
+    #[snafu(display("Graphics operation schema error"))]
     GraphicsOperationSchemaError,
-    #[error("Dict key not found")]
+    #[snafu(display("Dict key not found"))]
     DictKeyNotFound,
 }
 
 impl<'a> From<parser::ParseError<'a>> for ObjectValueError {
     fn from(e: parser::ParseError) -> Self {
-        Self::ParseError(format!("{:?}", e))
+        Self::ParseError {
+            message: format!("{:?}", e),
+        }
     }
 }
 

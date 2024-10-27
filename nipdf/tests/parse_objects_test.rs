@@ -15,7 +15,7 @@ fn scan_objects() {
         for id in 1..resolver.n() {
             print!("scan object: {id}");
             match resolver.resolve(RuntimeObjectId(id.try_into().unwrap())) {
-                Err(ObjectValueError::ObjectIDNotFound(_)) => {
+                Err(ObjectValueError::ObjectIDNotFound { .. }) => {
                     print!(" not found")
                 }
                 Err(e) => panic!("{}", e),

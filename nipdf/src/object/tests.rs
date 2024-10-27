@@ -63,9 +63,9 @@ fn value_type_validator() {
     let d = Dictionary::from(d);
 
     assert_eq!(
-        Err(ObjectValueError::DictSchemaUnExpectedType(
-            "Type: Page".into()
-        )),
+        Err(ObjectValueError::DictSchemaUnExpectedType {
+            schema: "Type: Page".into()
+        }),
         validator.valid(&d)
     );
 }

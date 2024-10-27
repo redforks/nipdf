@@ -82,7 +82,9 @@ impl ObjectStream {
         let n = d.get(&sname("N")).map_or(Ok(0), |v| v.int())? as usize;
         let buf = stream.decode_without_resolve_length(file, encrypt_info)?;
         parse_object_stream(n, buf.as_ref())
-            .map_err(|e| ObjectValueError::ParseError(e.to_string()))
+            .map_err(|e| ObjectValueError::ParseError {
+                message: e.to_string(),
+            })
             .map(|(_, r)| r)
     }
 
@@ -213,7 +215,7 @@ impl XRefTable {
     ) -> Result<Object, ObjectValueError> {
         let id = id.into();
         self.resolve_object_buf(buf, id, encrypt_info)
-            .ok_or(ObjectValueError::ObjectIDNotFound(id))
+            .ok_or(ObjectValueError::ObjectIDNotFound { id })
             .and_then(|buf| {
                 buf.either(
                     |buf| {
@@ -416,7 +418,7 @@ impl<'a> ObjectResolver<'a> {
         let id = id.into();
         self.objects
             .get(&id)
-            .ok_or(ObjectValueError::ObjectIDNotFound(id))?
+            .ok_or(ObjectValueError::ObjectIDNotFound { id })?
             .get_or_try_init(|| {
                 self.xref_table
                     .parse_object(self.buf, id, self.encript_info())
@@ -509,7 +511,9 @@ impl<'a> ObjectResolver<'a> {
         o: Result<T, ObjectValueError>,
     ) -> Result<Option<T>, ObjectValueError> {
         o.map(Some).or_else(|e| match e {
-            ObjectValueError::ObjectIDNotFound(_) | ObjectValueError::DictKeyNotFound => Ok(None),
+            ObjectValueError::ObjectIDNotFound { .. } | ObjectValueError::DictKeyNotFound => {
+                Ok(None)
+            }
             _ => Err(e),
         })
     }
