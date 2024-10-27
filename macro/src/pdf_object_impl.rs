@@ -595,15 +595,15 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         let method = if let Some(doc) = doc(attrs) {
             quote! {
                 #[doc = #doc]
-                pub fn #name(&self) -> anyhow::Result<#rt> {
-                    use anyhow::Context;
+                pub fn #name(&self) -> std::result::Result<#rt, snafu::Whatever> {
+                    use snafu::ResultExt as _;
                     #method.context(#key)
                 }
             }
         } else {
             quote! {
-                pub fn #name(&self) -> anyhow::Result<#rt> {
-                    use anyhow::Context;
+                pub fn #name(&self) -> std::result::Result<#rt, snafu::Whatever> {
+                    use snafu::ResultExt as _;
                     #method.context(#key)
                 }
             }
