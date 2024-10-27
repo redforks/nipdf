@@ -1,6 +1,6 @@
 //! object mod contains data structure map to low level pdf objects
+use crate::Result;
 use ahash::{HashMap, HashMapExt};
-use anyhow::Context as _;
 use educe::Educe;
 use paste::paste;
 use prescript::Name;
@@ -18,7 +18,7 @@ pub use indirect_object::IndirectObject;
 mod stream;
 pub use stream::*;
 pub type Array = Rc<[Object]>;
-use snafu::Snafu;
+use snafu::{ResultExt, Snafu};
 
 #[derive(PartialEq, Debug, Clone, Default, Educe)]
 #[educe(Deref, DerefMut)]
@@ -736,18 +736,22 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
     /// Resolve pdf object from data container `c` with key `k`, if value is reference,
     /// resolve it recursively. Return empty Map if object is not found.
     /// The raw value should be a dictionary, that key is Name and value is Dictionary.
-    pub fn resolve_pdf_object_map<O>(&self, id: &Name) -> anyhow::Result<HashMap<Name, O>>
+    pub fn resolve_pdf_object_map<O>(&self, id: &Name) -> Result<HashMap<Name, O>>
     where
         O: PdfObject<'b, R>,
     {
-        let dict = self.opt_resolve_value(id)?;
+        let dict = self
+            .opt_resolve_value(id)
+            .whatever_context("resolve pdf object")?;
         dict.map_or_else(
             || Ok(HashMap::default()),
             |dict| {
-                let dict = dict.as_dict().context("Value not dict")?;
+                let dict = dict.as_dict().whatever_context("Value not dict")?;
                 let mut res = HashMap::with_capacity(dict.len());
                 for k in dict.keys() {
-                    let obj: O = self._resolve_pdf_object(dict, k)?;
+                    let obj: O = self
+                        ._resolve_pdf_object(dict, k)
+                        .whatever_context("resolve pdf object")?;
                     res.insert(k.clone(), obj);
                 }
                 Ok(res)

@@ -1,6 +1,7 @@
 //! Contains types of PDF file structures.
 
 use crate::{
+    Result,
     file::encrypt::Authorizer,
     object::{
         Array, Dictionary, Entry, FrameSet, HexString, LiteralString, Object, ObjectId,
@@ -12,7 +13,6 @@ use crate::{
     },
 };
 use ahash::{HashMap, HashMapExt};
-use anyhow::Result as AnyResult;
 use either::Either;
 use log::error;
 use nipdf_macro::pdf_object;
@@ -588,13 +588,6 @@ pub enum FileError {
     InvalidFile,
 }
 
-impl From<anyhow::Error> for FileError {
-    fn from(e: anyhow::Error) -> Self {
-        error!("other error on open file: {}", e);
-        Self::InvalidFile
-    }
-}
-
 impl From<ObjectValueError> for FileError {
     fn from(e: ObjectValueError) -> Self {
         error!("object value error on open file: {}", e);
@@ -615,22 +608,25 @@ fn open_encrypt(
 
     let resolver = ObjectResolver::new(buf, xref, None);
     let trailer = TrailerDict::new(None, trailer, &resolver)?;
-    let encrypt = trailer.encrypt()?;
+    let encrypt = trailer.encrypt().map_err(|_| FileError::InvalidFile)?;
     let Some(encrypt) = encrypt else {
         return Ok(None);
     };
 
     assert_eq!(
         sname("Standard"),
-        encrypt.filter()?,
+        encrypt.filter().map_err(|_| FileError::InvalidFile)?,
         "unsupported security handler"
     );
     assert!(
-        encrypt.sub_filter()?.is_none(),
+        encrypt
+            .sub_filter()
+            .map_err(|_| FileError::InvalidFile)?
+            .is_none(),
         "unsupported security handler (SubFilter)"
     );
 
-    let authorizer = Authorizer::new(&encrypt, &trailer)?;
+    let authorizer = Authorizer::new(&encrypt, &trailer).map_err(|_| FileError::InvalidFile)?;
 
     authorizer.authorize(password.as_bytes()).map_or_else(
         || Err(FileError::InvalidPassword),
@@ -664,7 +660,7 @@ impl File {
         })
     }
 
-    pub fn resolver(&self) -> AnyResult<ObjectResolver<'_>> {
+    pub fn resolver(&self) -> Result<ObjectResolver<'_>> {
         Ok(ObjectResolver::new(
             &self.data,
             &self.xref,
@@ -700,13 +696,22 @@ pub(crate) fn decode_stream<
 >(
     file_path: impl AsRef<std::path::Path>,
     id: T,
-    f_assert: impl for<'a> FnOnce(&'a Dictionary, &'a ObjectResolver<'a>) -> AnyResult<()>,
-) -> AnyResult<Vec<u8>> {
+    f_assert: impl for<'a> FnOnce(&'a Dictionary, &'a ObjectResolver<'a>) -> Result<()>,
+) -> Result<Vec<u8>> {
+    use snafu::ResultExt;
+
     let f = open_test_file(file_path);
     let resolver = f.resolver()?;
-    let stream = resolver.resolve(id.try_into()?)?.stream()?;
+    let stream = resolver
+        .resolve(id.try_into().whatever_context("convert id")?)
+        .whatever_context("resolve object")?
+        .stream()
+        .whatever_context("resolve stream")?;
     f_assert(stream.as_dict(), &resolver)?;
-    Ok(stream.decode(&resolver)?.into_owned())
+    Ok(stream
+        .decode(&resolver)
+        .whatever_context("decode stream")?
+        .into_owned())
 }
 
 #[cfg(test)]
