@@ -204,7 +204,7 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
             Ok(Some(font.encodings()?))
         } else {
             info!("scan encoding from type1 font. ({})", font_name);
-            let type1_font = prescript::Font::parse(font_data)?;
+            let type1_font = prescript::Font::parse(font_data).map_err(|e| anyhow!("{}", e))?;
             Ok(type1_font.encoding().cloned())
         }
     }
@@ -1036,7 +1036,7 @@ impl<'a> CIDFontType2FontOp<'a> {
                     encoding_name
                 );
                 (!(encoding_name == "Identity-H" || encoding_name == "Identity-V"))
-                    .then(|| cmap_registry.get(&name(encoding_name)).unwrap())
+                    .then(|| cmap_registry.get(&name(encoding_name)).unwrap().unwrap())
             }
             NameOrStream::Stream(s) => {
                 assert!(
@@ -1044,7 +1044,11 @@ impl<'a> CIDFontType2FontOp<'a> {
                     "font_dict.use_cmap not supported"
                 );
                 let data = s.decode(font.resolver())?;
-                Some(cmap_registry.add_cmap_file(data.as_ref())?)
+                Some(
+                    cmap_registry
+                        .add_cmap_file(data.as_ref())
+                        .map_err(|e| anyhow!("{}", e))?,
+                )
             }
         };
 
@@ -1092,7 +1096,13 @@ impl<'a> FontOp for CIDFontType2FontOp<'a> {
                     .map(|ch| (ch[0] as u32) << 8 | ch[1] as u32)
                     .collect()
             },
-            |cmap| cmap.map(s).into_iter().map(|ch| ch.0 as u32).collect(),
+            |cmap| {
+                cmap.map(s)
+                    .unwrap()
+                    .into_iter()
+                    .map(|ch| ch.0 as u32)
+                    .collect()
+            },
         )
     }
 

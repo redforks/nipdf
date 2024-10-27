@@ -1,5 +1,5 @@
 use crate::object::{Object, ObjectValueError};
-use anyhow::Result as AnyResult;
+use anyhow::{Result as AnyResult, anyhow};
 use educe::Educe;
 #[cfg(test)]
 use mockall::automock;
@@ -245,7 +245,7 @@ impl Function for PostScriptFunction {
     #[doc = " Called by `self.call()`, args and return value are clipped by signature."]
     fn inner_call(&self, args: FunctionValue) -> AnyResult<FunctionValue> {
         let args = args.into_iter().collect::<Vec<_>>();
-        let r = self.f.exec(&args)?;
+        let r = self.f.exec(&args).map_err(|e| anyhow!("{}", e))?;
         Ok(r.into_iter().collect())
     }
 }
