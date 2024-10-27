@@ -1133,7 +1133,7 @@ fn parse_charsets(buf: &[u8], n_glyphs: u16) -> ParseResult<'_, Charsets> {
 /// Supplemental data for encoding, replace some char code for a new glyph name.
 /// `code` is char code to replace,
 /// `sid` is SID of glyph name.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct EncodingSupplement {
     code: u8,
     sid: Sid,

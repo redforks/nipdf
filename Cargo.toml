@@ -89,6 +89,7 @@ unsafe_code = "deny"
 elided-lifetimes-in-paths = "warn"
 explicit_outlives_requirements = "warn"
 meta_variable_misuse = "warn"
+redundant_lifetimes = "warn"
 
 [workspace.lints.clippy]
 empty_structs_with_brackets = "warn"
