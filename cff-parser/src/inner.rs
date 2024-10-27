@@ -825,7 +825,7 @@ struct SIDDict<'a> {
 }
 
 /// SIDDict deref to Dict, to add Dict access methods.
-impl<'a> Deref for SIDDict<'a> {
+impl Deref for SIDDict<'_> {
     type Target = Dict;
 
     fn deref(&self) -> &Self::Target {
@@ -833,7 +833,7 @@ impl<'a> Deref for SIDDict<'a> {
     }
 }
 
-impl<'a> SIDDict<'a> {
+impl SIDDict<'_> {
     fn resolve_sid(&self, v: &Operand) -> Result<&str> {
         v.int()
             .context(ExpectIntSnafu)
