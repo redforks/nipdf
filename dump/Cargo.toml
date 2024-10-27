@@ -10,9 +10,9 @@ nipdf = { path = "../nipdf" }
 nipdf-render = { path = "../render" }
 env_logger.workspace = true
 clap.workspace = true
-anyhow.workspace = true
 image = { workspace = true }
 mimalloc.workspace = true
+snafu.workspace = true
 
 [lints]
 workspace = true

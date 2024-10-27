@@ -1,4 +1,3 @@
-use anyhow::Result as AnyResult;
 use clap::{Command, arg, value_parser};
 use image::ImageFormat;
 use mimalloc::MiMalloc;
@@ -7,11 +6,13 @@ use nipdf::{
     object::{Object, RuntimeObjectId},
 };
 use nipdf_render::{RenderOptionBuilder, render_steps};
+use snafu::{ResultExt, Whatever};
 use std::{
     collections::HashSet,
     io::{BufWriter, Cursor, copy, stdout},
     path::{Path, PathBuf},
 };
+type Result<T, E = Whatever> = std::result::Result<T, E>;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -71,32 +72,41 @@ fn cli() -> Command {
         )
 }
 
-fn open(path: impl AsRef<Path>, password: &str) -> AnyResult<File> {
-    let buf = std::fs::read(path)?;
-    File::parse(buf, password).map_err(|e| e.into())
+fn open(path: impl AsRef<Path>, password: &str) -> Result<File> {
+    let buf = std::fs::read(path).whatever_context("read file")?;
+    File::parse(buf, password).whatever_context("Open pdf file")
 }
 
-fn dump_stream(path: &PathBuf, password: &str, id: u32, raw: bool, as_png: bool) -> AnyResult<()> {
+fn dump_stream(path: &PathBuf, password: &str, id: u32, raw: bool, as_png: bool) -> Result<()> {
     let f = open(path, password)?;
-    let resolver = f.resolver()?;
-    let obj = resolver.resolve(id)?;
+    let resolver = f.resolver().whatever_context("resolve")?;
+    let obj = resolver
+        .resolve(id)
+        .with_whatever_context(|_| format!("resolve object: {}", id))?;
     match obj {
         Object::Stream(s) => {
             let decoded;
             let png_buffer;
             let mut buf = if raw {
-                s.raw(&resolver)?
+                s.raw(&resolver)
+                    .with_whatever_context(|_| format!("decode raw stream : {}", id))?
             } else if as_png {
-                let img = s.decode_image(&resolver, None)?;
+                let img = s
+                    .decode_image(&resolver, None)
+                    .with_whatever_context(|_| format!("decode image: {}", id))?;
                 let mut buf = Cursor::new(Vec::new());
-                img.write_to(&mut buf, ImageFormat::Png)?;
+                img.write_to(&mut buf, ImageFormat::Png)
+                    .whatever_context("encode image to png")?;
                 png_buffer = buf.into_inner();
                 &png_buffer
             } else {
-                decoded = s.decode(&resolver)?;
+                decoded = s
+                    .decode(&resolver)
+                    .with_whatever_context(|_| format!("decode stream: {}", id))?;
                 decoded.as_ref()
             };
-            copy(&mut buf, &mut BufWriter::new(&mut stdout()))?;
+            copy(&mut buf, &mut BufWriter::new(&mut stdout()))
+                .whatever_context("write to stdout")?;
         }
         _ => eprintln!("object is not a stream"),
     };
@@ -115,7 +125,7 @@ struct DumpPageArgs<'a> {
     no_crop: bool,
 }
 
-fn dump_page(args: DumpPageArgs<'_>) -> AnyResult<()> {
+fn dump_page(args: DumpPageArgs<'_>) -> Result<()> {
     let DumpPageArgs {
         path,
         password,
@@ -129,31 +139,35 @@ fn dump_page(args: DumpPageArgs<'_>) -> AnyResult<()> {
     } = args;
 
     let f = open(path, password)?;
-    let resolver = f.resolver()?;
-    let catalog = f.catalog(&resolver)?;
+    let resolver = f.resolver().whatever_context("get resolver")?;
+    let catalog = f.catalog(&resolver).whatever_context("get catalog")?;
 
     if show_total_pages {
-        println!("{}", catalog.pages()?.len());
+        println!("{}", catalog.pages().whatever_context("get pages")?.len());
     } else if show_page_id {
         let page_no = page_no.expect("page number is required");
-        let page = &catalog.pages()?[page_no as usize];
+        let page = &catalog.pages().whatever_context("get pages")?[page_no as usize];
         println!("{}", page.id());
     } else if to_png {
         let page_no = page_no.expect("page number is required");
-        let page = &catalog.pages()?[page_no as usize];
+        let page = &catalog.pages().whatever_context("get pages")?[page_no as usize];
         let image = render_steps(
             page,
             RenderOptionBuilder::new().zoom(zoom.unwrap_or(1.75)),
             steps,
             no_crop,
-        )?;
+        )
+        .whatever_context("render page")?;
         let mut buf = vec![];
         let mut cursor = Cursor::new(&mut buf);
-        image.write_to(&mut cursor, ImageFormat::Png)?;
-        copy(&mut &buf[..], &mut BufWriter::new(&mut stdout()))?;
+        image
+            .write_to(&mut cursor, ImageFormat::Png)
+            .whatever_context("encode to png")?;
+        copy(&mut &buf[..], &mut BufWriter::new(&mut stdout()))
+            .whatever_context("write to stdout")?;
     } else if let Some(page_no) = page_no {
-        let page = &catalog.pages()?[page_no as usize];
-        let contents = page.content()?;
+        let page = &catalog.pages().whatever_context("get pages")?[page_no as usize];
+        let contents = page.content().whatever_context("get page content")?;
         for op in contents.operations() {
             println!("{:?}", op);
         }
@@ -162,9 +176,9 @@ fn dump_page(args: DumpPageArgs<'_>) -> AnyResult<()> {
     Ok(())
 }
 
-fn dump_object(path: &PathBuf, password: &str, id: u32) -> AnyResult<()> {
+fn dump_object(path: &PathBuf, password: &str, id: u32) -> Result<()> {
     let f = open(path, password)?;
-    let resolver = f.resolver()?;
+    let resolver = f.resolver().whatever_context("get resolver")?;
 
     let id = RuntimeObjectId(id);
     let mut id_wait_scanned = vec![id];
@@ -172,8 +186,12 @@ fn dump_object(path: &PathBuf, password: &str, id: u32) -> AnyResult<()> {
     while let Some(id) = id_wait_scanned.pop() {
         if ids.insert(id) {
             println!("OBJ {}:", id);
-            let obj = resolver.resolve(id)?;
-            obj.to_doc().render(80, &mut stdout())?;
+            let obj = resolver
+                .resolve(id)
+                .with_whatever_context(|_| format!("resolve id: {}", id))?;
+            obj.to_doc()
+                .render(80, &mut stdout())
+                .whatever_context("render")?;
             print!("\n\n\n");
 
             id_wait_scanned.extend(obj.iter_values().filter_map(|o| {

@@ -2565,13 +2565,13 @@ dependencies = [
 name = "nipdf-dump"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "clap",
  "env_logger",
  "image 0.25.2",
  "mimalloc",
  "nipdf",
  "nipdf-render",
+ "snafu",
 ]
 
 [[package]]
