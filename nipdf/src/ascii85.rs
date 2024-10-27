@@ -1,6 +1,8 @@
-#[derive(Debug, thiserror::Error)]
+use snafu::Snafu;
+
+#[derive(Debug, Copy, Clone, Snafu)]
 pub enum Ascii85Error {
-    #[error("tail error")]
+    #[snafu(display("tail error"))]
     TailError,
 }
 
