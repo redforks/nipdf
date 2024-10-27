@@ -1,6 +1,5 @@
 //! Test page render result using `insta` to ensure that the rendering result is not changed.
 //! This file checks file pdfReferenceUpdated.pdf
-use anyhow::Result as AnyResult;
 use hex::ToHex;
 use insta::assert_ron_snapshot;
 use log::info;
@@ -9,6 +8,7 @@ use md5::{Digest, Md5};
 use nipdf::file::File;
 use nipdf_render::{RenderOptionBuilder, render_page};
 use nipdf_test_macro::pdf_file_test_cases;
+use snafu::{ResultExt, Whatever};
 use std::{
     collections::hash_map::HashMap,
     io::BufWriter,
@@ -19,13 +19,17 @@ use ureq::get as download;
 
 /// Decode pdf embed image and return the result as Vec<u8>.
 /// The image is specified by ref id.
-fn decode_image(id: u32) -> AnyResult<String> {
+fn decode_image(id: u32) -> Result<String, Whatever> {
     let path = "../nipdf/sample_files/bizarre/pdfReferenceUpdated.pdf";
-    let buf = std::fs::read(path)?;
+    let buf = std::fs::read(path).whatever_context("parse pdf file")?;
     let f = File::parse(buf, "").unwrap_or_else(|_| panic!("failed to parse {path:?}"));
     let resolver = f.resolver()?;
-    let obj = resolver.resolve(id)?;
-    let image = obj.stream()?.decode_image(&resolver, None)?;
+    let obj = resolver.resolve(id).whatever_context("resolve object")?;
+    let image = obj
+        .stream()
+        .whatever_context("decode stream")?
+        .decode_image(&resolver, None)
+        .whatever_context("decode image")?;
     let hash = Md5::digest(image.into_bytes());
     Ok(hex::encode(hash))
 }
@@ -48,18 +52,13 @@ fn replace_dead_link(f: &str) -> Option<&'_ str> {
     dead_links.get(p.file_name()?.to_str()?).copied()
 }
 
-fn download_file(url: &str, p: impl AsRef<Path>) -> AnyResult<()> {
-    let resp = download(url).call()?;
-    let f = std::fs::File::create(p.as_ref())?;
+fn download_file(url: &str, p: impl AsRef<Path>) -> Result<(), Whatever> {
+    let resp = download(url).call().whatever_context("download pdf file")?;
+    let f = std::fs::File::create(p.as_ref()).whatever_context("create cache file")?;
     let mut f = BufWriter::new(f);
     let mut resp = resp.into_reader();
-    if let Err(err) = std::io::copy(&mut resp, &mut f) {
-        // delete the file if download failed
-        std::fs::remove_file(p.as_ref())?;
-        Err(err)?
-    } else {
-        Ok(())
-    }
+    std::io::copy(&mut resp, &mut f).whatever_context("save file")?;
+    Ok(())
 }
 
 /// These files are very rare and odd, not to be tested
@@ -139,7 +138,7 @@ static PASSWORD: phf::Map<&'static str, &'static str> = phf::phf_map! {
 /// If f ends with ".link", file content is a http url, download
 /// that file to `$flag_file.pdf`, skip the download if `$flag_file.pdf` exists.
 #[pdf_file_test_cases]
-fn render(f: &str) -> AnyResult<()> {
+fn render(f: &str) -> Result<(), Whatever> {
     // return if f ends with one of IGNORED
     if IGNORED.iter().any(|s| f.ends_with(s)) {
         return Ok(());
@@ -164,7 +163,7 @@ fn render(f: &str) -> AnyResult<()> {
             if let Some(link) = replace_dead_link(f) {
                 download_file(link, &pdf_file)?;
             } else {
-                let url = std::fs::read_to_string(f)?;
+                let url = std::fs::read_to_string(f).whatever_context("read file")?;
                 let url = url.trim();
                 let mut err = Ok(());
                 for url in url.split("http").filter(|f| !f.is_empty()) {
@@ -184,13 +183,18 @@ fn render(f: &str) -> AnyResult<()> {
     let pdf = File::parse(buf, PASSWORD.get(file_name).copied().unwrap_or(""))
         .unwrap_or_else(|_| panic!("failed to parse {f:?}"));
     let resolver = pdf.resolver().unwrap();
-    let catalog = pdf.catalog(&resolver)?;
-    for (idx, page) in catalog.pages()?.into_iter().enumerate() {
+    let catalog = pdf.catalog(&resolver).whatever_context("parse catalog")?;
+    for (idx, page) in catalog
+        .pages()
+        .whatever_context("parse pages")?
+        .into_iter()
+        .enumerate()
+    {
         info!("Page: {}", idx);
         let option = RenderOptionBuilder::new().zoom(0.75);
-        render_page(&page, option)?;
+        render_page(&page, option).whatever_context("render page")?;
     }
-    std::fs::write(&hash_file, "")?;
+    std::fs::write(&hash_file, "").whatever_context("write hsah file")?;
 
     Ok(())
 }

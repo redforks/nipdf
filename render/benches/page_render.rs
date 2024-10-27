@@ -1,9 +1,9 @@
-use anyhow::Result as AnyResult;
 use criterion::{Criterion, criterion_group, criterion_main};
 use image::RgbaImage;
 use mimalloc::MiMalloc;
 use nipdf::file::File;
 use nipdf_render::{RenderOptionBuilder, render_page};
+use snafu::{ResultExt, Whatever};
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -17,14 +17,21 @@ fn read_sample_file(file_path: impl AsRef<std::path::Path>) -> Vec<u8> {
 
 /// Render specific page of pdf file.
 /// `file_path` relative to '~/sample_files/'.
-fn render_page_no(file_path: impl AsRef<std::path::Path>, no: usize) -> AnyResult<RgbaImage> {
+fn render_page_no(
+    file_path: impl AsRef<std::path::Path>,
+    no: usize,
+) -> Result<RgbaImage, Whatever> {
     let buf = read_sample_file(file_path);
-    let f = File::parse(buf, "")?;
+    let f = File::parse(buf, "").whatever_context("parse pdf file")?;
     let resolver = f.resolver()?;
-    let pages = f.catalog(&resolver)?.pages()?;
+    let pages = f
+        .catalog(&resolver)
+        .whatever_context("parse catalog")?
+        .pages()
+        .whatever_context("parse pages")?;
     let page = &pages[no];
     let option = RenderOptionBuilder::new().zoom(1.5);
-    Ok(render_page(page, option)?)
+    render_page(page, option).whatever_context("render")
 }
 
 pub fn render1(c: &mut Criterion) {
