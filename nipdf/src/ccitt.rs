@@ -6,7 +6,7 @@ use bitstream_io::{
 use bitvec::{prelude::Msb0, slice::BitSlice, vec::BitVec};
 use educe::Educe;
 use either::Either;
-use log::error;
+use snafu::{ResultExt as _, Snafu};
 use std::{
     io::{Cursor, SeekFrom},
     iter::repeat,
@@ -70,13 +70,13 @@ impl PictualElement {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Snafu)]
 pub enum DecodeError {
-    #[error("IOError: {0}")]
-    IOError(#[from] std::io::Error),
+    #[snafu(display("IOError"))]
+    IOError { source: std::io::Error },
     // #[error("Horizontal run color mismatch")]
     // HorizontalRunColorMismatch,
-    #[error("Unknown code")]
+    #[snafu(display("Unknown code"))]
     InvalidCode,
 }
 
@@ -384,14 +384,14 @@ fn next_run(
     color: Color,
 ) -> Result<PictualElement> {
     let tree = huffman.get(color);
-    let pe = reader.read_huffman(tree)?;
+    let pe = reader.read_huffman(tree).context(IOSnafu)?;
     let Some(mut n) = pe.run_length() else {
         return Ok(pe);
     };
     let mut bytes = n;
 
     while n >= 64 {
-        let pe = reader.read_huffman(tree)?;
+        let pe = reader.read_huffman(tree).context(IOSnafu)?;
         n = pe.run_length().ok_or(DecodeError::InvalidCode)?;
         bytes += n;
     }
@@ -530,7 +530,7 @@ impl LineDecoder for Group4LineDecoder {
     ) -> Result<ProcessPEResult> {
         use ProcessPEResult::*;
 
-        match reader.read_huffman(&self.group4_huffman)? {
+        match reader.read_huffman(&self.group4_huffman).context(IOSnafu)? {
             Group4Code::Pass => {
                 let b1 = line.last.b1(line.pos, self.color.is_white());
                 let b2 = line.last.next_flip(Some(b1));
@@ -553,13 +553,13 @@ impl LineDecoder for Group4LineDecoder {
             }
             Group4Code::EndOfBlock => {
                 assert_eq!(
-                    reader.read_huffman(&self.group4_huffman)?,
+                    reader.read_huffman(&self.group4_huffman).context(IOSnafu)?,
                     Group4Code::EndOfBlock
                 );
                 Ok(EndOfBlock)
             }
             Group4Code::Extension => {
-                let ext_bits: u8 = reader.read(3)?;
+                let ext_bits: u8 = reader.read(3).context(IOSnafu)?;
                 todo!("Extension ({ext_bits})");
             }
             Group4Code::NotDef => Err(DecodeError::InvalidCode),
@@ -585,7 +585,7 @@ fn read_eol_with_fill_padding(
     mut zeros_hit: u16,
     reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
 ) -> Result<()> {
-    while !reader.read_bit()? {
+    while !reader.read_bit().context(IOSnafu)? {
         zeros_hit += 1;
     }
     if zeros_hit < 11 {
@@ -596,12 +596,12 @@ fn read_eol_with_fill_padding(
 
 /// return true if eol, false if eob
 fn read_eol_or_eob(n_eols: u8, reader: &mut BitReader<Cursor<&[u8]>, BigEndian>) -> Result<bool> {
-    let pos = reader.position_in_bits()?;
+    let pos = reader.position_in_bits().context(IOSnafu)?;
     for _ in 0..n_eols {
         match reader.read::<u16>(12) {
             Ok(1) => continue,
             _ => {
-                reader.seek_bits(SeekFrom::Start(pos))?;
+                reader.seek_bits(SeekFrom::Start(pos)).context(IOSnafu)?;
                 return Ok(true);
             }
         }
@@ -634,7 +634,7 @@ impl LineDecoder for Group3_2DLineDecoder {
         if !self.use_inner {
             read_eol_with_fill_padding(0, reader)?;
             self.use_inner = true;
-            self.inner = match reader.read_bit()? {
+            self.inner = match reader.read_bit().context(IOSnafu)? {
                 true => Either::Left(Group3_1DLineDecoder::new()),
                 false => Either::Right(Group4LineDecoder::new()),
             };
