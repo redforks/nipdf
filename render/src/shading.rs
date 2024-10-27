@@ -1,5 +1,4 @@
-use crate::{IntoSkia, into_skia::to_skia_color};
-use anyhow::Result as AnyResult;
+use crate::{IntoSkia, Result, into_skia::to_skia_color};
 use educe::Educe;
 use log::error;
 use nipdf::{
@@ -13,6 +12,7 @@ use nipdf::{
     },
     object::PdfObject,
 };
+use snafu::ResultExt;
 use std::rc::Rc;
 use tiny_skia::{Color, GradientStop, LinearGradient, RadialGradient, Shader, Transform};
 
@@ -98,56 +98,75 @@ impl Shading {
 pub fn build_shading<'a, 'b>(
     d: &ShadingDict<'a, 'b>,
     resources: &ResourceDict<'a, 'b>,
-) -> AnyResult<Option<Shading>> {
-    Ok(match d.shading_type()? {
-        ShadingType::Axial => build_axial(d, resources)?.map(Shading::Axial),
-        ShadingType::Radial => build_radial(d, resources)?.map(Shading::Radial),
-        t => {
-            error!("Shading not implemented: {:?}", t);
-            None
-        }
-    })
+) -> Result<Option<Shading>> {
+    Ok(
+        match d.shading_type().whatever_context("get shading type")? {
+            ShadingType::Axial => build_axial(d, resources)?.map(Shading::Axial),
+            ShadingType::Radial => build_radial(d, resources)?.map(Shading::Radial),
+            t => {
+                error!("Shading not implemented: {:?}", t);
+                None
+            }
+        },
+    )
 }
 
-fn build_axial(d: &ShadingDict, resources: &ResourceDict) -> AnyResult<Option<Axial>> {
-    let axial = d.axial()?;
-    let AxialCoords { start, end } = axial.coords()?;
+fn build_axial(d: &ShadingDict, resources: &ResourceDict) -> Result<Option<Axial>> {
+    let axial = d.axial().whatever_context("get axial")?;
+    let AxialCoords { start, end } = axial.coords().whatever_context("get coords")?;
     if start == end {
         return Ok(None);
     }
 
-    let color_space = d.color_space()?;
-    let color_space = ColorSpace::from_args(&color_space, resources.resolver(), Some(resources))?;
-    let function = axial.function()?;
+    let color_space = d.color_space().whatever_context("get color_space")?;
+    let color_space = ColorSpace::from_args(&color_space, resources.resolver(), Some(resources))
+        .whatever_context("parse color_space")?;
+    let function = axial.function().whatever_context("get function")?;
 
-    let stops = build_stops(&color_space, axial.domain()?, function)?;
+    let stops = build_stops(
+        &color_space,
+        axial.domain().whatever_context("get domain")?,
+        function,
+    )
+    .whatever_context("build axial stops")?;
     Ok(Some(Axial {
         start,
         end,
-        extend: axial.extend()?,
+        extend: axial.extend().whatever_context("get extend")?,
         stops,
-        b_box: axial.b_box()?,
+        b_box: axial.b_box().whatever_context("get b_box")?,
     }))
 }
 
 fn build_radial<'a, 'b>(
     d: &ShadingDict<'a, 'b>,
     resources: &ResourceDict<'a, 'b>,
-) -> AnyResult<Option<Radial>> {
-    let color_space = d.color_space()?;
-    let color_space = ColorSpace::from_args(&color_space, resources.resolver(), Some(resources))?;
+) -> Result<Option<Radial>> {
+    let color_space = d.color_space().whatever_context("get color_space")?;
+    let color_space = ColorSpace::from_args(&color_space, resources.resolver(), Some(resources))
+        .whatever_context("parse color_space")?;
 
-    let d = d.radial()?;
-    let RadialCoords { start, end } = d.coords()?;
+    let d = d.radial().whatever_context("get radial")?;
+    let RadialCoords { start, end } = d.coords().whatever_context("get coords")?;
     if (start.r == 0.0 && end.r == 0.0) || start.r < 0. || end.r < 0. {
         return Ok(None);
     }
 
-    let function = d.function()?.pop().unwrap().func()?;
-    let domain = d.domain()?;
-    let extend = d.extend()?;
+    let function = d
+        .function()
+        .whatever_context("get functions")?
+        .pop()
+        .unwrap()
+        .func()
+        .whatever_context("get function")?;
+    let domain = d.domain().whatever_context("get domain")?;
+    let extend = d.extend().whatever_context("get extend")?;
     Ok(Some(Radial {
-        stops: build_stops(&color_space, d.domain()?, d.function()?)?,
+        stops: build_stops(
+            &color_space,
+            d.domain().whatever_context("get domain")?,
+            d.function().whatever_context("get function")?,
+        )?,
         color_space,
         start,
         end,
@@ -161,40 +180,51 @@ fn build_stops(
     cs: &ColorSpace,
     domain: Domain,
     mut f: Vec<FunctionDict>,
-) -> AnyResult<Vec<(f32, Color)>> {
+) -> Result<Vec<(f32, Color)>> {
     assert!(f.len() == 1, "todo: support functions");
 
     let f = f.pop().unwrap();
-    fn create_stop<F: Function>(cs: &ColorSpace, f: &F, x: f32) -> AnyResult<(f32, Color)> {
-        let rv = f.call(&[x])?;
+    fn create_stop<F: Function>(cs: &ColorSpace, f: &F, x: f32) -> Result<(f32, Color)> {
+        let rv = f.call(&[x]).whatever_context("exec function for stop")?;
         let color = to_skia_color(cs, &rv);
         Ok((x, color))
     }
 
-    match f.function_type()? {
+    match f.function_type().whatever_context("get function type")? {
         FunctionType::ExponentialInterpolation => {
-            let ef = f.exponential_interpolation()?;
-            let eff = ef.func()?;
-            assert_eq!(ef.n()?, 1f32, "Only linear gradient function supported");
+            let ef = f
+                .exponential_interpolation()
+                .whatever_context("get exponential_interpolation")?;
+            let eff = ef.func().whatever_context("get func")?;
+            assert_eq!(
+                ef.n().whatever_context("get n")?,
+                1f32,
+                "Only linear gradient function supported"
+            );
             Ok(vec![
                 create_stop(cs, &eff, domain.start)?,
                 create_stop(cs, &eff, domain.end)?,
             ])
         }
         FunctionType::Stitching => {
-            let sf = f.stitch()?;
-            let sff = sf.func()?;
-            let mut stops = Vec::with_capacity(sf.functions()?.len() + 1);
+            let sf = f.stitch().whatever_context("get stitch")?;
+            let sff = sf.func().whatever_context("get func")?;
+            let mut stops =
+                Vec::with_capacity(sf.functions().whatever_context("get functions")?.len() + 1);
             stops.push(create_stop(cs, &sff, domain.start)?);
-            for t in sf.bounds()?.iter() {
+            for t in sf.bounds().whatever_context("get bounds")?.iter() {
                 stops.push(create_stop(cs, &sff, *t)?);
             }
-            stops.push(create_stop(cs, &f.func()?, domain.end)?);
+            stops.push(create_stop(
+                cs,
+                &f.func().whatever_context("get func")?,
+                domain.end,
+            )?);
             Ok(stops)
         }
         FunctionType::Sampled => {
-            let sf = f.sampled()?;
-            let sff = sf.func()?;
+            let sf = f.sampled().whatever_context("get sampled")?;
+            let sff = sf.func().whatever_context("get func")?;
             let t0 = euclid::default::Length::new(domain.start);
             let t1 = euclid::default::Length::new(domain.end);
             let len = sff.samples().min(256);
@@ -209,7 +239,10 @@ fn build_stops(
             Ok(stops)
         }
         _ => {
-            todo!("Unsupported function type: {:?}", f.function_type()?);
+            todo!(
+                "Unsupported function type: {:?}",
+                f.function_type().whatever_context("get function type")?
+            );
         }
     }
 }

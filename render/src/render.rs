@@ -1,9 +1,8 @@
 use crate::{
-    IntoSkia, PageDimension, RenderOption, RenderOptionBuilder,
+    IntoSkia, PageDimension, RenderOption, RenderOptionBuilder, Result,
     into_skia::to_skia_color,
     shading::{Axial, Radial, Shading, build_shading},
 };
-use anyhow::Result as AnyResult;
 use educe::Educe;
 use either::Either::{self, Left, Right};
 use euclid::{Length, Scale, Transform2D, default::Size2D};
@@ -33,6 +32,7 @@ use nipdf::{
 use nom::{combinator::eof, sequence::terminated};
 use num_traits::ToPrimitive;
 use prescript::Name;
+use snafu::ResultExt;
 use std::{
     borrow::Cow,
     cell::{Ref, RefCell},
@@ -978,7 +978,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         self.fill_and_stroke_even_odd();
     }
 
-    fn load_image_as_mask(mut img: RgbaImage, state: &State, s_mask: bool) -> AnyResult<Mask> {
+    fn load_image_as_mask(mut img: RgbaImage, state: &State, s_mask: bool) -> Result<Mask> {
         let paint = PixmapPaint {
             quality: FilterQuality::Nearest,
             ..Default::default()
@@ -1005,16 +1005,18 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         Ok(Mask::from_pixmap(canvas.as_ref(), MaskType::Alpha))
     }
 
-    fn paint_inline_image(&mut self, inline_image: InlineImage) -> AnyResult<()> {
+    fn paint_inline_image(&mut self, inline_image: InlineImage) -> Result<()> {
         let state = self.stack.last().unwrap();
         let meta = inline_image.meta();
         let img = inline_image
-            .image(self.resources.resolver(), self.resources)?
+            .image(self.resources.resolver(), self.resources)
+            .whatever_context("decode image")?
             .into_rgba8();
 
-        if meta.image_mask()? {
+        if meta.image_mask().whatever_context("get image mask")? {
             let domain = meta
-                .decode()?
+                .decode()
+                .whatever_context("decode domain")?
                 .map_or_else(|| Domain::new(0.0, 1.0), |domains| domains[0]);
             let mask_reversed = domain.start > domain.end;
             let mask = Self::load_image_as_mask(img, state, mask_reversed)?;
@@ -1052,7 +1054,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         Ok(())
     }
 
-    fn paint_image_x_object(&mut self, x_object: &XObjectDict<'a, '_>) -> AnyResult<()> {
+    fn paint_image_x_object(&mut self, x_object: &XObjectDict<'a, '_>) -> Result<()> {
         fn load_image<'a, 'b>(
             image_dict: &XObjectDict<'a, 'b>,
             resources: &ResourceDict<'a, 'b>,
@@ -1068,15 +1070,20 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
         let state = self.stack.last().unwrap();
 
-        if x_object.image_mask()? {
-            let is_invert = if let Some(decode) = x_object.decode()? {
-                let domain = decode.0[0];
-                domain.start > domain.end
-            } else {
-                false
-            };
-            let x_object = x_object.as_stream()?;
-            let img = x_object.decode_image(self.resources.resolver(), Some(self.resources))?;
+        if x_object.image_mask().whatever_context("get image mask")? {
+            let is_invert =
+                if let Some(decode) = x_object.decode().whatever_context("decode x_object")? {
+                    let domain = decode.0[0];
+                    domain.start > domain.end
+                } else {
+                    false
+                };
+            let x_object = x_object
+                .as_stream()
+                .whatever_context("decode x_object stream")?;
+            let img = x_object
+                .decode_image(self.resources.resolver(), Some(self.resources))
+                .whatever_context("decode x_object to image")?;
             let mask = Self::load_image_as_mask(img.into_rgba8(), state, is_invert)?;
             // fill canvas with current fill paint with mask
             let paint = state.get_fill_paint();
@@ -1096,7 +1103,8 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         }
 
         let s_mask = x_object
-            .s_mask()?
+            .s_mask()
+            .whatever_context("read x_object s_mask")?
             .map(|s_mask| {
                 let s_mask = s_mask.as_stream().unwrap();
                 let img = s_mask
@@ -1116,7 +1124,10 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
         let paint = PixmapPaint {
             opacity: state.fill_state.alpha(),
-            quality: if x_object.interpolate()? {
+            quality: if x_object
+                .interpolate()
+                .whatever_context("read x_object interpolate")?
+            {
                 FilterQuality::Bilinear
             } else {
                 FilterQuality::Nearest
@@ -1146,16 +1157,22 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
     ///    an example pdf file that b_box start point is not (0, 0)
     /// 1. Paints the graphics objects specified in the form object's stream in sub render.
     /// 1. Paint the rendered image on parent render
-    fn paint_form_x_object(&mut self, x_object: &XObjectDict<'a, 'b>) -> AnyResult<()> {
+    fn paint_form_x_object(&mut self, x_object: &XObjectDict<'a, 'b>) -> Result<()> {
         debug!("Render form");
 
-        let form = x_object.as_form()?;
-        let matrix = form.matrix()?;
-        let b_box = form.b_box()?;
-        let stream = x_object.as_stream()?;
-        let stream = stream.decode(self.resources.resolver())?;
+        let form = x_object
+            .as_form()
+            .whatever_context("read x_object as form")?;
+        let matrix = form.matrix().whatever_context("read form matrix")?;
+        let b_box = form.b_box().whatever_context("read form b_box")?;
+        let stream = x_object
+            .as_stream()
+            .whatever_context("read x_object stream")?;
+        let stream = stream
+            .decode(self.resources.resolver())
+            .whatever_context("decode x_object stream")?;
         let content = PageContent::new(vec![stream.into_owned()]);
-        let resources = form.resources()?;
+        let resources = form.resources().whatever_context("get form resources")?;
         let resources = resources.as_ref().unwrap_or(self.resources);
 
         let state = self.stack.last().unwrap();
@@ -1185,18 +1202,24 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
     }
 
     /// Paints the specified XObject. Only XObjectType::Image supported
-    fn paint_x_object(&mut self, nm: &NameOfDict) -> AnyResult<()> {
-        let x_objects = self.resources.x_object()?;
+    fn paint_x_object(&mut self, nm: &NameOfDict) -> Result<()> {
+        let x_objects = self
+            .resources
+            .x_object()
+            .whatever_context("read resources x_object")?;
         let x_object = &x_objects[&nm.0];
 
-        match x_object.subtype()? {
+        match x_object
+            .subtype()
+            .whatever_context("get x_object subtype")?
+        {
             XObjectType::Image => self.paint_image_x_object(x_object),
             XObjectType::Form => self.paint_form_x_object(x_object),
             t => todo!("{:?}", t),
         }
     }
 
-    fn paint_axial(&mut self, axial: Axial) -> Result<(), anyhow::Error> {
+    fn paint_axial(&mut self, axial: Axial) -> Result<()> {
         let b_box = axial.b_box;
 
         let state = self.stack.last().unwrap();
@@ -1241,7 +1264,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         Ok(())
     }
 
-    fn paint_radial(&mut self, radial: &Radial) -> AnyResult<()> {
+    fn paint_radial(&mut self, radial: &Radial) -> Result<()> {
         let Domain { start: t0, end: t1 } = radial.domain;
         let (x0, y0) = (radial.start.point.x, radial.start.point.y);
         let (x1, y1) = (radial.end.point.x, radial.end.point.y);
@@ -1282,7 +1305,10 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
 
         let ctm = ctm.into_skia();
         if radial.extend.end() {
-            let c = radial.function.call(&[1.0])?;
+            let c = radial
+                .function
+                .call(&[1.0])
+                .whatever_context("exec function")?;
             let mut c = radial.color_space.to_rgba(c.as_slice());
             c[3] = state.fill_state.alpha();
             paint.set_color(SkiaColor::from_rgba(c[0], c[1], c[2], c[3]).unwrap());
@@ -1303,7 +1329,10 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         if radial.extend.begin() && radial.start.r > 0.0 {
             let (x, y) = (radial.start.point.x, radial.start.point.y);
             let r = radial.start.r;
-            let c = radial.function.call(&[0.0])?;
+            let c = radial
+                .function
+                .call(&[0.0])
+                .whatever_context("exec function")?;
             let c = radial.color_space.to_rgba(c.as_slice());
             paint.set_color(SkiaColor::from_rgba(c[0], c[1], c[2], c[3]).unwrap());
             let path = PathBuilder::from_circle(x, y, r).unwrap();
@@ -1320,7 +1349,10 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         for t in 0..=steps {
             let t = t as f32 / steps as f32;
             let (x, y, r) = circle(t);
-            let c = radial.function.call(&[t][..])?;
+            let c = radial
+                .function
+                .call(&[t][..])
+                .whatever_context("exec function")?;
             let c = radial.color_space.to_rgba(c.as_slice());
 
             let Some(path) = PathBuilder::from_circle(x, y, r) else {
@@ -1340,12 +1372,17 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         Ok(())
     }
 
-    fn paint_shading(&mut self, nm: NameOfDict) -> AnyResult<()> {
-        let shading = self.resources.shading()?;
+    fn paint_shading(&mut self, nm: NameOfDict) -> Result<()> {
+        let shading = self
+            .resources
+            .shading()
+            .whatever_context("get shading resource")?;
         let shading = &shading[&nm.0];
-        match build_shading(shading, self.resources)? {
-            Some(Shading::Radial(radial)) => self.paint_radial(&radial),
-            Some(Shading::Axial(axial)) => self.paint_axial(axial),
+        match build_shading(shading, self.resources).whatever_context("build shading")? {
+            Some(Shading::Radial(radial)) => {
+                self.paint_radial(&radial).whatever_context("paint radial")
+            }
+            Some(Shading::Axial(axial)) => self.paint_axial(axial).whatever_context("paint axial"),
             None => Ok(()),
         }
     }
@@ -1362,12 +1399,15 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         &mut self,
         mut get_state: impl FnMut(&mut Self) -> &mut ColorState,
         color_or_name: &ColorArgsOrName,
-    ) -> AnyResult<()> {
+    ) -> Result<()> {
         match color_or_name {
             ColorArgsOrName::Name((name, color_args)) => {
-                let pattern = self.resources.pattern()?;
+                let pattern = self.resources.pattern().whatever_context("get pattern")?;
                 let pattern = &pattern[name];
-                match pattern.pattern_type()? {
+                match pattern
+                    .pattern_type()
+                    .whatever_context("get pattern type")?
+                {
                     PatternType::Tiling => {
                         let dimension = Size2D::new(
                             self.dimension.canvas_width() as f32,
@@ -1376,14 +1416,18 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
                         self.tiling_pattern(
                             &dimension,
                             get_state,
-                            pattern.tiling_pattern()?,
+                            pattern
+                                .tiling_pattern()
+                                .whatever_context("get tiling pattern")?,
                             color_args.as_ref(),
                         )
                     }
                     PatternType::Shading => {
-                        if let Some((paint, background_color)) =
-                            self.shading_pattern(pattern.shading_pattern()?)?
-                        {
+                        if let Some((paint, background_color)) = self.shading_pattern(
+                            pattern
+                                .shading_pattern()
+                                .whatever_context("get shading pattern")?,
+                        )? {
                             let color_state = get_state(self);
                             color_state.set_paint(paint, background_color);
                         }
@@ -1402,7 +1446,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
     fn shading_pattern(
         &mut self,
         pattern: ShadingPatternDict<'a, 'b>,
-    ) -> AnyResult<Option<(PaintCreator, Option<SkiaColor>)>> {
+    ) -> Result<Option<(PaintCreator, Option<SkiaColor>)>> {
         struct RestoreState<F>(Option<F>)
         where
             F: FnOnce();
@@ -1418,7 +1462,9 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         }
 
         let resources = self.resources;
-        let _restore = if let Some(ext_g_state) = pattern.ext_g_state()? {
+        let _restore = if let Some(ext_g_state) =
+            pattern.ext_g_state().whatever_context("read ext_g_state")?
+        {
             self.push();
             self.current_mut().set_graphics_state(&ext_g_state);
             Some(RestoreState(Some(|| self.pop())))
@@ -1426,21 +1472,27 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             None
         };
 
-        let shading = pattern.shading()?;
+        let shading = pattern.shading().whatever_context("get shading")?;
         // assert!(shading.b_box()?.is_none(), "TODO: support BBox of shading");
-        let background_color = if let Some(args) = shading.background()? {
-            let cs = shading.color_space()?;
-            let cs = ColorSpace::from_args(&cs, resources.resolver(), Some(resources)).unwrap();
-            Some(to_skia_color(&cs, args.as_ref()))
-        } else {
-            None
-        };
+        let background_color =
+            if let Some(args) = shading.background().whatever_context("get background")? {
+                let cs = shading.color_space().whatever_context("get color space")?;
+                let cs = ColorSpace::from_args(&cs, resources.resolver(), Some(resources)).unwrap();
+                Some(to_skia_color(&cs, args.as_ref()))
+            } else {
+                None
+            };
 
-        Ok(match build_shading(&shading, resources)? {
-            Some(shading) => Some((shading, pattern.matrix()?)),
-            None => return Ok(None),
-        }
-        .map(|shader| (PaintCreator::Gradient(shader), background_color)))
+        Ok(
+            match build_shading(&shading, resources).whatever_context("build shading")? {
+                Some(shading) => Some((
+                    shading,
+                    pattern.matrix().whatever_context("get pattern matrix")?,
+                )),
+                None => return Ok(None),
+            }
+            .map(|shader| (PaintCreator::Gradient(shader), background_color)),
+        )
     }
 
     fn tiling_pattern(
@@ -1449,23 +1501,38 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         mut get_state: impl FnMut(&mut Self) -> &mut ColorState,
         tile: TilingPatternDict<'a, 'b>,
         color_args: Option<&ColorArgs>,
-    ) -> AnyResult<()>
+    ) -> Result<()>
     where
         'a: 'b,
     {
-        let stream: &Object = tile.resolver().resolve(tile.id().unwrap())?;
-        let stream = stream.stream()?;
-        let bytes = stream.decode(tile.resolver())?;
+        let stream: &Object = tile
+            .resolver()
+            .resolve(tile.id().unwrap())
+            .whatever_context("resolve tile object")?;
+        let stream = stream.stream().whatever_context("get tile stream")?;
+        let bytes = stream
+            .decode(tile.resolver())
+            .whatever_context("decode tile stream")?;
         let (_, ops) = terminated(parse_operations, eof)(bytes.as_ref()).unwrap();
-        let b_box = tile.b_box()?;
-        assert!(tile.x_step()? > 0.0, "negative x_step not supported");
-        assert!(tile.y_step()? > 0.0, "negative y_step not supported");
+        let b_box = tile.b_box().whatever_context("get tile b_box")?;
+        assert!(
+            tile.x_step().whatever_context("get tile x_step")? > 0.0,
+            "negative x_step not supported"
+        );
+        assert!(
+            tile.y_step().whatever_context("get tile y_step")? > 0.0,
+            "negative y_step not supported"
+        );
         let mut zoom = 1.0f32;
         let (mut w, mut h) = (
-            b_box.width().min(tile.x_step()?),
-            b_box.height().min(tile.y_step()?),
+            b_box
+                .width()
+                .min(tile.x_step().whatever_context("get tile x_step")?),
+            b_box
+                .height()
+                .min(tile.y_step().whatever_context("get tile y_step")?),
         );
-        let mut matrix = tile.matrix()?;
+        let mut matrix = tile.matrix().whatever_context("get tile matrix")?;
         while w > canvas_size.width && h > canvas_size.height {
             w /= 2.0;
             h /= 2.0;
@@ -1473,7 +1540,7 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
             matrix = matrix.then_scale(2.0, 2.0);
         }
 
-        let resources = tile.resources()?;
+        let resources = tile.resources().whatever_context("get tile resources")?;
         let option = RenderOptionBuilder::default()
             .zoom(zoom)
             .page_box(&b_box, 0)
@@ -1492,7 +1559,11 @@ impl<'a, 'b: 'a, 'c> Render<'a, 'b, 'c> {
         }
         ops.into_iter().for_each(|op| render.exec(op));
         drop(render);
-        color_state.paint = PaintCreator::Tile((canvas, matrix, tile.x_step()? > b_box.width()));
+        color_state.paint = PaintCreator::Tile((
+            canvas,
+            matrix,
+            tile.x_step().whatever_context("get tile x_step")? > b_box.width(),
+        ));
         Ok(())
     }
 

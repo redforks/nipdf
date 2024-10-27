@@ -2606,7 +2606,6 @@ name = "nipdf-render"
 version = "0.1.0"
 dependencies = [
  "ahash",
- "anyhow",
  "criterion",
  "educe",
  "either",
@@ -2624,6 +2623,7 @@ dependencies = [
  "num-traits",
  "phf",
  "prescript",
+ "snafu",
  "test-case",
  "tiny-skia",
  "ureq",

@@ -1,10 +1,10 @@
 //! Test page render result using `insta` to ensure that the rendering result is not changed.
 //! This file checks file pdfreference1.0.pdf
-use crate::{RenderOptionBuilder, render_page};
-use anyhow::Result as AnyResult;
+use crate::{RenderOptionBuilder, Result, render_page};
 use insta::assert_ron_snapshot;
 use md5::{Digest, Md5};
 use nipdf::file::File;
+use snafu::ResultExt;
 
 /// Open file for testing. `file_path` relate to current crate directory.
 fn open_test_file(file_path: impl AsRef<std::path::Path>) -> File {
@@ -15,20 +15,22 @@ fn open_test_file(file_path: impl AsRef<std::path::Path>) -> File {
     File::parse(data, "").unwrap()
 }
 
-fn decode_file_page(path: &str, page_no: usize) -> AnyResult<String> {
+fn decode_file_page(path: &str, page_no: usize) -> Result<String> {
     let f = open_test_file(path);
-    let resolver = f.resolver()?;
-    let catalog = f.catalog(&resolver)?;
-    let pages = catalog.pages()?;
+    let resolver = f.resolver().whatever_context("get resolver")?;
+    let catalog = f.catalog(&resolver).whatever_context("get catalog")?;
+    let pages = catalog.pages().whatever_context("get pages")?;
     let page = &pages[page_no];
     let option = RenderOptionBuilder::new().zoom(1.5);
-    let bytes = render_page(page, option)?.into_vec();
+    let bytes = render_page(page, option)
+        .whatever_context("render page")?
+        .into_vec();
     let hash = Md5::digest(&bytes[..]);
     Ok(hex::encode(hash))
 }
 
 /// Render page to image, and returns its md5 hash converted to hex
-fn decode_page(page_no: usize) -> AnyResult<String> {
+fn decode_page(page_no: usize) -> Result<String> {
     decode_file_page("sample_files/normal/pdfreference1.0.pdf", page_no)
 }
 
