@@ -1289,7 +1289,7 @@ impl<'a, 'b> Type3Font<'a, 'b> {
     fn parse_glyphs(d: &Type3FontDict<'_, '_>) -> Result<Vec<(Name, Type3Glyph)>> {
         let procs = d.char_procs()?;
         let mut r = Vec::with_capacity(procs.len());
-        for (name, stream) in procs.iter() {
+        for (name, stream) in &procs {
             debug!("parse Type3 glyph: {}", name.as_str());
             let data = stream
                 .decode(d.resolver())

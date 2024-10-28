@@ -1085,7 +1085,7 @@ impl Object {
             }
             None => {
                 let mut ar: Vec<_> = arr.iter().cloned().collect();
-                for o in ar.iter_mut() {
+                for o in &mut ar {
                     f(o);
                 }
                 let ar: Rc<[Object]> = ar.into();

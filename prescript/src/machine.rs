@@ -658,7 +658,7 @@ impl<'a, P: MachinePlugin> Machine<'a, P> {
 
 impl<'a, P> Machine<'a, P> {
     pub fn exec_as_function(&mut self, args: &[f32], n_out: usize) -> MachineResult<Vec<f32>> {
-        for arg in args.iter() {
+        for arg in args {
             self.push(*arg);
         }
 

@@ -357,7 +357,7 @@ pub struct EncodingDifferences<'a>(HashMap<u8, &'a str>);
 
 impl<'a> EncodingDifferences<'a> {
     pub fn apply_differences(&self, mut encoding: Encoding) -> Encoding {
-        for (ch, n) in self.0.iter() {
+        for (ch, n) in &self.0 {
             encoding[*ch as usize] = name(n);
         }
         encoding

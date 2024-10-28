@@ -212,7 +212,7 @@ fn build_stops(
             let mut stops =
                 Vec::with_capacity(sf.functions().whatever_context("get functions")?.len() + 1);
             stops.push(create_stop(cs, &sff, domain.start)?);
-            for t in sf.bounds().whatever_context("get bounds")?.iter() {
+            for t in &sf.bounds().whatever_context("get bounds")? {
                 stops.push(create_stop(cs, &sff, *t)?);
             }
             stops.push(create_stop(
