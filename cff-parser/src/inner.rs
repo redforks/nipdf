@@ -1058,7 +1058,7 @@ impl Charsets {
                     let start = i;
                     i += Sid::try_from(range.len()).unwrap();
                     if i > idx {
-                        return Some(*range.start() + idx - start as Sid);
+                        return Some(*range.start() + idx - start);
                     }
                 }
                 None
@@ -1191,10 +1191,7 @@ impl Encodings {
                 let mut encodings = [NOTDEF; 256];
                 for range in ranges {
                     for i in range.first..=range.first + range.n_left {
-                        if let Some(v) = charsets
-                            .resolve_sid(i as Gid)
-                            .map(|sid| string_index.get(sid))
-                        {
+                        if let Some(v) = charsets.resolve_sid(i).map(|sid| string_index.get(sid)) {
                             encodings[i as usize] = name(v);
                         }
                     }

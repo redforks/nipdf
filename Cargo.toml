@@ -91,6 +91,7 @@ explicit_outlives_requirements = "warn"
 meta_variable_misuse = "warn"
 redundant_lifetimes = "warn"
 trivial_casts = "warn"
+trivial_numeric_casts = "warn"
 
 [workspace.lints.clippy]
 empty_structs_with_brackets = "warn"
