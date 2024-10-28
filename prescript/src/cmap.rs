@@ -716,7 +716,7 @@ impl EntriesParsing {
 
     fn on_end<P, EP: EntryParser<T>, T>(
         self,
-        parser: EP,
+        parser: &EP,
         m: &mut Machine<'_, P>,
     ) -> Result<Vec<T>, MachineError> {
         let mut entries = Vec::with_capacity(self.n);
@@ -783,7 +783,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     ok()
                 },
                 "endcodespacerange" => |m| {
-                    let entries = m.p.entries_parsing.take().whatever_context("take entries_parsing")?.on_end(CodeRangeParser, m)?;
+                    let entries = m.p.entries_parsing.take().whatever_context("take entries_parsing")?.on_end(&CodeRangeParser, m)?;
                     m.p.code_space_entries.extend(entries);
                     ok()
                 },
@@ -792,7 +792,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     ok()
                 },
                 "endcidrange" => |m| {
-                    let entries = m.p.entries_parsing.take().whatever_context("take entries_parsing")?.on_end(IncRangeMapParser, m)?;
+                    let entries = m.p.entries_parsing.take().whatever_context("take entries_parsing")?.on_end(&IncRangeMapParser, m)?;
                     m.p.cid_range_entries.extend(entries);
                     ok()
                 },
@@ -801,7 +801,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     ok()
                 },
                 "endbfrange" => |m| {
-                    let entries = m.p.entries_parsing.take().whatever_context("take entries_parsing")?.on_end(BFIncRangeMapParser, m)?;
+                    let entries = m.p.entries_parsing.take().whatever_context("take entries_parsing")?.on_end(&BFIncRangeMapParser, m)?;
                     m.p.cid_range_entries.extend(entries);
                     ok()
                 },
@@ -810,7 +810,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     ok()
                 },
                 "endcidchar" => |m| {
-                    let entries = m.p.entries_parsing.take().whatever_context("take entries_parsing")?.on_end(SingleCodeMapParser, m)?;
+                    let entries = m.p.entries_parsing.take().whatever_context("take entries_parsing")?.on_end(&SingleCodeMapParser, m)?;
                     m.p.cid_char_entries.extend(entries);
                     ok()
                 },
@@ -819,7 +819,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     ok()
                 },
                 "endbfchar" => |m| {
-                    let entries = m.p.entries_parsing.take().whatever_context("take entries_parsing")?.on_end(BFSingleCodeMapParser, m)?;
+                    let entries = m.p.entries_parsing.take().whatever_context("take entries_parsing")?.on_end(&BFSingleCodeMapParser, m)?;
                     m.p.cid_char_entries.extend(entries);
                     ok()
                 },
@@ -828,7 +828,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     ok()
                 },
                 "endnotdefrange" => |m| {
-                    let entries = m.p.entries_parsing.take().whatever_context("take entries_parsing")?.on_end(RangeMapToOneParser, m)?;
+                    let entries = m.p.entries_parsing.take().whatever_context("take entries_parsing")?.on_end(&RangeMapToOneParser, m)?;
                     m.p.notdef_range_entries.extend(entries);
                     ok()
                 },
@@ -837,7 +837,7 @@ impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
                     ok()
                 },
                 "endnotdefchar" => |m| {
-                    let entries = m.p.entries_parsing.take().whatever_context("take entries_parsing")?.on_end(SingleCodeMapParser, m)?;
+                    let entries = m.p.entries_parsing.take().whatever_context("take entries_parsing")?.on_end(&SingleCodeMapParser, m)?;
                     m.p.notdef_char_entries.extend(entries);
                     ok()
                 },

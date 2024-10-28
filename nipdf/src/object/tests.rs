@@ -32,12 +32,12 @@ fn hex_string_decoded(exp: impl AsRef<[u8]>, buf: impl AsRef<[u8]>) {
     assert_eq!(HexString::new(buf.as_ref()).as_bytes(), exp.as_ref());
 }
 
-#[test_case(Object::LiteralString(LiteralString::new(b"(foo)")), "(foo)"; "literal string")]
-#[test_case(Object::HexString(HexString::new(b"<901FA3>")), "<901FA3>"; "hex string")]
-#[test_case(Object::Name(sname("foo")), "/foo"; "name")]
-fn buf_or_str_to_object(exp: Object, s: &str) {
-    assert_eq!(exp, Object::from(s.as_bytes()));
-    assert_eq!(exp, Object::from(s));
+#[test_case(&Object::LiteralString(LiteralString::new(b"(foo)")), "(foo)"; "literal string")]
+#[test_case(&Object::HexString(HexString::new(b"<901FA3>")), "<901FA3>"; "hex string")]
+#[test_case(&Object::Name(sname("foo")), "/foo"; "name")]
+fn buf_or_str_to_object(exp: &Object, s: &str) {
+    assert_eq!(*exp, Object::from(s.as_bytes()));
+    assert_eq!(*exp, Object::from(s));
 }
 
 #[test]

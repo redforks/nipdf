@@ -51,7 +51,7 @@ impl Font {
                 parse_vec_encoding(&arr.borrow()).whatever_context("parse encodings")?
             }
             Value::PredefinedEncoding(encoding) => {
-                Encoding::predefined(encoding).whatever_context("get predefined encoding")?
+                Encoding::predefined(&encoding).whatever_context("get predefined encoding")?
             }
             _ => whatever!("Invalid encoding type"),
         };

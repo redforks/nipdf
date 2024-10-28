@@ -125,7 +125,7 @@ struct DumpPageArgs<'a> {
     no_crop: bool,
 }
 
-fn dump_page(args: DumpPageArgs<'_>) -> Result<()> {
+fn dump_page(args: &DumpPageArgs<'_>) -> Result<()> {
     let DumpPageArgs {
         path,
         password,
@@ -136,7 +136,7 @@ fn dump_page(args: DumpPageArgs<'_>) -> Result<()> {
         steps,
         zoom,
         no_crop,
-    } = args;
+    } = *args;
 
     let f = open(path, password)?;
     let resolver = f.resolver().whatever_context("get resolver")?;
@@ -220,7 +220,7 @@ fn main() {
             sub_m.get_one::<bool>("raw").copied().unwrap_or_default(),
             sub_m.get_one::<bool>("png").copied().unwrap_or_default(),
         ),
-        Some(("page", sub_m)) => dump_page(DumpPageArgs {
+        Some(("page", sub_m)) => dump_page(&DumpPageArgs {
             path: sub_m.get_one::<PathBuf>("filename").unwrap(),
             password: sub_m
                 .get_one::<String>("password")

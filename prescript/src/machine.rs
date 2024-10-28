@@ -667,7 +667,7 @@ impl<'a, P> Machine<'a, P> {
         match self.pop()? {
             RuntimeValue::Value(Value::Procedure(p)) => {
                 // the function may wrapped in a procedure
-                assert_eq!(ExecState::Ok, self.execute_procedure(p)?);
+                assert_eq!(ExecState::Ok, self.execute_procedure(&p)?);
             }
             RuntimeValue::Value(Value::Real(v)) => r.push(v),
             RuntimeValue::Value(Value::Integer(v)) => r.push(v as f32),
@@ -777,7 +777,7 @@ impl<'a, P> Machine<'a, P> {
                 let v = self.variable_stack.get(&name)?;
                 match v {
                     RuntimeValue::BuiltInOp(op) => op(self)?,
-                    RuntimeValue::Value(Value::Procedure(p)) => self.execute_procedure(p)?,
+                    RuntimeValue::Value(Value::Procedure(p)) => self.execute_procedure(&p)?,
                     RuntimeValue::Dictionary(d) => {
                         self.push(d);
                         ExecState::Ok
@@ -792,7 +792,7 @@ impl<'a, P> Machine<'a, P> {
         })
     }
 
-    fn execute_procedure(&mut self, proc: Rc<RefCell<TokenArray>>) -> MachineResult<ExecState> {
+    fn execute_procedure(&mut self, proc: &Rc<RefCell<TokenArray>>) -> MachineResult<ExecState> {
         for token in proc.borrow().iter().cloned() {
             assert_eq!(
                 self.exec(token)?,
@@ -1537,7 +1537,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
             let initial = m.pop()?.int()?;
             for i in (initial..=limit).step_by(increment as usize) {
                 m.push(i);
-                m.execute_procedure(proc.clone())?;
+                m.execute_procedure(&proc)?;
             }
             ok()
         },
@@ -1546,7 +1546,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
             let proc = m.pop()?.procedure()?;
             let cond = m.pop()?.bool()?;
             if cond {
-                m.execute_procedure(proc)?;
+                m.execute_procedure(&proc)?;
             }
             ok()
         },
@@ -1555,7 +1555,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
             let proc2 = m.pop()?.procedure()?;
             let proc1 = m.pop()?.procedure()?;
             let cond = m.pop()?.bool()?;
-            m.execute_procedure(if cond { proc1 } else { proc2 })?;
+            m.execute_procedure(if cond { &proc1 } else { &proc2 })?;
             ok()
         },
         sname("eexec") => |m| {
@@ -1569,7 +1569,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
         sname("exec") => |m| {
             let proc = m.pop()?;
             match proc {
-                RuntimeValue::Value(Value::Procedure(p)) => m.execute_procedure(p),
+                RuntimeValue::Value(Value::Procedure(p)) => m.execute_procedure(&p),
                 v@RuntimeValue::Dictionary(_) => {m.push(v); ok()}
                 _ => Err(TypeCheckSnafu.build()),
             }

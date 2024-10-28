@@ -123,7 +123,7 @@ impl App {
         match rv {
             Ok(v) => Some(v),
             Err(e) => {
-                self.current = View::Error(ErrorView::new(e));
+                self.current = View::Error(ErrorView::new(&e));
                 self.selecting_file = false;
                 None
             }

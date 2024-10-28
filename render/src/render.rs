@@ -135,7 +135,7 @@ impl<const N: usize> MaskCache<N> {
     /// If not found, intersect the new path with current mask, and save into cache.
     pub fn update(
         &mut self,
-        p: SkiaPath,
+        p: &SkiaPath,
         current: Option<MaskEntry>,
         rule: FillRule,
         create_mask: impl FnOnce() -> Mask,
@@ -147,7 +147,7 @@ impl<const N: usize> MaskCache<N> {
             Some(cur) => {
                 let mut r = PathBuilder::new();
                 r.push_path(&cur.0);
-                r.push_path(&p);
+                r.push_path(p);
                 (r.finish().unwrap(), Some(Rc::clone(&cur.1)))
             }
         };
@@ -161,7 +161,7 @@ impl<const N: usize> MaskCache<N> {
         }
 
         let mut mask: Mask = cur_mask.map_or_else(create_mask, |m| m.borrow().clone());
-        mask.intersect_path(&p, rule, true, Transform::identity());
+        mask.intersect_path(p, rule, true, Transform::identity());
         let entry = (Rc::new(new_path), Rc::new(RefCell::new(mask)));
         if self.recents.len() == N {
             self.recents.pop_back();
@@ -430,7 +430,7 @@ impl State {
         }
 
         self.mask = Some(self.mask_cache.borrow_mut().update(
-            path,
+            &path,
             self.mask.clone(),
             rule,
             new_mask,
@@ -803,7 +803,7 @@ impl<'a, 'c> Render<'a, 'c> {
                         .unwrap();
                 self.set_color_and_space(Self::fill_color_state, cs, None);
             }
-            Operation::SetStrokeColor(args) => self.set_color_args(Self::stroke_color_state, args),
+            Operation::SetStrokeColor(args) => self.set_color_args(Self::stroke_color_state, &args),
             Operation::SetStrokeGray(color) => self.set_color_and_space(
                 Self::stroke_color_state,
                 ColorSpace::DeviceGray,
@@ -822,7 +822,7 @@ impl<'a, 'c> Render<'a, 'c> {
             Operation::SetStrokeColorOrWithPattern(color_or_name) => self
                 .set_color_or_pattern(Self::stroke_color_state, &color_or_name)
                 .unwrap(),
-            Operation::SetFillColor(args) => self.set_color_args(Self::fill_color_state, args),
+            Operation::SetFillColor(args) => self.set_color_args(Self::fill_color_state, &args),
             Operation::SetFillGray(color) => self.set_color_and_space(
                 Self::fill_color_state,
                 ColorSpace::DeviceGray,
@@ -843,7 +843,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 .unwrap(),
 
             // Shading Operation
-            Operation::PaintShading(name) => self.paint_shading(name).unwrap(),
+            Operation::PaintShading(name) => self.paint_shading(&name).unwrap(),
 
             // XObject Operation
             Operation::PaintXObject(name) => self.paint_x_object(&name).unwrap(),
@@ -862,7 +862,7 @@ impl<'a, 'c> Render<'a, 'c> {
             Operation::SetGlyphWidth(_) | Operation::SetGlyphWidthAndBoundingBox(_, _, _) => {}
 
             Operation::PaintInlineImage(inline_image) => {
-                self.paint_inline_image(inline_image).unwrap()
+                self.paint_inline_image(&inline_image).unwrap()
             }
 
             _ => todo!("{:?}", op),
@@ -878,10 +878,10 @@ impl<'a, 'c> Render<'a, 'c> {
     fn set_color_args(
         &mut self,
         mut get_state: impl FnMut(&mut Self) -> &mut ColorState,
-        args: ColorArgs,
+        args: &ColorArgs,
     ) {
         let state = get_state(self);
-        state.set_color_args(&args);
+        state.set_color_args(args);
     }
 
     fn set_color_and_space(
@@ -1002,7 +1002,7 @@ impl<'a, 'c> Render<'a, 'c> {
         Ok(Mask::from_pixmap(canvas.as_ref(), MaskType::Alpha))
     }
 
-    fn paint_inline_image(&mut self, inline_image: InlineImage) -> Result<()> {
+    fn paint_inline_image(&mut self, inline_image: &InlineImage) -> Result<()> {
         let state = self.stack.last().unwrap();
         let meta = inline_image.meta();
         let img = inline_image
@@ -1216,7 +1216,7 @@ impl<'a, 'c> Render<'a, 'c> {
         }
     }
 
-    fn paint_axial(&mut self, axial: Axial) -> Result<()> {
+    fn paint_axial(&mut self, axial: &Axial) -> Result<()> {
         let b_box = axial.b_box;
 
         let state = self.stack.last().unwrap();
@@ -1369,7 +1369,7 @@ impl<'a, 'c> Render<'a, 'c> {
         Ok(())
     }
 
-    fn paint_shading(&mut self, nm: NameOfDict) -> Result<()> {
+    fn paint_shading(&mut self, nm: &NameOfDict) -> Result<()> {
         let shading = self
             .resources
             .shading()
@@ -1379,7 +1379,7 @@ impl<'a, 'c> Render<'a, 'c> {
             Some(Shading::Radial(radial)) => {
                 self.paint_radial(&radial).whatever_context("paint radial")
             }
-            Some(Shading::Axial(axial)) => self.paint_axial(axial).whatever_context("paint axial"),
+            Some(Shading::Axial(axial)) => self.paint_axial(&axial).whatever_context("paint axial"),
             None => Ok(()),
         }
     }
@@ -1413,7 +1413,7 @@ impl<'a, 'c> Render<'a, 'c> {
                         self.tiling_pattern(
                             dimension,
                             get_state,
-                            pattern
+                            &pattern
                                 .tiling_pattern()
                                 .whatever_context("get tiling pattern")?,
                             color_args.as_ref(),
@@ -1421,7 +1421,7 @@ impl<'a, 'c> Render<'a, 'c> {
                     }
                     PatternType::Shading => {
                         if let Some((paint, background_color)) = self.shading_pattern(
-                            pattern
+                            &pattern
                                 .shading_pattern()
                                 .whatever_context("get shading pattern")?,
                         )? {
@@ -1442,7 +1442,7 @@ impl<'a, 'c> Render<'a, 'c> {
 
     fn shading_pattern(
         &mut self,
-        pattern: ShadingPatternDict<'a, 'a>,
+        pattern: &ShadingPatternDict<'a, 'a>,
     ) -> Result<Option<(PaintCreator, Option<SkiaColor>)>> {
         struct RestoreState<F>(Option<F>)
         where
@@ -1496,7 +1496,7 @@ impl<'a, 'c> Render<'a, 'c> {
         &mut self,
         canvas_size: Size2D<f32>,
         mut get_state: impl FnMut(&mut Self) -> &mut ColorState,
-        tile: TilingPatternDict<'a, 'a>,
+        tile: &TilingPatternDict<'a, 'a>,
         color_args: Option<&ColorArgs>,
     ) -> Result<()> {
         let stream: &Object = tile

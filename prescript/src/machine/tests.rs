@@ -1,3 +1,5 @@
+#![allow(clippy::needless_pass_by_value)]
+
 use super::*;
 use crate::sname;
 use assert_approx_eq::assert_approx_eq;

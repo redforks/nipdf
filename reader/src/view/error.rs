@@ -10,7 +10,7 @@ use iced::{
 pub struct ErrorView(String);
 
 impl ErrorView {
-    pub fn new(err: impl ToString) -> Self {
+    pub fn new(err: &impl ToString) -> Self {
         Self(err.to_string())
     }
 

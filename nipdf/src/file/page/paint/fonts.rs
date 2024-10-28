@@ -172,8 +172,8 @@ struct EncodingParser<'a, 'b, 'c>(&'c FontDict<'a, 'b>);
 
 type EncodingPair<'a> = (Option<Name>, Option<EncodingDifferences<'a>>);
 impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
-    fn by_name(name: Name) -> Option<Encoding> {
-        let r = Encoding::predefined(name.clone());
+    fn by_name(name: &Name) -> Option<Encoding> {
+        let r = Encoding::predefined(name);
         if r.is_none() {
             warn!("Unknown encoding: {}", name.as_str());
         }
@@ -182,7 +182,7 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
 
     fn by_font_name(&self, font_name: &Name) -> Option<Encoding> {
         let encoding_name = standard_14_type1_font_encoding(font_name);
-        encoding_name.and_then(Self::by_name)
+        encoding_name.and_then(|n| Self::by_name(&n))
     }
 
     fn resolve_by_encoding_or_font_name(
@@ -191,7 +191,7 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
         font_name: &str,
     ) -> Option<Encoding> {
         pair.as_ref()
-            .and_then(|p| p.0.as_ref().and_then(|n| Self::by_name(n.clone())))
+            .and_then(|p| p.0.as_ref().and_then(Self::by_name))
             .or_else(|| self.by_font_name(&name(font_name)))
     }
 
@@ -287,7 +287,7 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
         };
 
         let r = pair.0.as_ref().map_or_else(Encoding::default, |n| {
-            Self::by_name(n.clone()).unwrap_or_else(Encoding::default)
+            Self::by_name(&n.clone()).unwrap_or_else(Encoding::default)
         });
         Ok(Some(self.apply_encoding_diff(r, &Some(pair))))
     }
@@ -735,7 +735,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
     fn load_ttf_parser_font<'a, 'b>(
         font_type: FontType,
         font: FontDict<'a, 'b>,
-        desc: FontDescriptorDict<'a, 'b>,
+        desc: &FontDescriptorDict<'a, 'b>,
     ) -> Result<Box<dyn Font<P> + 'b>> {
         let (is_embed, ttf_bytes) = match desc.font_file2()? {
             Some(stream) => {
@@ -749,11 +749,11 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                             desc.font_name()?,
                             e
                         );
-                        (false, Self::load_true_type_from_os(&desc)?)
+                        (false, Self::load_true_type_from_os(desc)?)
                     }
                 }
             }
-            None => (false, Self::load_true_type_from_os(&desc)?),
+            None => (false, Self::load_true_type_from_os(desc)?),
         };
         if font_type == FontType::Type0 {
             Ok(Box::new(CIDFontType2Font::new(is_embed, ttf_bytes, font)?))
@@ -817,7 +817,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                 Ok(Some(Self::load_ttf_parser_font(
                     FontType::TrueType,
                     font,
-                    desc,
+                    &desc,
                 )?))
             }
 
@@ -845,7 +845,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                         Ok(Some(Self::load_ttf_parser_font(
                             FontType::Type0,
                             font,
-                            desc,
+                            &desc,
                         )?))
                     }
                 }
@@ -862,7 +862,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                     Ok(Some(Self::load_ttf_parser_font(
                         FontType::Type1,
                         font,
-                        desc,
+                        &desc,
                     )?))
                 }),
 

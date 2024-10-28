@@ -79,6 +79,7 @@ impl BufPos {
     }
 }
 
+#[derive(Copy, Clone)]
 struct FilterDict<'a, 'b> {
     d: &'b Dictionary,
     r: Option<&'b ObjectResolver<'a>>,
@@ -407,6 +408,7 @@ fn handle_filter_error<V, E: Display>(
     })
 }
 
+#[derive(Clone, Copy)]
 struct LZWDeflateDecodeParams {
     predictor: i32,
     colors: i32,
@@ -679,7 +681,7 @@ fn decode_flate(buf: &[u8], params: LZWDeflateDecodeParams) -> Result<Vec<u8>, O
 }
 
 fn decode_dct<'a>(
-    buf: Cow<'a, [u8]>,
+    buf: &Cow<'a, [u8]>,
     params: Option<&Dictionary>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     assert!(
@@ -715,7 +717,7 @@ fn decode_dct<'a>(
 }
 
 fn decode_jpx<'a>(
-    buf: Cow<'a, [u8]>,
+    buf: &Cow<'a, [u8]>,
     params: Option<&Dictionary>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     assert!(
@@ -886,7 +888,7 @@ fn decode_run_length(buf: &[u8], params: Option<&Dictionary>) -> Vec<u8> {
 
 fn decode_ccitt(
     input: &[u8],
-    params: CCITTFaxDecodeParamsDict<'_, '_>,
+    params: &CCITTFaxDecodeParamsDict<'_, '_>,
 ) -> Result<Vec<u8>, ObjectValueError> {
     use crate::ccitt::Decoder;
 
@@ -894,7 +896,7 @@ fn decode_ccitt(
         algorithm: params.k().unwrap(),
         width: params.columns().unwrap(),
         rows: Some(params.rows().unwrap()),
-        flags: (&params).try_into().unwrap(),
+        flags: params.try_into().unwrap(),
     };
     let image = handle_filter_error(decoder.decode(input), &FILTER_CCITT_FAX)?;
     Ok(image)
@@ -920,10 +922,10 @@ fn filter<'a: 'b, 'b>(
             LZWDeflateDecodeParams::new(params.unwrap_or_else(|| &*empty_dict), resolver)?,
         )
         .map(FilterDecodedData::bytes),
-        S_FILTER_DCT_DECODE => decode_dct(buf, params),
+        S_FILTER_DCT_DECODE => decode_dct(&buf, params),
         S_FILTER_CCITT_FAX => decode_ccitt(
             &buf,
-            CCITTFaxDecodeParamsDict::new(
+            &CCITTFaxDecodeParamsDict::new(
                 None,
                 params.unwrap_or_else(|| &*empty_dict),
                 resolver.unwrap(),
@@ -933,7 +935,7 @@ fn filter<'a: 'b, 'b>(
         S_FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(FilterDecodedData::bytes),
         S_FILTER_ASCII_HEX_DECODE => decode_ascii_hex(&buf).map(FilterDecodedData::bytes),
         S_FILTER_RUN_LENGTH_DECODE => Ok(FilterDecodedData::bytes(decode_run_length(&buf, params))),
-        S_FILTER_JPX_DECODE => decode_jpx(buf, params),
+        S_FILTER_JPX_DECODE => decode_jpx(&buf, params),
         S_FILTER_LZW_DECODE => decode_lzw(
             &buf,
             LZWDeflateDecodeParams::new(params.unwrap_or_else(|| &*empty_dict), resolver)?,
@@ -956,7 +958,7 @@ fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> Result<Dyn
     }
 
     fn transform(img: DynamicImage, from: &ColorSpace, to: &ColorSpace) -> Result<DynamicImage> {
-        fn convert_cs(img: GrayImage, cs: &impl ColorSpaceTrait<f32>) -> Result<RgbaImage> {
+        fn convert_cs(img: &GrayImage, cs: &impl ColorSpaceTrait<f32>) -> Result<RgbaImage> {
             let mut r = RgbaImage::new(img.width(), img.height());
             for (p, dest_p) in img.pixels().zip(r.pixels_mut()) {
                 let color: [u8; 4] = color_to_rgba(cs, &[p[0].into_color_comp()]);
@@ -967,7 +969,7 @@ fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> Result<Dyn
 
         if let (ColorSpace::DeviceGray, ColorSpace::Separation(sep)) = (from, to) {
             return Ok(DynamicImage::ImageRgba8(convert_cs(
-                img.into_luma8(),
+                &img.into_luma8(),
                 sep.as_ref(),
             )?));
         }

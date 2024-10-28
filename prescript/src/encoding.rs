@@ -32,18 +32,18 @@ impl Encoding {
         self.0[ch as usize].as_str()
     }
 
-    pub fn predefined(name: Name) -> Option<Self> {
-        if name == sname("MacRomanEncoding") {
+    pub fn predefined(name: &Name) -> Option<Self> {
+        if *name == sname("MacRomanEncoding") {
             Some(Self::MAC_ROMAN)
-        } else if name == sname("MacExpertEncoding") {
+        } else if *name == sname("MacExpertEncoding") {
             Some(Self::MAC_EXPERT)
-        } else if name == sname("WinAnsiEncoding") {
+        } else if *name == sname("WinAnsiEncoding") {
             Some(Self::WIN_ANSI)
-        } else if name == sname("StandardEncoding") {
+        } else if *name == sname("StandardEncoding") {
             Some(Self::STANDARD)
-        } else if name == sname("Symbol") {
+        } else if *name == sname("Symbol") {
             Some(Self::SYMBOL)
-        } else if name == sname("ZapfDingbats") {
+        } else if *name == sname("ZapfDingbats") {
             Some(Self::ZAPFDINGBATS)
         } else {
             None

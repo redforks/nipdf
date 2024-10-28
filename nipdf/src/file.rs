@@ -73,7 +73,7 @@ fn parse_object_stream(n: usize, buf: &[u8]) -> ParseResult<'_, ObjectStream> {
 
 impl ObjectStream {
     pub fn new(
-        stream: Stream,
+        stream: &Stream,
         file: &[u8],
         encrypt_info: Option<&EncryptInfo>,
     ) -> Result<Self, ObjectValueError> {
@@ -199,7 +199,7 @@ impl XRefTable {
                                 );
                             });
                         }
-                        ObjectStream::new(stream, &obj_buf, encrypt_info)
+                        ObjectStream::new(&stream, &obj_buf, encrypt_info)
                     })
                     .unwrap();
                 Either::Right(object_stream.get_buf(*idx as usize))
@@ -674,7 +674,8 @@ impl File {
     ) -> Result<Option<String>, ObjectValueError> {
         let catalog = self.catalog(resolver)?;
         Ok(catalog
-            .ver().map_or_else(|| self.head_ver.clone(), |s| Some(s.into_string())))
+            .ver()
+            .map_or_else(|| self.head_ver.clone(), |s| Some(s.into_string())))
     }
 
     pub fn catalog<'a>(
