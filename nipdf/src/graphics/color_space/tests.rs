@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    file::XRefTable,
-    function::{FunctionValue, MockFunction},
-};
+use crate::{file::XRefTable, function::MockFunction};
 use assert_approx_eq::assert_approx_eq;
 use mockall::predicate::*;
 use prescript::name;
@@ -152,7 +149,7 @@ fn separation_color_space() {
     let mut f = MockFunction::new();
     f.expect_call()
         .with(eq(vec![0.5f32]))
-        .returning(|_| Ok(tiny_vec![0.1f32, 0.2f32, 0.3f32] as FunctionValue));
+        .returning(|_| Ok(tiny_vec![0.1f32, 0.2f32, 0.3f32]));
     let cs = SeparationColorSpace::<f32> {
         alt: ColorSpace::DeviceRGB,
         f: Rc::new(f),

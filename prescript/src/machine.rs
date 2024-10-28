@@ -870,13 +870,13 @@ pub(crate) fn ok() -> MachineResult<ExecState> {
 fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
     let mut r: RuntimeDictionary<'a, P> = built_in_ops!(
         // any1 any2 exch -> any2 any1
-        sname("exch") => (|m| {
+        sname("exch") => |m| {
             let a = m.pop()?;
             let b = m.pop()?;
             m.push(a);
             m.push(b);
             ok()
-        }) as OperatorFn<P>,
+        },
 
         // any -> any any
         sname("dup") => |m| {
@@ -1624,7 +1624,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
         },
 
         // key category findresource - instance
-        sname("findresource") => |m| {
+        sname("findresource") => |m: &mut Machine<'_, P>| {
             let category = m.pop()?.name()?;
             let key = m.pop()?.name()?;
             assert_eq!(key.as_ref(), "CIDInit");

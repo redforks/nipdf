@@ -59,7 +59,10 @@ impl<'a, P> Assert<'a, P> for Stack<'a, P> {
 
 macro_rules! asserts {
     ($($e:expr),*) => {
-        vec![$(Box::new($e) as Box<dyn Assert<'_>>),*]
+{
+        let v: Vec<Box<dyn Assert<'_>>> = vec![$(Box::new($e)),*];
+        v
+        }
     }
 }
 

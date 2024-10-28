@@ -869,7 +869,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
             }
 
             FontType::Type1 => Self::load_type1_font(font.clone())
-                .map(|v| Some(Box::new(v) as Box<dyn Font<P> + 'c>))
+                .map(|v| -> Option<Box<dyn Font<P> + 'c>> { Some(Box::new(v)) })
                 .or_else(|err| {
                     info!(
                         "Failed to load type1 font \"{:?}\", try load as truetype",

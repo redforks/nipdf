@@ -263,7 +263,7 @@ fn decode_image<'a, M: ImageMetadata>(
             0
         };
 
-        let mut r = BitReader::<_, BigEndian>::new(data as &[u8]);
+        let mut r = BitReader::<_, BigEndian>::new(data);
         for y in 0..h {
             for x in 0..w {
                 img.put_pixel(x, y, Luma([if r.read_bit().unwrap() { 255u8 } else { 0 }]));

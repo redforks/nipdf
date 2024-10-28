@@ -15,14 +15,12 @@ fn test_clip_args() {
         domain: Domains(vec![Domain::new(0.0, 1.0), Domain::new(-2.0, 2.0)]),
         range: None,
     };
-    assert_eq!(
-        signature.clip_args(&[0.5, 0.0]),
-        tiny_vec![0.5_f32, 0.0_f32] as TinyVec<[f32; 4]>
-    );
-    assert_eq!(
-        signature.clip_args(&[-1.0, 100.0]),
-        tiny_vec![0.0_f32, 2.0_f32] as TinyVec<[f32; 4]>
-    );
+    assert_eq!(signature.clip_args(&[0.5, 0.0]), tiny_vec![
+        0.5_f32, 0.0_f32
+    ]);
+    assert_eq!(signature.clip_args(&[-1.0, 100.0]), tiny_vec![
+        0.0_f32, 2.0_f32
+    ]);
 }
 
 #[test]
@@ -31,10 +29,9 @@ fn test_clip_returns() {
         domain: Domains(vec![]),
         range: None,
     };
-    assert_eq!(
-        signature.clip_returns(tiny_vec![100.0, -100.0]),
-        tiny_vec![100.0_f32, -100.0_f32] as FunctionValue
-    );
+    assert_eq!(signature.clip_returns(tiny_vec![100.0, -100.0]), tiny_vec![
+        100.0_f32, -100.0_f32
+    ]);
     assert_eq!(
         signature.clip_returns(FunctionValue::new()),
         FunctionValue::new()
@@ -63,12 +60,9 @@ fn test_exponential_function() {
     let resolver = ObjectResolver::empty(&xref);
     let f = ExponentialInterpolationFunctionDict::new(None, &d, &resolver).unwrap();
     let f = f.func().unwrap();
-    assert_eq!(f.call(&[0.0]).unwrap(), tiny_vec![0.1_f32, 0.2_f32]
-        as FunctionValue);
-    assert_eq!(f.call(&[1.0]).unwrap(), tiny_vec![0.2_f32, 0.4_f32]
-        as FunctionValue);
-    assert_eq!(f.call(&[0.5]).unwrap(), tiny_vec![0.15_f32, 0.3_f32]
-        as FunctionValue);
+    assert_eq!(f.call(&[0.0]).unwrap(), tiny_vec![0.1_f32, 0.2_f32]);
+    assert_eq!(f.call(&[1.0]).unwrap(), tiny_vec![0.2_f32, 0.4_f32]);
+    assert_eq!(f.call(&[0.5]).unwrap(), tiny_vec![0.15_f32, 0.3_f32]);
 }
 
 #[test]
@@ -133,8 +127,7 @@ fn stitching_function() {
     let resolver = ObjectResolver::empty(&xref);
     let f = StitchingFunctionDict::new(None, &d, &resolver).unwrap();
     let f = f.func().unwrap();
-    assert_eq!(f.call(&[0f32]).unwrap(), tiny_vec![0.2_f32, 0.4_f32]
-        as FunctionValue);
+    assert_eq!(f.call(&[0f32]).unwrap(), tiny_vec![0.2_f32, 0.4_f32]);
 }
 
 #[test]
