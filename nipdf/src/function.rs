@@ -318,7 +318,7 @@ impl Signature {
     }
 
     pub fn n_returns(&self) -> Option<usize> {
-        self.range.as_ref().map(|range| range.n())
+        self.range.as_ref().map(Domains::n)
     }
 
     fn clip_args(&self, args: &[f32]) -> TinyVec<[f32; 4]> {

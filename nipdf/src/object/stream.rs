@@ -605,7 +605,7 @@ fn crypt_filter(
     params: Option<&Dictionary>,
 ) -> Result<Vec<u8>, ObjectValueError> {
     let name = params
-        .and_then(|d| d.get("Name").map(|o| o.name()))
+        .and_then(|d| d.get("Name").map(Object::name))
         .transpose()?;
     encrypt_info.stream_decrypt(name, id, &mut buf);
     Ok(buf)
@@ -1031,7 +1031,7 @@ impl Stream {
         &self,
         resolver: &ObjectResolver<'a>,
     ) -> Result<Cow<'a, [u8]>, ObjectValueError> {
-        self._decode(resolver).and_then(|v| v.into_bytes())
+        self._decode(resolver).and_then(FilterDecodedData::into_bytes)
     }
 
     fn buf_range(

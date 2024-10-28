@@ -389,7 +389,7 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
                 r
             })
             .parse_next(input)
-            .map(|x| x.into())
+            .map(Into::into)
     }
 
     fn nested<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>, ParserError> {

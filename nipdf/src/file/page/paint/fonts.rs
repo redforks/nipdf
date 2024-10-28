@@ -912,15 +912,15 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
     }
 
     pub fn get_font(&self, s: &Name) -> Option<&dyn Font<P>> {
-        self.cache.borrow_fonts().get(s).map(|x| x.as_ref())
+        self.cache.borrow_fonts().get(s).map(AsRef::as_ref)
     }
 
     pub fn get_op(&self, s: &Name) -> Option<&(dyn FontOp)> {
-        self.cache.borrow_ops().get(s).map(|x| x.as_ref())
+        self.cache.borrow_ops().get(s).map(AsRef::as_ref)
     }
 
     pub fn get_glyph_render(&self, s: &Name) -> Option<&(dyn GlyphRender<P>)> {
-        self.cache.borrow_renders().get(s).map(|x| x.as_ref())
+        self.cache.borrow_renders().get(s).map(AsRef::as_ref)
     }
 }
 

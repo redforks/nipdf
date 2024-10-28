@@ -297,7 +297,7 @@ impl<'a, P> TryFrom<RuntimeValue<'a, P>> for Token {
             RuntimeValue::Value(v) => Ok(Self::Literal(v)),
             RuntimeValue::Dictionary(d) => {
                 let d: RuntimeDictionary<'_, P> =
-                    Rc::try_unwrap(d).map_or_else(|d| d.borrow().clone(), |d| d.into_inner());
+                    Rc::try_unwrap(d).map_or_else(|d| d.borrow().clone(), RefCell::into_inner);
                 Ok(Self::Literal(Value::Dictionary(into_dict(d)?)))
             }
             _ => Err(TypeCheckSnafu.build()),
@@ -410,7 +410,7 @@ fn into_dict<P>(d: RuntimeDictionary<'_, P>) -> MachineResult<Dictionary> {
             RuntimeValue::Value(v) => v,
             RuntimeValue::Dictionary(d) => {
                 let d: RuntimeDictionary<'_, P> =
-                    Rc::try_unwrap(d).map_or_else(|d| d.borrow().clone(), |d| d.into_inner());
+                    Rc::try_unwrap(d).map_or_else(|d| d.borrow().clone(), RefCell::into_inner);
                 Value::Dictionary(into_dict(d)?)
             }
             _ => return Err(TypeCheckSnafu.build()),

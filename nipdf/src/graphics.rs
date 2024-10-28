@@ -564,7 +564,7 @@ impl<'b> ConvertFromObject<'b> for String {
             .pop()
             .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
             .as_text_string()
-            .map(|s| s.to_owned())
+            .map(ToOwned::to_owned)
     }
 }
 

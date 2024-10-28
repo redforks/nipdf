@@ -238,7 +238,7 @@ impl CodeSpace {
     fn min_bytes(&self) -> Result<usize, Whatever> {
         self.0
             .iter()
-            .map(|r| r.n_bytes())
+            .map(CodeRange::n_bytes)
             .min()
             .whatever_context("Should not happen")
     }

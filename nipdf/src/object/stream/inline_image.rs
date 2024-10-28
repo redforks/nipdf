@@ -73,7 +73,7 @@ impl<'a> ImageMetadata for InlineStreamDict<'a> {
 
     fn image_mask(&self) -> Result<bool> {
         Ok(self
-            .alt_get(&sname("ImageMask"), &sname("IM"), |o| o.bool())
+            .alt_get(&sname("ImageMask"), &sname("IM"), Object::bool)
             .whatever_context("get ImageMask")?
             .unwrap_or(false))
     }

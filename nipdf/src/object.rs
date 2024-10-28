@@ -97,7 +97,7 @@ impl TypeValueGetter for NameTypeValueGetter {
     type Value = Name;
 
     fn get(&self, d: &Dictionary) -> Result<Option<Name>, ObjectValueError> {
-        d.get(&self.field).map(|v| v.name()).transpose()
+        d.get(&self.field).map(Object::name).transpose()
     }
 
     fn field(&self) -> &Name {
@@ -537,18 +537,18 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
     /// Return empty vec if not exist, error if not array
     pub fn u32_arr(&self, id: &Name) -> Result<Vec<u32>, ObjectValueError> {
         self.opt_arr_map(id, |o| o.as_int().map(|i| i as u32))
-            .map(|o| o.unwrap_or_default())
+            .map(Option::unwrap_or_default)
     }
 
     /// Return empty vec if not exist, error if not array
     pub fn f32_arr(&self, id: &Name) -> Result<Vec<f32>, ObjectValueError> {
-        self.opt_arr_map(id, |o| o.as_number())
-            .map(|o| o.unwrap_or_default())
+        self.opt_arr_map(id, Object::as_number)
+            .map(Option::unwrap_or_default)
     }
 
     pub fn opt_f32_arr(&self, id: &Name) -> Result<Option<Vec<f32>>, ObjectValueError> {
-        self.opt_arr_map(id, |o| o.as_number())
-            .map(|o| o.unwrap_or_default())
+        self.opt_arr_map(id, Object::as_number)
+            .map(Option::unwrap_or_default)
             .map(Some)
     }
 
@@ -628,7 +628,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
 
     pub fn ref_id_arr(&self, id: &Name) -> Result<Vec<RuntimeObjectId>, ObjectValueError> {
         self.opt_arr_map(id, |o| o.reference().map(|r| r.id().id()))
-            .map(|o| o.unwrap_or_default())
+            .map(Option::unwrap_or_default)
     }
 
     pub fn stream_dict(&self, id: &Name) -> Result<HashMap<Name, Stream>, ObjectValueError> {

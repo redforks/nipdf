@@ -79,7 +79,7 @@ impl ObjectStream {
     ) -> Result<Self, ObjectValueError> {
         let d = stream.as_dict();
         assert_eq!(sname("ObjStm"), d[&sname("Type")].name()?);
-        let n = d.get(&sname("N")).map_or(Ok(0), |v| v.int())? as usize;
+        let n = d.get(&sname("N")).map_or(Ok(0), Object::int)? as usize;
         let buf = stream.decode_without_resolve_length(file, encrypt_info)?;
         parse_object_stream(n, buf.as_ref())
             .map_err(|e| ObjectValueError::ParseError {
@@ -652,7 +652,7 @@ impl File {
         let root_id = root_id.reference().unwrap().id().id();
 
         Ok(Self {
-            head_ver: head_ver.map(|s| s.to_owned()),
+            head_ver: head_ver.map(ToOwned::to_owned),
             root_id,
             data: buf,
             xref,

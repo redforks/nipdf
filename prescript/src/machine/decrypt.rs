@@ -24,7 +24,7 @@ pub fn decrypt(key: u16, n: usize, buf: &[u8]) -> Result<(bool, Vec<u8>), hex::F
     // check first 8 bytes of buf to see its format, assert that it is not ascii hex form
     let decoded_hex;
     let is_hex;
-    let buf = if buf[..8].iter().all(|b| b.is_ascii_hexdigit()) {
+    let buf = if buf[..8].iter().all(u8::is_ascii_hexdigit) {
         is_hex = true;
         // take slice until non ascii_hexdigit, if in odd number, trunk last digit
         let n = buf.iter().take_while(|b| b.is_ascii_hexdigit()).count();

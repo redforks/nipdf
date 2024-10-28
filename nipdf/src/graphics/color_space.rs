@@ -509,7 +509,7 @@ where
     }
 
     fn components(&self) -> usize {
-        self.0.as_ref().map_or(0, |cs| cs.components())
+        self.0.as_ref().map_or(0, ColorSpaceTrait::components)
     }
 }
 
