@@ -662,7 +662,7 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
             .as_string()
     }
 
-    pub fn opt_resolve_pdf_object<'s, O: PdfObject<'b, R>>(
+    pub fn opt_resolve_pdf_object<O: PdfObject<'b, R>>(
         &self,
         id: &Name,
     ) -> Result<Option<O>, ObjectValueError> {

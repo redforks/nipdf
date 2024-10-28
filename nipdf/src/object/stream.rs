@@ -884,7 +884,7 @@ fn decode_run_length(buf: &[u8], params: Option<&Dictionary>) -> Vec<u8> {
     decode(buf)
 }
 
-fn decode_ccitt<'a: 'b, 'b>(
+fn decode_ccitt(
     input: &[u8],
     params: CCITTFaxDecodeParamsDict<'_, '_>,
 ) -> Result<Vec<u8>, ObjectValueError> {

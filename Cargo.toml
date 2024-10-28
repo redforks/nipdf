@@ -93,6 +93,7 @@ trivial_casts = "warn"
 trivial_numeric_casts = "warn"
 # remove this to detect unused crates, comment out because when compile with `cargo test` it will show unused crates which is not true
 # unused_crate_dependencies = "warn"
+unused_lifetimes = "warn"
 
 [workspace.lints.clippy]
 empty_structs_with_brackets = "warn"
