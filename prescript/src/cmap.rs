@@ -42,7 +42,7 @@ impl CharCode {
         }
     }
 
-    pub fn n_bytes(&self) -> usize {
+    pub fn n_bytes(self) -> usize {
         match self {
             Self::One(_) => 1,
             Self::Two(_) => 2,
@@ -101,7 +101,7 @@ impl ByteRange {
         Self { lower, upper }
     }
 
-    fn in_range(&self, c: u8) -> bool {
+    fn in_range(self, c: u8) -> bool {
         self.lower <= c && c <= self.upper
     }
 }

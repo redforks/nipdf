@@ -522,8 +522,8 @@ pub enum OffSize {
 
 impl OffSize {
     /// Return byte length of offset data type.
-    pub fn len(&self) -> usize {
-        *self as usize
+    pub fn len(self) -> usize {
+        self as usize
     }
 }
 
@@ -1144,7 +1144,7 @@ impl EncodingSupplement {
         Self { code, sid }
     }
 
-    pub fn apply(&self, strings: StringIndex<'_>, encodings: &mut Encoding) {
+    pub fn apply(self, strings: StringIndex<'_>, encodings: &mut Encoding) {
         encodings[self.code as usize] = name(strings.get(self.sid));
     }
 }

@@ -48,11 +48,11 @@ impl PageNavigator {
         }
     }
 
-    pub fn can_next(&self) -> bool {
+    pub fn can_next(self) -> bool {
         (self.current_page + 1) < self.total_pages
     }
 
-    pub fn can_prev(&self) -> bool {
+    pub fn can_prev(self) -> bool {
         self.current_page > 0
     }
 }

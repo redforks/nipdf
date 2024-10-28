@@ -87,7 +87,7 @@ fn stitching_sub_domain(idx: usize) -> (f32, f32) {
     let domain = Domain::new(0.0, 1.0);
     let bounds = [0.1f32, 0.5f32, 0.8f32];
 
-    let act = StitchingFunction::sub_domain(&domain, &bounds[..], idx);
+    let act = StitchingFunction::sub_domain(domain, &bounds[..], idx);
     (act.start, act.end)
 }
 
@@ -98,7 +98,7 @@ fn stitching_sub_domain_empty_bounds() {
 
     assert_eq!(
         domain.clone(),
-        StitchingFunction::sub_domain(&domain, &bounds[..], 0)
+        StitchingFunction::sub_domain(domain, &bounds[..], 0)
     );
 }
 
@@ -107,9 +107,9 @@ fn interpolation() {
     let a = Domain::new(0.0, 1.0);
     let b = Domain::new(1.0, 0.0);
 
-    assert_eq!(StitchingFunction::interpolation(&a, &b, 0.0), 1.0);
-    assert_eq!(StitchingFunction::interpolation(&a, &b, 0.5), 0.5);
-    assert_eq!(StitchingFunction::interpolation(&a, &b, 1.0), 0.0);
+    assert_eq!(StitchingFunction::interpolation(a, b, 0.0), 1.0);
+    assert_eq!(StitchingFunction::interpolation(a, b, 0.5), 0.5);
+    assert_eq!(StitchingFunction::interpolation(a, b, 1.0), 0.0);
 }
 
 #[test]

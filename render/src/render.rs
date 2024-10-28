@@ -1412,7 +1412,7 @@ impl<'a, 'c> Render<'a, 'c> {
                             self.dimension.canvas_height() as f32,
                         );
                         self.tiling_pattern(
-                            &dimension,
+                            dimension,
                             get_state,
                             pattern
                                 .tiling_pattern()
@@ -1495,7 +1495,7 @@ impl<'a, 'c> Render<'a, 'c> {
 
     fn tiling_pattern(
         &mut self,
-        canvas_size: &Size2D<f32>,
+        canvas_size: Size2D<f32>,
         mut get_state: impl FnMut(&mut Self) -> &mut ColorState,
         tile: TilingPatternDict<'a, 'a>,
         color_args: Option<&ColorArgs>,

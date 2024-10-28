@@ -583,7 +583,7 @@ impl StitchingFunction {
             .unwrap_or(bounds.len())
     }
 
-    fn sub_domain(domain: &Domain, bounds: &[f32], idx: usize) -> Domain {
+    fn sub_domain(domain: Domain, bounds: &[f32], idx: usize) -> Domain {
         let start = if idx == 0 {
             domain.start
         } else {
@@ -597,7 +597,7 @@ impl StitchingFunction {
         Domain::new(start, end)
     }
 
-    fn interpolation(from: &Domain, to: &Domain, t: f32) -> f32 {
+    fn interpolation(from: Domain, to: Domain, t: f32) -> f32 {
         let a_len = from.end - from.start;
         let b_len = to.end - to.start;
         let t = (t - from.start) / a_len;
@@ -615,14 +615,14 @@ impl Function for StitchingFunction {
 
         let x = args[0];
         let function_idx = Self::find_function(&self.bounds, x);
-        let mut sub_domain = Self::sub_domain(&self.domains().0[0], &self.bounds, function_idx);
+        let mut sub_domain = Self::sub_domain(self.domains().0[0], &self.bounds, function_idx);
         if sub_domain.is_zero() {
             // possibly incorrect bounds, bounds[0] should > domain[0].start
             // bounds[last] should < domain[0].end, but some buggie file
             // breaks, cause a zero sub_domain
             sub_domain = self.domains().0[0];
         }
-        let x1 = Self::interpolation(&sub_domain, &self.encode.0[function_idx], x);
+        let x1 = Self::interpolation(sub_domain, self.encode.0[function_idx], x);
 
         let f = &self.functions[function_idx];
         let r = f.call(&[x1])?;

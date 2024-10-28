@@ -249,7 +249,7 @@ pub enum CryptFilter {
 }
 
 impl CryptFilter {
-    pub fn decrypt(&self, key: &[u8], id: ObjectId, data: &mut impl VecLike) {
+    pub fn decrypt(self, key: &[u8], id: ObjectId, data: &mut impl VecLike) {
         match self {
             CryptFilter::Identity => {}
             CryptFilter::Rc4 => Rc4Decryptor::new(key, id).decrypt(data),
