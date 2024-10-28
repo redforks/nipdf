@@ -148,12 +148,12 @@ impl<I: Stream, C> AddContext<I, C> for ParserError<C> {
         context: C,
     ) -> Self {
         match &mut self {
-            Self::Leaf { context: c, .. } => *c = Some(context),
-            Self::Inter { context: c, .. } => *c = Some(context),
-            Self::StringEncoding { context: c, .. } => *c = Some(context),
-            Self::StrEncoding { context: c, .. } => *c = Some(context),
-            Self::ParseInt { context: c, .. } => *c = Some(context),
-            Self::Ascii85 { context: c, .. } => *c = Some(context),
+            Self::Leaf { context: c, .. }
+            | Self::Inter { context: c, .. }
+            | Self::StringEncoding { context: c, .. }
+            | Self::StrEncoding { context: c, .. }
+            | Self::ParseInt { context: c, .. }
+            | Self::Ascii85 { context: c, .. } => *c = Some(context),
         }
         self
     }

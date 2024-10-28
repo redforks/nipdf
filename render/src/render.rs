@@ -859,8 +859,7 @@ impl<'a, 'c> Render<'a, 'c> {
 
             // Type3 Extra Operations
             // Define something already known in FontDict, can safely ignored
-            Operation::SetGlyphWidth(_) => {}
-            Operation::SetGlyphWidthAndBoundingBox(_, _, _) => {}
+            Operation::SetGlyphWidth(_) | Operation::SetGlyphWidthAndBoundingBox(_, _, _) => {}
 
             Operation::PaintInlineImage(inline_image) => {
                 self.paint_inline_image(inline_image).unwrap()

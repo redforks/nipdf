@@ -219,8 +219,7 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
     fn guess_by_font_name(font_name: &str) -> Option<Encoding> {
         // if font not embed encoding, use known encoding for the two standard symbol fonts
         match font_name {
-            "Symbol" => Some(Encoding::SYMBOL),
-            "ZapfDingbats" => Some(Encoding::SYMBOL),
+            "Symbol" | "ZapfDingbats" => Some(Encoding::SYMBOL),
             _ => None,
         }
     }
@@ -563,70 +562,54 @@ fn normalize_true_type_font_name(name: &str) -> String {
 /// This function returns the standard 14 font if the font name is an known internal name.
 fn normalize_font_name(name: &str) -> &str {
     match name {
-        "Arial" => "Helvetica",
-        "Arial,Bold" => "Helvetica-Bold",
-        "Arial,BoldItalic" => "Helvetica-BoldOblique",
-        "Arial,Italic" => "Helvetica-Oblique",
-        "Arial-Bold" => "Helvetica-Bold",
-        "Arial-BoldItalic" => "Helvetica-BoldOblique",
-        "Arial-BoldItalicMT" => "Helvetica-BoldOblique",
-        "Arial-BoldMT" => "Helvetica-Bold",
-        "Arial-Italic" => "Helvetica-Oblique",
-        "Arial-ItalicMT" => "Helvetica-Oblique",
-        "ArialMT" => "Helvetica",
-        "Courier" => "Courier",
-        "Courier,Bold" => "Courier-Bold",
-        "Courier,BoldItalic" => "Courier-BoldOblique",
-        "Courier,Italic" => "Courier-Oblique",
-        "Courier-Bold" => "Courier-Bold",
-        "Courier-BoldOblique" => "Courier-BoldOblique",
-        "Courier-Oblique" => "Courier-Oblique",
-        "CourierNew" => "Courier",
-        "CourierNew,Bold" => "Courier-Bold",
-        "CourierNew,BoldItalic" => "Courier-BoldOblique",
-        "CourierNew,Italic" => "Courier-Oblique",
-        "CourierNew-Bold" => "Courier-Bold",
-        "CourierNew-BoldItalic" => "Courier-BoldOblique",
-        "CourierNew-Italic" => "Courier-Oblique",
-        "CourierNewPS-BoldItalicMT" => "Courier-BoldOblique",
-        "CourierNewPS-BoldMT" => "Courier-Bold",
-        "CourierNewPS-ItalicMT" => "Courier-Oblique",
-        "CourierNewPSMT" => "Courier",
-        "Helvetica" => "Helvetica",
-        "Helvetica,Bold" => "Helvetica-Bold",
-        "Helvetica,BoldItalic" => "Helvetica-BoldOblique",
-        "Helvetica,Italic" => "Helvetica-Oblique",
-        "Helvetica-Bold" => "Helvetica-Bold",
-        "Helvetica-BoldItalic" => "Helvetica-BoldOblique",
-        "Helvetica-BoldOblique" => "Helvetica-BoldOblique",
-        "Helvetica-Italic" => "Helvetica-Oblique",
-        "Helvetica-Oblique" => "Helvetica-Oblique",
-        "Symbol" => "Symbol",
-        "Symbol,Bold" => "Symbol",
-        "Symbol,BoldItalic" => "Symbol",
-        "Symbol,Italic" => "Symbol",
-        "Times-Bold" => "Times-Bold",
-        "Times-BoldItalic" => "Times-BoldItalic",
-        "Times-Italic" => "Times-Italic",
-        "Times-Roman" => "Times-Roman",
-        "TimesNewRoman" => "Times-Roman",
-        "TimesNewRoman,Bold" => "Times-Bold",
-        "TimesNewRoman,BoldItalic" => "Times-BoldItalic",
-        "TimesNewRoman,Italic" => "Times-Italic",
-        "TimesNewRoman-Bold" => "Times-Bold",
-        "TimesNewRoman-BoldItalic" => "Times-BoldItalic",
-        "TimesNewRoman-Italic" => "Times-Italic",
-        "TimesNewRomanPS" => "Times-Roman",
-        "TimesNewRomanPS-Bold" => "Times-Bold",
-        "TimesNewRomanPS-BoldItalic" => "Times-BoldItalic",
-        "TimesNewRomanPS-BoldItalicMT" => "Times-BoldItalic",
-        "TimesNewRomanPS-BoldMT" => "Times-Bold",
-        "TimesNewRomanPS-Italic" => "Times-Italic",
-        "TimesNewRomanPS-ItalicMT" => "Times-Italic",
-        "TimesNewRomanPSMT" => "Times-Roman",
-        "TimesNewRomanPSMT,Bold" => "Times-Bold",
-        "TimesNewRomanPSMT,BoldItalic" => "Times-BoldItalic",
-        "TimesNewRomanPSMT,Italic" => "Times-Italic",
+        "Arial" | "ArialMT" | "Helvetica" => "Helvetica",
+        "Arial,Bold" | "Arial-Bold" | "Arial-BoldMT" | "Helvetica,Bold" | "Helvetica-Bold" => {
+            "Helvetica-Bold"
+        }
+        "Arial,BoldItalic"
+        | "Arial-BoldItalic"
+        | "Arial-BoldItalicMT"
+        | "Helvetica,BoldItalic"
+        | "Helvetica-BoldItalic"
+        | "Helvetica-BoldOblique" => "Helvetica-BoldOblique",
+        "Arial,Italic" | "Arial-Italic" | "Arial-ItalicMT" | "Helvetica,Italic"
+        | "Helvetica-Italic" | "Helvetica-Oblique" => "Helvetica-Oblique",
+        "Courier" | "CourierNew" | "CourierNewPSMT" => "Courier",
+        "Courier,Bold"
+        | "Courier-Bold"
+        | "CourierNew,Bold"
+        | "CourierNew-Bold"
+        | "CourierNewPS-BoldMT" => "Courier-Bold",
+        "Courier,BoldItalic"
+        | "Courier-BoldOblique"
+        | "CourierNew,BoldItalic"
+        | "CourierNew-BoldItalic"
+        | "CourierNewPS-BoldItalicMT" => "Courier-BoldOblique",
+        "Courier,Italic"
+        | "Courier-Oblique"
+        | "CourierNew,Italic"
+        | "CourierNew-Italic"
+        | "CourierNewPS-ItalicMT" => "Courier-Oblique",
+        "Symbol" | "Symbol,Bold" | "Symbol,BoldItalic" | "Symbol,Italic" => "Symbol",
+        "Times-Bold"
+        | "TimesNewRoman,Bold"
+        | "TimesNewRoman-Bold"
+        | "TimesNewRomanPS-Bold"
+        | "TimesNewRomanPS-BoldMT"
+        | "TimesNewRomanPSMT,Bold" => "Times-Bold",
+        "Times-BoldItalic"
+        | "TimesNewRoman,BoldItalic"
+        | "TimesNewRoman-BoldItalic"
+        | "TimesNewRomanPS-BoldItalic"
+        | "TimesNewRomanPS-BoldItalicMT"
+        | "TimesNewRomanPSMT,BoldItalic" => "Times-BoldItalic",
+        "Times-Italic"
+        | "TimesNewRoman,Italic"
+        | "TimesNewRoman-Italic"
+        | "TimesNewRomanPS-Italic"
+        | "TimesNewRomanPS-ItalicMT"
+        | "TimesNewRomanPSMT,Italic" => "Times-Italic",
+        "Times-Roman" | "TimesNewRoman" | "TimesNewRomanPS" | "TimesNewRomanPSMT" => "Times-Roman",
         "ZapfDingbats" => "ZapfDingbats",
         others => others,
     }
@@ -635,19 +618,19 @@ fn normalize_font_name(name: &str) -> &str {
 /// If font_name is a standard 14 font, return its Encoding name
 fn standard_14_type1_font_encoding(font_name: &str) -> Option<Name> {
     match normalize_font_name(font_name) {
-        "Courier" => Some(sname("StandardEncoding")),
-        "Courier-Bold" => Some(sname("StandardEncoding")),
-        "Courier-BoldOblique" => Some(sname("StandardEncoding")),
-        "Courier-Oblique" => Some(sname("StandardEncoding")),
-        "Helvetica" => Some(sname("StandardEncoding")),
-        "Helvetica-Bold" => Some(sname("StandardEncoding")),
-        "Helvetica-BoldOblique" => Some(sname("StandardEncoding")),
-        "Helvetica-Oblique" => Some(sname("StandardEncoding")),
+        "Courier"
+        | "Courier-Bold"
+        | "Courier-BoldOblique"
+        | "Courier-Oblique"
+        | "Helvetica"
+        | "Helvetica-Bold"
+        | "Helvetica-BoldOblique"
+        | "Helvetica-Oblique"
+        | "Times-Bold"
+        | "Times-BoldItalic"
+        | "Times-Italic"
+        | "Times-Roman" => Some(sname("StandardEncoding")),
         "Symbol" => Some(sname("Symbol")),
-        "Times-Bold" => Some(sname("StandardEncoding")),
-        "Times-BoldItalic" => Some(sname("StandardEncoding")),
-        "Times-Italic" => Some(sname("StandardEncoding")),
-        "Times-Roman" => Some(sname("StandardEncoding")),
         "ZapfDingbats" => Some(sname("ZapfDingbats")),
         _ => None,
     }
@@ -737,8 +720,9 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
             Source::File(ref path) => {
                 Ok(std::fs::read(path).whatever_context("read ttf file from OS")?)
             }
-            Source::Binary(ref bytes) => Ok(bytes.as_ref().as_ref().to_owned()),
-            Source::SharedFile(_, ref bytes) => Ok(bytes.as_ref().as_ref().to_owned()),
+            Source::Binary(ref bytes) | Source::SharedFile(_, ref bytes) => {
+                Ok(bytes.as_ref().as_ref().to_owned())
+            }
         }
     }
 

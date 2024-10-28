@@ -696,7 +696,7 @@ impl<'a, P> Machine<'a, P> {
             b.next_token()
         } {
             match self.exec(token)? {
-                ExecState::Ok => {}
+                ExecState::Ok | ExecState::DefinesEncoding => {}
                 ExecState::StartEExec => {
                     self.file
                         .borrow_mut()
@@ -709,7 +709,6 @@ impl<'a, P> Machine<'a, P> {
                         .stop_decrypt()
                         .whatever_context("stop decrypt")?;
                 }
-                ExecState::DefinesEncoding => {}
             }
         }
         // assert that remains are all white space or comment
@@ -1608,17 +1607,13 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
                 RuntimeValue::Value(Value::Real(_)) => sname("realtype"),
                 RuntimeValue::Value(Value::String(_)) => sname("stringtype"),
                 RuntimeValue::Value(Value::Name(_)) => sname("nametype"),
-                RuntimeValue::Value(Value::Array(_)) => sname("arraytype"),
-                RuntimeValue::Dictionary(_) => sname("dicttype"),
-                RuntimeValue::Value(Value::Procedure(_)) => sname("arraytype"),
-                RuntimeValue::Value(Value::PredefinedEncoding(_)) => sname("arraytype"),
+                RuntimeValue::Dictionary(_) | RuntimeValue::Value(Value::Dictionary(_)) => sname("dicttype"),
+                RuntimeValue::Value(Value::Array(_)) | RuntimeValue::Value(Value::Procedure(_)) | RuntimeValue::Value(Value::PredefinedEncoding(_)) => sname("arraytype"),
                 RuntimeValue::CurrentFile(_) => sname("filetype"),
                 RuntimeValue::BuiltInOp(_) => sname("operatortype"),
-                RuntimeValue::Mark => sname("marktype"),
-                RuntimeValue::ArrayMark => sname("marktype"),
+                RuntimeValue::Mark | RuntimeValue::ArrayMark |
                 RuntimeValue::DictMark => sname("marktype"),
                 RuntimeValue::Value(Value::Null) => sname("nulltype"),
-                RuntimeValue::Value(Value::Dictionary(_)) => sname("dicttype"),
             });
             ok()
         },

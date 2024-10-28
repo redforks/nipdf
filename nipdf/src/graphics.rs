@@ -674,8 +674,8 @@ pub fn parse_operations(mut input: &[u8]) -> ParseResult<'_, Vec<Operation>> {
                             None
                         });
                         match opt_op {
-                            Some(Operation::BeginCompatibilitySection) => {}
-                            Some(Operation::EndCompatibilitySection) => {}
+                            Some(Operation::BeginCompatibilitySection)
+                            | Some(Operation::EndCompatibilitySection) => {}
                             Some(Operation::BeginInlineImage) => {
                                 let inline_image;
                                 (input, inline_image) = parse_inline_image
