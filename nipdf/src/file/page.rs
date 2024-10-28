@@ -361,7 +361,7 @@ impl PageContent {
 
     pub fn operations(self) -> Vec<Operation> {
         let mut data: Option<Vec<u8>> = None;
-        for buf in self.bufs.into_iter() {
+        for buf in self.bufs {
             if let Some(data) = data.as_mut() {
                 data.extend_from_slice(&buf);
             } else {

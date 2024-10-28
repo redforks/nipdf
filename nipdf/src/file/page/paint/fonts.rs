@@ -897,7 +897,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
     {
         let font_res = resource.font()?;
         let mut fonts = HashMap::with_capacity(font_res.len());
-        for (k, v) in font_res.into_iter() {
+        for (k, v) in font_res {
             info!("load font: {:?}", k);
             let font = Self::scan_font(v)?;
             if let Some(font) = font {
