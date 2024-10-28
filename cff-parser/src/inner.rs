@@ -415,7 +415,7 @@ impl Dict {
         k: Operator,
         dv: T,
     ) -> Result<T> {
-        self.0.get(&k).map(f).unwrap_or(Ok(dv))
+        self.0.get(&k).map_or(Ok(dv), f)
     }
 
     /// If value not exist for `k`, return `Error::RequiredDictValueMissing` error,

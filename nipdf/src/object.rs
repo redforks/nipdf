@@ -1148,9 +1148,7 @@ impl Object {
             Object::Integer(i) => RcDoc::as_string(i),
             Object::Number(f) => RcDoc::as_string(PrettyNumber(*f)),
             Object::LiteralString(s) => RcDoc::text(
-                from_utf8(&s.0)
-                    .map(|s| format!("({})", s))
-                    .unwrap_or_else(|_| format!("0x{}", hex::encode(s.as_bytes()))),
+                from_utf8(&s.0).map_or_else(|_| format!("0x{}", hex::encode(s.as_bytes())), |s| format!("({})", s)),
             ),
             Object::HexString(s) => RcDoc::text(format!("<{}>", hex::encode(s.as_bytes()))),
             Object::Name(n) => name_to_doc(n),

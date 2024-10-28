@@ -720,8 +720,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
             families: &families,
             weight: desc
                 .font_weight()?
-                .map(|v| Weight(v.try_into().unwrap()))
-                .unwrap_or(Weight::NORMAL),
+                .map_or(Weight::NORMAL, |v| Weight(v.try_into().unwrap())),
             style,
             ..Default::default()
         };

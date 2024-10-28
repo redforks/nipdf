@@ -674,9 +674,7 @@ impl File {
     ) -> Result<Option<String>, ObjectValueError> {
         let catalog = self.catalog(resolver)?;
         Ok(catalog
-            .ver()
-            .map(|s| Some(s.into_string()))
-            .unwrap_or_else(|| self.head_ver.clone()))
+            .ver().map_or_else(|| self.head_ver.clone(), |s| Some(s.into_string())))
     }
 
     pub fn catalog<'a>(

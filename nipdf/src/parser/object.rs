@@ -61,9 +61,7 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
             } else {
                 // from_utf8_unchecked is safe here, because the parser takes only digits
                 let s = from_utf8(s).unwrap();
-                i32::from_str(s)
-                    .map(Object::Integer)
-                    .unwrap_or_else(|_| Object::Number(f32::from_str(s).unwrap_or_default()))
+                i32::from_str(s).map_or_else(|_| Object::Number(f32::from_str(s).unwrap_or_default()), Object::Integer)
             }
         },
     );
