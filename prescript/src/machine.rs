@@ -1608,7 +1608,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
                 RuntimeValue::Value(Value::String(_)) => sname("stringtype"),
                 RuntimeValue::Value(Value::Name(_)) => sname("nametype"),
                 RuntimeValue::Dictionary(_) | RuntimeValue::Value(Value::Dictionary(_)) => sname("dicttype"),
-                RuntimeValue::Value(Value::Array(_)) | RuntimeValue::Value(Value::Procedure(_)) | RuntimeValue::Value(Value::PredefinedEncoding(_)) => sname("arraytype"),
+                RuntimeValue::Value(Value::Array(_) | Value::Procedure(_) | Value::PredefinedEncoding(_)) => sname("arraytype"),
                 RuntimeValue::CurrentFile(_) => sname("filetype"),
                 RuntimeValue::BuiltInOp(_) => sname("operatortype"),
                 RuntimeValue::Mark | RuntimeValue::ArrayMark |

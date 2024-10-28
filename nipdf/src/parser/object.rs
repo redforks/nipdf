@@ -31,7 +31,7 @@ pub fn unwrap_parse_result<'a, T: 'a>(obj: ParseResult<'a, T>) -> Result<T, Pars
     match obj {
         Ok((_, obj)) => Ok(obj),
         Err(nom::Err::Incomplete(_)) => unreachable!(),
-        Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => Err(e),
+        Err(nom::Err::Error(e) | nom::Err::Failure(e)) => Err(e),
     }
 }
 
@@ -61,7 +61,10 @@ pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
             } else {
                 // from_utf8_unchecked is safe here, because the parser takes only digits
                 let s = from_utf8(s).unwrap();
-                i32::from_str(s).map_or_else(|_| Object::Number(f32::from_str(s).unwrap_or_default()), Object::Integer)
+                i32::from_str(s).map_or_else(
+                    |_| Object::Number(f32::from_str(s).unwrap_or_default()),
+                    Object::Integer,
+                )
             }
         },
     );
