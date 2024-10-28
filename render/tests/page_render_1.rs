@@ -173,7 +173,7 @@ fn render(f: &str) -> Result<(), Whatever> {
                         break;
                     }
                 }
-                err?
+                err?;
             }
         }
     }

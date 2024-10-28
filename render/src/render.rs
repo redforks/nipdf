@@ -399,10 +399,10 @@ impl State {
                 "Type" => (),
                 "SM" => debug!("ExtGState key: SM (smoothness tolerance) not implemented"),
                 k @ ("OPM" | "op" | "OP") => {
-                    debug!("ExtGState key {k} is for Overprint, which is not supported")
+                    debug!("ExtGState key {k} is for Overprint, which is not supported");
                 }
                 "SA" => {
-                    debug!("Unknown or unsupported ExtGState key: SA (automatic stroke adjustment)")
+                    debug!("Unknown or unsupported ExtGState key: SA (automatic stroke adjustment)");
                 }
                 _ => info!("Unknown or unsupported ExtGState key: {}", key.as_ref()),
             }
@@ -705,7 +705,7 @@ impl<'a, 'c> Render<'a, 'c> {
             Operation::SetLineJoin(join) => self.current_mut().set_line_join(join),
             Operation::SetMiterLimit(limit) => self.current_mut().set_miter_limit(limit),
             Operation::SetDashPattern(pattern, phase) => {
-                self.current_mut().set_dash_pattern(&pattern, phase)
+                self.current_mut().set_dash_pattern(&pattern, phase);
             }
             Operation::SetRenderIntent(intent) => self.current_mut().set_render_intent(intent),
             Operation::SetFlatness(flatness) => self.current_mut().set_flatness(flatness),
@@ -862,7 +862,7 @@ impl<'a, 'c> Render<'a, 'c> {
             Operation::SetGlyphWidth(_) | Operation::SetGlyphWidthAndBoundingBox(_, _, _) => {}
 
             Operation::PaintInlineImage(inline_image) => {
-                self.paint_inline_image(&inline_image).unwrap()
+                self.paint_inline_image(&inline_image).unwrap();
             }
 
             _ => todo!("{:?}", op),
@@ -1453,7 +1453,7 @@ impl<'a, 'c> Render<'a, 'c> {
         {
             fn drop(&mut self) {
                 if let Some(f) = self.0.take() {
-                    f()
+                    f();
                 }
             }
         }

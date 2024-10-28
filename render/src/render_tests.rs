@@ -67,33 +67,33 @@ fn form_ctm() {
 fn radial_shade() {
     assert_ron_snapshot!(
         &decode_file_page("sample_files/bizarre/pdfReferenceUpdated.pdf", 809).unwrap()
-    )
+    );
 }
 
 #[test]
 fn axial_shade() {
     // TODO: find a sample page contains PaintShading("axial-shade") operation
-    assert_ron_snapshot!(&decode_file_page("../../pdf/code.pdf", 619).unwrap())
+    assert_ron_snapshot!(&decode_file_page("../../pdf/code.pdf", 619).unwrap());
 }
 
 #[test]
 fn type0_cid_font() {
     assert_ron_snapshot!(
         &decode_file_page("sample_files/bizarre/pdfReferenceUpdated.pdf", 1013).unwrap()
-    )
+    );
 }
 
 #[test]
 fn standard_14_font_alias_name() {
     // Font name: TimesNewRomanPSMT alias of Times-Roman, see normalize_font_name()
-    assert_ron_snapshot!(&decode_file_page("../../pdf/code.pdf", 620).unwrap())
+    assert_ron_snapshot!(&decode_file_page("../../pdf/code.pdf", 620).unwrap());
 }
 
 #[test]
 fn image_mask_cal_rgb_index_color_space() {
     // test paint image has mask, and its color space is Indexed to CalRGB,
     // image stream processed with Predicator
-    assert_ron_snapshot!(&decode_file_page("sample_files/filters/predictor.pdf", 0).unwrap())
+    assert_ron_snapshot!(&decode_file_page("sample_files/filters/predictor.pdf", 0).unwrap());
 }
 
 #[test]
@@ -107,14 +107,14 @@ fn ttf_font_cmap_trimmed_table_mapping() {
     // that ttf-parser glyph_index() don't work, see `TTFParserFontOp::char_to_gid()`
     assert_ron_snapshot!(
         &decode_file_page("pdf.js/web/compressed.tracemonkey-pldi-09.pdf", 9).unwrap()
-    )
+    );
 }
 
 #[test]
 fn axial_shade_with_sample_function() {
     assert_ron_snapshot!(
         &decode_file_page("pdf.js/web/compressed.tracemonkey-pldi-09.pdf", 10).unwrap()
-    )
+    );
 }
 
 #[test]
@@ -122,21 +122,21 @@ fn todo_rotate_n_encrypt_alg2() {
     // page rotate
     // encrypt algorithm 2 (Algorithm::Key40AndMore)
     // todo: ForceBold font flag should render glyph bolder
-    assert_ron_snapshot!(&decode_file_page("../../pdf/avr-1507-owners-manual-en.pdf", 10).unwrap())
+    assert_ron_snapshot!(&decode_file_page("../../pdf/avr-1507-owners-manual-en.pdf", 10).unwrap());
 }
 
 #[test]
 fn todo_radius_pattern() {
     // todo: tiny_skia not support end radius, the page has both start and end radius rendered
     // incorrectly
-    assert_ron_snapshot!(&decode_file_page("sample_files/bizarre/PDF32000_2008.pdf", 745).unwrap())
+    assert_ron_snapshot!(&decode_file_page("sample_files/bizarre/PDF32000_2008.pdf", 745).unwrap());
 }
 
 #[test]
 fn todo_glyph_encoding_problem() {
     // todo: incorrect bullet glyph rendered, possible because ttf-parser glyph_index() returned
     // wrong glyph index
-    assert_ron_snapshot!(&decode_file_page("sample_files/bizarre/PDF32000_2008.pdf", 159).unwrap())
+    assert_ron_snapshot!(&decode_file_page("sample_files/bizarre/PDF32000_2008.pdf", 159).unwrap());
 }
 
 #[test]
@@ -145,13 +145,13 @@ fn todo_radius_patten_without_extension() {
     // SpreadMode no support of no extension, apply a mask can fix, but complex
     //
     // and tests background color of shading dict
-    assert_ron_snapshot!(&decode_file_page("sample_files/bizarre/PDF32000_2008.pdf", 746).unwrap())
+    assert_ron_snapshot!(&decode_file_page("sample_files/bizarre/PDF32000_2008.pdf", 746).unwrap());
 }
 
 #[test]
 fn todo_coons_patch_mesh_shading() {
     // ShadingType::CoonsPatchMesh not implemented
-    assert_ron_snapshot!(&decode_file_page("sample_files/bizarre/PDF32000_2008.pdf", 747).unwrap())
+    assert_ron_snapshot!(&decode_file_page("sample_files/bizarre/PDF32000_2008.pdf", 747).unwrap());
 }
 
 #[test]
@@ -161,29 +161,29 @@ fn todo_interactive_form() {
     //   1. multiple page content stream, and operands and operator cross streams
     //   1. todo interactive form
 
-    assert_ron_snapshot!(&decode_file_page("pdf.js/test/pdfs/160F-2019.pdf", 0).unwrap())
+    assert_ron_snapshot!(&decode_file_page("pdf.js/test/pdfs/160F-2019.pdf", 0).unwrap());
 }
 
 #[test]
 fn tile_pattern_with_very_large_b_box() {
     assert_ron_snapshot!(
         &decode_file_page("pdf.js/web/compressed.tracemonkey-pldi-09.pdf", 12).unwrap()
-    )
+    );
 }
 
 #[test]
 fn transparent() {
-    assert_ron_snapshot!(&decode_file_page("pdf.js/test/pdfs/alphatrans.pdf", 0).unwrap())
+    assert_ron_snapshot!(&decode_file_page("pdf.js/test/pdfs/alphatrans.pdf", 0).unwrap());
 }
 
 #[test]
 fn type3_font() {
-    assert_ron_snapshot!(&decode_file_page("pdf.js/test/pdfs/bug1001080.pdf", 0).unwrap())
+    assert_ron_snapshot!(&decode_file_page("pdf.js/test/pdfs/bug1001080.pdf", 0).unwrap());
 }
 
 #[test]
 fn type3_with_nagative_font_size() {
-    assert_ron_snapshot!(&decode_file_page("pdf.js/test/pdfs/bug1011159.pdf", 0).unwrap())
+    assert_ron_snapshot!(&decode_file_page("pdf.js/test/pdfs/bug1011159.pdf", 0).unwrap());
 }
 
 #[test]
@@ -194,17 +194,17 @@ fn todo_tensor_product_patch_mesh_shading() {
     // todo: ShadingType::TensorProductPatchMesh, the electronic header bucket shader not rendered
     assert_ron_snapshot!(
         &decode_file_page("pdf.js/test/pdfs/bug1703683_page2_reduced.pdf", 0).unwrap()
-    )
+    );
 }
 
 #[test]
 fn text_clip_path() {
-    assert_ron_snapshot!(&decode_file_page("sample_files/xobject/text-clip.pdf", 0).unwrap())
+    assert_ron_snapshot!(&decode_file_page("sample_files/xobject/text-clip.pdf", 0).unwrap());
 }
 
 #[test]
 fn type1_font_units_per_em_not_1000() {
     assert_ron_snapshot!(
         &decode_file_page("../render/src/type1-units-per-em-not-1000.pdf", 0).unwrap()
-    )
+    );
 }

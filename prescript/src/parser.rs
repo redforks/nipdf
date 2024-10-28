@@ -383,7 +383,7 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
                     StringFragment::EscapedChar(c) => r.push(c),
                     StringFragment::EscapedNewLine => (),
                     StringFragment::Nested(s) => {
-                        r.extend(once(b'(').chain(s.iter().copied()).chain(once(b')')))
+                        r.extend(once(b'(').chain(s.iter().copied()).chain(once(b')')));
                     }
                 }
                 r
@@ -414,7 +414,7 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
         let bytes = repeat(0.., alt((hex_digit1, white_space)))
             .fold(Vec::new, |mut bytes, frag| {
                 if !is_white_space(frag[0]) {
-                    bytes.extend(frag)
+                    bytes.extend(frag);
                 }
                 bytes
             })

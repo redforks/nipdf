@@ -1280,7 +1280,7 @@ impl<'a, 'b> Type3Font<'a, 'b> {
             let (_, ops) = parse_operations(&data[..]).map_err(|e| {
                 Whatever::without_source(format!("parse type3 operation error: {}", e))
             })?;
-            r.push((name.clone(), Type3Glyph(ops.into())))
+            r.push((name.clone(), Type3Glyph(ops.into())));
         }
 
         Ok(r)

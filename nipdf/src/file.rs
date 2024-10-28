@@ -269,7 +269,7 @@ fn decrypt_string(encrypt_info: &EncryptInfo, id: ObjectId, mut o: Object) -> Ob
                 for (_, v) in d.iter_mut() {
                     self.decrypt(v);
                 }
-            })
+            });
         }
 
         fn arr(&self, arr: &mut Array) {
@@ -331,13 +331,13 @@ impl EncryptInfo {
     pub fn stream_decrypt(&self, filter: Option<Name>, id: ObjectId, data: &mut Vec<u8>) {
         self.filters
             .stream_filter(filter)
-            .decrypt(&self.encript_key, id, data)
+            .decrypt(&self.encript_key, id, data);
     }
 
     pub fn string_decrypt(&self, id: ObjectId, data: &mut impl VecLike) {
         self.filters
             .string_filter()
-            .decrypt(&self.encript_key, id, data)
+            .decrypt(&self.encript_key, id, data);
     }
 }
 

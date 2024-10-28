@@ -160,7 +160,7 @@ fn test_n_func() {
     assert_eq!(
         f.call(&[0.5_f32, 3.0_f32][..]).unwrap(),
         FunctionValue::from(&[0.6_f32, 0.8_f32][..])
-    )
+    );
 }
 
 #[test]

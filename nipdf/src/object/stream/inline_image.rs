@@ -118,7 +118,7 @@ fn normalize_name(d: &mut Dictionary) {
                 _ => {}
             }
         }
-    })
+    });
 }
 
 impl<'a> InlineStream<'a> {

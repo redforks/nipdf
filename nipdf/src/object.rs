@@ -44,7 +44,7 @@ impl Dictionary {
     }
 
     pub fn update(&mut self, f: impl FnOnce(&mut HashMap<Name, Object>)) {
-        f(Rc::make_mut(&mut self.0))
+        f(Rc::make_mut(&mut self.0));
     }
 }
 

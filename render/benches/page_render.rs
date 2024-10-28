@@ -36,25 +36,25 @@ fn render_page_no(
 
 pub fn render1(c: &mut Criterion) {
     c.bench_function("page render", |b| {
-        b.iter(|| render_page_no("../../pdf/ICEpower125ASX2_Datasheet_2.0.pdf", 1).unwrap())
+        b.iter(|| render_page_no("../../pdf/ICEpower125ASX2_Datasheet_2.0.pdf", 1).unwrap());
     });
 }
 
 pub fn render2(c: &mut Criterion) {
     c.bench_function("page render", |b| {
-        b.iter(|| render_page_no("../../pdf/compressed.tracemonkey-pldi-09.pdf", 0).unwrap())
+        b.iter(|| render_page_no("../../pdf/compressed.tracemonkey-pldi-09.pdf", 0).unwrap());
     });
 }
 
 pub fn render_inline_image(c: &mut Criterion) {
     c.bench_function("page render", |b| {
-        b.iter(|| render_page_no("../nipdf/sample_files/xobject/inline-image.pdf", 0).unwrap())
+        b.iter(|| render_page_no("../nipdf/sample_files/xobject/inline-image.pdf", 0).unwrap());
     });
 }
 
 pub fn render_path(c: &mut Criterion) {
     c.bench_function("page render", |b| {
-        b.iter(|| render_page_no("../nipdf/sample_files/path/path-op.pdf", 0).unwrap())
+        b.iter(|| render_page_no("../nipdf/sample_files/path/path-op.pdf", 0).unwrap());
     });
 }
 

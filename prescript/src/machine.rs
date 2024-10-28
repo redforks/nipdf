@@ -834,7 +834,7 @@ impl<'a, P> Machine<'a, P> {
     }
 
     fn push_current_file(&mut self) {
-        self.push(RuntimeValue::CurrentFile(self.file.clone()))
+        self.push(RuntimeValue::CurrentFile(self.file.clone()));
     }
 
     fn define_font(&mut self, name: String, font: Dictionary) {
@@ -972,10 +972,10 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
             let b = m.pop()?;
             match (a, b) {
                 (RuntimeValue::Value(Value::Bool(a)), RuntimeValue::Value(Value::Bool(b))) => {
-                    m.push(a && b)
+                    m.push(a && b);
                 }
                 (RuntimeValue::Value(Value::Integer(a)), RuntimeValue::Value(Value::Integer(b))) => {
-                    m.push(a & b)
+                    m.push(a & b);
                 }
                 _ => return Err(TypeCheckSnafu.build()),
             }
@@ -988,10 +988,10 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
             let b = m.pop()?;
             match (a, b) {
                 (RuntimeValue::Value(Value::Bool(a)), RuntimeValue::Value(Value::Bool(b))) => {
-                    m.push(a || b)
+                    m.push(a || b);
                 }
                 (RuntimeValue::Value(Value::Integer(a)), RuntimeValue::Value(Value::Integer(b))) => {
-                    m.push(a | b)
+                    m.push(a | b);
                 }
                 _ => return Err(TypeCheckSnafu.build()),
             }
@@ -1015,10 +1015,10 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
             let b = m.pop()?;
             match (a, b) {
                 (RuntimeValue::Value(Value::Bool(a)), RuntimeValue::Value(Value::Bool(b))) => {
-                    m.push(a ^ b)
+                    m.push(a ^ b);
                 }
                 (RuntimeValue::Value(Value::Integer(a)), RuntimeValue::Value(Value::Integer(b))) => {
-                    m.push(a ^ b)
+                    m.push(a ^ b);
                 }
                 _ => return Err(TypeCheckSnafu.build()),
             }
