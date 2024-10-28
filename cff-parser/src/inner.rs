@@ -626,15 +626,34 @@ impl<'a> IndexedData<'a> {
             .map(|(_, v)| v)
     }
 
+    /// Get value by index, use parser to decode data.
+    /// Panic if `idx` is out of range.
+    pub fn get2<T: 'a, F: winnow::Parser<&'a [u8], T, winnow::error::ContextError>>(
+        &self,
+        idx: usize,
+        mut f: F,
+    ) -> Result<T> {
+        let range = self.offsets.range(idx);
+        let buf = &self.data[range];
+        f.parse(buf).map_err(|e| {
+            log::error!("parse data failed: {:?}", e);
+            Error::ParseError {
+                message: format!("parse data failed: {:?}", e),
+            }
+        })
+    }
+
     /// Get str by index. Panic if `idx` is out of range.
     /// Returns `&[u8]` instead of `&str`, because the str may not be valid utf8,
     /// `from_utf8()` returns error if str contains '\0'.
     pub fn get_bin_str(&self, idx: usize) -> &'a [u8] {
-        fn parse_name(buf: &[u8]) -> ParseResult<'_, &'_ [u8]> {
-            Ok((&buf[0..0], buf))
+        fn parse_name<'a>(buf: &mut &'a [u8]) -> winnow::PResult<&'a [u8]> {
+            let r = *buf;
+            *buf = &[];
+            Ok(r)
         }
 
-        self.get(idx, parse_name).unwrap()
+        self.get2(idx, parse_name).unwrap()
     }
 
     /// Get Dict by index. Panic if `idx` is out of range.

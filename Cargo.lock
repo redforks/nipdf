@@ -503,6 +503,7 @@ dependencies = [
  "prescript",
  "snafu",
  "test-case",
+ "winnow 0.6.18",
 ]
 
 [[package]]

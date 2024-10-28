@@ -13,6 +13,7 @@ nom.workspace = true
 paste.workspace = true
 prescript = { path = "../prescript" }
 snafu.workspace = true
+winnow.workspace = true
 
 [dev-dependencies]
 map-macro.workspace = true
