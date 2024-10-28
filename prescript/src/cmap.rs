@@ -9,7 +9,7 @@ use crate::{
     sname,
 };
 use educe::Educe;
-use either::Either::{self, Right};
+use either::Either;
 use log::error;
 use once_cell::unsync::OnceCell;
 use phf::phf_map;
@@ -684,7 +684,7 @@ impl CMap {
         cid_or_code
             .map_either(
                 |_| use_map.next_cid(codes),
-                |cid| Ok((new_codes, Right(cid))),
+                |cid| Ok((new_codes, Either::Right(cid))),
             )
             .into_inner()
     }
@@ -764,10 +764,7 @@ macro_rules! built_in_ops {
 }
 
 impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
-    fn find_proc_set_resource<'b>(
-        &self,
-        name: &Name,
-    ) -> Option<crate::machine::RuntimeDictionary<'b, Self>> {
+    fn find_proc_set_resource<'b>(&self, name: &Name) -> Option<RuntimeDictionary<'b, Self>> {
         (name == "CIDInit").then(|| -> HashMap<Key, RuntimeValue<'_, Self>> {
             built_in_ops!(
                 "begincmap" => |_| {

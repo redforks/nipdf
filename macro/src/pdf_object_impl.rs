@@ -1,5 +1,5 @@
 use core::panic;
-use either::{Either, Left, Right};
+use either::Either;
 use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use quote::{ToTokens, quote};
@@ -69,7 +69,7 @@ fn has_attr<'a>(
     }
 
     let Type::Path(tp) = rt else {
-        return Some(Right(rt));
+        return Some(Either::Right(rt));
     };
 
     let Some(seg) = tp.path.segments.last() else {
@@ -77,10 +77,10 @@ fn has_attr<'a>(
     };
 
     if seg.ident != "Option" {
-        return Some(Right(rt));
+        return Some(Either::Right(rt));
     }
 
-    Some(Left(rt))
+    Some(Either::Left(rt))
 }
 
 fn _is_type(t: &Type, type_name: &'static str) -> bool {
@@ -264,11 +264,11 @@ fn gen_option_method(
     f_right: impl FnOnce(&Type) -> proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
     match ty {
-        Left(t) => {
+        Either::Left(t) => {
             let body = f_left(unwrap_option_type(t));
             quote! ( #body.whatever_context::<_, snafu::Whatever>(#key) )
         }
-        Right(t) => {
+        Either::Right(t) => {
             let body = f_right(t);
             quote! ( #body.whatever_context::<_, snafu::Whatever>(#key) )
         }
@@ -348,7 +348,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         Expr::Lit(lit) => {
             let lit = lit.lit;
             match lit {
-                syn::Lit::Str(lit) => {
+                Lit::Str(lit) => {
                     let typ_field =
                         type_field(def.attrs.as_slice()).unwrap_or_else(|| "Type".to_owned());
                     (
@@ -366,7 +366,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                         },
                     )
                 }
-                syn::Lit::Int(lit) => {
+                Lit::Int(lit) => {
                     let typ_field =
                         type_field(def.attrs.as_slice()).unwrap_or_else(|| "Type".to_owned());
                     (
@@ -452,7 +452,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     Expr::Lit(lit) => {
                         let lit = lit.lit;
                         match lit {
-                            syn::Lit::Str(lit) => {
+                            Lit::Str(lit) => {
                                 arg.push(Expr::Lit(ExprLit {
                                     attrs: vec![],
                                     lit: lit.into(),

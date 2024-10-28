@@ -57,7 +57,7 @@ where
     // '\0' maybe part of stream content.
     input.split_at_position1_complete(
         |c| !(c == b' ' || c == b'\t' || c == b'\r' || c == b'\n' || c == b'\x0C'),
-        nom::error::ErrorKind::MultiSpace,
+        ErrorKind::MultiSpace,
     )
 }
 

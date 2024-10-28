@@ -13,7 +13,7 @@ use euclid::{Length, Point2D, Transform2D};
 use log::{error, warn};
 use nipdf_macro::{OperationParser, TryFromIntObject, TryFromNameObject, pdf_object};
 use nom::{
-    Err, FindSubstring, Parser,
+    FindSubstring, Parser,
     branch::alt,
     bytes::complete::{is_not, tag},
     combinator::map_res,
@@ -659,7 +659,7 @@ pub fn parse_operations(mut input: &[u8]) -> ParseResult<'_, Vec<Operation>> {
         (input, _) = whitespace_or_comment(input)?;
         let vr = parse_object_or_operator(input);
         match vr {
-            Err(Err::Error(_)) => break,
+            Err(nom::Err::Error(_)) => break,
             Err(e) => return Err(e),
             Ok((remains, vr)) => {
                 input = remains;

@@ -17,7 +17,7 @@ use tinyvec::TinyVec;
 /// Color component composes a color.
 /// Two kinds of color component: float or integer.
 /// For float color component must in range [0, 1].
-pub trait ColorComp: Copy + Debug + std::cmp::PartialOrd {
+pub trait ColorComp: Copy + Debug + PartialOrd {
     fn min_color() -> Self;
     /// Max value of color component, for float color component must be 1.0
     fn max_color() -> Self;
@@ -649,9 +649,9 @@ where
     }
 }
 
-impl<T: PartialEq + Debug> core::cmp::PartialEq for DeviceNColorSpace<T> {
+impl<T: PartialEq + Debug> PartialEq for DeviceNColorSpace<T> {
     fn eq(&self, other: &Self) -> bool {
-        core::cmp::PartialEq::eq(&self.alt, &other.alt)
+        PartialEq::eq(&self.alt, &other.alt)
     }
 }
 

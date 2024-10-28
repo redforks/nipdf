@@ -24,7 +24,7 @@ use std::{fmt::Display, ops::RangeFrom, str::from_utf8};
 pub fn parse_header(buf: &[u8]) -> ParseResult<'_, Option<&str>> {
     let one_digit = || satisfy(|c| c.is_ascii_digit());
 
-    fn new_header(buf: &[u8]) -> std::result::Result<Option<&str>, FileError> {
+    fn new_header(buf: &[u8]) -> Result<Option<&str>, FileError> {
         assert_eq!(3, buf.len());
         if buf[0] != b'1' {
             Err(FileError::UnsupportedVersion {

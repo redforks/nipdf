@@ -1281,7 +1281,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
                 RuntimeValue::Value(Value::Real(v)) => v.to_i32().context(RangeCheckSnafu)?,
                 RuntimeValue::Value(Value::String(v)) =>  {
                     let v = v.borrow();
-                    let v = std::str::from_utf8(&v).whatever_context("convert from utf8").context(SyntaxSnafu)?;
+                    let v = from_utf8(&v).whatever_context("convert from utf8").context(SyntaxSnafu)?;
                     v.parse::<f32>().whatever_context("parse f32").context(SyntaxSnafu)?.to_i32().context(RangeCheckSnafu)?
                 }
                 _ => return Err(TypeCheckSnafu.build()),
@@ -1298,7 +1298,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
                 RuntimeValue::Value(Value::Real(v)) => v,
                 RuntimeValue::Value(Value::String(v)) =>  {
                     let v = v.borrow();
-                    let v = std::str::from_utf8(&v).whatever_context("convert from utf8").context(SyntaxSnafu)?;
+                    let v = from_utf8(&v).whatever_context("convert from utf8").context(SyntaxSnafu)?;
                     v.parse::<f32>().whatever_context("parse f32").context(SyntaxSnafu)?
                 }
                 _ => return Err(TypeCheckSnafu.build()),

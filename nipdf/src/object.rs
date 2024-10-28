@@ -1418,7 +1418,7 @@ impl HexString {
     }
 
     pub fn as_str(&self) -> &str {
-        std::str::from_utf8(self.as_bytes()).unwrap()
+        from_utf8(self.as_bytes()).unwrap()
     }
 }
 
