@@ -45,7 +45,6 @@ aes.workspace = true
 cbc.workspace = true
 phf.workspace = true
 miniz_oxide.workspace = true
-encoding_rs.workspace = true
 snafu.workspace = true
 
 [dev-dependencies]

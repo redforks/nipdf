@@ -11,9 +11,7 @@ description = "A library that parses CFF files"
 log.workspace = true
 nom.workspace = true
 paste.workspace = true
-test-case.workspace = true
 prescript = { path = "../prescript" }
-either.workspace = true
 snafu.workspace = true
 
 [dev-dependencies]

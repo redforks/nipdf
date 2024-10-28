@@ -11,7 +11,6 @@ description = "nipdf-render is a PDF renderer written in Rust."
 nipdf = { path = "../nipdf" }
 prescript = { path = "../prescript" }
 log.workspace = true
-ahash.workspace = true
 tiny-skia = "0.11.4"
 either.workspace = true
 euclid.workspace = true

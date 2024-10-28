@@ -496,7 +496,6 @@ checksum = "6d43a04d8753f35258c91f8ec639f792891f748a1edbd759cf1dcea3382ad83c"
 name = "cff-parser"
 version = "0.1.0"
 dependencies = [
- "either",
  "log",
  "map-macro",
  "nom",
@@ -1107,15 +1106,6 @@ name = "encode_unicode"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a357d28ed41a50f9c765dbfe56cbc04a64e53e5fc58ba79fbc34c10ef3df831f"
-
-[[package]]
-name = "encoding_rs"
-version = "0.8.34"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b45de904aa0b010bce2ab45264d0631681847fa7b6f2eaa7dab7619943bc4f59"
-dependencies = [
- "cfg-if",
-]
 
 [[package]]
 name = "enum-ordinalize"
@@ -2522,7 +2512,6 @@ dependencies = [
  "cff-parser",
  "educe",
  "either",
- "encoding_rs",
  "env_logger",
  "euclid",
  "font-kit",
@@ -2604,7 +2593,6 @@ dependencies = [
 name = "nipdf-render"
 version = "0.1.0"
 dependencies = [
- "ahash",
  "criterion",
  "educe",
  "either",
@@ -2634,7 +2622,6 @@ version = "0.1.0"
 dependencies = [
  "glob",
  "itertools 0.13.0",
- "proc-macro2",
  "quote",
  "syn 2.0.72",
 ]
