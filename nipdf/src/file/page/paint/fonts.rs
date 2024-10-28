@@ -180,19 +180,18 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
         r
     }
 
-    fn by_font_name(&self, font_name: &Name) -> Option<Encoding> {
+    fn by_font_name(font_name: &Name) -> Option<Encoding> {
         let encoding_name = standard_14_type1_font_encoding(font_name);
         encoding_name.and_then(|n| Self::by_name(&n))
     }
 
     fn resolve_by_encoding_or_font_name(
-        &self,
         pair: &Option<EncodingPair<'_>>,
         font_name: &str,
     ) -> Option<Encoding> {
         pair.as_ref()
             .and_then(|p| p.0.as_ref().and_then(Self::by_name))
-            .or_else(|| self.by_font_name(&name(font_name)))
+            .or_else(|| Self::by_font_name(&name(font_name)))
     }
 
     fn load_from_file(font_name: &str, font_data: &[u8], is_cff: bool) -> Result<Option<Encoding>> {
@@ -234,7 +233,7 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
         Ok(Encoding::STANDARD)
     }
 
-    fn apply_encoding_diff(&self, encoding: Encoding, pair: &Option<EncodingPair<'_>>) -> Encoding {
+    fn apply_encoding_diff(encoding: Encoding, pair: &Option<EncodingPair<'_>>) -> Encoding {
         if let Some((_, Some(diff))) = pair {
             return diff.apply_differences(encoding);
         }
@@ -247,20 +246,18 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
             .0
             .font_name()
             .whatever_context("parse type1 font name")?;
-        let r = self
-            .resolve_by_encoding_or_font_name(&encoding_pair, font_name.as_ref())
+        let r = Self::resolve_by_encoding_or_font_name(&encoding_pair, font_name.as_ref())
             .or_else(|| Self::load_from_file(font_name.as_ref(), font_data, is_cff).unwrap())
             .or_else(|| Self::guess_by_font_name(font_name.as_ref()))
             .unwrap_or_else(|| self.default_encoding().unwrap());
-        Ok(self.apply_encoding_diff(r, &encoding_pair))
+        Ok(Self::apply_encoding_diff(r, &encoding_pair))
     }
 
     pub fn type3(&self) -> Result<Encoding> {
         let encoding_pair = self.encoding_pair()?;
-        let r = self
-            .resolve_by_encoding_or_font_name(&encoding_pair, "")
+        let r = Self::resolve_by_encoding_or_font_name(&encoding_pair, "")
             .unwrap_or_else(|| self.default_encoding().unwrap());
-        Ok(self.apply_encoding_diff(r, &encoding_pair))
+        Ok(Self::apply_encoding_diff(r, &encoding_pair))
     }
 
     fn encoding_pair(&self) -> Result<Option<EncodingPair<'_>>> {
@@ -289,7 +286,7 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
         let r = pair.0.as_ref().map_or_else(Encoding::default, |n| {
             Self::by_name(&n.clone()).unwrap_or_else(Encoding::default)
         });
-        Ok(Some(self.apply_encoding_diff(r, &Some(pair))))
+        Ok(Some(Self::apply_encoding_diff(r, &Some(pair))))
     }
 }
 

@@ -54,7 +54,7 @@ impl AsRef<[u8]> for ShardedData {
 enum View {
     Error(ErrorView),
     Viewer(Box<Viewer>),
-    Welcome(Welcome),
+    Welcome,
 }
 
 /// Messages for application view.
@@ -160,7 +160,7 @@ impl Application for App {
 
     fn new(flags: Self::Flags) -> (Self, Command<Self::Message>) {
         let mut r = Self {
-            current: View::Welcome(Welcome),
+            current: View::Welcome,
             selecting_file: false,
             file_path_selecting: "".to_owned(),
             password: "".to_owned(),
@@ -218,7 +218,7 @@ impl Application for App {
         let main = match &self.current {
             View::Viewer(v) => v.view(),
             View::Error(v) => v.view(),
-            View::Welcome(v) => v.view(),
+            View::Welcome => Welcome::view(),
         };
 
         if self.selecting_file {

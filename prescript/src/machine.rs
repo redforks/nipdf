@@ -804,6 +804,7 @@ impl<'a, P> Machine<'a, P> {
     }
 
     fn dump_stack(&self) {
+        let _ = self;
         // debug!("{}", {
         //     use std::fmt::Write;
         //     let mut s = "stack: ".to_owned();

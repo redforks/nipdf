@@ -354,11 +354,13 @@ impl State {
     }
 
     #[allow(clippy::needless_pass_by_ref_mut)]
+    #[allow(clippy::unused_self)]
     fn set_flatness(&mut self, flatness: f32) {
         info!("not implemented: flatness: {}", flatness);
     }
 
     #[allow(clippy::needless_pass_by_ref_mut)]
+    #[allow(clippy::unused_self)]
     fn set_render_intent(&mut self, intent: RenderingIntent) {
         info!("not implemented: render intent: {}", intent);
     }
@@ -402,7 +404,9 @@ impl State {
                     debug!("ExtGState key {k} is for Overprint, which is not supported");
                 }
                 "SA" => {
-                    debug!("Unknown or unsupported ExtGState key: SA (automatic stroke adjustment)");
+                    debug!(
+                        "Unknown or unsupported ExtGState key: SA (automatic stroke adjustment)"
+                    );
                 }
                 _ => info!("Unknown or unsupported ExtGState key: {}", key.as_ref()),
             }
