@@ -11,7 +11,7 @@ pub fn decode(data: &[u8]) -> Result<Vec<u8>, Ascii85Error> {
 
     let mut stream = data
         .iter()
-        .cloned()
+        .copied()
         .filter(|&b| !matches!(b, b' ' | b'\n' | b'\r' | b'\t'));
 
     let mut symbols = stream.by_ref().take_while(|&b| b != b'~');

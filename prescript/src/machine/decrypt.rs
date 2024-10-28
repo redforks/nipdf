@@ -44,7 +44,7 @@ pub fn decrypt(key: u16, n: usize, buf: &[u8]) -> Result<(bool, Vec<u8>), hex::F
         is_hex,
         buf[n..]
             .iter()
-            .cloned()
+            .copied()
             .map(|b| decryptor.decrypt(b))
             .collect(),
     ))

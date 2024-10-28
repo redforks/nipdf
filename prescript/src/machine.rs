@@ -1482,7 +1482,7 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
                 RuntimeValue::Value(Value::String(s)) => {
                     let index = key.int()?;
                     let s = s.borrow();
-                    let v = s.get(index as usize).cloned().context(RangeCheckSnafu)?;
+                    let v = s.get(index as usize).copied().context(RangeCheckSnafu)?;
                     m.push(v as i32);
                 }
                 v => {
