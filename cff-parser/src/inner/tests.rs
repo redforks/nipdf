@@ -22,6 +22,21 @@ fn test_parse_integer(buf: &[u8]) -> i32 {
     r
 }
 
+#[test_case(&[0x8b] => 0)]
+#[test_case(&[0xef] => 100)]
+#[test_case(&[0x27] => -100)]
+#[test_case(&[0xfa, 0x7c] => 1000)]
+#[test_case(&[0xfe, 0x7c] => -1000)]
+#[test_case(&[0x1c, 0x27, 0x10] => 10000)]
+#[test_case(&[0x1c, 0xd8, 0xf0] => -10000)]
+#[test_case(&[0x1d, 0x00, 0x01, 0x86, 0xa0] => 100000)]
+#[test_case(&[0x1d, 0xff, 0xfe, 0x79, 0x60] => -100000)]
+fn test_integer_parser(buf: &[u8]) -> i32 {
+    let r = integer_parser().parse(buf).unwrap();
+    drop(buf);
+    r
+}
+
 #[test_case(&[0x1e, 0xe2, 0xa2, 0x5f] , -2.25)]
 #[test_case(&[0x1e, 0x0a, 0x14, 0x05, 0x41, 0xc3, 0xff] , 0.140541e-3)]
 fn test_parse_real(buf: &[u8], exp: f32) {

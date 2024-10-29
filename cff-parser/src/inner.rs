@@ -14,13 +14,15 @@ use nom::{
 };
 use paste::paste;
 use prescript::{Encoding, Name, name, sname};
-use snafu::prelude::*;
+use snafu::{Whatever, prelude::*};
 use std::{
     collections::HashMap,
     hash::Hash,
     ops::{Deref, Range, RangeInclusive},
+    slice::Windows,
     str::from_utf8,
 };
+use winnow::Parser as _;
 
 mod predefined_charsets;
 mod predefined_encodings;
@@ -121,6 +123,38 @@ fn parse_integer(buf: &[u8]) -> ParseResult<'_, i32> {
     }
 }
 
+/// Return parser to parse integer
+fn integer_parser<'a>() -> impl winnow::Parser<&'a [u8], i32, winnow::error::ContextError> {
+    use winnow::{
+        combinator::{dispatch, fail},
+        token::any,
+    };
+    dispatch! {any;
+        v@32..=246  => |_: &mut &[u8]| Ok((v as i32) - 139),
+        v@247..=250 => |buf: &mut &[u8]| {
+            let b1 = any(buf)?;
+            Ok(((v as i32) - 247) * 256 + (b1 as i32) + 108)
+        },
+        v@251..=254 => |buf: &mut &[u8]| {
+            let b1 = any(buf)?;
+            Ok(-((v as i32) - 251) * 256 - (b1 as i32) - 108)
+        },
+        28 => |buf: &mut &[u8]| {
+            let b1 = any(buf)?;
+            let b2 = any(buf)?;
+            Ok(((b1 as i16) << 8 | b2 as i16) as i32)
+        },
+        29 => |buf: &mut &[u8]| {
+            let b1 = any(buf)?;
+            let b2 = any(buf)?;
+            let b3 = any(buf)?;
+            let b4 = any(buf)?;
+            Ok(((b1 as i32) << 24) + ((b2 as i32) << 16) + ((b3 as i32) << 8) + (b4 as i32))
+        },
+        _ => fail::<_, i32, _>,
+    }
+}
+
 /// A real number operand is provided in addition to integer operands. This
 /// operand begins with a byte value of 30 followed  by a variable-length
 /// sequence of bytes. Each byte is composed  of two 4-bit nibbles as defined in
@@ -210,6 +244,51 @@ fn parse_real(buf: &[u8]) -> ParseResult<'_, f32> {
     } else {
         fail(buf)
     }
+}
+
+/// A real number operand is provided in addition to integer operands. This
+/// operand begins with a byte value of 30 followed  by a variable-length
+/// sequence of bytes. Each byte is composed  of two 4-bit nibbles as defined in
+/// fowling table. The first nibble of a  pair is stored in the most significant 4
+/// bits of a byte and the  second nibble of a pair is stored in the least
+/// significant 4 bits of a byte.
+///
+/// | nibble | represents |
+/// |--------|-------|
+/// | 0-9 | 0-9 |
+/// | a | .(decimal point) |
+/// | b | E |
+/// | c | E– |
+/// | d | <reserved> |
+/// | e | –(minus) |
+/// | f | end of number |
+///
+/// A real number is terminated by one (or two) 0xf nibbles so that it is
+/// always padded to a full byte. Thus, the value –2.25 is  encoded by the byte
+/// sequence (1e e2 a2 5f) and the value  0.140541E–3 by the sequence (1e 0a 14
+/// 05 41 c3 ff).
+fn parse_real2(buf: &mut &[u8]) -> winnow::PResult<f32> {
+    todo!()
+}
+
+/// Return operand parser
+/// Operand maybe integer/real/bool/intArray/realArray, if multiple operands
+/// are provided, item types must be same, either int or real, returned as
+/// intArray/realArray.
+fn operand_parser<'a>() -> impl winnow::Parser<&'a [u8], Operand, winnow::error::ContextError> {
+    use winnow::combinator::{alt, repeat};
+    fn post_process(v: Vec<Operand>) -> Result<Operand, Error> {
+        todo!()
+    }
+
+    repeat(
+        1..,
+        alt((
+            integer_parser().map(Operand::Integer),
+            parse_real2.map(Operand::Real),
+        )),
+    )
+    .try_map(post_process)
 }
 
 /// Operand maybe integer/real/bool/intArray/realArray, if multiple operands
@@ -391,7 +470,7 @@ impl<E: std::fmt::Debug> From<nom::Err<E>> for Error {
     }
 }
 
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Dict(HashMap<Operator, Operand>);
