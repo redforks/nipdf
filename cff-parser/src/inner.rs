@@ -373,8 +373,73 @@ fn real_parser<'a>() -> impl winnow::Parser<&'a [u8], f32, winnow::error::Contex
 /// intArray/realArray.
 fn operand_parser<'a>() -> impl winnow::Parser<&'a [u8], Operand, winnow::error::ContextError> {
     use winnow::combinator::{alt, repeat};
-    fn post_process(v: Vec<Operand>) -> Result<Operand, Error> {
-        todo!()
+    fn post_process(v: Vec<Operand>) -> Operand {
+        // if v has one element, return that element
+        // if all elements are all int, return int_array
+        // if all elements are all real, return real_array
+        // otherwize, convert all elements to real, and return real_array
+        if v.len() == 1 {
+            return v[0].clone();
+        }
+        let mut is_same_type = true;
+        let mut is_int = false;
+        let mut is_real = false;
+        for i in &v {
+            match i {
+                Operand::Integer(_) => {
+                    if is_real {
+                        is_same_type = false;
+                        break;
+                    }
+                    is_int = true;
+                }
+                Operand::Real(_) => {
+                    if is_int {
+                        is_same_type = false;
+                        break;
+                    }
+                    is_real = true;
+                }
+                _ => {
+                    is_same_type = false;
+                    break;
+                }
+            }
+        }
+        if is_same_type {
+            if is_int {
+                let mut int_array = Vec::with_capacity(v.len());
+                for i in v {
+                    match i {
+                        Operand::Integer(i) => int_array.push(i),
+                        _ => unreachable!(),
+                    }
+                }
+                Operand::IntArray(int_array)
+            } else if is_real {
+                let mut real_array = Vec::with_capacity(v.len());
+                for i in v {
+                    match i {
+                        Operand::Real(r) => real_array.push(r),
+                        _ => unreachable!(),
+                    }
+                }
+                Operand::RealArray(real_array)
+            } else {
+                unreachable!()
+            }
+        } else {
+            // mixed int/real to real array
+            let mut real_array = Vec::with_capacity(v.len());
+            for i in v {
+                match i {
+                    Operand::Integer(i) => real_array.push(i as f32),
+                    Operand::Real(r) => real_array.push(r),
+                    _ => unreachable!(),
+                }
+            }
+            Operand::RealArray(real_array)
+        }
     }
 
     repeat(
@@ -384,7 +449,7 @@ fn operand_parser<'a>() -> impl winnow::Parser<&'a [u8], Operand, winnow::error:
             real_parser().map(Operand::Real),
         )),
     )
-    .try_map(post_process)
+    .map(post_process)
 }
 
 /// Operand maybe integer/real/bool/intArray/realArray, if multiple operands
