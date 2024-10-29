@@ -64,6 +64,14 @@ fn test_parse_operator(buf: &[u8]) -> Operator {
     r
 }
 
+#[test_case(&[1] => Operator::new(1))]
+#[test_case(&[21] => Operator::new(21))]
+#[test_case(&[12, 0] => Operator::escaped(0))]
+#[test_case(&[12, 21] => Operator::escaped(21))]
+fn test_operator_parser(buf: &[u8]) -> Operator {
+    operator_parser().parse(buf).unwrap()
+}
+
 #[test]
 fn test_parse_off_size() {
     let mut buf = [0u8; 1];

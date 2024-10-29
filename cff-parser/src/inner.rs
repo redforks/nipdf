@@ -10,7 +10,7 @@ use nom::{
     error::Error as NomError,
     multi::{count, length_count, many_till, many1},
     number::complete::{be_u8, be_u16},
-    sequence::pair,
+    sequence::{pair, preceded},
 };
 use paste::paste;
 use prescript::{Encoding, Name, name, sname};
@@ -585,6 +585,16 @@ impl Hash for Operator {
         let tag = if escape { tag | 0x80 } else { tag };
         tag.hash(state);
     }
+}
+
+fn operator_parser<'a>() -> impl winnow::Parser<&'a [u8], Operator, winnow::error::ContextError> {
+    use winnow::{
+        combinator::{alt, preceded},
+        token::any,
+    };
+    let escaped = preceded(12u8, any).map(Operator::escaped);
+    let normal = any.map(Operator::new);
+    alt((escaped, normal))
 }
 
 fn parse_operator(buf: &[u8]) -> ParseResult<'_, Operator> {
