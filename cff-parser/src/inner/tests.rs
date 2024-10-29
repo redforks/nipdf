@@ -1,26 +1,9 @@
 use super::*;
 use map_macro::hash_map;
-use nom::{combinator::opt, number::complete::be_i16};
 use prescript::NOTDEF;
 use std::{collections::hash_map::DefaultHasher, hash::Hasher};
 use test_case::test_case;
-
-#[test_case(&[0x8b] => 0)]
-#[test_case(&[0xef] => 100)]
-#[test_case(&[0x27] => -100)]
-#[test_case(&[0xfa, 0x7c] => 1000)]
-#[test_case(&[0xfe, 0x7c] => -1000)]
-#[test_case(&[0x1c, 0x27, 0x10] => 10000)]
-#[test_case(&[0x1c, 0xd8, 0xf0] => -10000)]
-#[test_case(&[0x1d, 0x00, 0x01, 0x86, 0xa0] => 100000)]
-#[test_case(&[0x1d, 0xff, 0xfe, 0x79, 0x60] => -100000)]
-fn test_parse_integer(buf: &[u8]) -> i32 {
-    let mut buf = buf.to_owned();
-    buf.push(0x8b);
-    let (remains, r) = parse_integer(&buf[..]).unwrap();
-    assert_eq!(remains.len(), 1);
-    r
-}
+use winnow::binary::be_i16;
 
 #[test_case(&[0x8b] => 0)]
 #[test_case(&[0xef] => 100)]
@@ -37,31 +20,9 @@ fn test_integer_parser(buf: &[u8]) -> i32 {
 
 #[test_case(&[0x1e, 0xe2, 0xa2, 0x5f] , -2.25)]
 #[test_case(&[0x1e, 0x0a, 0x14, 0x05, 0x41, 0xc3, 0xff] , 0.140541e-3)]
-fn test_parse_real(buf: &[u8], exp: f32) {
-    let mut buf = buf.to_owned();
-    buf.push(0x8b);
-    let (remains, r) = parse_real(&buf[..]).unwrap();
-    assert_eq!(remains.len(), 1);
-    assert!((r - exp).abs() < 1e-6);
-}
-
-#[test_case(&[0x1e, 0xe2, 0xa2, 0x5f] , -2.25)]
-#[test_case(&[0x1e, 0x0a, 0x14, 0x05, 0x41, 0xc3, 0xff] , 0.140541e-3)]
 fn test_real_parser(buf: &[u8], exp: f32) {
     let r = real_parser().parse(buf).unwrap();
     assert!((r - exp).abs() < 1e-6, "exp: {}, act: {}", exp, r);
-}
-
-#[test_case(&[1] => Operator::new(1))]
-#[test_case(&[21] => Operator::new(21))]
-#[test_case(&[12, 0] => Operator::escaped(0))]
-#[test_case(&[12, 21] => Operator::escaped(21))]
-fn test_parse_operator(buf: &[u8]) -> Operator {
-    let mut buf = buf.to_owned();
-    buf.push(0x8b);
-    let (remains, r) = parse_operator(&buf[..]).unwrap();
-    assert_eq!(remains.len(), 1);
-    r
 }
 
 #[test_case(&[1] => Operator::new(1))]
@@ -130,19 +91,6 @@ fn test_parse_header() {
 #[test_case(&[0x8b, 0xef] => Operand::IntArray(vec![0, 100]))]
 #[test_case(&[0x1e, 0xe2, 0xa2, 0x5f, 0x1e, 0xe2, 0xa2, 0x5f] => Operand::RealArray(vec![-2.25, -2.25]))]
 #[test_case(&[0x8b, 0x1e, 0xe2, 0xa2, 0x5f, 0xef] => Operand::RealArray(vec![0.0, -2.25, 100.0]))]
-fn test_parse_operand(buf: &[u8]) -> Operand {
-    let mut buf = buf.to_owned();
-    buf.push(12);
-    let (remains, r) = parse_operand(&buf[..]).unwrap();
-    assert_eq!(remains.len(), 1);
-    r
-}
-
-#[test_case(&[0x1c, 0x27, 0x10] => Operand::Integer(10000))]
-#[test_case(&[0x1e, 0xe2, 0xa2, 0x5f] => Operand::Real(-2.25))]
-#[test_case(&[0x8b, 0xef] => Operand::IntArray(vec![0, 100]))]
-#[test_case(&[0x1e, 0xe2, 0xa2, 0x5f, 0x1e, 0xe2, 0xa2, 0x5f] => Operand::RealArray(vec![-2.25, -2.25]))]
-#[test_case(&[0x8b, 0x1e, 0xe2, 0xa2, 0x5f, 0xef] => Operand::RealArray(vec![0.0, -2.25, 100.0]))]
 fn test_operand_parser(buf: &[u8]) -> Operand {
     operand_parser().parse(buf).unwrap()
 }
@@ -161,16 +109,10 @@ fn test_operator_hash() {
 }
 
 #[test]
-fn test_parse_dict() {
-    // empty dict
-    let (remains, r) = opt(parse_dict)(&[]).unwrap();
-    assert_eq!(remains.len(), 0);
-    assert_eq!(r, None);
-
+fn test_dict_parser() {
     // dict with one item
     let buf = [0x8b_u8, 1];
-    let (remains, r) = parse_dict(&buf[..]).unwrap();
-    assert_eq!(remains.len(), 0);
+    let r = dict_parser().parse(&buf[..]).unwrap();
     assert_eq!(
         r,
         Dict(hash_map! {
@@ -180,8 +122,7 @@ fn test_parse_dict() {
 
     // dict with two items
     let buf = [0x8b_u8, 1, 0xef, 2];
-    let (remains, r) = parse_dict(&buf[..]).unwrap();
-    assert_eq!(remains.len(), 0);
+    let r = dict_parser().parse(&buf[..]).unwrap();
     assert_eq!(
         r,
         Dict(hash_map! {

@@ -1,25 +1,19 @@
 use nom::{
     IResult, Parser,
-    bits::{
-        bits,
-        complete::{tag as bit_tag, take as bit_take},
-    },
-    branch::alt,
     bytes::complete::take,
     combinator::{cond, fail, iterator},
     error::Error as NomError,
-    multi::{count, length_count, many_till, many1},
+    multi::{count, length_count},
     number::complete::{be_u8, be_u16},
-    sequence::{pair, preceded},
+    sequence::pair,
 };
 use paste::paste;
 use prescript::{Encoding, Name, name, sname};
-use snafu::{Whatever, prelude::*};
+use snafu::prelude::*;
 use std::{
     collections::HashMap,
     hash::Hash,
     ops::{Deref, Range, RangeInclusive},
-    slice::Windows,
     str::from_utf8,
 };
 use winnow::Parser as _;
@@ -86,43 +80,6 @@ impl Operand {
     }
 }
 
-fn parse_integer(buf: &[u8]) -> ParseResult<'_, i32> {
-    let (buf, b0) = take(1usize)(buf)?;
-    let b0 = b0[0];
-    if (32..=246).contains(&b0) {
-        Ok((buf, (b0 as i32) - 139))
-    } else if (247..=250).contains(&b0) {
-        let (buf, b1) = take(1usize)(buf)?;
-        let b1 = b1[0];
-        Ok((buf, ((b0 as i32) - 247) * 256 + (b1 as i32) + 108))
-    } else if (251..=254).contains(&b0) {
-        let (buf, b1) = take(1usize)(buf)?;
-        let b1 = b1[0];
-        Ok((buf, -((b0 as i32) - 251) * 256 - (b1 as i32) - 108))
-    } else if b0 == 28 {
-        let (buf, b1) = take(1usize)(buf)?;
-        let b1 = b1[0];
-        let (buf, b2) = take(1usize)(buf)?;
-        let b2 = b2[0];
-        Ok((buf, (((b1 as i16) << 8) | (b2 as i16)) as i32))
-    } else if b0 == 29 {
-        let (buf, b1) = take(1usize)(buf)?;
-        let b1 = b1[0];
-        let (buf, b2) = take(1usize)(buf)?;
-        let b2 = b2[0];
-        let (buf, b3) = take(1usize)(buf)?;
-        let b3 = b3[0];
-        let (buf, b4) = take(1usize)(buf)?;
-        let b4 = b4[0];
-        Ok((
-            buf,
-            ((b1 as i32) << 24) + ((b2 as i32) << 16) + ((b3 as i32) << 8) + (b4 as i32),
-        ))
-    } else {
-        fail(buf)
-    }
-}
-
 /// Return parser to parse integer
 fn integer_parser<'a>() -> impl winnow::Parser<&'a [u8], i32, winnow::error::ContextError> {
     use winnow::{
@@ -152,97 +109,6 @@ fn integer_parser<'a>() -> impl winnow::Parser<&'a [u8], i32, winnow::error::Con
             Ok(((b1 as i32) << 24) + ((b2 as i32) << 16) + ((b3 as i32) << 8) + (b4 as i32))
         },
         _ => fail::<_, i32, _>,
-    }
-}
-
-/// A real number operand is provided in addition to integer operands. This
-/// operand begins with a byte value of 30 followed  by a variable-length
-/// sequence of bytes. Each byte is composed  of two 4-bit nibbles as defined in
-/// fowling table. The first nibble of a  pair is stored in the most significant 4
-/// bits of a byte and the  second nibble of a pair is stored in the least
-/// significant 4 bits of a byte.
-///
-/// | nibble | represents |
-/// |--------|-------|
-/// | 0-9 | 0-9 |
-/// | a | .(decimal point) |
-/// | b | E |
-/// | c | E– |
-/// | d | <reserved> |
-/// | e | –(minus) |
-/// | f | end of number |
-///
-/// A real number is terminated by one (or two) 0xf nibbles so that it is
-/// always padded to a full byte. Thus, the value –2.25 is  encoded by the byte
-/// sequence (1e e2 a2 5f) and the value  0.140541E–3 by the sequence (1e 0a 14
-/// 05 41 c3 ff).
-fn parse_real(buf: &[u8]) -> ParseResult<'_, f32> {
-    #[derive(PartialEq, Eq, Debug)]
-    enum NumberState {
-        Int,
-        Mantissa,
-        Exponent,
-    }
-
-    let (buf, b0) = take(1usize)(buf)?;
-    let b0 = b0[0];
-    if b0 == 30 {
-        let mut sign = 1.0;
-        let mut exponent: f32 = 0.0;
-        let mut int: f32 = 0.0;
-        let mut mantissa: f32 = 0.0;
-        let mut mantissa_len = 0;
-        let mut exponent_sign = 1.0;
-        let mut number_state = NumberState::Int;
-        // TODO: rewrite use nom::combinator::iterator()
-        let mut parse_nibbles = bits::<_, _, NomError<(&[u8], usize)>, NomError<&[u8]>, _>(
-            many_till(bit_take::<_, u8, _, _>(4usize), bit_tag(0xf, 4usize)),
-        );
-        let (buf, (nibbles, _)) = parse_nibbles(buf)?;
-        for nibble in nibbles {
-            match nibble {
-                0..=9 => match number_state {
-                    NumberState::Int => {
-                        int = int.mul_add(10.0, nibble as f32);
-                    }
-                    NumberState::Mantissa => {
-                        mantissa = mantissa.mul_add(10.0, nibble as f32);
-                        mantissa_len += 1;
-                    }
-                    NumberState::Exponent => {
-                        exponent = exponent.mul_add(10.0_f32, nibble as f32);
-                    }
-                },
-                0xa => {
-                    debug_assert_eq!(NumberState::Int, number_state);
-                    number_state = NumberState::Mantissa;
-                }
-                0xb => {
-                    number_state = NumberState::Exponent;
-                }
-                0xc => {
-                    number_state = NumberState::Exponent;
-                    exponent_sign = -1.0;
-                }
-                0xe => {
-                    sign = -1.0;
-                }
-                0xf => {
-                    break;
-                }
-                _ => {
-                    return fail(buf);
-                }
-            }
-        }
-        let mut r = mantissa.mul_add(
-            10f32.powi(-mantissa_len) * 10f32.powf(exponent * exponent_sign),
-            int,
-        );
-        r *= sign;
-        Ok((buf, r))
-    } else {
-        fail(buf)
     }
 }
 
@@ -452,83 +318,6 @@ fn operand_parser<'a>() -> impl winnow::Parser<&'a [u8], Operand, winnow::error:
     .map(post_process)
 }
 
-/// Operand maybe integer/real/bool/intArray/realArray, if multiple operands
-/// are provided, item types must be same, either int or real, returned as
-/// intArray/realArray.
-fn parse_operand(buf: &[u8]) -> ParseResult<'_, Operand> {
-    let (buf, mut values) = many1(alt((
-        parse_integer.map(Operand::Integer),
-        parse_real.map(Operand::Real),
-    )))(buf)?;
-
-    // If values has one item, return it directly.
-    if values.len() == 1 {
-        return Ok((buf, values.pop().unwrap()));
-    }
-
-    // check if all items are same type.
-    let mut is_same_type = true;
-    let mut is_int = false;
-    let mut is_real = false;
-    for v in &values {
-        match v {
-            Operand::Integer(_) => {
-                if is_real {
-                    is_same_type = false;
-                    break;
-                }
-                is_int = true;
-            }
-            Operand::Real(_) => {
-                if is_int {
-                    is_same_type = false;
-                    break;
-                }
-                is_real = true;
-            }
-            _ => {
-                is_same_type = false;
-                break;
-            }
-        }
-    }
-
-    if is_same_type {
-        if is_int {
-            let mut int_array = Vec::with_capacity(values.len());
-            for v in values {
-                match v {
-                    Operand::Integer(i) => int_array.push(i),
-                    _ => unreachable!(),
-                }
-            }
-            Ok((buf, Operand::IntArray(int_array)))
-        } else if is_real {
-            let mut real_array = Vec::with_capacity(values.len());
-            for v in values {
-                match v {
-                    Operand::Real(r) => real_array.push(r),
-                    _ => unreachable!(),
-                }
-            }
-            Ok((buf, Operand::RealArray(real_array)))
-        } else {
-            unreachable!()
-        }
-    } else {
-        // mixed int/real to real array
-        let mut real_array = Vec::with_capacity(values.len());
-        for v in values {
-            match v {
-                Operand::Integer(i) => real_array.push(i as f32),
-                Operand::Real(r) => real_array.push(r),
-                _ => unreachable!(),
-            }
-        }
-        Ok((buf, Operand::RealArray(real_array)))
-    }
-}
-
 /// Operator of Dict. Operator is a byte value that is either a single byte
 /// value 0-21 or a byte value equal to 12 followed by a single byte
 /// value 0-21.
@@ -595,18 +384,6 @@ fn operator_parser<'a>() -> impl winnow::Parser<&'a [u8], Operator, winnow::erro
     let escaped = preceded(12u8, any).map(Operator::escaped);
     let normal = any.map(Operator::new);
     alt((escaped, normal))
-}
-
-fn parse_operator(buf: &[u8]) -> ParseResult<'_, Operator> {
-    let (buf, b0) = take(1usize)(buf)?;
-    let b0 = b0[0];
-    if b0 == 12 {
-        let (buf, b1) = take(1usize)(buf)?;
-        let b1 = b1[0];
-        Ok((buf, Operator::escaped(b1)))
-    } else {
-        Ok((buf, Operator::new(b0)))
-    }
 }
 
 /// Error may returned in this crate.
@@ -707,6 +484,16 @@ impl Dict {
     }
 }
 
+impl winnow::stream::Accumulate<(Operand, Operator)> for Dict {
+    fn initial(capacity: Option<usize>) -> Self {
+        Dict(capacity.map_or_else(HashMap::new, HashMap::with_capacity))
+    }
+
+    fn accumulate(&mut self, acc: (Operand, Operator)) {
+        self.0.insert(acc.1, acc.0);
+    }
+}
+
 macro_rules! access_methods {
     ($name: ident, $f: expr, $rt: ty) => {
         access_methods!($name, $f, $rt, $rt);
@@ -750,14 +537,13 @@ impl Dict {
     );
 }
 
-/// Parse Dict.
+/// Return Dict parser.
 /// Dict stored as a sequence of operators and operands. The operands are
 /// stored before the operators.
-fn parse_dict(buf: &[u8]) -> ParseResult<'_, Dict> {
-    let parse_item = pair(parse_operand, parse_operator).map(|(v, k)| (k, v));
-    let (buf, items) = many1(parse_item)(buf)?;
-    let dict = items.into_iter().collect();
-    Ok((buf, Dict(dict)))
+fn dict_parser<'a>() -> impl winnow::Parser<&'a [u8], Dict, winnow::error::ContextError> {
+    use winnow::combinator::repeat;
+    let parse_item = (operand_parser(), operator_parser());
+    repeat(1.., parse_item)
 }
 
 /// Byte length of offset data type.
@@ -857,28 +643,9 @@ impl<'a> IndexedData<'a> {
         self.offsets.len()
     }
 
-    /// Get value by index. Using parser `f` to decode data.
-    /// Panic if `idx` is out of range.
-    pub fn get<T: 'a, F: Parser<&'a [u8], T, NomError<&'a [u8]>>>(
-        &self,
-        idx: usize,
-        mut f: F,
-    ) -> Result<T> {
-        let range = self.offsets.range(idx);
-        let buf = &self.data[range];
-        f.parse(buf)
-            .map_err(|e| {
-                log::error!("parse data failed: {:?}", e);
-                Error::ParseError {
-                    message: format!("parse data failed: {:?}", e),
-                }
-            })
-            .map(|(_, v)| v)
-    }
-
     /// Get value by index, use parser to decode data.
     /// Panic if `idx` is out of range.
-    pub fn get2<T: 'a, F: winnow::Parser<&'a [u8], T, winnow::error::ContextError>>(
+    pub fn get<T: 'a, F: winnow::Parser<&'a [u8], T, winnow::error::ContextError>>(
         &self,
         idx: usize,
         mut f: F,
@@ -903,13 +670,13 @@ impl<'a> IndexedData<'a> {
             Ok(r)
         }
 
-        self.get2(idx, parse_name).unwrap()
+        self.get(idx, parse_name).unwrap()
     }
 
     /// Get Dict by index. Panic if `idx` is out of range.
     #[allow(dead_code)]
     pub fn get_dict(&self, idx: usize) -> Dict {
-        self.get(idx, parse_dict).unwrap()
+        self.get(idx, dict_parser()).unwrap()
     }
 }
 
@@ -1275,8 +1042,7 @@ impl<'a> TopDictIndex<'a> {
     }
 
     pub fn get(&self, idx: usize, strings: StringIndex<'a>) -> Result<TopDictData<'a>> {
-        let parse = parse_dict.map(|v| TopDictData::new(v, strings));
-        self.0.get(idx, parse)
+        Ok(TopDictData::new(self.0.get_dict(idx), strings))
     }
 }
 
