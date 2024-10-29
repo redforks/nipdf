@@ -32,9 +32,7 @@ fn test_parse_integer(buf: &[u8]) -> i32 {
 #[test_case(&[0x1d, 0x00, 0x01, 0x86, 0xa0] => 100000)]
 #[test_case(&[0x1d, 0xff, 0xfe, 0x79, 0x60] => -100000)]
 fn test_integer_parser(buf: &[u8]) -> i32 {
-    let r = integer_parser().parse(buf).unwrap();
-    drop(buf);
-    r
+    integer_parser().parse(buf).unwrap()
 }
 
 #[test_case(&[0x1e, 0xe2, 0xa2, 0x5f] , -2.25)]
@@ -45,6 +43,13 @@ fn test_parse_real(buf: &[u8], exp: f32) {
     let (remains, r) = parse_real(&buf[..]).unwrap();
     assert_eq!(remains.len(), 1);
     assert!((r - exp).abs() < 1e-6);
+}
+
+#[test_case(&[0x1e, 0xe2, 0xa2, 0x5f] , -2.25)]
+#[test_case(&[0x1e, 0x0a, 0x14, 0x05, 0x41, 0xc3, 0xff] , 0.140541e-3)]
+fn test_real_parser(buf: &[u8], exp: f32) {
+    let r = real_parser().parse(buf).unwrap();
+    assert!((r - exp).abs() < 1e-6, "exp: {}, act: {}", exp, r);
 }
 
 #[test_case(&[1] => Operator::new(1))]

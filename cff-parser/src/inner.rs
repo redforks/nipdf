@@ -267,8 +267,104 @@ fn parse_real(buf: &[u8]) -> ParseResult<'_, f32> {
 /// always padded to a full byte. Thus, the value –2.25 is  encoded by the byte
 /// sequence (1e e2 a2 5f) and the value  0.140541E–3 by the sequence (1e 0a 14
 /// 05 41 c3 ff).
-fn parse_real2(buf: &mut &[u8]) -> winnow::PResult<f32> {
-    todo!()
+fn real_parser<'a>() -> impl winnow::Parser<&'a [u8], f32, winnow::error::ContextError> {
+    use winnow::{
+        Parser as _,
+        binary::bits::{bits, pattern, take},
+        combinator::{preceded, repeat_till},
+        stream::Accumulate,
+    };
+
+    #[derive(PartialEq, Debug)]
+    enum NumberState {
+        Int,
+        Mantissa,
+        Exponent,
+    }
+
+    struct Real {
+        int: u32,
+        negative: bool,
+        state: NumberState,
+        mantissa: f32,
+        mantissa_len: i32,
+        exponent_negative: bool,
+        exponent: u32,
+    }
+
+    impl From<Real> for f32 {
+        fn from(value: Real) -> Self {
+            let mut r = value.mantissa.mul_add(
+                10f32.powi(-value.mantissa_len)
+                    * 10f32.powf(if value.exponent_negative {
+                        -(value.exponent as f32)
+                    } else {
+                        value.exponent as f32
+                    }),
+                value.int as f32,
+            );
+            if value.negative {
+                r = -r;
+            }
+            r
+        }
+    }
+
+    impl Accumulate<u8> for Real {
+        fn initial(_: Option<usize>) -> Self {
+            Self {
+                int: 0,
+                state: NumberState::Int,
+                exponent_negative: false,
+                mantissa: 0.0,
+                mantissa_len: 0,
+                exponent: 0,
+                negative: false,
+            }
+        }
+
+        fn accumulate(&mut self, acc: u8) {
+            match acc {
+                0..=9 => match self.state {
+                    NumberState::Int => {
+                        self.int = self.int * 10 + acc as u32;
+                    }
+                    NumberState::Mantissa => {
+                        self.mantissa = self.mantissa.mul_add(10.0, acc as f32);
+                        self.mantissa_len += 1;
+                    }
+                    NumberState::Exponent => {
+                        self.exponent = self.exponent * 10 + acc as u32;
+                    }
+                },
+                0xa => {
+                    debug_assert_eq!(NumberState::Int, self.state);
+                    self.state = NumberState::Mantissa;
+                }
+                0xb => {
+                    self.state = NumberState::Exponent;
+                }
+                0xc => {
+                    self.state = NumberState::Exponent;
+                    self.exponent_negative = true;
+                }
+                0xe => {
+                    // minus
+                    self.negative = true;
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+    preceded(
+        30u8,
+        bits(repeat_till::<_, _, Real, _, _, _, _>(
+            1..,
+            take::<_, u8, _, winnow::error::ContextError>(4u8),
+            pattern(0xfu8, 4u8),
+        )),
+    )
+    .map(|(v, _)| v.into())
 }
 
 /// Return operand parser
@@ -285,7 +381,7 @@ fn operand_parser<'a>() -> impl winnow::Parser<&'a [u8], Operand, winnow::error:
         1..,
         alt((
             integer_parser().map(Operand::Integer),
-            parse_real2.map(Operand::Real),
+            real_parser().map(Operand::Real),
         )),
     )
     .try_map(post_process)
