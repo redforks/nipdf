@@ -34,34 +34,6 @@ fn test_operator_parser(buf: &[u8]) -> Operator {
 }
 
 #[test]
-fn test_parse_off_size() {
-    let mut buf = [0u8; 1];
-    buf[0] = 1;
-    let (remains, r) = parse_off_size(&buf[..]).unwrap();
-    assert_eq!(remains.len(), 0);
-    assert_eq!(r, OffSize::One);
-
-    buf[0] = 2;
-    let (remains, r) = parse_off_size(&buf[..]).unwrap();
-    assert_eq!(remains.len(), 0);
-    assert_eq!(r, OffSize::Two);
-
-    buf[0] = 3;
-    let (remains, r) = parse_off_size(&buf[..]).unwrap();
-    assert_eq!(remains.len(), 0);
-    assert_eq!(r, OffSize::Three);
-
-    buf[0] = 4;
-    let (remains, r) = parse_off_size(&buf[..]).unwrap();
-    assert_eq!(remains.len(), 0);
-    assert_eq!(r, OffSize::Four);
-
-    buf[0] = 5;
-    let e = parse_off_size(&buf[..]);
-    assert!(e.is_err());
-}
-
-#[test]
 fn test_off_size_parser() {
     let r = off_size_parser().parse(&[1u8]).unwrap();
     assert_eq!(r, OffSize::One);
@@ -88,14 +60,9 @@ fn off_size_len(off_size: OffSize) -> usize {
 }
 
 #[test]
-fn test_parse_header() {
-    let mut buf = [0u8; 4];
-    buf[0] = 1;
-    buf[1] = 0;
-    buf[2] = 4;
-    buf[3] = 1;
-    let (remains, r) = parse_header(&buf[..]).unwrap();
-    assert_eq!(remains.len(), 0);
+fn test_header_parser() {
+    let buf: [u8; 4] = [1, 0, 4, 1];
+    let r = header_parser().parse(&buf[..]).unwrap();
     assert_eq!(r, Header {
         major: 1,
         minor: 0,

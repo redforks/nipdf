@@ -109,7 +109,13 @@ pub struct File<'a> {
 
 impl<'a> File<'a> {
     pub fn open(data: &'a [u8]) -> Result<Self> {
-        let (_, header) = inner::parse_header(data)?;
+        let mut buf = data;
+        let header = inner::header_parser().parse_next(&mut buf).map_err(|e| {
+            let e = e.into_inner();
+            Error::ParseError {
+                message: e.map_or_else(|| "".to_owned(), |e| e.to_string()),
+            }
+        })?;
         Ok(File { data, header })
     }
 

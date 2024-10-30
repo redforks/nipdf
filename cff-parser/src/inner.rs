@@ -577,18 +577,6 @@ fn off_size_parser<'a>() -> impl winnow::Parser<&'a [u8], OffSize, winnow::error
     }
 }
 
-fn parse_off_size(buf: &[u8]) -> ParseResult<'_, OffSize> {
-    let (buf, b0) = take(1usize)(buf)?;
-    let b0 = b0[0];
-    match b0 {
-        1 => Ok((buf, OffSize::One)),
-        2 => Ok((buf, OffSize::Two)),
-        3 => Ok((buf, OffSize::Three)),
-        4 => Ok((buf, OffSize::Four)),
-        _ => fail(buf),
-    }
-}
-
 /// Offsets is a sequence of n + 1 off_size bytes, where n is the number of
 /// items in the index. The first offset is always 1.
 #[derive(Debug, Clone, Copy)]
@@ -743,20 +731,14 @@ pub struct Header {
     pub off_size: OffSize,
 }
 
-pub fn parse_header(buf: &[u8]) -> ParseResult<'_, Header> {
-    let (buf, major) = take(1usize)(buf)?;
-    let major = major[0];
-    let (buf, minor) = take(1usize)(buf)?;
-    let minor = minor[0];
-    let (buf, hdr_size) = take(1usize)(buf)?;
-    let hdr_size = hdr_size[0];
-    let (buf, off_size) = parse_off_size(buf)?;
-    Ok((buf, Header {
+pub fn header_parser<'a>() -> impl winnow::Parser<&'a [u8], Header, winnow::error::ContextError> {
+    use winnow::binary::be_u8;
+    (be_u8, be_u8, be_u8, off_size_parser()).map(|(major, minor, hdr_size, off_size)| Header {
         major,
         minor,
         hdr_size,
         off_size,
-    }))
+    })
 }
 
 /// Font name index, stores font names in Index.
