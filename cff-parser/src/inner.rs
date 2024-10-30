@@ -1,8 +1,7 @@
 use nom::{
     IResult, Parser,
-    bytes::complete::take,
-    combinator::{cond, fail, iterator},
-    multi::{count, length_count},
+    combinator::{cond, fail},
+    multi::length_count,
     number::complete::{be_u8, be_u16},
     sequence::pair,
 };
@@ -981,7 +980,14 @@ impl<'a> TopDictData<'a> {
             0 => Ok(Charsets::Predefined(PredefinedCharsets::ISOAdobe)),
             1 => Ok(Charsets::Predefined(PredefinedCharsets::Expert)),
             2 => Ok(Charsets::Predefined(PredefinedCharsets::ExpertSubset)),
-            _ => Ok(parse_charsets(&file[offset as usize..], self.n_glyphs(file)?)?.1),
+            _ => Ok(charsets_parser(self.n_glyphs(file)?)
+                .parse_next(&mut &file[offset as usize..])
+                .map_err(|e| {
+                    let e = e.into_inner();
+                    Error::ParseError {
+                        message: e.map_or_else(|| "".to_owned(), |e| e.to_string()),
+                    }
+                })?),
         }
     }
 
@@ -1109,8 +1115,14 @@ impl Charsets {
 /// 2: format2, n_ranges (first, n_left: u16) SID
 ///
 /// Predefined charsets has no format byte, handled by TopDict::charsets().
-fn parse_charsets(buf: &[u8], n_glyphs: u16) -> ParseResult<'_, Charsets> {
-    let n_glyphs = n_glyphs - 1; // 0 is always .notdef, not exist in charsets
+fn charsets_parser<'a>(
+    n_glyphs: u16,
+) -> impl winnow::Parser<&'a [u8], Charsets, winnow::error::ContextError> {
+    use winnow::{
+        binary::{be_u8, be_u16},
+        combinator::{dispatch, fail, repeat},
+        token::any,
+    };
 
     fn covers(r: &[RangeInclusive<Sid>]) -> i32 {
         let mut covers = 0;
@@ -1120,48 +1132,31 @@ fn parse_charsets(buf: &[u8], n_glyphs: u16) -> ParseResult<'_, Charsets> {
         covers
     }
 
-    fn range_parser<
-        'a,
-        N: Into<u16> + Sized,
-        E: nom::error::ParseError<&'a [u8]>,
-        P: Parser<&'a [u8], N, E>,
-    >(
+    fn range_parser<'a, LEFT: winnow::Parser<&'a [u8], u16, winnow::error::ContextError>>(
         n_glyphs: u16,
-        n_left_parser: P,
-    ) -> impl Parser<&'a [u8], Vec<RangeInclusive<Sid>>, E> {
-        let mut parse_item =
-            pair(be_u16, n_left_parser).map(|(first, n_left)| first..=(first + n_left.into()));
-        move |buf| {
-            let mut ranges = vec![];
-            let mut iter = iterator(buf, |buf| parse_item.parse(buf));
-            iter.map_while(|v| {
-                ranges.push(v);
+        mut n_left_parser: LEFT,
+    ) -> impl winnow::Parser<&'a [u8], Vec<RangeInclusive<Sid>>, winnow::error::ContextError> {
+        // let n_left_parser = n_left_parser();
+        move |buf: &mut &'a [u8]| {
+            let mut parse_item =
+                (be_u16, n_left_parser.by_ref()).map(|(first, n_left)| first..=(first + n_left));
+            let mut ranges: Vec<RangeInclusive<Sid>> = vec![];
+            loop {
                 match n_glyphs as i32 - covers(&ranges[..]) {
-                    0 => None,
-                    1.. => Some(()),
+                    0 => return Ok(ranges),
+                    1.. => ranges.push(parse_item.parse_next(buf)?),
                     ..=-1 => panic!("parse charsets failed: {:?}", ranges.last().unwrap()),
                 }
-            })
-            .for_each(|_| ());
-            Ok((iter.finish()?.0, ranges))
+            }
         }
     }
 
-    let (buf, format) = take(1usize)(buf)?;
-    let format = format[0];
-    match format {
-        0 => {
-            let (buf, sids) = count(be_u16, n_glyphs as usize)(buf)?;
-            Ok((buf, Charsets::Format0(sids)))
-        }
-        1 => range_parser(n_glyphs, be_u8)
-            .map(Charsets::Format1)
-            .parse(buf),
-        2 => range_parser(n_glyphs, be_u16)
-            .map(Charsets::Format2)
-            .parse(buf),
-
-        _ => fail(buf),
+    let n_glyphs = n_glyphs - 1; // 0 is always .notdef, not exist in charsets
+    dispatch! {any;
+        0 => repeat(n_glyphs as usize,  be_u16).map(Charsets::Format0),
+        1 => range_parser(n_glyphs,  be_u8::<&'a [u8], winnow::error::ContextError>.output_into()).map(Charsets::Format1),
+        2 => range_parser(n_glyphs,  be_u16).map(Charsets::Format2),
+        _ => fail,
     }
 }
 

@@ -309,19 +309,20 @@ fn name_index() {
 
 #[test]
 fn parse_charsets_format0() {
-    let (remains, r) = parse_charsets(&[0_u8, 0, 1, 0, 2][..], 3).unwrap();
-    assert_eq!(remains.len(), 0);
+    let r = charsets_parser(3).parse(&[0_u8, 0, 1, 0, 2][..]).unwrap();
     assert_eq!(r, Charsets::Format0(vec![1, 2]));
 }
 
 #[test]
 fn parse_charsets_format1_2() {
-    let (remains, r) = parse_charsets(&[1_u8, 1, 2, 0, 0, 8, 1][..], 4).unwrap();
-    assert_eq!(remains.len(), 0);
+    let r = charsets_parser(4)
+        .parse(&[1_u8, 1, 2, 0, 0, 8, 1][..])
+        .unwrap();
     assert_eq!(r, Charsets::Format1(vec![0x102..=0x102, 8..=9]));
 
-    let (remains, r) = parse_charsets(&[2_u8, 1, 2, 0, 0, 0, 8, 0, 1][..], 4).unwrap();
-    assert_eq!(remains.len(), 0);
+    let r = charsets_parser(4)
+        .parse(&[2_u8, 1, 2, 0, 0, 0, 8, 0, 1][..])
+        .unwrap();
     assert_eq!(r, Charsets::Format2(vec![0x102..=0x102, 8..=9]));
 }
 
