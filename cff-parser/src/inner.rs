@@ -2,7 +2,6 @@ use nom::{
     IResult, Parser,
     bytes::complete::take,
     combinator::{cond, fail, iterator},
-    error::Error as NomError,
     multi::{count, length_count},
     number::complete::{be_u8, be_u16},
     sequence::pair,
@@ -586,7 +585,7 @@ impl<'a> Offsets<'a> {
     /// Return `Error::InvalidOffsetsData` if first offset is not 1.
     /// Assume data byte length is multiple of off_size.
     pub fn new(off_size: OffSize, data: &'a [u8]) -> Result<Self> {
-        let (_, first) = Self::_get(data, off_size, 0).map_err(|e| Error::ParseError {
+        let first = Self::_get(data, off_size, 0).map_err(|e| Error::ParseError {
             message: format!("parse first offset failed: {:?}", e),
         })?;
         ensure!(first == 1, InvalidOffsetsDataSnafu);
@@ -607,28 +606,28 @@ impl<'a> Offsets<'a> {
     /// `ith` can be length of offsets, which means the end offset of last element.
     /// Panic if `ith` is out of range.
     pub fn get(&self, ith: usize) -> usize {
-        let (_, r) = Self::_get(self.1, self.0, ith)
+        let r = Self::_get(self.1, self.0, ith)
             .unwrap_or_else(|e| panic!("parse offset failed: {:?}", e));
         r as usize - 1
     }
 
-    fn offset_parser<'b>(off_size: OffSize) -> impl Parser<&'b [u8], u32, NomError<&'b [u8]>> {
-        use nom::number::complete::{be_u24, be_u32};
-        move |buf| -> ParseResult<'_, u32> {
-            match off_size {
-                OffSize::One => be_u8.map(|v| v as u32).parse(buf),
-                OffSize::Two => be_u16.map(|v| v as u32).parse(buf),
-                OffSize::Three => be_u24.map(|v| v).parse(buf),
-                OffSize::Four => be_u32(buf),
-            }
-        }
-    }
-
     /// Get offset of `ith` element
-    fn _get(data: &[u8], off_size: OffSize, ith: usize) -> ParseResult<'_, u32> {
+    fn _get(data: &[u8], off_size: OffSize, ith: usize) -> Result<u32> {
+        use winnow::binary::{be_u8, be_u16, be_u24, be_u32};
         // skip ith off_size bytes
-        let buf = &data[ith * off_size.len()..];
-        Self::offset_parser(off_size).parse(buf)
+        let mut buf = &data[ith * off_size.len()..];
+        match off_size {
+            OffSize::One => be_u8.map(|v| v as u32).parse_next(&mut buf),
+            OffSize::Two => be_u16.map(|v| v as u32).parse_next(&mut buf),
+            OffSize::Three => be_u24.map(|v| v).parse_next(&mut buf),
+            OffSize::Four => be_u32.parse_next(&mut buf),
+        }
+        .map_err(|e: winnow::error::ErrMode<winnow::error::ContextError>| {
+            let e = e.into_inner();
+            Error::ParseError {
+                message: e.map_or_else(|| "".to_owned(), |e| e.to_string()),
+            }
+        })
     }
 }
 
