@@ -7,7 +7,14 @@ use std::{
     ops::{Deref, Range, RangeInclusive},
     str::from_utf8,
 };
-use winnow::{PResult, Parser as _};
+use winnow::{
+    PResult, Parser,
+    binary::{be_u8, be_u16, be_u24, be_u32, length_repeat, length_take},
+    combinator::{alt, dispatch, empty, fail, preceded, repeat, repeat_till},
+    error::{ContextError, ErrMode},
+    stream::Accumulate,
+    token::{any, take},
+};
 
 mod predefined_charsets;
 mod predefined_encodings;
@@ -70,11 +77,7 @@ impl Operand {
 }
 
 /// Return parser to parse integer
-fn integer_parser<'a>() -> impl winnow::Parser<&'a [u8], i32, winnow::error::ContextError> {
-    use winnow::{
-        combinator::{dispatch, fail},
-        token::any,
-    };
+fn integer_parser<'a>() -> impl Parser<&'a [u8], i32, ContextError> {
     dispatch! {any;
         v@32..=246  => |_: &mut &[u8]| Ok((v as i32) - 139),
         v@247..=250 => |buf: &mut &[u8]| {
@@ -122,13 +125,8 @@ fn integer_parser<'a>() -> impl winnow::Parser<&'a [u8], i32, winnow::error::Con
 /// always padded to a full byte. Thus, the value –2.25 is  encoded by the byte
 /// sequence (1e e2 a2 5f) and the value  0.140541E–3 by the sequence (1e 0a 14
 /// 05 41 c3 ff).
-fn real_parser<'a>() -> impl winnow::Parser<&'a [u8], f32, winnow::error::ContextError> {
-    use winnow::{
-        Parser as _,
-        binary::bits::{bits, pattern, take},
-        combinator::{preceded, repeat_till},
-        stream::Accumulate,
-    };
+fn real_parser<'a>() -> impl Parser<&'a [u8], f32, ContextError> {
+    use winnow::binary::bits::{bits, pattern, take};
 
     #[derive(PartialEq, Debug)]
     enum NumberState {
@@ -215,7 +213,7 @@ fn real_parser<'a>() -> impl winnow::Parser<&'a [u8], f32, winnow::error::Contex
         30u8,
         bits(repeat_till::<_, _, Real, _, _, _, _>(
             1..,
-            take::<_, u8, _, winnow::error::ContextError>(4u8),
+            take::<_, u8, _, ContextError>(4u8),
             pattern(0xfu8, 4u8),
         )),
     )
@@ -226,8 +224,7 @@ fn real_parser<'a>() -> impl winnow::Parser<&'a [u8], f32, winnow::error::Contex
 /// Operand maybe integer/real/bool/intArray/realArray, if multiple operands
 /// are provided, item types must be same, either int or real, returned as
 /// intArray/realArray.
-fn operand_parser<'a>() -> impl winnow::Parser<&'a [u8], Operand, winnow::error::ContextError> {
-    use winnow::combinator::{alt, repeat};
+fn operand_parser<'a>() -> impl Parser<&'a [u8], Operand, ContextError> {
     fn post_process(v: Vec<Operand>) -> Operand {
         // if v has one element, return that element
         // if all elements are all int, return int_array
@@ -365,11 +362,7 @@ impl Hash for Operator {
     }
 }
 
-fn operator_parser<'a>() -> impl winnow::Parser<&'a [u8], Operator, winnow::error::ContextError> {
-    use winnow::{
-        combinator::{alt, preceded},
-        token::any,
-    };
+fn operator_parser<'a>() -> impl Parser<&'a [u8], Operator, ContextError> {
     let escaped = preceded(12u8, any).map(Operator::escaped);
     let normal = any.map(Operator::new);
     alt((escaped, normal))
@@ -465,7 +458,7 @@ impl Dict {
     }
 }
 
-impl winnow::stream::Accumulate<(Operand, Operator)> for Dict {
+impl Accumulate<(Operand, Operator)> for Dict {
     fn initial(capacity: Option<usize>) -> Self {
         Dict(capacity.map_or_else(HashMap::new, HashMap::with_capacity))
     }
@@ -521,8 +514,7 @@ impl Dict {
 /// Return Dict parser.
 /// Dict stored as a sequence of operators and operands. The operands are
 /// stored before the operators.
-fn dict_parser<'a>() -> impl winnow::Parser<&'a [u8], Dict, winnow::error::ContextError> {
-    use winnow::combinator::repeat;
+fn dict_parser<'a>() -> impl Parser<&'a [u8], Dict, ContextError> {
     let parse_item = (operand_parser(), operator_parser());
     repeat(1.., parse_item)
 }
@@ -544,11 +536,7 @@ impl OffSize {
     }
 }
 
-fn off_size_parser<'a>() -> impl winnow::Parser<&'a [u8], OffSize, winnow::error::ContextError> {
-    use winnow::{
-        combinator::{dispatch, empty, fail},
-        token::any,
-    };
+fn off_size_parser<'a>() -> impl Parser<&'a [u8], OffSize, ContextError> {
     dispatch! {any;
         1 => empty.value(OffSize::One),
         2 => empty.value(OffSize::Two),
@@ -595,7 +583,6 @@ impl<'a> Offsets<'a> {
 
     /// Get offset of `ith` element
     fn _get(data: &[u8], off_size: OffSize, ith: usize) -> Result<u32> {
-        use winnow::binary::{be_u8, be_u16, be_u24, be_u32};
         // skip ith off_size bytes
         let mut buf = &data[ith * off_size.len()..];
         match off_size {
@@ -604,7 +591,7 @@ impl<'a> Offsets<'a> {
             OffSize::Three => be_u24.map(|v| v).parse_next(&mut buf),
             OffSize::Four => be_u32.parse_next(&mut buf),
         }
-        .map_err(|e: winnow::error::ErrMode<winnow::error::ContextError>| {
+        .map_err(|e: ErrMode<ContextError>| {
             let e = e.into_inner();
             Error::ParseError {
                 message: e.map_or_else(|| "".to_owned(), |e| e.to_string()),
@@ -628,7 +615,7 @@ impl<'a> IndexedData<'a> {
 
     /// Get value by index, use parser to decode data.
     /// Panic if `idx` is out of range.
-    pub fn get<T: 'a, F: winnow::Parser<&'a [u8], T, winnow::error::ContextError>>(
+    pub fn get<T: 'a, F: Parser<&'a [u8], T, ContextError>>(
         &self,
         idx: usize,
         mut f: F,
@@ -675,7 +662,6 @@ impl<'a> IndexedData<'a> {
 /// 3 | data                  | Data
 /// ---+-----------------------+------------------------------------------
 fn parse_indexed_data<'a>(buf: &'_ mut &'a [u8]) -> PResult<IndexedData<'a>> {
-    use winnow::{binary::be_u16, token::take};
     let (n, off_size) = (be_u16, off_size_parser()).parse_next(buf)?;
     let offset_data_len = (n + 1) as usize * off_size.len();
     let offsets = take(offset_data_len)
@@ -688,18 +674,15 @@ fn parse_indexed_data<'a>(buf: &'_ mut &'a [u8]) -> PResult<IndexedData<'a>> {
         .parse_next(buf)
 }
 
-pub fn name_index_parser<'a>()
--> impl winnow::Parser<&'a [u8], NameIndex<'a>, winnow::error::ContextError> {
+pub fn name_index_parser<'a>() -> impl Parser<&'a [u8], NameIndex<'a>, ContextError> {
     parse_indexed_data.map(NameIndex)
 }
 
-pub fn string_index_parser<'a>()
--> impl winnow::Parser<&'a [u8], StringIndex<'a>, winnow::error::ContextError> {
+pub fn string_index_parser<'a>() -> impl Parser<&'a [u8], StringIndex<'a>, ContextError> {
     parse_indexed_data.map(StringIndex)
 }
 
-pub fn top_dict_index_parser<'a>()
--> impl winnow::Parser<&'a [u8], TopDictIndex<'a>, winnow::error::ContextError> {
+pub fn top_dict_index_parser<'a>() -> impl Parser<&'a [u8], TopDictIndex<'a>, ContextError> {
     parse_indexed_data.map(TopDictIndex)
 }
 
@@ -712,8 +695,7 @@ pub struct Header {
     pub off_size: OffSize,
 }
 
-pub fn header_parser<'a>() -> impl winnow::Parser<&'a [u8], Header, winnow::error::ContextError> {
-    use winnow::binary::be_u8;
+pub fn header_parser<'a>() -> impl Parser<&'a [u8], Header, ContextError> {
     (be_u8, be_u8, be_u8, off_size_parser()).map(|(major, minor, hdr_size, off_size)| Header {
         major,
         minor,
@@ -1105,15 +1087,7 @@ impl Charsets {
 /// 2: format2, n_ranges (first, n_left: u16) SID
 ///
 /// Predefined charsets has no format byte, handled by TopDict::charsets().
-fn charsets_parser<'a>(
-    n_glyphs: u16,
-) -> impl winnow::Parser<&'a [u8], Charsets, winnow::error::ContextError> {
-    use winnow::{
-        binary::{be_u8, be_u16},
-        combinator::{dispatch, fail, repeat},
-        token::any,
-    };
-
+fn charsets_parser<'a>(n_glyphs: u16) -> impl Parser<&'a [u8], Charsets, ContextError> {
     fn covers(r: &[RangeInclusive<Sid>]) -> i32 {
         let mut covers = 0;
         for range in r {
@@ -1122,10 +1096,10 @@ fn charsets_parser<'a>(
         covers
     }
 
-    fn range_parser<'a, LEFT: winnow::Parser<&'a [u8], u16, winnow::error::ContextError>>(
+    fn range_parser<'a, LEFT: Parser<&'a [u8], u16, ContextError>>(
         n_glyphs: u16,
         mut n_left_parser: LEFT,
-    ) -> impl winnow::Parser<&'a [u8], Vec<RangeInclusive<Sid>>, winnow::error::ContextError> {
+    ) -> impl Parser<&'a [u8], Vec<RangeInclusive<Sid>>, ContextError> {
         // let n_left_parser = n_left_parser();
         move |buf: &mut &'a [u8]| {
             let mut parse_item =
@@ -1144,7 +1118,7 @@ fn charsets_parser<'a>(
     let n_glyphs = n_glyphs - 1; // 0 is always .notdef, not exist in charsets
     dispatch! {any;
         0 => repeat(n_glyphs as usize,  be_u16).map(Charsets::Format0),
-        1 => range_parser(n_glyphs,  be_u8::<&'a [u8], winnow::error::ContextError>.output_into()).map(Charsets::Format1),
+        1 => range_parser(n_glyphs,  be_u8::<&'a [u8], ContextError>.output_into()).map(Charsets::Format1),
         2 => range_parser(n_glyphs,  be_u16).map(Charsets::Format2),
         _ => fail,
     }
@@ -1235,15 +1209,8 @@ impl Encodings {
 /// If first byte highest bit is 1, EncodingSuppliments exists after Format0 or Format 1.
 /// EncodingSuppliments is a sequence of code (u8) and sid (u16) preceeded with `nSups` (u8),
 /// which is the count of EncodingSuppliment.
-fn encodings_parser<'a>() -> impl winnow::Parser<
-    &'a [u8],
-    (Encodings, Option<Vec<EncodingSupplement>>),
-    winnow::error::ContextError,
-> {
-    use winnow::{
-        binary::{be_u8, be_u16, length_repeat, length_take},
-        combinator::{dispatch, empty, fail},
-    };
+fn encodings_parser<'a>()
+-> impl Parser<&'a [u8], (Encodings, Option<Vec<EncodingSupplement>>), ContextError> {
     let mut format0 = length_take(be_u8).map(|v: &[u8]| Encodings::Format0(v.to_owned()));
     let mut format1 = length_repeat(
         be_u8,
