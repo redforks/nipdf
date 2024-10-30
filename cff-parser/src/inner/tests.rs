@@ -61,6 +61,24 @@ fn test_parse_off_size() {
     assert!(e.is_err());
 }
 
+#[test]
+fn test_off_size_parser() {
+    let r = off_size_parser().parse(&[1u8]).unwrap();
+    assert_eq!(r, OffSize::One);
+
+    let r = off_size_parser().parse(&[2u8]).unwrap();
+    assert_eq!(r, OffSize::Two);
+
+    let r = off_size_parser().parse(&[3u8]).unwrap();
+    assert_eq!(r, OffSize::Three);
+
+    let r = off_size_parser().parse(&[4u8]).unwrap();
+    assert_eq!(r, OffSize::Four);
+
+    let e = off_size_parser().parse(&[5u8]);
+    assert!(e.is_err());
+}
+
 #[test_case(OffSize::One => 1)]
 #[test_case(OffSize::Two => 2)]
 #[test_case(OffSize::Three => 3)]
@@ -248,15 +266,15 @@ fn offsets() {
 }
 
 #[test]
-fn test_parse_indexed_data() {
+fn test_parse_indexed_data2() {
     // empty index off_size 2 bytes
-    let (remains, r) = parse_indexed_data(&[0_u8, 0, 2, 0, 1][..]).unwrap();
-    assert_eq!(remains.len(), 0);
+    let r = parse_indexed_data.parse(&[0_u8, 0, 2, 0, 1][..]).unwrap();
     assert_eq!(0, r.len());
 
     // index with one items, off_size 3 bytes
-    let (remains, r) = parse_indexed_data(&[0_u8, 1, 3, 0, 0, 1, 0, 0, 2, 10][..]).unwrap();
-    assert_eq!(remains.len(), 0);
+    let r = parse_indexed_data
+        .parse(&[0_u8, 1, 3, 0, 0, 1, 0, 0, 2, 10][..])
+        .unwrap();
     assert_eq!(1, r.len());
     assert_eq!(0..1, r.offsets.range(0));
 }

@@ -16,7 +16,7 @@ use std::{
     ops::{Deref, Range, RangeInclusive},
     str::from_utf8,
 };
-use winnow::Parser as _;
+use winnow::{PResult, Parser as _};
 
 mod predefined_charsets;
 mod predefined_encodings;
@@ -563,6 +563,20 @@ impl OffSize {
     }
 }
 
+fn off_size_parser<'a>() -> impl winnow::Parser<&'a [u8], OffSize, winnow::error::ContextError> {
+    use winnow::{
+        combinator::{dispatch, empty, fail},
+        token::any,
+    };
+    dispatch! {any;
+        1 => empty.value(OffSize::One),
+        2 => empty.value(OffSize::Two),
+        3 => empty.value(OffSize::Three),
+        4 => empty.value(OffSize::Four),
+        _ => fail
+    }
+}
+
 fn parse_off_size(buf: &[u8]) -> ParseResult<'_, OffSize> {
     let (buf, b0) = take(1usize)(buf)?;
     let b0 = b0[0];
@@ -664,7 +678,7 @@ impl<'a> IndexedData<'a> {
     /// Returns `&[u8]` instead of `&str`, because the str may not be valid utf8,
     /// `from_utf8()` returns error if str contains '\0'.
     pub fn get_bin_str(&self, idx: usize) -> &'a [u8] {
-        fn parse_name<'a>(buf: &mut &'a [u8]) -> winnow::PResult<&'a [u8]> {
+        fn parse_name<'a>(buf: &mut &'a [u8]) -> PResult<&'a [u8]> {
             let r = *buf;
             *buf = &[];
             Ok(r)
@@ -691,33 +705,33 @@ impl<'a> IndexedData<'a> {
 /// ---+-----------------------+------------------------------------------
 /// 3 | data                  | Data
 /// ---+-----------------------+------------------------------------------
-pub fn parse_indexed_data(buf: &[u8]) -> ParseResult<'_, IndexedData<'_>> {
-    let (buf, n) = be_u16(buf)?;
-    let (buf, off_size) = parse_off_size(buf)?;
-
+fn parse_indexed_data<'a>(buf: &'_ mut &'a [u8]) -> PResult<IndexedData<'a>> {
+    use winnow::{binary::be_u16, token::take};
+    let (n, off_size) = (be_u16, off_size_parser()).parse_next(buf)?;
     let offset_data_len = (n + 1) as usize * off_size.len();
-    let (buf, offset_data) = take(offset_data_len)(buf)?;
-    let offsets = Offsets::new(off_size, offset_data).map_err(|e| {
-        log::error!("parse offsets failed: {:?}", e);
-        nom::Err::Error(NomError::new(buf, nom::error::ErrorKind::Verify))
-    })?;
+    let offsets = take(offset_data_len)
+        .try_map(|offset_data| Offsets::new(off_size, offset_data))
+        .parse_next(buf)?;
 
     let data_len = offsets.get(n as usize);
-    let (buf, data) = take(data_len)(buf)?;
-
-    Ok((buf, IndexedData { offsets, data }))
+    take(data_len)
+        .map(|data| IndexedData { offsets, data })
+        .parse_next(buf)
 }
 
-pub fn parse_name_index(buf: &[u8]) -> ParseResult<'_, NameIndex<'_>> {
-    parse_indexed_data.map(NameIndex).parse(buf)
+pub fn name_index_parser<'a>()
+-> impl winnow::Parser<&'a [u8], NameIndex<'a>, winnow::error::ContextError> {
+    parse_indexed_data.map(NameIndex)
 }
 
-pub fn parse_string_index(buf: &[u8]) -> ParseResult<'_, StringIndex<'_>> {
-    parse_indexed_data.map(StringIndex).parse(buf)
+pub fn string_index_parser<'a>()
+-> impl winnow::Parser<&'a [u8], StringIndex<'a>, winnow::error::ContextError> {
+    parse_indexed_data.map(StringIndex)
 }
 
-pub fn parse_top_dict_index(buf: &[u8]) -> ParseResult<'_, TopDictIndex<'_>> {
-    parse_indexed_data.map(TopDictIndex).parse(buf)
+pub fn top_dict_index_parser<'a>()
+-> impl winnow::Parser<&'a [u8], TopDictIndex<'a>, winnow::error::ContextError> {
+    parse_indexed_data.map(TopDictIndex)
 }
 
 /// Header of CFF.
@@ -1010,8 +1024,13 @@ impl<'a> TopDictData<'a> {
 
     /// Return glyphs count in font. `file` is the raw file data.
     pub fn n_glyphs(&self, file: &[u8]) -> Result<u16> {
-        let buf = &file[self.char_strings()? as usize..];
-        let (_, index) = parse_indexed_data(buf)?;
+        let mut buf = &file[self.char_strings()? as usize..];
+        let index = parse_indexed_data(&mut buf).map_err(|e| {
+            let e = e.into_inner();
+            Error::ParseError {
+                message: e.map_or_else(|| "".to_owned(), |e| e.to_string()),
+            }
+        })?;
         Ok(index.len().try_into().unwrap())
     }
 
