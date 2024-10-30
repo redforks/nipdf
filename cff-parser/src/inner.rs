@@ -1,10 +1,3 @@
-use nom::{
-    IResult, Parser,
-    combinator::{cond, fail},
-    multi::length_count,
-    number::complete::{be_u8, be_u16},
-    sequence::pair,
-};
 use paste::paste;
 use prescript::{Encoding, Name, name, sname};
 use snafu::prelude::*;
@@ -18,8 +11,6 @@ use winnow::{PResult, Parser as _};
 
 mod predefined_charsets;
 mod predefined_encodings;
-
-pub type ParseResult<'a, O> = IResult<&'a [u8], O>;
 
 /// Glyph ID
 type Gid = u8;
@@ -406,14 +397,6 @@ pub enum Error {
 
     #[snafu(display("Required top dict value missing"))]
     RequiredDictValueMissing,
-}
-
-impl<E: std::fmt::Debug> From<nom::Err<E>> for Error {
-    fn from(e: nom::Err<E>) -> Self {
-        Self::ParseError {
-            message: format!("{}", e),
-        }
-    }
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -997,7 +980,14 @@ impl<'a> TopDictData<'a> {
         match offset {
             0 => Ok((Encodings::PredefinedStandard, None)),
             1 => Ok((Encodings::PredefinedExpert, None)),
-            _ => Ok(parse_encodings(&file[offset as usize..])?.1),
+            _ => Ok(encodings_parser()
+                .parse_next(&mut &file[offset as usize..])
+                .map_err(|e| {
+                    let e = e.into_inner();
+                    Error::ParseError {
+                        message: e.map_or_else(|| "".to_owned(), |e| e.to_string()),
+                    }
+                })?),
         }
     }
 
@@ -1245,27 +1235,30 @@ impl Encodings {
 /// If first byte highest bit is 1, EncodingSuppliments exists after Format0 or Format 1.
 /// EncodingSuppliments is a sequence of code (u8) and sid (u16) preceeded with `nSups` (u8),
 /// which is the count of EncodingSuppliment.
-fn parse_encodings(buf: &[u8]) -> ParseResult<'_, (Encodings, Option<Vec<EncodingSupplement>>)> {
-    let (buf, format) = be_u8(buf)?;
-    let (buf, encodings) = match format & 0x7f {
-        0 => length_count(be_u8, be_u8)
-            .map(Encodings::Format0)
-            .parse(buf)?,
-        1 => {
-            let range_parser =
-                pair(be_u8, be_u8).map(|(first, n_left)| EncodingRange::new(first, n_left));
-            length_count(be_u8, range_parser)
-                .map(Encodings::Format1)
-                .parse(buf)?
-        }
-        _ => fail(buf)?,
+fn encodings_parser<'a>() -> impl winnow::Parser<
+    &'a [u8],
+    (Encodings, Option<Vec<EncodingSupplement>>),
+    winnow::error::ContextError,
+> {
+    use winnow::{
+        binary::{be_u8, be_u16, length_repeat, length_take},
+        combinator::{dispatch, empty, fail},
     };
-    let supplement_parser =
-        pair(be_u8, be_u16).map(|(code, sid)| EncodingSupplement::new(code, sid));
-    let supplements_parser = length_count(be_u8, supplement_parser);
-    let (buf, supplements) = cond(format & 0x80 != 0, supplements_parser)(buf)?;
-
-    Ok((buf, (encodings, supplements)))
+    let mut format0 = length_take(be_u8).map(|v: &[u8]| Encodings::Format0(v.to_owned()));
+    let mut format1 = length_repeat(
+        be_u8,
+        (be_u8, be_u8).map(|(first, n_left)| EncodingRange::new(first, n_left)),
+    )
+    .map(Encodings::Format1);
+    let supplement_parser = (be_u8, be_u16).map(|(code, sid)| EncodingSupplement::new(code, sid));
+    let mut supplements_parser = length_repeat(be_u8, supplement_parser).map(Some);
+    dispatch! { be_u8;
+        0 => (format0.by_ref(), empty.value(None)),
+        1 => (format1.by_ref(), empty.value(None)),
+        0x80 => (format0.by_ref(),  supplements_parser.by_ref()),
+        0x81 => (format1.by_ref(),  supplements_parser.by_ref()),
+        _ => fail,
+    }
 }
 
 #[cfg(test)]

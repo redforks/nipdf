@@ -329,13 +329,13 @@ fn parse_charsets_format1_2() {
 #[test]
 fn parse_encodings_format0() {
     // without supplement
-    let (remains, r) = parse_encodings(&[0_u8, 3, 1, 0, 2][..]).unwrap();
-    assert_eq!(remains.len(), 0);
+    let r = encodings_parser().parse(&[0_u8, 3, 1, 0, 2][..]).unwrap();
     assert_eq!(r, (Encodings::Format0(vec![1, 0, 2]), None));
 
     // with supplement
-    let (remains, r) = parse_encodings(&[0x80_u8, 3, 1, 0, 2, 1, 1, 2, 1][..]).unwrap();
-    assert_eq!(remains.len(), 0);
+    let r = encodings_parser()
+        .parse(&[0x80_u8, 3, 1, 0, 2, 1, 1, 2, 1][..])
+        .unwrap();
     assert_eq!(
         r,
         (
@@ -348,8 +348,9 @@ fn parse_encodings_format0() {
 #[test]
 fn parse_encodings_format1() {
     // without supplement
-    let (remains, r) = parse_encodings(&[1_u8, 2, 1, 10, 2, 20][..]).unwrap();
-    assert_eq!(remains.len(), 0);
+    let r = encodings_parser()
+        .parse(&[1_u8, 2, 1, 10, 2, 20][..])
+        .unwrap();
     assert_eq!(
         r,
         (
@@ -359,8 +360,9 @@ fn parse_encodings_format1() {
     );
 
     // with supplement
-    let (remains, r) = parse_encodings(&[0x81_u8, 1, 1, 100, 1, 1, 2, 1][..]).unwrap();
-    assert_eq!(remains.len(), 0);
+    let r = encodings_parser()
+        .parse(&[0x81_u8, 1, 1, 100, 1, 1, 2, 1][..])
+        .unwrap();
     assert_eq!(
         r,
         (

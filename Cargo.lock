@@ -498,7 +498,6 @@ version = "0.1.0"
 dependencies = [
  "log",
  "map-macro",
- "nom",
  "paste",
  "prescript",
  "snafu",

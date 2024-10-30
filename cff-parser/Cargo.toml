@@ -9,7 +9,6 @@ description = "A library that parses CFF files"
 
 [dependencies]
 log.workspace = true
-nom.workspace = true
 paste.workspace = true
 prescript = { path = "../prescript" }
 snafu.workspace = true
