@@ -10,9 +10,9 @@ use std::{
 use winnow::{
     PResult, Parser,
     binary::{be_u8, be_u16, be_u24, be_u32, length_repeat, length_take},
-    combinator::{alt, dispatch, empty, fail, preceded, repeat, repeat_till},
-    error::{ContextError, ErrMode},
-    stream::Accumulate,
+    combinator::{alt, dispatch, empty, fail, preceded, repeat, repeat_till, rest, terminated},
+    error::{AddContext, ErrorConvert, ErrorKind, FromExternalError, ParseError, StrContext},
+    stream::{Accumulate, Stream, StreamIsPartial},
     token::{any, take},
 };
 
@@ -77,7 +77,7 @@ impl Operand {
 }
 
 /// Return parser to parse integer
-fn integer_parser<'a>() -> impl Parser<&'a [u8], i32, ContextError> {
+fn integer_parser<'a>() -> impl Parser<&'a [u8], i32, ParserError> {
     dispatch! {any;
         v@32..=246  => |_: &mut &[u8]| Ok((v as i32) - 139),
         v@247..=250 => |buf: &mut &[u8]| {
@@ -125,7 +125,7 @@ fn integer_parser<'a>() -> impl Parser<&'a [u8], i32, ContextError> {
 /// always padded to a full byte. Thus, the value –2.25 is  encoded by the byte
 /// sequence (1e e2 a2 5f) and the value  0.140541E–3 by the sequence (1e 0a 14
 /// 05 41 c3 ff).
-fn real_parser<'a>() -> impl Parser<&'a [u8], f32, ContextError> {
+fn real_parser<'a>() -> impl Parser<&'a [u8], f32, ParserError> {
     use winnow::binary::bits::{bits, pattern, take};
 
     #[derive(PartialEq, Debug)]
@@ -213,7 +213,7 @@ fn real_parser<'a>() -> impl Parser<&'a [u8], f32, ContextError> {
         30u8,
         bits(repeat_till::<_, _, Real, _, _, _, _>(
             1..,
-            take::<_, u8, _, ContextError>(4u8),
+            take::<_, u8, _, ParserError>(4u8),
             pattern(0xfu8, 4u8),
         )),
     )
@@ -224,7 +224,7 @@ fn real_parser<'a>() -> impl Parser<&'a [u8], f32, ContextError> {
 /// Operand maybe integer/real/bool/intArray/realArray, if multiple operands
 /// are provided, item types must be same, either int or real, returned as
 /// intArray/realArray.
-fn operand_parser<'a>() -> impl Parser<&'a [u8], Operand, ContextError> {
+fn operand_parser<'a>() -> impl Parser<&'a [u8], Operand, ParserError> {
     fn post_process(v: Vec<Operand>) -> Operand {
         // if v has one element, return that element
         // if all elements are all int, return int_array
@@ -362,14 +362,81 @@ impl Hash for Operator {
     }
 }
 
-fn operator_parser<'a>() -> impl Parser<&'a [u8], Operator, ContextError> {
+fn operator_parser<'a>() -> impl Parser<&'a [u8], Operator, ParserError> {
     let escaped = preceded(12u8, any).map(Operator::escaped);
     let normal = any.map(Operator::new);
     alt((escaped, normal))
 }
 
+#[derive(Snafu, Debug)]
+pub enum ParserError<C: 'static = StrContext> {
+    Leaf {
+        kind: ErrorKind,
+        context: Vec<C>,
+    },
+    Inter {
+        kind: ErrorKind,
+        context: Vec<C>,
+        #[snafu(source(from(ParserError<C>, Box::new)))]
+        source: Box<ParserError<C>>,
+    },
+    Other {
+        kind: ErrorKind,
+        context: Vec<C>,
+        source: Box<dyn std::error::Error>,
+    },
+}
+
+impl<C: 'static, I> From<ParseError<I, ParserError<C>>> for ParserError<C> {
+    fn from(value: ParseError<I, ParserError<C>>) -> Self {
+        value.into_inner()
+    }
+}
+
+impl<C: 'static> ErrorConvert<ParserError<C>> for ParserError<C> {
+    fn convert(self) -> ParserError<C> {
+        self
+    }
+}
+
+impl<I: Stream, C> AddContext<I, C> for ParserError<C> {
+    fn add_context(mut self, _input: &I, _token_start: &<I as Stream>::Checkpoint, c: C) -> Self {
+        match self {
+            Self::Leaf {
+                ref mut context, ..
+            }
+            | Self::Inter {
+                ref mut context, ..
+            }
+            | Self::Other {
+                ref mut context, ..
+            } => {
+                context.push(c);
+            }
+        }
+        self
+    }
+}
+
+impl<I: Stream> winnow::error::ParserError<I> for ParserError {
+    fn from_error_kind(_: &I, kind: ErrorKind) -> Self {
+        Self::Leaf {
+            kind,
+            context: Vec::new(),
+        }
+    }
+
+    fn append(self, _: &I, _: &<I as Stream>::Checkpoint, kind: ErrorKind) -> Self {
+        Self::Inter {
+            kind,
+            context: vec![],
+            source: Box::new(self),
+        }
+    }
+}
+
 /// Error may returned in this crate.
-#[derive(PartialEq, Eq, Debug, Clone, Snafu)]
+#[derive(Debug, Snafu)]
 pub enum Error {
     #[snafu(display("Dict value not Integer"))]
     ExpectInt,
@@ -386,10 +453,23 @@ pub enum Error {
     InvalidOffsetsData,
 
     #[snafu(display("Parse error: {message}"))]
-    ParseError { message: String },
+    ParseError {
+        message: String,
+        source: ParserError,
+    },
 
     #[snafu(display("Required top dict value missing"))]
     RequiredDictValueMissing,
+}
+
+impl<I, C, E: std::error::Error + 'static> FromExternalError<I, E> for ParserError<C> {
+    fn from_external_error(_: &I, kind: ErrorKind, e: E) -> Self {
+        Self::Other {
+            kind,
+            context: vec![],
+            source: Box::new(e),
+        }
+    }
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -514,7 +594,7 @@ impl Dict {
 /// Return Dict parser.
 /// Dict stored as a sequence of operators and operands. The operands are
 /// stored before the operators.
-fn dict_parser<'a>() -> impl Parser<&'a [u8], Dict, ContextError> {
+fn dict_parser<'a>() -> impl Parser<&'a [u8], Dict, ParserError> {
     let parse_item = (operand_parser(), operator_parser());
     repeat(1.., parse_item)
 }
@@ -536,7 +616,7 @@ impl OffSize {
     }
 }
 
-fn off_size_parser<'a>() -> impl Parser<&'a [u8], OffSize, ContextError> {
+fn off_size_parser<'a>() -> impl Parser<&'a [u8], OffSize, ParserError> {
     dispatch! {any;
         1 => empty.value(OffSize::One),
         2 => empty.value(OffSize::Two),
@@ -555,9 +635,7 @@ impl<'a> Offsets<'a> {
     /// Return `Error::InvalidOffsetsData` if first offset is not 1.
     /// Assume data byte length is multiple of off_size.
     pub fn new(off_size: OffSize, data: &'a [u8]) -> Result<Self> {
-        let first = Self::_get(data, off_size, 0).map_err(|e| Error::ParseError {
-            message: format!("parse first offset failed: {:?}", e),
-        })?;
+        let first = Self::_get(data, off_size, 0)?;
         ensure!(first == 1, InvalidOffsetsDataSnafu);
         Ok(Self(off_size, data))
     }
@@ -584,20 +662,35 @@ impl<'a> Offsets<'a> {
     /// Get offset of `ith` element
     fn _get(data: &[u8], off_size: OffSize, ith: usize) -> Result<u32> {
         // skip ith off_size bytes
-        let mut buf = &data[ith * off_size.len()..];
+        let buf = &data[ith * off_size.len()..];
         match off_size {
-            OffSize::One => be_u8.map(|v| v as u32).parse_next(&mut buf),
-            OffSize::Two => be_u16.map(|v| v as u32).parse_next(&mut buf),
-            OffSize::Three => be_u24.map(|v| v).parse_next(&mut buf),
-            OffSize::Four => be_u32.parse_next(&mut buf),
+            OffSize::One => ignore_rest(be_u8.map(|v| v as u32)).parse(buf),
+            OffSize::Two => ignore_rest(be_u16.map(|v| v as u32)).parse(buf),
+            OffSize::Three => ignore_rest(be_u24.map(|v| v)).parse(buf),
+            OffSize::Four => ignore_rest(be_u32).parse(buf),
         }
-        .map_err(|e: ErrMode<ContextError>| {
-            let e = e.into_inner();
-            Error::ParseError {
-                message: e.map_or_else(|| "".to_owned(), |e| e.to_string()),
-            }
+        .map_err(Into::<ParserError>::into)
+        .context(ParseSnafu {
+            message: "parse OffSize".to_owned(),
         })
     }
+}
+
+fn ignore_rest<I, O, E, P>(p: P) -> impl Parser<I, O, E>
+where
+    I: Stream,
+    E: winnow::error::ParserError<I>,
+    P: Parser<I, O, E>,
+{
+    terminated(p, rest)
+}
+
+fn parse_ignore_rest<I, O, P>(p: P, buf: I) -> Result<O, ParserError>
+where
+    I: Stream + StreamIsPartial,
+    P: Parser<I, O, ParserError>,
+{
+    ignore_rest(p).parse(buf).map_err(Into::into)
 }
 
 /// Data with an index(offset) for quick access memory
@@ -615,18 +708,15 @@ impl<'a> IndexedData<'a> {
 
     /// Get value by index, use parser to decode data.
     /// Panic if `idx` is out of range.
-    pub fn get<T: 'a, F: Parser<&'a [u8], T, ContextError>>(
+    pub fn get<T: 'a, F: Parser<&'a [u8], T, ParserError>>(
         &self,
         idx: usize,
         mut f: F,
     ) -> Result<T> {
         let range = self.offsets.range(idx);
         let buf = &self.data[range];
-        f.parse(buf).map_err(|e| {
-            log::error!("parse data failed: {:?}", e);
-            Error::ParseError {
-                message: format!("parse data failed: {:?}", e),
-            }
+        f.parse(buf).map_err(Into::into).context(ParseSnafu {
+            message: format!("get indexed data: [{}]", idx),
         })
     }
 
@@ -634,13 +724,7 @@ impl<'a> IndexedData<'a> {
     /// Returns `&[u8]` instead of `&str`, because the str may not be valid utf8,
     /// `from_utf8()` returns error if str contains '\0'.
     pub fn get_bin_str(&self, idx: usize) -> &'a [u8] {
-        fn parse_name<'a>(buf: &mut &'a [u8]) -> PResult<&'a [u8]> {
-            let r = *buf;
-            *buf = &[];
-            Ok(r)
-        }
-
-        self.get(idx, parse_name).unwrap()
+        self.get(idx, rest).unwrap()
     }
 
     /// Get Dict by index. Panic if `idx` is out of range.
@@ -661,7 +745,7 @@ impl<'a> IndexedData<'a> {
 /// ---+-----------------------+------------------------------------------
 /// 3 | data                  | Data
 /// ---+-----------------------+------------------------------------------
-fn parse_indexed_data<'a>(buf: &'_ mut &'a [u8]) -> PResult<IndexedData<'a>> {
+fn parse_indexed_data<'a>(buf: &'_ mut &'a [u8]) -> PResult<IndexedData<'a>, ParserError> {
     let (n, off_size) = (be_u16, off_size_parser()).parse_next(buf)?;
     let offset_data_len = (n + 1) as usize * off_size.len();
     let offsets = take(offset_data_len)
@@ -674,15 +758,15 @@ fn parse_indexed_data<'a>(buf: &'_ mut &'a [u8]) -> PResult<IndexedData<'a>> {
         .parse_next(buf)
 }
 
-pub fn name_index_parser<'a>() -> impl Parser<&'a [u8], NameIndex<'a>, ContextError> {
+fn name_index_parser<'a>() -> impl Parser<&'a [u8], NameIndex<'a>, ParserError> {
     parse_indexed_data.map(NameIndex)
 }
 
-pub fn string_index_parser<'a>() -> impl Parser<&'a [u8], StringIndex<'a>, ContextError> {
+fn string_index_parser<'a>() -> impl Parser<&'a [u8], StringIndex<'a>, ParserError> {
     parse_indexed_data.map(StringIndex)
 }
 
-pub fn top_dict_index_parser<'a>() -> impl Parser<&'a [u8], TopDictIndex<'a>, ContextError> {
+fn top_dict_index_parser<'a>() -> impl Parser<&'a [u8], TopDictIndex<'a>, ParserError> {
     parse_indexed_data.map(TopDictIndex)
 }
 
@@ -695,12 +779,18 @@ pub struct Header {
     pub off_size: OffSize,
 }
 
-pub fn header_parser<'a>() -> impl Parser<&'a [u8], Header, ContextError> {
+fn header_parser<'a>() -> impl Parser<&'a [u8], Header, ParserError> {
     (be_u8, be_u8, be_u8, off_size_parser()).map(|(major, minor, hdr_size, off_size)| Header {
         major,
         minor,
         hdr_size,
         off_size,
+    })
+}
+
+pub fn parse_header(buf: &[u8]) -> Result<Header> {
+    parse_ignore_rest(header_parser(), buf).context(ParseSnafu {
+        message: "parse header".to_owned(),
     })
 }
 
@@ -945,14 +1035,13 @@ impl<'a> TopDictData<'a> {
             0 => Ok(Charsets::Predefined(PredefinedCharsets::ISOAdobe)),
             1 => Ok(Charsets::Predefined(PredefinedCharsets::Expert)),
             2 => Ok(Charsets::Predefined(PredefinedCharsets::ExpertSubset)),
-            _ => Ok(charsets_parser(self.n_glyphs(file)?)
-                .parse_next(&mut &file[offset as usize..])
-                .map_err(|e| {
-                    let e = e.into_inner();
-                    Error::ParseError {
-                        message: e.map_or_else(|| "".to_owned(), |e| e.to_string()),
-                    }
-                })?),
+            _ => parse_ignore_rest(
+                charsets_parser(self.n_glyphs(file)?),
+                &file[offset as usize..],
+            )
+            .context(ParseSnafu {
+                message: "parse Charsets".to_owned(),
+            }),
         }
     }
 
@@ -962,14 +1051,11 @@ impl<'a> TopDictData<'a> {
         match offset {
             0 => Ok((Encodings::PredefinedStandard, None)),
             1 => Ok((Encodings::PredefinedExpert, None)),
-            _ => Ok(encodings_parser()
-                .parse_next(&mut &file[offset as usize..])
-                .map_err(|e| {
-                    let e = e.into_inner();
-                    Error::ParseError {
-                        message: e.map_or_else(|| "".to_owned(), |e| e.to_string()),
-                    }
-                })?),
+            _ => parse_ignore_rest(encodings_parser(), &file[offset as usize..]).context(
+                ParseSnafu {
+                    message: "parse Encodings".to_owned(),
+                },
+            ),
         }
     }
 
@@ -983,12 +1069,9 @@ impl<'a> TopDictData<'a> {
 
     /// Return glyphs count in font. `file` is the raw file data.
     pub fn n_glyphs(&self, file: &[u8]) -> Result<u16> {
-        let mut buf = &file[self.char_strings()? as usize..];
-        let index = parse_indexed_data(&mut buf).map_err(|e| {
-            let e = e.into_inner();
-            Error::ParseError {
-                message: e.map_or_else(|| "".to_owned(), |e| e.to_string()),
-            }
+        let buf = &file[self.char_strings()? as usize..];
+        let index = parse_ignore_rest(parse_indexed_data, buf).context(ParseSnafu {
+            message: "parse CharStrings INDEX".to_owned(),
         })?;
         Ok(index.len().try_into().unwrap())
     }
@@ -1087,7 +1170,7 @@ impl Charsets {
 /// 2: format2, n_ranges (first, n_left: u16) SID
 ///
 /// Predefined charsets has no format byte, handled by TopDict::charsets().
-fn charsets_parser<'a>(n_glyphs: u16) -> impl Parser<&'a [u8], Charsets, ContextError> {
+fn charsets_parser<'a>(n_glyphs: u16) -> impl Parser<&'a [u8], Charsets, ParserError> {
     fn covers(r: &[RangeInclusive<Sid>]) -> i32 {
         let mut covers = 0;
         for range in r {
@@ -1096,10 +1179,10 @@ fn charsets_parser<'a>(n_glyphs: u16) -> impl Parser<&'a [u8], Charsets, Context
         covers
     }
 
-    fn range_parser<'a, LEFT: Parser<&'a [u8], u16, ContextError>>(
+    fn range_parser<'a, LEFT: Parser<&'a [u8], u16, ParserError>>(
         n_glyphs: u16,
         mut n_left_parser: LEFT,
-    ) -> impl Parser<&'a [u8], Vec<RangeInclusive<Sid>>, ContextError> {
+    ) -> impl Parser<&'a [u8], Vec<RangeInclusive<Sid>>, ParserError> {
         // let n_left_parser = n_left_parser();
         move |buf: &mut &'a [u8]| {
             let mut parse_item =
@@ -1118,7 +1201,7 @@ fn charsets_parser<'a>(n_glyphs: u16) -> impl Parser<&'a [u8], Charsets, Context
     let n_glyphs = n_glyphs - 1; // 0 is always .notdef, not exist in charsets
     dispatch! {any;
         0 => repeat(n_glyphs as usize,  be_u16).map(Charsets::Format0),
-        1 => range_parser(n_glyphs,  be_u8::<&'a [u8], ContextError>.output_into()).map(Charsets::Format1),
+        1 => range_parser(n_glyphs,  be_u8::<&'a [u8], ParserError>.output_into()).map(Charsets::Format1),
         2 => range_parser(n_glyphs,  be_u16).map(Charsets::Format2),
         _ => fail,
     }
@@ -1210,7 +1293,7 @@ impl Encodings {
 /// EncodingSuppliments is a sequence of code (u8) and sid (u16) preceeded with `nSups` (u8),
 /// which is the count of EncodingSuppliment.
 fn encodings_parser<'a>()
--> impl Parser<&'a [u8], (Encodings, Option<Vec<EncodingSupplement>>), ContextError> {
+-> impl Parser<&'a [u8], (Encodings, Option<Vec<EncodingSupplement>>), ParserError> {
     let mut format0 = length_take(be_u8).map(|v: &[u8]| Encodings::Format0(v.to_owned()));
     let mut format1 = length_repeat(
         be_u8,
@@ -1226,6 +1309,20 @@ fn encodings_parser<'a>()
         0x81 => (format1.by_ref(),  supplements_parser.by_ref()),
         _ => fail,
     }
+}
+
+pub fn parse_fonts(buf: &[u8]) -> Result<(NameIndex<'_>, TopDictIndex<'_>, StringIndex<'_>)> {
+    parse_ignore_rest(
+        (
+            name_index_parser(),
+            top_dict_index_parser(),
+            string_index_parser(),
+        ),
+        buf,
+    )
+    .context(ParseSnafu {
+        message: "parse fonts file".to_owned(),
+    })
 }
 
 #[cfg(test)]

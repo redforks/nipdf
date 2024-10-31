@@ -14,7 +14,6 @@ use prescript::Encoding;
 mod inner;
 
 pub use inner::{Error, Result};
-use winnow::Parser as _;
 
 pub struct Font<'a> {
     font_data: &'a [u8],
@@ -61,19 +60,8 @@ pub struct Fonts<'a> {
 impl<'a> Fonts<'a> {
     pub fn new(f: &File<'a>) -> Result<Self> {
         let names_offset = f.header.hdr_size as usize;
-        let mut buf = &f.data[names_offset..];
-        let (names_index, top_dict_index, string_index) = (
-            inner::name_index_parser(),
-            inner::top_dict_index_parser(),
-            inner::string_index_parser(),
-        )
-            .parse_next(&mut buf)
-            .map_err(|e| {
-                let e = e.into_inner();
-                Error::ParseError {
-                    message: e.map_or_else(|| "".to_owned(), |e| e.to_string()),
-                }
-            })?;
+        let buf = &f.data[names_offset..];
+        let (names_index, top_dict_index, string_index) = inner::parse_fonts(buf)?;
         Ok(Self {
             data: f.data,
             names_index,
@@ -109,13 +97,7 @@ pub struct File<'a> {
 
 impl<'a> File<'a> {
     pub fn open(data: &'a [u8]) -> Result<Self> {
-        let mut buf = data;
-        let header = inner::header_parser().parse_next(&mut buf).map_err(|e| {
-            let e = e.into_inner();
-            Error::ParseError {
-                message: e.map_or_else(|| "".to_owned(), |e| e.to_string()),
-            }
-        })?;
+        let header = inner::parse_header(data)?;
         Ok(File { data, header })
     }
 

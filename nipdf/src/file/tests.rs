@@ -35,9 +35,9 @@ fn object_resolver() {
     let xref_table = XRefTable::new(id_offset);
     let resolver = ObjectResolver::new(buf, &xref_table, None);
 
-    assert_eq!(resolver.resolve(1), Ok(&Object::Null));
-    assert_eq!(resolver.resolve(2), Ok(&Object::Integer(5)));
-    assert_eq!(resolver.resolve(1), Ok(&Object::Null));
+    std::assert_eq!((resolver.resolve(1)).unwrap(), (&Object::Null));
+    std::assert_eq!((resolver.resolve(2)).unwrap(), (&Object::Integer(5)));
+    std::assert_eq!((resolver.resolve(1)).unwrap(), (&Object::Null));
 }
 
 #[test]

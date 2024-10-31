@@ -124,9 +124,9 @@ fn dict_as_int() {
         Operator::new(2) => Operand::Real(100.0),
     });
 
-    assert_eq!(d.as_int(Operator::new(1)), Ok(Some(0)));
-    assert_eq!(d.as_int(Operator::new(3)), Ok(None));
-    assert_eq!(d.as_int(Operator::new(2)), Err(Error::ExpectInt));
+    assert_eq!(d.as_int(Operator::new(1)).unwrap(), Some(0));
+    assert_eq!(d.as_int(Operator::new(3)).unwrap(), None);
+    assert!(matches!(d.as_int(Operator::new(2)), Err(Error::ExpectInt)));
 }
 
 #[test]
@@ -137,10 +137,13 @@ fn dict_as_real() {
         Operator::new(3) => Operand::IntArray(vec![]),
     });
 
-    assert_eq!(d.as_real(Operator::new(1)), Ok(Some(0.0)));
-    assert_eq!(d.as_real(Operator::new(4)), Ok(None));
-    assert_eq!(d.as_real(Operator::new(2)), Ok(Some(100.0)));
-    assert_eq!(d.as_real(Operator::new(3)), Err(Error::ExpectReal));
+    std::assert_eq!((d.as_real(Operator::new(1))).unwrap(), (Some(0.0)));
+    std::assert_eq!((d.as_real(Operator::new(4))).unwrap(), (None));
+    std::assert_eq!((d.as_real(Operator::new(2))).unwrap(), (Some(100.0)));
+    assert!(matches!(
+        d.as_real(Operator::new(3)),
+        Err(Error::ExpectReal)
+    ));
 }
 
 #[test]
@@ -151,13 +154,19 @@ fn dict_as_int_array() {
         Operator::new(3) => Operand::RealArray(vec![]),
     });
 
-    assert_eq!(d.as_int_array(Operator::new(1)), Err(Error::ExpectIntArray));
-    assert_eq!(d.as_int_array(Operator::new(4)), Ok(None));
-    assert_eq!(
-        d.as_int_array(Operator::new(2)),
-        Ok(Some(&[1i32, 2, 3][..]))
+    assert!(matches!(
+        d.as_int_array(Operator::new(1)),
+        Err(Error::ExpectIntArray)
+    ));
+    std::assert_eq!((d.as_int_array(Operator::new(4))).unwrap(), (None));
+    std::assert_eq!(
+        (d.as_int_array(Operator::new(2))).unwrap(),
+        (Some(&[1i32, 2, 3][..]))
     );
-    assert_eq!(d.as_int_array(Operator::new(3)), Err(Error::ExpectIntArray));
+    assert!(matches!(
+        d.as_int_array(Operator::new(3)),
+        Err(Error::ExpectIntArray)
+    ));
 }
 
 #[test]
@@ -168,19 +177,19 @@ fn dict_as_real_array() {
         Operator::new(3) => Operand::IntArray(vec![]),
     });
 
-    assert_eq!(
+    assert!(matches!(
         d.as_real_array(Operator::new(1)),
         Err(Error::ExpectRealArray)
+    ));
+    std::assert_eq!((d.as_real_array(Operator::new(4))).unwrap(), (None));
+    std::assert_eq!(
+        (d.as_real_array(Operator::new(2))).unwrap(),
+        (Some(&[1.0, 2.0, 3.0][..]))
     );
-    assert_eq!(d.as_real_array(Operator::new(4)), Ok(None));
-    assert_eq!(
-        d.as_real_array(Operator::new(2)),
-        Ok(Some(&[1.0, 2.0, 3.0][..]))
-    );
-    assert_eq!(
+    assert!(matches!(
         d.as_real_array(Operator::new(3)),
         Err(Error::ExpectRealArray)
-    );
+    ));
 }
 
 #[test]
@@ -192,11 +201,17 @@ fn dict_as_bool() {
         Operator::new(4) => Operand::Integer(2),
     });
 
-    assert_eq!(d.as_bool(Operator::new(1)), Ok(Some(false)));
-    assert_eq!(d.as_bool(Operator::new(2)), Ok(Some(true)));
-    assert_eq!(d.as_bool(Operator::new(3)), Err(Error::ExpectBool));
-    assert_eq!(d.as_bool(Operator::new(4)), Err(Error::ExpectBool));
-    assert_eq!(d.as_bool(Operator::new(5)), Ok(None));
+    std::assert_eq!((d.as_bool(Operator::new(1))).unwrap(), (Some(false)));
+    std::assert_eq!((d.as_bool(Operator::new(2))).unwrap(), (Some(true)));
+    assert!(matches!(
+        d.as_bool(Operator::new(3)),
+        Err(Error::ExpectBool)
+    ));
+    assert!(matches!(
+        d.as_bool(Operator::new(4)),
+        Err(Error::ExpectBool)
+    ));
+    std::assert_eq!((d.as_bool(Operator::new(5))).unwrap(), (None));
 }
 
 #[test]
@@ -207,12 +222,18 @@ fn dict_as_delta_encoded() {
         Operator::new(3) => Operand::RealArray(vec![1., 2., 3.]),
     });
 
-    assert_eq!(d.as_delta_encoded(Operator::new(4)), Ok(None));
-    assert_eq!(d.as_delta_encoded(Operator::new(1)), Ok(Some(vec![])));
-    assert_eq!(d.as_delta_encoded(Operator::new(2)), Ok(Some(vec![1.])));
-    assert_eq!(
-        d.as_delta_encoded(Operator::new(3)),
-        Ok(Some(vec![1., 3., 6.]))
+    std::assert_eq!((d.as_delta_encoded(Operator::new(4))).unwrap(), (None));
+    std::assert_eq!(
+        (d.as_delta_encoded(Operator::new(1))).unwrap(),
+        (Some(vec![]))
+    );
+    std::assert_eq!(
+        (d.as_delta_encoded(Operator::new(2))).unwrap(),
+        (Some(vec![1.]))
+    );
+    std::assert_eq!(
+        (d.as_delta_encoded(Operator::new(3))).unwrap(),
+        (Some(vec![1., 3., 6.]))
     );
 }
 
