@@ -1147,9 +1147,10 @@ impl Object {
             Object::Bool(b) => RcDoc::text(if *b { "true" } else { "false" }),
             Object::Integer(i) => RcDoc::as_string(i),
             Object::Number(f) => RcDoc::as_string(PrettyNumber(*f)),
-            Object::LiteralString(s) => RcDoc::text(
-                from_utf8(&s.0).map_or_else(|_| format!("0x{}", hex::encode(s.as_bytes())), |s| format!("({})", s)),
-            ),
+            Object::LiteralString(s) => RcDoc::text(from_utf8(&s.0).map_or_else(
+                |_| format!("0x{}", hex::encode(s.as_bytes())),
+                |s| format!("({})", s),
+            )),
             Object::HexString(s) => RcDoc::text(format!("<{}>", hex::encode(s.as_bytes()))),
             Object::Name(n) => name_to_doc(n),
             Object::Dictionary(d) => dict_to_doc(d),

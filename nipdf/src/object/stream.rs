@@ -1031,7 +1031,8 @@ impl Stream {
         &self,
         resolver: &ObjectResolver<'a>,
     ) -> Result<Cow<'a, [u8]>, ObjectValueError> {
-        self._decode(resolver).and_then(FilterDecodedData::into_bytes)
+        self._decode(resolver)
+            .and_then(FilterDecodedData::into_bytes)
     }
 
     fn buf_range(

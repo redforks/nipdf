@@ -306,7 +306,10 @@ impl<'a> Page<'a> {
             .contents()
             .unwrap()
             .into_iter()
-            .map(|s| s.decode(self.d.d.resolver()).map(std::borrow::Cow::into_owned))
+            .map(|s| {
+                s.decode(self.d.d.resolver())
+                    .map(std::borrow::Cow::into_owned)
+            })
             .collect::<Result<_, _>>()?;
         Ok(PageContent { bufs })
     }
