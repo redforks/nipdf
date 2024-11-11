@@ -296,7 +296,7 @@ fn indexed_data_get_dict() {
         Dict(hash_map! {
             Operator::new(1) => Operand::Integer(0),
         }),
-        indexed_data.get_dict(0)
+        indexed_data.get_dict(0).unwrap()
     );
 }
 
@@ -323,9 +323,9 @@ fn name_index() {
     let index = NameIndex(indexed_data);
 
     assert_eq!(3, index.len());
-    assert_eq!(Some("ab"), index.get(0));
+    assert_eq!(Some("ab"), index.get(0).as_deref());
     assert_eq!(None, index.get(1));
-    assert_eq!(Some("f"), index.get(2));
+    assert_eq!(Some("f"), index.get(2).as_deref());
 }
 
 #[test]

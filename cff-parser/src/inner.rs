@@ -2,10 +2,10 @@ use paste::paste;
 use prescript::{Encoding, Name, name, sname};
 use snafu::prelude::*;
 use std::{
+    borrow::Cow,
     collections::HashMap,
     hash::Hash,
     ops::{Deref, Range, RangeInclusive},
-    str::from_utf8,
 };
 use winnow::{
     PResult, Parser,
@@ -713,8 +713,7 @@ impl<'a> IndexedData<'a> {
         idx: usize,
         mut f: F,
     ) -> Result<T> {
-        let range = self.offsets.range(idx);
-        let buf = &self.data[range];
+        let buf = self.get_bin_str(idx);
         f.parse(buf).map_err(Into::into).context(ParseSnafu {
             message: format!("get indexed data: [{}]", idx),
         })
@@ -724,13 +723,13 @@ impl<'a> IndexedData<'a> {
     /// Returns `&[u8]` instead of `&str`, because the str may not be valid utf8,
     /// `from_utf8()` returns error if str contains '\0'.
     pub fn get_bin_str(&self, idx: usize) -> &'a [u8] {
-        self.get(idx, rest).unwrap()
+        let range = self.offsets.range(idx);
+        &self.data[range]
     }
 
     /// Get Dict by index. Panic if `idx` is out of range.
-    #[allow(dead_code)]
-    pub fn get_dict(&self, idx: usize) -> Dict {
-        self.get(idx, dict_parser()).unwrap()
+    pub fn get_dict(&self, idx: usize) -> Result<Dict> {
+        self.get(idx, dict_parser())
     }
 }
 
@@ -806,12 +805,12 @@ impl<'a> NameIndex<'a> {
     }
 
     /// Get font name by index. Return None if name is marked removed.
-    pub fn get(&self, idx: usize) -> Option<&'a str> {
+    pub fn get(&self, idx: usize) -> Option<Cow<'a, str>> {
         let name = self.0.get_bin_str(idx);
         if name.is_empty() || name[0] == 0 {
             None
         } else {
-            Some(from_utf8(name).unwrap())
+            Some(String::from_utf8_lossy(name))
         }
     }
 }
@@ -827,11 +826,11 @@ pub struct StringIndex<'a>(IndexedData<'a>);
 
 impl<'a> StringIndex<'a> {
     /// Panic if `idx` is out of range. Return None if str is marked removed
-    pub fn get(&self, idx: Sid) -> &'a str {
+    pub fn get(&self, idx: Sid) -> Cow<'a, str> {
         if idx < 391 {
-            STANDARD_STRINGS[idx as usize]
+            Cow::Borrowed(STANDARD_STRINGS[idx as usize])
         } else {
-            from_utf8(self.0.get_bin_str((idx - 391) as usize)).unwrap()
+            String::from_utf8_lossy(self.0.get_bin_str((idx - 391) as usize))
         }
     }
 }
@@ -919,24 +918,24 @@ impl Deref for SIDDict<'_> {
 }
 
 impl SIDDict<'_> {
-    fn resolve_sid(&self, v: &Operand) -> Result<&str> {
+    fn resolve_sid(&self, v: &Operand) -> Result<Cow<'_, str>> {
         v.int()
             .context(ExpectIntSnafu)
             .map(|v| self.strings.get(v.try_into().unwrap()))
     }
 
-    pub fn sid(&self, k: Operator) -> Result<&str> {
+    pub fn sid(&self, k: Operator) -> Result<Cow<'_, str>> {
         self.required(|v| self.resolve_sid(v), k)
     }
 
     #[allow(dead_code)]
-    pub fn as_sid(&self, k: Operator) -> Result<Option<&str>> {
+    pub fn as_sid(&self, k: Operator) -> Result<Option<Cow<'_, str>>> {
         self.opt(|v| self.resolve_sid(v), k)
     }
 
     #[allow(dead_code)]
-    pub fn as_sid_or(&self, k: Operator, default: &'static str) -> Result<&str> {
-        self.opt_or(|v| self.resolve_sid(v), k, default)
+    pub fn as_sid_or(&self, k: Operator, default: &'static str) -> Result<Cow<'_, str>> {
+        self.opt_or(|v| self.resolve_sid(v), k, default.into())
     }
 }
 
@@ -955,27 +954,27 @@ impl<'a> TopDictData<'a> {
         self.0.strings
     }
 
-    pub fn version(&self) -> Result<&str> {
+    pub fn version(&self) -> Result<Cow<'_, str>> {
         self.0.sid(Operator::VERSION)
     }
 
-    pub fn notice(&self) -> Result<&str> {
+    pub fn notice(&self) -> Result<Cow<'_, str>> {
         self.0.sid(Operator::NOTICE)
     }
 
-    pub fn copyright(&self) -> Result<&str> {
+    pub fn copyright(&self) -> Result<Cow<'_, str>> {
         self.0.sid(Operator::COPYRIGHT)
     }
 
-    pub fn full_name(&self) -> Result<&str> {
+    pub fn full_name(&self) -> Result<Cow<'_, str>> {
         self.0.sid(Operator::FULL_NAME)
     }
 
-    pub fn family_name(&self) -> Result<&str> {
+    pub fn family_name(&self) -> Result<Cow<'_, str>> {
         self.0.sid(Operator::FAMILY_NAME)
     }
 
-    pub fn weight(&self) -> Result<&str> {
+    pub fn weight(&self) -> Result<Cow<'_, str>> {
         self.0.sid(Operator::WEIGHT)
     }
 
@@ -1080,11 +1079,11 @@ impl<'a> TopDictData<'a> {
         self.0.int(Operator::SYNTHETIC_BASE)
     }
 
-    pub fn post_script(&self) -> Result<&str> {
+    pub fn post_script(&self) -> Result<Cow<'_, str>> {
         self.0.sid(Operator::POST_SCRIPT)
     }
 
-    pub fn base_font_name(&self) -> Result<&str> {
+    pub fn base_font_name(&self) -> Result<Cow<'_, str>> {
         self.0.sid(Operator::BASE_FONT_NAME)
     }
 
@@ -1103,7 +1102,7 @@ impl<'a> TopDictIndex<'a> {
     }
 
     pub fn get(&self, idx: usize, strings: StringIndex<'a>) -> Result<TopDictData<'a>> {
-        Ok(TopDictData::new(self.0.get_dict(idx), strings))
+        Ok(TopDictData::new(self.0.get_dict(idx)?, strings))
     }
 }
 
@@ -1171,10 +1170,10 @@ impl Charsets {
 ///
 /// Predefined charsets has no format byte, handled by TopDict::charsets().
 fn charsets_parser<'a>(n_glyphs: u16) -> impl Parser<&'a [u8], Charsets, ParserError> {
-    fn covers(r: &[RangeInclusive<Sid>]) -> i32 {
+    fn covers(r: &[RangeInclusive<Sid>]) -> usize {
         let mut covers = 0;
         for range in r {
-            covers += i32::try_from(range.len()).unwrap();
+            covers += range.len();
         }
         covers
     }
@@ -1189,10 +1188,12 @@ fn charsets_parser<'a>(n_glyphs: u16) -> impl Parser<&'a [u8], Charsets, ParserE
                 (be_u16, n_left_parser.by_ref()).map(|(first, n_left)| first..=(first + n_left));
             let mut ranges: Vec<RangeInclusive<Sid>> = vec![];
             loop {
-                match n_glyphs as i32 - covers(&ranges[..]) {
-                    0 => return Ok(ranges),
-                    1.. => ranges.push(parse_item.parse_next(buf)?),
-                    ..=-1 => panic!("parse charsets failed: {:?}", ranges.last().unwrap()),
+                if n_glyphs as usize == covers(&ranges[..]) {
+                    return Ok(ranges);
+                } else if n_glyphs as usize > covers(&ranges[..]) {
+                    ranges.push(parse_item.parse_next(buf)?);
+                } else {
+                    fail.parse_next(buf)?;
                 }
             }
         }
@@ -1222,7 +1223,7 @@ impl EncodingSupplement {
     }
 
     pub fn apply(self, strings: StringIndex<'_>, encodings: &mut Encoding) {
-        encodings[self.code as usize] = name(strings.get(self.sid));
+        encodings[self.code as usize] = name(&strings.get(self.sid));
     }
 }
 
@@ -1259,7 +1260,7 @@ impl Encodings {
                         .resolve_sid((i + 1).try_into().unwrap())
                         .map(|sid| string_index.get(sid))
                     {
-                        encodings[*code as usize] = name(v);
+                        encodings[*code as usize] = name(&v);
                     }
                 }
                 Encoding::new(encodings)
@@ -1269,7 +1270,7 @@ impl Encodings {
                 for range in ranges {
                     for i in range.first..=range.first + range.n_left {
                         if let Some(v) = charsets.resolve_sid(i).map(|sid| string_index.get(sid)) {
-                            encodings[i as usize] = name(v);
+                            encodings[i as usize] = name(&v);
                         }
                     }
                 }

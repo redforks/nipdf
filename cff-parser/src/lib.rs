@@ -8,8 +8,13 @@
 //!
 //! File::fonts() returns a iterator of `Font` which is a struct
 //! that provides info for that font, such as encoding, charset, etc.
+#![warn(clippy::unwrap_used)]
+#![warn(clippy::expect_used)]
+#![cfg_attr(test, allow(clippy::unwrap_used))]
+#![cfg_attr(test, allow(clippy::expect_used))]
 
 use prescript::Encoding;
+use std::borrow::Cow;
 
 mod inner;
 
@@ -17,12 +22,16 @@ pub use inner::{Error, Result};
 
 pub struct Font<'a> {
     font_data: &'a [u8],
-    name: &'a str,
+    name: Cow<'a, str>,
     top_dict_data: inner::TopDictData<'a>,
 }
 
 impl<'a> Font<'a> {
-    pub fn new(font_data: &'a [u8], name: &'a str, top_dict_data: inner::TopDictData<'a>) -> Self {
+    pub fn new(
+        font_data: &'a [u8],
+        name: Cow<'a, str>,
+        top_dict_data: inner::TopDictData<'a>,
+    ) -> Self {
         Self {
             font_data,
             name,
@@ -31,7 +40,7 @@ impl<'a> Font<'a> {
     }
 
     pub fn name(&self) -> &str {
-        self.name
+        &self.name
     }
 
     pub fn encodings(&self) -> Result<Encoding> {
