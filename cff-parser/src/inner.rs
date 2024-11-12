@@ -5,6 +5,7 @@ use std::{
     borrow::Cow,
     collections::HashMap,
     hash::Hash,
+    num::TryFromIntError,
     ops::{Deref, Range, RangeInclusive},
 };
 use winnow::{
@@ -456,6 +457,13 @@ pub enum Error {
     ParseError {
         message: String,
         source: ParserError,
+    },
+
+    /// Error during cast integer.
+    #[snafu(display("Parse error: {message}"))]
+    ParseErrorIntCast {
+        message: String,
+        source: TryFromIntError,
     },
 
     #[snafu(display("Required top dict value missing"))]
@@ -919,9 +927,12 @@ impl Deref for SIDDict<'_> {
 
 impl SIDDict<'_> {
     fn resolve_sid(&self, v: &Operand) -> Result<Cow<'_, str>> {
-        v.int()
-            .context(ExpectIntSnafu)
-            .map(|v| self.strings.get(v.try_into().unwrap()))
+        v.int().context(ExpectIntSnafu).and_then(|v| {
+            Ok(self.strings.get(
+                v.try_into()
+                    .context(ParseErrorIntCastSnafu { message: "" })?,
+            ))
+        })
     }
 
     pub fn sid(&self, k: Operator) -> Result<Cow<'_, str>> {
@@ -1072,7 +1083,9 @@ impl<'a> TopDictData<'a> {
         let index = parse_ignore_rest(parse_indexed_data, buf).context(ParseSnafu {
             message: "parse CharStrings INDEX".to_owned(),
         })?;
-        Ok(index.len().try_into().unwrap())
+        index.len().try_into().context(ParseErrorIntCastSnafu {
+            message: "convert index length to u16".to_owned(),
+        })
     }
 
     pub fn synthetic_base(&self) -> Result<i32> {
@@ -1151,7 +1164,19 @@ impl Charsets {
                 let mut i: Sid = 1;
                 for range in ranges {
                     let start = i;
-                    i += Sid::try_from(range.len()).unwrap();
+                    match Sid::try_from(range.len()) {
+                        Ok(len) => i += len,
+                        Err(e) => {
+                            log::error!("Error converting range length to Sid: {:?}", e);
+                            #[cfg(debug_assertions)]
+                            panic!("Error converting range length to Sid: {:?}", e);
+                            #[cfg(not(debug_assertions))]
+                            {
+                                log::error!("Error converting range length to Sid: {:?}", e);
+                                return None;
+                            }
+                        }
+                    }
                     if i > idx {
                         return Some(*range.start() + idx - start);
                     }
@@ -1188,12 +1213,10 @@ fn charsets_parser<'a>(n_glyphs: u16) -> impl Parser<&'a [u8], Charsets, ParserE
                 (be_u16, n_left_parser.by_ref()).map(|(first, n_left)| first..=(first + n_left));
             let mut ranges: Vec<RangeInclusive<Sid>> = vec![];
             loop {
-                if n_glyphs as usize == covers(&ranges[..]) {
-                    return Ok(ranges);
-                } else if n_glyphs as usize > covers(&ranges[..]) {
-                    ranges.push(parse_item.parse_next(buf)?);
-                } else {
-                    fail.parse_next(buf)?;
+                match (n_glyphs as usize).cmp(&covers(&ranges[..])) {
+                    std::cmp::Ordering::Equal => return Ok(ranges),
+                    std::cmp::Ordering::Greater => ranges.push(parse_item.parse_next(buf)?),
+                    std::cmp::Ordering::Less => fail.parse_next(buf)?,
                 }
             }
         }
@@ -1256,10 +1279,21 @@ impl Encodings {
             Self::Format0(codes) => {
                 let mut encodings = [NOTDEF; 256];
                 for (i, code) in codes.iter().enumerate() {
-                    if let Some(v) = charsets
-                        .resolve_sid((i + 1).try_into().unwrap())
-                        .map(|sid| string_index.get(sid))
-                    {
+                    let gid = (i + 1).try_into();
+                    let gid = match gid {
+                        Ok(gid) => Some(gid),
+                        Err(e) => {
+                            #[cfg(debug_assertions)]
+                            panic!("Error converting index to gid: {:?}", e);
+                            #[cfg(not(debug_assertions))]
+                            {
+                                log::error!("Error converting index to gid: {:?}", e);
+                                None
+                            }
+                        }
+                    };
+                    let sid = gid.and_then(|gid| charsets.resolve_sid(gid));
+                    if let Some(v) = sid.map(|sid| string_index.get(sid)) {
                         encodings[*code as usize] = name(&v);
                     }
                 }
