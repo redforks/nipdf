@@ -27,6 +27,7 @@ use nipdf::{
             image_to_user_space, move_text_space_pos, move_text_space_right,
         },
     },
+    log_err,
     object::{ImageMask, ImageMetadata, InlineImage, Object, PdfObject, TextStringOrNumber},
 };
 use nom::{combinator::eof, sequence::terminated};
@@ -787,12 +788,12 @@ impl<'a, 'c> Render<'a, 'c> {
             Operation::MoveToStartOfNextLine => self.move_to_start_of_next_line(),
 
             // Text Showing Operations
-            Operation::ShowText(text) => self.show_text(text.to_bytes().unwrap()),
+            Operation::ShowText(text) => log_err(self.show_text(text.to_bytes().unwrap())),
             Operation::MoveToNextLineAndShowText(text) => {
                 self.move_to_start_of_next_line();
-                self.show_text(text.to_bytes().unwrap());
+                log_err(self.show_text(text.to_bytes().unwrap()));
             }
-            Operation::ShowTexts(texts) => self.show_texts(&texts),
+            Operation::ShowTexts(texts) => log_err(self.show_texts(&texts)),
 
             // Color Operations
             Operation::SetStrokeColorSpace(args) => {
@@ -1628,10 +1629,10 @@ impl<'a, 'c> Render<'a, 'c> {
         }
     }
 
-    fn show_text(&mut self, text: &[u8]) {
+    fn show_text(&mut self, text: &[u8]) -> Result<()> {
         let text_object = self.text_object();
         if text_object.render_mode == TextRenderingMode::Invisible {
-            return;
+            return Ok(());
         }
 
         let font = self
@@ -1665,7 +1666,7 @@ impl<'a, 'c> Render<'a, 'c> {
                     .build(),
                 resources.as_ref().unwrap_or(self.resources),
             ) else {
-                return;
+                return Ok(());
             };
 
             for ch in op.decode_chars(text) {
@@ -1676,7 +1677,7 @@ impl<'a, 'c> Render<'a, 'c> {
                         .with_destination()
                         .with_source(),
                 );
-                if let Some(glyph) = type3_font.get_glyph(op.char_to_gid(ch)) {
+                if let Some(glyph) = type3_font.get_glyph(op.char_to_gid(ch)?) {
                     for op in glyph.operations() {
                         render.exec(op.clone());
                     }
@@ -1692,7 +1693,7 @@ impl<'a, 'c> Render<'a, 'c> {
             let mut text_clip_path = Path::default();
 
             for ch in op.decode_chars(text) {
-                let path = Self::gen_glyph_path(glyph_render, op.char_to_gid(ch));
+                let path = Self::gen_glyph_path(glyph_render, op.char_to_gid(ch)?);
                 if !path.is_empty() {
                     let path = path.finish().unwrap();
                     // pre transform path to user space, render_glyph() will zoom line_width,
@@ -1724,17 +1725,19 @@ impl<'a, 'c> Render<'a, 'c> {
             }
         }
         self.current_mut().text_object = text_object;
+        Ok(())
     }
 
-    fn show_texts(&mut self, texts: &[TextStringOrNumber]) {
+    fn show_texts(&mut self, texts: &[TextStringOrNumber]) -> Result<()> {
         for t in texts {
             match t {
-                TextStringOrNumber::TextString(s) => self.show_text(s.to_bytes().unwrap()),
+                TextStringOrNumber::TextString(s) => self.show_text(s.to_bytes().unwrap())?,
                 TextStringOrNumber::Number(n) => {
                     self.text_object_mut().adjust_tj(*n);
                 }
             }
         }
+        Ok(())
     }
 
     fn end_text(&mut self) {

@@ -342,14 +342,14 @@ impl<'a> FontOp for Type1FontOp<'a> {
     }
 
     /// Use font.glyph_for_char() if encoding is None or encoding.replace() returns None
-    fn char_to_gid(&self, ch: u32) -> u16 {
+    fn char_to_gid(&self, ch: u32) -> Result<u16> {
         let gid_name = self.encoding.get_str(ch.try_into().unwrap());
         if let Some(r) = self.font.glyph_by_name(gid_name) {
-            r.try_into().unwrap()
+            r.try_into().whatever_context("convert glyph id to u16")
         } else {
             info!("glyph id not found for char: {:?}/{}", ch, gid_name);
             // .notdef gid is always be 0 for type1 font
-            0
+            Ok(0)
         }
     }
 
@@ -365,7 +365,7 @@ impl<'a> FontOp for Type1FontOp<'a> {
             },
             |x| {
                 Ok(GlyphLength::new(
-                    x.glyph_width(self.char_to_gid(gid) as u32)? as f32,
+                    x.glyph_width(self.char_to_gid(gid)? as u32)? as f32,
                 ))
             },
         )
@@ -447,29 +447,30 @@ impl<'a> FontOp for TTFParserFontOp<'a> {
         s.iter().map(|v| *v as u32).collect()
     }
 
-    fn char_to_gid(&self, ch: u32) -> u16 {
+    fn char_to_gid(&self, ch: u32) -> Result<u16> {
         if let Some(encoding) = self.encoding.as_ref() {
-            let glyph_name = encoding.get_str(ch.try_into().unwrap());
+            let glyph_name = encoding.get_str(ch.try_into().whatever_context("Convert ch to u8")?);
             if glyph_name != NOTDEF {
                 if let Some(r) = self.face.glyph_index_by_name(glyph_name) {
-                    return r.0;
+                    return Ok(r.0);
                 } else {
                     // If glyph_name not in font CMap, convert to unicode then resolve by unicode
                     // use Adobe Glyph List to convert glyph name to unicode
                     if let Some(unicode) = GLYPH_NAME_TO_UNICODE.get(glyph_name) {
-                        if let Some(gid) = self.face.glyph_index(char::from_u32(*unicode).unwrap())
-                        {
-                            return gid.0;
+                        if let Some(gid) = self.face.glyph_index(
+                            char::from_u32(*unicode).whatever_context("convert unicode to char")?,
+                        ) {
+                            return Ok(gid.0);
                         }
                     }
                 }
             }
         }
 
-        glyph_index(&self.face, ch).unwrap_or_else(|| {
+        Ok(glyph_index(&self.face, ch).unwrap_or_else(|| {
             warn!("TTF glyph id not found for char: {}", ch);
             0
-        })
+        }))
     }
 
     fn char_width(&self, ch: u32) -> Result<GlyphLength> {
@@ -479,8 +480,8 @@ impl<'a> FontOp for TTFParserFontOp<'a> {
 
         Ok(GlyphLength::new(
             self.face
-                .glyph_hor_advance(GlyphId(self.char_to_gid(ch)))
-                .unwrap() as f32,
+                .glyph_hor_advance(GlyphId(self.char_to_gid(ch)?))
+                .whatever_context("get glyph horizontal advance")? as f32,
         ))
     }
 
@@ -949,7 +950,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
 pub trait FontOp {
     /// Decode char codes to chars, possible using some encoding
     fn decode_chars(&self, s: &[u8]) -> Vec<u32>;
-    fn char_to_gid(&self, ch: u32) -> u16;
+    fn char_to_gid(&self, ch: u32) -> Result<u16>;
     /// Return glyph width for specified char
     fn char_width(&self, ch: u32) -> Result<GlyphLength>;
     fn units_per_em(&self) -> u16 {
@@ -991,8 +992,8 @@ impl FontOp for CIDFontType0FontOp {
         rv
     }
 
-    fn char_to_gid(&self, ch: u32) -> u16 {
-        ch.try_into().unwrap()
+    fn char_to_gid(&self, ch: u32) -> Result<u16> {
+        ch.try_into().whatever_context("convert ch to u16 gid")
     }
 
     fn char_width(&self, ch: u32) -> Result<GlyphLength> {
@@ -1120,25 +1121,34 @@ impl<'a> FontOp for CIDFontType2FontOp<'a> {
         )
     }
 
-    fn char_to_gid(&self, ch: u32) -> u16 {
+    fn char_to_gid(&self, ch: u32) -> Result<u16> {
         if self.cid_is_gid {
-            return ch.try_into().unwrap();
+            return ch.try_into().whatever_context("convert ch to u16 gid");
         }
 
         self.cid_to_gid.as_ref().map_or_else(
             || {
-                glyph_index(&self.face, ch).unwrap_or_else(|| {
-                    // warn!("(cid_to_gid_map) glyph id not found for char: {}", ch);
-                    ch.try_into().unwrap()
-                })
+                glyph_index(&self.face, ch).map_or_else(
+                    || {
+                        // warn!("(cid_to_gid_map) glyph id not found for char: {}", ch);
+                        ch.try_into().whatever_context("convert ch to u16 gid")
+                    },
+                    Ok,
+                )
             },
             |m| {
-                m.to_gid(ch as usize).unwrap_or_else(|| {
-                    glyph_index(&self.face, ch).unwrap_or_else(|| {
-                        // warn!("(cid_to_gid_map) glyph id not found for char: {}", ch);
-                        ch.try_into().unwrap()
-                    })
-                })
+                m.to_gid(ch as usize).map_or_else(
+                    || {
+                        glyph_index(&self.face, ch).map_or_else(
+                            || {
+                                // warn!("(cid_to_gid_map) glyph id not found for char: {}", ch);
+                                ch.try_into().whatever_context("convert ch to u16 gid")
+                            },
+                            Ok,
+                        )
+                    },
+                    Ok,
+                )
             },
         )
     }
@@ -1265,13 +1275,15 @@ impl<'a> FontOp for Type3FontOp<'a> {
         s.iter().map(|v| *v as u32).collect()
     }
 
-    fn char_to_gid(&self, ch: u32) -> u16 {
-        let gid_name = self.encoding.get_str(ch.try_into().unwrap());
+    fn char_to_gid(&self, ch: u32) -> Result<u16> {
+        let gid_name = self
+            .encoding
+            .get_str(ch.try_into().whatever_context("convert ch to u8")?);
         if let Some(gid) = self.name_to_gid.get(gid_name) {
-            *gid
+            Ok(*gid)
         } else {
             info!("glyph id not found for char: {:?}/{}", ch, gid_name);
-            u16::MAX
+            Ok(u16::MAX)
         }
     }
 
