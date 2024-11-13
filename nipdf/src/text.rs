@@ -10,6 +10,7 @@ use log::warn;
 use nipdf_macro::{TryFromIntObjectForBitflags, TryFromNameObject, pdf_object};
 use num_traits::ToPrimitive;
 use prescript::{Encoding, Name, name};
+use snafu::{OptionExt, ResultExt};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, TryFromNameObject)]
 pub enum FontType {
@@ -178,22 +179,27 @@ pub enum CIDFontWidthGroup {
 pub struct CIDFontWidths(Vec<CIDFontWidthGroup>);
 impl CIDFontWidths {
     /// Return None if ch out of range
-    pub(crate) fn char_width(&self, ch: u32) -> Option<u32> {
+    pub(crate) fn char_width(&self, ch: u32) -> Result<Option<u32>, ObjectValueError> {
         for group in &self.0 {
             match group {
                 CIDFontWidthGroup::NConsecutive((first, widths)) => {
-                    if ch >= *first && ch < *first + u32::try_from(widths.len()).unwrap() {
-                        return Some(widths[(ch - first) as usize] as u32);
+                    if ch >= *first
+                        && ch
+                            < *first
+                                + u32::try_from(widths.len())
+                                    .whatever_context::<_, ObjectValueError>("convert to u32")?
+                    {
+                        return Ok(Some(widths[(ch - first) as usize] as u32));
                     }
                 }
                 CIDFontWidthGroup::FirstLast { first, last, width } => {
                     if ch >= *first && ch <= *last {
-                        return Some(*width as u32);
+                        return Ok(Some(*width as u32));
                     }
                 }
             }
         }
-        None
+        Ok(None)
     }
 }
 
@@ -214,7 +220,10 @@ impl<'b> TryFrom<&'b Object> for CIDFontWidths {
                 Object::Array(arr) => {
                     let mut width = Vec::with_capacity(arr.len());
                     for num in arr.iter() {
-                        let num = num.as_number()?.to_u16().unwrap();
+                        let num = num
+                            .as_number()?
+                            .to_u16()
+                            .whatever_context::<_, ObjectValueError>("should be u16")?;
                         width.push(num);
                     }
                     widths.push(CIDFontWidthGroup::NConsecutive((first as u32, width)));
@@ -224,7 +233,10 @@ impl<'b> TryFrom<&'b Object> for CIDFontWidths {
                     widths.push(CIDFontWidthGroup::FirstLast {
                         first: first as u32,
                         last: *last as u32,
-                        width: width.as_number()?.to_u16().unwrap(),
+                        width: width
+                            .as_number()?
+                            .to_u16()
+                            .whatever_context::<_, ObjectValueError>("should be u16")?,
                     });
                 }
                 _ => return Err(Self::Error::UnexpectedType),
@@ -385,7 +397,11 @@ impl<'b> TryFrom<&'b Object> for EncodingDifferences<'b> {
         for o in iter {
             match o {
                 Object::Name(name) => {
-                    map.insert(code.try_into().unwrap(), name.as_str());
+                    map.insert(
+                        code.try_into()
+                            .whatever_context::<_, ObjectValueError>("code should be u8")?,
+                        name.as_str(),
+                    );
                     code += 1;
                 }
                 Object::Integer(num) => {

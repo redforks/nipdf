@@ -851,7 +851,7 @@ mod frame;
 use crate::{file::DataContainer, graphics::trans::ThousandthsOfText, parser};
 pub use frame::*;
 
-#[derive(Clone, PartialEq, Debug, Snafu)]
+#[derive(Debug, Snafu)]
 pub enum ObjectValueError {
     #[snafu(display("unexpected type"))]
     UnexpectedType,
@@ -887,6 +887,15 @@ pub enum ObjectValueError {
     GraphicsOperationSchemaError,
     #[snafu(display("Dict key not found"))]
     DictKeyNotFound,
+    #[snafu(whatever, display("{message}"))]
+    GenericError {
+        message: String,
+
+        // Having a `source` is optional, but if it is present, it must
+        // have this specific attribute and type:
+        #[snafu(source(from(Box<dyn std::error::Error>, Some)))]
+        source: Option<Box<dyn std::error::Error>>,
+    },
 }
 
 impl<'a> From<parser::ParseError<'a>> for ObjectValueError {

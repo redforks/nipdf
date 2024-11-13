@@ -974,7 +974,7 @@ impl FontOp for CIDFontType0FontOp {
         let char_width = self
             .widths
             .as_ref()
-            .and_then(|w| w.char_width(ch))
+            .and_then(|w| w.char_width(ch).unwrap())
             .unwrap_or(self.default_width) as f32;
         GlyphLength::new(char_width)
     }
@@ -1122,7 +1122,7 @@ impl<'a> FontOp for CIDFontType2FontOp<'a> {
         let mut char_width = self
             .widths
             .as_ref()
-            .and_then(|w| w.char_width(ch))
+            .and_then(|w| w.char_width(ch).unwrap())
             .unwrap_or(self.default_width) as f32;
         if self.units_per_em != 1000 {
             char_width = char_width / 1000.0 * self.units_per_em as f32;
