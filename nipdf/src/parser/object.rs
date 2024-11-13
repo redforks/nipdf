@@ -19,7 +19,7 @@ use nom::{
 };
 use num_traits::ToPrimitive;
 use prescript::{Name, sname};
-use snafu::OptionExt;
+use snafu::{OptionExt, ResultExt};
 use std::{
     borrow::Cow,
     num::NonZeroU32,
@@ -144,7 +144,9 @@ fn normalize_name(buf: &[u8]) -> Result<Cow<'_, str>, ObjectValueError> {
     String::from_utf8(result).map_or_else(
         |_| {
             warn!("Invalid UTF-8 name: {:?}", s);
-            Ok(Cow::Borrowed(from_utf8(s).unwrap()))
+            Ok(Cow::Borrowed(
+                from_utf8(s).whatever_context::<_, ObjectValueError>("convert to utf8")?,
+            ))
         },
         |s| Ok(Cow::Owned(s)),
     )
@@ -222,7 +224,7 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<'_, Either<Object, Strea
                     data,
                     Either::Right((
                         d,
-                        start.try_into().unwrap(),
+                        start.try_into().map_err(|_| fail(input))?,
                         length.and_then(NonZeroU32::new),
                     )),
                 ))
@@ -238,13 +240,15 @@ pub fn parse_indirect_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
     let input_len = input.len();
     let (input, (id, gen)) = ws_prefixed(separated_pair(u32, multispace1, u16))(input)?;
     let (input, _) = ws(tag(b"obj"))(input)?;
-    let offset = input_len - input.len();
+    let offset = (input_len - input.len())
+        .to_u32()
+        .ok_or_else(|| fail(input))?;
     let (input, obj) = parse_object_and_stream(input)?;
     let obj = match obj {
         Either::Left(o) => o,
         Either::Right((dict, start, length)) => Object::Stream(Stream::new(
             dict,
-            BufPos::new(offset.to_u32().unwrap() + start, length),
+            BufPos::new(offset + start, length),
             ObjectId::new(id, gen),
         )),
     };
@@ -252,15 +256,16 @@ pub fn parse_indirect_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
     Ok((input, IndirectObject::new(id.into(), gen, obj)))
 }
 
+fn fail(input: &[u8]) -> nom::Err<ParseError<'_>> {
+    nom::Err::Failure(ParseError::from_error_kind(input, ErrorKind::Fail))
+}
+
 /// Parse stream wrapped in indirect object tag,
 /// different from `parse_indirect_object()`, buf will after the end of `endobj`
 pub fn parse_indirect_stream(input: &[u8]) -> ParseResult<'_, Stream> {
     let (input, o) = parse_indirect_object(input)?;
     let Object::Stream(s) = o.take() else {
-        return Err(nom::Err::Failure(ParseError::from_error_kind(
-            input,
-            ErrorKind::Fail,
-        )));
+        return Err(fail(input));
     };
     Ok((input, s))
 }

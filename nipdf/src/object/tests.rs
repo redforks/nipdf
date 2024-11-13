@@ -62,12 +62,12 @@ fn value_type_validator() {
     d.insert(sname("a"), "/foo".into());
     let d = Dictionary::from(d);
 
-    assert_eq!(
+    assert!(matches!(
+        validator.valid(&d),
         Err(ObjectValueError::DictSchemaUnExpectedType {
-            schema: "Type: Page".into()
-        }),
-        validator.valid(&d)
-    );
+            schema
+        }) if schema == "Type: Page"
+    ));
 }
 
 #[test]

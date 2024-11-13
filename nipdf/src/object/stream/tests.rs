@@ -9,7 +9,54 @@ use snafu::ResultExt;
 use std::{rc::Rc, str::from_utf8};
 use test_case::test_case;
 
-#[test_case([] => Ok(vec![]); "empty")]
+#[test_case([] => Vec::<(Name, Option<Dictionary>)>::new(); "empty")]
+#[test_case(
+    [(KEY_FILTER, FILTER_FLATE_DECODE.into())] =>
+    vec![(FILTER_FLATE_DECODE, None)];
+     "one filter"
+)]
+#[test_case(
+    [(KEY_FILTER, FILTER_FLATE_DECODE.into()),
+     (KEY_FILTER_PARAMS, Object::Array(vec![Object::Null].into()))] =>
+    vec![(FILTER_FLATE_DECODE, None)];
+     "one filter with null params in array"
+)]
+#[test_case(
+    [(KEY_FILTER, FILTER_FLATE_DECODE.into()),
+     (KEY_FILTER_PARAMS, Object::Dictionary(Dictionary::default()))] =>
+    vec![(FILTER_FLATE_DECODE, Some(Dictionary::default()))];
+     "one filter with dictionary params"
+)]
+#[test_case(
+    [(KEY_FILTER, vec![
+        FILTER_FLATE_DECODE.into(),
+        FILTER_DCT_DECODE.into(),
+    ].into())] =>
+    vec![(FILTER_FLATE_DECODE, None),
+            (FILTER_DCT_DECODE, None)];
+     "two filters no params"
+)]
+#[test_case(
+    [(KEY_FILTER, Object::Array(vec![
+        FILTER_FLATE_DECODE.into(),
+        FILTER_DCT_DECODE.into(),
+    ].into())),
+    (KEY_FILTER_PARAMS, Dictionary::default().into())] =>
+    vec![(FILTER_FLATE_DECODE, Some(Dictionary::default())),
+            (FILTER_DCT_DECODE, None)];
+     "two filters with null params"
+)]
+fn test_iter_filter(
+    dict: impl IntoIterator<Item = (Name, Object)>,
+) -> Vec<(Name, Option<Dictionary>)> {
+    let dict: Dictionary = dict.into_iter().collect::<Dictionary>();
+    let d = FilterDict::new(&dict, None).unwrap();
+    iter_filters(d)
+        .unwrap()
+        .map(|(k, v)| (k, v.cloned()))
+        .collect()
+}
+
 #[test_case(
     [(KEY_FILTER, 1.into())] => matches Err(ObjectValueError::UnexpectedType);
     "incorrect filter type"
@@ -19,53 +66,16 @@ use test_case::test_case;
     "filter is array but item not name"
 )]
 #[test_case(
-    [(KEY_FILTER, FILTER_FLATE_DECODE.into())] =>
-    Ok(vec![(FILTER_FLATE_DECODE, None)]);
-     "one filter"
-)]
-#[test_case(
-    [(KEY_FILTER, FILTER_FLATE_DECODE.into()),
-     (KEY_FILTER_PARAMS, Object::Array(vec![Object::Null].into()))] =>
-    Ok(vec![(FILTER_FLATE_DECODE, None)]);
-     "one filter with null params in array"
-)]
-#[test_case(
-    [(KEY_FILTER, FILTER_FLATE_DECODE.into()),
-     (KEY_FILTER_PARAMS, Object::Dictionary(Dictionary::default()))] =>
-    Ok(vec![(FILTER_FLATE_DECODE, Some(Dictionary::default()))]);
-     "one filter with dictionary params"
-)]
-#[test_case(
-    [(KEY_FILTER, vec![
-        FILTER_FLATE_DECODE.into(),
-        FILTER_DCT_DECODE.into(),
-    ].into())] =>
-    Ok(vec![(FILTER_FLATE_DECODE, None),
-            (FILTER_DCT_DECODE, None)]);
-     "two filters no params"
-)]
-#[test_case(
-    [(KEY_FILTER, Object::Array(vec![
-        FILTER_FLATE_DECODE.into(),
-        FILTER_DCT_DECODE.into(),
-    ].into())),
-    (KEY_FILTER_PARAMS, Dictionary::default().into())] =>
-    Ok(vec![(FILTER_FLATE_DECODE, Some(Dictionary::default())),
-            (FILTER_DCT_DECODE, None)]);
-     "two filters with null params"
-)]
-#[test_case(
     [(KEY_FFILTER, FILTER_FLATE_DECODE.into())] =>
-    Err(ObjectValueError::ExternalStreamNotSupported);
+    matches Err(ObjectValueError::ExternalStreamNotSupported);
      "filter not supported"
 )]
-fn test_iter_filter(
+fn test_iter_filter_err(
     dict: impl IntoIterator<Item = (Name, Object)>,
 ) -> Result<Vec<(Name, Option<Dictionary>)>, ObjectValueError> {
     let dict: Dictionary = dict.into_iter().collect::<Dictionary>();
     let d = FilterDict::new(&dict, None)?;
-    let r: Vec<(Name, Option<Dictionary>)> =
-        iter_filters(d)?.map(|(k, v)| (k, v.cloned())).collect();
+    let r = iter_filters(d)?.map(|(k, v)| (k, v.cloned())).collect();
     Ok(r)
 }
 
@@ -138,15 +148,15 @@ fn image_mask_try_from_object() {
     );
 
     // ExplicitMask
-    let stream = Rc::new(Stream(
+    let stream = Stream(
         Dictionary::default(),
         // b"0 1 2 3 4 5 6 7 8 9".as_ref(),
         BufPos::new(0, None),
         ObjectId::empty(),
-    ));
+    );
     let o = Object::Stream(stream.clone());
     let mask = ImageMask::try_from(&o).unwrap();
-    assert_eq!(mask, ImageMask::Explicit(stream));
+    assert_eq!(mask, ImageMask::Explicit(Rc::new(stream)));
 }
 
 #[test_case([10, 15, 20, 0] => true; "matches lower range")]
