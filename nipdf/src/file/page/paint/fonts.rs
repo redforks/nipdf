@@ -343,7 +343,9 @@ impl<'a> FontOp for Type1FontOp<'a> {
 
     /// Use font.glyph_for_char() if encoding is None or encoding.replace() returns None
     fn char_to_gid(&self, ch: u32) -> Result<u16> {
-        let gid_name = self.encoding.get_str(ch.try_into().unwrap());
+        let gid_name = self
+            .encoding
+            .get_str(ch.try_into().whatever_context("char to u8")?);
         if let Some(r) = self.font.glyph_by_name(gid_name) {
             r.try_into().whatever_context("convert glyph id to u16")
         } else {
@@ -467,7 +469,7 @@ impl<'a> FontOp for TTFParserFontOp<'a> {
             }
         }
 
-        Ok(glyph_index(&self.face, ch).unwrap_or_else(|| {
+        Ok(glyph_index(&self.face, ch)?.unwrap_or_else(|| {
             warn!("TTF glyph id not found for char: {}", ch);
             0
         }))
@@ -724,9 +726,11 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
 
         let mut q = Query {
             families: &families,
-            weight: desc
-                .font_weight()?
-                .map_or(Weight::NORMAL, |v| Weight(v.try_into().unwrap())),
+            weight: desc.font_weight()?.map_or(Ok(Weight::NORMAL), |v| {
+                Ok(Weight(
+                    v.try_into().whatever_context("Convert to fontdb::Weight")?,
+                ))
+            })?,
             style,
             ..Default::default()
         };
@@ -736,7 +740,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         debug!("load ttf font from OS, using query: {:?}", &q);
 
         let id = SYSTEM_FONTS.query(&q).expect("font not found in system");
-        let face = SYSTEM_FONTS.face(id).unwrap();
+        let face = SYSTEM_FONTS.face(id).whatever_context("get system fonts")?;
         debug!("loaded ttf font: {:?}", &face.source);
         assert_eq!(face.index, 0, "Only one face supported");
         match face.source {
@@ -836,7 +840,9 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         match font.subtype()? {
             FontType::TrueType => {
                 let tt = font.truetype()?;
-                let desc = tt.font_descriptor()?.unwrap();
+                let desc = tt
+                    .font_descriptor()?
+                    .whatever_context("get true type font desc")?;
                 Ok(Some(Self::load_ttf_parser_font(
                     FontType::TrueType,
                     font,
@@ -852,18 +858,27 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                     1,
                     "Type0 font should have one descendant fonts"
                 );
-                let descentdant_font = descentdant_fonts.into_iter().next().unwrap();
+                let descentdant_font = descentdant_fonts
+                    .into_iter()
+                    .next()
+                    .whatever_context("get type0 font desc")?;
                 match descentdant_font.subtype()? {
                     CIDFontType::CIDFontType0 => {
-                        let desc = descentdant_font.font_descriptor()?.unwrap();
-                        let stream = desc.font_file3()?.unwrap();
+                        let desc = descentdant_font
+                            .font_descriptor()?
+                            .whatever_context("get CIDFontType0 desc")?;
+                        let stream = desc
+                            .font_file3()?
+                            .whatever_context("get CIDFontType0 font stream")?;
                         Ok(Some(Box::new(CIDFontType0Font::new(
                             font,
                             Self::load_embed_font_bytes(descentdant_font.resolver(), stream)?,
                         )?)))
                     }
                     CIDFontType::CIDFontType2 => {
-                        let desc = descentdant_font.font_descriptor()?.unwrap();
+                        let desc = descentdant_font
+                            .font_descriptor()?
+                            .whatever_context("get CIDFontType2 desc")?;
 
                         Ok(Some(Self::load_ttf_parser_font(
                             FontType::Type0,
@@ -881,7 +896,9 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                         "Failed to load type1 font \"{:?}\", try load as truetype",
                         err
                     );
-                    let desc = font.font_descriptor()?.unwrap();
+                    let desc = font
+                        .font_descriptor()?
+                        .whatever_context("get Type1 font desc")?;
                     Ok(Some(Self::load_ttf_parser_font(
                         FontType::Type1,
                         font,
@@ -1000,7 +1017,10 @@ impl FontOp for CIDFontType0FontOp {
         let char_width = self
             .widths
             .as_ref()
-            .and_then(|w| w.char_width(ch).unwrap())
+            .map(|w| w.char_width(ch))
+            .transpose()
+            .whatever_context("get char width")?
+            .flatten()
             .unwrap_or(self.default_width) as f32;
         Ok(GlyphLength::new(char_width))
     }
@@ -1051,7 +1071,13 @@ impl<'a> CIDFontType2FontOp<'a> {
                     encoding_name
                 );
                 (!(encoding_name == "Identity-H" || encoding_name == "Identity-V"))
-                    .then(|| cmap_registry.get(&name(encoding_name)).unwrap().unwrap())
+                    .then(|| {
+                        Ok(cmap_registry
+                            .get(&name(encoding_name))
+                            .whatever_context("Get cmap")?
+                            .whatever_context("Get cmap")?)
+                    })
+                    .transpose()?
             }
             NameOrStream::Stream(s) => {
                 assert!(
@@ -1092,15 +1118,20 @@ impl<'a> CIDFontType2FontOp<'a> {
 // TTFFace::glyph_index() ignores non unicode cmap table,
 // some non-cjk pdf file use non unicode cmap table. This function
 // try to find glyph id from all cmap tables
-fn glyph_index(face: &TTFFace<'_>, ch: u32) -> Option<u16> {
-    for subtable in face.tables().cmap.unwrap().subtables {
+fn glyph_index(face: &TTFFace<'_>, ch: u32) -> Result<Option<u16>> {
+    for subtable in face
+        .tables()
+        .cmap
+        .whatever_context("get cmap from TTF Face")?
+        .subtables
+    {
         if let Some(id) = subtable.glyph_index(ch) {
-            return Some(id.0);
+            return Ok(Some(id.0));
         }
     }
 
     warn!("glyph id not found from TTF CMap for char: {}", ch);
-    None
+    Ok(None)
 }
 
 impl<'a> FontOp for CIDFontType2FontOp<'a> {
@@ -1128,7 +1159,7 @@ impl<'a> FontOp for CIDFontType2FontOp<'a> {
 
         self.cid_to_gid.as_ref().map_or_else(
             || {
-                glyph_index(&self.face, ch).map_or_else(
+                glyph_index(&self.face, ch)?.map_or_else(
                     || {
                         // warn!("(cid_to_gid_map) glyph id not found for char: {}", ch);
                         ch.try_into().whatever_context("convert ch to u16 gid")
@@ -1139,7 +1170,7 @@ impl<'a> FontOp for CIDFontType2FontOp<'a> {
             |m| {
                 m.to_gid(ch as usize).map_or_else(
                     || {
-                        glyph_index(&self.face, ch).map_or_else(
+                        glyph_index(&self.face, ch)?.map_or_else(
                             || {
                                 // warn!("(cid_to_gid_map) glyph id not found for char: {}", ch);
                                 ch.try_into().whatever_context("convert ch to u16 gid")
