@@ -1186,7 +1186,10 @@ impl<'a> FontOp for CIDFontType2FontOp<'a> {
         let mut char_width = self
             .widths
             .as_ref()
-            .and_then(|w| w.char_width(ch).unwrap())
+            .map(|w| w.char_width(ch))
+            .transpose()
+            .whatever_context("get char width")?
+            .flatten()
             .unwrap_or(self.default_width) as f32;
         if self.units_per_em != 1000 {
             char_width = char_width / 1000.0 * self.units_per_em as f32;
@@ -1291,10 +1294,14 @@ impl<'a> Type3FontOp<'a> {
         let matrix = type3.matrix()?;
 
         Ok(Self {
-            font_width: FirstLastFontWidth::from(font_dict)?.unwrap(),
+            font_width: FirstLastFontWidth::from(font_dict)?
+                .whatever_context("Get FirstLastFontWidth")?,
             name_to_gid,
             encoding,
-            units_per_em: (1.0 / matrix.m11).abs().to_u16().unwrap(),
+            units_per_em: (1.0 / matrix.m11)
+                .abs()
+                .to_u16()
+                .whatever_context("units_per_em to u16")?,
         })
     }
 }
@@ -1355,7 +1362,10 @@ impl<'a, 'b> Type3Font<'a, 'b> {
         let mut glyphs = Vec::with_capacity(glyph_and_names.len());
         let mut glyph_ids = HashMap::with_capacity(glyph_and_names.len());
         for (name, glyph) in glyph_and_names {
-            let gid = glyphs.len().try_into().unwrap();
+            let gid = glyphs
+                .len()
+                .try_into()
+                .whatever_context("glyphs length convert to u16")?;
             glyphs.push(glyph);
             glyph_ids.insert(name, gid);
         }
