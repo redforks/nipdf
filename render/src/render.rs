@@ -1669,7 +1669,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 return Ok(());
             };
 
-            for ch in op.decode_chars(text) {
+            for ch in op.decode_chars(text)? {
                 render.current_mut().set_ctm(
                     text_object
                         .type3_runtime_matrix(&font_matrix)
@@ -1692,7 +1692,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 .unwrap();
             let mut text_clip_path = Path::default();
 
-            for ch in op.decode_chars(text) {
+            for ch in op.decode_chars(text)? {
                 let path = Self::gen_glyph_path(glyph_render, op.char_to_gid(ch)?);
                 if !path.is_empty() {
                     let path = path.finish().unwrap();

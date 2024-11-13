@@ -337,8 +337,8 @@ impl<'a> Type1FontOp<'a> {
 }
 
 impl<'a> FontOp for Type1FontOp<'a> {
-    fn decode_chars<'d>(&'d self, text: &'d [u8]) -> Vec<u32> {
-        text.iter().map(|v| *v as u32).collect()
+    fn decode_chars<'d>(&'d self, text: &'d [u8]) -> Result<Vec<u32>> {
+        Ok(text.iter().map(|v| *v as u32).collect())
     }
 
     /// Use font.glyph_for_char() if encoding is None or encoding.replace() returns None
@@ -449,8 +449,8 @@ impl<'a> TTFParserFontOp<'a> {
 static GLYPH_NAME_TO_UNICODE: phf::Map<&'static str, u32> = include!("glyph_name_to_unicode.in");
 
 impl<'a> FontOp for TTFParserFontOp<'a> {
-    fn decode_chars(&self, s: &[u8]) -> Vec<u32> {
-        s.iter().map(|v| *v as u32).collect()
+    fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>> {
+        Ok(s.iter().map(|v| *v as u32).collect())
     }
 
     fn char_to_gid(&self, ch: u32) -> Result<u16> {
@@ -970,7 +970,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
 
 pub trait FontOp {
     /// Decode char codes to chars, possible using some encoding
-    fn decode_chars(&self, s: &[u8]) -> Vec<u32>;
+    fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>>;
     fn char_to_gid(&self, ch: u32) -> Result<u16>;
     /// Return glyph width for specified char
     fn char_width(&self, ch: u32) -> Result<GlyphLength>;
@@ -1003,14 +1003,14 @@ impl CIDFontType0FontOp {
 
 impl FontOp for CIDFontType0FontOp {
     /// `s` each two bytes as a char code, big endian. append 0 if len(s) is odd
-    fn decode_chars(&self, s: &[u8]) -> Vec<u32> {
+    fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>> {
         debug_assert!(s.len() % 2 == 0, "{:?}", s);
         let mut rv = Vec::with_capacity(s.len() / 2);
         for i in 0..s.len() / 2 {
             let ch = u16::from_be_bytes([s[i * 2], s[i * 2 + 1]]);
             rv.push(ch as u32);
         }
-        rv
+        Ok(rv)
     }
 
     fn char_to_gid(&self, ch: u32) -> Result<u16> {
@@ -1139,20 +1139,14 @@ fn glyph_index(face: &TTFFace<'_>, ch: u32) -> Result<Option<u16>> {
 }
 
 impl<'a> FontOp for CIDFontType2FontOp<'a> {
-    fn decode_chars(&self, s: &[u8]) -> Vec<u32> {
+    fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>> {
         self.cmap.as_ref().map_or_else(
             || {
-                s.chunks(2)
+                Ok(s.chunks(2)
                     .map(|ch| (ch[0] as u32) << 8 | ch[1] as u32)
-                    .collect()
+                    .collect())
             },
-            |cmap| {
-                cmap.map(s)
-                    .unwrap()
-                    .into_iter()
-                    .map(|ch| ch.0 as u32)
-                    .collect()
-            },
+            |cmap| Ok(cmap.map(s)?.into_iter().map(|ch| ch.0 as u32).collect()),
         )
     }
 
@@ -1306,8 +1300,8 @@ impl<'a> Type3FontOp<'a> {
 }
 
 impl<'a> FontOp for Type3FontOp<'a> {
-    fn decode_chars(&self, s: &[u8]) -> Vec<u32> {
-        s.iter().map(|v| *v as u32).collect()
+    fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>> {
+        Ok(s.iter().map(|v| *v as u32).collect())
     }
 
     fn char_to_gid(&self, ch: u32) -> Result<u16> {
