@@ -917,7 +917,7 @@ pub enum Object {
     Name(Name),
     Dictionary(Dictionary),
     Array(Array),
-    Stream(Rc<Stream>),
+    Stream(Stream),
     Reference(Reference),
 }
 
@@ -1191,7 +1191,7 @@ impl Display for PrettyNumber {
 
 impl From<Stream> for Object {
     fn from(value: Stream) -> Self {
-        Self::Stream(Rc::new(value))
+        Self::Stream(value)
     }
 }
 

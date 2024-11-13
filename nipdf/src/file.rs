@@ -20,7 +20,7 @@ use nom::Finish;
 use once_cell::unsync::OnceCell;
 use prescript::{Name, sname};
 use snafu::Snafu;
-use std::{iter::repeat_with, rc::Rc};
+use std::iter::repeat_with;
 
 pub mod page;
 pub use page::*;
@@ -276,8 +276,7 @@ fn decrypt_string(encrypt_info: &EncryptInfo, id: ObjectId, mut o: Object) -> Ob
             Object::update_array_items(arr, |o| self.decrypt(o));
         }
 
-        fn stream(&self, stream: &mut Rc<Stream>) {
-            let stream = Rc::make_mut(stream);
+        fn stream(&self, stream: &mut Stream) {
             self.dict(&mut stream.0);
         }
 

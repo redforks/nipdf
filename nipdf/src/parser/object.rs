@@ -19,6 +19,7 @@ use nom::{
 };
 use num_traits::ToPrimitive;
 use prescript::{Name, sname};
+use snafu::OptionExt;
 use std::{
     borrow::Cow,
     num::NonZeroU32,
@@ -241,11 +242,11 @@ pub fn parse_indirect_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
     let (input, obj) = parse_object_and_stream(input)?;
     let obj = match obj {
         Either::Left(o) => o,
-        Either::Right((dict, start, length)) => Object::Stream(Rc::new(Stream::new(
+        Either::Right((dict, start, length)) => Object::Stream(Stream::new(
             dict,
             BufPos::new(offset.to_u32().unwrap() + start, length),
             ObjectId::new(id, gen),
-        ))),
+        )),
     };
     let (input, _) = opt(ws_prefixed(tag("endobj")))(input)?;
     Ok((input, IndirectObject::new(id.into(), gen, obj)))
@@ -261,7 +262,7 @@ pub fn parse_indirect_stream(input: &[u8]) -> ParseResult<'_, Stream> {
             ErrorKind::Fail,
         )));
     };
-    Ok((input, Rc::into_inner(s).unwrap()))
+    Ok((input, s))
 }
 
 fn parse_reference(input: &[u8]) -> ParseResult<'_, Reference> {

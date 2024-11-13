@@ -743,7 +743,7 @@ impl TryFrom<&Object> for ImageMask {
 
     fn try_from(v: &Object) -> Result<Self, Self::Error> {
         Ok(match v {
-            Object::Stream(s) => Self::Explicit(s.clone()),
+            Object::Stream(s) => Self::Explicit(Rc::new(s.clone())),
             Object::Array(_) => {
                 let domains = Domains::try_from(v)?;
                 Self::ColorKey(domains)
