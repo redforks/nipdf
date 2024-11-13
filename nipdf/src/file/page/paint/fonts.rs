@@ -254,16 +254,30 @@ impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
             .font_name()
             .whatever_context("parse type1 font name")?;
         let r = Self::resolve_by_encoding_or_font_name(&encoding_pair, font_name.as_ref())
-            .or_else(|| Self::load_from_file(font_name.as_ref(), font_data, is_cff).unwrap())
+            .or_else(
+                || match Self::load_from_file(font_name.as_ref(), font_data, is_cff) {
+                    Ok(encoding) => encoding,
+                    Err(e) => {
+                        #[cfg(debug_assertions)]
+                        panic!("Failed to load encoding from file: {}", e);
+
+                        #[cfg(not(debug_assertions))]
+                        {
+                            error!("Failed to load encoding from file: {}", e);
+                            None
+                        }
+                    }
+                },
+            )
             .or_else(|| Self::guess_by_font_name(font_name.as_ref()))
-            .unwrap_or_else(|| self.default_encoding().unwrap());
+            .map_or_else(|| self.default_encoding(), Ok)?;
         Ok(Self::apply_encoding_diff(r, &encoding_pair))
     }
 
     pub fn type3(&self) -> Result<Encoding> {
         let encoding_pair = self.encoding_pair()?;
         let r = Self::resolve_by_encoding_or_font_name(&encoding_pair, "")
-            .unwrap_or_else(|| self.default_encoding().unwrap());
+            .map_or_else(|| self.default_encoding(), Ok)?;
         Ok(Self::apply_encoding_diff(r, &encoding_pair))
     }
 
