@@ -1650,7 +1650,7 @@ impl<'a, 'c> Render<'a, 'c> {
             .unwrap();
         let state = self.stack.last().unwrap();
         let mut text_object = state.text_object.clone();
-        text_object.set_units_per_em(op.units_per_em() as f32);
+        text_object.set_units_per_em(op.units_per_em()? as f32);
         let user_to_device = state.user_to_device.into_skia();
 
         if let Some(type3_font) = font.as_type3() {

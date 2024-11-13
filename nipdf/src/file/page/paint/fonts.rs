@@ -359,8 +359,8 @@ impl<'a> FontOp for Type1FontOp<'a> {
         self.font_width.as_ref().either(
             |x| {
                 let r = x.char_width(gid);
-                if self.units_per_em() != 1000 {
-                    Ok::<_, Whatever>(GlyphLength::new(r.0 / 1000.0 * self.units_per_em() as f32))
+                if self.units_per_em()? != 1000 {
+                    Ok::<_, Whatever>(GlyphLength::new(r.0 / 1000.0 * self.units_per_em()? as f32))
                 } else {
                     Ok(r)
                 }
@@ -373,8 +373,12 @@ impl<'a> FontOp for Type1FontOp<'a> {
         )
     }
 
-    fn units_per_em(&self) -> u16 {
-        self.font.metrics().units_per_em.try_into().unwrap()
+    fn units_per_em(&self) -> Result<u16> {
+        self.font
+            .metrics()
+            .units_per_em
+            .try_into()
+            .whatever_context("convert units_per_em to u16")
     }
 }
 
@@ -487,8 +491,8 @@ impl<'a> FontOp for TTFParserFontOp<'a> {
         ))
     }
 
-    fn units_per_em(&self) -> u16 {
-        self.units_per_em
+    fn units_per_em(&self) -> Result<u16> {
+        Ok(self.units_per_em)
     }
 }
 
@@ -970,8 +974,8 @@ pub trait FontOp {
     fn char_to_gid(&self, ch: u32) -> Result<u16>;
     /// Return glyph width for specified char
     fn char_width(&self, ch: u32) -> Result<GlyphLength>;
-    fn units_per_em(&self) -> u16 {
-        1000
+    fn units_per_em(&self) -> Result<u16> {
+        Ok(1000)
     }
 }
 
@@ -1196,8 +1200,8 @@ impl<'a> FontOp for CIDFontType2FontOp<'a> {
         Ok(GlyphLength::new(char_width))
     }
 
-    fn units_per_em(&self) -> u16 {
-        self.units_per_em
+    fn units_per_em(&self) -> Result<u16> {
+        Ok(self.units_per_em)
     }
 }
 
@@ -1322,8 +1326,8 @@ impl<'a> FontOp for Type3FontOp<'a> {
         Ok(self.font_width.char_width(ch))
     }
 
-    fn units_per_em(&self) -> u16 {
-        self.units_per_em
+    fn units_per_em(&self) -> Result<u16> {
+        Ok(self.units_per_em)
     }
 }
 
