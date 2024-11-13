@@ -1682,7 +1682,7 @@ impl<'a, 'c> Render<'a, 'c> {
                     }
                 }
 
-                text_object.move_to_next_pos(op.char_width(ch), ch == 32);
+                text_object.move_to_next_pos(op.char_width(ch).unwrap(), ch == 32);
             }
         } else {
             let glyph_render = self
@@ -1713,7 +1713,7 @@ impl<'a, 'c> Render<'a, 'c> {
                     );
                 }
 
-                text_object.move_to_next_pos(op.char_width(ch), ch == 32);
+                text_object.move_to_next_pos(op.char_width(ch).unwrap(), ch == 32);
             }
 
             if let Some(text_clip_path) = text_clip_path.finish() {

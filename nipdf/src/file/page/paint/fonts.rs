@@ -26,7 +26,7 @@ use prescript::{
     cmap::{CMap, CMapRegistry},
     name, sname,
 };
-use snafu::{FromString, ResultExt, Whatever, whatever};
+use snafu::{FromString, OptionExt, ResultExt, Whatever, whatever};
 use std::{collections::HashMap, ops::RangeInclusive, rc::Rc, sync::LazyLock};
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
 
@@ -48,7 +48,8 @@ impl FirstLastFontWidth {
 
         let default_width = font.default_width()?;
 
-        let range = first_char.unwrap()..=last_char.unwrap();
+        let range = first_char.whatever_context("get first_char")?
+            ..=last_char.whatever_context("get last_char")?;
         Ok(Some(Self {
             range,
             default_width,
@@ -75,8 +76,14 @@ impl<'a> FreeTypeFontWidth<'a> {
         Self { font }
     }
 
-    pub fn glyph_width(&self, gid: u32) -> u32 {
-        self.font.advance(gid).unwrap().x().to_u32().unwrap()
+    pub fn glyph_width(&self, gid: u32) -> Result<u32> {
+        Ok(self
+            .font
+            .advance(gid)
+            .whatever_context("get gid advance")?
+            .x()
+            .to_u32()
+            .whatever_context("convert advance to u32")?)
     }
 }
 
@@ -332,17 +339,21 @@ impl<'a> FontOp for Type1FontOp<'a> {
         }
     }
 
-    fn char_width(&self, gid: u32) -> GlyphLength {
+    fn char_width(&self, gid: u32) -> Result<GlyphLength> {
         self.font_width.as_ref().either(
             |x| {
                 let r = x.char_width(gid);
                 if self.units_per_em() != 1000 {
-                    GlyphLength::new(r.0 / 1000.0 * self.units_per_em() as f32)
+                    Ok::<_, Whatever>(GlyphLength::new(r.0 / 1000.0 * self.units_per_em() as f32))
                 } else {
-                    r
+                    Ok(r)
                 }
             },
-            |x| GlyphLength::new(x.glyph_width(self.char_to_gid(gid) as u32) as f32),
+            |x| {
+                Ok(GlyphLength::new(
+                    x.glyph_width(self.char_to_gid(gid) as u32)? as f32,
+                ))
+            },
         )
     }
 
@@ -447,16 +458,16 @@ impl<'a> FontOp for TTFParserFontOp<'a> {
         })
     }
 
-    fn char_width(&self, ch: u32) -> GlyphLength {
+    fn char_width(&self, ch: u32) -> Result<GlyphLength> {
         if let Some(font_width) = &self.font_width {
-            return font_width.char_width(ch) / 1000.0 * self.units_per_em as f32;
+            return Ok(font_width.char_width(ch) / 1000.0 * self.units_per_em as f32);
         }
 
-        GlyphLength::new(
+        Ok(GlyphLength::new(
             self.face
                 .glyph_hor_advance(GlyphId(self.char_to_gid(ch)))
                 .unwrap() as f32,
-        )
+        ))
     }
 
     fn units_per_em(&self) -> u16 {
@@ -926,7 +937,7 @@ pub trait FontOp {
     fn decode_chars(&self, s: &[u8]) -> Vec<u32>;
     fn char_to_gid(&self, ch: u32) -> u16;
     /// Return glyph width for specified char
-    fn char_width(&self, ch: u32) -> GlyphLength;
+    fn char_width(&self, ch: u32) -> Result<GlyphLength>;
     fn units_per_em(&self) -> u16 {
         1000
     }
@@ -970,13 +981,13 @@ impl FontOp for CIDFontType0FontOp {
         ch.try_into().unwrap()
     }
 
-    fn char_width(&self, ch: u32) -> GlyphLength {
+    fn char_width(&self, ch: u32) -> Result<GlyphLength> {
         let char_width = self
             .widths
             .as_ref()
             .and_then(|w| w.char_width(ch).unwrap())
             .unwrap_or(self.default_width) as f32;
-        GlyphLength::new(char_width)
+        Ok(GlyphLength::new(char_width))
     }
 }
 
@@ -1118,7 +1129,7 @@ impl<'a> FontOp for CIDFontType2FontOp<'a> {
         )
     }
 
-    fn char_width(&self, ch: u32) -> GlyphLength {
+    fn char_width(&self, ch: u32) -> Result<GlyphLength> {
         let mut char_width = self
             .widths
             .as_ref()
@@ -1127,7 +1138,7 @@ impl<'a> FontOp for CIDFontType2FontOp<'a> {
         if self.units_per_em != 1000 {
             char_width = char_width / 1000.0 * self.units_per_em as f32;
         }
-        GlyphLength::new(char_width)
+        Ok(GlyphLength::new(char_width))
     }
 
     fn units_per_em(&self) -> u16 {
@@ -1250,8 +1261,8 @@ impl<'a> FontOp for Type3FontOp<'a> {
         }
     }
 
-    fn char_width(&self, ch: u32) -> GlyphLength {
-        self.font_width.char_width(ch)
+    fn char_width(&self, ch: u32) -> Result<GlyphLength> {
+        Ok(self.font_width.char_width(ch))
     }
 
     fn units_per_em(&self) -> u16 {
