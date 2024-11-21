@@ -125,7 +125,9 @@ fn normalize_name(buf: &[u8]) -> Result<Cow<'_, str>, ObjectValueError> {
 
     let s = &buf[1..];
     if s.iter().copied().all(|b| b != b'#') {
-        return Ok(Cow::Borrowed(from_utf8(s).unwrap()));
+        return Ok(Cow::Borrowed(
+            from_utf8(s).whatever_context::<_, ObjectValueError>("convert utf8")?,
+        ));
     }
 
     let mut result = Vec::with_capacity(s.len());
