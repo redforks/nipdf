@@ -5,7 +5,7 @@
 
 use snafu::{Snafu, Whatever};
 use winnow::{
-    error::{AddContext, ErrorConvert, ErrorKind, ParseError, StrContext},
+    error::{AddContext, ErrorConvert, ErrorKind, FromExternalError, ParseError, StrContext},
     stream::Stream,
 };
 
@@ -46,21 +46,35 @@ pub type PResult<O> = winnow::PResult<O, ParserError>;
 
 #[derive(Snafu, Debug)]
 pub enum ParserError<C: 'static = StrContext> {
-    Leaf {
-        kind: ErrorKind,
-        context: Vec<C>,
-    },
+    #[snafu(display("Parse error: {}", kind))]
+    Leaf { kind: ErrorKind, context: Vec<C> },
+    #[snafu(display("Parse error: {}", kind))]
     Inter {
         kind: ErrorKind,
         context: Vec<C>,
         #[snafu(source(from(ParserError<C>, Box::new)))]
         source: Box<ParserError<C>>,
     },
+    #[snafu(display("Parse error: {}", kind))]
     Other {
         kind: ErrorKind,
         context: Vec<C>,
         source: Box<dyn std::error::Error>,
     },
+}
+
+impl<I, E, C> FromExternalError<I, E> for ParserError<C>
+where
+    E: std::error::Error + 'static,
+    C: 'static,
+{
+    fn from_external_error(_: &I, kind: ErrorKind, e: E) -> Self {
+        Self::Other {
+            kind,
+            context: Vec::new(),
+            source: Box::new(e),
+        }
+    }
 }
 
 impl<C: 'static, I> From<ParseError<I, ParserError<C>>> for ParserError<C> {
