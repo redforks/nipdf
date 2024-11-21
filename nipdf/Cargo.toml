@@ -46,6 +46,7 @@ cbc.workspace = true
 phf.workspace = true
 miniz_oxide.workspace = true
 snafu.workspace = true
+winnow.workspace = true
 
 [dev-dependencies]
 env_logger.workspace = true

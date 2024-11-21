@@ -2547,6 +2547,7 @@ dependencies = [
  "tinyvec",
  "ttf-parser 0.25.0",
  "weezl",
+ "winnow 0.6.18",
 ]
 
 [[package]]
