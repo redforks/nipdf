@@ -9,7 +9,7 @@ use crate::{
     },
     parser::{
         ParseResult, parse_frame_set, parse_header, parse_indirect_object, parse_indirect_stream,
-        parse_object, ws_terminated,
+        parse_object, ws_now, ws_terminated,
     },
 };
 use ahash::{HashMap, HashMapExt};
@@ -21,6 +21,7 @@ use once_cell::unsync::OnceCell;
 use prescript::{Name, sname};
 use snafu::Snafu;
 use std::iter::repeat_with;
+use winnow::Parser as _;
 
 pub mod page;
 pub use page::*;
@@ -69,6 +70,30 @@ fn parse_object_stream(n: usize, buf: &[u8]) -> ParseResult<'_, ObjectStream> {
         buf: buf.to_owned(),
         offsets,
     }))
+}
+
+// TODO: use and create test
+fn object_stream_parser<'a>(
+    n: usize,
+) -> impl winnow::Parser<&'a [u8], ObjectStream, crate::ParserError> {
+    use winnow::{
+        ascii::{dec_uint, space1},
+        combinator::{preceded, repeat, rest, terminated},
+    };
+    (
+        repeat(
+            n,
+            terminated(
+                preceded((dec_uint::<_, u32, _>, space1), dec_uint::<_, u16, _>),
+                ws_now(),
+            ),
+        ),
+        rest,
+    )
+        .map(|(nums, buf): (Vec<u16>, &'a [u8])| ObjectStream {
+            buf: buf.to_owned(),
+            offsets: nums,
+        })
 }
 
 impl ObjectStream {
