@@ -59,5 +59,13 @@ fn test_comment_now(input: &[u8]) -> (&[u8], &[u8]) {
 #[test_case(b"\r" => b""; "carriage return")]
 #[test_case(b"\x0C" => b""; "form feed")]
 fn test_whitespace_now(input: &[u8]) -> &'_ [u8] {
-    whitepace_now().parse_peek(input).unwrap().0
+    whitespace_now().parse_peek(input).unwrap().0
+}
+
+#[test_case(b" " => b""; "space")]
+#[test_case(b" \t\n\r\x0Cfoo" => b"foo"; "multiple whitespaces")]
+#[test_case(b"%foo\n" => b""; "comment")]
+#[test_case(b"\t %foo\rbar" => b"bar"; "whitespace and comment")]
+fn test_ws_now(input: &[u8]) -> &'_ [u8] {
+    ws_now().parse_peek(input).unwrap().0
 }

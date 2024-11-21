@@ -74,9 +74,15 @@ fn comment_now<'a>() -> impl winnow::Parser<&'a [u8], &'a [u8], crate::ParserErr
 /// in PDF 32000-1:2008 7.2.2 '\0' is whitespace, but in 4.46 '\0' is
 /// not listed as whitespace. Exclude '\0' because after `stream` tag,
 /// '\0' maybe part of stream content.
-fn whitepace_now<'a>() -> impl winnow::Parser<&'a [u8], u8, crate::ParserError> {
+fn whitespace_now<'a>() -> impl winnow::Parser<&'a [u8], u8, crate::ParserError> {
     use winnow::token::one_of;
     one_of([b' ', b'\t', b'\r', b'\n', b'\x0C'])
+}
+
+/// Return parser that parse one or more whitespace and/or comments.
+pub fn ws_now<'a>() -> impl winnow::Parser<&'a [u8], (), crate::ParserError> {
+    use winnow::combinator::{alt, repeat};
+    repeat(1.., alt((whitespace_now().void(), comment_now().void())))
 }
 
 #[allow(clippy::needless_pass_by_value)]
