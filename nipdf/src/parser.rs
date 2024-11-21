@@ -10,9 +10,10 @@ use snafu::Snafu;
 
 mod file;
 mod object;
-
+use crate::PResult;
 pub use file::*;
 pub use object::*;
+use winnow::Parser as _;
 
 // Set `nom::error:VerboseError<&'a[u8]>` for detail error
 #[cfg(not(debug_assertions))]
@@ -46,6 +47,36 @@ fn comment(buf: &[u8]) -> ParseResult<'_, ()> {
 
 pub(crate) fn is_white_space(b: u8) -> bool {
     b == b' ' || b == b'\t' || b == b'\n' || b == b'\x0C' || b == b'\r' || b == b'\0'
+}
+
+/// Return eol parser.
+///
+/// EOL is '\n', '\r', or "\r\n"
+fn eol_now<'a>() -> impl winnow::Parser<&'a [u8], (), crate::ParserError> {
+    use winnow::{
+        combinator::{cond, opt},
+        token::one_of,
+    };
+    one_of([b'\n', b'\r'])
+        .flat_map(|v| cond(v == b'\r', opt(b'\n')))
+        .void()
+}
+
+/// Return comment parser. Parser returns comment string, `%` prefix and newline suffix not
+/// included.
+fn comment_now<'a>() -> impl winnow::Parser<&'a [u8], &'a [u8], crate::ParserError> {
+    use winnow::{combinator::delimited, token::take_till};
+    delimited(b'%', take_till(0.., [b'\n', b'\r']), eol_now())
+}
+
+/// Return parser that parse one of whitespace characters.
+///
+/// in PDF 32000-1:2008 7.2.2 '\0' is whitespace, but in 4.46 '\0' is
+/// not listed as whitespace. Exclude '\0' because after `stream` tag,
+/// '\0' maybe part of stream content.
+fn whitepace_now<'a>() -> impl winnow::Parser<&'a [u8], u8, crate::ParserError> {
+    use winnow::token::one_of;
+    one_of([b' ', b'\t', b'\r', b'\n', b'\x0C'])
 }
 
 #[allow(clippy::needless_pass_by_value)]
