@@ -37,6 +37,12 @@ fn new_hex_string(s: &str) -> Object {
     Object::Name(sname("foo")),
     Object::Array(vec![Object::Bool(true)].into())
 ].into()); "nested array with null, name, and boolean")]
+#[test_case("<<>>" => Object::Dictionary(Dictionary::new()); "empty dict")]
+#[test_case("<< /Type 1 >>" => Object::Dictionary({
+    let mut dict = HashMap::default();
+    dict.insert(sname("Type"), Object::Integer(1));
+    Dictionary::from(dict)
+}); "dictionary with name and integer")]
 fn parse_object(buf: &str) -> Object {
     report_parse_err(object().parse(buf.as_bytes()))
 }
