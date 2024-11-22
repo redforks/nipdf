@@ -1,4 +1,4 @@
-use super::eol_now;
+use super::{eol_now, ws_now, ws_prefixed_now};
 use crate::{
     ParserError,
     object::{HexString, InnerString, LiteralString, Object, ObjectValueError},
@@ -169,6 +169,13 @@ fn hex_string<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
     delimited(b'<', parser.try_map(decode_hex), b'>').map(Object::HexString)
 }
 
+fn array(input: &mut &[u8]) -> PResult<Object, ParserError> {
+    let parser = repeat::<_, _, Vec<_>, _, _>(0.., ws_prefixed_now(object()));
+    delimited(b'[', parser, ws_prefixed_now(b']'))
+        .output_into()
+        .parse_next(input)
+}
+
 /// Return parser to parse [Object].
 fn object<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
     let null = b"null".value(Object::Null);
@@ -179,7 +186,15 @@ fn object<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
     let name = name().map(Object::Name);
     let quoted_string = parse_quoted_string.map(Object::LiteralString);
 
-    alt((null, bool, number(), name, quoted_string, hex_string()))
+    alt((
+        null,
+        bool,
+        number(),
+        name,
+        quoted_string,
+        hex_string(),
+        array,
+    ))
 }
 
 #[cfg(test)]

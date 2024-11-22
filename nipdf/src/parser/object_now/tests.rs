@@ -30,6 +30,13 @@ fn new_hex_string(s: &str) -> Object {
 #[test_case("<200a0d>" => new_hex_string(" \n\r"); "hex string")]
 #[test_case("<20 0a\t 0d>" => new_hex_string(" \n\r"); "hex ignore space")]
 #[test_case("<201F2>" => new_hex_string("\x20\x1f "); "odd hex char" )]
+#[test_case("[]" => Object::Array(vec![].into()); "empty array")]
+#[test_case("[ \t]" => Object::Array(vec![].into()); "array with space and tab")]
+#[test_case("[null/foo[true]]" => Object::Array(vec![
+    Object::Null,
+    Object::Name(sname("foo")),
+    Object::Array(vec![Object::Bool(true)].into())
+].into()); "nested array with null, name, and boolean")]
 fn parse_object(buf: &str) -> Object {
     report_parse_err(object().parse(buf.as_bytes()))
 }

@@ -83,10 +83,18 @@ fn is_whitespace() -> impl ContainsToken<u8> {
     b" \t\r\n\x0C"
 }
 
-/// Return parser that parse one or more whitespace and/or comments.
+/// Return parser that parse zero or more whitespace and/or comments.
 pub fn ws_now<'a>() -> impl winnow::Parser<&'a [u8], (), crate::ParserError> {
     use winnow::combinator::{alt, repeat};
-    repeat(1.., alt((whitespace_now().void(), comment_now().void())))
+    repeat(0.., alt((whitespace_now().void(), comment_now().void())))
+}
+
+pub fn ws_prefixed_now<'a, F, O>(inner: F) -> impl winnow::Parser<&'a [u8], O, crate::ParserError>
+where
+    F: winnow::Parser<&'a [u8], O, crate::ParserError>,
+{
+    use winnow::combinator::preceded;
+    preceded(ws_now(), inner)
 }
 
 #[allow(clippy::needless_pass_by_value)]
