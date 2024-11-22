@@ -77,13 +77,13 @@ impl<'a> FreeTypeFontWidth<'a> {
     }
 
     pub fn glyph_width(&self, gid: u32) -> Result<u32> {
-        Ok(self
+        self
             .font
             .advance(gid)
             .whatever_context("get gid advance")?
             .x()
             .to_u32()
-            .whatever_context("convert advance to u32")?)
+            .whatever_context("convert advance to u32")
     }
 }
 
@@ -1076,10 +1076,10 @@ impl<'a> CIDFontType2FontOp<'a> {
                 );
                 (!(encoding_name == "Identity-H" || encoding_name == "Identity-V"))
                     .then(|| {
-                        Ok(cmap_registry
+                        cmap_registry
                             .get(&name(encoding_name))
                             .whatever_context("Get cmap")?
-                            .whatever_context("Get cmap")?)
+                            .whatever_context("Get cmap")
                     })
                     .transpose()?
             }

@@ -23,7 +23,6 @@ use snafu::{OptionExt, ResultExt};
 use std::{
     borrow::Cow,
     num::NonZeroU32,
-    rc::Rc,
     str::{FromStr, from_utf8},
 };
 

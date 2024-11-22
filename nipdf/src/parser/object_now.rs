@@ -5,18 +5,14 @@ use crate::{
 };
 use log::warn;
 use prescript::Name;
-use snafu::{FromString, OptionExt, ResultExt as _, Whatever};
-use std::{
-    borrow::Cow,
-    num::{ParseFloatError, ParseIntError},
-    str::from_utf8,
-};
+use snafu::{OptionExt, ResultExt as _, Whatever};
+use std::str::from_utf8;
 use winnow::{
     PResult, Parser,
-    ascii::{float, take_escaped},
+    ascii::float,
     combinator::{alt, delimited, preceded, repeat, rest},
     stream::AsChar,
-    token::{any, none_of, take_till, take_while},
+    token::{any, take_till, take_while},
 };
 
 fn name<'a>() -> impl Parser<&'a [u8], Name, ParserError> {
@@ -94,7 +90,7 @@ enum LiteralStringFragment<'a> {
     Nested(LiteralString),
 }
 
-fn parse_quoted_string<'a>(input: &mut &'a [u8]) -> PResult<LiteralString, ParserError> {
+fn parse_quoted_string(input: &mut &[u8]) -> PResult<LiteralString, ParserError> {
     let literal = take_till(1.., b"\\()").map(LiteralStringFragment::Literal);
     let paired = parse_quoted_string.map(LiteralStringFragment::Nested);
     let oct_char = take_while(1..4, AsChar::is_oct_digit)
