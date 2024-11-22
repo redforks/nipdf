@@ -12,7 +12,7 @@ use test_case::test_case;
 #[test_case("4294967296" => Object::Number(4294967296f32); "integer out of range")]
 #[test_case("123.12" => Object::Number(123.12); "number")]
 #[test_case("-123.12" => Object::Number(-123.12); "negative number")]
-#[test_case("-" => Object::Number(0.); "negative symbol only")]
+#[test_case("-" => Object::Integer(0); "negative symbol only")]
 #[test_case("+123.12" => Object::Number(123.12); "number prefixed with +")]
 #[test_case("4.0" => Object::Number(4.); "number end with dot")]
 #[test_case("4.58984938980.04" => Object::Number(4.58984938980); "number ignore 2nd dot")]
