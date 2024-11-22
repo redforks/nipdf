@@ -1,17 +1,20 @@
 use super::eol_now;
 use crate::{
     ParserError,
-    object::{InnerString, LiteralString, Object, ObjectValueError},
+    object::{HexString, InnerString, LiteralString, Object, ObjectValueError},
+    parser::is_whitespace,
 };
+use hex::FromHexError;
 use log::warn;
+use nom::AsBytes;
 use prescript::Name;
 use snafu::{OptionExt, ResultExt as _, Whatever};
-use std::str::from_utf8;
+use std::{borrow::Cow, str::from_utf8};
 use winnow::{
     PResult, Parser,
     ascii::float,
     combinator::{alt, delimited, preceded, repeat, rest},
-    stream::AsChar,
+    stream::{AsChar, ContainsToken},
     token::{any, take_till, take_while},
 };
 
@@ -135,6 +138,37 @@ fn parse_quoted_string(input: &mut &[u8]) -> PResult<LiteralString, ParserError>
     .parse_next(input)
 }
 
+fn decode_hex(buf: &[u8]) -> Result<HexString, FromHexError> {
+    /// Remove whitespace from hex string.
+    fn preprocess(buf: &[u8]) -> Cow<'_, [u8]> {
+        let is_ws = is_whitespace();
+        if (buf.len() % 2 == 0) && !buf.iter().any(|&c| is_ws.contains_token(c)) {
+            return buf.into();
+        }
+
+        let mut result: Vec<u8> = buf
+            .iter()
+            .copied()
+            .filter(|&c| !is_ws.contains_token(c))
+            .collect();
+        if result.len() % 2 != 0 {
+            result.push(b'0');
+        }
+        result.into()
+    }
+
+    let buf = preprocess(buf);
+    hex::decode(&buf).map(|v| HexString(v.as_bytes().into()))
+}
+
+fn hex_string<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
+    let parser = take_while(
+        ..,
+        (AsChar::is_hex_digit, [b' ', b'\t', b'\r', b'\n', b'\x0C']),
+    );
+    delimited(b'<', parser.try_map(decode_hex), b'>').map(Object::HexString)
+}
+
 /// Return parser to parse [Object].
 fn object<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
     let null = b"null".value(Object::Null);
@@ -145,7 +179,7 @@ fn object<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
     let name = name().map(Object::Name);
     let quoted_string = parse_quoted_string.map(Object::LiteralString);
 
-    alt((null, bool, number(), name, quoted_string))
+    alt((null, bool, number(), name, quoted_string, hex_string()))
 }
 
 #[cfg(test)]

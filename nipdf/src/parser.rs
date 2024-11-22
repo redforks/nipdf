@@ -13,7 +13,7 @@ mod object;
 mod object_now;
 pub use file::*;
 pub use object::*;
-use winnow::Parser as _;
+use winnow::{Parser as _, stream::ContainsToken};
 
 // Set `nom::error:VerboseError<&'a[u8]>` for detail error
 #[cfg(not(debug_assertions))]
@@ -76,7 +76,11 @@ fn comment_now<'a>() -> impl winnow::Parser<&'a [u8], &'a [u8], crate::ParserErr
 /// '\0' maybe part of stream content.
 fn whitespace_now<'a>() -> impl winnow::Parser<&'a [u8], u8, crate::ParserError> {
     use winnow::token::one_of;
-    one_of([b' ', b'\t', b'\r', b'\n', b'\x0C'])
+    one_of(is_whitespace())
+}
+
+fn is_whitespace() -> impl ContainsToken<u8> {
+    b" \t\r\n\x0C"
 }
 
 /// Return parser that parse one or more whitespace and/or comments.

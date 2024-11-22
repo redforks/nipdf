@@ -2,6 +2,10 @@ use super::*;
 use prescript::sname;
 use test_case::test_case;
 
+fn new_hex_string(s: &str) -> Object {
+    Object::HexString(HexString(s.as_bytes().into()))
+}
+
 #[test_case("null" => Object::Null)]
 #[test_case("true" => Object::Bool(true))]
 #[test_case("false" => Object::Bool(false))]
@@ -21,6 +25,11 @@ use test_case::test_case;
 #[test_case("/foo" => Object::Name(sname("foo")); "name")]
 #[test_case("/@foo" => Object::Name(sname("@foo")); "special name")]
 #[test_case("/foo#20bar" => Object::Name(sname("foo bar")); "contains hex")]
+#[test_case("<>" => new_hex_string(""); "empty hex string")]
+#[test_case("<20>" => new_hex_string(" "); "one hex string")]
+#[test_case("<200a0d>" => new_hex_string(" \n\r"); "hex string")]
+#[test_case("<20 0a\t 0d>" => new_hex_string(" \n\r"); "hex ignore space")]
+#[test_case("<201F2>" => new_hex_string("\x20\x1f "); "odd hex char" )]
 fn parse_object(buf: &str) -> Object {
     report_parse_err(object().parse(buf.as_bytes()))
 }

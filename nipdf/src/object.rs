@@ -1267,7 +1267,7 @@ impl From<bool> for Object {
 pub struct LiteralString(pub(crate) InnerString);
 
 impl LiteralString {
-    // TODO: remove convert escape logic, winnow version handled it
+    // TODO: remove convert escape logic, winnow version parser handled it
     pub fn new(s: &[u8]) -> Self {
         fn skip_cur_new_line<I: Iterator<Item = u8>>(cur: u8, s: &mut Peekable<I>) -> bool {
             if cur == b'\r' {
@@ -1397,6 +1397,7 @@ pub struct HexString(pub(crate) InnerString);
 assert_eq_size!(HexString, TinyVec<[u8; 14]>, (u64, u64, u64));
 
 impl HexString {
+    // TODO: remove convert escape logic, winnow version parser handled it
     pub fn new(s: &[u8]) -> Self {
         fn filter_whitespace(s: &mut InnerString) {
             s.retain(|b| !b.is_ascii_whitespace());
