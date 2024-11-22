@@ -1267,6 +1267,7 @@ impl From<bool> for Object {
 pub struct LiteralString(pub(crate) InnerString);
 
 impl LiteralString {
+    // TODO: remove convert escape logic, winnow version handled it
     pub fn new(s: &[u8]) -> Self {
         fn skip_cur_new_line<I: Iterator<Item = u8>>(cur: u8, s: &mut Peekable<I>) -> bool {
             if cur == b'\r' {

@@ -1,6 +1,7 @@
+use super::eol_now;
 use crate::{
     ParserError,
-    object::{Object, ObjectValueError},
+    object::{InnerString, LiteralString, Object, ObjectValueError},
 };
 use log::warn;
 use prescript::Name;
@@ -12,12 +13,13 @@ use std::{
 };
 use winnow::{
     PResult, Parser,
-    ascii::float,
-    combinator::{alt, preceded, rest},
-    token::{take_till, take_while},
+    ascii::{float, take_escaped},
+    combinator::{alt, delimited, preceded, repeat, rest},
+    stream::AsChar,
+    token::{any, none_of, take_till, take_while},
 };
 
-fn name_parser<'a>() -> impl Parser<&'a [u8], Name, ParserError> {
+fn name<'a>() -> impl Parser<&'a [u8], Name, ParserError> {
     preceded(
         b'/',
         take_till(0.., &[
@@ -68,7 +70,7 @@ fn normalize_name(buf: &[u8]) -> Result<Name, ObjectValueError> {
     Ok(prescript::name(&String::from_utf8_lossy(&result)))
 }
 
-fn number_parser<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
+fn number<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
     let int = rest.parse_to::<i32>().map(Object::Integer);
     let real = rest.parse_to::<f32>().map(Object::Number);
     fn fallback(buf: &mut &[u8]) -> PResult<Object, ParserError> {
@@ -84,15 +86,70 @@ fn number_parser<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
         .and_then(alt((int, real, float.map(Object::Number), fallback)))
 }
 
-fn object_parser<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
+#[derive(Clone)]
+enum LiteralStringFragment<'a> {
+    Literal(&'a [u8]),
+    Escaped(u8),
+    EscapedLine,
+    Nested(LiteralString),
+}
+
+fn parse_quoted_string<'a>(input: &mut &'a [u8]) -> PResult<LiteralString, ParserError> {
+    let literal = take_till(1.., b"\\()").map(LiteralStringFragment::Literal);
+    let paired = parse_quoted_string.map(LiteralStringFragment::Nested);
+    let oct_char = take_while(1..4, AsChar::is_oct_digit)
+        .try_map(|s: &[u8]| {
+            u8::from_str_radix(from_utf8(s).whatever_context::<_, Whatever>("not utf8")?, 8)
+                .whatever_context::<_, Whatever>("parse oct")
+        })
+        .map(LiteralStringFragment::Escaped);
+    let escaped_line = eol_now().value(LiteralStringFragment::EscapedLine);
+    let escaped = preceded(
+        b'\\',
+        alt((
+            'n'.value(LiteralStringFragment::Escaped(b'\n')),
+            'r'.value(LiteralStringFragment::Escaped(b'\r')),
+            't'.value(LiteralStringFragment::Escaped(b'\t')),
+            'b'.value(LiteralStringFragment::Escaped(b'\x08')),
+            'f'.value(LiteralStringFragment::Escaped(b'\x0C')),
+            oct_char,
+            escaped_line,
+            any.map(LiteralStringFragment::Escaped),
+        )),
+    );
+    // .map(LiteralStringFragment::Literal);
+    delimited(
+        b'(',
+        repeat(0.., alt((literal, paired, escaped))).fold(InnerString::new, |mut r, f| {
+            match f {
+                LiteralStringFragment::Literal(s) => r.extend_from_slice(s),
+                LiteralStringFragment::Escaped(c) => r.push(c),
+                LiteralStringFragment::Nested(mut s) => {
+                    r.push(b'(');
+                    r.append(&mut s.0);
+                    r.push(b')');
+                }
+                LiteralStringFragment::EscapedLine => {}
+            }
+            r
+        }),
+        b')',
+    )
+    .map(LiteralString)
+    .parse_next(input)
+}
+
+/// Return parser to parse [Object].
+fn object<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
     let null = b"null".value(Object::Null);
     let bool = alt((
         b"true".value(Object::Bool(true)),
         b"false".value(Object::Bool(false)),
     ));
-    let name_parser = name_parser().map(Object::Name);
+    let name = name().map(Object::Name);
+    let quoted_string = parse_quoted_string.map(Object::LiteralString);
 
-    alt((null, bool, number_parser(), name_parser))
+    alt((null, bool, number(), name, quoted_string))
 }
 
 #[cfg(test)]
