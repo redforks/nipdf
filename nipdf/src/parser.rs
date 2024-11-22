@@ -89,25 +89,31 @@ fn is_whitespace() -> impl ContainsToken<u8> {
     b" \t\r\n\x0C"
 }
 
-/// Return parser that parse zero or more whitespace and/or comments.
-pub fn ws_or_comment0<'a>() -> impl winnow::Parser<&'a [u8], (), crate::ParserError> {
-    use winnow::combinator::{alt, repeat};
-    repeat(0.., alt((whitespace_now().void(), comment_now().void())))
+/// Parses a Whitespace or a comment.
+pub fn wsc<'a>() -> impl winnow::Parser<&'a [u8], (), crate::ParserError> {
+    use winnow::combinator::alt;
+    alt((whitespace_now().void(), comment_now().void()))
 }
 
-/// Return parser that parse one or more whitespace and/or comments.
-pub fn ws_or_comment1<'a>() -> impl winnow::Parser<&'a [u8], (), crate::ParserError> {
-    use winnow::combinator::{alt, repeat};
-    repeat(1.., alt((whitespace_now().void(), comment_now().void())))
-}
-
-/// Convert a parser to a parser that prefixed with 0 or more whitespace and/or comments.
-pub fn ws_prefixed0<'a, F, O>(inner: F) -> impl winnow::Parser<&'a [u8], O, crate::ParserError>
+/// Convert a parser to a parser that prefixed with 0 or more whitespace and/or comment.
+fn wsc_prefixed0<'a, F, O>(inner: F) -> impl winnow::Parser<&'a [u8], O, crate::ParserError>
 where
     F: winnow::Parser<&'a [u8], O, crate::ParserError>,
 {
-    use winnow::combinator::preceded;
-    preceded(ws_or_comment0(), inner)
+    use winnow::combinator::{preceded, repeat};
+    preceded(repeat::<_, _, (), _, _>(0.., wsc()).void(), inner)
+}
+
+/// Convert a parser to a parser that prefixed with 1 or more whitespace.
+fn ws_prefixed1<'a, F, O>(inner: F) -> impl winnow::Parser<&'a [u8], O, crate::ParserError>
+where
+    F: winnow::Parser<&'a [u8], O, crate::ParserError>,
+{
+    use winnow::combinator::{preceded, repeat};
+    preceded(
+        repeat::<_, _, (), _, _>(1.., whitespace_now()).void(),
+        inner,
+    )
 }
 
 #[allow(clippy::needless_pass_by_value)]

@@ -1,7 +1,9 @@
-use super::{eol_3, ws_prefixed0};
+use super::{eol_3, ws_prefixed1, wsc_prefixed0};
 use crate::{
     ParserError,
-    object::{Dictionary, HexString, InnerString, LiteralString, Object, ObjectValueError},
+    object::{
+        Dictionary, HexString, InnerString, LiteralString, Object, ObjectValueError, Reference,
+    },
     parser::is_whitespace,
 };
 use ahash::HashMap;
@@ -13,8 +15,8 @@ use snafu::{OptionExt, ResultExt as _, Whatever};
 use std::{borrow::Cow, str::from_utf8};
 use winnow::{
     PResult, Parser,
-    ascii::float,
-    combinator::{alt, delimited, preceded, repeat, rest},
+    ascii::{dec_uint, float},
+    combinator::{alt, delimited, preceded, repeat, rest, terminated},
     stream::{AsChar, ContainsToken},
     token::{any, take_till, take_while},
 };
@@ -171,22 +173,29 @@ fn hex_string<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
 }
 
 fn array(input: &mut &[u8]) -> PResult<Object, ParserError> {
-    let item = repeat::<_, _, Vec<_>, _, _>(0.., ws_prefixed0(object()));
-    delimited(b'[', item, ws_prefixed0(b']'))
+    let item = repeat::<_, _, Vec<_>, _, _>(0.., wsc_prefixed0(object()));
+    delimited(b'[', item, wsc_prefixed0(b']'))
         .output_into()
         .parse_next(input)
 }
 
 fn dict(input: &mut &[u8]) -> PResult<Object, ParserError> {
-    let key = ws_prefixed0(name());
-    let value = ws_prefixed0(object());
+    let key = wsc_prefixed0(name());
+    let value = wsc_prefixed0(object());
     let pair = repeat::<_, _, HashMap<_, _>, _, _>(0.., (key, value)).map(Dictionary::from);
-    delimited(b"<<", pair, ws_prefixed0(b">>"))
+    delimited(b"<<", pair, wsc_prefixed0(b">>"))
         .output_into()
         .parse_next(input)
 }
 
+fn reference<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
+    terminated((dec_uint, ws_prefixed1(dec_uint)), ws_prefixed1(b'R'))
+        .map(|(id, gen): (u32, u16)| Reference::new(id, gen).into())
+}
+
 /// Return parser to parse [Object].
+///
+/// Stream not parsed, because stream is indirect object.
 fn object<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
     let null = b"null".value(Object::Null);
     let bool = alt((
@@ -199,6 +208,7 @@ fn object<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
     alt((
         null,
         bool,
+        reference(),
         number(),
         name,
         quoted_string,

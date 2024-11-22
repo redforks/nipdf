@@ -74,11 +74,3 @@ fn test_comment_now(input: &[u8]) -> (&[u8], &[u8]) {
 fn test_whitespace_now(input: &[u8]) -> &'_ [u8] {
     whitespace_now().parse_peek(input).unwrap().0
 }
-
-#[test_case(b" " => b""; "space")]
-#[test_case(b" \t\n\r\x0Cfoo" => b"foo"; "multiple whitespaces")]
-#[test_case(b"%foo\n" => b""; "comment")]
-#[test_case(b"\t %foo\rbar" => b"bar"; "whitespace and comment")]
-fn test_ws_now(input: &[u8]) -> &'_ [u8] {
-    ws_or_comment0().parse_peek(input).unwrap().0
-}

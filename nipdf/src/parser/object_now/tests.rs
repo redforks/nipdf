@@ -31,6 +31,7 @@ fn new_hex_string(s: &str) -> Object {
 #[test_case("<20 0a\t 0d>" => new_hex_string(" \n\r"); "hex ignore space")]
 #[test_case("<201F2>" => new_hex_string("\x20\x1f "); "odd hex char" )]
 #[test_case("[]" => Object::Array(vec![].into()); "empty array")]
+#[test_case("[%comment\n]" => Object::Array(vec![].into()); "array contains comment")]
 #[test_case("[ \t]" => Object::Array(vec![].into()); "array with space and tab")]
 #[test_case("[null/foo[true]]" => Object::Array(vec![
     Object::Null,
@@ -43,6 +44,7 @@ fn new_hex_string(s: &str) -> Object {
     dict.insert(sname("Type"), Object::Integer(1));
     Dictionary::from(dict)
 }); "dictionary with name and integer")]
+#[test_case("1 0 R" => Object::Reference(Reference::new(1, 0)); "reference")]
 fn parse_object(buf: &str) -> Object {
     report_parse_err(object().parse(buf.as_bytes()))
 }
