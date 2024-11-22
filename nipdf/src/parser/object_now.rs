@@ -1,4 +1,4 @@
-use super::{eol_now, ws_now, ws_prefixed_now};
+use super::{eol_3, ws_now, ws_prefixed_now};
 use crate::{
     ParserError,
     object::{Dictionary, HexString, InnerString, LiteralString, Object, ObjectValueError},
@@ -103,7 +103,7 @@ fn parse_quoted_string(input: &mut &[u8]) -> PResult<LiteralString, ParserError>
                 .whatever_context::<_, Whatever>("parse oct")
         })
         .map(LiteralStringFragment::Escaped);
-    let escaped_line = eol_now().value(LiteralStringFragment::EscapedLine);
+    let escaped_line = eol_3().value(LiteralStringFragment::EscapedLine);
     let escaped = preceded(
         b'\\',
         alt((

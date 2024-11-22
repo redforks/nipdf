@@ -49,10 +49,8 @@ pub(crate) fn is_white_space(b: u8) -> bool {
     b == b' ' || b == b'\t' || b == b'\n' || b == b'\x0C' || b == b'\r' || b == b'\0'
 }
 
-/// Return eol parser.
-///
-/// EOL is '\n', '\r', or "\r\n"
-fn eol_now<'a>() -> impl winnow::Parser<&'a [u8], (), crate::ParserError> {
+/// Return eol parser that has 3 alternative: '\n', '\r', or "\r\n"
+fn eol_3<'a>() -> impl winnow::Parser<&'a [u8], (), crate::ParserError> {
     use winnow::{
         combinator::{cond, opt},
         token::one_of,
@@ -62,11 +60,19 @@ fn eol_now<'a>() -> impl winnow::Parser<&'a [u8], (), crate::ParserError> {
         .void()
 }
 
+/// Return eol parser that has 2 alternative: '\n', or '\r\n'
+fn eol_2<'a>() -> impl winnow::Parser<&'a [u8], (), crate::ParserError> {
+    use winnow::{combinator::cond, token::one_of};
+    one_of([b'\n', b'\r'])
+        .flat_map(|v| cond(v == b'\r', b'\n'))
+        .void()
+}
+
 /// Return comment parser. Parser returns comment string, `%` prefix and newline suffix not
 /// included.
 fn comment_now<'a>() -> impl winnow::Parser<&'a [u8], &'a [u8], crate::ParserError> {
     use winnow::{combinator::delimited, token::take_till};
-    delimited(b'%', take_till(0.., [b'\n', b'\r']), eol_now())
+    delimited(b'%', take_till(0.., [b'\n', b'\r']), eol_3())
 }
 
 /// Return parser that parse one of whitespace characters.
