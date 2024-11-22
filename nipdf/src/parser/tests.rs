@@ -80,5 +80,5 @@ fn test_whitespace_now(input: &[u8]) -> &'_ [u8] {
 #[test_case(b"%foo\n" => b""; "comment")]
 #[test_case(b"\t %foo\rbar" => b"bar"; "whitespace and comment")]
 fn test_ws_now(input: &[u8]) -> &'_ [u8] {
-    ws_now().parse_peek(input).unwrap().0
+    ws_or_comment0().parse_peek(input).unwrap().0
 }

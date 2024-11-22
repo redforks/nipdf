@@ -9,7 +9,7 @@ use crate::{
     },
     parser::{
         ParseResult, parse_frame_set, parse_header, parse_indirect_object, parse_indirect_stream,
-        parse_object, ws_now, ws_terminated,
+        parse_object, ws_or_comment0, ws_terminated,
     },
 };
 use ahash::{HashMap, HashMapExt};
@@ -85,7 +85,7 @@ fn object_stream_parser<'a>(
             n,
             terminated(
                 preceded((dec_uint::<_, u32, _>, space1), dec_uint::<_, u16, _>),
-                ws_now(),
+                ws_or_comment0(),
             ),
         ),
         rest,

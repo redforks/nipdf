@@ -1,4 +1,4 @@
-use super::{eol_3, ws_now, ws_prefixed_now};
+use super::{eol_3, ws_prefixed0};
 use crate::{
     ParserError,
     object::{Dictionary, HexString, InnerString, LiteralString, Object, ObjectValueError},
@@ -171,17 +171,17 @@ fn hex_string<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
 }
 
 fn array(input: &mut &[u8]) -> PResult<Object, ParserError> {
-    let item = repeat::<_, _, Vec<_>, _, _>(0.., ws_prefixed_now(object()));
-    delimited(b'[', item, ws_prefixed_now(b']'))
+    let item = repeat::<_, _, Vec<_>, _, _>(0.., ws_prefixed0(object()));
+    delimited(b'[', item, ws_prefixed0(b']'))
         .output_into()
         .parse_next(input)
 }
 
 fn dict(input: &mut &[u8]) -> PResult<Object, ParserError> {
-    let key = ws_prefixed_now(name());
-    let value = ws_prefixed_now(object());
+    let key = ws_prefixed0(name());
+    let value = ws_prefixed0(object());
     let pair = repeat::<_, _, HashMap<_, _>, _, _>(0.., (key, value)).map(Dictionary::from);
-    delimited(b"<<", pair, ws_prefixed_now(b">>"))
+    delimited(b"<<", pair, ws_prefixed0(b">>"))
         .output_into()
         .parse_next(input)
 }
