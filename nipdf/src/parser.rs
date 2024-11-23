@@ -104,6 +104,14 @@ where
     preceded(repeat::<_, _, (), _, _>(0.., wsc()).void(), inner)
 }
 
+fn wsc_prefixed1<'a, F, O>(inner: F) -> impl winnow::Parser<&'a [u8], O, crate::ParserError>
+where
+    F: winnow::Parser<&'a [u8], O, crate::ParserError>,
+{
+    use winnow::combinator::{preceded, repeat};
+    preceded(repeat::<_, _, (), _, _>(1.., wsc()).void(), inner)
+}
+
 /// Convert a parser to a parser that prefixed with 1 or more whitespace.
 fn ws_prefixed1<'a, F, O>(inner: F) -> impl winnow::Parser<&'a [u8], O, crate::ParserError>
 where
