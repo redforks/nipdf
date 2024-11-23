@@ -40,18 +40,18 @@ fn test_whitespace_or_comment(input: &str) -> &str {
 #[test_case(b"\r\n" => b""; "CRLF")]
 #[test_case(b"\n\r" => b"\r"; "LFCR")]
 fn test_eol_3(input: &[u8]) -> &'_ [u8] {
-    eol_3().parse_peek(input).unwrap().0
+    eol3().parse_peek(input).unwrap().0
 }
 
 #[test_case(b"\n" => b""; "LF")]
 #[test_case(b"\r\n" => b""; "CRLF")]
 fn test_eol_2(input: &[u8]) -> &'_ [u8] {
-    eol_2().parse_peek(input).unwrap().0
+    eol2().parse_peek(input).unwrap().0
 }
 
 #[test]
 fn test_eol_2_cr() {
-    let e = eol_2().parse_next(&mut b"\r".as_ref()).unwrap_err();
+    let e = eol2().parse_next(&mut b"\r".as_ref()).unwrap_err();
     assert!(matches!(e, ErrMode::<crate::ParserError>::Backtrack(_)))
 }
 

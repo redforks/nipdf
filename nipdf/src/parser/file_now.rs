@@ -1,4 +1,4 @@
-use super::eol_3;
+use super::eol3;
 use crate::ParserError;
 use winnow::{
     Parser,
@@ -24,6 +24,6 @@ where
             one_of(AsChar::is_dec_digit),
         )
             .take(),
-        eol_3(),
+        eol3(),
     )
 }

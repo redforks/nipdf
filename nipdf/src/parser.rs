@@ -54,7 +54,7 @@ pub(crate) fn is_white_space(b: u8) -> bool {
 }
 
 /// Return eol parser that has 3 alternative: '\n', '\r', or "\r\n"
-fn eol_3<'a, S>() -> impl winnow::Parser<S, (), crate::ParserError>
+fn eol3<'a, S>() -> impl winnow::Parser<S, (), crate::ParserError>
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8>,
 {
@@ -68,7 +68,7 @@ where
 }
 
 /// Return eol parser that has 2 alternative: '\n', or '\r\n'
-fn eol_2<'a, S>() -> impl winnow::Parser<S, (), crate::ParserError>
+fn eol2<'a, S>() -> impl winnow::Parser<S, (), crate::ParserError>
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8>,
 {
@@ -85,7 +85,7 @@ where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8>,
 {
     use winnow::{combinator::delimited, token::take_till};
-    delimited(b'%', take_till(0.., [b'\n', b'\r']), eol_3())
+    delimited(b'%', take_till(0.., [b'\n', b'\r']), eol3())
 }
 
 /// Return parser that parse one of whitespace characters.

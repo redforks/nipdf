@@ -1,4 +1,4 @@
-use super::{eol_2, eol_3, ws_prefixed1, wsc_prefixed0};
+use super::{eol2, eol3, ws_prefixed1, wsc_prefixed0};
 use crate::{
     ParserError,
     object::{
@@ -116,7 +116,7 @@ where
                 .whatever_context::<_, Whatever>("parse oct")
         })
         .map(LiteralStringFragment::Escaped);
-    let escaped_line = eol_3().value(LiteralStringFragment::EscapedLine);
+    let escaped_line = eol3().value(LiteralStringFragment::EscapedLine);
     let escaped = preceded(
         b'\\',
         alt((
@@ -311,7 +311,7 @@ where
     };
 
     let saved_pos = buf.checkpoint();
-    match terminated(wsc_prefixed0(b"stream".as_slice()), eol_2())
+    match terminated(wsc_prefixed0(b"stream".as_slice()), eol2())
         .span()
         .parse_next(buf)
     {
