@@ -19,21 +19,12 @@ use nom::{
 };
 use num_traits::ToPrimitive;
 use prescript::{Name, sname};
-use snafu::{OptionExt, ResultExt};
+use snafu::ResultExt as _;
 use std::{
     borrow::Cow,
     num::NonZeroU32,
     str::{FromStr, from_utf8},
 };
-
-/// Unwrap the result of nom parser to a *normal* result.
-pub fn unwrap_parse_result<'a, T: 'a>(obj: ParseResult<'a, T>) -> Result<T, ParseError<'a>> {
-    match obj {
-        Ok((_, obj)) => Ok(obj),
-        Err(nom::Err::Incomplete(_)) => unreachable!(),
-        Err(nom::Err::Error(e) | nom::Err::Failure(e)) => Err(e),
-    }
-}
 
 pub fn parse_object(buf: &[u8]) -> ParseResult<'_, Object> {
     let null = value(Object::Null, tag(b"null"));
@@ -172,7 +163,7 @@ fn parse_name(input: &[u8]) -> ParseResult<'_, Name> {
     Ok((input, name))
 }
 
-pub fn parse_array(input: &[u8]) -> ParseResult<'_, Array> {
+fn parse_array(input: &[u8]) -> ParseResult<'_, Array> {
     let (input, arr) = delimited(
         ws(tag(b"[")),
         many0(ws(parse_object)),
