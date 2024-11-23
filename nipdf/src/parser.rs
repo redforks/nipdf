@@ -13,7 +13,10 @@ mod object;
 mod object_now;
 pub use file::*;
 pub use object::*;
-use winnow::{Parser as _, stream::ContainsToken};
+use winnow::{
+    Parser as _,
+    stream::{Compare, ContainsToken, Stream, StreamIsPartial},
+};
 
 // Set `nom::error:VerboseError<&'a[u8]>` for detail error
 #[cfg(not(debug_assertions))]
@@ -50,7 +53,10 @@ pub(crate) fn is_white_space(b: u8) -> bool {
 }
 
 /// Return eol parser that has 3 alternative: '\n', '\r', or "\r\n"
-fn eol_3<'a>() -> impl winnow::Parser<&'a [u8], (), crate::ParserError> {
+fn eol_3<'a, S>() -> impl winnow::Parser<S, (), crate::ParserError>
+where
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8>,
+{
     use winnow::{
         combinator::{cond, opt},
         token::one_of,
@@ -61,7 +67,10 @@ fn eol_3<'a>() -> impl winnow::Parser<&'a [u8], (), crate::ParserError> {
 }
 
 /// Return eol parser that has 2 alternative: '\n', or '\r\n'
-fn eol_2<'a>() -> impl winnow::Parser<&'a [u8], (), crate::ParserError> {
+fn eol_2<'a, S>() -> impl winnow::Parser<S, (), crate::ParserError>
+where
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8>,
+{
     use winnow::{combinator::cond, token::one_of};
     one_of([b'\n', b'\r'])
         .flat_map(|v| cond(v == b'\r', b'\n'))
@@ -70,7 +79,10 @@ fn eol_2<'a>() -> impl winnow::Parser<&'a [u8], (), crate::ParserError> {
 
 /// Return comment parser. Parser returns comment string, `%` prefix and newline suffix not
 /// included.
-fn comment_now<'a>() -> impl winnow::Parser<&'a [u8], &'a [u8], crate::ParserError> {
+fn comment_now<'a, S>() -> impl winnow::Parser<S, &'a [u8], crate::ParserError>
+where
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8>,
+{
     use winnow::{combinator::delimited, token::take_till};
     delimited(b'%', take_till(0.., [b'\n', b'\r']), eol_3())
 }
@@ -80,7 +92,10 @@ fn comment_now<'a>() -> impl winnow::Parser<&'a [u8], &'a [u8], crate::ParserErr
 /// in PDF 32000-1:2008 7.2.2 '\0' is whitespace, but in 4.46 '\0' is
 /// not listed as whitespace. Exclude '\0' because after `stream` tag,
 /// '\0' maybe part of stream content.
-fn whitespace_now<'a>() -> impl winnow::Parser<&'a [u8], u8, crate::ParserError> {
+fn whitespace_now<'a, S>() -> impl winnow::Parser<S, u8, crate::ParserError> + 'a
+where
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+{
     use winnow::token::one_of;
     one_of(is_whitespace())
 }
@@ -90,32 +105,41 @@ fn is_whitespace() -> impl ContainsToken<u8> {
 }
 
 /// Parses a Whitespace or a comment.
-pub fn wsc<'a>() -> impl winnow::Parser<&'a [u8], (), crate::ParserError> {
+pub fn wsc<'a, S>() -> impl winnow::Parser<S, (), crate::ParserError> + 'a
+where
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+{
     use winnow::combinator::alt;
     alt((whitespace_now().void(), comment_now().void()))
 }
 
 /// Convert a parser to a parser that prefixed with 0 or more whitespace and/or comment.
-fn wsc_prefixed0<'a, F, O>(inner: F) -> impl winnow::Parser<&'a [u8], O, crate::ParserError>
+fn wsc_prefixed0<'a, S, F, O>(inner: F) -> impl winnow::Parser<S, O, crate::ParserError> + 'a
 where
-    F: winnow::Parser<&'a [u8], O, crate::ParserError>,
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+    F: winnow::Parser<S, O, crate::ParserError> + 'a,
+    O: 'a,
 {
     use winnow::combinator::{preceded, repeat};
     preceded(repeat::<_, _, (), _, _>(0.., wsc()).void(), inner)
 }
 
-fn wsc_prefixed1<'a, F, O>(inner: F) -> impl winnow::Parser<&'a [u8], O, crate::ParserError>
+fn wsc_prefixed1<'a, S, F, O>(inner: F) -> impl winnow::Parser<S, O, crate::ParserError> + 'a
 where
-    F: winnow::Parser<&'a [u8], O, crate::ParserError>,
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+    F: winnow::Parser<S, O, crate::ParserError> + 'a,
+    O: 'a,
 {
     use winnow::combinator::{preceded, repeat};
     preceded(repeat::<_, _, (), _, _>(1.., wsc()).void(), inner)
 }
 
 /// Convert a parser to a parser that prefixed with 1 or more whitespace.
-fn ws_prefixed1<'a, F, O>(inner: F) -> impl winnow::Parser<&'a [u8], O, crate::ParserError>
+fn ws_prefixed1<'a, S, F, O>(inner: F) -> impl winnow::Parser<S, O, crate::ParserError> + 'a
 where
-    F: winnow::Parser<&'a [u8], O, crate::ParserError>,
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+    F: winnow::Parser<S, O, crate::ParserError> + 'a,
+    O: 'a,
 {
     use winnow::combinator::{preceded, repeat};
     preceded(

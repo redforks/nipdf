@@ -17,11 +17,14 @@ use winnow::{
     PResult, Parser,
     ascii::{dec_uint, float},
     combinator::{alt, delimited, preceded, repeat, rest, terminated},
-    stream::{AsChar, ContainsToken},
+    stream::{AsChar, Compare, ContainsToken, Stream, StreamIsPartial},
     token::{any, take_till, take_while},
 };
 
-fn name<'a>() -> impl Parser<&'a [u8], Name, ParserError> {
+fn name<'a, S>() -> impl Parser<S, Name, ParserError> + 'a
+where
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+{
     preceded(
         b'/',
         take_till(0.., &[
@@ -72,7 +75,10 @@ fn normalize_name(buf: &[u8]) -> Result<Name, ObjectValueError> {
     Ok(prescript::name(&String::from_utf8_lossy(&result)))
 }
 
-fn number<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
+fn number<'a, S>() -> impl Parser<S, Object, ParserError> + 'a
+where
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+{
     let int = rest.parse_to::<i32>().map(Object::Integer);
     let real = rest.parse_to::<f32>().map(Object::Number);
     fn fallback(buf: &mut &[u8]) -> PResult<Object, ParserError> {
@@ -96,7 +102,10 @@ enum LiteralStringFragment<'a> {
     Nested(LiteralString),
 }
 
-fn parse_quoted_string(input: &mut &[u8]) -> PResult<LiteralString, ParserError> {
+fn parse_quoted_string<'a, S>(input: &mut S) -> PResult<LiteralString, ParserError>
+where
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+{
     let literal = take_till(1.., b"\\()").map(LiteralStringFragment::Literal);
     let paired = parse_quoted_string.map(LiteralStringFragment::Nested);
     let oct_char = take_while(1..4, AsChar::is_oct_digit)
@@ -109,11 +118,11 @@ fn parse_quoted_string(input: &mut &[u8]) -> PResult<LiteralString, ParserError>
     let escaped = preceded(
         b'\\',
         alt((
-            'n'.value(LiteralStringFragment::Escaped(b'\n')),
-            'r'.value(LiteralStringFragment::Escaped(b'\r')),
-            't'.value(LiteralStringFragment::Escaped(b'\t')),
-            'b'.value(LiteralStringFragment::Escaped(b'\x08')),
-            'f'.value(LiteralStringFragment::Escaped(b'\x0C')),
+            b'n'.value(LiteralStringFragment::Escaped(b'\n')),
+            b'r'.value(LiteralStringFragment::Escaped(b'\r')),
+            b't'.value(LiteralStringFragment::Escaped(b'\t')),
+            b'b'.value(LiteralStringFragment::Escaped(b'\x08')),
+            b'f'.value(LiteralStringFragment::Escaped(b'\x0C')),
             oct_char,
             escaped_line,
             any.map(LiteralStringFragment::Escaped),
@@ -164,7 +173,10 @@ fn decode_hex(buf: &[u8]) -> Result<HexString, FromHexError> {
     hex::decode(&buf).map(|v| HexString(v.as_bytes().into()))
 }
 
-fn hex_string<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
+fn hex_string<'a, S>() -> impl Parser<S, Object, ParserError> + 'a
+where
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+{
     let parser = take_while(
         ..,
         (AsChar::is_hex_digit, [b' ', b'\t', b'\r', b'\n', b'\x0C']),
@@ -172,33 +184,57 @@ fn hex_string<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
     delimited(b'<', parser.try_map(decode_hex), b'>').map(Object::HexString)
 }
 
-fn array(input: &mut &[u8]) -> PResult<Object, ParserError> {
+fn array<'a, S>(input: &mut S) -> PResult<Object, ParserError>
+where
+    S: Stream<Token = u8, Slice = &'a [u8]>
+        + StreamIsPartial
+        + Compare<u8>
+        + Compare<&'a [u8]>
+        + 'a,
+{
     let item = repeat::<_, _, Vec<_>, _, _>(0.., wsc_prefixed0(object()));
     delimited(b'[', item, wsc_prefixed0(b']'))
         .output_into()
         .parse_next(input)
 }
 
-fn dict(input: &mut &[u8]) -> PResult<Object, ParserError> {
+fn dict<'a, S>(input: &mut S) -> PResult<Object, ParserError>
+where
+    S: Stream<Token = u8, Slice = &'a [u8]>
+        + StreamIsPartial
+        + Compare<u8>
+        + Compare<&'a [u8]>
+        + 'a,
+{
     let key = wsc_prefixed0(name());
     let value = wsc_prefixed0(object());
     let pair = repeat::<_, _, HashMap<_, _>, _, _>(0.., (key, value)).map(Dictionary::from);
-    delimited(b"<<", pair, wsc_prefixed0(b">>"))
+    delimited(b"<<".as_slice(), pair, wsc_prefixed0(b">>".as_slice()))
         .output_into()
         .parse_next(input)
 }
 
-fn reference<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
+fn reference<'a, S>() -> impl Parser<S, Object, ParserError> + 'a
+where
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+{
     terminated((dec_uint, ws_prefixed1(dec_uint)), ws_prefixed1(b'R'))
         .map(|(id, gen): (u32, u16)| Reference::new(id, gen).into())
 }
 
 /// Return parser to parse [Object].
-fn object<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
-    let null = b"null".value(Object::Null);
+fn object<'a, S>() -> impl Parser<S, Object, ParserError> + 'a
+where
+    S: Stream<Token = u8, Slice = &'a [u8]>
+        + StreamIsPartial
+        + Compare<u8>
+        + Compare<&'a [u8]>
+        + 'a,
+{
+    let null = b"null".as_slice().value(Object::Null);
     let bool = alt((
-        b"true".value(Object::Bool(true)),
-        b"false".value(Object::Bool(false)),
+        b"true".as_slice().value(Object::Bool(true)),
+        b"false".as_slice().value(Object::Bool(false)),
     ));
     let name = name().map(Object::Name);
     let quoted_string = parse_quoted_string.map(Object::LiteralString);
