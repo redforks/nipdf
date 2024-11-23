@@ -240,7 +240,7 @@ fn parse_frame(buf: &[u8]) -> ParseResult<'_, (Dictionary, XRefSection)> {
     )(buf)
 }
 
-pub fn parse_frame_set(input: &[u8]) -> ParseResult<'_, FrameSet<'_>> {
+pub fn parse_frame_set(input: &[u8]) -> ParseResult<'_, FrameSet> {
     fn get_prev(frame: &Frame) -> Option<i32> {
         frame.trailer.get(&sname("Prev")).map(|o| o.int().unwrap())
     }

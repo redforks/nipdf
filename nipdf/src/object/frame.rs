@@ -51,4 +51,4 @@ impl Frame {
     }
 }
 
-pub type FrameSet<'a> = Vec<Frame>;
+pub type FrameSet = Vec<Frame>;

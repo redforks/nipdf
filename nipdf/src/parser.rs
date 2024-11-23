@@ -9,6 +9,7 @@ use nom::{
 use snafu::Snafu;
 
 mod file;
+mod file_now;
 mod object;
 mod object_now;
 pub use file::*;

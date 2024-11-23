@@ -182,7 +182,7 @@ impl XRefTable {
         Self::new(id_offset)
     }
 
-    fn scan(frame_set: &FrameSet<'_>) -> IDOffsetMap {
+    fn scan(frame_set: &FrameSet) -> IDOffsetMap {
         let mut r = IDOffsetMap::with_capacity(5000);
         for (id, entry) in frame_set.iter().rev().flat_map(|f| f.xref_section.iter()) {
             if entry.is_used() {
@@ -194,7 +194,7 @@ impl XRefTable {
         r
     }
 
-    pub fn from_frame_set(frame_set: &FrameSet<'_>) -> Self {
+    pub fn from_frame_set(frame_set: &FrameSet) -> Self {
         Self::new(Self::scan(frame_set))
     }
 
