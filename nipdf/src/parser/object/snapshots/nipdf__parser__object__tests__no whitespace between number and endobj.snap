@@ -4,7 +4,7 @@ expression: parse_indirect_object(buf.as_ref()).unwrap()
 ---
 (
     [],
-    IndirectObject(
+    IndirectObjectDef(
         ObjectId {
             id: RuntimeObjectId(
                 1,
