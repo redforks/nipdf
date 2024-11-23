@@ -1,7 +1,7 @@
 use super::RuntimeObjectId;
 
 #[derive(Debug, Clone, PartialEq, Copy)]
-pub struct FilePos(u32, u16, bool); // offset, generation, is_used
+pub struct FilePos(pub(crate) u32, pub(crate) u16, pub(crate) bool); // offset, generation, is_used
 
 impl FilePos {
     pub fn new(offset: u32, generation: u16, is_used: bool) -> Self {
