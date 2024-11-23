@@ -1,10 +1,10 @@
-use super::{Object, ObjectId, RuntimeObjectId};
+use super::{Object, ObjectId};
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct IndirectObject(ObjectId, Object);
+pub struct IndirectObjectDef(pub(crate) ObjectId, pub(crate) Object);
 
-impl IndirectObject {
-    pub fn new(id: RuntimeObjectId, generation: u16, object: Object) -> Self {
+impl IndirectObjectDef {
+    pub fn new(id: u32, generation: u16, object: Object) -> Self {
         Self(ObjectId::new(id, generation), object)
     }
 

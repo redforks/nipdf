@@ -14,7 +14,7 @@ use std::{
 use tinyvec::TinyVec;
 
 mod indirect_object;
-pub use indirect_object::IndirectObject;
+pub use indirect_object::IndirectObjectDef;
 mod stream;
 pub use stream::*;
 pub type Array = Rc<[Object]>;

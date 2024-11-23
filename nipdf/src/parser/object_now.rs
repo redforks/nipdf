@@ -11,7 +11,7 @@ use hex::FromHexError;
 use log::warn;
 use nom::AsBytes;
 use prescript::Name;
-use snafu::{OptionExt, ResultExt as _, Whatever};
+use snafu::{ResultExt as _, Whatever};
 use std::{borrow::Cow, str::from_utf8};
 use winnow::{
     PResult, Parser,
@@ -194,8 +194,6 @@ fn reference<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
 }
 
 /// Return parser to parse [Object].
-///
-/// Stream not parsed, because stream is indirect object.
 fn object<'a>() -> impl Parser<&'a [u8], Object, ParserError> {
     let null = b"null".value(Object::Null);
     let bool = alt((

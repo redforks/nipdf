@@ -1,6 +1,6 @@
 use super::{ParseError, ParseResult, whitespace_or_comment, ws, ws_prefixed, ws_terminated};
 use crate::object::{
-    Array, BufPos, Dictionary, HexString, IndirectObject, LiteralString, Object, ObjectId,
+    Array, BufPos, Dictionary, HexString, IndirectObjectDef, LiteralString, Object, ObjectId,
     ObjectValueError, Reference, Stream,
 };
 use either::Either;
@@ -237,7 +237,7 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<'_, Either<Object, Strea
     }
 }
 
-pub fn parse_indirect_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
+pub fn parse_indirect_object(input: &[u8]) -> ParseResult<'_, IndirectObjectDef> {
     let input_len = input.len();
     let (input, (id, gen)) = ws_prefixed(separated_pair(u32, multispace1, u16))(input)?;
     let (input, _) = ws(tag(b"obj"))(input)?;
@@ -254,7 +254,7 @@ pub fn parse_indirect_object(input: &[u8]) -> ParseResult<'_, IndirectObject> {
         )),
     };
     let (input, _) = opt(ws_prefixed(tag("endobj")))(input)?;
-    Ok((input, IndirectObject::new(id.into(), gen, obj)))
+    Ok((input, IndirectObjectDef::new(id.into(), gen, obj)))
 }
 
 fn fail(input: &[u8]) -> nom::Err<ParseError<'_>> {
