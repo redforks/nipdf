@@ -82,6 +82,20 @@ where
     )
 }
 
+/// Return an iterator that yields lines in reverse order. Return from first non-empty line,
+/// ignore trailing empty lines.
+fn rev_iter_lines(s: &[u8]) -> impl Iterator<Item = &'_ [u8]> {
+    s.rsplit(|&b| b == b'\n')
+        .map(|line| {
+            if line.ends_with(&[b'\r']) {
+                &line[..line.len() - 1]
+            } else {
+                line
+            }
+        })
+        .skip_while(|line| line.is_empty())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -107,5 +121,13 @@ mod tests {
             xref_section().parse(&buf[..])?
         );
         Ok(())
+    }
+
+    #[test]
+    fn test_rev_iter_lines() {
+        let input = b"line1\r\nline2\r\nline3\n";
+        let expected: Vec<&[u8]> = vec![b"line3", b"line2", b"line1"];
+        let result: Vec<&[u8]> = rev_iter_lines(input).collect();
+        assert_eq!(result, expected);
     }
 }
