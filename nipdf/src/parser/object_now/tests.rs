@@ -1,6 +1,7 @@
 use super::*;
 use prescript::sname;
 use test_case::test_case;
+use winnow::Located;
 
 fn new_hex_string(s: &str) -> Object {
     Object::HexString(HexString(s.as_bytes().into()))
@@ -70,6 +71,56 @@ fn parse_object(buf: &str) -> Object {
 fn test_parse_quoted_string(input: &[u8]) -> (&[u8], String) {
     let (rest, r) = report_peek_err(parse_quoted_string.parse_peek(input));
     (rest, r.as_str().to_string())
+}
+
+#[snafu::report]
+#[test]
+fn test_parse_indirect_object_def() -> Result<(), ParserError> {
+    let o = indirect_object_def()
+        .parse(Located::new(b"100 0 obj\n<<>>".as_slice()))
+        .map_err(|e| e.into_inner())?;
+    assert_eq!(o.1, Dictionary::default().into());
+
+    let mut dict = HashMap::default();
+    dict.insert(sname("Length"), Object::Integer(42));
+    let dict = Dictionary::from(dict);
+    let o = indirect_object_def()
+        .parse(Located::new(b"100 0 obj\n<</Length 42>>".as_slice()))
+        .map_err(|e| e.into_inner())?;
+    assert_eq!(o.1, dict.clone().into());
+
+    let o = indirect_object_def()
+        .parse(Located::new(
+            b"100 1 obj\n<</Length 42>>\nstream\n".as_slice(),
+        ))
+        .map_err(|e| e.into_inner())?;
+    assert_eq!(
+        o.1,
+        Object::Stream(PdfStream(
+            dict,
+            BufPos::new(32, Some(NonZeroU32::try_from(42u32).unwrap())),
+            ObjectId::new(100, 1)
+        ))
+    );
+
+    let mut dict = HashMap::default();
+    dict.insert(sname("Length"), Object::Reference(Reference::new(10, 0)));
+    let dict = Dictionary::from(dict);
+    let o = indirect_object_def()
+        .parse(Located::new(
+            b"100 1 obj\n<</Length 10 0 R>>\nstream\n".as_slice(),
+        ))
+        .map_err(|e| e.into_inner())?;
+    assert_eq!(
+        o.1,
+        Object::Stream(PdfStream(
+            dict,
+            BufPos::new(36, None),
+            ObjectId::new(100, 1)
+        ))
+    );
+
+    Ok(())
 }
 
 fn report_parse_err<I, T, E: std::error::Error>(

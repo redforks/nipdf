@@ -1,23 +1,25 @@
-use super::{eol_3, ws_prefixed1, wsc_prefixed0};
+use super::{eol_2, eol_3, ws_prefixed1, wsc_prefixed0};
 use crate::{
     ParserError,
     object::{
-        Dictionary, HexString, InnerString, LiteralString, Object, ObjectValueError, Reference,
+        BufPos, Dictionary, HexString, IndirectObjectDef, InnerString, LiteralString, Object,
+        ObjectId, ObjectValueError, PdfObject, Reference, Stream as PdfStream,
     },
     parser::is_whitespace,
 };
 use ahash::HashMap;
+use either::Either;
 use hex::FromHexError;
 use log::warn;
 use nom::AsBytes;
 use prescript::Name;
 use snafu::{ResultExt as _, Whatever};
-use std::{borrow::Cow, str::from_utf8};
+use std::{borrow::Cow, num::NonZeroU32, str::from_utf8};
 use winnow::{
     PResult, Parser,
     ascii::{dec_uint, float},
-    combinator::{alt, delimited, preceded, repeat, rest, terminated},
-    stream::{AsChar, Compare, ContainsToken, Stream, StreamIsPartial},
+    combinator::{alt, delimited, fail, preceded, repeat, rest, terminated},
+    stream::{AsChar, Compare, ContainsToken, Location, Stream, StreamIsPartial},
     token::{any, take_till, take_while},
 };
 
@@ -214,12 +216,19 @@ where
         .parse_next(input)
 }
 
+fn object_id<'a, S>() -> impl Parser<S, ObjectId, ParserError> + 'a
+where
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+{
+    (dec_uint, ws_prefixed1(dec_uint)).map(|(id, gen): (u32, u16)| ObjectId::new(id, gen))
+}
+
 fn reference<'a, S>() -> impl Parser<S, Object, ParserError> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
 {
-    terminated((dec_uint, ws_prefixed1(dec_uint)), ws_prefixed1(b'R'))
-        .map(|(id, gen): (u32, u16)| Reference::new(id, gen).into())
+    terminated(object_id(), ws_prefixed1(b'R'))
+        .map(|id| Reference::new(id.id(), id.generation()).into())
 }
 
 /// Return parser to parse [Object].
@@ -250,6 +259,71 @@ where
         array,
         dict,
     ))
+}
+
+/// Return parser to parse indirect object definition.
+///
+/// Because the complexity of stream object, parser not consume all input, it will end at the end of
+/// object definition, or at the begin of stream object.
+fn indirect_object_def<'a, S>() -> impl Parser<S, IndirectObjectDef, ParserError> + 'a
+where
+    S: Stream<Token = u8, Slice = &'a [u8]>
+        + StreamIsPartial
+        + Location
+        + Compare<u8>
+        + Compare<&'a [u8]>
+        + 'a,
+{
+    (
+        object_id(),
+        preceded(
+            ws_prefixed1(b"obj".as_slice()),
+            ws_prefixed1(indirect_object_content),
+        ),
+    )
+        .map(|(id, dict_or_bufpos)| match dict_or_bufpos {
+            Either::Left(o) => IndirectObjectDef(id, o),
+            Either::Right((dict, bufpos)) => {
+                IndirectObjectDef(id, PdfStream(dict, bufpos, id).into())
+            }
+        })
+}
+
+fn indirect_object_content<'a, S>(
+    buf: &mut S,
+) -> PResult<Either<Object, (Dictionary, BufPos)>, ParserError>
+where
+    S: Stream<Token = u8, Slice = &'a [u8]>
+        + StreamIsPartial
+        + Location
+        + Compare<u8>
+        + Compare<&'a [u8]>
+        + 'a,
+{
+    let o = object().parse_next(buf)?;
+    let Object::Dictionary(dict) = o else {
+        return Ok(Either::Left(o));
+    };
+    let len: Option<NonZeroU32> = match dict.get("Length") {
+        Some(Object::Integer(l)) => Some(NonZeroU32::try_from(u32::try_from(*l).unwrap()).unwrap()),
+        Some(Object::Reference(_)) => None,
+        _ => return Ok(Either::Left(Object::Dictionary(dict))),
+    };
+
+    let saved_pos = buf.checkpoint();
+    match terminated(wsc_prefixed0(b"stream".as_slice()), eol_2())
+        .span()
+        .parse_next(buf)
+    {
+        Ok(range) => {
+            let bufpos = BufPos::new(range.end.try_into().unwrap(), len);
+            Ok(Either::Right((dict, bufpos)))
+        }
+        Err(_) => {
+            buf.reset(&saved_pos);
+            return Ok(Either::Left(Object::Dictionary(dict)));
+        }
+    }
 }
 
 #[cfg(test)]
