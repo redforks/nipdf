@@ -200,7 +200,7 @@ where
         .parse_next(input)
 }
 
-fn dict<'a, S>(input: &mut S) -> PResult<Object, ParserError>
+pub(crate) fn dict<'a, S>(input: &mut S) -> PResult<Dictionary, ParserError>
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
@@ -211,9 +211,7 @@ where
     let key = wsc_prefixed0(name());
     let value = wsc_prefixed0(object());
     let pair = repeat::<_, _, HashMap<_, _>, _, _>(0.., (key, value)).map(Dictionary::from);
-    delimited(b"<<".as_slice(), pair, wsc_prefixed0(b">>".as_slice()))
-        .output_into()
-        .parse_next(input)
+    delimited(b"<<".as_slice(), pair, wsc_prefixed0(b">>".as_slice())).parse_next(input)
 }
 
 fn object_id<'a, S>() -> impl Parser<S, ObjectId, ParserError> + 'a
@@ -257,7 +255,7 @@ where
         quoted_string,
         hex_string(),
         array,
-        dict,
+        dict.output_into(),
     ))
 }
 

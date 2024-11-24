@@ -1,12 +1,15 @@
-use super::eol3;
+use super::{eol3, object_now::dict, wsc_prefixed0};
 use crate::{
-    ParserError,
-    object::{Entry, FilePos, XRefSection},
+    PResult, ParserError,
+    object::{Entry, FilePos, Frame, FrameSet, XRefSection},
+    parser::wsc_prefixed1,
 };
+use prescript::sname;
 use winnow::{
     Parser,
     ascii::dec_uint,
     combinator::{alt, delimited, fail, preceded, repeat, separated_pair, seq, terminated},
+    error::{ErrMode, ErrorKind, ParserError as _, StrContext},
     stream::{AsChar, Compare, ParseSlice, Stream, StreamIsPartial},
     token::{any, one_of, take},
 };
@@ -45,7 +48,7 @@ impl XRefSubSection {
     }
 }
 
-fn xref_section<'a, S>() -> impl Parser<S, XRefSection, ParserError> + 'a
+fn xref<'a, S>() -> impl Parser<S, XRefSection, ParserError> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
@@ -96,9 +99,54 @@ fn rev_iter_lines(s: &[u8]) -> impl Iterator<Item = &'_ [u8]> {
         .skip_while(|line| line.is_empty())
 }
 
+const EMPTY_BUF: [u8; 0] = [];
+
+fn parse_file_trailers(buf: &mut &[u8]) -> PResult<FrameSet> {
+    // find start of last cross reference section
+    let mut lines = rev_iter_lines(buf);
+    let mut line = lines
+        .next()
+        .ok_or_else(move || ErrMode::from_error_kind(&&(EMPTY_BUF[..]), ErrorKind::Eof))?;
+    b"%%EOF".as_slice().parse_next(&mut line)?;
+    let mut line = lines
+        .next()
+        .ok_or_else(move || ErrMode::from_error_kind(&&(EMPTY_BUF[..]), ErrorKind::Eof))?;
+    let pos: usize = dec_uint(&mut line)?;
+    let mut line = lines
+        .next()
+        .ok_or_else(move || ErrMode::from_error_kind(&&(EMPTY_BUF[..]), ErrorKind::Eof))?;
+    b"startxref".as_slice().parse_next(&mut line)?;
+    drop(lines);
+
+    fn get_prev(frame: &Frame) -> Option<usize> {
+        frame
+            .trailer
+            .get(&sname("Prev"))
+            .map(|o| o.int().unwrap().try_into().unwrap())
+    }
+
+    let mut r = Vec::new();
+    let mut next_pos = Some(pos);
+    while let Some(pos) = next_pos {
+        let mut frame = (
+            xref().context(StrContext::Label("xref")),
+            preceded(wsc_prefixed1(b"trailer".as_slice()), dict)
+                .context(StrContext::Label("trailer dict")),
+            b"%%EOF".as_slice(),
+        )
+            .context(StrContext::Label("frame"));
+        let f = frame.parse_next(&mut &buf[pos..])?;
+        let f = Frame::new(pos.try_into().unwrap(), f.1, f.0);
+        next_pos = get_prev(&f);
+        r.push(f);
+    }
+    Ok(r)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::file::{report_peek_err, test_file};
     use snafu::report;
 
     #[report]
@@ -118,7 +166,7 @@ mod tests {
                 (23, Entry::InFile(FilePos(25518, 2, true))),
                 (24, Entry::InFile(FilePos(25635, 0, true))),
             ],
-            xref_section().parse(&buf[..])?
+            xref().parse(&buf[..])?
         );
         Ok(())
     }
@@ -129,5 +177,12 @@ mod tests {
         let expected: Vec<&[u8]> = vec![b"line3", b"line2", b"line1"];
         let result: Vec<&[u8]> = rev_iter_lines(input).collect();
         assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_file_trailers() {
+        let buf = std::fs::read(test_file("sample_files/normal/pdfreference1.0.pdf")).unwrap();
+        report_peek_err(parse_file_trailers(&mut &buf[..]));
+        todo!("compare with expected result");
     }
 }

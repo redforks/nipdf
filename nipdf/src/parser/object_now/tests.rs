@@ -1,4 +1,5 @@
 use super::*;
+use crate::file::{report_parse_err, report_peek_err};
 use prescript::sname;
 use test_case::test_case;
 use winnow::Located;
@@ -121,16 +122,4 @@ fn test_parse_indirect_object_def() -> Result<(), ParserError> {
     );
 
     Ok(())
-}
-
-fn report_parse_err<I, T, E: std::error::Error>(
-    rv: Result<T, winnow::error::ParseError<I, E>>,
-) -> T {
-    rv.map_err(|e| snafu::Report::from_error(e.into_inner()))
-        .unwrap()
-}
-
-fn report_peek_err<T, E: std::error::Error>(rv: PResult<T, E>) -> T {
-    rv.map_err(|e| snafu::Report::from_error(e.into_inner().unwrap()))
-        .unwrap()
 }

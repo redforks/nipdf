@@ -117,7 +117,11 @@ where
 /// Convert a parser to a parser that prefixed with 0 or more whitespace and/or comment.
 fn wsc_prefixed0<'a, S, F, O>(inner: F) -> impl winnow::Parser<S, O, crate::ParserError> + 'a
 where
-    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+    S: Stream<Token = u8, Slice = &'a [u8]>
+        + StreamIsPartial
+        + Compare<u8>
+        + Compare<&'a [u8]>
+        + 'a,
     F: winnow::Parser<S, O, crate::ParserError> + 'a,
     O: 'a,
 {
@@ -127,7 +131,11 @@ where
 
 fn wsc_prefixed1<'a, S, F, O>(inner: F) -> impl winnow::Parser<S, O, crate::ParserError> + 'a
 where
-    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+    S: Stream<Token = u8, Slice = &'a [u8]>
+        + StreamIsPartial
+        + Compare<u8>
+        + Compare<&'a [u8]>
+        + 'a,
     F: winnow::Parser<S, O, crate::ParserError> + 'a,
     O: 'a,
 {
