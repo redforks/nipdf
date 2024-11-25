@@ -33,7 +33,7 @@ pub trait TrailerDictTrait {
     fn id(&self) -> Option<DocId>;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 /// Frame contains things like xref, trailer, caused by incremental update. See [FrameSet]
 pub struct Frame {
     pub xref_pos: u32,

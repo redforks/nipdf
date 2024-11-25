@@ -1,17 +1,20 @@
-use super::{eol3, object_now::dict, wsc_prefixed0};
+use super::{eol3, object_now::dict};
 use crate::{
-    PResult, ParserError,
-    object::{Entry, FilePos, Frame, FrameSet, XRefSection},
-    parser::wsc_prefixed1,
+    ParserError,
+    object::{Entry, FilePos, Frame, FrameSet, ObjectValueError, XRefSection},
 };
+use hex::FromHexError;
+use log::info;
 use prescript::sname;
 use winnow::{
-    Parser,
+    PResult, Parser,
     ascii::dec_uint,
-    combinator::{alt, delimited, fail, preceded, repeat, separated_pair, seq, terminated},
-    error::{ErrMode, ErrorKind, ParserError as _, StrContext},
+    combinator::{alt, delimited, preceded, repeat, separated_pair, seq, terminated},
+    error::{
+        AddContext, ErrMode, ErrorKind, FromExternalError, ParserError as _,
+    },
     stream::{AsChar, Compare, ParseSlice, Stream, StreamIsPartial},
-    token::{any, one_of, take},
+    token::{one_of, take},
 };
 
 /// Parser to parse file header, return pdf file version string, such as "1.7".
@@ -48,7 +51,7 @@ impl XRefSubSection {
     }
 }
 
-fn xref<'a, S>() -> impl Parser<S, XRefSection, ParserError> + 'a
+fn xref<'a, S, E>() -> impl Parser<S, XRefSection, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
@@ -56,6 +59,7 @@ where
         + Compare<&'a [u8]>
         + ParseSlice<u32>
         + 'a,
+    E: winnow::error::ParserError<S> + 'a,
 {
     preceded(
         terminated(b"xref".as_slice(), eol3()),
@@ -101,7 +105,15 @@ fn rev_iter_lines(s: &[u8]) -> impl Iterator<Item = &'_ [u8]> {
 
 const EMPTY_BUF: [u8; 0] = [];
 
-fn parse_file_trailers(buf: &mut &[u8]) -> PResult<FrameSet> {
+fn parse_file_trailers<'a, E>(buf: &mut &'a [u8]) -> PResult<FrameSet, E>
+where
+    E: winnow::error::ParserError<&'a [u8]>
+        + AddContext<&'a [u8]>
+        + FromExternalError<&'a [u8], FromHexError>
+        + FromExternalError<&'a [u8], ObjectValueError>
+        + FromExternalError<&'a [u8], FromHexError>
+        + 'a,
+{
     // find start of last cross reference section
     let mut lines = rev_iter_lines(buf);
     let mut line = lines
@@ -128,14 +140,21 @@ fn parse_file_trailers(buf: &mut &[u8]) -> PResult<FrameSet> {
     let mut r = Vec::new();
     let mut next_pos = Some(pos);
     while let Some(pos) = next_pos {
+        info!("trailer frame pos: {}", pos);
         let mut frame = (
-            xref().context(StrContext::Label("xref")),
-            preceded(wsc_prefixed1(b"trailer".as_slice()), dict)
-                .context(StrContext::Label("trailer dict")),
-            b"%%EOF".as_slice(),
+            xref().context("xref"),
+            preceded(
+                terminated(b"trailer".as_slice(), eol3()),
+                terminated(dict, eol3()),
+            )
+            .context("trailer"),
+            terminated(b"startxref".as_slice(), eol3()).context("startxref"),
+            terminated(dec_uint::<_, usize, _>, eol3()).context("startxref pos"),
+            terminated(b"%%EOF".as_slice(), eol3()).context("EOF tag"),
         )
-            .context(StrContext::Label("frame"));
+            .context("frame");
         let f = frame.parse_next(&mut &buf[pos..])?;
+        info!("startxref pos: {}", f.3);
         let f = Frame::new(pos.try_into().unwrap(), f.1, f.0);
         next_pos = get_prev(&f);
         r.push(f);
@@ -146,8 +165,12 @@ fn parse_file_trailers(buf: &mut &[u8]) -> PResult<FrameSet> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::file::{report_peek_err, test_file};
+    use crate::{
+        file::{report_peek_err, test_file},
+        object::Dictionary,
+    };
     use snafu::report;
+    use winnow::error::{ContextError, TreeError};
 
     #[report]
     #[test]
@@ -182,7 +205,12 @@ mod tests {
     #[test]
     fn test_file_trailers() {
         let buf = std::fs::read(test_file("sample_files/normal/pdfreference1.0.pdf")).unwrap();
-        report_peek_err(parse_file_trailers(&mut &buf[..]));
-        todo!("compare with expected result");
+        let frameset = parse_file_trailers::<ContextError<&'static str>>(&mut &buf[..]).unwrap();
+        assert_eq!(2, frameset.len());
+        let (f1, f2) = (&frameset[0], &frameset[1]);
+        assert_eq!(f1.xref_pos, 116);
+        assert_eq!(f2.xref_pos, 1513589);
+        assert_eq!(f1.trailer.get(&sname("Size")).unwrap().int().unwrap(), 4963);
+        assert_eq!(f2.trailer.get(&sname("Size")).unwrap().int().unwrap(), 1046);
     }
 }

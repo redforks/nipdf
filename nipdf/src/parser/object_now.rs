@@ -1,6 +1,5 @@
 use super::{eol2, eol3, ws_prefixed1, wsc_prefixed0};
 use crate::{
-    ParserError,
     object::{
         BufPos, Dictionary, HexString, IndirectObjectDef, InnerString, LiteralString, Object,
         ObjectId, ObjectValueError, PdfObject, Reference, Stream as PdfStream,
@@ -10,22 +9,24 @@ use crate::{
 use ahash::HashMap;
 use either::Either;
 use hex::FromHexError;
-use log::warn;
 use nom::AsBytes;
 use prescript::Name;
-use snafu::{ResultExt as _, Whatever};
-use std::{borrow::Cow, num::NonZeroU32, str::from_utf8};
+use snafu::Whatever;
+use std::{borrow::Cow, num::NonZeroU32};
 use winnow::{
     PResult, Parser,
-    ascii::{dec_uint, float},
-    combinator::{alt, delimited, fail, preceded, repeat, rest, terminated},
-    stream::{AsChar, Compare, ContainsToken, Location, Stream, StreamIsPartial},
+    ascii::{Caseless, dec_int, dec_uint, float},
+    combinator::{alt, delimited, preceded, repeat, terminated},
+    error::FromExternalError,
+    stream::{AsBStr, AsChar, Compare, ContainsToken, Location, Stream, StreamIsPartial},
     token::{any, take_till, take_while},
 };
 
-fn name<'a, S>() -> impl Parser<S, Name, ParserError> + 'a
+fn name<'a, S, E>() -> impl Parser<S, Name, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+    E: winnow::error::ParserError<S> + 'a,
+    E: FromExternalError<S, ObjectValueError>,
 {
     preceded(
         b'/',
@@ -77,23 +78,30 @@ fn normalize_name(buf: &[u8]) -> Result<Name, ObjectValueError> {
     Ok(prescript::name(&String::from_utf8_lossy(&result)))
 }
 
-fn number<'a, S>() -> impl Parser<S, Object, ParserError> + 'a
+fn number<'a, S, E>() -> impl Parser<S, Object, E> + 'a
 where
-    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+    S: Stream<Token = u8, Slice = &'a [u8]>
+        + StreamIsPartial
+        + Compare<u8>
+        + Compare<char>
+        + AsBStr
+        + Compare<Caseless<&'static str>>
+        + 'a,
+    <S as Stream>::IterOffsets: Clone,
+    E: winnow::error::ParserError<S> + 'a,
+    E: winnow::error::ParserError<&'a [u8]> + 'a,
 {
-    let int = rest.parse_to::<i32>().map(Object::Integer);
-    let real = rest.parse_to::<f32>().map(Object::Number);
-    fn fallback(buf: &mut &[u8]) -> PResult<Object, ParserError> {
-        *buf = &[];
-        warn!(
-            "Invalid number: {},  fallback to 0",
-            String::from_utf8_lossy(buf)
-        );
+    fn fallback<E>(buf: &mut &[u8]) -> PResult<Object, E> {
+        buf.finish();
         Ok(Object::Integer(0))
     }
-    take_while(1.., (b'0'..=b'9', b'+', b'-', b'.'))
+    take_while::<_, S, _>(1.., (b'0'..=b'9', b'+', b'-', b'.'))
         .take()
-        .and_then(alt((int, real, float.map(Object::Number), fallback)))
+        .and_then(alt((
+            dec_int.map(Object::Integer),
+            float.map(Object::Number),
+            fallback,
+        )))
 }
 
 #[derive(Clone)]
@@ -104,17 +112,15 @@ enum LiteralStringFragment<'a> {
     Nested(LiteralString),
 }
 
-fn parse_quoted_string<'a, S>(input: &mut S) -> PResult<LiteralString, ParserError>
+fn parse_quoted_string<'a, S, E>(input: &mut S) -> PResult<LiteralString, E>
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+    E: winnow::error::ParserError<S> + 'a,
 {
     let literal = take_till(1.., b"\\()").map(LiteralStringFragment::Literal);
     let paired = parse_quoted_string.map(LiteralStringFragment::Nested);
     let oct_char = take_while(1..4, AsChar::is_oct_digit)
-        .try_map(|s: &[u8]| {
-            u8::from_str_radix(from_utf8(s).whatever_context::<_, Whatever>("not utf8")?, 8)
-                .whatever_context::<_, Whatever>("parse oct")
-        })
+        .parse_to::<u8>()
         .map(LiteralStringFragment::Escaped);
     let escaped_line = eol3().value(LiteralStringFragment::EscapedLine);
     let escaped = preceded(
@@ -175,9 +181,10 @@ fn decode_hex(buf: &[u8]) -> Result<HexString, FromHexError> {
     hex::decode(&buf).map(|v| HexString(v.as_bytes().into()))
 }
 
-fn hex_string<'a, S>() -> impl Parser<S, Object, ParserError> + 'a
+fn hex_string<'a, S, E>() -> impl Parser<S, Object, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+    E: winnow::error::ParserError<S> + FromExternalError<S, FromHexError> + 'a,
 {
     let parser = take_while(
         ..,
@@ -186,13 +193,21 @@ where
     delimited(b'<', parser.try_map(decode_hex), b'>').map(Object::HexString)
 }
 
-fn array<'a, S>(input: &mut S) -> PResult<Object, ParserError>
+fn array<'a, S, E>(input: &mut S) -> PResult<Object, E>
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
+        + AsBStr
         + Compare<u8>
+        + Compare<char>
         + Compare<&'a [u8]>
+        + Compare<Caseless<&'static str>>
         + 'a,
+    <S as Stream>::IterOffsets: Clone,
+    E: winnow::error::ParserError<S> + 'a,
+    E: FromExternalError<S, ObjectValueError>,
+    E: winnow::error::ParserError<&'a [u8]> + 'a,
+    E: FromExternalError<S, FromHexError> + 'a,
 {
     let item = repeat::<_, _, Vec<_>, _, _>(0.., wsc_prefixed0(object()));
     delimited(b'[', item, wsc_prefixed0(b']'))
@@ -200,13 +215,21 @@ where
         .parse_next(input)
 }
 
-pub(crate) fn dict<'a, S>(input: &mut S) -> PResult<Dictionary, ParserError>
+pub(crate) fn dict<'a, S, E>(input: &mut S) -> PResult<Dictionary, E>
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
+        + AsBStr
         + Compare<u8>
+        + Compare<char>
         + Compare<&'a [u8]>
+        + Compare<Caseless<&'static str>>
         + 'a,
+    <S as Stream>::IterOffsets: Clone,
+    E: winnow::error::ParserError<S> + 'a,
+    E: FromExternalError<S, ObjectValueError>,
+    E: winnow::error::ParserError<&'a [u8]> + 'a,
+    E: FromExternalError<S, FromHexError> + 'a,
 {
     let key = wsc_prefixed0(name());
     let value = wsc_prefixed0(object());
@@ -214,29 +237,39 @@ where
     delimited(b"<<".as_slice(), pair, wsc_prefixed0(b">>".as_slice())).parse_next(input)
 }
 
-fn object_id<'a, S>() -> impl Parser<S, ObjectId, ParserError> + 'a
+fn object_id<'a, S, E>() -> impl Parser<S, ObjectId, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+    E: winnow::error::ParserError<S> + 'a,
 {
     (dec_uint, ws_prefixed1(dec_uint)).map(|(id, gen): (u32, u16)| ObjectId::new(id, gen))
 }
 
-fn reference<'a, S>() -> impl Parser<S, Object, ParserError> + 'a
+fn reference<'a, S, E>() -> impl Parser<S, Object, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+    E: winnow::error::ParserError<S> + 'a,
 {
     terminated(object_id(), ws_prefixed1(b'R'))
         .map(|id| Reference::new(id.id(), id.generation()).into())
 }
 
 /// Return parser to parse [Object].
-fn object<'a, S>() -> impl Parser<S, Object, ParserError> + 'a
+fn object<'a, S, E>() -> impl Parser<S, Object, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
+        + AsBStr
         + Compare<u8>
+        + Compare<char>
         + Compare<&'a [u8]>
+        + Compare<Caseless<&'static str>>
         + 'a,
+    <S as Stream>::IterOffsets: Clone,
+    E: winnow::error::ParserError<S> + 'a,
+    E: FromExternalError<S, ObjectValueError>,
+    E: winnow::error::ParserError<&'a [u8]> + 'a,
+    E: FromExternalError<S, FromHexError> + 'a,
 {
     let null = b"null".as_slice().value(Object::Null);
     let bool = alt((
@@ -263,14 +296,23 @@ where
 ///
 /// Because the complexity of stream object, parser not consume all input, it will end at the end of
 /// object definition, or at the begin of stream object.
-fn indirect_object_def<'a, S>() -> impl Parser<S, IndirectObjectDef, ParserError> + 'a
+fn indirect_object_def<'a, S, E>() -> impl Parser<S, IndirectObjectDef, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
-        + Location
+        + AsBStr
         + Compare<u8>
+        + Compare<char>
         + Compare<&'a [u8]>
+        + Compare<Caseless<&'static str>>
+        + Location
         + 'a,
+    <S as Stream>::IterOffsets: Clone,
+    E: winnow::error::ParserError<S> + 'a,
+    E: FromExternalError<S, ObjectValueError>,
+    E: winnow::error::ParserError<&'a [u8]> + 'a,
+    E: FromExternalError<S, FromHexError> + 'a,
+    E: FromExternalError<S, Whatever> + 'a,
 {
     (
         object_id(),
@@ -287,16 +329,25 @@ where
         })
 }
 
-fn indirect_object_content<'a, S>(
+fn indirect_object_content<'a, S, E>(
     buf: &mut S,
-) -> PResult<Either<Object, (Dictionary, BufPos)>, ParserError>
+) -> PResult<Either<Object, (Dictionary, BufPos)>, E>
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
-        + Location
+        + AsBStr
         + Compare<u8>
+        + Compare<char>
         + Compare<&'a [u8]>
+        + Compare<Caseless<&'static str>>
+        + Location
         + 'a,
+    <S as Stream>::IterOffsets: Clone,
+    E: winnow::error::ParserError<S> + 'a,
+    E: FromExternalError<S, ObjectValueError>,
+    E: winnow::error::ParserError<&'a [u8]> + 'a,
+    E: FromExternalError<S, FromHexError> + 'a,
+    E: FromExternalError<S, Whatever> + 'a,
 {
     let o = object().parse_next(buf)?;
     let Object::Dictionary(dict) = o else {
@@ -309,7 +360,7 @@ where
     };
 
     let saved_pos = buf.checkpoint();
-    match terminated(wsc_prefixed0(b"stream".as_slice()), eol2())
+    match terminated(wsc_prefixed0(b"stream".as_slice()), eol2::<_, E>())
         .span()
         .parse_next(buf)
     {
@@ -319,7 +370,7 @@ where
         }
         Err(_) => {
             buf.reset(&saved_pos);
-            return Ok(Either::Left(Object::Dictionary(dict)));
+            Ok(Either::Left(Object::Dictionary(dict)))
         }
     }
 }

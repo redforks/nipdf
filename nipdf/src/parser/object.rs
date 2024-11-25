@@ -245,7 +245,7 @@ pub fn parse_indirect_object(input: &[u8]) -> ParseResult<'_, IndirectObjectDef>
         )),
     };
     let (input, _) = opt(ws_prefixed(tag("endobj")))(input)?;
-    Ok((input, IndirectObjectDef::new(id.into(), gen, obj)))
+    Ok((input, IndirectObjectDef::new(id, gen, obj)))
 }
 
 fn fail(input: &[u8]) -> nom::Err<ParseError<'_>> {

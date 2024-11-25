@@ -42,8 +42,6 @@ impl<T, E> ResultExt<T, E> for Result<T, E> {
     }
 }
 
-pub type PResult<O> = winnow::PResult<O, ParserError>;
-
 #[derive(Snafu, Debug)]
 pub enum ParserError<C: 'static = StrContext> {
     #[snafu(display("Parse error: {}", kind))]

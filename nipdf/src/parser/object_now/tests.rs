@@ -48,7 +48,7 @@ fn new_hex_string(s: &str) -> Object {
 }); "dictionary with name and integer")]
 #[test_case("1 0 R" => Object::Reference(Reference::new(1, 0)); "reference")]
 fn parse_object(buf: &str) -> Object {
-    report_parse_err(object().parse(buf.as_bytes()))
+    report_parse_err(object::<_, ParserError>().parse(buf.as_bytes()))
 }
 
 #[test_case(b"()bar" => (b"bar".as_ref(), "".to_owned()); "empty")]
@@ -70,14 +70,14 @@ fn parse_object(buf: &str) -> Object {
 #[test_case(b"(\\1414)" => (b"".as_ref(), "a4".to_owned()); "escaped with fourc octal")]
 #[test_case(b"(Line1 \\\nLine2 \\\rLine3)" => (b"".as_ref(), "Line1 Line2 Line3".to_owned()); "escaped newline")]
 fn test_parse_quoted_string(input: &[u8]) -> (&[u8], String) {
-    let (rest, r) = report_peek_err(parse_quoted_string.parse_peek(input));
+    let (rest, r) = report_peek_err(parse_quoted_string::<_, ParserError>.parse_peek(input));
     (rest, r.as_str().to_string())
 }
 
 #[snafu::report]
 #[test]
 fn test_parse_indirect_object_def() -> Result<(), ParserError> {
-    let o = indirect_object_def()
+    let o = indirect_object_def::<_, ParserError>()
         .parse(Located::new(b"100 0 obj\n<<>>".as_slice()))
         .map_err(|e| e.into_inner())?;
     assert_eq!(o.1, Dictionary::default().into());
@@ -85,12 +85,12 @@ fn test_parse_indirect_object_def() -> Result<(), ParserError> {
     let mut dict = HashMap::default();
     dict.insert(sname("Length"), Object::Integer(42));
     let dict = Dictionary::from(dict);
-    let o = indirect_object_def()
+    let o = indirect_object_def::<_, ParserError>()
         .parse(Located::new(b"100 0 obj\n<</Length 42>>".as_slice()))
         .map_err(|e| e.into_inner())?;
     assert_eq!(o.1, dict.clone().into());
 
-    let o = indirect_object_def()
+    let o = indirect_object_def::<_, ParserError>()
         .parse(Located::new(
             b"100 1 obj\n<</Length 42>>\nstream\n".as_slice(),
         ))
@@ -107,7 +107,7 @@ fn test_parse_indirect_object_def() -> Result<(), ParserError> {
     let mut dict = HashMap::default();
     dict.insert(sname("Length"), Object::Reference(Reference::new(10, 0)));
     let dict = Dictionary::from(dict);
-    let o = indirect_object_def()
+    let o = indirect_object_def::<_, ParserError>()
         .parse(Located::new(
             b"100 1 obj\n<</Length 10 0 R>>\nstream\n".as_slice(),
         ))
