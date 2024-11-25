@@ -81,28 +81,30 @@ fn test_parse_quoted_string(input: &[u8]) -> (&[u8], String) {
 #[test]
 fn test_parse_indirect_object_def() -> Result<(), ParserError> {
     let o = indirect_object_def::<_, ParserError>()
-        .parse(Located::new(b"100 0 obj\n<<>>".as_slice()))
+        .parse(Located::new(b"100 0 obj\n<<>>\nendobj\n".as_slice()))
         .map_err(|e| e.into_inner())?;
     assert_eq!(o.1, Dictionary::default().into());
 
     let mut dict = HashMap::default();
-    dict.insert(sname("Length"), Object::Integer(42));
+    dict.insert(sname("Length"), Object::Integer(2));
     let dict = Dictionary::from(dict);
     let o = indirect_object_def::<_, ParserError>()
-        .parse(Located::new(b"100 0 obj\n<</Length 42>>".as_slice()))
+        .parse(Located::new(
+            b"100 0 obj\n<</Length 2>>\nendobj\n".as_slice(),
+        ))
         .map_err(|e| e.into_inner())?;
     assert_eq!(o.1, dict.clone().into());
 
     let o = indirect_object_def::<_, ParserError>()
         .parse(Located::new(
-            b"100 1 obj\n<</Length 42>>\nstream\n".as_slice(),
+            b"100 1 obj\n<</Length 2>>\nstream\n  \nendstream\nendobj\n".as_slice(),
         ))
         .map_err(|e| e.into_inner())?;
     assert_eq!(
         o.1,
         Object::Stream(PdfStream(
             dict,
-            BufPos::new(32, Some(NonZeroU32::try_from(42u32).unwrap())),
+            BufPos::new(31, Some(NonZeroU32::try_from(2u32).unwrap())),
             ObjectId::new(100, 1)
         ))
     );

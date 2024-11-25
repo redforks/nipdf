@@ -135,3 +135,6 @@ semicolon_if_nothing_returned = "warn"
 stable_sort_primitive = "warn"
 unnested_or_patterns = "warn"
 unused_self = "warn"
+
+[patch.crates-io]
+winnow = { path = "../winnow" }

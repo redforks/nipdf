@@ -9,7 +9,6 @@ use crate::{
 use ahash::HashMap;
 use either::Either;
 use hex::FromHexError;
-use nom::AsBytes;
 use prescript::Name;
 use std::{
     borrow::Cow,
@@ -19,9 +18,9 @@ use winnow::{
     PResult, Parser,
     ascii::{Caseless, dec_uint, float},
     combinator::{alt, delimited, preceded, repeat, rest, terminated},
-    error::FromExternalError,
+    error::{ErrMode, ErrorKind, FromExternalError, ParserError as _},
     stream::{AsBStr, AsChar, Compare, ContainsToken, Location, Stream, StreamIsPartial},
-    token::{any, take_till, take_while},
+    token::{any, take, take_till, take_while},
 };
 
 fn name<'a, S, E>() -> impl Parser<S, Name, E> + 'a
@@ -182,7 +181,7 @@ fn decode_hex(buf: &[u8]) -> Result<HexString, FromHexError> {
     }
 
     let buf = preprocess(buf);
-    hex::decode(&buf).map(|v| HexString(v.as_bytes().into()))
+    hex::decode(&buf).map(|v| HexString((&v[..]).into()))
 }
 
 fn hex_string<'a, S, E>() -> impl Parser<S, Object, E> + 'a
@@ -301,9 +300,9 @@ where
 
 /// Return parser to parse indirect object definition.
 ///
-/// Because the complexity of stream object, parser not consume all input, it will end at the end of
-/// object definition, or at the begin of stream object.
-fn indirect_object_def<'a, S, E>() -> impl Parser<S, IndirectObjectDef, E> + 'a
+/// If stream dict length is reference, parser will end at after the `stream<eol>`, because
+/// stream length not known at this point.
+pub(crate) fn indirect_object_def<'a, S, E>() -> impl Parser<S, IndirectObjectDef, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
@@ -358,12 +357,16 @@ where
 {
     let o = object().parse_next(buf)?;
     let Object::Dictionary(dict) = o else {
+        ws_prefixed1(terminated(b"endobj".as_slice(), eol3())).parse_next(buf)?;
         return Ok(Either::Left(o));
     };
     let len: Option<NonZeroU32> = match dict.get("Length") {
         Some(Object::Integer(l)) => Some(NonZeroU32::try_from(u32::try_from(*l).unwrap()).unwrap()),
         Some(Object::Reference(_)) => None,
-        _ => return Ok(Either::Left(Object::Dictionary(dict))),
+        _ => {
+            ws_prefixed1(terminated(b"endobj".as_slice(), eol3())).parse_next(buf)?;
+            return Ok(Either::Left(Object::Dictionary(dict)));
+        }
     };
 
     let saved_pos = buf.checkpoint();
@@ -372,11 +375,20 @@ where
         .parse_next(buf)
     {
         Ok(range) => {
+            if let Some(len) = len {
+                (
+                    take(u32::from(len)),
+                    ws_prefixed1(b"endstream".as_slice()),
+                    ws_prefixed1(terminated(b"endobj".as_slice(), eol3())),
+                )
+                    .parse_next(buf)?;
+            }
             let bufpos = BufPos::new(range.end.try_into().unwrap(), len);
             Ok(Either::Right((dict, bufpos)))
         }
         Err(_) => {
             buf.reset(&saved_pos);
+            ws_prefixed1(terminated(b"endobj".as_slice(), eol3())).parse_next(buf)?;
             Ok(Either::Left(Object::Dictionary(dict)))
         }
     }

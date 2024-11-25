@@ -1,18 +1,24 @@
 use super::{eol3, object_now::dict};
 use crate::{
     ParserError,
-    object::{Entry, FilePos, Frame, FrameSet, ObjectValueError, XRefSection},
+    function::{Domain, Domains},
+    object::{
+        Dictionary, Entry, FilePos, Frame, FrameSet, IndirectObjectDef, ObjectId, ObjectValueError,
+        RuntimeObjectId, Stream as PdfStream, XRefSection,
+    },
+    parser::{object_now::indirect_object_def, wsc_prefixed0},
 };
 use hex::FromHexError;
-use log::info;
+use log::{info, warn};
 use prescript::sname;
-use std::num::ParseIntError;
+use std::{fmt::Debug, num::ParseIntError};
 use winnow::{
-    PResult, Parser,
-    ascii::dec_uint,
-    combinator::{alt, delimited, preceded, repeat, separated_pair, seq, terminated},
+    Located, PResult, Parser,
+    ascii::{Caseless, dec_uint},
+    binary::{be_u8, be_u16, be_u24, be_u32},
+    combinator::{alt, delimited, empty, preceded, repeat, separated_pair, seq, terminated},
     error::{AddContext, ErrMode, ErrorKind, FromExternalError, ParserError as _},
-    stream::{AsChar, Compare, ParseSlice, Stream, StreamIsPartial},
+    stream::{AsBStr, AsChar, Compare, Location, ParseSlice, Stream, StreamIsPartial},
     token::{one_of, take},
 };
 
@@ -104,29 +110,163 @@ fn rev_iter_lines(s: &[u8]) -> impl Iterator<Item = &'_ [u8]> {
 
 const EMPTY_BUF: [u8; 0] = [];
 
-fn parse_file_trailers<'a, E>(buf: &mut &'a [u8]) -> PResult<FrameSet, E>
+struct CrossReferenceStreamDict {
+    size: u32,
+    index: Domains<u32>,
+    w: Vec<u32>,
+}
+
+impl CrossReferenceStreamDict {
+    pub fn new(d: &Dictionary) -> Result<Self, ObjectValueError> {
+        let size = d
+            .get(&sname("Size"))
+            .ok_or(ObjectValueError::DictKeyNotFound)?
+            .int()? as u32;
+        let index = d.get(&sname("Index")).map_or_else(
+            || Domains(vec![Domain::new(0, size)]),
+            |o| Domains::<u32>::try_from(o).unwrap(),
+        );
+        let w = d
+            .get(&sname("W"))
+            .ok_or(ObjectValueError::DictKeyNotFound)?
+            .arr()?
+            .iter()
+            .map(|o| o.int().map(|v| v as u32))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Self { size, index, w })
+    }
+
+    pub fn iter_ids(&self) -> impl Iterator<Item = u32> + '_ {
+        self.index
+            .iter()
+            .flat_map(move |d| d.start..(d.start + d.end))
+    }
+}
+
+/// Return nom parser to parse u32 value by byte length (0, 1, 2, 3, 4),
+/// if n is 0, return parser takes 0 bytes and returns `default_value`
+/// if n > 1, n32 stored in big endian n bytes.
+fn segment_parser<'a, S, E>(n: u32, default_value: u32) -> Box<dyn Parser<S, u32, E> + 'a>
 where
-    E: winnow::error::ParserError<&'a [u8]>
-        + AddContext<&'a [u8]>
-        + FromExternalError<&'a [u8], FromHexError>
-        + FromExternalError<&'a [u8], ObjectValueError>
-        + FromExternalError<&'a [u8], FromHexError>
-        + FromExternalError<&'a [u8], ParseIntError>
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+    E: winnow::error::ParserError<S> + 'a,
+{
+    match n {
+        0 => Box::new(empty.value(default_value)),
+        1 => Box::new(be_u8.output_into()),
+        2 => Box::new(be_u16.output_into()),
+        3 => Box::new(be_u24),
+        4 => Box::new(be_u32),
+        _ => unreachable!(),
+    }
+}
+
+fn parse_xref_stream<'a, S, E>(input: &mut S) -> PResult<(XRefSection, Dictionary), E>
+where
+    S: Stream<Token = u8, Slice = &'a [u8]>
+        + StreamIsPartial
+        + AsBStr
+        + Compare<u8>
+        + Compare<char>
+        + Compare<&'a [u8]>
+        + Compare<Caseless<&'static str>>
+        + Location
+        + 'a,
+    <S as Stream>::IterOffsets: Clone,
+    E: winnow::error::ParserError<S> + 'a,
+    E: winnow::error::ParserError<&'a [u8]> + 'a,
+    E: FromExternalError<S, ObjectValueError>,
+    E: FromExternalError<S, FromHexError> + 'a,
+    E: FromExternalError<S, ParseIntError> + 'a,
+{
+    let start = input.checkpoint();
+    let IndirectObjectDef(_, s) = indirect_object_def::<S, E>().parse_next(input)?;
+    let s = s.stream().unwrap().clone();
+    let d = CrossReferenceStreamDict::new(s.as_dict())
+        .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?;
+    input.reset(&start);
+    let buf = input.finish();
+    let data = s
+        .decode_without_resolve_length(buf, None)
+        .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?;
+    let (a, b, c) = (d.w[0], d.w[1], d.w[2]);
+    dbg!((a, b, c));
+    debug_assert_eq!(
+        data.len() % (a + b + c) as usize,
+        0,
+        "stream data length should multiple of w0 + w1 + w2"
+    );
+    dbg!(d.size);
+
+    let mut buf = data.as_ref();
+    let count = d.iter_ids().count();
+    let mut id_iter = d.iter_ids();
+    let r = repeat(
+        count,
+        (
+            segment_parser::<_, ()>(a, 1),
+            segment_parser(b, 0),
+            segment_parser(c, 0),
+        ),
+    )
+    .fold(Vec::new, |mut r, (a, b, c)| {
+        let c: u16 = c.try_into().unwrap();
+        match a {
+            0 => r.push((id_iter.next().unwrap(), Entry::in_file(0, c, false))),
+            1 => r.push((id_iter.next().unwrap(), Entry::in_file(b, c, true))),
+            2 => r.push((
+                id_iter.next().unwrap(),
+                Entry::in_stream(RuntimeObjectId(b), c),
+            )),
+            _ => warn!(
+                "unknown xref stream entry type: {}, idx: {}, ignored",
+                a,
+                id_iter.next().unwrap()
+            ),
+        }
+        r
+    })
+    .parse_next(&mut buf)
+    .unwrap();
+    Ok((r, s.take_dict()))
+}
+
+fn parse_file_trailers<'a, S, E>(buf: &mut S) -> PResult<FrameSet, E>
+where
+    S: Stream<Token = u8, Slice = &'a [u8]>
+        + StreamIsPartial
+        + AsBStr
+        + Compare<u8>
+        + Compare<char>
+        + Compare<&'a [u8]>
+        + Compare<Caseless<&'static str>>
+        + Clone
+        + 'a,
+    <S as Stream>::IterOffsets: Clone,
+    E: winnow::error::ParserError<S> + winnow::error::ParserError<&'a [u8]> + AddContext<S> + 'a,
+    E: winnow::error::ParserError<Located<&'a [u8]>>
+        + Debug
+        + AddContext<Located<&'a [u8]>>
+        + FromExternalError<Located<&'a [u8]>, ObjectValueError>
+        + FromExternalError<Located<&'a [u8]>, FromHexError>
+        + FromExternalError<Located<&'a [u8]>, ParseIntError>
         + 'a,
 {
+    let bytes = buf.peek_finish().1;
     // find start of last cross reference section
-    let mut lines = rev_iter_lines(buf);
+    let mut lines = rev_iter_lines(bytes);
     let mut line = lines
         .next()
-        .ok_or_else(move || ErrMode::from_error_kind(&&(EMPTY_BUF[..]), ErrorKind::Eof))?;
+        .ok_or_else(|| ErrMode::from_error_kind(buf, ErrorKind::Eof))?;
     b"%%EOF".as_slice().parse_next(&mut line)?;
     let mut line = lines
         .next()
-        .ok_or_else(move || ErrMode::from_error_kind(&&(EMPTY_BUF[..]), ErrorKind::Eof))?;
+        .ok_or_else(|| ErrMode::from_error_kind(buf, ErrorKind::Eof))?;
     let pos: usize = dec_uint(&mut line)?;
     let mut line = lines
         .next()
-        .ok_or_else(move || ErrMode::from_error_kind(&&(EMPTY_BUF[..]), ErrorKind::Eof))?;
+        .ok_or_else(|| ErrMode::from_error_kind(buf, ErrorKind::Eof))?;
     b"startxref".as_slice().parse_next(&mut line)?;
     drop(lines);
 
@@ -141,21 +281,22 @@ where
     let mut next_pos = Some(pos);
     while let Some(pos) = next_pos {
         info!("trailer frame pos: {}", pos);
-        let mut frame = (
-            xref().context("xref"),
-            preceded(
-                terminated(b"trailer".as_slice(), eol3()),
-                terminated(dict, eol3()),
-            )
-            .context("trailer"),
-            terminated(b"startxref".as_slice(), eol3()).context("startxref"),
-            terminated(dec_uint::<_, usize, _>, eol3()).context("startxref pos"),
-            terminated(b"%%EOF".as_slice(), eol3()).context("EOF tag"),
-        )
+        dbg!(pos);
+        let mut frame = (alt((
+            (
+                xref().context("xref"),
+                preceded(
+                    terminated(b"trailer".as_slice(), eol3()),
+                    terminated(dict, eol3()),
+                )
+                .context("trailer"),
+            ),
+            parse_xref_stream.context("xref stream"),
+        )),)
             .context("frame");
-        let f = frame.parse_next(&mut &buf[pos..])?;
-        info!("startxref pos: {}", f.3);
-        let f = Frame::new(pos.try_into().unwrap(), f.1, f.0);
+        let mut bytes = Located::new(&bytes[pos..]);
+        let f = frame.parse_next(&mut bytes)?;
+        let f = Frame::new(pos.try_into().unwrap(), f.0.1, f.0.0);
         next_pos = get_prev(&f);
         r.push(f);
     }
@@ -170,7 +311,7 @@ mod tests {
         object::Dictionary,
     };
     use snafu::report;
-    use winnow::error::{ContextError, TreeError};
+    use winnow::error::{ContextError, InputError, TreeError};
 
     #[report]
     #[test]
@@ -205,12 +346,19 @@ mod tests {
     #[test]
     fn test_file_trailers() {
         let buf = std::fs::read(test_file("sample_files/normal/pdfreference1.0.pdf")).unwrap();
-        let frameset = parse_file_trailers::<ContextError<&'static str>>(&mut &buf[..]).unwrap();
+        let frameset = parse_file_trailers::<_, ContextError<&'static str>>(&mut &buf[..]).unwrap();
         assert_eq!(2, frameset.len());
         let (f1, f2) = (&frameset[0], &frameset[1]);
         assert_eq!(f1.xref_pos, 116);
         assert_eq!(f2.xref_pos, 1513589);
         assert_eq!(f1.trailer.get(&sname("Size")).unwrap().int().unwrap(), 4963);
         assert_eq!(f2.trailer.get(&sname("Size")).unwrap().int().unwrap(), 1046);
+    }
+
+    #[test]
+    fn test_file_trailers_xref_stream() {
+        let buf = std::fs::read(test_file("sample_files/bizarre/imm5257b_1.pdf")).unwrap();
+        let frameset = parse_file_trailers::<_, ContextError<&'static str>>(&mut &buf[..]).unwrap();
+        assert_eq!(2, frameset.len());
     }
 }
