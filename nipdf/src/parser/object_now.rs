@@ -2,7 +2,7 @@ use super::{eol2, eol3, ws_prefixed1, wsc_prefixed0};
 use crate::{
     object::{
         BufPos, Dictionary, HexString, IndirectObjectDef, InnerString, LiteralString, Object,
-        ObjectId, ObjectValueError, PdfObject, Reference, Stream as PdfStream,
+        ObjectId, ObjectValueError, Reference, Stream as PdfStream,
     },
     parser::is_whitespace,
 };
@@ -11,12 +11,14 @@ use either::Either;
 use hex::FromHexError;
 use nom::AsBytes;
 use prescript::Name;
-use snafu::Whatever;
-use std::{borrow::Cow, num::NonZeroU32};
+use std::{
+    borrow::Cow,
+    num::{NonZeroU32, ParseIntError},
+};
 use winnow::{
     PResult, Parser,
-    ascii::{Caseless, dec_int, dec_uint, float},
-    combinator::{alt, delimited, preceded, repeat, terminated},
+    ascii::{Caseless, dec_uint, float},
+    combinator::{alt, delimited, preceded, repeat, rest, terminated},
     error::FromExternalError,
     stream::{AsBStr, AsChar, Compare, ContainsToken, Location, Stream, StreamIsPartial},
     token::{any, take_till, take_while},
@@ -98,7 +100,8 @@ where
     take_while::<_, S, _>(1.., (b'0'..=b'9', b'+', b'-', b'.'))
         .take()
         .and_then(alt((
-            dec_int.map(Object::Integer),
+            rest.parse_to().map(Object::Integer),
+            rest.parse_to().map(Object::Number),
             float.map(Object::Number),
             fallback,
         )))
@@ -116,11 +119,12 @@ fn parse_quoted_string<'a, S, E>(input: &mut S) -> PResult<LiteralString, E>
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
     E: winnow::error::ParserError<S> + 'a,
+    E: FromExternalError<S, ParseIntError>,
 {
     let literal = take_till(1.., b"\\()").map(LiteralStringFragment::Literal);
     let paired = parse_quoted_string.map(LiteralStringFragment::Nested);
     let oct_char = take_while(1..4, AsChar::is_oct_digit)
-        .parse_to::<u8>()
+        .try_map(|s: &[u8]| u8::from_str_radix(&String::from_utf8_lossy(s), 8))
         .map(LiteralStringFragment::Escaped);
     let escaped_line = eol3().value(LiteralStringFragment::EscapedLine);
     let escaped = preceded(
@@ -208,6 +212,7 @@ where
     E: FromExternalError<S, ObjectValueError>,
     E: winnow::error::ParserError<&'a [u8]> + 'a,
     E: FromExternalError<S, FromHexError> + 'a,
+    E: FromExternalError<S, ParseIntError> + 'a,
 {
     let item = repeat::<_, _, Vec<_>, _, _>(0.., wsc_prefixed0(object()));
     delimited(b'[', item, wsc_prefixed0(b']'))
@@ -230,6 +235,7 @@ where
     E: FromExternalError<S, ObjectValueError>,
     E: winnow::error::ParserError<&'a [u8]> + 'a,
     E: FromExternalError<S, FromHexError> + 'a,
+    E: FromExternalError<S, ParseIntError> + 'a,
 {
     let key = wsc_prefixed0(name());
     let value = wsc_prefixed0(object());
@@ -270,6 +276,7 @@ where
     E: FromExternalError<S, ObjectValueError>,
     E: winnow::error::ParserError<&'a [u8]> + 'a,
     E: FromExternalError<S, FromHexError> + 'a,
+    E: FromExternalError<S, ParseIntError>,
 {
     let null = b"null".as_slice().value(Object::Null);
     let bool = alt((
@@ -312,7 +319,7 @@ where
     E: FromExternalError<S, ObjectValueError>,
     E: winnow::error::ParserError<&'a [u8]> + 'a,
     E: FromExternalError<S, FromHexError> + 'a,
-    E: FromExternalError<S, Whatever> + 'a,
+    E: FromExternalError<S, ParseIntError> + 'a,
 {
     (
         object_id(),
@@ -347,7 +354,7 @@ where
     E: FromExternalError<S, ObjectValueError>,
     E: winnow::error::ParserError<&'a [u8]> + 'a,
     E: FromExternalError<S, FromHexError> + 'a,
-    E: FromExternalError<S, Whatever> + 'a,
+    E: FromExternalError<S, ParseIntError>,
 {
     let o = object().parse_next(buf)?;
     let Object::Dictionary(dict) = o else {

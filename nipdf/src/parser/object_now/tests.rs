@@ -1,5 +1,8 @@
 use super::*;
-use crate::file::{report_parse_err, report_peek_err};
+use crate::{
+    ParserError,
+    file::{report_parse_err, report_peek_err},
+};
 use prescript::sname;
 use test_case::test_case;
 use winnow::Located;

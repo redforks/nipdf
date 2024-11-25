@@ -6,13 +6,12 @@ use crate::{
 use hex::FromHexError;
 use log::info;
 use prescript::sname;
+use std::num::ParseIntError;
 use winnow::{
     PResult, Parser,
     ascii::dec_uint,
     combinator::{alt, delimited, preceded, repeat, separated_pair, seq, terminated},
-    error::{
-        AddContext, ErrMode, ErrorKind, FromExternalError, ParserError as _,
-    },
+    error::{AddContext, ErrMode, ErrorKind, FromExternalError, ParserError as _},
     stream::{AsChar, Compare, ParseSlice, Stream, StreamIsPartial},
     token::{one_of, take},
 };
@@ -112,6 +111,7 @@ where
         + FromExternalError<&'a [u8], FromHexError>
         + FromExternalError<&'a [u8], ObjectValueError>
         + FromExternalError<&'a [u8], FromHexError>
+        + FromExternalError<&'a [u8], ParseIntError>
         + 'a,
 {
     // find start of last cross reference section
