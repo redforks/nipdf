@@ -13,6 +13,7 @@ mod file_now;
 mod object;
 mod object_now;
 pub use file::*;
+pub(crate) use file_now::header as header_parser;
 pub use object::*;
 use winnow::{
     Parser as _,

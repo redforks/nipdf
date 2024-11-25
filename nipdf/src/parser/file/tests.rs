@@ -4,13 +4,6 @@ use insta::assert_debug_snapshot;
 use test_case::test_case;
 use test_log::test;
 
-#[test]
-fn parse_file_header() {
-    let buf = b"%PDF-1.7\n%comment\n";
-    let (_, header) = parse_header(buf).unwrap();
-    assert_eq!(header, Some("1.7"));
-}
-
 #[test_case(None, b"hello", b"world"; "not exist")]
 #[test_case(Some(0), b"hello", b"hello"; "matches")]
 #[test_case(Some(1), b"\nhello", b"hello"; "after newline")]

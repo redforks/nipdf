@@ -3,10 +3,10 @@ use crate::{
     ParserError,
     function::{Domain, Domains},
     object::{
-        Dictionary, Entry, FilePos, Frame, FrameSet, IndirectObjectDef, ObjectId, ObjectValueError,
-        RuntimeObjectId, Stream as PdfStream, XRefSection,
+        Dictionary, Entry, FilePos, Frame, FrameSet, IndirectObjectDef, ObjectValueError,
+        RuntimeObjectId, XRefSection,
     },
-    parser::{object_now::indirect_object_def, wsc_prefixed0},
+    parser::object_now::indirect_object_def,
 };
 use hex::FromHexError;
 use log::{info, warn};
@@ -23,7 +23,7 @@ use winnow::{
 };
 
 /// Parser to parse file header, return pdf file version string, such as "1.7".
-fn header<'a, S>() -> impl Parser<S, &'a [u8], ParserError>
+pub(crate) fn header<'a, S>() -> impl Parser<S, &'a [u8], ParserError>
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
@@ -191,13 +191,13 @@ where
         .decode_without_resolve_length(buf, None)
         .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?;
     let (a, b, c) = (d.w[0], d.w[1], d.w[2]);
-    dbg!((a, b, c));
+    (a, b, c);
     debug_assert_eq!(
         data.len() % (a + b + c) as usize,
         0,
         "stream data length should multiple of w0 + w1 + w2"
     );
-    dbg!(d.size);
+    d.size;
 
     let mut buf = data.as_ref();
     let count = d.iter_ids().count();
@@ -281,7 +281,7 @@ where
     let mut next_pos = Some(pos);
     while let Some(pos) = next_pos {
         info!("trailer frame pos: {}", pos);
-        dbg!(pos);
+        pos;
         let mut frame = (alt((
             (
                 xref().context("xref"),
@@ -306,12 +306,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        file::{report_peek_err, test_file},
-        object::Dictionary,
-    };
+    use crate::file::test_file;
     use snafu::report;
-    use winnow::error::{ContextError, InputError, TreeError};
+    use winnow::error::ContextError;
 
     #[report]
     #[test]

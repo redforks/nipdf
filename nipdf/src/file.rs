@@ -8,7 +8,7 @@ use crate::{
         ObjectValueError, PdfObject, Resolver, RuntimeObjectId, Stream, TrailerDict,
     },
     parser::{
-        ParseResult, parse_frame_set, parse_header, parse_indirect_object, parse_indirect_stream,
+        ParseResult, header_parser, parse_frame_set, parse_indirect_object, parse_indirect_stream,
         parse_object, ws_terminated, wsc,
     },
 };
@@ -20,7 +20,7 @@ use nom::Finish;
 use once_cell::unsync::OnceCell;
 use prescript::{Name, sname};
 use snafu::Snafu;
-use std::iter::repeat_with;
+use std::{iter::repeat_with, str::from_utf8};
 use winnow::Parser as _;
 
 pub mod page;
@@ -660,7 +660,7 @@ fn open_encrypt(
 
 impl File {
     pub fn parse(buf: Vec<u8>, user_password: &str) -> Result<Self, FileError> {
-        let (_, head_ver) = parse_header(&buf).unwrap();
+        let head_ver = Some(from_utf8(header_parser().parse_next(&mut &buf[..]).unwrap()).unwrap());
         let (_, frame_set) = parse_frame_set(&buf).unwrap();
         let xref = XRefTable::from_frame_set(&frame_set);
 

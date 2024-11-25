@@ -24,7 +24,7 @@ fn new_hex_string(s: &str) -> Object {
 #[test_case("-" => Object::Integer(0); "negative symbol only")]
 #[test_case("+123.12" => Object::Number(123.12); "number prefixed with +")]
 #[test_case("4.0" => Object::Number(4.); "number end with dot")]
-#[test_case("4.58984938980.04" => Object::Number(4.58984938980); "number ignore 2nd dot")]
+#[test_case("4.58984938980.04" => Object::Number(4.589_849_5); "number ignore 2nd dot")]
 #[test_case("-.002" => Object::Number(-0.002); "number start with dot")]
 #[test_case("/" => Object::Name(sname("")); "empty name")]
 #[test_case("/foo" => Object::Name(sname("foo")); "name")]
@@ -82,7 +82,7 @@ fn test_parse_quoted_string(input: &[u8]) -> (&[u8], String) {
 fn test_parse_indirect_object_def() -> Result<(), ParserError> {
     let o = indirect_object_def::<_, ParserError>()
         .parse(Located::new(b"100 0 obj\n<<>>\nendobj\n".as_slice()))
-        .map_err(|e| e.into_inner())?;
+        .map_err(winnow::error::ParseError::into_inner)?;
     assert_eq!(o.1, Dictionary::default().into());
 
     let mut dict = HashMap::default();
@@ -92,14 +92,14 @@ fn test_parse_indirect_object_def() -> Result<(), ParserError> {
         .parse(Located::new(
             b"100 0 obj\n<</Length 2>>\nendobj\n".as_slice(),
         ))
-        .map_err(|e| e.into_inner())?;
+        .map_err(winnow::error::ParseError::into_inner)?;
     assert_eq!(o.1, dict.clone().into());
 
     let o = indirect_object_def::<_, ParserError>()
         .parse(Located::new(
             b"100 1 obj\n<</Length 2>>\nstream\n  \nendstream\nendobj\n".as_slice(),
         ))
-        .map_err(|e| e.into_inner())?;
+        .map_err(winnow::error::ParseError::into_inner)?;
     assert_eq!(
         o.1,
         Object::Stream(PdfStream(
@@ -116,7 +116,7 @@ fn test_parse_indirect_object_def() -> Result<(), ParserError> {
         .parse(Located::new(
             b"100 1 obj\n<</Length 10 0 R>>\nstream\n".as_slice(),
         ))
-        .map_err(|e| e.into_inner())?;
+        .map_err(winnow::error::ParseError::into_inner)?;
     assert_eq!(
         o.1,
         Object::Stream(PdfStream(

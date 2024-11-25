@@ -55,7 +55,7 @@ fn test_eol_2_cr() {
     let e = eol2::<_, ParserError>()
         .parse_next(&mut b"\r".as_ref())
         .unwrap_err();
-    assert!(matches!(e, ErrMode::<ParserError>::Backtrack(_)))
+    assert!(matches!(e, ErrMode::<ParserError>::Backtrack(_)));
 }
 
 #[test_case(b"%foo\n" => (b"".as_ref(), b"foo".as_ref()); "end with LF")]

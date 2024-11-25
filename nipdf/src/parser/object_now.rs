@@ -18,7 +18,7 @@ use winnow::{
     PResult, Parser,
     ascii::{Caseless, dec_uint, float},
     combinator::{alt, delimited, preceded, repeat, rest, terminated},
-    error::{ErrMode, ErrorKind, FromExternalError, ParserError as _},
+    error::{FromExternalError, ParserError as _},
     stream::{AsBStr, AsChar, Compare, ContainsToken, Location, Stream, StreamIsPartial},
     token::{any, take, take_till, take_while},
 };

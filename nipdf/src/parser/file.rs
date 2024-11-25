@@ -1,4 +1,4 @@
-use super::{FileError, ParseError, ParseResult, ws_terminated};
+use super::{ParseError, ParseResult, ws_terminated};
 use crate::{
     function::{Domain, Domains},
     object::{Dictionary, Entry, Frame, FrameSet, ObjectValueError, RuntimeObjectId, XRefSection},
@@ -10,43 +10,15 @@ use nom::{
     InputIter, InputLength, InputTake, Parser, Slice,
     branch::alt,
     bytes::complete::tag,
-    character::complete::{char, satisfy, u32},
-    combinator::{complete, map, map_res, opt, recognize},
+    character::complete::u32,
+    combinator::{complete, map},
     error::{ErrorKind, ParseError as NomParseError, context},
     multi::{count, fold_many1, many0},
     number::complete::{be_u8, be_u16, be_u24, be_u32},
     sequence::{preceded, separated_pair, tuple},
 };
 use prescript::sname;
-use std::{fmt::Display, ops::RangeFrom, str::from_utf8};
-
-/// Return `None`` if file not start with `%PDF-`
-pub fn parse_header(buf: &[u8]) -> ParseResult<'_, Option<&str>> {
-    let one_digit = || satisfy(|c| c.is_ascii_digit());
-
-    fn new_header(buf: &[u8]) -> Result<Option<&str>, FileError> {
-        assert_eq!(3, buf.len());
-        if buf[0] != b'1' {
-            Err(FileError::UnsupportedVersion {
-                version: String::from_utf8_lossy(buf).to_string(),
-            })
-        } else {
-            // safe to call from_utf8_unchecked(), because buf is checked for ascii digits
-            Ok(Some(from_utf8(buf).unwrap()))
-        }
-    }
-
-    let (buf, _) = tag("%")(buf)?;
-    let (buf, v) = opt(tag("PDF-"))(buf)?;
-    if v.is_none() {
-        return Ok((buf, None));
-    }
-
-    map_res(
-        recognize(tuple((one_digit(), char('.'), one_digit()))),
-        new_header,
-    )(buf)
-}
+use std::{fmt::Display, ops::RangeFrom};
 
 /// Return start position of object tag from the end of the buffer.
 /// Object tag occupies a whole line.
