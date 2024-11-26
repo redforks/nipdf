@@ -8,8 +8,8 @@ use crate::{
         ObjectValueError, PdfObject, Resolver, RuntimeObjectId, Stream, TrailerDict,
     },
     parser::{
-        ParseResult, header_parser, parse_frame_set, parse_indirect_object, parse_indirect_stream,
-        parse_object, ws_terminated, wsc0,
+        self, ParseResult, header_parser, parse_frame_set, parse_indirect_object,
+        parse_indirect_stream, ws_terminated, wsc0,
     },
 };
 use ahash::{HashMap, HashMapExt};
@@ -258,9 +258,8 @@ impl XRefTable {
                             .map_err(ObjectValueError::from)
                     },
                     |buf| {
-                        parse_object(buf)
-                            .finish()
-                            .map(|(_, o)| o)
+                        parser::object::<_, winnow::error::ContextError>()
+                            .parse(buf)
                             .map_err(ObjectValueError::from)
                     },
                 )

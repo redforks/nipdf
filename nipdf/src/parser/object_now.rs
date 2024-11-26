@@ -260,7 +260,7 @@ where
 }
 
 /// Return parser to parse [Object].
-fn object<'a, S, E>() -> impl Parser<S, Object, E> + 'a
+pub(crate) fn object<'a, S, E>() -> impl Parser<S, Object, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial

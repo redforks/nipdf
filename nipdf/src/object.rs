@@ -906,6 +906,16 @@ impl<'a> From<parser::ParseError<'a>> for ObjectValueError {
     }
 }
 
+impl<I: winnow::stream::AsBStr, E: Display> From<winnow::error::ParseError<I, E>>
+    for ObjectValueError
+{
+    fn from(e: winnow::error::ParseError<I, E>) -> Self {
+        Self::ParseError {
+            message: format!("{}", e),
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub enum Object {
     Null,
