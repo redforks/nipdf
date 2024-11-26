@@ -18,7 +18,7 @@ use winnow::{
     binary::{be_u8, be_u16, be_u24, be_u32},
     combinator::{alt, delimited, empty, preceded, repeat, separated_pair, seq, terminated},
     error::{AddContext, ErrMode, ErrorKind, FromExternalError, ParserError as _},
-    stream::{AsBStr, AsChar, Compare, Location, ParseSlice, Stream, StreamIsPartial},
+    stream::{AsBStr, AsChar, Compare, Location, Stream, StreamIsPartial},
     token::{one_of, take},
 };
 
@@ -62,7 +62,6 @@ where
         + StreamIsPartial
         + Compare<u8>
         + Compare<&'a [u8]>
-        + ParseSlice<u32>
         + 'a,
     E: winnow::error::ParserError<S> + 'a,
 {
