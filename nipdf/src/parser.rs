@@ -9,11 +9,9 @@ use nom::{
 use snafu::Snafu;
 
 mod file;
-mod file_now;
 mod object;
 mod object_now;
-pub use file::*;
-pub(crate) use file_now::header as header_parser;
+pub(crate) use file::{header as header_parser, parse_frame_set};
 pub use object::*;
 use winnow::{
     Parser as _,
@@ -120,6 +118,26 @@ where
     alt((whitespace_now().void(), comment_now().void()))
 }
 
+/// Matches 0 or more whitespace or comments.
+pub fn wsc0<'a, S, E>() -> impl winnow::Parser<S, (), E> + 'a
+where
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+    E: winnow::error::ParserError<S> + 'a,
+{
+    use winnow::combinator::repeat;
+    repeat::<_, _, (), _, _>(0.., wsc()).void()
+}
+
+/// Matches 1 or more whitespace or comments.
+pub fn wsc1<'a, S, E>() -> impl winnow::Parser<S, (), E> + 'a
+where
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+    E: winnow::error::ParserError<S> + 'a,
+{
+    use winnow::combinator::repeat;
+    repeat::<_, _, (), _, _>(1.., wsc()).void()
+}
+
 /// Convert a parser to a parser that prefixed with 0 or more whitespace and/or comment.
 fn wsc_prefixed0<'a, S, F, O, E>(inner: F) -> impl winnow::Parser<S, O, E> + 'a
 where
@@ -132,8 +150,8 @@ where
     O: 'a,
     E: winnow::error::ParserError<S> + 'a,
 {
-    use winnow::combinator::{preceded, repeat};
-    preceded(repeat::<_, _, (), _, _>(0.., wsc()).void(), inner)
+    use winnow::combinator::preceded;
+    preceded(wsc0(), inner)
 }
 
 fn wsc_prefixed1<'a, S, F, O, E>(inner: F) -> impl winnow::Parser<S, O, E> + 'a
@@ -147,8 +165,8 @@ where
     O: 'a,
     E: winnow::error::ParserError<S> + 'a,
 {
-    use winnow::combinator::{preceded, repeat};
-    preceded(repeat::<_, _, (), _, _>(1.., wsc()).void(), inner)
+    use winnow::combinator::preceded;
+    preceded(wsc1(), inner)
 }
 
 /// Convert a parser to a parser that prefixed with 1 or more whitespace.

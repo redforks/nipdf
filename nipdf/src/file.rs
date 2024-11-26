@@ -9,7 +9,7 @@ use crate::{
     },
     parser::{
         ParseResult, header_parser, parse_frame_set, parse_indirect_object, parse_indirect_stream,
-        parse_object, ws_terminated, wsc,
+        parse_object, ws_terminated, wsc0,
     },
 };
 use ahash::{HashMap, HashMapExt};
@@ -85,7 +85,7 @@ fn object_stream_parser<'a>(
             n,
             terminated(
                 preceded((dec_uint::<_, u32, _>, space1), dec_uint::<_, u16, _>),
-                repeat::<_, _, (), _, _>(.., wsc()),
+                wsc0(),
             ),
         ),
         rest,
@@ -661,7 +661,8 @@ fn open_encrypt(
 impl File {
     pub fn parse(buf: Vec<u8>, user_password: &str) -> Result<Self, FileError> {
         let head_ver = Some(from_utf8(header_parser().parse_next(&mut &buf[..]).unwrap()).unwrap());
-        let (_, frame_set) = parse_frame_set(&buf).unwrap();
+        let frame_set =
+            parse_frame_set::<_, winnow::error::ContextError<&'static str>>(&mut &buf[..]).unwrap();
         let xref = XRefTable::from_frame_set(&frame_set);
 
         let trailers: Vec<_> = frame_set.into_iter().map(|f| f.trailer).collect();

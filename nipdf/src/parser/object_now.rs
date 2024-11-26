@@ -1,4 +1,4 @@
-use super::{eol2, eol3, ws_prefixed1, wsc_prefixed0};
+use super::{eol2, eol3, ws_prefixed1, wsc_prefixed0, wsc0};
 use crate::{
     object::{
         BufPos, Dictionary, HexString, IndirectObjectDef, InnerString, LiteralString, Object,
@@ -18,7 +18,7 @@ use winnow::{
     PResult, Parser,
     ascii::{Caseless, dec_uint, float},
     combinator::{alt, delimited, preceded, repeat, rest, terminated},
-    error::{FromExternalError, ParserError as _},
+    error::FromExternalError,
     stream::{AsBStr, AsChar, Compare, ContainsToken, Location, Stream, StreamIsPartial},
     token::{any, take, take_till, take_while},
 };
@@ -214,7 +214,7 @@ where
     E: FromExternalError<S, ParseIntError> + 'a,
 {
     let item = repeat::<_, _, Vec<_>, _, _>(0.., wsc_prefixed0(object()));
-    delimited(b'[', item, wsc_prefixed0(b']'))
+    delimited(b'[', item, (wsc0(), b']'))
         .output_into()
         .parse_next(input)
 }
@@ -239,7 +239,7 @@ where
     let key = wsc_prefixed0(name());
     let value = wsc_prefixed0(object());
     let pair = repeat::<_, _, HashMap<_, _>, _, _>(0.., (key, value)).map(Dictionary::from);
-    delimited(b"<<".as_slice(), pair, wsc_prefixed0(b">>".as_slice())).parse_next(input)
+    delimited(b"<<".as_slice(), pair, (wsc0(), b">>".as_slice())).parse_next(input)
 }
 
 fn object_id<'a, S, E>() -> impl Parser<S, ObjectId, E> + 'a
@@ -370,7 +370,7 @@ where
     };
 
     let saved_pos = buf.checkpoint();
-    match terminated(wsc_prefixed0(b"stream".as_slice()), eol2::<_, E>())
+    match delimited(wsc0(), b"stream".as_slice(), eol2::<_, E>())
         .span()
         .parse_next(buf)
     {
