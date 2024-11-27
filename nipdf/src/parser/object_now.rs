@@ -42,21 +42,8 @@ where
 /// not two hex char after `#`.
 fn normalize_name(buf: &[u8]) -> Result<Name, ObjectValueError> {
     fn next_hex_char(iter: &mut impl Iterator<Item = u8>) -> Option<u8> {
-        let mut result = 0;
-        for _ in 0..2 {
-            if let Some(c) = iter.next() {
-                result <<= 4;
-                result |= match c {
-                    b'0'..=b'9' => c - b'0',
-                    b'a'..=b'f' => c - b'a' + 10,
-                    b'A'..=b'F' => c - b'A' + 10,
-                    _ => return None,
-                };
-            } else {
-                return None;
-            }
-        }
-        Some(result)
+        let hex_str: String = iter.take(2).map(|c| c as char).collect();
+        u8::from_str_radix(&hex_str, 16).ok()
     }
 
     if !buf.contains(&b'#') {
@@ -219,7 +206,8 @@ where
         .parse_next(input)
 }
 
-pub(crate) fn dict<'a, S, E>(input: &mut S) -> PResult<Dictionary, E>
+/// Parse Dictionary body, i.e, Dictionary without '<<' and '>>' quote.
+pub(crate) fn dict_body<'a, S, E>() -> impl Parser<S, Dictionary, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
@@ -238,8 +226,27 @@ where
 {
     let key = wsc_prefixed0(name());
     let value = wsc_prefixed0(object());
-    let pair = repeat::<_, _, HashMap<_, _>, _, _>(0.., (key, value)).map(Dictionary::from);
-    delimited(b"<<".as_slice(), pair, (wsc0(), b">>".as_slice())).parse_next(input)
+    repeat::<_, _, HashMap<_, _>, _, _>(0.., (key, value)).map(Dictionary::from)
+}
+
+pub(crate) fn dict<'a, S, E>(input: &mut S) -> PResult<Dictionary, E>
+where
+    S: Stream<Token = u8, Slice = &'a [u8]>
+        + StreamIsPartial
+        + AsBStr
+        + Compare<u8>
+        + Compare<char>
+        + Compare<&'a [u8]>
+        + Compare<Caseless<&'static str>>
+        + 'a,
+    <S as Stream>::IterOffsets: Clone,
+    E: winnow::error::ParserError<S> + 'a,
+    E: FromExternalError<S, ObjectValueError>,
+    E: winnow::error::ParserError<&'a [u8]> + 'a,
+    E: FromExternalError<S, FromHexError> + 'a,
+    E: FromExternalError<S, ParseIntError> + 'a,
+{
+    delimited(b"<<".as_slice(), dict_body(), (wsc0(), b">>".as_slice())).parse_next(input)
 }
 
 fn object_id<'a, S, E>() -> impl Parser<S, ObjectId, E> + 'a
