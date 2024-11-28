@@ -7,10 +7,7 @@ use crate::{
         Array, Dictionary, Entry, FrameSet, HexString, LiteralString, Object, ObjectId,
         ObjectValueError, PdfObject, Resolver, RuntimeObjectId, Stream, TrailerDict,
     },
-    parser::{
-        self, ParseResult, header_parser, indirect_object_def, parse_frame_set, ws_terminated,
-        wsc_prefixed0, wsc0,
-    },
+    parser::{self, header_parser, indirect_object_def, parse_frame_set, wsc_prefixed0, wsc0},
 };
 use ahash::{HashMap, HashMapExt};
 use either::Either;
@@ -20,7 +17,11 @@ use once_cell::unsync::OnceCell;
 use prescript::{Name, sname};
 use snafu::{ResultExt, Snafu, whatever};
 use std::{iter::repeat_with, str::from_utf8};
-use winnow::{Located, Parser as _, error::ContextError};
+use winnow::{
+    Located, Parser as _,
+    error::ContextError,
+    stream::{Compare, StreamIsPartial},
+};
 
 pub mod page;
 pub use page::*;
@@ -56,25 +57,11 @@ struct ObjectStream {
     offsets: Vec<u16>,
 }
 
-fn parse_object_stream(n: usize, buf: &[u8]) -> ParseResult<'_, ObjectStream> {
-    use nom::{
-        character::complete::{space1, u16, u32},
-        multi::count,
-        sequence::separated_pair,
-    };
-
-    let (buf, nums) = count(ws_terminated(separated_pair(u32, space1, u16)), n)(buf)?;
-    let offsets = nums.into_iter().map(|(_, n)| n).collect();
-    Ok((buf, ObjectStream {
-        buf: buf.to_owned(),
-        offsets,
-    }))
-}
-
 // TODO: use and create test
-fn object_stream_parser<'a>(
-    n: usize,
-) -> impl winnow::Parser<&'a [u8], ObjectStream, crate::ParserError> {
+fn object_stream_parser<'a, S>(n: usize) -> impl winnow::Parser<S, ObjectStream, ContextError> + 'a
+where
+    S: winnow::stream::Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+{
     use winnow::{
         ascii::{dec_uint, space1},
         combinator::{preceded, repeat, rest, terminated},
@@ -105,11 +92,8 @@ impl ObjectStream {
         assert_eq!(sname("ObjStm"), d[&sname("Type")].name()?);
         let n = d.get(&sname("N")).map_or(Ok(0), Object::int)? as usize;
         let buf = stream.decode_without_resolve_length(file, encrypt_info)?;
-        parse_object_stream(n, buf.as_ref())
-            .map_err(|e| ObjectValueError::ParseError {
-                message: e.to_string(),
-            })
-            .map(|(_, r)| r)
+        let r = object_stream_parser(n).parse(buf.as_ref())?;
+        Ok(r)
     }
 
     pub fn get_buf(&self, idx: usize) -> &[u8] {
