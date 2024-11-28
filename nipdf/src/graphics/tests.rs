@@ -8,23 +8,6 @@ use prescript::sname;
 use snafu::{ResultExt, report};
 use test_case::test_case;
 
-#[test_case("w ", "w")]
-#[test_case("w", "w"; "not end with whitespace")]
-#[test_case("TL ", "TL")]
-#[test_case("B*\t", "B*")]
-#[test_case("' ", "'"; "quote 1")]
-#[test_case("\" ", "\""; "quote 2")]
-#[test_case("Tc[", "Tc"; "end with separator 1")]
-#[test_case("Tc<", "Tc"; "end with separator 2")]
-#[test_case("Tc(", "Tc"; "end with separator 3")]
-#[test_case("q/foo", "q"; "end with Name")]
-fn parse_operator_succeed(s: &str, op: &str) {
-    let len = s.len();
-    let (input, result) = parse_operator(s.as_bytes()).unwrap();
-    assert_eq!(input.len() + op.len(), len);
-    assert_eq!(result, ObjectOrOperator::Operator(op));
-}
-
 #[test_case(""=> Vec::<Operation>::new(); "empty")]
 #[test_case(" % comment\n "=> Vec::<Operation>::new(); "comment only")]
 #[test_case(" % comment\n q Q"=> vec![
@@ -44,8 +27,9 @@ fn parse_operator_succeed(s: &str, op: &str) {
     "cm and Do"
 )]
 fn test_parse_operations(s: &str) -> Vec<Operation> {
-    let (_, result) = parse_operations(s.as_bytes()).unwrap();
-    result
+    parse_operations::<winnow::error::ContextError<&'static str>>
+        .parse(s.as_bytes())
+        .unwrap()
 }
 
 #[test_case("q" => Operation::SaveGraphicsState; "save")]
@@ -63,14 +47,16 @@ fn test_parse_operations(s: &str) -> Vec<Operation> {
 #[test_case("/tag /name DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict(sname("tag")), NameOrDict::Name(sname("name"))); "DP with name")]
 #[test_case("/tag<<>>DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict(sname("tag")), NameOrDict::Dict(Dictionary::new())); "DP with dict")]
 fn test_parse_operation(s: &str) -> Operation {
-    let (_, mut result) = parse_operations(s.as_bytes()).unwrap();
+    let mut result = parse_operations::<winnow::error::ContextError<&'static str>>
+        .parse(s.as_bytes())
+        .unwrap();
     assert_eq!(1, result.len());
     result.pop().unwrap()
 }
 
 #[test]
 fn test_ignore_bx_ex() {
-    let (buf, result) = parse_operations(b"BX\nq\nEX\nQ").unwrap();
+    let (buf, result) = parse_operations::<()>.parse_peek(b"BX\nq\nEX\nQ").unwrap();
     assert_eq!(buf, b"");
     assert_eq!(
         vec![
@@ -123,7 +109,9 @@ fn parse_inline_image_with_ascii85_filter() -> Result<()> {
     use crate::object::{ImageMetadata, PdfObject};
 
     let data = include_bytes!("inline-image-ascii85");
-    let (remains, img) = parse_inline_image(data).whatever_context("parse inline image")?;
+    let (remains, img) = inline_image::<winnow::error::ContextError<&'static str>>()
+        .parse_peek(data)
+        .unwrap();
     assert_eq!(remains, b" Q\n");
     let meta = img.meta();
     assert_eq!(meta.width()?, 4772);

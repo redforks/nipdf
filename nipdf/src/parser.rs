@@ -13,7 +13,7 @@ mod object;
 mod object_now;
 pub(crate) use file::{header as header_parser, parse_frame_set};
 pub use object::*;
-pub(crate) use object_now::object;
+pub(crate) use object_now::{dict_body, object};
 use winnow::{
     Parser as _,
     stream::{Compare, ContainsToken, Stream, StreamIsPartial},
@@ -140,7 +140,7 @@ where
 }
 
 /// Convert a parser to a parser that prefixed with 0 or more whitespace and/or comment.
-fn wsc_prefixed0<'a, S, F, O, E>(inner: F) -> impl winnow::Parser<S, O, E> + 'a
+pub(crate) fn wsc_prefixed0<'a, S, F, O, E>(inner: F) -> impl winnow::Parser<S, O, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial

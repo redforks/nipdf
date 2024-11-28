@@ -77,8 +77,7 @@ impl<'a> FreeTypeFontWidth<'a> {
     }
 
     pub fn glyph_width(&self, gid: u32) -> Result<u32> {
-        self
-            .font
+        self.font
             .advance(gid)
             .whatever_context("get gid advance")?
             .x()
@@ -1347,7 +1346,7 @@ impl<'a, 'b> Type3Font<'a, 'b> {
             let data = stream
                 .decode(d.resolver())
                 .map_err(|_| Whatever::without_source("decode stream".to_owned()))?;
-            let (_, ops) = parse_operations(&data[..]).map_err(|e| {
+            let ops = parse_operations::<()>(&mut &data[..]).map_err(|e| {
                 Whatever::without_source(format!("parse type3 operation error: {}", e))
             })?;
             r.push((name.clone(), Type3Glyph(ops.into())));

@@ -4,23 +4,14 @@ use crate::{
         Array, Dictionary, InlineImage, InlineStream, Object, ObjectValueError, RuntimeObjectId,
         Stream, TextString, TextStringOrNumber,
     },
-    parser::{
-        ParseError, ParseResult, is_white_space, parse_dict_entries, parse_object,
-        whitespace_or_comment, ws_prefixed, ws_terminated,
-    },
+    parser::{self, wsc_prefixed0, wsc0},
 };
 use euclid::{Length, Point2D, Transform2D};
 use log::{error, warn};
 use nipdf_macro::{OperationParser, TryFromIntObject, TryFromNameObject, pdf_object};
-use nom::{
-    FindSubstring, Parser,
-    branch::alt,
-    bytes::complete::{is_not, tag},
-    combinator::map_res,
-    error::{ErrorKind, FromExternalError, ParseError as NomParseError},
-    sequence::terminated,
-};
 use prescript::{Name, sname};
+use std::{num::ParseIntError, str::from_utf8};
+use winnow::Parser as _;
 
 pub mod color_space;
 pub mod pattern;
@@ -612,93 +603,86 @@ enum ObjectOrOperator<'a> {
     Operator(&'a str),
 }
 
-fn parse_operator(input: &[u8]) -> ParseResult<'_, ObjectOrOperator<'_>> {
-    let p = is_not(b" \t\n\r%[<(/".as_slice());
-    map_res(p, |op| {
-        let op = std::str::from_utf8(op).unwrap();
-        Ok::<_, ParseError<'_>>(ObjectOrOperator::Operator(op))
-    })(input)
-}
-
-fn parse_object_or_operator(input: &[u8]) -> ParseResult<'_, ObjectOrOperator<'_>> {
-    alt((parse_object.map(ObjectOrOperator::Object), parse_operator))(input)
-}
-
 /// Parses `Operation::PaintInlineImage` operation.
 /// `input` start after `BI`, parses dictionary and image data, consumes EI.
-fn parse_inline_image(input: &[u8]) -> ParseResult<'_, InlineImage> {
-    fn parse_dict(input: &[u8]) -> ParseResult<'_, Dictionary> {
-        terminated(parse_dict_entries, ws_terminated(tag(b"ID")))
-            .map(|v| v.into_iter().collect())
-            .parse(input)
-    }
-    let (input, d) = ws_prefixed(parse_dict).parse(input)?;
-
-    let mut p = 0;
-    let (input, data) = loop {
-        p += (&input[p..])
-            .find_substring(b"EI".as_slice())
-            .ok_or_else(|| nom::Err::Error(ParseError::from_error_kind(input, ErrorKind::Tag)))?;
-        if is_white_space(input[p - 1]) && input.get(p + 2).map_or(true, |b| is_white_space(*b)) {
-            break (&input[p + 2..], &input[..p]);
-        }
-        p += 2;
+fn inline_image<'a, E>() -> impl winnow::Parser<&'a [u8], InlineImage, E>
+where
+    E: winnow::error::ParserError<&'a [u8]>
+        + winnow::error::FromExternalError<&'a [u8], ObjectValueError>
+        + winnow::error::FromExternalError<&'a [u8], ParseIntError>
+        + winnow::error::FromExternalError<&'a [u8], hex::FromHexError>
+        + winnow::error::AddContext<&'a [u8], &'static str>
+        + 'static,
+{
+    use winnow::{
+        combinator::{alt, repeat_till},
+        seq,
+        token::any,
     };
-    let stream = InlineStream::new(d, data);
-    let image = stream
-        .decode_image()
-        .map_err(|e| nom::Err::Error(ParseError::from_external_error(input, ErrorKind::Fail, e)))?;
-
-    Ok((input, image))
+    seq! {(
+        wsc_prefixed0(parser::dict_body()).context("dict_body"),
+        _: wsc0(), _: b"ID".as_slice(), _:any,
+        repeat_till(1.., any, alt((b" EI".as_slice(), b"\nEI".as_slice()))).map(|(o, _)| o).context("image data"),
+    )}
+    .map(|(d, data): (Dictionary, Vec<u8>)| {
+        let stream = InlineStream::new(d, &data);
+        stream.decode_image().unwrap()
+    })
 }
 
-pub fn parse_operations(mut input: &[u8]) -> ParseResult<'_, Vec<Operation>> {
+pub fn parse_operations<'a, E>(buf: &mut &'a [u8]) -> winnow::PResult<Vec<Operation>, E>
+where
+    E: winnow::error::ParserError<&'a [u8]>
+        + winnow::error::FromExternalError<&'a [u8], ObjectValueError>
+        + winnow::error::FromExternalError<&'a [u8], ParseIntError>
+        + winnow::error::FromExternalError<&'a [u8], hex::FromHexError>
+        + winnow::error::AddContext<&'a [u8], &'static str>
+        + 'static,
+{
+    use winnow::{Parser as _, combinator::alt, token::take_till};
+
+    let operator = take_till(1.., b" \t\n\r%[<(/".as_slice())
+        .map(|buf| ObjectOrOperator::Operator(from_utf8(buf).unwrap()));
+    let mut object_or_operator = alt((parser::object().map(ObjectOrOperator::Object), operator));
     let mut operands = Vec::with_capacity(8);
     let mut r = vec![];
     loop {
-        (input, _) = whitespace_or_comment(input)?;
-        let vr = parse_object_or_operator(input);
-        match vr {
-            Err(nom::Err::Error(_)) => break,
-            Err(e) => return Err(e),
-            Ok((remains, vr)) => {
-                input = remains;
-                match vr {
-                    ObjectOrOperator::Object(o) => {
-                        operands.push(o);
+        wsc0().parse_next(buf)?;
+        if buf.is_empty() {
+            if !operands.is_empty() {
+                warn!("Not enough operands for operation");
+            }
+            return Ok(r);
+        }
+        let oo = object_or_operator.parse_next(buf)?;
+        match oo {
+            ObjectOrOperator::Object(o) => operands.push(o),
+            ObjectOrOperator::Operator(op) => {
+                let opt_op = create_operation(op, &mut operands).unwrap_or_else(|e| {
+                    // possible because not enough operands
+                    warn!("Invalid operation '{}': {:?}", op, e);
+                    None
+                });
+                match opt_op {
+                    Some(
+                        Operation::BeginCompatibilitySection | Operation::EndCompatibilitySection,
+                    ) => {}
+                    Some(Operation::BeginInlineImage) => {
+                        let inline_image = inline_image()
+                            .map(Operation::PaintInlineImage)
+                            .parse_next(buf)?;
+                        r.push(inline_image);
                     }
-                    ObjectOrOperator::Operator(op) => {
-                        let opt_op = create_operation(op, &mut operands).unwrap_or_else(|e| {
-                            // possible because not enough operands
-                            warn!("Invalid operation '{}': {:?}", op, e);
-                            None
-                        });
-                        match opt_op {
-                            Some(
-                                Operation::BeginCompatibilitySection
-                                | Operation::EndCompatibilitySection,
-                            ) => {}
-                            Some(Operation::BeginInlineImage) => {
-                                let inline_image;
-                                (input, inline_image) = parse_inline_image
-                                    .map(Operation::PaintInlineImage)
-                                    .parse(input)?;
-                                r.push(inline_image);
-                            }
-                            Some(op) => r.push(op),
-                            None => {
-                                warn!("Unknown operation: {:?}", op);
-                            }
-                        }
-                        // Some pdf files has bug that has extra operands
-                        operands.clear();
+                    Some(op) => r.push(op),
+                    None => {
+                        warn!("Unknown operation: {:?}", op);
                     }
                 }
+                // Some pdf files has bug that has extra operands
+                operands.clear();
             }
         }
     }
-
-    Ok((input, r))
 }
 
 #[cfg(test)]

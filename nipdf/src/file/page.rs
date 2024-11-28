@@ -14,6 +14,7 @@ use nipdf_macro::{TryFromNameObject, pdf_object};
 use nom::Finish;
 use prescript::{Name, sname};
 use std::{cell::LazyCell, iter::once};
+use winnow::Parser as _;
 
 pub mod paint;
 
@@ -373,9 +374,9 @@ impl PageContent {
         }
 
         if let Some(data) = data {
-            let (input, ops) = parse_operations(&data).finish().unwrap();
-            assert!(input.is_empty(), "buf should be empty: {:?}", input);
-            ops
+            parse_operations::<winnow::error::ContextError<&'static str>>
+                .parse(&data)
+                .unwrap()
         } else {
             vec![]
         }

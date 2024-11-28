@@ -2778,6 +2778,7 @@ dependencies = [
  "test-case",
  "tiny-skia",
  "ureq",
+ "winnow",
 ]
 
 [[package]]
