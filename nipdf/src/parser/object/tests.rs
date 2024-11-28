@@ -105,7 +105,7 @@ endstream
     assert_eq!(input, b"\n");
     let (_, start, length) = o.right().unwrap();
     assert_eq!(21, start);
-    assert_eq!(Some(NonZeroU32::new(4).unwrap()), length);
+    assert_eq!(Some(4), length);
 
     // length is ref
     let buf = br#"<</Length 1 0 R>>
@@ -129,7 +129,7 @@ stream
     assert_eq!(input, b"\n");
     let (_, start, length) = o.right().unwrap();
     assert_eq!(21, start);
-    assert_eq!(Some(NonZeroU32::new(4).unwrap()), length);
+    assert_eq!(Some(4), length);
 
     // length is 0
     let buf = b"<</Length 0>>
@@ -140,5 +140,5 @@ endstream
     assert_eq!(input, b"\n");
     let (_, start, length) = o.right().unwrap();
     assert_eq!(21, start);
-    assert_eq!(None, length);
+    assert_eq!(Some(0), length);
 }

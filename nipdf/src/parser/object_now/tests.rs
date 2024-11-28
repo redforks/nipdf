@@ -108,7 +108,7 @@ fn test_parse_indirect_object_def() -> Result<(), ParserError> {
         o.1,
         Object::Stream(PdfStream(
             dict,
-            BufPos::new(31, Some(NonZeroU32::try_from(2u32).unwrap())),
+            BufPos::new(31, Some(2u32)),
             ObjectId::new(100, 1)
         ))
     );

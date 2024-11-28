@@ -370,8 +370,8 @@ where
         (wsc0(), b"endobj".as_slice(), wsc0()).parse_next(buf)?;
         return Ok(Either::Left(o));
     };
-    let len: Option<NonZeroU32> = match dict.get("Length") {
-        Some(Object::Integer(l)) => Some(NonZeroU32::try_from(u32::try_from(*l).unwrap()).unwrap()),
+    let len: Option<u32> = match dict.get("Length") {
+        Some(Object::Integer(l)) => Some(u32::try_from(*l).unwrap()),
         Some(Object::Reference(_)) => None,
         _ => {
             (wsc0(), b"endobj".as_slice(), wsc0()).parse_next(buf)?;

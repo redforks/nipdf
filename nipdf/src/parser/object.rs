@@ -22,7 +22,6 @@ use prescript::{Name, sname};
 use snafu::ResultExt as _;
 use std::{
     borrow::Cow,
-    num::NonZeroU32,
     str::{FromStr, from_utf8},
 };
 
@@ -188,7 +187,7 @@ pub fn parse_dict(input: &[u8]) -> ParseResult<'_, Dictionary> {
     )(input)
 }
 
-type StreamParts = (Dictionary, u32, Option<NonZeroU32>);
+type StreamParts = (Dictionary, u32, Option<u32>);
 
 fn parse_object_and_stream(input: &[u8]) -> ParseResult<'_, Either<Object, StreamParts>> {
     let input_len = input.len();
@@ -214,11 +213,7 @@ fn parse_object_and_stream(input: &[u8]) -> ParseResult<'_, Either<Object, Strea
                 }
                 Ok((
                     data,
-                    Either::Right((
-                        d,
-                        start.try_into().map_err(|_| fail(input))?,
-                        length.and_then(NonZeroU32::new),
-                    )),
+                    Either::Right((d, start.try_into().map_err(|_| fail(input))?, length)),
                 ))
             } else {
                 Ok((data, Either::Left(Object::Dictionary(d))))
