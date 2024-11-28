@@ -30,7 +30,6 @@ use nipdf::{
     log_err,
     object::{ImageMask, ImageMetadata, InlineImage, Object, PdfObject, TextStringOrNumber},
 };
-use nom::{combinator::eof, sequence::terminated};
 use num_traits::ToPrimitive;
 use prescript::Name;
 use snafu::ResultExt;

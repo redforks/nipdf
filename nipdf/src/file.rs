@@ -635,7 +635,7 @@ fn open_encrypt(
     let resolver = ObjectResolver::new(buf, xref, None);
     let trailer = TrailerDict::new(None, trailer, &resolver)?;
     let encrypt = trailer.encrypt().map_err(|e| {
-        dbg!(e);
+        drop(e);
         FileError::InvalidFile
     })?;
     let Some(encrypt) = encrypt else {

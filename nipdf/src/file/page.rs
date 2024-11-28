@@ -11,7 +11,6 @@ use ahash::{HashMap, HashMapExt};
 use educe::Educe;
 use log::error;
 use nipdf_macro::{TryFromNameObject, pdf_object};
-use nom::Finish;
 use prescript::{Name, sname};
 use std::{cell::LazyCell, iter::once};
 use winnow::Parser as _;

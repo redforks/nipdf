@@ -853,7 +853,7 @@ mod xref;
 pub use xref::{Entry as XRefEntry, Section as XRefSection, *};
 
 mod frame;
-use crate::{file::DataContainer, graphics::trans::ThousandthsOfText, parser};
+use crate::{file::DataContainer, graphics::trans::ThousandthsOfText};
 pub use frame::*;
 
 #[derive(Debug, Snafu)]

@@ -5,7 +5,7 @@
 
 use snafu::{Snafu, Whatever};
 use winnow::{
-    error::{AddContext, ErrorConvert, ErrorKind, FromExternalError, ParseError, StrContext},
+    error::{AddContext, ErrorConvert, ErrorKind, FromExternalError, ParseError},
     stream::Stream,
 };
 

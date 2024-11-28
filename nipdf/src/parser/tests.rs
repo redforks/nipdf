@@ -1,9 +1,5 @@
 use super::*;
 use crate::ParserError;
-use std::{
-    any::{Any, TypeId},
-    str::from_utf8,
-};
 use test_case::test_case;
 use winnow::error::ErrMode;
 

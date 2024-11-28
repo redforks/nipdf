@@ -27,7 +27,6 @@ use std::{
     cell::LazyCell,
     fmt::Display,
     iter::{once, repeat},
-    num::NonZeroU32,
     ops::Range,
     rc::Rc,
 };
@@ -74,7 +73,7 @@ impl BufPos {
     /// `f` to resolve length
     pub fn range<E>(&self, f: impl FnOnce() -> Result<u32, E>) -> Result<Range<usize>, E> {
         let start = self.start as usize;
-        let length = self.length.map_or_else(f, |v| Ok(u32::from(v)))? as usize;
+        let length = self.length.map_or_else(f, |v| Ok(v))? as usize;
         Ok(start..(start + length))
     }
 }

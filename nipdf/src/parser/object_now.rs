@@ -1,4 +1,4 @@
-use super::{eol2, eol3, ws_prefixed0, ws_prefixed1, wsc_prefixed0, wsc0, wsc1};
+use super::{eol2, eol3, ws_prefixed0, ws_prefixed1, wsc_prefixed0, wsc0};
 use crate::{
     object::{
         BufPos, Dictionary, HexString, IndirectObjectDef, InnerString, LiteralString, Object,
@@ -12,7 +12,7 @@ use hex::FromHexError;
 use prescript::Name;
 use std::{
     borrow::Cow,
-    num::{NonZeroU32, ParseIntError},
+    num::ParseIntError,
 };
 use winnow::{
     PResult, Parser,
@@ -387,7 +387,7 @@ where
         Ok(range) => {
             if let Some(len) = len {
                 (
-                    take(u32::from(len)),
+                    take(len),
                     wsc_prefixed0(b"endstream".as_slice()),
                     wsc_prefixed0(terminated(b"endobj".as_slice(), wsc0())),
                 )
