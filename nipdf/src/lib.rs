@@ -43,7 +43,7 @@ impl<T, E> ResultExt<T, E> for Result<T, E> {
 }
 
 #[derive(Snafu, Debug)]
-pub enum ParserError<C: 'static = StrContext> {
+pub enum ParserError<C: 'static = &'static str> {
     #[snafu(display("Parse error: {}", kind))]
     Leaf { kind: ErrorKind, context: Vec<C> },
     #[snafu(display("Parse error: {}", kind))]

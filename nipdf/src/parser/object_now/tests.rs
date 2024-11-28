@@ -77,11 +77,15 @@ fn test_parse_quoted_string(input: &[u8]) -> (&[u8], String) {
     (rest, r.as_str().to_string())
 }
 
-#[snafu::report]
 #[test]
 fn test_parse_indirect_object_def() -> Result<(), ParserError> {
-    let o = indirect_object_def::<_, ParserError>()
+    let o = indirect_object_def::<_, ParserError<&'static str>>()
         .parse(Located::new(b"100 0 obj\n<<>>\nendobj\n".as_slice()))
+        .map_err(winnow::error::ParseError::into_inner)?;
+    assert_eq!(o.1, Dictionary::default().into());
+
+    let o = indirect_object_def::<_, ParserError<&'static str>>()
+        .parse(Located::new(b"100 0 obj<<>>endobj\n".as_slice()))
         .map_err(winnow::error::ParseError::into_inner)?;
     assert_eq!(o.1, Dictionary::default().into());
 

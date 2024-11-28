@@ -1,4 +1,4 @@
-use super::{eol2, eol3, ws_prefixed1, wsc_prefixed0, wsc0};
+use super::{eol2, eol3, ws_prefixed0, ws_prefixed1, wsc_prefixed0, wsc0};
 use crate::{
     object::{
         BufPos, Dictionary, HexString, IndirectObjectDef, InnerString, LiteralString, Object,
@@ -18,7 +18,7 @@ use winnow::{
     PResult, Parser,
     ascii::{Caseless, dec_uint, float},
     combinator::{alt, delimited, preceded, repeat, rest, terminated},
-    error::FromExternalError,
+    error::{AddContext, FromExternalError},
     stream::{AsBStr, AsChar, Compare, ContainsToken, Location, Stream, StreamIsPartial},
     token::{any, take, take_till, take_while},
 };
@@ -321,17 +321,19 @@ where
         + Location
         + 'a,
     <S as Stream>::IterOffsets: Clone,
-    E: winnow::error::ParserError<S> + 'a,
-    E: FromExternalError<S, ObjectValueError>,
-    E: winnow::error::ParserError<&'a [u8]> + 'a,
-    E: FromExternalError<S, FromHexError> + 'a,
-    E: FromExternalError<S, ParseIntError> + 'a,
+    E: AddContext<S>
+        + FromExternalError<S, ObjectValueError>
+        + 'a
+        + winnow::error::ParserError<S>
+        + winnow::error::ParserError<&'a [u8]>
+        + FromExternalError<S, FromHexError>
+        + FromExternalError<S, ParseIntError>,
 {
     (
         object_id(),
         preceded(
-            ws_prefixed1(b"obj".as_slice()),
-            ws_prefixed1(indirect_object_content),
+            ws_prefixed0(b"obj".as_slice()),
+            ws_prefixed0(indirect_object_content),
         ),
     )
         .map(|(id, dict_or_bufpos)| match dict_or_bufpos {
@@ -360,18 +362,19 @@ where
     E: FromExternalError<S, ObjectValueError>,
     E: winnow::error::ParserError<&'a [u8]> + 'a,
     E: FromExternalError<S, FromHexError> + 'a,
+    E: AddContext<S, &'static str>,
     E: FromExternalError<S, ParseIntError>,
 {
     let o = object().parse_next(buf)?;
     let Object::Dictionary(dict) = o else {
-        ws_prefixed1(terminated(b"endobj".as_slice(), eol3())).parse_next(buf)?;
+        (wsc0(), b"endobj".as_slice(), eol3()).parse_next(buf)?;
         return Ok(Either::Left(o));
     };
     let len: Option<NonZeroU32> = match dict.get("Length") {
         Some(Object::Integer(l)) => Some(NonZeroU32::try_from(u32::try_from(*l).unwrap()).unwrap()),
         Some(Object::Reference(_)) => None,
         _ => {
-            ws_prefixed1(terminated(b"endobj".as_slice(), eol3())).parse_next(buf)?;
+            (wsc0(), b"endobj".as_slice(), eol3()).parse_next(buf)?;
             return Ok(Either::Left(Object::Dictionary(dict)));
         }
     };
@@ -385,8 +388,8 @@ where
             if let Some(len) = len {
                 (
                     take(u32::from(len)),
-                    ws_prefixed1(b"endstream".as_slice()),
-                    ws_prefixed1(terminated(b"endobj".as_slice(), eol3())),
+                    wsc_prefixed0(b"endstream".as_slice()),
+                    wsc_prefixed0(terminated(b"endobj".as_slice(), eol3())),
                 )
                     .parse_next(buf)?;
             }
@@ -395,7 +398,7 @@ where
         }
         Err(_) => {
             buf.reset(&saved_pos);
-            ws_prefixed1(terminated(b"endobj".as_slice(), eol3())).parse_next(buf)?;
+            (wsc0(), b"endobj".as_slice(), eol3()).parse_next(buf)?;
             Ok(Either::Left(Object::Dictionary(dict)))
         }
     }

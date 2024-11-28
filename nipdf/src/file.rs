@@ -8,8 +8,8 @@ use crate::{
         ObjectValueError, PdfObject, Resolver, RuntimeObjectId, Stream, TrailerDict,
     },
     parser::{
-        self, ParseResult, header_parser, parse_frame_set, parse_indirect_object,
-        parse_indirect_stream, ws_terminated, wsc0,
+        self, ParseResult, header_parser, indirect_object_def, parse_frame_set,
+        parse_indirect_object, parse_indirect_stream, ws_terminated, wsc_prefixed0, wsc0,
     },
 };
 use ahash::{HashMap, HashMapExt};
@@ -21,7 +21,10 @@ use once_cell::unsync::OnceCell;
 use prescript::{Name, sname};
 use snafu::Snafu;
 use std::{iter::repeat_with, str::from_utf8};
-use winnow::Parser as _;
+use winnow::{
+    Located, Parser as _,
+    error::{ContextError, InputError},
+};
 
 pub mod page;
 pub use page::*;
@@ -162,11 +165,18 @@ impl XRefTable {
     /// Scan IDOffsetMap by scan indirect object declaration,
     /// helps to create pdf file objects for testing.
     pub fn from_buf(buf: &[u8]) -> Self {
-        use crate::parser::{whitespace_or_comment, ws_prefixed};
-        use nom::{combinator::all_consuming, multi::many1};
+        use winnow::combinator::{repeat, terminated};
 
-        let (input, objects) = many1(ws_prefixed(parse_indirect_object))(buf).unwrap();
-        all_consuming(whitespace_or_comment)(input).unwrap();
+        let objects: Vec<_> = terminated(
+            repeat(
+                1..,
+                wsc_prefixed0(indirect_object_def::<_, ContextError<&'static str>>()),
+            ),
+            wsc0(),
+        )
+        .context("blah")
+        .parse(Located::new(buf))
+        .unwrap();
         let mut id_offset = IDOffsetMap::new();
         for o in objects {
             let search_key = format!("{} {} obj", o.id().id(), o.id().generation());

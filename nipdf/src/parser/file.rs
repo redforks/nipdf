@@ -229,6 +229,7 @@ where
     E: FromExternalError<S, ObjectValueError>,
     E: FromExternalError<S, FromHexError> + 'a,
     E: FromExternalError<S, ParseIntError> + 'a,
+    E: AddContext<S>,
 {
     let start = input.checkpoint();
     let IndirectObjectDef(_, s) = indirect_object_def::<S, E>().parse_next(input)?;
@@ -295,8 +296,8 @@ where
     <S as Stream>::IterOffsets: Clone,
     E: winnow::error::ParserError<S> + winnow::error::ParserError<&'a [u8]> + AddContext<S> + 'a,
     E: winnow::error::ParserError<Located<&'a [u8]>>
-        + Debug
         + AddContext<Located<&'a [u8]>>
+        + Debug
         + FromExternalError<Located<&'a [u8]>, ObjectValueError>
         + FromExternalError<Located<&'a [u8]>, FromHexError>
         + FromExternalError<Located<&'a [u8]>, ParseIntError>

@@ -13,7 +13,7 @@ mod object;
 mod object_now;
 pub(crate) use file::{header as header_parser, parse_frame_set};
 pub use object::*;
-pub(crate) use object_now::{dict_body, object};
+pub(crate) use object_now::{dict_body, indirect_object_def, object};
 use winnow::{
     Parser as _,
     stream::{Compare, ContainsToken, Stream, StreamIsPartial},
@@ -183,6 +183,18 @@ where
         repeat::<_, _, (), _, _>(1.., whitespace_now()).void(),
         inner,
     )
+}
+
+/// Convert a parser to a parser that prefixed with 0 or more whitespace.
+fn ws_prefixed0<'a, S, F, O, E>(inner: F) -> impl winnow::Parser<S, O, E> + 'a
+where
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+    F: winnow::Parser<S, O, E> + 'a,
+    O: 'a,
+    E: winnow::error::ParserError<S> + 'a,
+{
+    use winnow::combinator::{preceded, repeat};
+    preceded(repeat::<_, _, (), _, _>(.., whitespace_now()).void(), inner)
 }
 
 #[allow(clippy::needless_pass_by_value)]
