@@ -903,14 +903,6 @@ pub enum ObjectValueError {
     },
 }
 
-impl<'a> From<parser::ParseError<'a>> for ObjectValueError {
-    fn from(e: parser::ParseError<'_>) -> Self {
-        Self::ParseError {
-            message: format!("{:?}", e),
-        }
-    }
-}
-
 impl<I: winnow::stream::AsBStr, E: Display> From<winnow::error::ParseError<I, E>>
     for ObjectValueError
 {
