@@ -50,6 +50,8 @@ struct XRefSubSection {
 
 impl XRefSubSection {
     fn push_to(self, entries: &mut Vec<(u32, Entry)>) {
+        assert!(self.entries.len() < u32::MAX as usize);
+        #[allow(clippy::cast_possible_truncation)]
         for (i, entry) in self.entries.into_iter().enumerate() {
             entries.push((self.start_id + i as u32, Entry::InFile(entry)));
         }
@@ -241,7 +243,6 @@ where
         .decode_without_resolve_length(buf, None)
         .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?;
     let (a, b, c) = (d.w[0], d.w[1], d.w[2]);
-    (a, b, c);
     debug_assert_eq!(
         data.len() % (a + b + c) as usize,
         0,
@@ -281,7 +282,7 @@ where
     Ok((r, s.take_dict()))
 }
 
-pub(crate) fn parse_frame_set<'a, S, E>(buf: &mut S) -> PResult<FrameSet, E>
+pub(crate) fn parse_frame_set<'a, S, E>(buf: &S) -> PResult<FrameSet, E>
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial

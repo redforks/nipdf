@@ -151,7 +151,7 @@ impl CryptFilters {
     }
 }
 
-impl<'a, 'b> EncryptDict<'a, 'b> {
+impl EncryptDict<'_, '_> {
     pub fn crypt_filters(&self) -> CryptFilters {
         fn _do(this: &EncryptDict<'_, '_>) -> Result<CryptFilters> {
             if this.revison()? != StandardHandlerRevision::V4 {

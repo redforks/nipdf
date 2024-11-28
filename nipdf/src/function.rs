@@ -256,7 +256,7 @@ impl Function for PostScriptFunction {
     }
 }
 
-impl<'a, 'b> FunctionDict<'a, 'b> {
+impl FunctionDict<'_, '_> {
     fn signature(&self) -> Result<Signature> {
         Ok(Signature {
             domain: self.domain()?,
@@ -440,7 +440,7 @@ impl Function for SampledFunction {
     }
 }
 
-impl<'a, 'b> SampledFunctionDict<'a, 'b> {
+impl SampledFunctionDict<'_, '_> {
     /// Return SampledFunction instance which implements Function trait.
     pub fn func(&self) -> Result<SampledFunction> {
         let f = self.function_dict()?;
@@ -515,7 +515,7 @@ impl Function for ExponentialInterpolationFunction {
     }
 }
 
-impl<'a, 'b> ExponentialInterpolationFunctionDict<'a, 'b> {
+impl ExponentialInterpolationFunctionDict<'_, '_> {
     pub fn func(&self) -> Result<ExponentialInterpolationFunction> {
         let f = self.function_dict()?;
         Ok(ExponentialInterpolationFunction {
@@ -545,7 +545,7 @@ pub trait StitchingFunctionDictTrait {
     fn function_dict(&self) -> FunctionDict<'a, 'b>;
 }
 
-impl<'a, 'b> StitchingFunctionDict<'a, 'b> {
+impl StitchingFunctionDict<'_, '_> {
     pub fn func(&self) -> Result<StitchingFunction> {
         let functions = self
             .functions()?

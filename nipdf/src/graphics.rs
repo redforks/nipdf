@@ -253,7 +253,7 @@ pub enum NameOrStream<'b> {
     Stream(&'b Stream),
 }
 
-impl<'b> NameOrStream<'b> {
+impl NameOrStream<'_> {
     const IDENTITY: &'static Name = &sname("Identity");
 
     pub const fn identity() -> Self {

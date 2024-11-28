@@ -96,7 +96,7 @@ pub trait PathSink {
 
 pub struct PathSinkWrap<'a, P>(&'a mut P);
 
-impl<'a, S: PathSink> font_kit::outline::OutlineSink for PathSinkWrap<'a, S> {
+impl<S: PathSink> font_kit::outline::OutlineSink for PathSinkWrap<'_, S> {
     fn move_to(&mut self, to: Vector2F) {
         self.0.move_to(Point::new(to.x(), to.y()));
     }
@@ -123,7 +123,7 @@ impl<'a, S: PathSink> font_kit::outline::OutlineSink for PathSinkWrap<'a, S> {
     }
 }
 
-impl<'a, S: PathSink> OutlineBuilder for PathSinkWrap<'a, S> {
+impl<S: PathSink> OutlineBuilder for PathSinkWrap<'_, S> {
     fn move_to(&mut self, x: f32, y: f32) {
         self.0.move_to(Point::new(x, y));
     }
@@ -153,7 +153,7 @@ struct Type1GlyphRender<'a> {
     font: &'a FontKitFont,
 }
 
-impl<'a, P: PathSink> GlyphRender<P> for Type1GlyphRender<'a> {
+impl<P: PathSink> GlyphRender<P> for Type1GlyphRender<'_> {
     fn render(&self, gid: u16, sink: &mut P) -> Result<()> {
         self.font
             .outline(
@@ -177,7 +177,7 @@ pub trait Font<P> {
 struct EncodingParser<'a, 'b, 'c>(&'c FontDict<'a, 'b>);
 
 type EncodingPair<'a> = (Option<Name>, Option<EncodingDifferences<'a>>);
-impl<'a, 'b, 'c> EncodingParser<'a, 'b, 'c> {
+impl EncodingParser<'_, '_, '_> {
     fn by_name(name: &Name) -> Option<Encoding> {
         let r = Encoding::predefined(name);
         if r.is_none() {
@@ -335,7 +335,7 @@ impl<'a> Type1FontOp<'a> {
     }
 }
 
-impl<'a> FontOp for Type1FontOp<'a> {
+impl FontOp for Type1FontOp<'_> {
     fn decode_chars<'d>(&'d self, text: &'d [u8]) -> Result<Vec<u32>> {
         Ok(text.iter().map(|v| *v as u32).collect())
     }
@@ -404,7 +404,7 @@ impl<'a> Type1Font<'a> {
     }
 }
 
-impl<'a, P: PathSink> Font<P> for Type1Font<'a> {
+impl<P: PathSink> Font<P> for Type1Font<'_> {
     fn font_type(&self) -> FontType {
         FontType::Type1
     }
@@ -447,7 +447,7 @@ impl<'a> TTFParserFontOp<'a> {
 
 static GLYPH_NAME_TO_UNICODE: phf::Map<&'static str, u32> = include!("glyph_name_to_unicode.in");
 
-impl<'a> FontOp for TTFParserFontOp<'a> {
+impl FontOp for TTFParserFontOp<'_> {
     fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>> {
         Ok(s.iter().map(|v| *v as u32).collect())
     }
@@ -499,7 +499,7 @@ struct TTFParserGlyphRender<'a> {
     face: TTFFace<'a>,
 }
 
-impl<'a, P: PathSink> GlyphRender<P> for TTFParserGlyphRender<'a> {
+impl<P: PathSink> GlyphRender<P> for TTFParserGlyphRender<'_> {
     fn render(&self, gid: u16, sink: &mut P) -> Result<()> {
         self.face
             .outline_glyph(GlyphId(gid), &mut PathSinkWrap(sink));
@@ -524,7 +524,7 @@ impl<'a, 'b> TTFParserFont<'a, 'b> {
     }
 }
 
-impl<'a, 'b, P: PathSink> Font<P> for TTFParserFont<'a, 'b> {
+impl<P: PathSink> Font<P> for TTFParserFont<'_, '_> {
     fn font_type(&self) -> FontType {
         self.typ
     }
@@ -1137,7 +1137,7 @@ fn glyph_index(face: &TTFFace<'_>, ch: u32) -> Result<Option<u16>> {
     Ok(None)
 }
 
-impl<'a> FontOp for CIDFontType2FontOp<'a> {
+impl FontOp for CIDFontType2FontOp<'_> {
     fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>> {
         self.cmap.as_ref().map_or_else(
             || {
@@ -1235,7 +1235,7 @@ impl<'a, 'b> CIDFontType2Font<'a, 'b> {
     }
 }
 
-impl<'a, 'b, P: PathSink + 'static> Font<P> for CIDFontType2Font<'a, 'b> {
+impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
     fn font_type(&self) -> FontType {
         FontType::Type0
     }
@@ -1257,7 +1257,7 @@ impl<'a, 'b, P: PathSink + 'static> Font<P> for CIDFontType2Font<'a, 'b> {
     }
 }
 
-impl<'a, 'b, P: PathSink + 'static> Font<P> for CIDFontType0Font<'a, 'b> {
+impl<P: PathSink + 'static> Font<P> for CIDFontType0Font<'_, '_> {
     fn font_type(&self) -> FontType {
         FontType::Type0
     }
@@ -1305,7 +1305,7 @@ impl<'a> Type3FontOp<'a> {
     }
 }
 
-impl<'a> FontOp for Type3FontOp<'a> {
+impl FontOp for Type3FontOp<'_> {
     fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>> {
         Ok(s.iter().map(|v| *v as u32).collect())
     }
@@ -1389,7 +1389,7 @@ impl<'a, 'b> Type3Font<'a, 'b> {
     }
 }
 
-impl<'a, 'b, P: PathSink + 'static> Font<P> for Type3Font<'a, 'b> {
+impl<P: PathSink + 'static> Font<P> for Type3Font<'_, '_> {
     fn font_type(&self) -> FontType {
         FontType::Type3
     }

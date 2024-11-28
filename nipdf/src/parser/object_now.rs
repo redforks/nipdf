@@ -10,10 +10,7 @@ use ahash::HashMap;
 use either::Either;
 use hex::FromHexError;
 use prescript::Name;
-use std::{
-    borrow::Cow,
-    num::ParseIntError,
-};
+use std::{borrow::Cow, num::ParseIntError};
 use winnow::{
     PResult, Parser,
     ascii::{Caseless, dec_uint, float},
@@ -29,13 +26,7 @@ where
     E: winnow::error::ParserError<S> + 'a,
     E: FromExternalError<S, ObjectValueError>,
 {
-    preceded(
-        b'/',
-        take_till(0.., &[
-            b' ', b'\t', b'\r', b'\n', b'\x0C', b'[', b'<', b'(', b'/', b'>', b']',
-        ]),
-    )
-    .try_map(normalize_name)
+    preceded(b'/', take_till(0.., b" \t\r\n\x0C[<(/>]")).try_map(normalize_name)
 }
 
 /// Return `Err(ObjectValueError::InvalidNameFormat)` if the name is not a valid PDF name encoding,

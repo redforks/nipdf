@@ -396,7 +396,7 @@ macro_rules! schema_access {
     };
 }
 
-impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
+impl<'b, T: TypeValidator, R: Resolver> SchemaDict<'b, T, R> {
     schema_access!(bool, bool);
 
     schema_access!(int, i32);

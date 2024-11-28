@@ -358,7 +358,7 @@ fn decode_image<'a, M: ImageMetadata>(
     Ok(r)
 }
 
-impl<'a, 'b> ImageMetadata for ImageDict<'a, 'b> {
+impl ImageMetadata for ImageDict<'_, '_> {
     fn width(&self) -> Result<u32> {
         self.width()
     }

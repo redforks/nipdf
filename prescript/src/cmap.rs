@@ -763,7 +763,7 @@ macro_rules! built_in_ops {
     };
 }
 
-impl<'a> MachinePlugin for CMapMachinePlugin<'a> {
+impl MachinePlugin for CMapMachinePlugin<'_> {
     fn find_proc_set_resource<'b>(&self, name: &Name) -> Option<RuntimeDictionary<'b, Self>> {
         (name == "CIDInit").then(|| -> HashMap<Key, RuntimeValue<'_, Self>> {
             built_in_ops!(

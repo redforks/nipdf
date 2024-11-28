@@ -101,7 +101,7 @@ pub trait Type1FontDictTrait {
     fn to_unicode(&self) -> Option<&'b Stream>;
 }
 
-impl<'a, 'b> FontDict<'a, 'b> {
+impl FontDict<'_, '_> {
     fn resolve_name(&self) -> Result<Name> {
         if let Some(desc) = self.font_descriptor()? {
             return desc.font_name();
@@ -367,7 +367,7 @@ bitflags! {
 /// to glyph names from BaseEncoding.
 pub struct EncodingDifferences<'a>(HashMap<u8, &'a str>);
 
-impl<'a> EncodingDifferences<'a> {
+impl EncodingDifferences<'_> {
     pub fn apply_differences(&self, mut encoding: Encoding) -> Encoding {
         for (ch, n) in &self.0 {
             encoding[*ch as usize] = name(n);

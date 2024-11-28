@@ -351,7 +351,7 @@ fn build_run_huffman(algo: Algorithm) -> RunHuffmanTree {
             (PictualElement::MakeUp(2560), vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]),
             (PictualElement::NotDef(0), vec![0, 0, 0, 0, 0, 0, 0, 0]),
         ];
-    
+
     match algo {
         Algorithm::Group3_1D => {
             let len = white_codes.len();
@@ -400,7 +400,7 @@ fn next_run(
 
 struct LastLine<'a>(&'a BitSlice<u8, Msb0>);
 
-impl<'a> LastLine<'a> {
+impl LastLine<'_> {
     fn b1(&self, pos: Option<u32>, pos_color: bool) -> usize {
         let pos = self.next_flip(pos.map(|v| v as usize));
         if pos < self.0.len() && self.0[pos] == pos_color {

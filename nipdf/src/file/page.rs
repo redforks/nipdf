@@ -158,7 +158,7 @@ pub trait XObjectDictTrait {
     fn decode(&self) -> Option<Domains>;
 }
 
-impl<'a, 'b> XObjectDict<'a, 'b> {
+impl XObjectDict<'_, '_> {
     pub fn as_stream(&self) -> Result<&Stream, ObjectValueError> {
         self.d.resolver().resolve(self.id().unwrap())?.stream()
     }
@@ -247,7 +247,7 @@ pub(crate) trait PageDictTrait {
     fn rotate(&self) -> i32;
 }
 
-impl<'a, 'b> PageDict<'a, 'b> {
+impl PageDict<'_, '_> {
     pub fn is_leaf(&self) -> bool {
         self.type_name().unwrap() == sname("Page")
     }

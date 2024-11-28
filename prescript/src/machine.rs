@@ -68,7 +68,7 @@ pub(crate) enum RuntimeValue<'a, P> {
     ),
 }
 
-impl<'b, P> Display for RuntimeValue<'b, P> {
+impl<P> Display for RuntimeValue<'_, P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RuntimeValue::Mark => write!(f, "mark"),
@@ -99,7 +99,7 @@ impl<'b, P> Display for RuntimeValue<'b, P> {
     }
 }
 
-impl<'a, P> From<Name> for RuntimeValue<'a, P> {
+impl<P> From<Name> for RuntimeValue<'_, P> {
     fn from(v: Name) -> Self {
         Self::Value(Value::Name(v))
     }
@@ -190,7 +190,7 @@ rt_value_access!(
     Rc<RefCell<CurrentFile<'a>>>
 );
 
-impl<'a, P> RuntimeValue<'a, P> {
+impl<P> RuntimeValue<'_, P> {
     pub fn opt_number(&self) -> Option<Either<i32, f32>> {
         match self {
             Self::Value(Value::Integer(i)) => Some(Either::Left(*i)),
@@ -238,7 +238,7 @@ impl From<TokenArray> for Value {
     }
 }
 
-impl<'a, P> From<Value> for RuntimeValue<'a, P> {
+impl<P> From<Value> for RuntimeValue<'_, P> {
     fn from(v: Value) -> Self {
         Self::Value(v)
     }
@@ -279,7 +279,7 @@ pub enum Token {
     Name(Name),
 }
 
-impl<'a, P> From<Token> for RuntimeValue<'a, P> {
+impl<P> From<Token> for RuntimeValue<'_, P> {
     fn from(v: Token) -> Self {
         match v {
             Token::Literal(v) => Self::Value(v),
@@ -348,14 +348,14 @@ impl<const N: usize> From<[u8; N]> for Value {
     }
 }
 
-impl<'a, P, const N: usize> From<[u8; N]> for RuntimeValue<'a, P> {
+impl<P, const N: usize> From<[u8; N]> for RuntimeValue<'_, P> {
     fn from(v: [u8; N]) -> Self {
         let bytes: Vec<u8> = v.into();
         bytes.into()
     }
 }
 
-impl<'a, P> From<Vec<u8>> for RuntimeValue<'a, P> {
+impl<P> From<Vec<u8>> for RuntimeValue<'_, P> {
     fn from(v: Vec<u8>) -> Self {
         Value::String(Rc::new(RefCell::new(v))).into()
     }
@@ -367,7 +367,7 @@ impl From<Vec<u8>> for Value {
     }
 }
 
-impl<'a, P> From<&str> for RuntimeValue<'a, P> {
+impl<P> From<&str> for RuntimeValue<'_, P> {
     fn from(v: &str) -> Self {
         Value::from(v).into()
     }
@@ -385,7 +385,7 @@ impl From<Array> for Value {
     }
 }
 
-impl<'a, P> From<Array> for RuntimeValue<'a, P> {
+impl<P> From<Array> for RuntimeValue<'_, P> {
     fn from(v: Array) -> Self {
         Value::Array(Rc::new(RefCell::new(v))).into()
     }
@@ -626,7 +626,7 @@ pub enum ExecState {
     DefinesEncoding,
 }
 
-impl<'a, P> Machine<'a, P> {
+impl<P> Machine<'_, P> {
     pub fn take_plugin(self) -> P {
         self.p
     }
@@ -1698,7 +1698,7 @@ fn user_dict<'a, P>() -> RuntimeDictionary<'a, P> {
     RuntimeDictionary::new()
 }
 
-impl<'a, P: MachinePlugin> VariableDictStack<'a, P> {
+impl<P: MachinePlugin> VariableDictStack<'_, P> {
     fn new() -> Self {
         Self {
             stack: vec![

@@ -37,7 +37,7 @@ impl<'a> InlineStreamDict<'a> {
     }
 }
 
-impl<'a> ImageMetadata for InlineStreamDict<'a> {
+impl ImageMetadata for InlineStreamDict<'_> {
     fn width(&self) -> Result<u32> {
         self.alt_get(&sname("Width"), &sname("W"), |o| o.int().map(|v| v as u32))
             .whatever_context("get width")?

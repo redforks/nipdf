@@ -277,7 +277,7 @@ impl XRefTable {
 fn decrypt_string(encrypt_info: &EncryptInfo, id: ObjectId, mut o: Object) -> Object {
     struct Decryptor<'a>(&'a EncryptInfo, ObjectId);
 
-    impl<'a> Decryptor<'a> {
+    impl Decryptor<'_> {
         fn hex_string(&self, s: &mut HexString) {
             self.0.string_decrypt(self.1, &mut s.0);
         }
@@ -543,7 +543,7 @@ impl<'a> ObjectResolver<'a> {
     }
 }
 
-impl<'a> Resolver for ObjectResolver<'a> {
+impl Resolver for ObjectResolver<'_> {
     fn do_resolve_container_value<'b: 'c, 'c, C: DataContainer>(
         &'b self,
         c: &'c C,
@@ -666,7 +666,7 @@ fn open_encrypt(
 impl File {
     pub fn parse(buf: Vec<u8>, user_password: &str) -> Result<Self, FileError> {
         let head_ver = Some(from_utf8(header_parser().parse_next(&mut &buf[..]).unwrap()).unwrap());
-        let frame_set = parse_frame_set::<_, ContextError<&'static str>>(&mut &buf[..]).unwrap();
+        let frame_set = parse_frame_set::<_, ContextError<&'static str>>(&&buf[..]).unwrap();
         let xref = XRefTable::from_frame_set(&frame_set);
 
         let trailers: Vec<_> = frame_set.into_iter().map(|f| f.trailer).collect();
