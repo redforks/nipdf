@@ -116,20 +116,6 @@ where
     preceded(wsc0(), inner)
 }
 
-fn wsc_prefixed1<'a, S, F, O, E>(inner: F) -> impl Parser<S, O, E> + 'a
-where
-    S: Stream<Token = u8, Slice = &'a [u8]>
-        + StreamIsPartial
-        + Compare<u8>
-        + Compare<&'a [u8]>
-        + 'a,
-    F: Parser<S, O, E> + 'a,
-    O: 'a,
-    E: ParserError<S> + 'a,
-{
-    preceded(wsc1(), inner)
-}
-
 /// Convert a parser to a parser that prefixed with 1 or more whitespace.
 fn ws_prefixed1<'a, S, F, O, E>(inner: F) -> impl Parser<S, O, E> + 'a
 where

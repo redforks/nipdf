@@ -161,7 +161,6 @@ impl<'a> Iterator for LinesRev<'a> {
 }
 
 struct CrossReferenceStreamDict {
-    size: u32,
     index: Domains<u32>,
     w: Vec<u32>,
 }
@@ -184,7 +183,7 @@ impl CrossReferenceStreamDict {
             .map(|o| o.int().map(|v| v as u32))
             .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(Self { size, index, w })
+        Ok(Self { index, w })
     }
 
     pub fn iter_ids(&self) -> impl Iterator<Item = u32> + '_ {

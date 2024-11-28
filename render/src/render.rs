@@ -43,7 +43,6 @@ use tiny_skia::{
     Color as SkiaColor, FillRule, FilterQuality, Mask, MaskType, Paint, Path as SkiaPath,
     PathBuilder, Pixmap, PixmapPaint, PixmapRef, Rect, Stroke, StrokeDash, Transform,
 };
-use winnow::Parser as _;
 
 trait CloneOrMove {
     type Target;

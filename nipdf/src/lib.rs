@@ -31,17 +31,6 @@ pub fn log_err<E: std::error::Error>(v: Result<(), E>) {
     }
 }
 
-trait ResultExt<T, E>: Sized {
-    /// Convert the result to a unit result
-    fn remove_result(self) -> Result<(), E>;
-}
-
-impl<T, E> ResultExt<T, E> for Result<T, E> {
-    fn remove_result(self) -> Result<(), E> {
-        self.map(|_| ())
-    }
-}
-
 #[derive(Snafu, Debug)]
 pub enum ParserError<C: 'static = &'static str> {
     #[snafu(display("Parse error: {}", kind))]
