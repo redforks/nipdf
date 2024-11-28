@@ -1,4 +1,4 @@
-use super::{eol2, eol3, ws_prefixed0, ws_prefixed1, wsc_prefixed0, wsc0};
+use super::{eol2, eol3, ws_prefixed0, ws_prefixed1, wsc_prefixed0, wsc0, wsc1};
 use crate::{
     object::{
         BufPos, Dictionary, HexString, IndirectObjectDef, InnerString, LiteralString, Object,
@@ -333,7 +333,7 @@ where
         object_id(),
         preceded(
             ws_prefixed0(b"obj".as_slice()),
-            ws_prefixed0(indirect_object_content),
+            wsc_prefixed0(indirect_object_content),
         ),
     )
         .map(|(id, dict_or_bufpos)| match dict_or_bufpos {
@@ -367,14 +367,14 @@ where
 {
     let o = object().parse_next(buf)?;
     let Object::Dictionary(dict) = o else {
-        (wsc0(), b"endobj".as_slice(), eol3()).parse_next(buf)?;
+        (wsc0(), b"endobj".as_slice(), wsc0()).parse_next(buf)?;
         return Ok(Either::Left(o));
     };
     let len: Option<NonZeroU32> = match dict.get("Length") {
         Some(Object::Integer(l)) => Some(NonZeroU32::try_from(u32::try_from(*l).unwrap()).unwrap()),
         Some(Object::Reference(_)) => None,
         _ => {
-            (wsc0(), b"endobj".as_slice(), eol3()).parse_next(buf)?;
+            (wsc0(), b"endobj".as_slice(), wsc0()).parse_next(buf)?;
             return Ok(Either::Left(Object::Dictionary(dict)));
         }
     };
@@ -389,7 +389,7 @@ where
                 (
                     take(u32::from(len)),
                     wsc_prefixed0(b"endstream".as_slice()),
-                    wsc_prefixed0(terminated(b"endobj".as_slice(), eol3())),
+                    wsc_prefixed0(terminated(b"endobj".as_slice(), wsc0())),
                 )
                     .parse_next(buf)?;
             }
@@ -398,7 +398,7 @@ where
         }
         Err(_) => {
             buf.reset(&saved_pos);
-            (wsc0(), b"endobj".as_slice(), eol3()).parse_next(buf)?;
+            (wsc0(), b"endobj".as_slice(), wsc0()).parse_next(buf)?;
             Ok(Either::Left(Object::Dictionary(dict)))
         }
     }

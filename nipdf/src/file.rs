@@ -19,7 +19,7 @@ use nipdf_macro::pdf_object;
 use nom::Finish;
 use once_cell::unsync::OnceCell;
 use prescript::{Name, sname};
-use snafu::Snafu;
+use snafu::{ResultExt, Snafu};
 use std::{iter::repeat_with, str::from_utf8};
 use winnow::{
     Located, Parser as _,
@@ -174,7 +174,6 @@ impl XRefTable {
             ),
             wsc0(),
         )
-        .context("blah")
         .parse(Located::new(buf))
         .unwrap();
         let mut id_offset = IDOffsetMap::new();
@@ -254,9 +253,8 @@ impl XRefTable {
             .and_then(|buf| {
                 buf.either(
                     |buf| {
-                        parse_indirect_object(buf)
-                            .finish()
-                            .map(|(_, o)| {
+                        indirect_object_def::<_, crate::ParserError>()
+                            .map(|o| {
                                 let id = o.id();
                                 let o = o.take();
                                 if let Some(encrypt_info) = encrypt_info {
@@ -265,10 +263,11 @@ impl XRefTable {
                                     o
                                 }
                             })
+                            .parse_next(&mut Located::new(buf))
                             .map_err(ObjectValueError::from)
                     },
                     |buf| {
-                        parser::object::<_, winnow::error::ContextError>()
+                        parser::object::<_, crate::ParserError>()
                             .parse(buf)
                             .map_err(ObjectValueError::from)
                     },
@@ -442,7 +441,10 @@ impl<'a> ObjectResolver<'a> {
         id: impl Into<RuntimeObjectId>,
     ) -> Result<T, ObjectValueError> {
         let id = id.into();
-        let obj = self.resolve(id)?.as_dict()?;
+        let obj = self
+            .resolve(id)
+            .with_whatever_context::<_, _, ObjectValueError>(|_| format!("resolve object: {}", id))?
+            .as_dict()?;
         T::new(Some(id), obj, self)
     }
 
@@ -588,7 +590,9 @@ impl<'a> Catalog<'a> {
         resolver: &'a ObjectResolver<'a>,
     ) -> Result<Self, ObjectValueError> {
         Ok(Self {
-            d: resolver.resolve_pdf_object(id)?,
+            d: resolver
+                .resolve_pdf_object(id)
+                .whatever_context::<_, ObjectValueError>("resolve catalog")?,
         })
     }
 
@@ -641,7 +645,10 @@ fn open_encrypt(
 
     let resolver = ObjectResolver::new(buf, xref, None);
     let trailer = TrailerDict::new(None, trailer, &resolver)?;
-    let encrypt = trailer.encrypt().map_err(|_| FileError::InvalidFile)?;
+    let encrypt = trailer.encrypt().map_err(|e| {
+        dbg!(e);
+        FileError::InvalidFile
+    })?;
     let Some(encrypt) = encrypt else {
         return Ok(None);
     };
@@ -670,8 +677,7 @@ fn open_encrypt(
 impl File {
     pub fn parse(buf: Vec<u8>, user_password: &str) -> Result<Self, FileError> {
         let head_ver = Some(from_utf8(header_parser().parse_next(&mut &buf[..]).unwrap()).unwrap());
-        let frame_set =
-            parse_frame_set::<_, winnow::error::ContextError<&'static str>>(&mut &buf[..]).unwrap();
+        let frame_set = parse_frame_set::<_, ContextError<&'static str>>(&mut &buf[..]).unwrap();
         let xref = XRefTable::from_frame_set(&frame_set);
 
         let trailers: Vec<_> = frame_set.into_iter().map(|f| f.trailer).collect();

@@ -4,6 +4,7 @@ use crate::{
     parser::parse_dict,
 };
 use prescript::sname;
+use snafu::report;
 use std::path::PathBuf;
 
 #[test]
@@ -25,8 +26,9 @@ fn xref_table_resolve_object_buf() {
     assert_eq!(xref_table.resolve_object_buf(buf, 3, None), None);
 }
 
+#[report]
 #[test]
-fn object_resolver() {
+fn object_resolver() -> Result<(), ObjectValueError> {
     let buf = b"   2 0 obj 5 endobj 1 0 obj null endobj 3 0 obj 2 0 R endobj";
     let mut id_offset = IDOffsetMap::default();
     id_offset.insert(1.into(), ObjectPos::Offset(20));
@@ -35,9 +37,15 @@ fn object_resolver() {
     let xref_table = XRefTable::new(id_offset);
     let resolver = ObjectResolver::new(buf, &xref_table, None);
 
-    std::assert_eq!((resolver.resolve(1)).unwrap(), (&Object::Null));
-    std::assert_eq!((resolver.resolve(2)).unwrap(), (&Object::Integer(5)));
-    std::assert_eq!((resolver.resolve(1)).unwrap(), (&Object::Null));
+    std::assert_eq!(
+        resolver
+            .resolve(1)
+            .whatever_context::<_, ObjectValueError>("1")?,
+        &Object::Null
+    );
+    std::assert_eq!(resolver.resolve(2)?, &Object::Integer(5));
+    std::assert_eq!(resolver.resolve(1)?, &Object::Null);
+    Ok(())
 }
 
 #[test]
@@ -115,8 +123,9 @@ endobj
     Ok(())
 }
 
+#[report]
 #[test]
-fn resolve_one_or_more_pdf_object() {
+fn resolve_one_or_more_pdf_object() -> Result<(), ObjectValueError> {
     // object is dictionary
     let buf = b"1 0 obj <</foo 2 0 R>> endobj";
     let xref = XRefTable::from_buf(buf);
@@ -136,28 +145,27 @@ endobj"#;
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
     let id = Object::new_ref(1);
-    let list = resolver
-        .resolve_one_or_more_pdf_object::<FooDict<'_, '_>>(&id)
-        .unwrap();
+    let list = resolver.resolve_one_or_more_pdf_object::<FooDict<'_, '_>>(&id)?;
     assert_eq!(list.len(), 1);
     assert_eq!(Some(1.into()), list[0].id());
 
     // object is array
     let buf = br#"1 0 obj [2 0 R<<>>] endobj
-2 0 obj<<>>endobj"#;
+    2 0 obj<<>>endobj"#;
     let xref = XRefTable::from_buf(buf);
     let resolver = ObjectResolver::new(buf, &xref, None);
     let id = Object::new_ref(1);
-    let list = resolver
-        .resolve_one_or_more_pdf_object::<FooDict<'_, '_>>(&id)
-        .unwrap();
+    let list = resolver.resolve_one_or_more_pdf_object::<FooDict<'_, '_>>(&id)?;
     assert_eq!(list.len(), 2);
     assert_eq!(Some(2.into()), list[0].id());
     assert_eq!(None, list[1].id());
+
+    Ok(())
 }
 
+#[report]
 #[test]
-fn parse_file() {
+fn parse_file() -> Result<(), ObjectValueError> {
     let mut p = PathBuf::from(file!());
     assert_eq!(
         p.pop()
@@ -172,5 +180,7 @@ fn parse_file() {
     let buf = std::fs::read(p).unwrap();
     let f = File::parse(buf, "").unwrap();
     let resolver = f.resolver().unwrap();
-    assert_eq!(Some("1.5".to_owned()), f.version(&resolver).unwrap());
+    assert_eq!(Some("1.5".to_owned()), f.version(&resolver)?);
+
+    Ok(())
 }

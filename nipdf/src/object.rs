@@ -666,7 +666,12 @@ impl<'a, 'b, T: TypeValidator, R: 'a + Resolver> SchemaDict<'b, T, R> {
         &self,
         id: &Name,
     ) -> Result<Option<O>, ObjectValueError> {
-        if let Some((id, obj)) = self._opt_resolve_container_value(id)? {
+        if let Some((id, obj)) = self
+            ._opt_resolve_container_value(id)
+            .with_whatever_context::<_, _, ObjectValueError>(|_| {
+                format!("resolve object from dict: {}", id)
+            })?
+        {
             match obj {
                 Object::Dictionary(d) => Ok(Some(O::new(id, d, self.r)?)),
                 Object::Stream(s) => Ok(Some(O::new(id, s.as_dict(), self.r)?)),
@@ -910,6 +915,14 @@ impl<I: winnow::stream::AsBStr, E: Display> From<winnow::error::ParseError<I, E>
     for ObjectValueError
 {
     fn from(e: winnow::error::ParseError<I, E>) -> Self {
+        Self::ParseError {
+            message: format!("{}", e),
+        }
+    }
+}
+
+impl<E: Debug> From<winnow::error::ErrMode<E>> for ObjectValueError {
+    fn from(e: winnow::error::ErrMode<E>) -> Self {
         Self::ParseError {
             message: format!("{}", e),
         }
