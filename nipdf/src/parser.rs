@@ -9,11 +9,9 @@ use nom::{
 use snafu::Snafu;
 
 mod file;
-mod object;
 mod object_now;
 pub(crate) use file::{header as header_parser, parse_frame_set};
-pub use object::*;
-pub(crate) use object_now::{dict_body, indirect_object_def, object};
+pub(crate) use object_now::{dict, dict_body, indirect_object_def, object};
 use winnow::{
     Parser as _,
     stream::{Compare, ContainsToken, Stream, StreamIsPartial},

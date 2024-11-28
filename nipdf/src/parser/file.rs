@@ -1,4 +1,4 @@
-use super::{eol3, object_now::dict, wsc0, wsc1};
+use super::{dict, eol3, wsc0, wsc1};
 use crate::{
     ParserError,
     function::{Domain, Domains},

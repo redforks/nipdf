@@ -8,23 +8,19 @@ use crate::{
         ObjectValueError, PdfObject, Resolver, RuntimeObjectId, Stream, TrailerDict,
     },
     parser::{
-        self, ParseResult, header_parser, indirect_object_def, parse_frame_set,
-        parse_indirect_object, parse_indirect_stream, ws_terminated, wsc_prefixed0, wsc0,
+        self, ParseResult, header_parser, indirect_object_def, parse_frame_set, ws_terminated,
+        wsc_prefixed0, wsc0,
     },
 };
 use ahash::{HashMap, HashMapExt};
 use either::Either;
 use log::error;
 use nipdf_macro::pdf_object;
-use nom::Finish;
 use once_cell::unsync::OnceCell;
 use prescript::{Name, sname};
-use snafu::{ResultExt, Snafu};
+use snafu::{ResultExt, Snafu, whatever};
 use std::{iter::repeat_with, str::from_utf8};
-use winnow::{
-    Located, Parser as _,
-    error::{ContextError, InputError},
-};
+use winnow::{Located, Parser as _, error::ContextError};
 
 pub mod page;
 pub use page::*;
@@ -214,13 +210,22 @@ impl XRefTable {
         id: impl Into<RuntimeObjectId>,
         encrypt_info: Option<&EncryptInfo>,
     ) -> Option<Either<&'a [u8], &'b [u8]>> {
+        fn parse_indirect_stream(input: &[u8]) -> Result<Stream, ObjectValueError> {
+            let (_, o) = indirect_object_def::<_, ContextError<&'static str>>()
+                .parse_peek(Located::new(input))?;
+            let Object::Stream(s) = o.take() else {
+                whatever!("expected stream");
+            };
+            Ok(s)
+        }
+
         self.id_offset.get(&id.into()).map(|entry| match entry {
             ObjectPos::Offset(offset) => Either::Left(&buf[*offset as usize..]),
             ObjectPos::InStream(id, idx) => {
                 let object_stream = self.object_streams[id]
                     .get_or_try_init(|| {
                         let obj_buf = self.resolve_object_buf(buf, *id, encrypt_info).unwrap();
-                        let (_, mut stream) = parse_indirect_stream(&obj_buf).unwrap();
+                        let mut stream = parse_indirect_stream(&obj_buf).unwrap();
                         let length = stream.0.get("Length").cloned();
                         // Some pdf file use indirect object to store length, which it is not
                         // allowed by pdf file standard, but anyway, we

@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    object::{Object, SchemaDict},
-    parser::parse_dict,
-};
+use crate::object::{Object, SchemaDict};
 use prescript::sname;
 use snafu::report;
 use std::path::PathBuf;
@@ -51,7 +48,7 @@ fn object_resolver() -> Result<(), ObjectValueError> {
 #[test]
 fn object_resolver_resolve_container_value() {
     let dict = b"<</a 1>>";
-    let (_, dict) = parse_dict(dict).unwrap();
+    let dict = parser::dict::<_, ContextError>.parse(&dict[..]).unwrap();
     let xref = XRefTable::empty();
     let resolver = ObjectResolver::empty(&xref);
 
