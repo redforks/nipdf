@@ -16,7 +16,6 @@ either.workspace = true
 euclid.workspace = true
 image.workspace = true
 educe.workspace = true
-nom.workspace = true
 num-traits.workspace = true
 snafu.workspace = true
 winnow.workspace = true

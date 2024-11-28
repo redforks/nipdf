@@ -10,7 +10,6 @@ description = "A PDF library written in Rust"
 [dependencies]
 hex.workspace = true
 once_cell.workspace = true
-nom.workspace = true
 num-traits.workspace = true
 memchr.workspace = true
 ahash.workspace = true
