@@ -6,7 +6,7 @@ use crate::{
         Dictionary, Entry, FilePos, Frame, FrameSet, IndirectObjectDef, ObjectValueError,
         RuntimeObjectId, XRefSection,
     },
-    parser::object_now::indirect_object_def,
+    parser::object::indirect_object_def,
 };
 use hex::FromHexError;
 use log::{info, warn};

@@ -1,108 +1,134 @@
 use super::*;
+use crate::{
+    ParserError,
+    file::{report_parse_err, report_peek_err},
+};
+use prescript::sname;
 use test_case::test_case;
+use winnow::Located;
 
-#[test_case(vec![], "[]"; "empty array")]
-#[test_case(vec![], "[ \t]"; "empty array 2")]
-#[test_case(vec![Object::Null], "[null]"; "array with null")]
-#[test_case(vec![Object::Array(vec![Object::Null].into())], "[[null]]"; "nested array with null")]
-#[test_case(vec![sname("foo").into()], "[/foo]"; "name value")]
-fn test_parse_array(exp: Vec<Object>, buf: &'static str) {
-    assert_eq!(
-        (b"".as_slice(), exp.into()),
-        parse_array(buf.as_bytes()).unwrap()
-    );
+fn new_hex_string(s: &str) -> Object {
+    Object::HexString(HexString(s.as_bytes().into()))
 }
 
-#[test_case(b"<< >>", "empty dict")]
-#[test_case(b"<<>>", "empty dict 2")]
-#[test_case(b"<< /Type /Catalog >>", "dict with one entry")]
-#[test_case(b"<</Inner<<>>>>", "nested")]
-#[test_case(b"<</id[]>>", "empty array")]
-#[test_case(b"<</id()>>", "string value")]
-#[test_case(b"<</id/Value>>", "name value")]
-#[test_case(b"<</id/>>", "empty name value")]
-#[test_case(b"<<//id>>", "empty name key")]
-#[test_case(b"<</id<<>>>>", "nested empty dict")]
-fn test_parse_dict(buf: impl AsRef<[u8]>, name: &str) {
-    insta::assert_debug_snapshot!(name, parse_dict(buf.as_ref()).unwrap());
+#[test_case("null" => Object::Null)]
+#[test_case("true" => Object::Bool(true))]
+#[test_case("false" => Object::Bool(false))]
+#[test_case("123" => Object::Integer(123); "integer")]
+#[test_case("-123" => Object::Integer(-123); "negative integer")]
+#[test_case("+123" => Object::Integer(123); "integer prefixed with +")]
+#[test_case("32488685" => Object::Integer(32488685); "integer can not cast from float")]
+#[test_case("4294967296" => Object::Number(4294967296f32); "integer out of range")]
+#[test_case("123.12" => Object::Number(123.12); "number")]
+#[test_case("-123.12" => Object::Number(-123.12); "negative number")]
+#[test_case("-" => Object::Integer(0); "negative symbol only")]
+#[test_case("+123.12" => Object::Number(123.12); "number prefixed with +")]
+#[test_case("4.0" => Object::Number(4.); "number end with dot")]
+#[test_case("4.58984938980.04" => Object::Number(4.589_849_5); "number ignore 2nd dot")]
+#[test_case("-.002" => Object::Number(-0.002); "number start with dot")]
+#[test_case("/" => Object::Name(sname("")); "empty name")]
+#[test_case("/foo" => Object::Name(sname("foo")); "name")]
+#[test_case("/@foo" => Object::Name(sname("@foo")); "special name")]
+#[test_case("/foo#20bar" => Object::Name(sname("foo bar")); "contains hex")]
+#[test_case("<>" => new_hex_string(""); "empty hex string")]
+#[test_case("<20>" => new_hex_string(" "); "one hex string")]
+#[test_case("<200a0d>" => new_hex_string(" \n\r"); "hex string")]
+#[test_case("<20 0a\t 0d>" => new_hex_string(" \n\r"); "hex ignore space")]
+#[test_case("<201F2>" => new_hex_string("\x20\x1f "); "odd hex char" )]
+#[test_case("[]" => Object::Array(vec![].into()); "empty array")]
+#[test_case("[%comment\n]" => Object::Array(vec![].into()); "array contains comment")]
+#[test_case("[ \t]" => Object::Array(vec![].into()); "array with space and tab")]
+#[test_case("[null/foo[true]]" => Object::Array(vec![
+    Object::Null,
+    Object::Name(sname("foo")),
+    Object::Array(vec![Object::Bool(true)].into())
+].into()); "nested array with null, name, and boolean")]
+#[test_case("<<>>" => Object::Dictionary(Dictionary::new()); "empty dict")]
+#[test_case("<< /Type 1 >>" => Object::Dictionary({
+    let mut dict = HashMap::default();
+    dict.insert(sname("Type"), Object::Integer(1));
+    Dictionary::from(dict)
+}); "dictionary with name and integer")]
+#[test_case("1 0 R" => Object::Reference(Reference::new(1, 0)); "reference")]
+fn parse_object(buf: &str) -> Object {
+    report_parse_err(object::<_, ParserError>().parse(buf.as_bytes()))
 }
 
-#[test_case(
-    b"1 0 obj
-null
-endobj",
-    "null"
-)]
-#[test_case(b"1 0 obj 25endobj", "no whitespace between number and endobj")]
-#[test_case(
-    b"
-1 0 obj 25endobj",
-    "start with endline"
-)]
-fn test_parse_indirected_object(buf: impl AsRef<[u8]>, name: &str) {
-    insta::assert_debug_snapshot!(name, parse_indirect_object(buf.as_ref()).unwrap());
-}
-
-#[test_case(b"1 0 R", "simple")]
-fn test_parse_reference(buf: impl AsRef<[u8]>, name: &str) {
-    insta::assert_debug_snapshot!(name, parse_reference(buf.as_ref()).unwrap());
-}
-
-#[test_case("foo", b"/foo")]
-#[test_case("a#b", b"/a#23b")]
-#[test_case("Ab", b"/#41#62")]
-#[test_case("#A5#A5", b"/#A5#A5")]
-#[test_case("a#A5#A5", b"/a#A5#A5")]
-fn name_normalize(exp: impl AsRef<str>, name: impl AsRef<[u8]>) {
-    assert_eq!(normalize_name(name.as_ref()).unwrap(), exp.as_ref());
+#[test_case(b"()bar" => (b"bar".as_ref(), "".to_owned()); "empty")]
+#[test_case(b"(foo)bar" => (b"bar".as_ref(), "foo".to_owned()); "normal")]
+#[test_case(b"(\n)" => (b"".as_ref(), "\n".to_owned()); "contains newline")]
+#[test_case(b"(())bar" => (b"bar".as_ref(), "()".to_owned()); "nested empty")]
+#[test_case(b"((foo))bar" => (b"bar".as_ref(), "(foo)".to_owned()); "nested")]
+#[test_case(b"(foo\\nbar)" => (b"".as_ref(), "foo\nbar".to_owned()); "escaped newline in string")]
+#[test_case(b"(foo\\rbar)" => (b"".as_ref(), "foo\rbar".to_owned()); "escaped carriage return in string")]
+#[test_case(b"(foo\\tbar)" => (b"".as_ref(), "foo\tbar".to_owned()); "escaped tab in string")]
+#[test_case(b"(foo\\bbar)" => (b"".as_ref(), "foo\x08bar".to_owned()); "escaped backspace in string")]
+#[test_case(b"(foo\\fbar)" => (b"".as_ref(), "foo\x0Cbar".to_owned()); "escaped form feed in string")]
+#[test_case(b"(foo\\(bar)" => (b"".as_ref(), "foo(bar".to_owned()); "escaped left parenthesis in string")]
+#[test_case(b"(foo\\)bar)" => (b"".as_ref(), "foo)bar".to_owned()); "escaped right parenthesis in string")]
+#[test_case(b"(\\a)" => (b"".as_ref(), "a".to_owned()); "other char escaped to it self")]
+#[test_case(b"(\\040)" => (b"".as_ref(), " ".to_owned()); "escaped octal")]
+#[test_case(b"(\\7)" => (b"".as_ref(), "\u{7}".to_owned()); "escaped with one octal")]
+#[test_case(b"(\\12)" => (b"".as_ref(), "\n".to_owned()); "escaped with two octal")]
+#[test_case(b"(\\1414)" => (b"".as_ref(), "a4".to_owned()); "escaped with fourc octal")]
+#[test_case(b"(Line1 \\\nLine2 \\\rLine3)" => (b"".as_ref(), "Line1 Line2 Line3".to_owned()); "escaped newline")]
+fn test_parse_quoted_string(input: &[u8]) -> (&[u8], String) {
+    let (rest, r) = report_peek_err(parse_quoted_string::<_, ParserError>.parse_peek(input));
+    (rest, r.as_str().to_string())
 }
 
 #[test]
-fn test_parse_object_and_stream() {
-    // length is int
-    let buf = br#"<</Length 4>>
-stream
-1234
-endstream
-"#;
-    let (input, o) = parse_object_and_stream(buf).unwrap();
-    assert_eq!(input, b"\n");
-    let (_, start, length) = o.right().unwrap();
-    assert_eq!(21, start);
-    assert_eq!(Some(4), length);
+fn test_parse_indirect_object_def() -> Result<(), ParserError> {
+    let o = indirect_object_def::<_, ParserError<&'static str>>()
+        .parse(Located::new(b"100 0 obj\n<<>>\nendobj\n".as_slice()))
+        .map_err(winnow::error::ParseError::into_inner)?;
+    assert_eq!(o.1, Dictionary::default().into());
 
-    // length is ref
-    let buf = br#"<</Length 1 0 R>>
-stream
-blah
-endstream
-"#;
-    let (input, o) = parse_object_and_stream(buf).unwrap();
-    assert_eq!(input[0], b'b');
-    assert!(input.len() > 4);
-    let (_, start, length) = o.right().unwrap();
-    assert_eq!(25, start);
-    assert_eq!(None, length);
+    let o = indirect_object_def::<_, ParserError<&'static str>>()
+        .parse(Located::new(b"100 0 obj<<>>endobj\n".as_slice()))
+        .map_err(winnow::error::ParseError::into_inner)?;
+    assert_eq!(o.1, Dictionary::default().into());
 
-    // endstream precede with cr
-    let buf = b"<</Length 4>>
-stream
-1234\rendstream
-";
-    let (input, o) = parse_object_and_stream(buf).unwrap();
-    assert_eq!(input, b"\n");
-    let (_, start, length) = o.right().unwrap();
-    assert_eq!(21, start);
-    assert_eq!(Some(4), length);
+    let mut dict = HashMap::default();
+    dict.insert(sname("Length"), Object::Integer(2));
+    let dict = Dictionary::from(dict);
+    let o = indirect_object_def::<_, ParserError>()
+        .parse(Located::new(
+            b"100 0 obj\n<</Length 2>>\nendobj\n".as_slice(),
+        ))
+        .map_err(winnow::error::ParseError::into_inner)?;
+    assert_eq!(o.1, dict.clone().into());
 
-    // length is 0
-    let buf = b"<</Length 0>>
-stream
-endstream
-";
-    let (input, o) = parse_object_and_stream(buf).unwrap();
-    assert_eq!(input, b"\n");
-    let (_, start, length) = o.right().unwrap();
-    assert_eq!(21, start);
-    assert_eq!(Some(0), length);
+    let o = indirect_object_def::<_, ParserError>()
+        .parse(Located::new(
+            b"100 1 obj\n<</Length 2>>\nstream\n  \nendstream\nendobj\n".as_slice(),
+        ))
+        .map_err(winnow::error::ParseError::into_inner)?;
+    assert_eq!(
+        o.1,
+        Object::Stream(PdfStream(
+            dict,
+            BufPos::new(31, Some(2u32)),
+            ObjectId::new(100, 1)
+        ))
+    );
+
+    let mut dict = HashMap::default();
+    dict.insert(sname("Length"), Object::Reference(Reference::new(10, 0)));
+    let dict = Dictionary::from(dict);
+    let o = indirect_object_def::<_, ParserError>()
+        .parse(Located::new(
+            b"100 1 obj\n<</Length 10 0 R>>\nstream\n".as_slice(),
+        ))
+        .map_err(winnow::error::ParseError::into_inner)?;
+    assert_eq!(
+        o.1,
+        Object::Stream(PdfStream(
+            dict,
+            BufPos::new(36, None),
+            ObjectId::new(100, 1)
+        ))
+    );
+
+    Ok(())
 }
