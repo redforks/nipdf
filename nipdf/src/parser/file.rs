@@ -10,6 +10,7 @@ use crate::{
 use hex::FromHexError;
 use log::{info, warn};
 use prescript::sname;
+use snafu::ResultExt;
 use std::{
     fmt::Debug,
     num::{ParseIntError, TryFromIntError},
@@ -348,7 +349,13 @@ where
         next_pos = f
             .trailer
             .get(&sname("Prev"))
-            .map(|o| o.int().unwrap().try_into().unwrap());
+            .map(|o| {
+                o.int()?
+                    .try_into()
+                    .whatever_context::<_, ObjectValueError>("Prev to usize")
+            })
+            .transpose()
+            .map_err(|e| ErrMode::from_external_error(&bytes, ErrorKind::Fail, e))?;
         r.push(f);
     }
     Ok(r)
