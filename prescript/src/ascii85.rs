@@ -1,5 +1,5 @@
-use std::error::Error;
-
+//! Copied from https://github.com/JoNil/ascii85, because the original crate returns error [Box<dyn Error>]
+//! We require a error that implements [Sync] and [Send].
 const TABLE: [u32; 5] = [85 * 85 * 85 * 85, 85 * 85 * 85, 85 * 85, 85, 1];
 
 fn decode_digit(digit: u8, counter: &mut usize, chunk: &mut u32, result: &mut Vec<u8>) {
@@ -16,7 +16,17 @@ fn decode_digit(digit: u8, counter: &mut usize, chunk: &mut u32, result: &mut Ve
     }
 }
 
-pub fn decode(input: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+use snafu::Snafu;
+
+#[derive(Debug, Snafu)]
+pub enum Ascii85Error {
+    #[snafu(display("Misaligned 'z' in input"))]
+    MisalignedZ,
+    #[snafu(display("Input char is out of range for Ascii85"))]
+    CharOutOfRange,
+}
+
+pub fn decode(input: &str) -> Result<Vec<u8>, Ascii85Error> {
     let mut result = Vec::with_capacity(4 * (input.len() / 5 + 16));
 
     let mut counter = 0;
@@ -34,12 +44,12 @@ pub fn decode(input: &str) -> Result<Vec<u8>, Box<dyn Error>> {
             if counter == 0 {
                 result.extend_from_slice(&[0, 0, 0, 0]);
             } else {
-                return Err("Missaligned z in input".into());
+                return Err(Ascii85Error::MisalignedZ);
             }
         }
 
         if digit < 33 || digit > 117 {
-            return Err("Input char is out of range for Ascii85".into());
+            return Err(Ascii85Error::CharOutOfRange);
         }
 
         decode_digit(digit, &mut counter, &mut chunk, &mut result);

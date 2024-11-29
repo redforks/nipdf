@@ -1,5 +1,5 @@
 use crate::{
-    ascii85,
+    ascii85::{self, Ascii85Error},
     machine::{Token, TokenArray, Value},
     name,
     type1::Header,
@@ -50,7 +50,7 @@ pub enum ParserError<C: 'static = StrContext> {
         context: Option<C>,
     },
     Ascii85 {
-        source: Box<dyn std::error::Error>,
+        source: Ascii85Error,
         context: Option<C>,
     },
 }
@@ -72,7 +72,7 @@ enum PossibleError {
     Utf8(Utf8Error),
     Utf8Str(FromUtf8Error),
     Int(ParseIntError),
-    Ascii85(Box<dyn std::error::Error>),
+    Ascii85(Ascii85Error),
 }
 
 impl From<Utf8Error> for PossibleError {
@@ -93,8 +93,8 @@ impl From<ParseIntError> for PossibleError {
     }
 }
 
-impl From<Box<dyn std::error::Error>> for PossibleError {
-    fn from(value: Box<dyn std::error::Error>) -> Self {
+impl From<Ascii85Error> for PossibleError {
+    fn from(value: Ascii85Error) -> Self {
         PossibleError::Ascii85(value)
     }
 }
