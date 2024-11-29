@@ -48,7 +48,7 @@ pub fn decode(input: &str) -> Result<Vec<u8>, Ascii85Error> {
             }
         }
 
-        if digit < 33 || digit > 117 {
+        if !(33..=117).contains(&digit) {
             return Err(Ascii85Error::CharOutOfRange);
         }
 

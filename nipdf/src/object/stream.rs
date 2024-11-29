@@ -21,7 +21,6 @@ use log::error;
 use nipdf_macro::pdf_object;
 use num_traits::ToPrimitive;
 use prescript::{AnyWhatever, Name, sname};
-use snafu::Whatever;
 use std::{
     borrow::{Borrow, Cow},
     cell::LazyCell,

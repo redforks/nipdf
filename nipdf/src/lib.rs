@@ -3,11 +3,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 #![cfg_attr(test, allow(clippy::expect_used))]
 
-use snafu::{Error, Snafu, Whatever};
-use winnow::{
-    error::{AddContext, ErrorConvert, ErrorKind, FromExternalError, ParseError},
-    stream::Stream,
-};
+use snafu::Error;
 
 mod ascii85;
 mod ccitt;
