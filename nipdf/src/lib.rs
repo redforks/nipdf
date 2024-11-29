@@ -3,7 +3,10 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 #![cfg_attr(test, allow(clippy::expect_used))]
 
-use snafu::{Snafu, Whatever};
+use snafu::{
+    AsBacktrace, AsErrorSource, Backtrace, Error, ErrorCompat, FromString, GenerateImplicitData,
+    Snafu, Whatever,
+};
 use winnow::{
     error::{AddContext, ErrorConvert, ErrorKind, FromExternalError, ParseError},
     stream::Stream,
@@ -22,7 +25,7 @@ pub mod text;
 type Result<T, E = Whatever> = std::result::Result<T, E>;
 
 /// Error logging if the result is an error, panic in debug mode
-pub fn log_err<E: std::error::Error>(v: Result<(), E>) {
+pub fn log_err<E: Error>(v: Result<(), E>) {
     if let Err(e) = v {
         log::error!("{}", e);
 
@@ -46,13 +49,13 @@ pub enum ParserError<C: 'static = &'static str> {
     Other {
         kind: ErrorKind,
         context: Vec<C>,
-        source: Box<dyn std::error::Error>,
+        source: Box<dyn Error>,
     },
 }
 
 impl<I, E, C> FromExternalError<I, E> for ParserError<C>
 where
-    E: std::error::Error + 'static,
+    E: Error + 'static,
     C: 'static,
 {
     fn from_external_error(_: &I, kind: ErrorKind, e: E) -> Self {
@@ -110,4 +113,18 @@ impl<I: Stream> winnow::error::ParserError<I> for ParserError {
             source: Box::new(self),
         }
     }
+}
+
+/// Like [snafu::Whatever], but implement [Send + Sync]
+#[derive(Debug, Snafu)]
+#[snafu(crate_root(crate))]
+#[snafu(whatever)]
+#[snafu(display("{message}"))]
+#[snafu(provide(opt, ref, chain, dyn std::error::Error => source.as_deref()))]
+pub struct AnyWhatever {
+    #[snafu(source(from(Box<dyn Error + Send + Sync>, Some)))]
+    #[snafu(provide(false))]
+    source: Option<Box<dyn Error + Send + Sync>>,
+    message: String,
+    backtrace: Backtrace,
 }
