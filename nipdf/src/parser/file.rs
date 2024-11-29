@@ -1,5 +1,6 @@
 use super::{dict, eol3, wsc0, wsc1};
 use crate::{
+    AnyWhatever,
     function::{Domain, Domains},
     object::{
         Dictionary, Entry, FilePos, Frame, FrameSet, IndirectObjectDef, ObjectValueError,
@@ -9,9 +10,11 @@ use crate::{
 };
 use hex::FromHexError;
 use log::{info, warn};
+use num_traits::{NumCast, Unsigned};
 use prescript::sname;
-use snafu::ResultExt;
+use snafu::{OptionExt, ResultExt};
 use std::{
+    borrow::Cow,
     fmt::Debug,
     num::{ParseIntError, TryFromIntError},
 };
@@ -19,8 +22,8 @@ use winnow::{
     Located, PResult, Parser,
     ascii::{Caseless, dec_uint},
     binary::{be_u8, be_u16, be_u24, be_u32},
-    combinator::{alt, delimited, empty, preceded, repeat, separated_pair, seq, terminated},
-    error::{AddContext, ErrMode, ErrorKind, FromExternalError, ParserError},
+    combinator::{alt, delimited, empty, fail, preceded, repeat, separated_pair, seq, terminated},
+    error::{AddContext, ContextError, ErrMode, ErrorKind, FromExternalError, ParserError},
     stream::{AsBStr, AsChar, Compare, Location, Stream, StreamIsPartial},
     token::{one_of, take},
 };
@@ -177,9 +180,9 @@ impl CrossReferenceStreamDict {
             .ok_or(ObjectValueError::DictKeyNotFound)?
             .int()? as u32;
         let index = d.get(&sname("Index")).map_or_else(
-            || Domains(vec![Domain::new(0, size)]),
-            |o| Domains::<u32>::try_from(o).unwrap(),
-        );
+            || Ok(Domains(vec![Domain::new(0, size)])),
+            Domains::<u32>::try_from,
+        )?;
         let w = d
             .get(&sname("W"))
             .ok_or(ObjectValueError::DictKeyNotFound)?
@@ -201,18 +204,25 @@ impl CrossReferenceStreamDict {
 /// Return nom parser to parse u32 value by byte length (0, 1, 2, 3, 4),
 /// if n is 0, return parser takes 0 bytes and returns `default_value`
 /// if n > 1, n32 stored in big endian n bytes.
-fn segment_parser<'a, S, E>(n: u32, default_value: u32) -> Box<dyn Parser<S, u32, E> + 'a>
+fn segment_parser<'a, T, S, E>(n: u32, default_value: T) -> Box<dyn Parser<S, T, E> + 'a>
 where
+    T: Unsigned + NumCast + Copy + From<u8> + From<u16> + 'static,
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
-    E: ParserError<S> + 'a,
+    E: ParserError<S> + FromExternalError<S, AnyWhatever> + 'a,
 {
+    use num_traits::cast;
+
     match n {
         0 => Box::new(empty.value(default_value)),
         1 => Box::new(be_u8.output_into()),
         2 => Box::new(be_u16.output_into()),
-        3 => Box::new(be_u24),
-        4 => Box::new(be_u32),
-        _ => unreachable!(),
+        3 => Box::new(
+            be_u24.try_map(|v| cast(v).whatever_context::<_, AnyWhatever>("Cast from u32")),
+        ),
+        4 => Box::new(
+            be_u32.try_map(|v| cast(v).whatever_context::<_, AnyWhatever>("Cast from u32")),
+        ),
+        _ => Box::new(fail),
     }
 }
 
@@ -235,16 +245,20 @@ where
         + FromExternalError<S, FromHexError>
         + FromExternalError<S, ParseIntError>
         + FromExternalError<S, TryFromIntError>
+        + FromExternalError<S, AnyWhatever>
         + AddContext<S>,
 {
     let start = input.checkpoint();
     let IndirectObjectDef(_, s) = indirect_object_def::<S, E>().parse_next(input)?;
-    let s = s.stream().unwrap().clone();
+    let s = s
+        .stream()
+        .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?
+        .clone();
     let d = CrossReferenceStreamDict::new(s.as_dict())
         .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?;
     input.reset(&start);
-    let buf = input.finish();
-    let data = s
+    let buf: &'a [u8] = input.finish();
+    let data: Cow<'a, [u8]> = s
         .decode_without_resolve_length(buf, None)
         .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?;
     let (a, b, c) = (d.w[0], d.w[1], d.w[2]);
@@ -254,37 +268,44 @@ where
         "stream data length should multiple of w0 + w1 + w2"
     );
 
-    let mut buf = data.as_ref();
     let count = d.iter_ids().count();
     let mut id_iter = d.iter_ids();
     let r = repeat(
         count,
         (
-            segment_parser::<_, ()>(a, 1),
-            segment_parser(b, 0),
-            segment_parser(c, 0),
+            segment_parser::<u32, _, ContextError>(a, 1),
+            segment_parser::<u32, _, ContextError>(b, 0),
+            segment_parser::<u16, _, ContextError>(c, 0),
         ),
     )
-    .fold(Vec::new, |mut r, (a, b, c)| {
-        let c: u16 = c.try_into().unwrap();
-        match a {
-            0 => r.push((id_iter.next().unwrap(), Entry::in_file(0, c, false))),
-            1 => r.push((id_iter.next().unwrap(), Entry::in_file(b, c, true))),
-            2 => r.push((
-                id_iter.next().unwrap(),
-                Entry::in_stream(RuntimeObjectId(b), c),
-            )),
-            _ => warn!(
-                "unknown xref stream entry type: {}, idx: {}, ignored",
-                a,
-                id_iter.next().unwrap()
-            ),
-        }
-        r
-    })
-    .parse_next(&mut buf)
-    .unwrap();
-    Ok((r, s.take_dict()))
+    .fold(
+        || Ok(Vec::new()),
+        |r: Result<_, AnyWhatever>, (a, b, c)| {
+            let mut r = r?;
+            let next_id = id_iter
+                .next()
+                .whatever_context("expect more entries in XRefStream")?;
+            match a {
+                0 => r.push((next_id, Entry::in_file(0, c, false))),
+                1 => r.push((next_id, Entry::in_file(b, c, true))),
+                2 => r.push((next_id, Entry::in_stream(RuntimeObjectId(b), c))),
+                _ => warn!(
+                    "unknown xref stream entry type: {}, idx: {}, ignored",
+                    a, next_id
+                ),
+            }
+            Ok(r)
+        },
+    )
+    .parse_next(&mut data.as_ref())
+    .map_err(|e| {
+        warn!("Error when parse xref stream entries: {:?}", e);
+        ErrMode::from_error_kind(input, ErrorKind::Fail)
+    })?;
+    Ok((
+        r.map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?,
+        s.take_dict(),
+    ))
 }
 
 pub(crate) fn parse_frame_set<'a, S, E>(buf: &S) -> PResult<FrameSet, E>
@@ -309,6 +330,8 @@ where
         + FromExternalError<Located<&'a [u8]>, FromHexError>
         + FromExternalError<Located<&'a [u8]>, ParseIntError>
         + FromExternalError<Located<&'a [u8]>, TryFromIntError>
+        + FromExternalError<Located<&'a [u8]>, AnyWhatever>
+        + for<'b> FromExternalError<&'b [u8], AnyWhatever>
         + 'a,
 {
     let bytes = buf.peek_finish().1;

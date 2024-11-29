@@ -21,19 +21,11 @@ use test_case::test_case;
 #[test_case("\x05a", b"(\\05a)"; "oct 2")]
 #[test_case("\x05a", b"(\\005a)"; "oct 3")]
 fn literal_string_decoded(exp: &str, buf: impl AsRef<[u8]>) {
-    assert_eq!(LiteralString::new(buf.as_ref()).as_str(), exp);
-}
-
-#[test_case(b"", b"<>" ; "empty")]
-#[test_case(b"\x90\x1f\xa3", b"<901FA3>"; "not empty")]
-#[test_case(b"\x90\x1f\xa0", b"<901FA>"; "append 0 if odd")]
-#[test_case(b"\x90\x1f\xa0", b"<90 1F\tA>"; "ignore whitespace")]
-fn hex_string_decoded(exp: impl AsRef<[u8]>, buf: impl AsRef<[u8]>) {
-    assert_eq!(HexString::new(buf.as_ref()).as_bytes(), exp.as_ref());
+    assert_eq!(LiteralString::new(buf.as_ref()).as_str().unwrap(), exp);
 }
 
 #[test_case(&Object::LiteralString(LiteralString::new(b"(foo)")), "(foo)"; "literal string")]
-#[test_case(&Object::HexString(HexString::new(b"<901FA3>")), "<901FA3>"; "hex string")]
+#[test_case(&Object::HexString(HexString((&b"\x90\x1F\xA3"[..]).into())), "<901FA3>"; "hex string")]
 #[test_case(&Object::Name(sname("foo")), "/foo"; "name")]
 fn buf_or_str_to_object(exp: &Object, s: &str) {
     assert_eq!(*exp, Object::from(s.as_bytes()));
@@ -117,7 +109,7 @@ fn schema_ref_id_arr(ids: Option<&[u32]>) -> Vec<u32> {
 #[test_case(1i32 => "1")]
 #[test_case(1.0f32 => "1.0")]
 #[test_case(LiteralString::new(b"(foo)") => "(foo)")]
-#[test_case(HexString::new(b"<901FA3>") => "<901fa3>")]
+#[test_case(HexString((&b"\x90\x1F\xA3"[..]).into()) => "<901fa3>")]
 #[test_case("/foo" => "/foo"; "Name")]
 #[test_case(vec![] => "[]"; "empty array")]
 #[test_case(vec![Object::Null] => "[null]"; "array with null")]

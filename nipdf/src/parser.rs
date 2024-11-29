@@ -3,6 +3,8 @@ use snafu::Snafu;
 mod file;
 mod object;
 pub(crate) use file::{header as header_parser, parse_frame_set};
+#[cfg(test)]
+pub(crate) use object::hex_string;
 pub(crate) use object::{dict, dict_body, indirect_object_def, object};
 use winnow::{
     Parser,

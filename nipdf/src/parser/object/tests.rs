@@ -74,7 +74,7 @@ fn parse_object(buf: &str) -> Object {
 #[test_case(b"(Line1 \\\nLine2 \\\rLine3)" => (b"".as_ref(), "Line1 Line2 Line3".to_owned()); "escaped newline")]
 fn test_parse_quoted_string(input: &[u8]) -> (&[u8], String) {
     let (rest, r) = report_peek_err(parse_quoted_string::<_, ParserError>.parse_peek(input));
-    (rest, r.as_str().to_string())
+    (rest, r.as_str().unwrap().to_string())
 }
 
 #[test]

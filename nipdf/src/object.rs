@@ -2,14 +2,15 @@
 use crate::Result;
 use ahash::{HashMap, HashMapExt};
 use educe::Educe;
+use itertools::Itertools as _;
 use paste::paste;
 use prescript::Name;
 use std::{
     borrow::{Borrow, Cow},
     fmt::{Debug, Display},
-    iter::{Peekable, repeat},
+    iter::Peekable,
     rc::Rc,
-    str::from_utf8,
+    str::{Utf8Error, from_utf8},
 };
 use tinyvec::TinyVec;
 
@@ -1065,7 +1066,7 @@ impl Object {
 
     pub fn as_text_string(&self) -> Result<&str, ObjectValueError> {
         match self {
-            Object::LiteralString(s) => Ok(s.as_str()),
+            Object::LiteralString(s) => s.as_str(),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
@@ -1073,8 +1074,10 @@ impl Object {
     /// Return decoded string from LiteralString or HexString
     pub fn as_string(&self) -> Result<&str, ObjectValueError> {
         match self {
-            Object::LiteralString(s) => Ok(s.as_str()),
-            Object::HexString(s) => Ok(s.as_str()),
+            Object::LiteralString(s) => s.as_str(),
+            Object::HexString(s) => s
+                .as_str()
+                .whatever_context::<_, ObjectValueError>("convert HexString to str"),
             _ => Err(ObjectValueError::UnexpectedType),
         }
     }
@@ -1148,16 +1151,12 @@ impl Object {
         }
 
         fn dict_to_doc(d: &Dictionary) -> RcDoc<'_> {
-            let mut keys = d.keys().collect::<Vec<_>>();
-            keys.sort();
             RcDoc::text("<<")
                 .append(
                     RcDoc::intersperse(
-                        keys.into_iter().map(|k| {
-                            name_to_doc(k)
-                                .append(RcDoc::space())
-                                .append(d.get(k).unwrap().to_doc())
-                        }),
+                        d.iter()
+                            .sorted_by_key(|(k, _)| *k)
+                            .map(|(k, v)| name_to_doc(k).append(RcDoc::space()).append(v.to_doc())),
                         RcDoc::line(),
                     )
                     .nest(2)
@@ -1240,10 +1239,13 @@ impl From<Name> for Object {
 #[cfg(test)]
 impl<'a> From<&'a [u8]> for Object {
     fn from(value: &'a [u8]) -> Self {
+        use winnow::{Parser as _, error::ContextError};
         assert!(!value.is_empty());
         match value[0] {
             b'(' => Self::LiteralString(LiteralString::new(value)),
-            b'<' => Self::HexString(HexString::new(value)),
+            b'<' => crate::parser::hex_string::<_, ContextError>()
+                .parse(value)
+                .unwrap(),
             b'/' => Self::Name(prescript::name(from_utf8(&value[1..]).unwrap())),
             _ => panic!("invalid object"),
         }
@@ -1367,8 +1369,8 @@ impl LiteralString {
         f(self.0.as_mut_slice());
     }
 
-    pub fn as_str(&self) -> &str {
-        from_utf8(&self.0).unwrap()
+    pub fn as_str(&self) -> Result<&str, ObjectValueError> {
+        from_utf8(&self.0).whatever_context("LiteralString as str")
     }
 
     pub fn as_bytes(&self) -> &[u8] {
@@ -1412,28 +1414,6 @@ pub struct HexString(pub(crate) InnerString);
 assert_eq_size!(HexString, TinyVec<[u8; 14]>, (u64, u64, u64));
 
 impl HexString {
-    // TODO: remove convert escape logic, winnow version parser handled it
-    pub fn new(s: &[u8]) -> Self {
-        fn filter_whitespace(s: &mut InnerString) {
-            s.retain(|b| !b.is_ascii_whitespace());
-        }
-
-        fn append_zero_if_odd(s: &mut InnerString) {
-            if s.len() % 2 != 0 {
-                s.push(b'0');
-            }
-        }
-
-        debug_assert!(s.starts_with(b"<") && s.ends_with(b">"));
-        let mut s: InnerString = s[1..s.len() - 1].into();
-        filter_whitespace(&mut s);
-        append_zero_if_odd(&mut s);
-        assert!(s.len() % 2 == 0);
-        let mut r: InnerString = repeat(0u8).take(s.len() / 2).collect();
-        hex::decode_to_slice(s, r.as_mut_slice()).unwrap();
-        Self(r)
-    }
-
     pub fn update(&mut self, f: impl FnOnce(&mut [u8])) {
         f(self.0.as_mut_slice());
     }
@@ -1442,8 +1422,8 @@ impl HexString {
         self.0.as_ref()
     }
 
-    pub fn as_str(&self) -> &str {
-        from_utf8(self.as_bytes()).unwrap()
+    pub fn as_str(&self) -> Result<&str, Utf8Error> {
+        from_utf8(self.as_bytes())
     }
 }
 

@@ -162,7 +162,7 @@ fn decode_hex(buf: &[u8]) -> Result<HexString, FromHexError> {
     hex::decode(&buf).map(|v| HexString((&v[..]).into()))
 }
 
-fn hex_string<'a, S, E>() -> impl Parser<S, Object, E> + 'a
+pub(crate) fn hex_string<'a, S, E>() -> impl Parser<S, Object, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
     E: ParserError<S> + FromExternalError<S, FromHexError> + 'a,
