@@ -344,7 +344,7 @@ where
             .context("frame");
         let mut bytes = Located::new(&bytes[pos..]);
         let f = frame.parse_next(&mut bytes)?;
-        let f = Frame::new(pos.try_into().unwrap(), f.0.1, f.0.0);
+        let f = Frame::new(pos, f.0.1, f.0.0);
         next_pos = f
             .trailer
             .get(&sname("Prev"))
