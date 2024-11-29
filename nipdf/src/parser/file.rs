@@ -326,13 +326,6 @@ where
         .ok_or_else(|| ErrMode::from_error_kind(buf, ErrorKind::Eof))?;
     b"startxref".as_slice().parse_next(&mut line)?;
 
-    fn get_prev(frame: &Frame) -> Option<usize> {
-        frame
-            .trailer
-            .get(&sname("Prev"))
-            .map(|o| o.int().unwrap().try_into().unwrap())
-    }
-
     let mut r = Vec::new();
     let mut next_pos = Some(pos);
     while let Some(pos) = next_pos {
@@ -352,7 +345,10 @@ where
         let mut bytes = Located::new(&bytes[pos..]);
         let f = frame.parse_next(&mut bytes)?;
         let f = Frame::new(pos.try_into().unwrap(), f.0.1, f.0.0);
-        next_pos = get_prev(&f);
+        next_pos = f
+            .trailer
+            .get(&sname("Prev"))
+            .map(|o| o.int().unwrap().try_into().unwrap());
         r.push(f);
     }
     Ok(r)
