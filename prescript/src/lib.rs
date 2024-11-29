@@ -3,6 +3,11 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 #![cfg_attr(test, allow(clippy::expect_used))]
 
+use snafu::{
+    AsBacktrace, AsErrorSource, Backtrace, Error, ErrorCompat, FromString, GenerateImplicitData,
+    Snafu,
+};
+
 pub(crate) mod machine;
 pub(crate) mod parser;
 
@@ -33,3 +38,19 @@ pub const fn sname(s: &'static str) -> Name {
 
 /// Symbol for .notdef glyph
 pub const NOTDEF: &str = ".notdef";
+
+/// Like [snafu::Whatever], but implement [Send + Sync]
+#[derive(Debug, Snafu)]
+#[snafu(crate_root(crate))]
+#[snafu(whatever)]
+#[snafu(display("{message}"))]
+#[snafu(provide(opt, ref, chain, dyn std::error::Error => source.as_deref()))]
+pub struct AnyWhatever {
+    #[snafu(source(from(Box<dyn Error + Send + Sync>, Some)))]
+    #[snafu(provide(false))]
+    source: Option<Box<dyn Error + Send + Sync>>,
+    message: String,
+    backtrace: Backtrace,
+}
+
+pub type Result<T, E = AnyWhatever> = std::result::Result<T, E>;

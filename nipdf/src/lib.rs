@@ -3,10 +3,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 #![cfg_attr(test, allow(clippy::expect_used))]
 
-use snafu::{
-    AsBacktrace, AsErrorSource, Backtrace, Error, ErrorCompat, FromString, GenerateImplicitData,
-    Snafu, Whatever,
-};
+use snafu::{Error, Snafu, Whatever};
 use winnow::{
     error::{AddContext, ErrorConvert, ErrorKind, FromExternalError, ParseError},
     stream::Stream,
@@ -21,6 +18,7 @@ pub mod object;
 pub mod parser;
 mod run_length;
 pub mod text;
+use prescript::AnyWhatever;
 
 type Result<T, E = Whatever> = std::result::Result<T, E>;
 
@@ -113,18 +111,4 @@ impl<I: Stream> winnow::error::ParserError<I> for ParserError {
             source: Box::new(self),
         }
     }
-}
-
-/// Like [snafu::Whatever], but implement [Send + Sync]
-#[derive(Debug, Snafu)]
-#[snafu(crate_root(crate))]
-#[snafu(whatever)]
-#[snafu(display("{message}"))]
-#[snafu(provide(opt, ref, chain, dyn std::error::Error => source.as_deref()))]
-pub struct AnyWhatever {
-    #[snafu(source(from(Box<dyn Error + Send + Sync>, Some)))]
-    #[snafu(provide(false))]
-    source: Option<Box<dyn Error + Send + Sync>>,
-    message: String,
-    backtrace: Backtrace,
 }
