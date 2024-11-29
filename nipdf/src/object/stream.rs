@@ -21,9 +21,11 @@ use log::error;
 use nipdf_macro::pdf_object;
 use num_traits::ToPrimitive;
 use prescript::{AnyWhatever, Name, sname};
+use snafu::{OptionExt, ResultExt as _};
 use std::{
     borrow::{Borrow, Cow},
     cell::LazyCell,
+    convert::identity,
     fmt::Display,
     iter::{once, repeat},
     ops::Range,
@@ -343,7 +345,7 @@ fn decode_image<'a, M: ImageMetadata>(
             todo!("Color Space not defined when process color key mask");
         };
         let mut img = r.into_rgba8();
-        let color_key = color_key_range(&color_key, &cs);
+        let color_key = color_key_range(&color_key, &cs)?;
 
         for p in img.pixels_mut() {
             // set alpha color to 0 if its rgb color in color_key range inclusive
@@ -421,29 +423,58 @@ impl LZWDeflateDecodeParams {
             Self {
                 predictor: r
                     .opt_resolve_container_value(d, &sname("Predictor"))?
-                    .map_or(1, |o| o.int().unwrap()),
+                    .map_or(Ok(1), |o| {
+                        o.int()
+                            .whatever_context::<_, ObjectValueError>("Failed to get Predictor")
+                    })?,
                 colors: r
                     .opt_resolve_container_value(d, &sname("Colors"))?
-                    .map_or(1, |o| o.int().unwrap()),
+                    .map_or(Ok(1), |o| {
+                        o.int()
+                            .whatever_context::<_, ObjectValueError>("Failed to get Colors")
+                    })?,
                 bits_per_component: r
                     .opt_resolve_container_value(d, &sname("BitsPerComponent"))?
-                    .map_or(8, |o| o.int().unwrap()),
+                    .map_or(Ok(8), |o| {
+                        o.int().whatever_context::<_, ObjectValueError>(
+                            "Failed to get BitsPerComponent",
+                        )
+                    })?,
                 columns: r
                     .opt_resolve_container_value(d, &sname("Columns"))?
-                    .map_or(1, |o| o.int().unwrap()),
+                    .map_or(Ok(1), |o| {
+                        o.int()
+                            .whatever_context::<_, ObjectValueError>("Failed to get Columns")
+                    })?,
                 early_change: r
                     .opt_resolve_container_value(d, &sname("EarlyChange"))?
-                    .map_or(1, |o| o.int().unwrap()),
+                    .map_or(Ok(1), |o| {
+                        o.int()
+                            .whatever_context::<_, ObjectValueError>("Failed to get EarlyChange")
+                    })?,
             }
         } else {
             Self {
-                predictor: d.get(&sname("Predictor")).map_or(1, |o| o.int().unwrap()),
-                colors: d.get(&sname("Colors")).map_or(1, |o| o.int().unwrap()),
-                bits_per_component: d
-                    .get(&sname("BitsPerComponent"))
-                    .map_or(8, |o| o.int().unwrap()),
-                columns: d.get(&sname("Columns")).map_or(1, |o| o.int().unwrap()),
-                early_change: d.get(&sname("EarlyChange")).map_or(1, |o| o.int().unwrap()),
+                predictor: d.get(&sname("Predictor")).map_or(Ok(1), |o| {
+                    o.int()
+                        .whatever_context::<_, ObjectValueError>("Failed to get Predictor")
+                })?,
+                colors: d.get(&sname("Colors")).map_or(Ok(1), |o| {
+                    o.int()
+                        .whatever_context::<_, ObjectValueError>("Failed to get Colors")
+                })?,
+                bits_per_component: d.get(&sname("BitsPerComponent")).map_or(Ok(8), |o| {
+                    o.int()
+                        .whatever_context::<_, ObjectValueError>("Failed to get BitsPerComponent")
+                })?,
+                columns: d.get(&sname("Columns")).map_or(Ok(1), |o| {
+                    o.int()
+                        .whatever_context::<_, ObjectValueError>("Failed to get Columns")
+                })?,
+                early_change: d.get(&sname("EarlyChange")).map_or(Ok(1), |o| {
+                    o.int()
+                        .whatever_context::<_, ObjectValueError>("Failed to get EarlyChange")
+                })?,
             }
         })
     }
@@ -501,7 +532,9 @@ fn png_predictor(
     let mut r = vec![0u8; buf.len() / row_with_flag_bytes * row_bytes];
 
     for (cur_row, dest_row) in buf.chunks(row_with_flag_bytes).zip(r.chunks_mut(row_bytes)) {
-        let (flag, cur_row) = cur_row.split_first().unwrap();
+        let (flag, cur_row) = cur_row
+            .split_first()
+            .whatever_context::<_, ObjectValueError>("Failed to split first element")?;
         match flag {
             0 => dest_row.copy_from_slice(cur_row),
             1 => {
@@ -691,11 +724,14 @@ fn decode_dct<'a>(
     use jpeg_decoder::Decoder;
     let mut decoder = Decoder::new(buf.as_ref());
     let pixels = handle_filter_error(decoder.decode(), &FILTER_DCT_DECODE)?;
-    let info = decoder.info().unwrap();
+    let info = decoder
+        .info()
+        .whatever_context::<_, ObjectValueError>("Failed to get decoder info")?;
 
     match info.pixel_format {
         PixelFormat::L8 => Ok(FilterDecodedData::Image(DynamicImage::ImageLuma8(
-            GrayImage::from_vec(info.width as u32, info.height as u32, pixels).unwrap(),
+            GrayImage::from_vec(info.width as u32, info.height as u32, pixels)
+                .whatever_context::<_, ObjectValueError>("Failed to create GrayImage")?,
         ))),
         PixelFormat::L16 => {
             todo!("Convert to DynamicImage::ImageLuma16")
@@ -704,7 +740,8 @@ fn decode_dct<'a>(
             // pixels
         }
         PixelFormat::RGB24 => Ok(FilterDecodedData::Image(DynamicImage::ImageRgb8(
-            RgbImage::from_vec(info.width as u32, info.height as u32, pixels).unwrap(),
+            RgbImage::from_vec(info.width as u32, info.height as u32, pixels)
+                .whatever_context::<_, ObjectValueError>("Failed to create RgbImage")?,
         ))),
         PixelFormat::CMYK32 => Ok(FilterDecodedData::CmykImage((
             info.width as u32,
@@ -809,7 +846,10 @@ impl<'b> TryFrom<&'b Object> for CCITTAlgorithm {
     fn try_from(v: &'b Object) -> Result<Self, Self::Error> {
         Ok(match v.int()? {
             0 => Self::Group3_1D,
-            k @ 1.. => Self::Group3_2D(k.try_into().unwrap()),
+            k @ 1.. => Self::Group3_2D(
+                k.try_into()
+                    .whatever_context::<_, ObjectValueError>("convert k to u16")?,
+            ),
             ..=-1 => Self::Group4,
         })
     }
@@ -891,10 +931,20 @@ fn decode_ccitt(
     use crate::ccitt::Decoder;
 
     let decoder = Decoder {
-        algorithm: params.k().unwrap(),
-        width: params.columns().unwrap(),
-        rows: Some(params.rows().unwrap()),
-        flags: params.try_into().unwrap(),
+        algorithm: params
+            .k()
+            .whatever_context::<_, ObjectValueError>("Failed to get CCITTAlgorithm")?,
+        width: params
+            .columns()
+            .whatever_context::<_, ObjectValueError>("Failed to get columns")?,
+        rows: Some(
+            params
+                .rows()
+                .whatever_context::<_, ObjectValueError>("Failed to get rows")?,
+        ),
+        flags: params
+            .try_into()
+            .whatever_context::<_, ObjectValueError>("Failed to convert params to Flags")?,
     };
     let image = handle_filter_error(decoder.decode(input), &FILTER_CCITT_FAX)?;
     Ok(image)
@@ -911,10 +961,13 @@ fn filter<'a: 'b, 'b>(
     let empty_dict = LazyCell::new(Dictionary::new);
     #[allow(clippy::match_ref_pats)]
     match filter_name.as_str() {
-        S_FILTER_CRYPT => {
-            crypt_filter(buf.into_owned(), id.unwrap(), encrypt_info.unwrap(), params)
-                .map(FilterDecodedData::bytes)
-        }
+        S_FILTER_CRYPT => crypt_filter(
+            buf.into_owned(),
+            id.whatever_context::<_, ObjectValueError>("ObjectId is required")?,
+            encrypt_info.whatever_context::<_, ObjectValueError>("EncryptInfo is required")?,
+            params,
+        )
+        .map(FilterDecodedData::bytes),
         S_FILTER_FLATE_DECODE => decode_flate(
             &buf,
             LZWDeflateDecodeParams::new(params.unwrap_or_else(|| &*empty_dict), resolver)?,
@@ -926,7 +979,7 @@ fn filter<'a: 'b, 'b>(
             &CCITTFaxDecodeParamsDict::new(
                 None,
                 params.unwrap_or_else(|| &*empty_dict),
-                resolver.unwrap(),
+                resolver.whatever_context::<_, ObjectValueError>("Need ObjectResolver")?,
             )?,
         )
         .map(FilterDecodedData::CCITTFaxImage),
@@ -1088,7 +1141,7 @@ type ColorKey = ([u8; 4], [u8; 4]);
 
 /// `range` length is n which is ColorSpace component counts,
 /// Convert min and max color into ColorSpace, return (min, max) rgba8
-fn color_key_range(range: &Domains, cs: &ColorSpace) -> ColorKey {
+fn color_key_range(range: &Domains, cs: &ColorSpace) -> Result<ColorKey, ObjectValueError> {
     let n = cs.components();
     assert_eq!(range.n(), n);
     assert!(range.n() <= 4);
@@ -1096,12 +1149,18 @@ fn color_key_range(range: &Domains, cs: &ColorSpace) -> ColorKey {
     let mut min = [0u8; 4];
     let mut max = [0u8; 4];
     for (i, (min, max)) in min.iter_mut().zip(max.iter_mut()).take(n).enumerate() {
-        *min = range.0[i].start.to_u8().unwrap();
-        *max = range.0[i].end.to_u8().unwrap();
+        *min = range.0[i]
+            .start
+            .to_u8()
+            .whatever_context::<_, ObjectValueError>("convert f32 min to u8")?;
+        *max = range.0[i]
+            .end
+            .to_u8()
+            .whatever_context::<_, ObjectValueError>("convert f32 max to u8")?;
     }
     let min: [_; 4] = convert_color_to(&min[..]);
     let max: [_; 4] = convert_color_to(&max[..]);
-    (color_to_rgba(cs, &min[..]), color_to_rgba(cs, &max[..]))
+    Ok((color_to_rgba(cs, &min[..]), color_to_rgba(cs, &max[..])))
 }
 
 /// Return true if rgb color in color_key range inclusive, alpha part not compared.
