@@ -1,5 +1,5 @@
 use paste::paste;
-use prescript::{Encoding, Name, name, sname};
+use prescript::{Encoding, Name, ParserError, name, sname};
 use snafu::prelude::*;
 use std::{
     borrow::Cow,
@@ -12,7 +12,7 @@ use winnow::{
     PResult, Parser,
     binary::{be_u8, be_u16, be_u24, be_u32, length_repeat, length_take},
     combinator::{alt, dispatch, empty, fail, preceded, repeat, repeat_till, rest, terminated},
-    error::{AddContext, ErrorConvert, ErrorKind, FromExternalError, ParseError, StrContext},
+    error::{AddContext, ErrorConvert, ErrorKind, FromExternalError, ParseError},
     stream::{Accumulate, Stream, StreamIsPartial},
     token::{any, take},
 };
@@ -369,73 +369,6 @@ fn operator_parser<'a>() -> impl Parser<&'a [u8], Operator, ParserError> {
     alt((escaped, normal))
 }
 
-#[derive(Snafu, Debug)]
-pub enum ParserError<C: 'static = StrContext> {
-    Leaf {
-        kind: ErrorKind,
-        context: Vec<C>,
-    },
-    Inter {
-        kind: ErrorKind,
-        context: Vec<C>,
-        #[snafu(source(from(ParserError<C>, Box::new)))]
-        source: Box<ParserError<C>>,
-    },
-    Other {
-        kind: ErrorKind,
-        context: Vec<C>,
-        source: Box<dyn std::error::Error>,
-    },
-}
-
-impl<C: 'static, I> From<ParseError<I, ParserError<C>>> for ParserError<C> {
-    fn from(value: ParseError<I, ParserError<C>>) -> Self {
-        value.into_inner()
-    }
-}
-
-impl<C: 'static> ErrorConvert<ParserError<C>> for ParserError<C> {
-    fn convert(self) -> ParserError<C> {
-        self
-    }
-}
-
-impl<I: Stream, C> AddContext<I, C> for ParserError<C> {
-    fn add_context(mut self, _input: &I, _token_start: &<I as Stream>::Checkpoint, c: C) -> Self {
-        match self {
-            Self::Leaf {
-                ref mut context, ..
-            }
-            | Self::Inter {
-                ref mut context, ..
-            }
-            | Self::Other {
-                ref mut context, ..
-            } => {
-                context.push(c);
-            }
-        }
-        self
-    }
-}
-
-impl<I: Stream> winnow::error::ParserError<I> for ParserError {
-    fn from_error_kind(_: &I, kind: ErrorKind) -> Self {
-        Self::Leaf {
-            kind,
-            context: Vec::new(),
-        }
-    }
-
-    fn append(self, _: &I, _: &<I as Stream>::Checkpoint, kind: ErrorKind) -> Self {
-        Self::Inter {
-            kind,
-            context: vec![],
-            source: Box::new(self),
-        }
-    }
-}
-
 /// Error may returned in this crate.
 #[derive(Debug, Snafu)]
 pub enum Error {
@@ -468,16 +401,6 @@ pub enum Error {
 
     #[snafu(display("Required top dict value missing"))]
     RequiredDictValueMissing,
-}
-
-impl<I, C, E: std::error::Error + 'static> FromExternalError<I, E> for ParserError<C> {
-    fn from_external_error(_: &I, kind: ErrorKind, e: E) -> Self {
-        Self::Other {
-            kind,
-            context: vec![],
-            source: Box::new(e),
-        }
-    }
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
