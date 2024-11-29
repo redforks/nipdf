@@ -6,7 +6,7 @@ use nipdf::{
     graphics::trans::{LogicDeviceToDeviceSpace, UserToUserSpace, logic_device_to_device},
     object::ObjectValueError,
 };
-use snafu::Whatever;
+use prescript::Result;
 use tiny_skia::{Color, Pixmap};
 
 mod render;
@@ -15,8 +15,6 @@ use render::{Render, State};
 mod into_skia;
 pub(crate) use into_skia::*;
 use num_traits::ToPrimitive;
-
-type Result<T, E = Whatever> = std::result::Result<T, E>;
 
 #[derive(Debug, Educe, Clone, Copy)]
 #[educe(Default)]

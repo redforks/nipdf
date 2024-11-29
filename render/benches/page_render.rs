@@ -3,7 +3,8 @@ use image::RgbaImage;
 use mimalloc::MiMalloc;
 use nipdf::file::File;
 use nipdf_render::{RenderOptionBuilder, render_page};
-use snafu::{ResultExt, Whatever};
+use prescript::Result;
+use snafu::ResultExt as _;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -17,10 +18,7 @@ fn read_sample_file(file_path: impl AsRef<std::path::Path>) -> Vec<u8> {
 
 /// Render specific page of pdf file.
 /// `file_path` relative to '~/sample_files/'.
-fn render_page_no(
-    file_path: impl AsRef<std::path::Path>,
-    no: usize,
-) -> Result<RgbaImage, Whatever> {
+fn render_page_no(file_path: impl AsRef<std::path::Path>, no: usize) -> Result<RgbaImage> {
     let buf = read_sample_file(file_path);
     let f = File::parse(buf, "").whatever_context("parse pdf file")?;
     let resolver = f.resolver()?;

@@ -8,7 +8,8 @@ use md5::{Digest, Md5};
 use nipdf::file::File;
 use nipdf_render::{RenderOptionBuilder, render_page};
 use nipdf_test_macro::pdf_file_test_cases;
-use snafu::{ResultExt, Whatever};
+use prescript::Result;
+use snafu::ResultExt as _;
 use std::{
     collections::hash_map::HashMap,
     io::BufWriter,
@@ -19,7 +20,7 @@ use ureq::get as download;
 
 /// Decode pdf embed image and return the result as Vec<u8>.
 /// The image is specified by ref id.
-fn decode_image(id: u32) -> Result<String, Whatever> {
+fn decode_image(id: u32) -> Result<String> {
     let path = "../nipdf/sample_files/bizarre/pdfReferenceUpdated.pdf";
     let buf = std::fs::read(path).whatever_context("parse pdf file")?;
     let f = File::parse(buf, "").unwrap_or_else(|_| panic!("failed to parse {path:?}"));
@@ -52,7 +53,7 @@ fn replace_dead_link(f: &str) -> Option<&'_ str> {
     dead_links.get(p.file_name()?.to_str()?).copied()
 }
 
-fn download_file(url: &str, p: impl AsRef<Path>) -> Result<(), Whatever> {
+fn download_file(url: &str, p: impl AsRef<Path>) -> Result<()> {
     let resp = download(url).call().whatever_context("download pdf file")?;
     let f = std::fs::File::create(p.as_ref()).whatever_context("create cache file")?;
     let mut f = BufWriter::new(f);
@@ -138,7 +139,7 @@ static PASSWORD: phf::Map<&'static str, &'static str> = phf::phf_map! {
 /// If f ends with ".link", file content is a http url, download
 /// that file to `$flag_file.pdf`, skip the download if `$flag_file.pdf` exists.
 #[pdf_file_test_cases]
-fn render(f: &str) -> Result<(), Whatever> {
+fn render(f: &str) -> Result<()> {
     // return if f ends with one of IGNORED
     if IGNORED.iter().any(|s| f.ends_with(s)) {
         return Ok(());

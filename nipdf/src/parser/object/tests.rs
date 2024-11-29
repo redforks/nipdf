@@ -79,12 +79,12 @@ fn test_parse_quoted_string(input: &[u8]) -> (&[u8], String) {
 
 #[test]
 fn test_parse_indirect_object_def() -> Result<(), ParserError> {
-    let o = indirect_object_def::<_, ParserError<&'static str>>()
+    let o = indirect_object_def::<_, ParserError>()
         .parse(Located::new(b"100 0 obj\n<<>>\nendobj\n".as_slice()))
         .map_err(winnow::error::ParseError::into_inner)?;
     assert_eq!(o.1, Dictionary::default().into());
 
-    let o = indirect_object_def::<_, ParserError<&'static str>>()
+    let o = indirect_object_def::<_, ParserError>()
         .parse(Located::new(b"100 0 obj<<>>endobj\n".as_slice()))
         .map_err(winnow::error::ParseError::into_inner)?;
     assert_eq!(o.1, Dictionary::default().into());

@@ -1,7 +1,7 @@
 //! Cmap to map CharCode to CID, used in Type0/CID font
 
 use crate::{
-    Name,
+    Name, Result,
     machine::{
         Key, Machine, MachineError, MachinePlugin, MachineResult, RuntimeDictionary, RuntimeValue,
         TypeCheckSnafu, UndefinedSnafu, ok,
@@ -13,7 +13,7 @@ use either::Either;
 use log::error;
 use once_cell::unsync::OnceCell;
 use phf::phf_map;
-use snafu::{OptionExt, Whatever, prelude::*};
+use snafu::{OptionExt as _, ResultExt as _};
 use std::{collections::HashMap, rc::Rc, str::from_utf8};
 use tinyvec::ArrayVec;
 
@@ -204,10 +204,7 @@ impl CodeSpace {
     /// If next code not in code space, return `Left(next_code)`.
     /// Returns minimal bytes of current CodeSpace, even in error cases, append zero if not
     /// enough bytes.
-    fn next_code<'a>(
-        &self,
-        codes: &'a [u8],
-    ) -> Result<(&'a [u8], Either<CharCode, CharCode>), Whatever> {
+    fn next_code<'a>(&self, codes: &'a [u8]) -> Result<(&'a [u8], Either<CharCode, CharCode>)> {
         let next = self
             .0
             .iter()
@@ -235,7 +232,7 @@ impl CodeSpace {
         Ok((&codes[next.into_inner().n_bytes().min(codes.len())..], next))
     }
 
-    fn min_bytes(&self) -> Result<usize, Whatever> {
+    fn min_bytes(&self) -> Result<usize> {
         self.0
             .iter()
             .map(CodeRange::n_bytes)
@@ -628,7 +625,7 @@ impl CMapRegistry {
     }
 
     /// Add a CMap file, parse it and add to registry.
-    pub fn add_cmap_file(&mut self, file: &[u8]) -> Result<Rc<CMap>, Whatever> {
+    pub fn add_cmap_file(&mut self, file: &[u8]) -> Result<Rc<CMap>> {
         let parsed = self
             .parse_cmap_file(file)
             .whatever_context("parse cmap file")?;
@@ -659,7 +656,7 @@ impl CMap {
     /// Map(Decode) char codes to CIDs.
     /// If code out of code space, or not mapped to cid, use notdef_map to map to a designed notdef
     /// char, if code not in notdef_map, returns 0 (notdef).
-    pub fn map(&self, mut codes: &[u8]) -> Result<Vec<CID>, Whatever> {
+    pub fn map(&self, mut codes: &[u8]) -> Result<Vec<CID>> {
         let mut r = Vec::with_capacity(codes.len());
         while !codes.is_empty() {
             let code;
@@ -673,7 +670,7 @@ impl CMap {
 
     /// Get next cid, update codes buffer, without map notdef.
     /// If use_map not null, recover codes buffer, call next_cid.
-    fn next_cid<'a>(&self, codes: &'a [u8]) -> Result<(&'a [u8], Either<CharCode, CID>), Whatever> {
+    fn next_cid<'a>(&self, codes: &'a [u8]) -> Result<(&'a [u8], Either<CharCode, CID>)> {
         let (new_codes, code) = self.code_space.next_code(codes)?;
         let cid_or_code = code.right_and_then(|c| self.cid_map.map(c).ok_or(c).into());
 

@@ -26,9 +26,10 @@ use prescript::{
     cmap::{CMap, CMapRegistry},
     name, sname,
 };
-use snafu::{FromString, OptionExt, ResultExt, Whatever, whatever};
+use snafu::{FromString, OptionExt, ResultExt, whatever};
 use std::{collections::HashMap, ops::RangeInclusive, rc::Rc, sync::LazyLock};
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
+use winnow::{Parser as _, error::ContextError};
 
 /// FontWidth used in Type1 and TrueType fonts
 struct FirstLastFontWidth {
@@ -359,7 +360,7 @@ impl FontOp for Type1FontOp<'_> {
             |x| {
                 let r = x.char_width(gid);
                 if self.units_per_em()? != 1000 {
-                    Ok::<_, Whatever>(GlyphLength::new(r.0 / 1000.0 * self.units_per_em()? as f32))
+                    Ok(GlyphLength::new(r.0 / 1000.0 * self.units_per_em()? as f32))
                 } else {
                     Ok(r)
                 }
@@ -1345,10 +1346,10 @@ impl<'a, 'b> Type3Font<'a, 'b> {
             debug!("parse Type3 glyph: {}", name.as_str());
             let data = stream
                 .decode(d.resolver())
-                .map_err(|_| Whatever::without_source("decode stream".to_owned()))?;
-            let ops = parse_operations::<()>(&mut &data[..]).map_err(|e| {
-                Whatever::without_source(format!("parse type3 operation error: {}", e))
-            })?;
+                .whatever_context("decode stream")?;
+            let ops = parse_operations::<crate::ParserError>(&mut &data[..])
+                .map_err(|e| e.into_inner().unwrap())
+                .whatever_context("parse type3 operation")?;
             r.push((name.clone(), Type3Glyph(ops.into())));
         }
 

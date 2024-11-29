@@ -20,7 +20,7 @@ use jpeg_decoder::PixelFormat;
 use log::error;
 use nipdf_macro::pdf_object;
 use num_traits::ToPrimitive;
-use prescript::{Name, sname};
+use prescript::{AnyWhatever, Name, sname};
 use snafu::Whatever;
 use std::{
     borrow::{Borrow, Cow},
@@ -790,7 +790,7 @@ trait CCITTFaxDecodeParamsDictTrait {
 }
 
 impl<'a: 'b, 'b> TryFrom<&CCITTFaxDecodeParamsDict<'a, 'b>> for Flags {
-    type Error = Whatever;
+    type Error = AnyWhatever;
 
     fn try_from(params: &CCITTFaxDecodeParamsDict<'a, 'b>) -> Result<Self, Self::Error> {
         assert!(!params.end_of_line()?);
