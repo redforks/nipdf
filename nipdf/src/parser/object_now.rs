@@ -15,7 +15,7 @@ use winnow::{
     PResult, Parser,
     ascii::{Caseless, dec_uint, float},
     combinator::{alt, delimited, preceded, repeat, rest, terminated},
-    error::{AddContext, FromExternalError},
+    error::{AddContext, FromExternalError, ParserError},
     stream::{AsBStr, AsChar, Compare, ContainsToken, Location, Stream, StreamIsPartial},
     token::{any, take, take_till, take_while},
 };
@@ -23,8 +23,7 @@ use winnow::{
 fn name<'a, S, E>() -> impl Parser<S, Name, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
-    E: winnow::error::ParserError<S> + 'a,
-    E: FromExternalError<S, ObjectValueError>,
+    E: ParserError<S> + 'a + FromExternalError<S, ObjectValueError>,
 {
     preceded(b'/', take_till(0.., b" \t\r\n\x0C[<(/>]")).try_map(normalize_name)
 }
@@ -67,8 +66,7 @@ where
         + Compare<Caseless<&'static str>>
         + 'a,
     <S as Stream>::IterOffsets: Clone,
-    E: winnow::error::ParserError<S> + 'a,
-    E: winnow::error::ParserError<&'a [u8]> + 'a,
+    E: ParserError<S> + 'a + ParserError<&'a [u8]>,
 {
     fn fallback<E>(buf: &mut &[u8]) -> PResult<Object, E> {
         buf.finish();
@@ -95,8 +93,7 @@ enum LiteralStringFragment<'a> {
 fn parse_quoted_string<'a, S, E>(input: &mut S) -> PResult<LiteralString, E>
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
-    E: winnow::error::ParserError<S> + 'a,
-    E: FromExternalError<S, ParseIntError>,
+    E: ParserError<S> + 'a + FromExternalError<S, ParseIntError>,
 {
     let literal = take_till(1.., b"\\()").map(LiteralStringFragment::Literal);
     let paired = parse_quoted_string.map(LiteralStringFragment::Nested);
@@ -165,7 +162,7 @@ fn decode_hex(buf: &[u8]) -> Result<HexString, FromHexError> {
 fn hex_string<'a, S, E>() -> impl Parser<S, Object, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
-    E: winnow::error::ParserError<S> + FromExternalError<S, FromHexError> + 'a,
+    E: ParserError<S> + FromExternalError<S, FromHexError> + 'a,
 {
     let parser = take_while(
         ..,
@@ -185,11 +182,12 @@ where
         + Compare<Caseless<&'static str>>
         + 'a,
     <S as Stream>::IterOffsets: Clone,
-    E: winnow::error::ParserError<S> + 'a,
-    E: FromExternalError<S, ObjectValueError>,
-    E: winnow::error::ParserError<&'a [u8]> + 'a,
-    E: FromExternalError<S, FromHexError> + 'a,
-    E: FromExternalError<S, ParseIntError> + 'a,
+    E: ParserError<S>
+        + 'a
+        + ParserError<&'a [u8]>
+        + FromExternalError<S, ObjectValueError>
+        + FromExternalError<S, FromHexError>
+        + FromExternalError<S, ParseIntError>,
 {
     let item = repeat::<_, _, Vec<_>, _, _>(0.., wsc_prefixed0(object()));
     delimited(b'[', item, (wsc0(), b']'))
@@ -209,11 +207,12 @@ where
         + Compare<Caseless<&'static str>>
         + 'a,
     <S as Stream>::IterOffsets: Clone,
-    E: winnow::error::ParserError<S> + 'a,
-    E: FromExternalError<S, ObjectValueError>,
-    E: winnow::error::ParserError<&'a [u8]> + 'a,
-    E: FromExternalError<S, FromHexError> + 'a,
-    E: FromExternalError<S, ParseIntError> + 'a,
+    E: ParserError<S>
+        + 'a
+        + ParserError<&'a [u8]>
+        + FromExternalError<S, ObjectValueError>
+        + FromExternalError<S, FromHexError>
+        + FromExternalError<S, ParseIntError>,
 {
     let key = wsc_prefixed0(name());
     let value = wsc_prefixed0(object());
@@ -231,11 +230,12 @@ where
         + Compare<Caseless<&'static str>>
         + 'a,
     <S as Stream>::IterOffsets: Clone,
-    E: winnow::error::ParserError<S> + 'a,
-    E: FromExternalError<S, ObjectValueError>,
-    E: winnow::error::ParserError<&'a [u8]> + 'a,
-    E: FromExternalError<S, FromHexError> + 'a,
-    E: FromExternalError<S, ParseIntError> + 'a,
+    E: ParserError<S>
+        + 'a
+        + ParserError<&'a [u8]>
+        + FromExternalError<S, ObjectValueError>
+        + FromExternalError<S, FromHexError>
+        + FromExternalError<S, ParseIntError>,
 {
     delimited(b"<<".as_slice(), dict_body(), (wsc0(), b">>".as_slice())).parse_next(input)
 }
@@ -243,7 +243,7 @@ where
 fn object_id<'a, S, E>() -> impl Parser<S, ObjectId, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
-    E: winnow::error::ParserError<S> + 'a,
+    E: ParserError<S> + 'a,
 {
     (dec_uint, ws_prefixed1(dec_uint)).map(|(id, gen): (u32, u16)| ObjectId::new(id, gen))
 }
@@ -251,7 +251,7 @@ where
 fn reference<'a, S, E>() -> impl Parser<S, Object, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
-    E: winnow::error::ParserError<S> + 'a,
+    E: ParserError<S> + 'a,
 {
     terminated(object_id(), ws_prefixed1(b'R'))
         .map(|id| Reference::new(id.id(), id.generation()).into())
@@ -269,11 +269,12 @@ where
         + Compare<Caseless<&'static str>>
         + 'a,
     <S as Stream>::IterOffsets: Clone,
-    E: winnow::error::ParserError<S> + 'a,
-    E: FromExternalError<S, ObjectValueError>,
-    E: winnow::error::ParserError<&'a [u8]> + 'a,
-    E: FromExternalError<S, FromHexError> + 'a,
-    E: FromExternalError<S, ParseIntError>,
+    E: ParserError<S>
+        + 'a
+        + ParserError<&'a [u8]>
+        + FromExternalError<S, ObjectValueError>
+        + FromExternalError<S, FromHexError>
+        + FromExternalError<S, ParseIntError>,
 {
     let null = b"null".as_slice().value(Object::Null);
     let bool = alt((
@@ -313,10 +314,10 @@ where
         + 'a,
     <S as Stream>::IterOffsets: Clone,
     E: AddContext<S>
-        + FromExternalError<S, ObjectValueError>
         + 'a
-        + winnow::error::ParserError<S>
-        + winnow::error::ParserError<&'a [u8]>
+        + ParserError<S>
+        + ParserError<&'a [u8]>
+        + FromExternalError<S, ObjectValueError>
         + FromExternalError<S, FromHexError>
         + FromExternalError<S, ParseIntError>,
 {
@@ -349,12 +350,13 @@ where
         + Location
         + 'a,
     <S as Stream>::IterOffsets: Clone,
-    E: winnow::error::ParserError<S> + 'a,
-    E: FromExternalError<S, ObjectValueError>,
-    E: winnow::error::ParserError<&'a [u8]> + 'a,
-    E: FromExternalError<S, FromHexError> + 'a,
-    E: AddContext<S, &'static str>,
-    E: FromExternalError<S, ParseIntError>,
+    E: ParserError<S>
+        + 'a
+        + ParserError<&'a [u8]>
+        + AddContext<S, &'static str>
+        + FromExternalError<S, ObjectValueError>
+        + FromExternalError<S, FromHexError>
+        + FromExternalError<S, ParseIntError>,
 {
     let o = object().parse_next(buf)?;
     let Object::Dictionary(dict) = o else {
