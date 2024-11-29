@@ -1,4 +1,5 @@
 use crate::{
+    ascii85,
     machine::{Token, TokenArray, Value},
     name,
     type1::Header,

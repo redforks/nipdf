@@ -12,7 +12,6 @@ winnow.workspace = true
 log.workspace = true
 either.workspace = true
 memchr.workspace = true
-ascii85.workspace = true
 educe.workspace = true
 hex.workspace = true
 kstring.workspace = true

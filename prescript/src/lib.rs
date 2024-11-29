@@ -6,6 +6,7 @@
 pub(crate) mod machine;
 pub(crate) mod parser;
 
+mod ascii85;
 pub mod cmap;
 mod encoding;
 mod pdf_fn;

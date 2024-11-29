@@ -75,7 +75,6 @@ quote = "1.0"
 syn = { version = "2.0", features = ["full", "extra-traits"] }
 map-macro = "0.3"
 winnow = { version = "0.6", features = ["simd"] }
-ascii85 = "0.2"
 kstring = { version = "2.0", features = ["max_inline"] }
 itertools = "0.13"
 clap = { version = "4.5", features = ["derive"] }
