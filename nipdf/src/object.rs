@@ -7,6 +7,7 @@ use paste::paste;
 use prescript::Name;
 use std::{
     borrow::{Borrow, Cow},
+    convert::identity,
     fmt::{Debug, Display},
     iter::Peekable,
     rc::Rc,
@@ -19,7 +20,7 @@ pub use indirect_object::IndirectObjectDef;
 mod stream;
 pub use stream::*;
 pub type Array = Rc<[Object]>;
-use snafu::{ResultExt, Snafu};
+use snafu::{OptionExt, ResultExt, Snafu};
 
 #[derive(PartialEq, Debug, Clone, Default, Educe)]
 #[educe(Deref, DerefMut)]
@@ -468,11 +469,15 @@ impl<'b, T: TypeValidator, R: Resolver> SchemaDict<'b, T, R> {
     }
 
     pub fn opt_u16(&self, id: &Name) -> Result<Option<u16>, ObjectValueError> {
-        self.opt_int(id).map(|i| i.map(|i| i.try_into().unwrap()))
+        self.opt_int(id).and_then(|i| {
+            i.map(|i| i.try_into().whatever_context("i32 convert to u16"))
+                .transpose()
+        })
     }
 
     pub fn required_u16(&self, id: &Name) -> Result<u16, ObjectValueError> {
-        self.int(id).map(|i| i.try_into().unwrap())
+        self.int(id)
+            .and_then(|i| i.try_into().whatever_context("i32 convert to u16"))
     }
 
     pub fn opt_u32(&self, id: &Name) -> Result<Option<u32>, ObjectValueError> {
@@ -494,11 +499,14 @@ impl<'b, T: TypeValidator, R: Resolver> SchemaDict<'b, T, R> {
     }
 
     pub fn opt_u8(&self, id: &Name) -> Result<Option<u8>, ObjectValueError> {
-        self.opt_int(id).map(|i| i.map(|i| i.try_into().unwrap()))
+        self.opt_int(id)?
+            .map(|i| i.try_into().whatever_context("i32 convert to u8"))
+            .transpose()
     }
 
     pub fn required_u8(&self, id: &Name) -> Result<u8, ObjectValueError> {
-        self.int(id).map(|i| i.try_into().unwrap())
+        self.int(id)
+            .and_then(|i| i.try_into().whatever_context("i32 convert to u8"))
     }
 
     pub fn u8_or(&self, id: &Name, default: u8) -> Result<u8, ObjectValueError> {
@@ -1041,7 +1049,17 @@ impl Object {
     /// Get number as i32, if value is f32, convert to i32, error otherwise.
     pub fn as_int(&self) -> Result<i32, ObjectValueError> {
         self.either::<f32, i32>()
-            .map(|v| v.map_either(|v| v.to_i32().unwrap(), |v| v).into_inner())
+            .map(|v| {
+                v.map_either(
+                    |v| {
+                        v.to_i32()
+                            .whatever_context::<_, ObjectValueError>("convert f32 to int")
+                    },
+                    Ok,
+                )
+                .into_inner()
+            })
+            .and_then(identity)
     }
 
     pub fn as_number(&self) -> Result<f32, ObjectValueError> {
