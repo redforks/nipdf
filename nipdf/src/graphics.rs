@@ -11,7 +11,13 @@ use log::{error, warn};
 use nipdf_macro::{OperationParser, TryFromIntObject, TryFromNameObject, pdf_object};
 use prescript::{Name, sname};
 use std::{num::ParseIntError, str::from_utf8};
-use winnow::Parser as _;
+use winnow::{
+    PResult, Parser,
+    combinator::{alt, repeat_till},
+    error::{AddContext, FromExternalError, ParserError},
+    seq,
+    token::{any, take_till},
+};
 
 pub mod color_space;
 pub mod pattern;
@@ -605,20 +611,15 @@ enum ObjectOrOperator<'a> {
 
 /// Parses `Operation::PaintInlineImage` operation.
 /// `input` start after `BI`, parses dictionary and image data, consumes EI.
-fn inline_image<'a, E>() -> impl winnow::Parser<&'a [u8], InlineImage, E>
+fn inline_image<'a, E>() -> impl Parser<&'a [u8], InlineImage, E>
 where
-    E: winnow::error::ParserError<&'a [u8]>
-        + winnow::error::FromExternalError<&'a [u8], ObjectValueError>
-        + winnow::error::FromExternalError<&'a [u8], ParseIntError>
-        + winnow::error::FromExternalError<&'a [u8], hex::FromHexError>
-        + winnow::error::AddContext<&'a [u8], &'static str>
+    E: ParserError<&'a [u8]>
+        + FromExternalError<&'a [u8], ObjectValueError>
+        + FromExternalError<&'a [u8], ParseIntError>
+        + FromExternalError<&'a [u8], hex::FromHexError>
+        + AddContext<&'a [u8], &'static str>
         + 'static,
 {
-    use winnow::{
-        combinator::{alt, repeat_till},
-        seq,
-        token::any,
-    };
     seq! {(
         wsc_prefixed0(parser::dict_body()).context("dict_body"),
         _: wsc0(), _: b"ID".as_slice(), _:any,
@@ -630,17 +631,15 @@ where
     })
 }
 
-pub fn parse_operations<'a, E>(buf: &mut &'a [u8]) -> winnow::PResult<Vec<Operation>, E>
+pub fn parse_operations<'a, E>(buf: &mut &'a [u8]) -> PResult<Vec<Operation>, E>
 where
-    E: winnow::error::ParserError<&'a [u8]>
-        + winnow::error::FromExternalError<&'a [u8], ObjectValueError>
-        + winnow::error::FromExternalError<&'a [u8], ParseIntError>
-        + winnow::error::FromExternalError<&'a [u8], hex::FromHexError>
-        + winnow::error::AddContext<&'a [u8], &'static str>
+    E: ParserError<&'a [u8]>
+        + FromExternalError<&'a [u8], ObjectValueError>
+        + FromExternalError<&'a [u8], ParseIntError>
+        + FromExternalError<&'a [u8], hex::FromHexError>
+        + AddContext<&'a [u8], &'static str>
         + 'static,
 {
-    use winnow::{Parser as _, combinator::alt, token::take_till};
-
     let operator = take_till(1.., b" \t\n\r%[<(/".as_slice())
         .map(|buf| ObjectOrOperator::Operator(from_utf8(buf).unwrap()));
     let mut object_or_operator = alt((parser::object().map(ObjectOrOperator::Object), operator));
