@@ -32,8 +32,8 @@ fn test_eol_2_cr() {
 #[test_case(b"%foo\nbar" => (b"bar".as_ref(), b"foo".as_ref()); "comment with trailing data")]
 #[test_case(b"%foo\rbar" => (b"bar".as_ref(), b"foo".as_ref()); "comment with trailing data and CR")]
 #[test_case(b"%foo\r\nbar" => (b"bar".as_ref(), b"foo".as_ref()); "comment with trailing data and CRLF")]
-fn test_comment_now(input: &[u8]) -> (&[u8], &[u8]) {
-    comment_now::<_, ParserError>().parse_peek(input).unwrap()
+fn test_comment(input: &[u8]) -> (&[u8], &[u8]) {
+    comment::<_, ParserError>().parse_peek(input).unwrap()
 }
 
 #[test_case(b" " => b""; "space")]
@@ -41,9 +41,6 @@ fn test_comment_now(input: &[u8]) -> (&[u8], &[u8]) {
 #[test_case(b"\n" => b""; "newline")]
 #[test_case(b"\r" => b""; "carriage return")]
 #[test_case(b"\x0C" => b""; "form feed")]
-fn test_whitespace_now(input: &[u8]) -> &'_ [u8] {
-    whitespace_now::<_, ParserError>()
-        .parse_peek(input)
-        .unwrap()
-        .0
+fn test_whitespace(input: &[u8]) -> &'_ [u8] {
+    whitespace::<_, ParserError>().parse_peek(input).unwrap().0
 }

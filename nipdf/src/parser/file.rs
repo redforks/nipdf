@@ -1,6 +1,5 @@
 use super::{dict, eol3, wsc0, wsc1};
 use crate::{
-    ParserError,
     function::{Domain, Domains},
     object::{
         Dictionary, Entry, FilePos, Frame, FrameSet, IndirectObjectDef, ObjectValueError,
@@ -17,13 +16,13 @@ use winnow::{
     ascii::{Caseless, dec_uint},
     binary::{be_u8, be_u16, be_u24, be_u32},
     combinator::{alt, delimited, empty, preceded, repeat, separated_pair, seq, terminated},
-    error::{AddContext, ErrMode, ErrorKind, FromExternalError, ParserError as _},
+    error::{AddContext, ErrMode, ErrorKind, FromExternalError, ParserError},
     stream::{AsBStr, AsChar, Compare, Location, Stream, StreamIsPartial},
     token::{one_of, take},
 };
 
 /// Parser to parse file header, return pdf file version string, such as "1.7".
-pub(crate) fn header<'a, S>() -> impl Parser<S, &'a [u8], ParserError>
+pub(crate) fn header<'a, S>() -> impl Parser<S, &'a [u8], crate::ParserError>
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
@@ -65,7 +64,7 @@ where
         + Compare<u8>
         + Compare<&'a [u8]>
         + 'a,
-    E: winnow::error::ParserError<S> + 'a,
+    E: ParserError<S> + 'a,
 {
     preceded(
         (wsc0(), b"xref".as_slice(), eol3()),
@@ -201,7 +200,7 @@ impl CrossReferenceStreamDict {
 fn segment_parser<'a, S, E>(n: u32, default_value: u32) -> Box<dyn Parser<S, u32, E> + 'a>
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
-    E: winnow::error::ParserError<S> + 'a,
+    E: ParserError<S> + 'a,
 {
     match n {
         0 => Box::new(empty.value(default_value)),
@@ -225,12 +224,13 @@ where
         + Location
         + 'a,
     <S as Stream>::IterOffsets: Clone,
-    E: winnow::error::ParserError<S> + 'a,
-    E: winnow::error::ParserError<&'a [u8]> + 'a,
-    E: FromExternalError<S, ObjectValueError>,
-    E: FromExternalError<S, FromHexError> + 'a,
-    E: FromExternalError<S, ParseIntError> + 'a,
-    E: AddContext<S>,
+    E: ParserError<S>
+        + 'a
+        + ParserError<&'a [u8]>
+        + FromExternalError<S, ObjectValueError>
+        + FromExternalError<S, FromHexError>
+        + FromExternalError<S, ParseIntError>
+        + AddContext<S>,
 {
     let start = input.checkpoint();
     let IndirectObjectDef(_, s) = indirect_object_def::<S, E>().parse_next(input)?;
@@ -294,8 +294,10 @@ where
         + Clone
         + 'a,
     <S as Stream>::IterOffsets: Clone,
-    E: winnow::error::ParserError<S> + winnow::error::ParserError<&'a [u8]> + AddContext<S> + 'a,
-    E: winnow::error::ParserError<Located<&'a [u8]>>
+    E: ParserError<S>
+        + ParserError<&'a [u8]>
+        + ParserError<Located<&'a [u8]>>
+        + AddContext<S>
         + AddContext<Located<&'a [u8]>>
         + Debug
         + FromExternalError<Located<&'a [u8]>, ObjectValueError>
@@ -360,7 +362,7 @@ mod tests {
 
     #[report]
     #[test]
-    fn test_xref_section() -> Result<(), ParserError> {
+    fn test_xref_section() -> Result<(), crate::ParserError> {
         // extra \r add to the end of entry lines because eol should 2 bytes
         let buf = b"xref
 0 1

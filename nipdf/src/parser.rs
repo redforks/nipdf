@@ -49,7 +49,7 @@ where
 
 /// Return comment parser. Parser returns comment string, `%` prefix and newline suffix not
 /// included.
-fn comment_now<'a, S, E>() -> impl Parser<S, &'a [u8], E>
+fn comment<'a, S, E>() -> impl Parser<S, &'a [u8], E>
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8>,
     E: ParserError<S> + 'a,
@@ -62,7 +62,7 @@ where
 /// in PDF 32000-1:2008 7.2.2 '\0' is whitespace, but in 4.46 '\0' is
 /// not listed as whitespace. Exclude '\0' because after `stream` tag,
 /// '\0' maybe part of stream content.
-fn whitespace_now<'a, S, E>() -> impl Parser<S, u8, E> + 'a
+fn whitespace<'a, S, E>() -> impl Parser<S, u8, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
     E: ParserError<S> + 'a,
@@ -80,7 +80,7 @@ where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
     E: ParserError<S> + 'a,
 {
-    alt((whitespace_now().void(), comment_now().void()))
+    alt((whitespace().void(), comment().void()))
 }
 
 /// Matches 0 or more whitespace or comments.
@@ -124,10 +124,7 @@ where
     O: 'a,
     E: ParserError<S> + 'a,
 {
-    preceded(
-        repeat::<_, _, (), _, _>(1.., whitespace_now()).void(),
-        inner,
-    )
+    preceded(repeat::<_, _, (), _, _>(1.., whitespace()).void(), inner)
 }
 
 /// Convert a parser to a parser that prefixed with 0 or more whitespace.
@@ -138,7 +135,7 @@ where
     O: 'a,
     E: ParserError<S> + 'a,
 {
-    preceded(repeat::<_, _, (), _, _>(.., whitespace_now()).void(), inner)
+    preceded(repeat::<_, _, (), _, _>(.., whitespace()).void(), inner)
 }
 
 #[cfg(test)]
