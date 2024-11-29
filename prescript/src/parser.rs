@@ -1,11 +1,12 @@
 use crate::{
+    AnyWhatever, ParserError,
     ascii85::{self, Ascii85Error},
     machine::{Token, TokenArray, Value},
     name,
     type1::Header,
 };
 use either::Either;
-use snafu::{FromString, Whatever, prelude::*};
+use snafu::FromString as _;
 use std::{
     cell::RefCell,
     iter::once,
@@ -18,163 +19,36 @@ use winnow::{
     PResult, Parser,
     ascii::hex_digit1,
     combinator::{alt, delimited, dispatch, fail, opt, preceded, repeat, terminated},
-    error::{
-        AddContext, ErrMode, ErrorKind, FromExternalError, ParseError, ParserError as _, StrContext,
-    },
+    error::{ErrMode, ErrorKind, FromExternalError, ParseError, ParserError as _},
     stream::{AsChar, Stream},
     token::{any, literal, one_of, take_till, take_while},
 };
 
-#[derive(Snafu, Debug)]
-pub enum ParserError<C: 'static = StrContext> {
-    Leaf {
-        kind: ErrorKind,
-        context: Option<C>,
-    },
-    Inter {
-        #[snafu(source(from(ParserError<C>, Box::new)))]
-        source: Box<ParserError<C>>,
-        kind: ErrorKind,
-        context: Option<C>,
-    },
-    StringEncoding {
-        source: FromUtf8Error,
-        context: Option<C>,
-    },
-    StrEncoding {
-        source: Utf8Error,
-        context: Option<C>,
-    },
-    ParseInt {
-        source: ParseIntError,
-        context: Option<C>,
-    },
-    Ascii85 {
-        source: Ascii85Error,
-        context: Option<C>,
-    },
-}
-
-impl<C: 'static, I> FromExternalError<I, Utf8Error> for ParserError<C> {
-    fn from_external_error(_input: &I, kind: ErrorKind, e: Utf8Error) -> Self {
-        Self::Inter {
-            source: Box::new(Self::StrEncoding {
-                source: e,
-                context: None,
-            }),
-            kind,
-            context: None,
-        }
-    }
-}
-
+#[derive(snafu::Snafu, Debug)]
 enum PossibleError {
-    Utf8(Utf8Error),
-    Utf8Str(FromUtf8Error),
-    Int(ParseIntError),
-    Ascii85(Ascii85Error),
+    #[snafu(transparent)]
+    Utf8 { source: Utf8Error },
+    #[snafu(transparent)]
+    Utf8Str { source: FromUtf8Error },
+    #[snafu(transparent)]
+    Int { source: ParseIntError },
+    #[snafu(transparent)]
+    Ascii85 { source: Ascii85Error },
 }
 
-impl From<Utf8Error> for PossibleError {
-    fn from(err: Utf8Error) -> Self {
-        PossibleError::Utf8(err)
-    }
-}
-
-impl From<FromUtf8Error> for PossibleError {
-    fn from(err: FromUtf8Error) -> Self {
-        PossibleError::Utf8Str(err)
-    }
-}
-
-impl From<ParseIntError> for PossibleError {
-    fn from(err: ParseIntError) -> Self {
-        PossibleError::Int(err)
-    }
-}
-
-impl From<Ascii85Error> for PossibleError {
-    fn from(value: Ascii85Error) -> Self {
-        PossibleError::Ascii85(value)
-    }
-}
-
-impl<C: 'static, I> FromExternalError<I, PossibleError> for ParserError<C> {
-    fn from_external_error(_input: &I, kind: ErrorKind, e: PossibleError) -> Self {
-        Self::Inter {
-            source: Box::new(match e {
-                PossibleError::Utf8(e) => Self::StrEncoding {
-                    source: e,
-                    context: None,
-                },
-                PossibleError::Utf8Str(e) => Self::StringEncoding {
-                    source: e,
-                    context: None,
-                },
-                PossibleError::Int(e) => Self::ParseInt {
-                    source: e,
-                    context: None,
-                },
-                PossibleError::Ascii85(e) => Self::Ascii85 {
-                    source: e,
-                    context: None,
-                },
-            }),
-            kind,
-            context: None,
-        }
-    }
-}
-
-pub(crate) fn perror_to_whatever(err: ErrMode<ParserError>, msg: impl Into<String>) -> Whatever {
+pub(crate) fn perror_to_whatever(err: ErrMode<ParserError>, msg: impl Into<String>) -> AnyWhatever {
     match err.into_inner() {
-        Some(err) => Whatever::with_source(Box::new(err), msg.into()),
-        None => unreachable!(),
+        Some(err) => AnyWhatever::with_source(Box::new(err), msg.into()),
+        None => todo!(),
     }
 }
 
 pub(crate) fn parse_error_to_whatever<I>(
     err: ParseError<I, ParserError>,
     msg: impl Into<String>,
-) -> Whatever {
+) -> AnyWhatever {
     let e = err.into_inner();
-    Whatever::with_source(Box::new(e), msg.into())
-}
-
-impl<I: Stream, C> AddContext<I, C> for ParserError<C> {
-    fn add_context(
-        mut self,
-        _input: &I,
-        _token_start: &<I as Stream>::Checkpoint,
-        context: C,
-    ) -> Self {
-        match &mut self {
-            Self::Leaf { context: c, .. }
-            | Self::Inter { context: c, .. }
-            | Self::StringEncoding { context: c, .. }
-            | Self::StrEncoding { context: c, .. }
-            | Self::ParseInt { context: c, .. }
-            | Self::Ascii85 { context: c, .. } => *c = Some(context),
-        }
-        self
-    }
-}
-
-impl<I: Stream> winnow::error::ParserError<I> for ParserError {
-    fn from_error_kind(_input: &I, kind: ErrorKind) -> Self {
-        Self::Leaf {
-            kind,
-            context: None,
-        }
-    }
-
-    fn append(self, _input: &I, _token_start: &<I as Stream>::Checkpoint, kind: ErrorKind) -> Self {
-        Self::Inter {
-            source: Box::new(self),
-            kind,
-            context: None,
-        }
-    }
+    AnyWhatever::with_source(Box::new(e), msg.into())
 }
 
 /// Parses the header of a Type 1 font. The header is the first line of the
@@ -202,14 +76,11 @@ pub fn header(input: &mut &[u8]) -> PResult<Header, ParserError> {
 
     Ok(Header {
         spec_ver: String::from_utf8(spec_ver.to_owned())
-            .context(StringEncodingSnafu { context: None })
-            .map_err(ErrMode::Backtrack)?,
+            .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?,
         font_name: String::from_utf8(font_name.to_owned())
-            .context(StringEncodingSnafu { context: None })
-            .map_err(ErrMode::Backtrack)?,
+            .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?,
         font_ver: String::from_utf8(font_ver.to_owned())
-            .context(StringEncodingSnafu { context: None })
-            .map_err(ErrMode::Backtrack)?,
+            .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?,
     })
 }
 
@@ -290,46 +161,37 @@ fn int_or_float(input: &mut &[u8]) -> PResult<Either<i32, f32>, ParserError> {
     if let Some(pos) = memchr::memchr(b'#', buf) {
         let (radix, num) = buf.split_at(pos);
         let radix = from_utf8(radix)
-            .context(StrEncodingSnafu { context: None })
-            .map_err(ErrMode::Backtrack)?
+            .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?
             .parse::<u32>()
-            .map_err(|_| ErrMode::Backtrack(ParserError::from_error_kind(input, ErrorKind::Tag)))?;
+            .map_err(|_| ErrMode::from_error_kind(input, ErrorKind::Tag))?;
         let num = i32::from_str_radix(
             from_utf8(&num[1..])
-                .context(StrEncodingSnafu { context: None })
-                .map_err(ErrMode::Backtrack)?,
+                .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?,
             radix,
         )
-        .map_err(|_| ErrMode::Backtrack(ParserError::from_error_kind(input, ErrorKind::Tag)))?;
+        .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Tag, e))?;
         return Ok(Either::Left(num));
     }
 
     if memchr::memchr3(b'.', b'e', b'E', buf).is_some() {
         Ok(Either::Right(
             from_utf8(buf)
-                .context(StrEncodingSnafu { context: None })
-                .map_err(ErrMode::Backtrack)?
+                .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?
                 .parse::<f32>()
-                .map_err(|_| {
-                    ErrMode::Backtrack(ParserError::from_error_kind(input, ErrorKind::Tag))
-                })?,
+                .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Tag, e))?,
         ))
     } else {
         Ok(
             match from_utf8(buf)
-                .context(StrEncodingSnafu { context: None })
-                .map_err(ErrMode::Backtrack)?
+                .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?
                 .parse::<i32>()
             {
                 Ok(v) => Either::Left(v),
                 Err(_) => Either::Right(
                     from_utf8(buf)
-                        .context(StrEncodingSnafu { context: None })
-                        .map_err(ErrMode::Backtrack)?
+                        .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?
                         .parse::<f32>()
-                        .map_err(|_| {
-                            ErrMode::Backtrack(ParserError::from_error_kind(input, ErrorKind::Tag))
-                        })?,
+                        .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Tag, e))?,
                 ),
             },
         )
@@ -473,9 +335,7 @@ fn procedure(input: &mut &[u8]) -> PResult<TokenArray, ParserError> {
 /// Parses '[', ']', '<<', '>>' and convert them to String.
 fn special_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str, ParserError> {
     let buf = take_while(1..=2, (b'[', ']', b"<<", b">>")).parse_next(input)?;
-    from_utf8(buf)
-        .context(StrEncodingSnafu { context: None })
-        .map_err(ErrMode::Backtrack)
+    from_utf8(buf).map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))
 }
 
 pub fn token(input: &mut &[u8]) -> PResult<Token, ParserError> {

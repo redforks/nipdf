@@ -1,5 +1,5 @@
 use crate::{
-    Name, name,
+    AnyWhatever, Name, Result, name,
     parser::{
         perror_to_whatever, token as token_parser, white_space, white_space_or_comment, ws_prefixed,
     },
@@ -7,7 +7,7 @@ use crate::{
 };
 use educe::Educe;
 use either::Either;
-use snafu::{FromString, ResultExt, Whatever, prelude::*};
+use snafu::{FromString as _, OptionExt as _, ResultExt as _, Snafu, ensure};
 use std::{
     cell::{Ref, RefCell},
     collections::HashMap,
@@ -467,15 +467,15 @@ pub enum MachineError {
     #[snafu(display("range check error"))]
     RangeCheck,
     #[snafu(display("syntax error"))]
-    SyntaxError { source: Whatever },
+    SyntaxError { source: AnyWhatever },
     #[snafu(whatever, display("{message}"))]
     Whatever {
         message: String,
 
         // Having a `source` is optional, but if it is present, it must
         // have this specific attribute and type:
-        #[snafu(source(from(Box<dyn std::error::Error>, Some)))]
-        source: Option<Box<dyn std::error::Error>>,
+        #[snafu(source(from(Box<dyn std::error::Error + Sync + Send>, Some)))]
+        source: Option<Box<dyn std::error::Error + Sync + Send>>,
     },
 }
 
@@ -517,7 +517,7 @@ impl<'a> CurrentFile<'a> {
         }
     }
 
-    pub fn skip_white_space(&mut self) -> Result<(), Whatever> {
+    pub fn skip_white_space(&mut self) -> Result<()> {
         match self.decryped {
             Some(ref data) => {
                 let mut buf = &data[self.decryped_pos..];
@@ -537,7 +537,7 @@ impl<'a> CurrentFile<'a> {
         Ok(())
     }
 
-    pub fn start_decrypt(&mut self) -> Result<(), Whatever> {
+    pub fn start_decrypt(&mut self) -> Result<()> {
         assert!(self.decryped.is_none());
         self.skip_white_space()?;
         let remains = &self.data[self.remains_pos..];
@@ -549,7 +549,7 @@ impl<'a> CurrentFile<'a> {
         Ok(())
     }
 
-    pub fn stop_decrypt(&mut self) -> Result<(), Whatever> {
+    pub fn stop_decrypt(&mut self) -> Result<()> {
         assert!(self.decryped.is_some());
         self.skip_white_space()?;
         self.remains_pos += if self.hex_form {
@@ -561,7 +561,7 @@ impl<'a> CurrentFile<'a> {
         Ok(())
     }
 
-    pub fn read(&mut self, buf: &mut [u8]) -> Result<usize, Whatever> {
+    pub fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         self.skip_white_space()?;
         Ok(match self.decryped {
             Some(ref data) => {

@@ -1,10 +1,10 @@
 use crate::{
-    Encoding,
+    Encoding, ParserError, Result,
     machine::{Array, Machine, Value},
-    parser::{ParserError, header, parse_error_to_whatever, perror_to_whatever},
+    parser::{header, parse_error_to_whatever, perror_to_whatever},
     sname,
 };
-use snafu::{Whatever, prelude::*};
+use snafu::{OptionExt as _, ResultExt as _, whatever};
 use std::{array::from_fn, borrow::Cow};
 use winnow::{Parser, binary::le_u32, combinator::preceded, token::any};
 
@@ -22,13 +22,13 @@ pub struct Font {
     encoding: Option<Encoding>,
 }
 
-fn parse_header(mut data: &[u8]) -> Result<Header, Whatever> {
+fn parse_header(mut data: &[u8]) -> Result<Header> {
     header
         .parse_next(&mut data)
         .map_err(|e| perror_to_whatever(e, "parse header"))
 }
 
-fn parse_vec_encoding(arr: &Array) -> Result<Encoding, Whatever> {
+fn parse_vec_encoding(arr: &Array) -> Result<Encoding> {
     let mut names = from_fn(|_| sname(".notdef"));
     for (i, v) in arr.iter().enumerate() {
         names[i] = v.name().whatever_context("get encoding name")?;
@@ -37,7 +37,7 @@ fn parse_vec_encoding(arr: &Array) -> Result<Encoding, Whatever> {
 }
 
 impl Font {
-    pub fn parse(data: &[u8]) -> Result<Self, Whatever> {
+    pub fn parse(data: &[u8]) -> Result<Self> {
         let data = normalize_pfb(data)?;
         let header = parse_header(&data)?;
         assert!(header.spec_ver.starts_with("1."), "Not Type1 font");
@@ -74,7 +74,7 @@ impl Font {
 }
 
 /// If file is pfb file, remove pfb section bytes
-fn normalize_pfb(data: &[u8]) -> Result<Cow<'_, [u8]>, Whatever> {
+fn normalize_pfb(data: &[u8]) -> Result<Cow<'_, [u8]>> {
     if data.len() < 100 || data[0] != 0x80 {
         return Ok(Cow::Borrowed(data));
     }
