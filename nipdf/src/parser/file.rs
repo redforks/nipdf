@@ -10,7 +10,10 @@ use crate::{
 use hex::FromHexError;
 use log::{info, warn};
 use prescript::sname;
-use std::{fmt::Debug, num::ParseIntError};
+use std::{
+    fmt::Debug,
+    num::{ParseIntError, TryFromIntError},
+};
 use winnow::{
     Located, PResult, Parser,
     ascii::{Caseless, dec_uint},
@@ -230,6 +233,7 @@ where
         + FromExternalError<S, ObjectValueError>
         + FromExternalError<S, FromHexError>
         + FromExternalError<S, ParseIntError>
+        + FromExternalError<S, TryFromIntError>
         + AddContext<S>,
 {
     let start = input.checkpoint();
@@ -303,6 +307,7 @@ where
         + FromExternalError<Located<&'a [u8]>, ObjectValueError>
         + FromExternalError<Located<&'a [u8]>, FromHexError>
         + FromExternalError<Located<&'a [u8]>, ParseIntError>
+        + FromExternalError<Located<&'a [u8]>, TryFromIntError>
         + 'a,
 {
     let bytes = buf.peek_finish().1;

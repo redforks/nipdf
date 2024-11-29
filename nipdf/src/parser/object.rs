@@ -10,12 +10,15 @@ use ahash::HashMap;
 use either::Either;
 use hex::FromHexError;
 use prescript::Name;
-use std::{borrow::Cow, num::ParseIntError};
+use std::{
+    borrow::Cow,
+    num::{ParseIntError, TryFromIntError},
+};
 use winnow::{
     PResult, Parser,
     ascii::{Caseless, dec_uint, float},
     combinator::{alt, delimited, preceded, repeat, rest, terminated},
-    error::{AddContext, FromExternalError, ParserError},
+    error::{AddContext, ErrMode, ErrorKind, FromExternalError, ParserError},
     stream::{AsBStr, AsChar, Compare, ContainsToken, Location, Stream, StreamIsPartial},
     token::{any, take, take_till, take_while},
 };
@@ -319,6 +322,7 @@ where
         + ParserError<&'a [u8]>
         + FromExternalError<S, ObjectValueError>
         + FromExternalError<S, FromHexError>
+        + FromExternalError<S, TryFromIntError>
         + FromExternalError<S, ParseIntError>,
 {
     (
@@ -356,6 +360,7 @@ where
         + AddContext<S, &'static str>
         + FromExternalError<S, ObjectValueError>
         + FromExternalError<S, FromHexError>
+        + FromExternalError<S, TryFromIntError>
         + FromExternalError<S, ParseIntError>,
 {
     let o = object().parse_next(buf)?;
@@ -364,7 +369,10 @@ where
         return Ok(Either::Left(o));
     };
     let len: Option<u32> = match dict.get("Length") {
-        Some(Object::Integer(l)) => Some(u32::try_from(*l).unwrap()),
+        Some(Object::Integer(l)) => Some(
+            u32::try_from(*l)
+                .map_err(|e| ErrMode::from_external_error(buf, ErrorKind::Assert, e))?,
+        ),
         Some(Object::Reference(_)) => None,
         _ => {
             (wsc0(), b"endobj".as_slice(), wsc0()).parse_next(buf)?;
@@ -386,7 +394,13 @@ where
                 )
                     .parse_next(buf)?;
             }
-            let bufpos = BufPos::new(range.end.try_into().unwrap(), len);
+            let bufpos = BufPos::new(
+                range
+                    .end
+                    .try_into()
+                    .map_err(|e| ErrMode::from_external_error(buf, ErrorKind::Assert, e))?,
+                len,
+            );
             Ok(Either::Right((dict, bufpos)))
         }
         Err(_) => {
