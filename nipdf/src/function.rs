@@ -474,7 +474,7 @@ impl SampledFunctionDict<'_, '_> {
             }),
             size: self.size()?,
             samples: sample_data.into_owned(),
-            bits_per_sample: bits_per_sample.try_into().unwrap(),
+            bits_per_sample: bits_per_sample.try_into().unwrap_or(u8::MAX),
         })
     }
 }

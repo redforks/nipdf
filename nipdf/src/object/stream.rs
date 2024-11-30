@@ -17,7 +17,7 @@ use crate::{
 use bitstream_io::{BigEndian, BitReader};
 use image::{DynamicImage, GrayImage, Luma, RgbImage, Rgba, RgbaImage};
 use jpeg_decoder::PixelFormat;
-use log::error;
+use log::{error, warn};
 use nipdf_macro::pdf_object;
 use num_traits::ToPrimitive;
 use prescript::{AnyWhatever, Name, sname};
@@ -308,15 +308,18 @@ fn decode_image<'a, M: ImageMetadata>(
             let cs = DeviceCMYK;
             DynamicImage::ImageRgba8(RgbaImage::from_fn(width, height, |x, y| {
                 let i = (y * width + x) as usize * 4;
-                Rgba(
-                    cs.to_rgba(&[
+                let rgba = cs
+                    .to_rgba(&[
                         255 - pixels[i],
                         255 - pixels[i + 1],
                         255 - pixels[i + 2],
                         255 - pixels[i + 3],
                     ])
-                    .unwrap(),
-                )
+                    .unwrap_or_else(|err| {
+                        warn!("Failed to convert CMYK to RGBA: {}", err);
+                        [0, 0, 0, 255]
+                    });
+                Rgba(rgba)
             }))
         }
 

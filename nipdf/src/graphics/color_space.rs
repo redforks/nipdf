@@ -56,7 +56,11 @@ impl ColorCompConvertTo<u8> for f32 {
         // rounded to nearest integer, See page 157 of PDF 32000-1:2008
         // If the value is a real number, it shall be rounded to the nearest integer;
         // value clamped to u8 range, cast is safe
-        (self * 255.0).round().clamp(0., 255.).to_u8().unwrap()
+        (self * 255.0)
+            .round()
+            .clamp(0., 255.)
+            .to_u8()
+            .unwrap_or(255)
     }
 }
 
@@ -150,7 +154,9 @@ where
                 "DeviceCMYK" => Ok(Self::DeviceCMYK),
                 "Pattern" => Ok(Self::Pattern(Box::new(PatternColorSpace(None)))),
                 _ => {
-                    let color_spaces = resources.unwrap().color_space()?;
+                    let color_spaces = resources
+                        .whatever_context("resources not provided")?
+                        .color_space()?;
                     let args = color_spaces
                         .get(name)
                         .whatever_context("ColorSpace::from_args() color space not found")?;
@@ -242,7 +248,9 @@ where
                     // occur only if at least one color component (other than None) is specified
                     // and is not available on the  device.
                     ensure_whatever!(
-                        !names.iter().all(|n| n.name().unwrap() == sname("None")),
+                        !names
+                            .iter()
+                            .all(|n| n.name().map_or(false, |name| name == sname("None"))),
                         "all color component None should not render which is not supported"
                     );
 
@@ -254,7 +262,8 @@ where
                         .whatever_context("resolve pdf object")?;
                     let base = Self::from_args(&alternate, resolver, resources)?;
                     Ok(Self::DeviceN(Box::new(DeviceNColorSpace {
-                        n: n.try_into().unwrap(),
+                        n: n.try_into()
+                            .whatever_context("conversion to usize failed")?,
                         alt: base,
                         f: Rc::new(f.func()?),
                     })))
@@ -507,7 +516,7 @@ where
     fn to_rgba(&self, color: &[T]) -> Result<[T; 4]> {
         self.0
             .as_ref()
-            .expect("Pattern CS base CS not set")
+            .whatever_context("Pattern CS base CS not set")?
             .to_rgba(color)
     }
 
@@ -598,7 +607,10 @@ where
     u8: ColorCompConvertTo<T>,
 {
     fn to_rgba(&self, color: &[T]) -> Result<[T; 4]> {
-        let c = self.f.call(&[color[0].into_color_comp()]).unwrap();
+        let c = self
+            .f
+            .call(&[color[0].into_color_comp()])
+            .whatever_context("Function call failed")?;
         let mut r = [T::max_color(); 4];
         c.iter()
             .zip(r.iter_mut())
@@ -634,7 +646,10 @@ where
             .take(self.n as usize)
             .map(|c| c.into_color_comp())
             .collect();
-        let c = self.f.call(color.as_slice()).unwrap();
+        let c = self
+            .f
+            .call(color.as_slice())
+            .whatever_context("Function call failed")?;
         let mut r = [T::max_color(); 4];
         c.iter()
             .zip(r.iter_mut())
@@ -648,7 +663,18 @@ where
 
     fn default_color(&self) -> [T; 4] {
         let color: TinyVec<[T; 4]> = repeat(T::max_color()).take(self.n as usize).collect();
-        self.to_rgba(color.as_slice()).unwrap()
+        match self.to_rgba(color.as_slice()) {
+            Ok(rgba) => rgba,
+            Err(e) => {
+                log::warn!("Error converting to RGBA: {:?}", e);
+                [
+                    T::min_color(),
+                    T::min_color(),
+                    T::min_color(),
+                    T::min_color(),
+                ]
+            }
+        }
     }
 }
 
