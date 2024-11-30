@@ -106,7 +106,18 @@ where
     CS: ColorSpaceTrait<F>,
     F: ColorCompConvertTo<T>,
 {
-    convert_color_to(&cs.to_rgba(color).unwrap())
+    match cs.to_rgba(color) {
+        Ok(rgba) => convert_color_to(&rgba),
+        Err(e) => {
+            log::warn!("Error converting color to RGBA: {:?}", e);
+            [
+                T::min_color(),
+                T::min_color(),
+                T::min_color(),
+                T::min_color(),
+            ]
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
