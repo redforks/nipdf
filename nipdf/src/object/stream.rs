@@ -110,7 +110,11 @@ impl<'a, 'b> FilterDict<'a, 'b> {
                 .map(|v| v.name().map_err(|_| ObjectValueError::UnexpectedType))
                 .collect::<Result<_, _>>()?,
             Object::Name(n) => vec![n.clone()],
-            Object::Reference(id) => Self::get_filters(r.unwrap().resolve(id.id().id())?, r)?,
+            Object::Reference(id) => Self::get_filters(
+                r.whatever_context::<_, ObjectValueError>("ObjectResolver is None")?
+                    .resolve(id.id().id())?,
+                r,
+            )?,
             _ => {
                 error!("Filter is not Name or Array of Name");
                 return Err(ObjectValueError::UnexpectedType);
@@ -134,10 +138,9 @@ impl<'a, 'b> FilterDict<'a, 'b> {
     /// If value is array, its items should be Dictionary or None,
     /// Otherwise, it should be Dictionary.
     pub fn parameters(&self) -> Result<Vec<Option<&'b Dictionary>>, ObjectValueError> {
-        let v = self.alt_get(&KEY_FILTER_PARAMS, &sname("DP"));
-        let Some(v) = v else {
-            return Ok(vec![]);
-        };
+        let v = self
+            .alt_get(&KEY_FILTER_PARAMS, &sname("DP"))
+            .whatever_context::<_, ObjectValueError>("Failed to get DecodeParms or DP")?;
 
         Ok(match v {
             Object::Array(vals) => vals
@@ -147,7 +150,7 @@ impl<'a, 'b> FilterDict<'a, 'b> {
                     Object::Null => Ok(None),
                     Object::Reference(r) => self
                         .r
-                        .unwrap()
+                        .whatever_context::<_, ObjectValueError>("ObjectResolver is None")?
                         .resolve(r.id().id())
                         .and_then(|o| o.as_dict().map(Some)),
                     _ => {
@@ -252,7 +255,12 @@ fn decode_image<'a, M: ImageMetadata>(
     resolver: &ObjectResolver<'a>,
     resources: Option<&ResourceDict<'a, '_>>,
 ) -> Result<DynamicImage, ObjectValueError> {
-    fn decode_one_bit(w: u32, h: u32, data: &[u8], row_padding: bool) -> DynamicImage {
+    fn decode_one_bit(
+        w: u32,
+        h: u32,
+        data: &[u8],
+        row_padding: bool,
+    ) -> Result<DynamicImage, ObjectValueError> {
         use bitstream_io::read::BitRead;
 
         let mut img = GrayImage::new(w, h);
@@ -266,20 +274,31 @@ fn decode_image<'a, M: ImageMetadata>(
         let mut r = BitReader::<_, BigEndian>::new(data);
         for y in 0..h {
             for x in 0..w {
-                img.put_pixel(x, y, Luma([if r.read_bit().unwrap() { 255u8 } else { 0 }]));
+                let bit = r
+                    .read_bit()
+                    .whatever_context::<_, ObjectValueError>("Failed to read bit")?;
+                img.put_pixel(x, y, Luma([if bit { 255u8 } else { 0 }]));
             }
-            r.skip(row_padding_bits).unwrap();
+            r.skip(row_padding_bits)
+                .whatever_context::<_, ObjectValueError>("Failed to skip bits")?;
         }
-        DynamicImage::ImageLuma8(img)
+        Ok(DynamicImage::ImageLuma8(img))
     }
 
-    let color_space = img_meta.color_space().unwrap();
-    let color_space =
-        color_space.map(|args| ColorSpace::from_args(&args, resolver, resources).unwrap());
+    let color_space = img_meta
+        .color_space()
+        .whatever_context::<_, ObjectValueError>("Failed to get color space")?;
+    let color_space = color_space
+        .map(|args| ColorSpace::from_args(&args, resolver, resources))
+        .transpose()
+        .whatever_context::<_, ObjectValueError>("Failed to create ColorSpace from args")?;
     let mut r = match data {
         FilterDecodedData::Image(img) => {
             if let Some(color_space) = color_space.as_ref() {
-                image_transform_color_space(img, color_space).unwrap()
+                image_transform_color_space(img, color_space)
+                    .whatever_context::<_, ObjectValueError>(
+                        "Failed to transform image color space",
+                    )?
             } else {
                 img
             }
@@ -301,18 +320,31 @@ fn decode_image<'a, M: ImageMetadata>(
         FilterDecodedData::Bytes(data) => {
             match (
                 &color_space,
-                img_meta.bits_per_component().unwrap().unwrap(),
+                img_meta
+                    .bits_per_component()
+                    .whatever_context::<_, ObjectValueError>("Failed to get bits per component")?
+                    .whatever_context::<_, ObjectValueError>("Bits per component is None")?,
             ) {
                 (_, 1) => decode_one_bit(
-                    img_meta.width().unwrap(),
-                    img_meta.height().unwrap(),
+                    img_meta
+                        .width()
+                        .whatever_context::<_, ObjectValueError>("Failed to get width")?,
+                    img_meta
+                        .height()
+                        .whatever_context::<_, ObjectValueError>("Failed to get height")?,
                     data.borrow(),
                     true,
-                ),
+                )?,
                 (Some(cs), 8) => {
                     let n_colors = cs.components();
-                    let mut img =
-                        RgbaImage::new(img_meta.width().unwrap(), img_meta.height().unwrap());
+                    let mut img = RgbaImage::new(
+                        img_meta
+                            .width()
+                            .whatever_context::<_, ObjectValueError>("Failed to get width")?,
+                        img_meta
+                            .height()
+                            .whatever_context::<_, ObjectValueError>("Failed to get height")?,
+                    );
                     for (p, dest_p) in data.chunks(n_colors).zip(img.pixels_mut()) {
                         let c: TinyVec<[f32; 4]> = p.iter().map(|v| v.into_color_comp()).collect();
                         let color: [u8; 4] = color_to_rgba(cs, c.as_slice());
@@ -323,26 +355,44 @@ fn decode_image<'a, M: ImageMetadata>(
                 _ => todo!(
                     "unsupported interoperate decoded stream data as image: {:?} {}",
                     color_space,
-                    img_meta.bits_per_component().unwrap().unwrap()
+                    img_meta
+                        .bits_per_component()
+                        .whatever_context::<_, ObjectValueError>(
+                            "Failed to get bits per component"
+                        )?
+                        .whatever_context::<_, ObjectValueError>("Bits per component is None")?
                 ),
             }
         }
 
         FilterDecodedData::CCITTFaxImage(data) => {
-            assert_eq!(1, img_meta.bits_per_component().unwrap().unwrap());
+            assert_eq!(
+                1,
+                img_meta
+                    .bits_per_component()
+                    .whatever_context::<_, ObjectValueError>("Failed to get bits per component")?
+                    .whatever_context::<_, ObjectValueError>("Bits per component is None")?
+            );
             decode_one_bit(
-                img_meta.width().unwrap(),
-                img_meta.height().unwrap(),
+                img_meta
+                    .width()
+                    .whatever_context::<_, ObjectValueError>("Failed to get width")?,
+                img_meta
+                    .height()
+                    .whatever_context::<_, ObjectValueError>("Failed to get height")?,
                 &data,
                 false,
-            )
+            )?
         }
     };
 
-    if let Some(ImageMask::ColorKey(color_key)) = img_meta.mask().unwrap() {
-        let Some(cs) = color_space else {
-            todo!("Color Space not defined when process color key mask");
-        };
+    if let Some(ImageMask::ColorKey(color_key)) = img_meta
+        .mask()
+        .whatever_context::<_, ObjectValueError>("Failed to get mask")?
+    {
+        let cs = color_space.whatever_context::<_, ObjectValueError>(
+            "Color Space not defined when processing color key mask",
+        )?;
         let mut img = r.into_rgba8();
         let color_key = color_key_range(&color_key, &cs)?;
 

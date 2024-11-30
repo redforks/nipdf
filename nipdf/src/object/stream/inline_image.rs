@@ -52,7 +52,8 @@ impl ImageMetadata for InlineStreamDict<'_> {
 
     fn bits_per_component(&self) -> Result<Option<u8>> {
         self.alt_get(&sname("BitsPerComponent"), &sname("BPC"), |o| {
-            o.int().map(|v| v.try_into().unwrap())
+            o.int()
+                .and_then(|v| v.try_into().whatever_context("convert BitsPerComponent"))
         })
         .whatever_context("get BitsPerComponent")
     }

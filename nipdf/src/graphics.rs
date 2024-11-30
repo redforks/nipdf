@@ -9,8 +9,11 @@ use crate::{
 use euclid::{Length, Point2D, Transform2D};
 use log::{error, warn};
 use nipdf_macro::{OperationParser, TryFromIntObject, TryFromNameObject, pdf_object};
-use prescript::{Name, sname};
-use std::{num::ParseIntError, str::from_utf8};
+use prescript::{AnyWhatever, Name, sname};
+use std::{
+    num::ParseIntError,
+    str::{Utf8Error, from_utf8},
+};
 use winnow::{
     PResult, Parser,
     combinator::{alt, repeat_till},
@@ -617,6 +620,7 @@ where
         + FromExternalError<&'a [u8], ObjectValueError>
         + FromExternalError<&'a [u8], ParseIntError>
         + FromExternalError<&'a [u8], hex::FromHexError>
+        + FromExternalError<&'a [u8], AnyWhatever>
         + AddContext<&'a [u8], &'static str>
         + 'static,
 {
@@ -625,9 +629,8 @@ where
         _: wsc0(), _: b"ID".as_slice(), _:any,
         repeat_till(1.., any, alt((b" EI".as_slice(), b"\nEI".as_slice()))).map(|(o, _)| o).context("image data"),
     )}
-    .map(|(d, data): (Dictionary, Vec<u8>)| {
-        let stream = InlineStream::new(d, &data);
-        stream.decode_image().unwrap()
+    .try_map(|(d, data): (Dictionary, Vec<u8>)| {
+        InlineStream::new(d, &data).decode_image()
     })
 }
 
@@ -637,11 +640,13 @@ where
         + FromExternalError<&'a [u8], ObjectValueError>
         + FromExternalError<&'a [u8], ParseIntError>
         + FromExternalError<&'a [u8], hex::FromHexError>
+        + FromExternalError<&'a [u8], Utf8Error>
+        + FromExternalError<&'a [u8], AnyWhatever>
         + AddContext<&'a [u8], &'static str>
         + 'static,
 {
     let operator = take_till(1.., b" \t\n\r%[<(/".as_slice())
-        .map(|buf| ObjectOrOperator::Operator(from_utf8(buf).unwrap()));
+        .try_map(|buf| Ok::<_, Utf8Error>(ObjectOrOperator::Operator(from_utf8(buf)?)));
     let mut object_or_operator = alt((parser::object().map(ObjectOrOperator::Object), operator));
     let mut operands = Vec::with_capacity(8);
     let mut r = vec![];
