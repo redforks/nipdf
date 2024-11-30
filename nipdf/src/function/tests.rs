@@ -5,14 +5,13 @@ use crate::{
     parser,
 };
 use assert_approx_eq::assert_approx_eq;
-use mockall::predicate::eq;
 use std::slice::from_ref;
 use test_case::test_case;
 use winnow::{Parser as _, error::ContextError};
 
 #[test]
 fn test_clip_args() {
-    let signature = Signature {
+    let signature = Type23Signature {
         domain: Domains(vec![Domain::new(0.0, 1.0), Domain::new(-2.0, 2.0)]),
         range: None,
     };
@@ -26,7 +25,7 @@ fn test_clip_args() {
 
 #[test]
 fn test_clip_returns() {
-    let signature = Signature {
+    let signature = Type23Signature {
         domain: Domains(vec![]),
         range: None,
     };
@@ -38,7 +37,7 @@ fn test_clip_returns() {
         FunctionValue::new()
     );
 
-    let signature = Signature {
+    let signature = Type23Signature {
         domain: Domains(vec![]),
         range: Some(Domains(vec![Domain::new(0.0, 1.0), Domain::new(-2.0, 2.0)])),
     };
@@ -62,9 +61,9 @@ fn test_exponential_function() {
     let resolver = ObjectResolver::empty(&xref);
     let f = ExponentialInterpolationFunctionDict::new(None, &d, &resolver).unwrap();
     let f = f.func().unwrap();
-    assert_eq!(f.call(&[0.0]).unwrap(), tiny_vec![0.1_f32, 0.2_f32]);
-    assert_eq!(f.call(&[1.0]).unwrap(), tiny_vec![0.2_f32, 0.4_f32]);
-    assert_eq!(f.call(&[0.5]).unwrap(), tiny_vec![0.15_f32, 0.3_f32]);
+    assert_eq!(f.do_call(&[0.0]).unwrap(), tiny_vec![0.1_f32, 0.2_f32]);
+    assert_eq!(f.do_call(&[1.0]).unwrap(), tiny_vec![0.2_f32, 0.4_f32]);
+    assert_eq!(f.do_call(&[0.5]).unwrap(), tiny_vec![0.15_f32, 0.3_f32]);
 }
 
 #[test]
@@ -131,49 +130,16 @@ fn stitching_function() {
     let resolver = ObjectResolver::empty(&xref);
     let f = StitchingFunctionDict::new(None, &d, &resolver).unwrap();
     let f = f.func().unwrap();
-    assert_eq!(f.call(&[0f32]).unwrap(), tiny_vec![0.2_f32, 0.4_f32]);
-}
-
-#[test]
-fn test_n_func() {
-    assert!(NFunc::new(vec![]).is_err(), "check empty functions");
-
-    let mut f1 = MockFunction::new();
-    f1.expect_signature().return_const(Signature::new(
-        Domains(vec![Domain::new(0.0, 1.0), Domain::new(2., 3.)]),
-        Some(Domains(vec![Domain::new(0.0, 1.0)])),
-    ));
-    f1.expect_call()
-        .with(eq(&[0.5_f32, 3.0_f32][..]))
-        .returning(|_| Ok(FunctionValue::from(&[0.6_f32][..])));
-    let mut f2 = MockFunction::new();
-    f2.expect_signature().return_const(Signature::new(
-        Domains(vec![Domain::new(0.0, 1.0), Domain::new(2., 3.)]),
-        None,
-    ));
-    f2.expect_call()
-        .with(eq(&[0.5_f32, 3.0_f32][..]))
-        .returning(|_| Ok(FunctionValue::from(&[0.8_f32][..])));
-    let f = NFunc::new(vec![Box::new(f1), Box::new(f2)]).unwrap();
-    assert_eq!(
-        f.signature().domain,
-        Domains(vec![Domain::new(0.0, 1.0), Domain::new(2., 3.)])
-    );
-    assert!(f.signature().range.is_none());
-
-    assert_eq!(
-        f.call(&[0.5_f32, 3.0_f32][..]).unwrap(),
-        FunctionValue::from(&[0.6_f32, 0.8_f32][..])
-    );
+    assert_eq!(f.do_call(&[0f32]).unwrap(), tiny_vec![0.2_f32, 0.4_f32]);
 }
 
 #[test]
 fn sampled_function_bits_per_sample_8() -> Result<()> {
     let f = SampledFunction {
         bits_per_sample: 8,
-        signature: Signature {
+        signature: Type04Signature {
             domain: Domains(vec![Domain::new(0.0, 10.0), Domain::new(0.0, 2.0)]),
-            range: Some(Domains(vec![Domain::new(0.0, 1.0)])),
+            range: Domains(vec![Domain::new(0.0, 1.0)]),
         },
         encode: Domains(vec![Domain::new(0., 1.), Domain::new(0., 2.)]),
         decode: Domains(vec![Domain::new(0., 1.)]),
@@ -193,7 +159,7 @@ fn sampled_function_bits_per_sample_8() -> Result<()> {
         ((7.0f32, 2.0f32), 32.0 / 255.0),
     ];
     for (args, exp) in cases {
-        assert_approx_eq!(exp, f.call(&[args.0, args.1][..])?[0]);
+        assert_approx_eq!(exp, f.do_call(&[args.0, args.1][..])?[0]);
     }
     Ok(())
 }
@@ -202,9 +168,9 @@ fn sampled_function_bits_per_sample_8() -> Result<()> {
 fn sampled_function_bits_per_sample_16() {
     let f = SampledFunction {
         bits_per_sample: 16,
-        signature: Signature {
+        signature: Type04Signature {
             domain: Domains(vec![Domain::new(0.0, 2.0)]),
-            range: Some(Domains(vec![Domain::new(0.0, 1.0)])),
+            range: Domains(vec![Domain::new(0.0, 1.0)]),
         },
         encode: Domains(vec![Domain::new(0., 2.)]),
         decode: Domains(vec![Domain::new(0., 1.)]),
@@ -218,6 +184,6 @@ fn sampled_function_bits_per_sample_16() {
         (2., 0x0506 as f32 / 65535.0),
     ];
     for (arg, exp) in cases {
-        assert_approx_eq!(exp, f.call(from_ref(&arg)).unwrap()[0]);
+        assert_approx_eq!(exp, f.do_call(from_ref(&arg)).unwrap()[0]);
     }
 }

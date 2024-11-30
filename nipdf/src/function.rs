@@ -111,9 +111,10 @@ impl Domains {
 
 pub type FunctionValue = TinyVec<[f32; 4]>;
 
-#[cfg_attr(test, automock)]
-pub trait Function {
-    fn call(&self, args: &[f32]) -> Result<FunctionValue> {
+trait InnerFunction {
+    type Signature: Signature + std::fmt::Debug;
+
+    fn do_call(&self, args: &[f32]) -> Result<FunctionValue> {
         let args = self.signature().clip_args(args);
         let r = self.inner_call(args)?;
         for v in &r {
@@ -122,30 +123,33 @@ pub trait Function {
         Ok(self.signature().clip_returns(r))
     }
 
-    fn signature(&self) -> &Signature;
+    fn signature(&self) -> &Self::Signature;
 
     /// Called by `self.call()`, args and return value are clipped by signature.
     fn inner_call(&self, args: FunctionValue) -> Result<FunctionValue>;
+}
+
+#[cfg_attr(test, automock)]
+pub trait Function {
+    fn call(&self, args: &[f32]) -> Result<FunctionValue>;
+}
+
+impl<Inner: InnerFunction> Function for Inner {
+    fn call(&self, args: &[f32]) -> Result<FunctionValue> {
+        self.do_call(args)
+    }
 }
 
 impl Function for Box<dyn Function> {
     fn call(&self, args: &[f32]) -> Result<FunctionValue> {
         self.as_ref().call(args)
     }
-
-    fn signature(&self) -> &Signature {
-        self.as_ref().signature()
-    }
-
-    fn inner_call(&self, _args: TinyVec<[f32; 4]>) -> Result<FunctionValue> {
-        unreachable!()
-    }
 }
 
 /// Combine functions to create a new function. These functions called with
 /// the same arguments as the original function, and returns only one value.
 /// The end result gather the results of the component functions into an vec.
-pub struct NFunc(Vec<Box<dyn Function>>, Signature);
+pub struct NFunc(Vec<Box<dyn Function>>);
 
 impl NFunc {
     /// If one element in `functions`, returns it directly.
@@ -164,21 +168,7 @@ impl NFunc {
             whatever!("at least one function is required")
         }
 
-        for f in &functions {
-            if f.signature().n_returns().unwrap_or(1) != 1 {
-                whatever!(
-                    Err(ObjectValueError::UnexpectedType),
-                    "check function signature returns"
-                );
-            }
-        }
-        let signature = Signature {
-            // assume functions in list have same domain
-            domain: functions[0].signature().domain.clone(),
-            // each function in list clips its return value, so NFunc no need to clip return value.
-            range: None,
-        };
-        Ok(Self(functions, signature))
+        Ok(Self(functions))
     }
 }
 
@@ -189,14 +179,6 @@ impl Function for NFunc {
             r.extend_from_slice(&f.call(args)?);
         }
         Ok(r)
-    }
-
-    fn inner_call(&self, _args: FunctionValue) -> Result<FunctionValue> {
-        unreachable!()
-    }
-
-    fn signature(&self) -> &Signature {
-        &self.1
     }
 }
 
@@ -230,21 +212,23 @@ pub trait FunctionDictTrait {
 }
 
 pub struct PostScriptFunction {
-    signature: Signature,
+    signature: Type04Signature,
     f: PdfFunc,
 }
 
 impl PostScriptFunction {
-    pub fn new(signature: Signature, script: Box<[u8]>) -> Self {
+    pub fn new(signature: Type04Signature, script: Box<[u8]>) -> Self {
         Self {
-            f: PdfFunc::new(script, signature.n_returns().unwrap()),
+            f: PdfFunc::new(script, signature.n_returns()),
             signature,
         }
     }
 }
 
-impl Function for PostScriptFunction {
-    fn signature(&self) -> &Signature {
+impl InnerFunction for PostScriptFunction {
+    type Signature = Type04Signature;
+
+    fn signature(&self) -> &Self::Signature {
         &self.signature
     }
 
@@ -257,10 +241,17 @@ impl Function for PostScriptFunction {
 }
 
 impl FunctionDict<'_, '_> {
-    fn signature(&self) -> Result<Signature> {
-        Ok(Signature {
+    fn type23_signature(&self) -> Result<Type23Signature> {
+        Ok(Type23Signature {
             domain: self.domain()?,
             range: self.range()?,
+        })
+    }
+
+    fn type04_signature(&self) -> Result<Type04Signature> {
+        Ok(Type04Signature {
+            domain: self.domain()?,
+            range: self.range()?.whatever_context("range should exist")?,
         })
     }
 
@@ -274,7 +265,7 @@ impl FunctionDict<'_, '_> {
 
     pub fn post_script_func(&self) -> Result<PostScriptFunction> {
         assert_eq!(self.function_type()?, Type::PostScriptCalculator);
-        let signature = self.signature()?;
+        let signature = self.type04_signature()?;
         let resolver = self.d.resolver();
         let stream = resolver
             .resolve(self.id.unwrap())
@@ -301,35 +292,19 @@ impl FunctionDict<'_, '_> {
     }
 }
 
-/// Function signature, clip input args and returns.
+pub trait Signature {
+    fn clip_args(&self, args: &[f32]) -> TinyVec<[f32; 4]>;
+    fn clip_returns(&self, returns: FunctionValue) -> FunctionValue;
+}
+
+/// Function signature for Type 2 and 3, clip input args and returns.
 #[derive(Debug, PartialEq, Clone)]
-pub struct Signature {
+pub struct Type23Signature {
     domain: Domains,
     range: Option<Domains>,
 }
 
-impl Signature {
-    pub fn new(domain: Domains, range: Option<Domains>) -> Self {
-        Self { domain, range }
-    }
-
-    pub fn n_args(&self) -> usize {
-        self.domain.n()
-    }
-
-    pub fn n_returns(&self) -> Option<usize> {
-        self.range.as_ref().map(Domains::n)
-    }
-
-    fn clip_args(&self, args: &[f32]) -> TinyVec<[f32; 4]> {
-        debug_assert_eq!(args.len(), self.n_args());
-
-        args.iter()
-            .zip(self.domain.0.iter())
-            .map(|(&arg, domain)| domain.clamp(arg))
-            .collect()
-    }
-
+impl Signature for Type23Signature {
     fn clip_returns(&self, returns: FunctionValue) -> FunctionValue {
         let Some(range) = self.range.as_ref() else {
             return returns;
@@ -341,6 +316,71 @@ impl Signature {
             .zip(range.0.iter())
             .map(|(&ret, domain)| domain.clamp(ret))
             .collect()
+    }
+
+    fn clip_args(&self, args: &[f32]) -> TinyVec<[f32; 4]> {
+        debug_assert_eq!(args.len(), self.n_args());
+
+        args.iter()
+            .zip(self.domain.0.iter())
+            .map(|(&arg, domain)| domain.clamp(arg))
+            .collect()
+    }
+}
+
+impl Type23Signature {
+    pub fn new(domain: Domains, range: Option<Domains>) -> Self {
+        Self { domain, range }
+    }
+
+    pub fn n_args(&self) -> usize {
+        self.domain.n()
+    }
+
+    pub fn n_returns(&self) -> Option<usize> {
+        self.range.as_ref().map(Domains::n)
+    }
+}
+
+/// Function signature for Type 0 and 4, which range is required
+#[derive(Debug, PartialEq, Clone)]
+pub struct Type04Signature {
+    domain: Domains,
+    range: Domains,
+}
+
+impl Signature for Type04Signature {
+    fn clip_returns(&self, returns: FunctionValue) -> FunctionValue {
+        assert_eq!(returns.len(), self.range.n());
+
+        returns
+            .iter()
+            .zip(self.range.0.iter())
+            .map(|(&ret, domain)| domain.clamp(ret))
+            .collect()
+    }
+
+    fn clip_args(&self, args: &[f32]) -> TinyVec<[f32; 4]> {
+        debug_assert_eq!(args.len(), self.n_args());
+
+        args.iter()
+            .zip(self.domain.0.iter())
+            .map(|(&arg, domain)| domain.clamp(arg))
+            .collect()
+    }
+}
+
+impl Type04Signature {
+    pub fn new(domain: Domains, range: Domains) -> Self {
+        Self { domain, range }
+    }
+
+    pub fn n_args(&self) -> usize {
+        self.domain.n()
+    }
+
+    pub fn n_returns(&self) -> usize {
+        self.range.n()
     }
 }
 
@@ -383,7 +423,7 @@ pub trait SampledFunctionDictTrait {
 /// because sampled function need to load sample data from stream.
 #[derive(Debug, PartialEq, Clone)]
 pub struct SampledFunction {
-    signature: Signature,
+    signature: Type04Signature,
     encode: Domains,
     decode: Domains,
     size: Vec<u32>,
@@ -394,11 +434,13 @@ pub struct SampledFunction {
 impl SampledFunction {
     pub fn samples(&self) -> usize {
         // NOTE: assume bits_per_sample is 8
-        self.samples.len() / self.signature.n_returns().unwrap()
+        self.samples.len() / self.signature.n_returns()
     }
 }
 
-impl Function for SampledFunction {
+impl InnerFunction for SampledFunction {
+    type Signature = Type04Signature;
+
     fn inner_call(&self, args: TinyVec<[f32; 4]>) -> Result<FunctionValue> {
         let mut idx = 0;
         for (arg, (domain, (encode, size))) in args
@@ -422,10 +464,7 @@ impl Function for SampledFunction {
         }
         let idx = idx as usize;
 
-        let n_ret = self
-            .signature
-            .n_returns()
-            .whatever_context("get signature n_returns")?;
+        let n_ret = self.signature.n_returns();
         let sample_size = self.bits_per_sample as usize / 8;
         let mut r = tiny_vec![];
         let decode = &self.decode.0[0];
@@ -443,7 +482,7 @@ impl Function for SampledFunction {
         Ok(r)
     }
 
-    fn signature(&self) -> &Signature {
+    fn signature(&self) -> &Self::Signature {
         &self.signature
     }
 }
@@ -464,13 +503,9 @@ impl SampledFunctionDict<'_, '_> {
             .stream()
             .whatever_context("get as stream")?;
         let sample_data = stream.decode(resolver).whatever_context("decode stream")?;
-        let signature = f.signature()?;
+        let signature = f.type04_signature()?;
         ensure_whatever!(
-            sample_data.len()
-                >= size[0] as usize
-                    * signature
-                        .n_returns()
-                        .whatever_context("get number of returns")?,
+            sample_data.len() >= size[0] as usize * signature.n_returns(),
             "Sample data length is insufficient"
         );
         Ok(SampledFunction {
@@ -516,10 +551,12 @@ pub struct ExponentialInterpolationFunction {
     c0: Vec<f32>,
     c1: Vec<f32>,
     n: f32,
-    signature: Signature,
+    signature: Type23Signature,
 }
 
-impl Function for ExponentialInterpolationFunction {
+impl InnerFunction for ExponentialInterpolationFunction {
+    type Signature = Type23Signature;
+
     fn inner_call(&self, args: TinyVec<[f32; 4]>) -> Result<FunctionValue> {
         let x = args[0];
         let r = (0..self.c0.len())
@@ -528,7 +565,7 @@ impl Function for ExponentialInterpolationFunction {
         Ok(r)
     }
 
-    fn signature(&self) -> &Signature {
+    fn signature(&self) -> &Type23Signature {
         &self.signature
     }
 }
@@ -540,7 +577,7 @@ impl ExponentialInterpolationFunctionDict<'_, '_> {
             c0: self.c0()?,
             c1: self.c1()?,
             n: self.n()?,
-            signature: f.signature()?,
+            signature: f.type23_signature()?,
         })
     }
 }
@@ -573,7 +610,7 @@ impl StitchingFunctionDict<'_, '_> {
         let bounds = self.bounds()?;
         let encode = self.encode()?;
         let f = self.function_dict()?;
-        let signature = Signature {
+        let signature = Type23Signature {
             domain: f.domain()?,
             range: f.range()?,
         };
@@ -590,7 +627,7 @@ pub struct StitchingFunction {
     functions: Vec<Box<dyn Function>>,
     bounds: Vec<f32>,
     encode: Domains,
-    signature: Signature,
+    signature: Type23Signature,
 }
 
 impl StitchingFunction {
@@ -627,7 +664,9 @@ impl StitchingFunction {
     }
 }
 
-impl Function for StitchingFunction {
+impl InnerFunction for StitchingFunction {
+    type Signature = Type23Signature;
+
     fn inner_call(&self, args: TinyVec<[f32; 4]>) -> Result<FunctionValue> {
         assert_eq!(args.len(), 1);
 
@@ -647,7 +686,7 @@ impl Function for StitchingFunction {
         Ok(r)
     }
 
-    fn signature(&self) -> &Signature {
+    fn signature(&self) -> &Type23Signature {
         &self.signature
     }
 }
