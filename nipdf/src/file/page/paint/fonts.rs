@@ -445,7 +445,7 @@ impl<'a> TTFParserFontOp<'a> {
     }
 }
 
-static GLYPH_NAME_TO_UNICODE: phf::Map<&'static str, u32> = include!("glyph_name_to_unicode.in");
+static GLYPH_NAME_TO_UNICODE: phf::Map<&'static str, u32> = include!("glyph_name_to_unicode.rs");
 
 impl FontOp for TTFParserFontOp<'_> {
     fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>> {
