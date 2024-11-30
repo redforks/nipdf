@@ -745,6 +745,7 @@ impl<'a> LineBuffer<'a> {
 pub struct Flags {
     pub encoded_byte_align: bool,
     pub inverse_black_white: bool,
+    #[allow(dead_code)]
     #[educe(Default = true)]
     pub end_of_block: bool,
 }
