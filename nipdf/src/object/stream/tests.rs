@@ -180,7 +180,10 @@ fn test_color_key_range() {
         Domain::new(20., 120.),
     ]);
     let color_key: ColorKey = ([10, 15, 20, 255], [110, 115, 120, 255]);
-    assert_eq!(color_key, color_key_range(&range, &ColorSpace::DeviceRGB));
+    assert_eq!(
+        color_key,
+        color_key_range(&range, &ColorSpace::DeviceRGB).unwrap()
+    );
 }
 
 #[test_case(b"" => b"".as_slice())]
