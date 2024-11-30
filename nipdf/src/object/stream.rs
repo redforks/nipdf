@@ -25,7 +25,6 @@ use snafu::{OptionExt, ResultExt as _};
 use std::{
     borrow::{Borrow, Cow},
     cell::LazyCell,
-    convert::identity,
     fmt::Display,
     iter::{once, repeat},
     ops::Range,

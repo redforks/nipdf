@@ -29,7 +29,6 @@ use prescript::{
 use snafu::{OptionExt, ResultExt, whatever};
 use std::{collections::HashMap, ops::RangeInclusive, rc::Rc, sync::LazyLock};
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
-use winnow::Parser as _;
 
 /// FontWidth used in Type1 and TrueType fonts
 struct FirstLastFontWidth {
