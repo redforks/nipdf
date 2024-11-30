@@ -102,7 +102,7 @@ where
     CS: ColorSpaceTrait<F>,
     F: ColorCompConvertTo<T>,
 {
-    convert_color_to(&cs.to_rgba(color))
+    convert_color_to(&cs.to_rgba(color).unwrap())
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -324,7 +324,7 @@ where
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
 {
-    fn to_rgba(&self, color: &[T]) -> [T; 4] {
+    fn to_rgba(&self, color: &[T]) -> Result<[T; 4]> {
         match self {
             Self::DeviceGray => DeviceGray.to_rgba(color),
             Self::DeviceRGB => DeviceRGB.to_rgba(color),
@@ -361,7 +361,7 @@ pub trait ColorSpaceTrait<T: ColorComp> {
     /// Convert color from current space to RGBA.
     /// `color` len should at least be `components()`
     /// Use `color_to_rgba()` function, if target color space is not T.
-    fn to_rgba(&self, color: &[T]) -> [T; 4];
+    fn to_rgba(&self, color: &[T]) -> Result<[T; 4]>;
 
     /// Number of color components in this color space.
     fn components(&self) -> usize;
@@ -382,8 +382,8 @@ pub struct DeviceGray;
 
 impl<T: ColorComp> ColorSpaceTrait<T> for DeviceGray {
     #[allow(clippy::missing_asserts_for_indexing)]
-    fn to_rgba(&self, color: &[T]) -> [T; 4] {
-        [color[0], color[0], color[0], T::max_color()]
+    fn to_rgba(&self, color: &[T]) -> Result<[T; 4]> {
+        Ok([color[0], color[0], color[0], T::max_color()])
     }
 
     fn components(&self) -> usize {
@@ -395,9 +395,9 @@ impl<T: ColorComp> ColorSpaceTrait<T> for DeviceGray {
 pub struct DeviceRGB;
 
 impl<T: ColorComp> ColorSpaceTrait<T> for DeviceRGB {
-    fn to_rgba(&self, color: &[T]) -> [T; 4] {
+    fn to_rgba(&self, color: &[T]) -> Result<[T; 4]> {
         assert!(color.len() > 2);
-        [color[0], color[1], color[2], T::max_color()]
+        Ok([color[0], color[1], color[2], T::max_color()])
     }
 
     fn components(&self) -> usize {
@@ -413,8 +413,11 @@ where
     T: ColorComp + ColorCompConvertTo<f32>,
     f32: ColorCompConvertTo<T>,
 {
-    fn to_rgba(&self, color: &[T]) -> [T; 4] {
-        assert!(color.len() > 3);
+    fn to_rgba(&self, color: &[T]) -> Result<[T; 4]> {
+        ensure_whatever!(
+            color.len() > 3,
+            "DeviceCMYK color must have at least 4 components"
+        );
         let c = color[0].into_color_comp();
         let m = color[1].into_color_comp();
         let y = color[2].into_color_comp();
@@ -475,12 +478,12 @@ where
         g = ColorComp::clamp(g);
         b = ColorComp::clamp(b);
 
-        [
+        Ok([
             r.into_color_comp(),
             g.into_color_comp(),
             b.into_color_comp(),
             T::max_color(),
-        ]
+        ])
     }
 
     fn components(&self) -> usize {
@@ -501,7 +504,7 @@ where
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
 {
-    fn to_rgba(&self, color: &[T]) -> [T; 4] {
+    fn to_rgba(&self, color: &[T]) -> Result<[T; 4]> {
         self.0
             .as_ref()
             .expect("Pattern CS base CS not set")
@@ -554,7 +557,7 @@ where
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
 {
-    fn to_rgba(&self, color: &[T]) -> [T; 4] {
+    fn to_rgba(&self, color: &[T]) -> Result<[T; 4]> {
         let index = ColorCompConvertTo::<u8>::into_color_comp(color[0]) as usize;
         let n = self.base.components();
         let u8_color = &self.data[index * n..(index + 1) * n];
@@ -594,7 +597,7 @@ where
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
 {
-    fn to_rgba(&self, color: &[T]) -> [T; 4] {
+    fn to_rgba(&self, color: &[T]) -> Result<[T; 4]> {
         let c = self.f.call(&[color[0].into_color_comp()]).unwrap();
         let mut r = [T::max_color(); 4];
         c.iter()
@@ -625,7 +628,7 @@ where
     f32: ColorCompConvertTo<T>,
     u8: ColorCompConvertTo<T>,
 {
-    fn to_rgba(&self, color: &[T]) -> [T; 4] {
+    fn to_rgba(&self, color: &[T]) -> Result<[T; 4]> {
         let color: TinyVec<[f32; 4]> = color
             .iter()
             .take(self.n as usize)
@@ -645,7 +648,7 @@ where
 
     fn default_color(&self) -> [T; 4] {
         let color: TinyVec<[T; 4]> = repeat(T::max_color()).take(self.n as usize).collect();
-        self.to_rgba(color.as_slice())
+        self.to_rgba(color.as_slice()).unwrap()
     }
 }
 
@@ -732,12 +735,12 @@ where
     T: ColorComp + ColorCompConvertTo<f32>,
     f32: ColorCompConvertTo<T>,
 {
-    fn to_rgba(&self, color: &[T]) -> [T; 4] {
+    fn to_rgba(&self, color: &[T]) -> Result<[T; 4]> {
         // no need to do conversion to rgb, it is already rgb
         // gamma and other settings are used for converting to other color space
         // such as CMYK etc.
         assert!(color.len() > 2);
-        [color[0], color[1], color[2], T::max_color()]
+        Ok([color[0], color[1], color[2], T::max_color()])
     }
 
     fn components(&self) -> usize {
@@ -781,7 +784,7 @@ where
     T: ColorComp + ColorCompConvertTo<f32> + LabColorInput,
     f32: ColorCompConvertTo<T>,
 {
-    fn to_rgba(&self, color: &[T]) -> [T; 4] {
+    fn to_rgba(&self, color: &[T]) -> Result<[T; 4]> {
         fn g(x: f32) -> f32 {
             if x > (6.0 / 29.0) {
                 x.powi(3)
@@ -817,12 +820,12 @@ where
             v.clamp(0f32, 1f32).sqrt().into_color_comp()
         }
 
-        [
+        Ok([
             to_color_comp(r),
             to_color_comp(g),
             to_color_comp(b),
             T::max_color(),
-        ]
+        ])
     }
 
     fn components(&self) -> usize {
@@ -844,7 +847,7 @@ where
     T: ColorComp + ColorCompConvertTo<f32> + LabColorInput,
     f32: ColorCompConvertTo<T>,
 {
-    fn to_rgba(&self, color: &[T]) -> [T; 4] {
+    fn to_rgba(&self, color: &[T]) -> Result<[T; 4]> {
         assert!(!color.is_empty());
         let a: f32 = color[0].into_color_comp();
         let ag = a.powf(self.gamma);
@@ -852,12 +855,12 @@ where
         let x = xw * ag;
         let y = yw * ag;
         let z = zw * ag;
-        [
+        Ok([
             x.into_color_comp(),
             y.into_color_comp(),
             z.into_color_comp(),
             T::max_color(),
-        ]
+        ])
     }
 
     fn components(&self) -> usize {

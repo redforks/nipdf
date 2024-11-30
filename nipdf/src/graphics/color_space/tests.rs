@@ -10,7 +10,7 @@ use tinyvec::tiny_vec;
 fn device_gray_to_rgb() {
     let color_space = DeviceGray;
     let rgba = color_space.to_rgba(&[0x80]);
-    assert_eq!(rgba, [0x80, 0x80, 0x80, 0xff]);
+    assert_eq!(rgba.unwrap(), [0x80, 0x80, 0x80, 0xff]);
 }
 
 #[test]
@@ -18,7 +18,7 @@ fn rgb_to_rgb() {
     let color_space = DeviceRGB;
     let color = [0x1, 0x2, 0x3];
     let rgba = color_space.to_rgba(&color);
-    assert_eq!(rgba, [1, 2, 3, 255]);
+    assert_eq!(rgba.unwrap(), [1, 2, 3, 255]);
 }
 
 #[test]
@@ -26,11 +26,11 @@ fn cmyk_to_rgb() {
     let color_space = DeviceCMYK;
     let color = [0, 0, 0, 0];
     let rgb = color_space.to_rgba(&color);
-    assert_eq!(rgb, [255, 255, 255, 255]);
+    assert_eq!(rgb.unwrap(), [255, 255, 255, 255]);
 
     let color = [255, 0, 0, 0];
     let rgb = color_space.to_rgba(&color);
-    assert_eq!(rgb, [0, 173, 239, 255]);
+    assert_eq!(rgb.unwrap(), [0, 173, 239, 255]);
 }
 
 fn to_u8(v: impl ColorCompConvertTo<u8>) -> u8 {
@@ -88,8 +88,8 @@ fn indexed_color_space() {
         ],
     };
     assert_eq!(2, color_space.len());
-    assert_eq!(color_space.to_rgba(&[0]), [0, 0, 0, 255]);
-    assert_eq!(color_space.to_rgba(&[1]), [255, 255, 255, 255]);
+    assert_eq!(color_space.to_rgba(&[0]).unwrap(), [0, 0, 0, 255]);
+    assert_eq!(color_space.to_rgba(&[1]).unwrap(), [255, 255, 255, 255]);
 }
 
 #[test_case("DeviceRGB" => ColorSpace::DeviceRGB)]
@@ -155,7 +155,9 @@ fn separation_color_space() {
         f: Rc::new(f),
     };
 
-    assert_eq!(cs.to_rgba(&[0.5f32]), [0.1f32, 0.2f32, 0.3f32, 1.0]);
+    assert_eq!(cs.to_rgba(&[0.5f32]).unwrap(), [
+        0.1f32, 0.2f32, 0.3f32, 1.0
+    ]);
 }
 
 #[test]
@@ -209,7 +211,7 @@ fn indexed(buf: &[u8]) -> Result<()> {
 
 #[test]
 fn cal_rgb_from_args() {
-    let buf = br#" 
+    let buf = br#"
 1 0 obj
 [/CalRGB <</WhitePoint[0.9505 1.0 1.089]/BlackPoint[0.01 0.02 0.03]/Gamma[1.8 1.8 1.8]/Matrix[0.4497 0.2446 0.0252 0.3163 0.672 0.1412 0.1845 0.0833 0.9227]>>]
 endobj
@@ -252,14 +254,14 @@ fn cal_rgb_color_space() {
         ],
     };
 
-    assert_eq!(cs.to_rgba(&[0., 1.0, 0.5]), [0., 1.0, 0.5, 1.0]);
+    assert_eq!(cs.to_rgba(&[0., 1.0, 0.5]).unwrap(), [0., 1.0, 0.5, 1.0]);
 }
 
 #[test]
 #[should_panic(expected = "Pattern CS base CS not set")]
 fn pattern_no_base_panic_to_rgba() {
     let cs = PatternColorSpace::<f32>(None);
-    cs.to_rgba(&[1.0, 0., 0., 0.]);
+    cs.to_rgba(&[1.0, 0., 0., 0.]).unwrap();
 }
 
 #[test]
@@ -271,7 +273,7 @@ fn pattern_color_space() {
     // has base color space
     let cs = PatternColorSpace::<f32>(Some(ColorSpace::DeviceRGB));
     assert_eq!(3, cs.components());
-    assert_eq!(cs.to_rgba(&[1.0, 0., 0., 0.]), [1.0, 0., 0., 1.]);
+    assert_eq!(cs.to_rgba(&[1.0, 0., 0., 0.]).unwrap(), [1.0, 0., 0., 1.]);
 }
 
 #[test]
@@ -322,10 +324,10 @@ fn lab_to_rgb() {
         ..Default::default()
     };
 
-    assert_eq!([0., 0., 0., 1.], cs.to_rgba(&[0., 0., 0.]));
-    assert_eq!([0., 1., 0., 1.], cs.to_rgba(&[100., -128., 128.]));
-    assert_eq!([6, 0, 0, 255], cs.to_rgba(&[0, 128, 128]));
-    assert_eq!([0, 255, 0, 255], cs.to_rgba(&[255, 0, 255]));
+    assert_eq!([0., 0., 0., 1.], cs.to_rgba(&[0., 0., 0.]).unwrap());
+    assert_eq!([0., 1., 0., 1.], cs.to_rgba(&[100., -128., 128.]).unwrap());
+    assert_eq!([6, 0, 0, 255], cs.to_rgba(&[0, 128, 128]).unwrap());
+    assert_eq!([0, 255, 0, 255], cs.to_rgba(&[255, 0, 255]).unwrap());
 }
 
 fn parse_color_space(buf: &[u8]) -> Result<ColorSpace> {
@@ -384,8 +386,8 @@ fn cal_gray_to_rgb() {
         gamma: 1.8,
     };
 
-    assert_eq!([0., 0., 0., 1.], cs.to_rgba(&[0.]));
-    assert_eq!([1., 1., 1., 1.], cs.to_rgba(&[1.]));
+    assert_eq!([0., 0., 0., 1.], cs.to_rgba(&[0.]).unwrap());
+    assert_eq!([1., 1., 1., 1.], cs.to_rgba(&[1.]).unwrap());
 }
 
 #[test]

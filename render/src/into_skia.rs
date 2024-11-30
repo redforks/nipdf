@@ -64,7 +64,7 @@ pub fn to_skia_color<T>(cs: &impl ColorSpaceTrait<T>, color: &[T]) -> tiny_skia:
 where
     T: ColorComp + ColorCompConvertTo<f32>,
 {
-    let rgba = cs.to_rgba(color);
+    let rgba = cs.to_rgba(color).unwrap();
     let [r, g, b, a] = convert_color_to(&rgba);
     tiny_skia::Color::from_rgba(r, g, b, a).unwrap()
 }

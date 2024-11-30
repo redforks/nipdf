@@ -1310,7 +1310,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 .function
                 .call(&[1.0])
                 .whatever_context("exec function")?;
-            let mut c = radial.color_space.to_rgba(c.as_slice());
+            let mut c = radial.color_space.to_rgba(c.as_slice()).unwrap();
             c[3] = state.fill_state.alpha();
             paint.set_color(SkiaColor::from_rgba(c[0], c[1], c[2], c[3]).unwrap());
             self.canvas.fill_rect(
@@ -1334,7 +1334,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 .function
                 .call(&[0.0])
                 .whatever_context("exec function")?;
-            let c = radial.color_space.to_rgba(c.as_slice());
+            let c = radial.color_space.to_rgba(c.as_slice()).unwrap();
             paint.set_color(SkiaColor::from_rgba(c[0], c[1], c[2], c[3]).unwrap());
             let path = PathBuilder::from_circle(x, y, r).unwrap();
             let path = path.transform(ctm).unwrap();
@@ -1354,7 +1354,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 .function
                 .call(&[t][..])
                 .whatever_context("exec function")?;
-            let c = radial.color_space.to_rgba(c.as_slice());
+            let c = radial.color_space.to_rgba(c.as_slice()).unwrap();
 
             let Some(path) = PathBuilder::from_circle(x, y, r) else {
                 continue;

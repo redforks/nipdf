@@ -308,12 +308,15 @@ fn decode_image<'a, M: ImageMetadata>(
             let cs = DeviceCMYK;
             DynamicImage::ImageRgba8(RgbaImage::from_fn(width, height, |x, y| {
                 let i = (y * width + x) as usize * 4;
-                Rgba(cs.to_rgba(&[
-                    255 - pixels[i],
-                    255 - pixels[i + 1],
-                    255 - pixels[i + 2],
-                    255 - pixels[i + 3],
-                ]))
+                Rgba(
+                    cs.to_rgba(&[
+                        255 - pixels[i],
+                        255 - pixels[i + 1],
+                        255 - pixels[i + 2],
+                        255 - pixels[i + 3],
+                    ])
+                    .unwrap(),
+                )
             }))
         }
 
