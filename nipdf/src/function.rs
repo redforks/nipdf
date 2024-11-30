@@ -8,7 +8,7 @@ use mockall::automock;
 use nipdf_macro::{TryFromIntObject, pdf_object};
 use num_traits::ToPrimitive;
 use prescript::PdfFunc;
-use snafu::{ResultExt, whatever};
+use snafu::{OptionExt as _, ResultExt as _, ensure_whatever, whatever};
 use tinyvec::{TinyVec, tiny_vec};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -379,7 +379,7 @@ pub trait SampledFunctionDictTrait {
     fn decode(&self) -> Option<Domains>;
 }
 
-/// strut to implement Function trait for SampledFunctionDict,
+/// struct to implement Function trait for SampledFunctionDict,
 /// because sampled function need to load sample data from stream.
 #[derive(Debug, PartialEq, Clone)]
 pub struct SampledFunction {
@@ -413,11 +413,19 @@ impl Function for SampledFunction {
         {
             let arg = (arg - domain.start) / (domain.end - domain.start);
             let arg = arg.mul_add(encode.end - encode.start, encode.start);
-            idx = size * idx + arg.round().to_u32().unwrap().clamp(0, size - 1);
+            idx = size * idx
+                + arg
+                    .round()
+                    .to_u32()
+                    .whatever_context("convert to u32")?
+                    .clamp(0, *size - 1);
         }
         let idx = idx as usize;
 
-        let n_ret = self.signature.n_returns().unwrap();
+        let n_ret = self
+            .signature
+            .n_returns()
+            .whatever_context("get signature n_returns")?;
         let sample_size = self.bits_per_sample as usize / 8;
         let mut r = tiny_vec![];
         let decode = &self.decode.0[0];
@@ -457,7 +465,14 @@ impl SampledFunctionDict<'_, '_> {
             .whatever_context("get as stream")?;
         let sample_data = stream.decode(resolver).whatever_context("decode stream")?;
         let signature = f.signature()?;
-        assert!(sample_data.len() >= size[0] as usize * signature.n_returns().unwrap());
+        ensure_whatever!(
+            sample_data.len()
+                >= size[0] as usize
+                    * signature
+                        .n_returns()
+                        .whatever_context("get number of returns")?,
+            "Sample data length is insufficient"
+        );
         Ok(SampledFunction {
             signature,
             encode: self.encode()?.unwrap_or_else(|| {
@@ -467,11 +482,14 @@ impl SampledFunctionDict<'_, '_> {
                         .collect(),
                 )
             }),
-            decode: self.decode()?.unwrap_or_else(|| {
-                f.range()
-                    .unwrap()
-                    .expect("range should exist in sampled function")
-            }),
+            decode: self.decode()?.map_or_else(
+                || {
+                    f.range()
+                        .whatever_context("get range")?
+                        .whatever_context("range should exist in sampled function")
+                },
+                Ok,
+            )?,
             size: self.size()?,
             samples: sample_data.into_owned(),
             bits_per_sample: bits_per_sample.try_into().unwrap_or(u8::MAX),
