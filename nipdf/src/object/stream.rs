@@ -138,9 +138,10 @@ impl<'a, 'b> FilterDict<'a, 'b> {
     /// If value is array, its items should be Dictionary or None,
     /// Otherwise, it should be Dictionary.
     pub fn parameters(&self) -> Result<Vec<Option<&'b Dictionary>>, ObjectValueError> {
-        let v = self
-            .alt_get(&KEY_FILTER_PARAMS, &sname("DP"))
-            .whatever_context::<_, ObjectValueError>("Failed to get DecodeParms or DP")?;
+        let v = self.alt_get(&KEY_FILTER_PARAMS, &sname("DP"));
+        let Some(v) = v else {
+            return Ok(vec![]);
+        };
 
         Ok(match v {
             Object::Array(vals) => vals
