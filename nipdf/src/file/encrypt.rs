@@ -8,6 +8,7 @@ use log::error;
 use md5::{Digest, Md5};
 use nipdf_macro::{TryFromIntObject, TryFromNameObject, pdf_object};
 use prescript::{Name, sname};
+use snafu::OptionExt;
 use tinyvec::{Array, ArrayVec, TinyVec};
 
 #[derive(TryFromIntObject, Default, Debug, PartialEq, Eq, Clone, Copy)]
@@ -331,7 +332,7 @@ impl Authorizer {
             owner_hash,
             user_hash,
             permission_flags: d.permission_flags()?,
-            doc_id: trailer.id()?.unwrap().0,
+            doc_id: trailer.id()?.whatever_context("get trailer id")?.0,
             encrypt_metadata: d.encrypt_metadata()?,
         })
     }

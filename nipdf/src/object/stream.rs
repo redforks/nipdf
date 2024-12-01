@@ -1116,7 +1116,7 @@ impl Stream {
     /// Get stream un-decoded raw data.
     /// `buf` start from indirect object, from xref
     pub fn raw<'a>(&self, resolver: &ObjectResolver<'a>) -> Result<&'a [u8], ObjectValueError> {
-        let buf = resolver.stream_data(self.2.id());
+        let buf = resolver.stream_data(self.2.id())?;
         Ok(&buf[self.buf_range(Some(resolver))?])
     }
 

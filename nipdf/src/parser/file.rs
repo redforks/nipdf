@@ -17,6 +17,7 @@ use std::{
     borrow::Cow,
     fmt::Debug,
     num::{ParseIntError, TryFromIntError},
+    str::from_utf8,
 };
 use winnow::{
     Located, PResult, Parser,
@@ -29,7 +30,7 @@ use winnow::{
 };
 
 /// Parser to parse file header, return pdf file version string, such as "1.7".
-pub(crate) fn header<'a, S>() -> impl Parser<S, &'a [u8], crate::ParserError>
+pub(crate) fn header<'a, S>() -> impl Parser<S, &'a str, crate::ParserError>
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
@@ -44,7 +45,8 @@ where
             b'.',
             one_of(AsChar::is_dec_digit),
         )
-            .take(),
+            .take()
+            .try_map(from_utf8),
         eol3(),
     )
 }

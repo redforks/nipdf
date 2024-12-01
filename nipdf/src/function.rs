@@ -156,7 +156,10 @@ impl NFunc {
     /// Returns `NFunc` otherwise.
     pub fn new_box(functions: Vec<Box<dyn Function>>) -> Result<Box<dyn Function>> {
         if functions.len() == 1 {
-            Ok(functions.into_iter().next().unwrap())
+            Ok(functions
+                .into_iter()
+                .next()
+                .whatever_context("Expected at least one function")?)
         } else {
             Ok(Box::new(Self::new(functions)?))
         }
@@ -255,20 +258,12 @@ impl FunctionDict<'_, '_> {
         })
     }
 
-    pub fn n_args(&self) -> usize {
-        self.domain().unwrap().n()
-    }
-
-    pub fn n_returns(&self) -> Option<usize> {
-        self.range().unwrap().map(|range| range.n())
-    }
-
     pub fn post_script_func(&self) -> Result<PostScriptFunction> {
         assert_eq!(self.function_type()?, Type::PostScriptCalculator);
         let signature = self.type04_signature()?;
         let resolver = self.d.resolver();
         let stream = resolver
-            .resolve(self.id.unwrap())
+            .resolve(self.id.whatever_context("id should exist")?)
             .whatever_context("resolve")?
             .stream()
             .whatever_context("get as stream")?;
@@ -498,7 +493,7 @@ impl SampledFunctionDict<'_, '_> {
         let size = self.size()?;
         let resolver = self.d.resolver();
         let stream = resolver
-            .resolve(self.id.unwrap())
+            .resolve(self.id.whatever_context("id should exist")?)
             .whatever_context("resolve object")?
             .stream()
             .whatever_context("get as stream")?;

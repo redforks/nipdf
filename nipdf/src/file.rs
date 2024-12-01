@@ -7,7 +7,7 @@ use crate::{
         Array, Dictionary, Entry, FrameSet, HexString, LiteralString, Object, ObjectId,
         ObjectValueError, PdfObject, Resolver, RuntimeObjectId, Stream, TrailerDict,
     },
-    parser::{self, header_parser, indirect_object_def, parse_frame_set, wsc_prefixed0, wsc0},
+    parser::{self, header_parser, indirect_object_def, parse_frame_set, wsc0},
 };
 use ahash::{HashMap, HashMapExt};
 use either::Either;
@@ -15,8 +15,8 @@ use log::error;
 use nipdf_macro::pdf_object;
 use once_cell::unsync::OnceCell;
 use prescript::{Name, sname};
-use snafu::{ResultExt, Snafu, whatever};
-use std::{iter::repeat_with, str::from_utf8};
+use snafu::{OptionExt as _, ResultExt as _, Snafu, whatever};
+use std::iter::repeat_with;
 use winnow::{
     Located, Parser as _,
     error::ContextError,
@@ -144,6 +144,7 @@ impl XRefTable {
 
     /// Scan IDOffsetMap by scan indirect object declaration,
     /// helps to create pdf file objects for testing.
+    #[cfg(test)]
     pub fn from_buf(buf: &[u8]) -> Self {
         use winnow::combinator::{repeat, terminated};
 
@@ -193,7 +194,7 @@ impl XRefTable {
         buf: &'a [u8],
         id: impl Into<RuntimeObjectId>,
         encrypt_info: Option<&EncryptInfo>,
-    ) -> Option<Either<&'a [u8], &'b [u8]>> {
+    ) -> Result<Option<Either<&'a [u8], &'b [u8]>>, ObjectValueError> {
         fn parse_indirect_stream(input: &[u8]) -> Result<Stream, ObjectValueError> {
             let (_, o) = indirect_object_def::<_, ContextError<&'static str>>()
                 .parse_peek(Located::new(input))?;
@@ -203,31 +204,40 @@ impl XRefTable {
             Ok(s)
         }
 
-        self.id_offset.get(&id.into()).map(|entry| match entry {
-            ObjectPos::Offset(offset) => Either::Left(&buf[*offset as usize..]),
-            ObjectPos::InStream(id, idx) => {
-                let object_stream = self.object_streams[id]
-                    .get_or_try_init(|| {
-                        let obj_buf = self.resolve_object_buf(buf, *id, encrypt_info).unwrap();
-                        let mut stream = parse_indirect_stream(&obj_buf).unwrap();
-                        let length = stream.0.get("Length").cloned();
-                        // Some pdf file use indirect object to store length, which it is not
-                        // allowed by pdf file standard, but anyway, we
-                        // support it.
-                        if let Some(Object::Reference(id)) = length {
-                            stream.0.update(|d| {
-                                d.insert(
-                                    sname("Length"),
-                                    self.parse_object(buf, id.id().id(), None).unwrap(),
-                                );
-                            });
-                        }
-                        ObjectStream::new(&stream, &obj_buf, encrypt_info)
-                    })
-                    .unwrap();
-                Either::Right(object_stream.get_buf(*idx as usize))
-            }
-        })
+        self.id_offset
+            .get(&id.into())
+            .map(|entry| {
+                Ok(match entry {
+                    ObjectPos::Offset(offset) => Either::Left(&buf[*offset as usize..]),
+                    ObjectPos::InStream(id, idx) => {
+                        let object_stream = self.object_streams[id].get_or_try_init(|| {
+                            let obj_buf = self
+                                .resolve_object_buf(buf, *id, encrypt_info)
+                                .whatever_context::<_, ObjectValueError>("resolve object buffer 1")?
+                                .whatever_context::<_, ObjectValueError>(
+                                    "resolve object buffer 2",
+                                )?;
+                            let mut stream = parse_indirect_stream(&obj_buf)
+                                .whatever_context::<_, ObjectValueError>("parse indirect stream")?;
+                            let length = stream.0.get("Length").cloned();
+                            // Some pdf file use indirect object to store length, which it is not
+                            // allowed by pdf file standard, but anyway, we
+                            // support it.
+                            if let Some(Object::Reference(id)) = length {
+                                let v = self
+                                    .parse_object(buf, id.id().id(), None)
+                                    .whatever_context::<_, ObjectValueError>("parse object")?;
+                                stream.0.update(|d| {
+                                    d.insert(sname("Length"), v);
+                                });
+                            }
+                            ObjectStream::new(&stream, &obj_buf, encrypt_info)
+                        })?;
+                        Either::Right(object_stream.get_buf(*idx as usize))
+                    }
+                })
+            })
+            .transpose()
     }
 
     pub fn parse_object<'a: 'c, 'b: 'c, 'c>(
@@ -237,7 +247,7 @@ impl XRefTable {
         encrypt_info: Option<&EncryptInfo>,
     ) -> Result<Object, ObjectValueError> {
         let id = id.into();
-        self.resolve_object_buf(buf, id, encrypt_info)
+        self.resolve_object_buf(buf, id, encrypt_info)?
             .ok_or(ObjectValueError::ObjectIDNotFound { id })
             .and_then(|buf| {
                 buf.either(
@@ -450,12 +460,15 @@ impl<'a> ObjectResolver<'a> {
     }
 
     /// Return file data start from stream id indirect object till the file end
-    /// Panic if id not found or not stream
-    pub fn stream_data(&self, id: impl Into<RuntimeObjectId>) -> &'a [u8] {
+    pub fn stream_data(
+        &self,
+        id: impl Into<RuntimeObjectId>,
+    ) -> Result<&'a [u8], ObjectValueError> {
         self.xref_table
-            .resolve_object_buf(self.buf, id, self.encript_info())
-            .unwrap()
-            .unwrap_left()
+            .resolve_object_buf(self.buf, id, self.encript_info())?
+            .whatever_context::<_, ObjectValueError>("get stream buf")?
+            .left()
+            .whatever_context("stream should not in ObjectStream")
     }
 
     /// Resolve value from data container `c` with key `k`, if value is reference,
@@ -586,11 +599,18 @@ impl<'a> Catalog<'a> {
     }
 
     pub fn pages(&self) -> Result<Vec<Page<'a>>, ObjectValueError> {
-        Page::parse(self.d.pages().unwrap())
+        Page::parse(
+            self.d
+                .pages()
+                .whatever_context::<_, ObjectValueError>("resolve pages")?,
+        )
     }
 
     pub fn ver(&self) -> Option<Name> {
-        self.d.version().unwrap()
+        self.d.version().unwrap_or_else(|e| {
+            log::warn!("Failed to get version {}", e);
+            None
+        })
     }
 }
 
@@ -665,8 +685,18 @@ fn open_encrypt(
 
 impl File {
     pub fn parse(buf: Vec<u8>, user_password: &str) -> Result<Self, FileError> {
-        let head_ver = Some(from_utf8(header_parser().parse_next(&mut &buf[..]).unwrap()).unwrap());
-        let frame_set = parse_frame_set::<_, ContextError<&'static str>>(&&buf[..]).unwrap();
+        let head_ver = match header_parser().parse_next(&mut &buf[..]) {
+            Ok(ver) => Some(ver),
+            Err(e) => {
+                log::warn!("Failed to parse header: {}", e);
+                None
+            }
+        };
+        let frame_set =
+            parse_frame_set::<_, ContextError<&'static str>>(&&buf[..]).map_err(|e| {
+                error!("Failed to parse frame set: {}", e);
+                FileError::InvalidFile
+            })?;
         let xref = XRefTable::from_frame_set(&frame_set);
 
         let trailers: Vec<_> = frame_set.into_iter().map(|f| f.trailer).collect();
@@ -677,8 +707,21 @@ impl File {
             user_password,
         )?;
 
-        let root_id = trailers.iter().find_map(|t| t.get(&sname("Root"))).unwrap();
-        let root_id = root_id.reference().unwrap().id().id();
+        let root_id = trailers
+            .iter()
+            .find_map(|t| t.get(&sname("Root")))
+            .ok_or_else(|| {
+                error!("Root entry not found in trailers");
+                FileError::InvalidFile
+            })?;
+        let root_id = root_id
+            .reference()
+            .map_err(|e| {
+                error!("Failed to get reference from root_id: {}", e);
+                FileError::InvalidFile
+            })?
+            .id()
+            .id();
 
         Ok(Self {
             head_ver: head_ver.map(ToOwned::to_owned),
