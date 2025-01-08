@@ -963,7 +963,7 @@ macro_rules! copy_value_access {
                 /// Return None if value not specific type.
                 pub fn [<opt_ $method>](&self) -> Option<$t> {
                     match self {
-                        Self::$branch(v) => Some(v.clone()),
+                        Self::$branch(v) => Some(*v),
                         _ => None,
                     }
                 }
@@ -971,7 +971,7 @@ macro_rules! copy_value_access {
                 /// Return `ObjectValueError::UnexpectedType` if value not expected type.
                 pub fn $method(&self) -> Result<$t, ObjectValueError> {
                     match self {
-                        Self::$branch(v) => Ok(v.clone()),
+                        Self::$branch(v) => Ok(*v),
                         _ => Err(ObjectValueError::UnexpectedType),
                     }
                 }
@@ -1024,11 +1024,42 @@ copy_value_access!(int, Integer, i32);
 copy_value_access!(real, Number, f32);
 ref_value_access!(literal_str, LiteralString, &LiteralString);
 ref_value_access!(hex_str, HexString, &HexString);
-copy_value_access!(name, Name, Name);
 ref_value_access!(dict, Dictionary, &Dictionary);
 ref_value_access!(arr, Array, &Array);
 ref_value_access!(stream, Stream, &Stream);
 copy_value_access!(reference, Reference, Reference);
+
+impl Object {
+    #[doc = r" Return None if value not specific type."]
+    pub fn opt_name(&self) -> Option<Name> {
+        match self {
+            Self::Name(v) => Some(v.clone()),
+            _ => None,
+        }
+    }
+
+    #[doc = r" Return `ObjectValueError::UnexpectedType` if value not expected type."]
+    pub fn name(&self) -> Result<Name, ObjectValueError> {
+        match self {
+            Self::Name(v) => Ok(v.clone()),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
+    }
+}
+
+impl TryFrom<&Object> for Name {
+    type Error = ObjectValueError;
+
+    fn try_from(value: &Object) -> Result<Self, Self::Error> {
+        value.name()
+    }
+}
+
+impl From<&Object> for Option<Name> {
+    fn from(value: &Object) -> Self {
+        value.opt_name()
+    }
+}
 
 impl From<Vec<Object>> for Object {
     fn from(v: Vec<Object>) -> Self {
@@ -1462,7 +1493,7 @@ impl From<HexString> for Object {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, Clone)]
+#[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
 pub struct Reference(ObjectId);
 
 impl Reference {
