@@ -110,6 +110,7 @@ enum Group4Code {
 
 #[rustfmt::skip]
 fn build_group4_huffman_tree() -> Box<[ReadHuffmanTree<BigEndian, Group4Code>]> {
+    #[allow(clippy::unwrap_used)] // we know this will never fail, because it parses on predefined data
     compile_read_tree(vec![
         (Group4Code::Vertical(0),  vec![1]),
 
@@ -124,7 +125,7 @@ fn build_group4_huffman_tree() -> Box<[ReadHuffmanTree<BigEndian, Group4Code>]> 
         (Group4Code::Extension,    vec![0, 0, 0, 0, 0, 0, 1]),
         (Group4Code::Vertical(-3), vec![0, 0, 0, 0, 0, 1, 0]),
         (Group4Code::Vertical(3),  vec![0, 0, 0, 0, 0, 1, 1]),
-        (Group4Code::EndOfBlock,         vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]),
+        (Group4Code::EndOfBlock,   vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]),
         (Group4Code::NotDef,       vec![0, 0, 0, 0, 0, 0, 0, 1]),
         (Group4Code::NotDef,       vec![0, 0, 0, 0, 0, 0, 0, 0, 1]),
         (Group4Code::NotDef,       vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 1]),
@@ -372,6 +373,7 @@ fn build_run_huffman(algo: Algorithm) -> RunHuffmanTree {
         Algorithm::Group4 => { },
     }
 
+    #[allow(clippy::unwrap_used)] // it's safe to unwrap here, data is built-in
     RunHuffmanTree {
         white: compile_read_tree(white_codes).unwrap(),
         black: compile_read_tree(black_codes).unwrap(),
