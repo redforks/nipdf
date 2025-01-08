@@ -7,7 +7,7 @@ use crate::{
         Array, Dictionary, Entry, FrameSet, HexString, LiteralString, Object, ObjectId,
         ObjectValueError, PdfObject, Resolver, RuntimeObjectId, Stream, TrailerDict,
     },
-    parser::{self, header_parser, indirect_object_def, parse_frame_set, wsc0},
+    parser::{self, header_parser, indirect_object_def, parse_frame_set, wsc_prefixed0, wsc0},
 };
 use ahash::{HashMap, HashMapExt};
 use either::Either;
@@ -144,7 +144,6 @@ impl XRefTable {
 
     /// Scan IDOffsetMap by scan indirect object declaration,
     /// helps to create pdf file objects for testing.
-    #[cfg(test)]
     pub fn from_buf(buf: &[u8]) -> Self {
         use winnow::combinator::{repeat, terminated};
 

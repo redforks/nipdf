@@ -13,14 +13,14 @@ fn xref_table_resolve_object_buf() {
     let xref_table = XRefTable::new(id_offset);
 
     assert_eq!(
-        xref_table.resolve_object_buf(buf, 1, None),
+        xref_table.resolve_object_buf(buf, 1, None).unwrap(),
         Some(Either::Left(&b"67890"[..]))
     );
     assert_eq!(
-        xref_table.resolve_object_buf(buf, 2, None),
+        xref_table.resolve_object_buf(buf, 2, None).unwrap(),
         Some(Either::Left(&b"4567890"[..]))
     );
-    assert_eq!(xref_table.resolve_object_buf(buf, 3, None), None);
+    assert_eq!(xref_table.resolve_object_buf(buf, 3, None).unwrap(), None);
 }
 
 #[report]
