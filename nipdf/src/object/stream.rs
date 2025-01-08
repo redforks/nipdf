@@ -189,7 +189,7 @@ fn decode_stream<'a, 'b>(
     encrypt_info: Option<&EncryptInfo>,
     id: Option<ObjectId>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
-    let encrypt_info = encrypt_info.or_else(|| resolver.and_then(|r| r.encript_info()));
+    let encrypt_info = encrypt_info.or_else(|| resolver.and_then(|r| r.encrypt_info()));
     let filter_dict = FilterDict::new(filter_dict, resolver)?;
     let mut decoded = FilterDecodedData::Bytes(buf.into());
     let filters = iter_filters(filter_dict)?;

@@ -346,14 +346,14 @@ impl DataContainer for Vec<&Dictionary> {
 
 #[derive(Clone)]
 pub struct EncryptInfo {
-    encript_key: Box<[u8]>,
+    encrypt_key: Box<[u8]>,
     filters: CryptFilters,
 }
 
 impl EncryptInfo {
-    pub fn new(encript_key: Box<[u8]>, filters: CryptFilters) -> Self {
+    pub fn new(encrypt_key: Box<[u8]>, filters: CryptFilters) -> Self {
         Self {
-            encript_key,
+            encrypt_key,
             filters,
         }
     }
@@ -361,13 +361,13 @@ impl EncryptInfo {
     pub fn stream_decrypt(&self, filter: Option<Name>, id: ObjectId, data: &mut Vec<u8>) {
         self.filters
             .stream_filter(filter)
-            .decrypt(&self.encript_key, id, data);
+            .decrypt(&self.encrypt_key, id, data);
     }
 
     pub fn string_decrypt(&self, id: ObjectId, data: &mut impl VecLike) {
         self.filters
             .string_filter()
-            .decrypt(&self.encript_key, id, data);
+            .decrypt(&self.encrypt_key, id, data);
     }
 }
 
@@ -375,14 +375,14 @@ pub struct ObjectResolver<'a> {
     buf: &'a [u8],
     xref_table: &'a XRefTable,
     objects: HashMap<RuntimeObjectId, OnceCell<Object>>,
-    encript_info: Option<EncryptInfo>,
+    encrypt_info: Option<EncryptInfo>,
 }
 
 impl<'a> ObjectResolver<'a> {
     pub fn new(
         buf: &'a [u8],
         xref_table: &'a XRefTable,
-        encript_info: Option<EncryptInfo>,
+        encrypt_info: Option<EncryptInfo>,
     ) -> Self {
         let mut objects = HashMap::with_capacity(xref_table.count());
         xref_table.iter_ids().for_each(|id| {
@@ -393,12 +393,12 @@ impl<'a> ObjectResolver<'a> {
             buf,
             xref_table,
             objects,
-            encript_info,
+            encrypt_info,
         }
     }
 
-    pub fn encript_info(&self) -> Option<&EncryptInfo> {
-        self.encript_info.as_ref()
+    pub fn encrypt_info(&self) -> Option<&EncryptInfo> {
+        self.encrypt_info.as_ref()
     }
 
     /// Return total objects count.
@@ -413,7 +413,7 @@ impl<'a> ObjectResolver<'a> {
             buf: b"",
             xref_table,
             objects: HashMap::default(),
-            encript_info: None,
+            encrypt_info: None,
         }
     }
 
@@ -454,7 +454,7 @@ impl<'a> ObjectResolver<'a> {
             .ok_or(ObjectValueError::ObjectIDNotFound { id })?
             .get_or_try_init(|| {
                 self.xref_table
-                    .parse_object(self.buf, id, self.encript_info())
+                    .parse_object(self.buf, id, self.encrypt_info())
             })
     }
 
@@ -464,7 +464,7 @@ impl<'a> ObjectResolver<'a> {
         id: impl Into<RuntimeObjectId>,
     ) -> Result<&'a [u8], ObjectValueError> {
         self.xref_table
-            .resolve_object_buf(self.buf, id, self.encript_info())?
+            .resolve_object_buf(self.buf, id, self.encrypt_info())?
             .whatever_context::<_, ObjectValueError>("get stream buf")?
             .left()
             .whatever_context("stream should not in ObjectStream")
