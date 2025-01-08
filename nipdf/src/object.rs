@@ -302,9 +302,9 @@ where
 pub trait Resolver {
     fn resolve_reference<'b>(&'b self, v: &'b Object) -> Result<&'b Object, ObjectValueError>;
 
-    fn do_resolve_container_value<'b: 'c, 'c, C: DataContainer>(
+    fn do_resolve_container_value<'b: 'c, 'c>(
         &'b self,
-        c: &'c C,
+        c: &'c Dictionary,
         id: &Name,
     ) -> Result<(Option<RuntimeObjectId>, &'c Object), ObjectValueError>;
 }
@@ -318,12 +318,12 @@ impl Resolver for () {
         Ok(v)
     }
 
-    fn do_resolve_container_value<'b: 'c, 'c, C: DataContainer>(
+    fn do_resolve_container_value<'b: 'c, 'c>(
         &'b self,
-        c: &'c C,
+        c: &'c Dictionary,
         id: &Name,
     ) -> Result<(Option<RuntimeObjectId>, &'c Object), ObjectValueError> {
-        c.get_value(id)
+        c.get(id)
             .map(|o| {
                 debug_assert!(
                     !matches!(o, Object::Reference(_)),
@@ -873,7 +873,7 @@ mod xref;
 pub use xref::{Entry as XRefEntry, Section as XRefSection, *};
 
 mod frame;
-use crate::{file::DataContainer, graphics::trans::ThousandthsOfText};
+use crate::graphics::trans::ThousandthsOfText;
 pub use frame::*;
 
 #[derive(Debug, Snafu)]

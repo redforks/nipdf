@@ -332,23 +332,6 @@ fn decrypt_string(encrypt_info: &EncryptInfo, id: ObjectId, mut o: Object) -> Ob
     o
 }
 
-pub trait DataContainer {
-    fn get_value(&self, key: &Name) -> Option<&Object>;
-}
-
-impl DataContainer for Dictionary {
-    fn get_value(&self, key: &Name) -> Option<&Object> {
-        self.get(key)
-    }
-}
-
-/// Get value from first dictionary that contains `key`.
-impl DataContainer for Vec<&Dictionary> {
-    fn get_value(&self, key: &Name) -> Option<&Object> {
-        self.iter().find_map(|d| d.get(key))
-    }
-}
-
 #[derive(Clone)]
 pub struct EncryptInfo {
     encrypt_key: Box<[u8]>,
@@ -476,9 +459,9 @@ impl<'a> ObjectResolver<'a> {
 
     /// Resolve value from data container `c` with key `k`, if value is reference,
     /// resolve it recursively. Return `None` if object is not found.
-    pub fn opt_resolve_container_value<'b: 'c, 'c, C: DataContainer>(
+    pub fn opt_resolve_container_value<'b: 'c, 'c>(
         &'b self,
-        c: &'c C,
+        c: &'c Dictionary,
         id: &Name,
     ) -> Result<Option<&'c Object>, ObjectValueError> {
         Self::not_found_error_to_opt(self._resolve_container_value(c, id).map(|(_, o)| o))
@@ -486,18 +469,18 @@ impl<'a> ObjectResolver<'a> {
 
     /// Resolve value from data container `c` with key `k`, if value is reference,
     /// resolve it recursively.
-    pub fn resolve_container_value<'b: 'c, 'c, C: DataContainer>(
+    pub fn resolve_container_value<'b: 'c, 'c>(
         &'b self,
-        c: &'c C,
+        c: &'c Dictionary,
         id: &Name,
     ) -> Result<&'c Object, ObjectValueError> {
         self.resolve_required_value(c, id).map(|(_, o)| o)
     }
 
     /// Like _resolve_container_value(), but error logs if value not exist
-    fn resolve_required_value<'b: 'c, 'c, C: DataContainer>(
+    fn resolve_required_value<'b: 'c, 'c>(
         &'b self,
-        c: &'c C,
+        c: &'c Dictionary,
         id: &Name,
     ) -> Result<(Option<RuntimeObjectId>, &'c Object), ObjectValueError> {
         self._resolve_container_value(c, id).map_err(|e| {
@@ -506,12 +489,12 @@ impl<'a> ObjectResolver<'a> {
         })
     }
 
-    fn _resolve_container_value<'b: 'c, 'c, C: DataContainer>(
+    fn _resolve_container_value<'b: 'c, 'c>(
         &'b self,
-        c: &'c C,
+        c: &'c Dictionary,
         id: &Name,
     ) -> Result<(Option<RuntimeObjectId>, &'c Object), ObjectValueError> {
-        let obj = c.get_value(id).ok_or(ObjectValueError::DictKeyNotFound)?;
+        let obj = c.get(id).ok_or(ObjectValueError::DictKeyNotFound)?;
 
         if let Object::Reference(id) = obj {
             self.resolve(id.id().id()).map(|o| (Some(id.id().id()), o))
@@ -560,9 +543,9 @@ impl<'a> ObjectResolver<'a> {
 }
 
 impl Resolver for ObjectResolver<'_> {
-    fn do_resolve_container_value<'b: 'c, 'c, C: DataContainer>(
+    fn do_resolve_container_value<'b: 'c, 'c>(
         &'b self,
-        c: &'c C,
+        c: &'c Dictionary,
         id: &Name,
     ) -> Result<(Option<RuntimeObjectId>, &'c Object), ObjectValueError> {
         self._resolve_container_value(c, id)
