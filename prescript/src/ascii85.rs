@@ -1,4 +1,4 @@
-//! Copied from https://github.com/JoNil/ascii85, because the original crate returns error [Box<dyn Error>]
+//! Copied from <https://github.com/JoNil/ascii85>, because the original crate returns error `Box<dyn Error>`
 //! We require a error that implements [Sync] and [Send].
 const TABLE: [u32; 5] = [85 * 85 * 85 * 85, 85 * 85 * 85, 85 * 85, 85, 1];
 
