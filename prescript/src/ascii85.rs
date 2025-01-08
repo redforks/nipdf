@@ -57,6 +57,7 @@ pub fn decode(input: &[u8]) -> Result<Vec<u8>, Ascii85Error> {
         if digit == b'z' {
             if counter == 0 {
                 result.extend_from_slice(&[0, 0, 0, 0]);
+                continue;
             } else {
                 return Err(Ascii85Error::MisalignedZ);
             }
@@ -83,14 +84,13 @@ pub fn decode(input: &[u8]) -> Result<Vec<u8>, Ascii85Error> {
 
 #[cfg(test)]
 mod tests {
-
     use super::decode;
 
     #[test]
     fn decode_test() {
         assert_eq!(decode(b"<~9jqo^F*2M7/c~>").unwrap(), [
             77, 97, 110, 32, 115, 117, 114, 101, 46
-        ],);
+        ]);
 
         assert!(
             decode(br#"
@@ -109,5 +109,20 @@ mod tests {
             decode(&[b'<', b'~', 47, 99, 117, 117, 117, b'~', b'>']).unwrap(),
             [46, 3, 25, 180]
         );
+    }
+
+    #[test]
+    fn decode_for_pdf() {
+        // extract from sample_files/normal/ASCII85_RunLengthDecode.pdf object 8
+        let buf = include_bytes!("./ascii85-1");
+        insta::assert_debug_snapshot!(decode(buf).unwrap());
+    }
+
+    #[test]
+    fn decode_for_pdf2() {
+        // extract from sample_files/normal/T-REC-T.4-199904-S!!PDF-E.pdf object 394
+        let buf =
+            b"8;Z][_$pAe#R%BbR?D]?kQDgNR._&7O9nQ2[sQV\\'@1UnqbR1B'u^7Tz%uWSlp2]mC6\\#1;4[o%3~>";
+        insta::assert_debug_snapshot!(decode(buf).unwrap());
     }
 }

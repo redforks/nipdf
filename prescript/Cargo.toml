@@ -27,6 +27,7 @@ test-log.workspace = true
 env_logger.workspace = true
 static_assertions.workspace = true
 assert_approx_eq.workspace = true
+insta.workspace = true
 
 [lints]
 workspace = true

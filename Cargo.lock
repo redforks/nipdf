@@ -3350,6 +3350,7 @@ dependencies = [
  "either",
  "env_logger",
  "hex",
+ "insta",
  "kstring",
  "log",
  "memchr",
