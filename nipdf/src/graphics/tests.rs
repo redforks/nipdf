@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     Result,
-    file::{ObjectResolver, ResourceDict, XRefTable},
+    file::{ObjectResolver, ResourceDict, XRefTable, open_test_file},
     object::LiteralString,
 };
 use prescript::sname;
@@ -126,5 +126,22 @@ fn parse_inline_image_with_ascii85_filter() -> Result<()> {
     // should be 4772 * 110 * 3, because it is RGB image
     // * 4, maybe because of sample data extract from wrong pdf
     assert_eq!(4772 * 110 * 4, img.as_bytes().len());
+    Ok(())
+}
+
+#[report]
+#[test]
+fn test_inline_image_et() -> Result<()> {
+    let f = open_test_file("sample_files/xobject/inline-image.pdf");
+    let resolver = f.resolver()?;
+    let catalog = f.catalog(&resolver).whatever_context("resolve catalog")?;
+    let pages = catalog.pages().whatever_context("resolve pages")?;
+    let page = &pages[0];
+
+    let content = page.content().whatever_context("get page context")?;
+    // the page contains a inline image, its data contains a line begin with 'ET'
+    // this test is to check if the parser can handle this case
+    content.operations();
+
     Ok(())
 }

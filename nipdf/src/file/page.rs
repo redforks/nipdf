@@ -11,7 +11,7 @@ use ahash::{HashMap, HashMapExt};
 use educe::Educe;
 use log::error;
 use nipdf_macro::{TryFromNameObject, pdf_object};
-use prescript::{Name, sname};
+use prescript::{Name, ParserError, sname};
 use std::{cell::LazyCell, iter::once};
 use winnow::Parser as _;
 
@@ -373,9 +373,12 @@ impl PageContent {
         }
 
         if let Some(data) = data {
-            parse_operations::<winnow::error::ContextError<&'static str>>
-                .parse(&data)
-                .unwrap()
+            match parse_operations::<ParserError>.parse(&data) {
+                Ok(ops) => ops,
+                Err(e) => {
+                    panic!("parse operations error: {:?}", e.into_inner());
+                }
+            }
         } else {
             vec![]
         }

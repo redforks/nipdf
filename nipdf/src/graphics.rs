@@ -4,7 +4,7 @@ use crate::{
         Array, Dictionary, InlineImage, InlineStream, Object, ObjectValueError, RuntimeObjectId,
         Stream, TextString, TextStringOrNumber,
     },
-    parser::{self, wsc_prefixed0, wsc0},
+    parser::{self, whitespace, wsc_prefixed0, wsc0},
 };
 use euclid::{Length, Point2D, Transform2D};
 use log::{error, warn};
@@ -627,7 +627,7 @@ where
     seq! {(
         wsc_prefixed0(parser::dict_body()).context("dict_body"),
         _: wsc0(), _: b"ID".as_slice(), _:any,
-        repeat_till(1.., any, alt((b" EI".as_slice(), b"\nEI".as_slice()))).map(|(o, _)| o).context("image data"),
+        repeat_till(1.., any, (alt((b" EI".as_slice(), b"\nEI".as_slice())), whitespace())).map(|(o, _)| o).context("image data"),
     )}
     .try_map(|(d, data): (Dictionary, Vec<u8>)| {
         InlineStream::new(d, &data).decode_image()
