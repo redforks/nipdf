@@ -451,7 +451,7 @@ impl Color {
 enum DecodeLineResult {
     EndOfBlock,
     EndOfBlockNoLine,
-    LineFullfilled,
+    LineFulfilled,
 }
 
 enum ProcessPEResult {
@@ -480,21 +480,21 @@ trait LineDecoder {
                 ProcessPEResult::EndOfBlock => {
                     return match line.pos() {
                         0 => Ok(DecodeLineResult::EndOfBlockNoLine),
-                        _ if line.line_fullfilled() => Ok(DecodeLineResult::EndOfBlock),
+                        _ if line.line_fulfilled() => Ok(DecodeLineResult::EndOfBlock),
                         _ => unreachable!(),
                     };
                 }
                 ProcessPEResult::Pixels1(pixels) => {
                     line.push_pixels(pixels.0, pixels.1);
-                    if line.line_fullfilled() {
-                        return Ok(DecodeLineResult::LineFullfilled);
+                    if line.line_fulfilled() {
+                        return Ok(DecodeLineResult::LineFulfilled);
                     }
                 }
                 ProcessPEResult::Pixels2(p1, p2) => {
                     line.push_pixels(p1.0, p1.1);
                     line.push_pixels(p2.0, p2.1);
-                    if line.line_fullfilled() {
-                        return Ok(DecodeLineResult::LineFullfilled);
+                    if line.line_fulfilled() {
+                        return Ok(DecodeLineResult::LineFulfilled);
                     }
                 }
             }
@@ -717,7 +717,7 @@ impl<'a> LineBuffer<'a> {
         }
     }
 
-    pub fn line_fullfilled(&self) -> bool {
+    pub fn line_fulfilled(&self) -> bool {
         debug_assert!(self.pos() <= self.last.0.len());
         self.pos() == self.last.0.len()
     }
@@ -774,7 +774,7 @@ impl Decoder {
             }
 
             let finished = match ld.decode_line(&mut reader, &mut line_buffer)? {
-                DecodeLineResult::LineFullfilled => false,
+                DecodeLineResult::LineFulfilled => false,
                 DecodeLineResult::EndOfBlock => true,
                 DecodeLineResult::EndOfBlockNoLine => break,
             };
