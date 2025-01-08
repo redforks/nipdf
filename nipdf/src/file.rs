@@ -187,13 +187,14 @@ impl XRefTable {
         Self::new(Self::scan(frame_set))
     }
 
-    /// Return `buf` start from where `id` is
+    /// Return `buf` start from where `id` is. Return Left if object is direct stored in file,
+    /// return Right if object is in object stream.
     fn resolve_object_buf<'a, 'b>(
         &'b self,
         buf: &'a [u8],
         id: impl Into<RuntimeObjectId>,
         encrypt_info: Option<&EncryptInfo>,
-    ) -> Result<Option<Either<&'a [u8], &'b [u8]>>, ObjectValueError> {
+    ) -> Result<Either<&'a [u8], &'b [u8]>, ObjectValueError> {
         fn parse_indirect_stream(input: &[u8]) -> Result<Stream, ObjectValueError> {
             let (_, o) = indirect_object_def::<_, ContextError<&'static str>>()
                 .parse_peek(Located::new(input))?;
@@ -203,40 +204,45 @@ impl XRefTable {
             Ok(s)
         }
 
-        self.id_offset
-            .get(&id.into())
-            .map(|entry| {
-                Ok(match entry {
-                    ObjectPos::Offset(offset) => Either::Left(&buf[*offset as usize..]),
-                    ObjectPos::InStream(id, idx) => {
-                        let object_stream = self.object_streams[id].get_or_try_init(|| {
-                            let obj_buf = self
-                                .resolve_object_buf(buf, *id, encrypt_info)
-                                .whatever_context::<_, ObjectValueError>("resolve object buffer 1")?
-                                .whatever_context::<_, ObjectValueError>(
-                                    "resolve object buffer 2",
-                                )?;
-                            let mut stream = parse_indirect_stream(&obj_buf)
-                                .whatever_context::<_, ObjectValueError>("parse indirect stream")?;
-                            let length = stream.0.get("Length").cloned();
-                            // Some pdf file use indirect object to store length, which it is not
-                            // allowed by pdf file standard, but anyway, we
-                            // support it.
-                            if let Some(Object::Reference(id)) = length {
-                                let v = self
-                                    .parse_object(buf, id.id().id(), None)
-                                    .whatever_context::<_, ObjectValueError>("parse object")?;
-                                stream.0.update(|d| {
-                                    d.insert(sname("Length"), v);
-                                });
-                            }
-                            ObjectStream::new(&stream, &obj_buf, encrypt_info)
-                        })?;
-                        Either::Right(object_stream.get_buf(*idx as usize))
+        let id = id.into();
+
+        // Look up the entry in id_offset map
+        let entry = self
+            .id_offset
+            .get(&id)
+            .ok_or(ObjectValueError::ObjectIDNotFound { id })?;
+
+        // Match on the entry type and return appropriate buffer
+        match entry {
+            ObjectPos::Offset(offset) => Ok(Either::Left(&buf[*offset as usize..])),
+            ObjectPos::InStream(id, idx) => {
+                let object_stream = self.object_streams[id].get_or_try_init(|| {
+                    let obj_buf = self
+                        .resolve_object_buf(buf, *id, encrypt_info)?
+                        .left()
+                        .whatever_context::<_, ObjectValueError>(
+                        "object stream should not be in another object stream",
+                    )?;
+
+                    let mut stream = parse_indirect_stream(&obj_buf)
+                        .whatever_context::<_, ObjectValueError>("parse indirect stream")?;
+
+                    let length = stream.0.get("Length").cloned();
+                    if let Some(Object::Reference(id)) = length {
+                        let v = self
+                            .parse_object(buf, id.id().id(), None)
+                            .whatever_context::<_, ObjectValueError>("parse object")?;
+                        stream.0.update(|d| {
+                            d.insert(sname("Length"), v);
+                        });
                     }
-                })
-            })
-            .transpose()
+
+                    ObjectStream::new(&stream, &obj_buf, encrypt_info)
+                })?;
+
+                Ok(Either::Right(object_stream.get_buf(*idx as usize)))
+            }
+        }
     }
 
     pub fn parse_object<'a: 'c, 'b: 'c, 'c>(
@@ -246,8 +252,7 @@ impl XRefTable {
         encrypt_info: Option<&EncryptInfo>,
     ) -> Result<Object, ObjectValueError> {
         let id = id.into();
-        self.resolve_object_buf(buf, id, encrypt_info)?
-            .ok_or(ObjectValueError::ObjectIDNotFound { id })
+        self.resolve_object_buf(buf, id, encrypt_info)
             .and_then(|buf| {
                 buf.either(
                     |buf| {
@@ -465,7 +470,6 @@ impl<'a> ObjectResolver<'a> {
     ) -> Result<&'a [u8], ObjectValueError> {
         self.xref_table
             .resolve_object_buf(self.buf, id, self.encrypt_info())?
-            .whatever_context::<_, ObjectValueError>("get stream buf")?
             .left()
             .whatever_context("stream should not in ObjectStream")
     }

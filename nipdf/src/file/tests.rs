@@ -14,13 +14,16 @@ fn xref_table_resolve_object_buf() {
 
     assert_eq!(
         xref_table.resolve_object_buf(buf, 1, None).unwrap(),
-        Some(Either::Left(&b"67890"[..]))
+        Either::Left(&b"67890"[..])
     );
     assert_eq!(
         xref_table.resolve_object_buf(buf, 2, None).unwrap(),
-        Some(Either::Left(&b"4567890"[..]))
+        Either::Left(&b"4567890"[..])
     );
-    assert_eq!(xref_table.resolve_object_buf(buf, 3, None).unwrap(), None);
+    assert!(matches!(
+        xref_table.resolve_object_buf(buf, 3, None),
+        Err(ObjectValueError::ObjectIDNotFound { id }) if id == 3.into()
+    ));
 }
 
 #[report]
