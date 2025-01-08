@@ -26,19 +26,33 @@ pub enum Ascii85Error {
     CharOutOfRange,
 }
 
-pub fn decode(input: &str) -> Result<Vec<u8>, Ascii85Error> {
+pub fn decode(input: &[u8]) -> Result<Vec<u8>, Ascii85Error> {
     let mut result = Vec::with_capacity(4 * (input.len() / 5 + 16));
 
     let mut counter = 0;
     let mut chunk = 0;
 
-    for digit in input
-        .trim_start()
-        .trim_start_matches("<~")
-        .trim_end()
-        .trim_end_matches("~>")
-        .bytes()
-        .filter(|c| !c.is_ascii_whitespace())
+    // Find start of actual data by trimming whitespace and "<~" prefix
+    let mut start_idx = 0;
+    while start_idx < input.len() && input[start_idx].is_ascii_whitespace() {
+        start_idx += 1;
+    }
+    if start_idx + 2 <= input.len() && input[start_idx..start_idx + 2] == [b'<', b'~'] {
+        start_idx += 2;
+    }
+
+    // Find end of data by trimming whitespace and "~>" suffix
+    let mut end_idx = input.len();
+    while end_idx > start_idx && input[end_idx - 1].is_ascii_whitespace() {
+        end_idx -= 1;
+    }
+    if end_idx >= 2 && input[end_idx - 2..end_idx] == [b'~', b'>'] {
+        end_idx -= 2;
+    }
+
+    for &digit in input[start_idx..end_idx]
+        .iter()
+        .filter(|&&c| !c.is_ascii_whitespace())
     {
         if digit == b'z' {
             if counter == 0 {
@@ -74,12 +88,12 @@ mod tests {
 
     #[test]
     fn decode_test() {
-        assert_eq!(decode("<~9jqo^F*2M7/c~>").unwrap(), [
+        assert_eq!(decode(b"<~9jqo^F*2M7/c~>").unwrap(), [
             77, 97, 110, 32, 115, 117, 114, 101, 46
         ],);
 
         assert!(
-            decode(r#"
+            decode(br#"
                 <~9jqo^BlbD-BleB1DJ+*+F(f,q/0JhKF<GL>Cj@.4Gp$d7F!,L7@<6@)/0JDEF<G%<+EV:2F!,
                 O<DJ+*.@<*K0@<6L(Df-\0Ec5e;DffZ(EZee.Bl.9pF"AGXBPCsi+DGm>@3BB/F*&OCAfu2/AKY
                 i(DIb:@FD,*)+C]U=@3BN#EcYf8ATD3s@q?d$AftVqCh[NqF<G:8+EV:.+Cf>-FD5W8ARlolDIa
@@ -92,8 +106,7 @@ mod tests {
         );
 
         assert_eq!(
-            decode(std::str::from_utf8(&[b'<', b'~', 47, 99, 117, 117, 117, b'~', b'>']).unwrap())
-                .unwrap(),
+            decode(&[b'<', b'~', 47, 99, 117, 117, 117, b'~', b'>']).unwrap(),
             [46, 3, 25, 180]
         );
     }

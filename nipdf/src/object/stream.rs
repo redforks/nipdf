@@ -970,8 +970,7 @@ fn decode_ascii_hex(buf: &[u8]) -> Result<Vec<u8>, ObjectValueError> {
 
 fn decode_ascii85(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, ObjectValueError> {
     assert!(params.is_none());
-    use crate::ascii85::decode;
-    handle_filter_error(decode(buf), &FILTER_ASCII85_DECODE)
+    handle_filter_error(prescript::ascii85::decode(buf), &FILTER_ASCII85_DECODE)
 }
 
 fn decode_run_length(buf: &[u8], params: Option<&Dictionary>) -> Vec<u8> {

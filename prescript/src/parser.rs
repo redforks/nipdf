@@ -300,7 +300,7 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
         delimited(
             b'~',
             take_while(0.., |c| c != b'~')
-                .try_map(|v: &[u8]| Ok::<_, PossibleError>(ascii85::decode(from_utf8(v)?)?.into())),
+                .try_map(|v: &[u8]| Ok::<_, PossibleError>(ascii85::decode(v)?.into())),
             b"~>",
         )
         .parse_next(input)

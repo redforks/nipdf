@@ -3,7 +3,6 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 #![cfg_attr(test, allow(clippy::expect_used))]
 
-mod ascii85;
 mod ccitt;
 pub mod file;
 pub mod function;
