@@ -67,7 +67,7 @@ pub trait EncryptDictTrait {
 
     #[key("R")]
     #[try_from]
-    fn revison(&self) -> StandardHandlerRevision;
+    fn revision(&self) -> StandardHandlerRevision;
 
     /// 32-byte long string.
     #[key("O")]
@@ -155,7 +155,7 @@ impl CryptFilters {
 impl EncryptDict<'_, '_> {
     pub fn crypt_filters(&self) -> CryptFilters {
         fn _do(this: &EncryptDict<'_, '_>) -> Result<CryptFilters> {
-            if this.revison()? != StandardHandlerRevision::V4 {
+            if this.revision()? != StandardHandlerRevision::V4 {
                 return Ok(CryptFilters::rc4());
             }
 
@@ -327,7 +327,7 @@ impl Authorizer {
         owner_hash.copy_from_slice(&d.owner_password_hash()?[..32]);
         user_hash.copy_from_slice(&d.user_password_hash()?[..32]);
         Ok(Self {
-            revision: d.revison()?,
+            revision: d.revision()?,
             key_length: d.key_length()? as usize,
             owner_hash,
             user_hash,
