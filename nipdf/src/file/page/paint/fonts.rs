@@ -29,6 +29,7 @@ use prescript::{
 use snafu::{OptionExt, ResultExt, whatever};
 use std::{collections::HashMap, ops::RangeInclusive, rc::Rc, sync::LazyLock};
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
+use winnow::Parser as _;
 
 /// FontWidth used in Type1 and TrueType fonts
 struct FirstLastFontWidth {
@@ -209,7 +210,7 @@ impl EncodingParser<'_, '_, '_> {
                 .iter()
                 .whatever_context("iter fonts from cff file")?
                 .next()
-                .expect("no font in cff?");
+                .whatever_context("no font in cff?")?;
             Ok(Some(
                 font.encodings()
                     .whatever_context("parse cff file encodings")?,
@@ -742,7 +743,9 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         }
         debug!("load ttf font from OS, using query: {:?}", &q);
 
-        let id = SYSTEM_FONTS.query(&q).expect("font not found in system");
+        let id = SYSTEM_FONTS
+            .query(&q)
+            .whatever_context("font not found in system")?;
         let face = SYSTEM_FONTS.face(id).whatever_context("get system fonts")?;
         debug!("loaded ttf font: {:?}", &face.source);
         assert_eq!(face.index, 0, "Only one face supported");
@@ -1346,8 +1349,9 @@ impl<'a, 'b> Type3Font<'a, 'b> {
             let data = stream
                 .decode(d.resolver())
                 .whatever_context("decode stream")?;
-            let ops = parse_operations::<crate::ParserError>(&mut &data[..])
-                .map_err(|e| e.into_inner().unwrap())
+            let ops = parse_operations::<crate::ParserError>
+                .parse(&data[..])
+                .map_err(winnow::error::ParseError::into_inner)
                 .whatever_context("parse type3 operation")?;
             r.push((name.clone(), Type3Glyph(ops.into())));
         }
