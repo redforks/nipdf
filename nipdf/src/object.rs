@@ -56,8 +56,8 @@ impl Dictionary {
         Self(Rc::new(HashMap::with_capacity(n)))
     }
 
-    pub fn update(&mut self, f: impl FnOnce(&mut HashMap<Name, Object>)) {
-        f(Rc::make_mut(&mut self.0));
+    pub fn update<T>(&mut self, f: impl FnOnce(&mut HashMap<Name, Object>) -> T) -> T {
+        f(Rc::make_mut(&mut self.0))
     }
 }
 
@@ -1179,6 +1179,28 @@ impl Object {
                 *arr = ar;
             }
         }
+    }
+
+    pub fn try_update_array_items(
+        arr: &mut Array,
+        mut f: impl FnMut(&mut Object) -> Result<()>,
+    ) -> Result<()> {
+        match Rc::get_mut(arr) {
+            Some(r) => {
+                for o in r.iter_mut() {
+                    f(o)?;
+                }
+            }
+            None => {
+                let mut ar: Vec<_> = arr.iter().cloned().collect();
+                for o in &mut ar {
+                    f(o)?;
+                }
+                let ar: Rc<[Object]> = ar.into();
+                *arr = ar;
+            }
+        }
+        Ok(())
     }
 }
 

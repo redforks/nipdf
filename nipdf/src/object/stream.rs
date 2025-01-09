@@ -694,7 +694,9 @@ fn crypt_filter(
     let name = params
         .and_then(|d| d.get("Name").map(Object::name))
         .transpose()?;
-    encrypt_info.stream_decrypt(name, id, &mut buf);
+    encrypt_info
+        .stream_decrypt(name, id, &mut buf)
+        .whatever_context::<_, ObjectValueError>("decrypt stream data")?;
     Ok(buf)
 }
 

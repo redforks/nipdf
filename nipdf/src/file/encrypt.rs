@@ -8,7 +8,7 @@ use log::error;
 use md5::{Digest, Md5};
 use nipdf_macro::{TryFromIntObject, TryFromNameObject, pdf_object};
 use prescript::{Name, sname};
-use snafu::OptionExt;
+use snafu::{OptionExt, whatever};
 use tinyvec::{Array, ArrayVec, TinyVec};
 
 #[derive(TryFromIntObject, Default, Debug, PartialEq, Eq, Clone, Copy)]
@@ -206,6 +206,7 @@ const PADDING: [u8; 32] = [
 /// 7A]
 fn pad_trunc_password(s: &[u8]) -> [u8; 32] {
     let mut iter = s.iter().copied().chain(PADDING).take(32);
+    #[allow(clippy::unwrap_used)] // iterator at least has 32 bytes
     std::array::from_fn(|_| iter.next().unwrap())
 }
 
@@ -216,7 +217,7 @@ pub trait VecLike {
 
 pub trait Decryptor {
     fn new(key: &[u8], id: ObjectId) -> Self;
-    fn decrypt<V: VecLike>(&self, data: &mut V);
+    fn decrypt<V: VecLike>(&self, data: &mut V) -> Result<()>;
 }
 
 impl<A> VecLike for TinyVec<A>
@@ -250,9 +251,9 @@ pub enum CryptFilter {
 }
 
 impl CryptFilter {
-    pub fn decrypt(self, key: &[u8], id: ObjectId, data: &mut impl VecLike) {
+    pub fn decrypt(self, key: &[u8], id: ObjectId, data: &mut impl VecLike) -> Result<()> {
         match self {
-            CryptFilter::Identity => {}
+            CryptFilter::Identity => Ok(()),
             CryptFilter::Rc4 => Rc4Decryptor::new(key, id).decrypt(data),
             CryptFilter::Aes => AesDecryptor::new(key, id).decrypt(data),
         }
@@ -273,8 +274,9 @@ impl Decryptor for Rc4Decryptor {
         Self(key)
     }
 
-    fn decrypt<V: VecLike>(&self, data: &mut V) {
+    fn decrypt<V: VecLike>(&self, data: &mut V) -> Result<()> {
         Arc4::with_key(&self.0).encrypt(data.as_mut_slice());
+        Ok(())
     }
 }
 
@@ -297,16 +299,20 @@ impl Decryptor for AesDecryptor {
     /// the initialization vector is a 16-byte random  number that is stored as the first 16 bytes
     /// of the encrypted data.
     /// Pad the data using the PKCS#5 padding scheme.
-    fn decrypt<V: VecLike>(&self, data: &mut V) {
+    fn decrypt<V: VecLike>(&self, data: &mut V) -> Result<()> {
         use aes::cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7};
         type Aes128CbcDec = cbc::Decryptor<aes::Aes128>;
 
         let iv_data = data.drain(0..16);
         let mut iv = [0u8; 16];
         iv.copy_from_slice(&iv_data[..]);
-        Aes128CbcDec::new(self.0.as_ref().into(), &iv.into())
+        if Aes128CbcDec::new(self.0.as_ref().into(), &iv.into())
             .decrypt_padded_mut::<Pkcs7>(data.as_mut_slice())
-            .unwrap();
+            .is_err()
+        {
+            whatever!("UnpadError on decode Aes128Cbc");
+        }
+        Ok(())
     }
 }
 

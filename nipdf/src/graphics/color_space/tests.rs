@@ -195,7 +195,7 @@ endobj
 #[test_case(b"1 0 obj[/Indexed/DeviceRGB 1(\x01\x02\x03\x04\x05\x06)]endobj"; "Literal String")]
 #[test_case(b"1 0 obj[/Indexed/DeviceRGB 1<010203040506>]endobj"; "Hex String")]
 fn indexed(buf: &[u8]) -> Result<()> {
-    let xref = XRefTable::from_buf(buf);
+    let xref = XRefTable::from_buf(buf)?;
     let resolver = ObjectResolver::new(buf, &xref, None);
     let _args = ColorSpaceArgs::try_from(resolver.resolve(1).unwrap()).unwrap();
     let color_space = parse_color_space(buf)?;
@@ -293,7 +293,7 @@ endobj
 [/DeviceN [/None /None] /DeviceRGB 2 0 R]
 endobj
 "#;
-    let xref = XRefTable::from_buf(buf);
+    let xref = XRefTable::from_buf(buf)?;
     let resolver = ObjectResolver::new(buf, &xref, None);
 
     let _args = ColorSpaceArgs::try_from(resolver.resolve(1).unwrap()).unwrap();
@@ -331,7 +331,7 @@ fn lab_to_rgb() {
 }
 
 fn parse_color_space(buf: &[u8]) -> Result<ColorSpace> {
-    let xref = XRefTable::from_buf(buf);
+    let xref = XRefTable::from_buf(buf)?;
     let resolver = ObjectResolver::new(buf, &xref, None);
     let args = ColorSpaceArgs::try_from(resolver.resolve(1).unwrap()).unwrap();
     ColorSpace::<f32>::from_args(&args, &resolver, None)

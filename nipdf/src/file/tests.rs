@@ -1,6 +1,6 @@
 use super::*;
 use crate::object::{Object, SchemaDict};
-use prescript::sname;
+use prescript::{AnyWhatever, sname};
 use snafu::report;
 use std::path::PathBuf;
 
@@ -77,7 +77,7 @@ fn resolve_container_one_or_more_pdf_object() -> Result<()> {
 <<>>
 endobj
 "#;
-    let xref = XRefTable::from_buf(buf);
+    let xref = XRefTable::from_buf(buf)?;
     let resolver = ObjectResolver::new(buf, &xref, None);
     let d = resolver.resolve(1).unwrap().as_dict().unwrap();
     let d = SchemaDict::new(d, &resolver, ()).unwrap();
@@ -93,7 +93,7 @@ endobj
 endobj
 2 0 obj<<>>endobj
 "#;
-    let xref = XRefTable::from_buf(buf);
+    let xref = XRefTable::from_buf(buf)?;
     let resolver = ObjectResolver::new(buf, &xref, None);
     let d = resolver.resolve(1).unwrap().as_dict().unwrap();
     let d = SchemaDict::new(d, &resolver, ()).unwrap();
@@ -109,7 +109,7 @@ endobj
 endobj
 3 0 obj<<>>endobj
 "#;
-    let xref = XRefTable::from_buf(buf);
+    let xref = XRefTable::from_buf(buf)?;
     let resolver = ObjectResolver::new(buf, &xref, None);
     let d = resolver.resolve(1).unwrap().as_dict().unwrap();
     let d = SchemaDict::new(d, &resolver, ()).unwrap();
@@ -125,10 +125,10 @@ endobj
 
 #[report]
 #[test]
-fn resolve_one_or_more_pdf_object() -> Result<(), ObjectValueError> {
+fn resolve_one_or_more_pdf_object() -> Result<(), AnyWhatever> {
     // object is dictionary
     let buf = b"1 0 obj <</foo 2 0 R>> endobj";
-    let xref = XRefTable::from_buf(buf);
+    let xref = XRefTable::from_buf(buf)?;
     let resolver = ObjectResolver::new(buf, &xref, None);
     let id = Object::new_ref(1);
     let list = resolver
@@ -142,20 +142,24 @@ fn resolve_one_or_more_pdf_object() -> Result<(), ObjectValueError> {
 123
 endstream
 endobj"#;
-    let xref = XRefTable::from_buf(buf);
+    let xref = XRefTable::from_buf(buf)?;
     let resolver = ObjectResolver::new(buf, &xref, None);
     let id = Object::new_ref(1);
-    let list = resolver.resolve_one_or_more_pdf_object::<FooDict<'_, '_>>(&id)?;
+    let list = resolver
+        .resolve_one_or_more_pdf_object::<FooDict<'_, '_>>(&id)
+        .whatever_context("resolve FooDict")?;
     assert_eq!(list.len(), 1);
     assert_eq!(Some(1.into()), list[0].id());
 
     // object is array
     let buf = br#"1 0 obj [2 0 R<<>>] endobj
     2 0 obj<<>>endobj"#;
-    let xref = XRefTable::from_buf(buf);
+    let xref = XRefTable::from_buf(buf)?;
     let resolver = ObjectResolver::new(buf, &xref, None);
     let id = Object::new_ref(1);
-    let list = resolver.resolve_one_or_more_pdf_object::<FooDict<'_, '_>>(&id)?;
+    let list = resolver
+        .resolve_one_or_more_pdf_object::<FooDict<'_, '_>>(&id)
+        .whatever_context("Resolve FooDict")?;
     assert_eq!(list.len(), 2);
     assert_eq!(Some(2.into()), list[0].id());
     assert_eq!(None, list[1].id());

@@ -19,7 +19,7 @@ use snafu::{OptionExt as _, ResultExt as _, Snafu, whatever};
 use std::iter::repeat_with;
 use winnow::{
     Located, Parser as _,
-    error::ContextError,
+    error::{ContextError, ParseError},
     stream::{Compare, StreamIsPartial},
 };
 
@@ -144,31 +144,29 @@ impl XRefTable {
 
     /// Scan IDOffsetMap by scan indirect object declaration,
     /// helps to create pdf file objects for testing.
-    pub fn from_buf(buf: &[u8]) -> Self {
+    pub fn from_buf(buf: &[u8]) -> Result<Self> {
         use winnow::combinator::{repeat, terminated};
 
         let objects: Vec<_> = terminated(
-            repeat(
-                1..,
-                wsc_prefixed0(indirect_object_def::<_, ContextError<&'static str>>()),
-            ),
+            repeat(1.., wsc_prefixed0(indirect_object_def::<_, ParserError>())),
             wsc0(),
         )
         .parse(Located::new(buf))
-        .unwrap();
+        .map_err(ParseError::into_inner)
+        .whatever_context("parse xref table objects")?;
         let mut id_offset = IDOffsetMap::new();
         for o in objects {
             let search_key = format!("{} {} obj", o.id().id(), o.id().generation());
             let pos: u32 = buf
                 .windows(search_key.len())
                 .position(|w| w == search_key.as_bytes())
-                .unwrap()
+                .whatever_context("get object position")?
                 .try_into()
-                .unwrap();
+                .whatever_context("convert position into u32")?;
             id_offset.insert(o.id().id(), ObjectPos::Offset(pos));
         }
 
-        Self::new(id_offset)
+        Ok(Self::new(id_offset))
     }
 
     fn scan(frame_set: &FrameSet) -> IDOffsetMap {
@@ -224,7 +222,7 @@ impl XRefTable {
                         "object stream should not be in another object stream",
                     )?;
 
-                    let mut stream = parse_indirect_stream(&obj_buf)
+                    let mut stream = parse_indirect_stream(obj_buf)
                         .whatever_context::<_, ObjectValueError>("parse indirect stream")?;
 
                     let length = stream.0.get("Length").cloned();
@@ -237,7 +235,7 @@ impl XRefTable {
                         });
                     }
 
-                    ObjectStream::new(&stream, &obj_buf, encrypt_info)
+                    ObjectStream::new(&stream, obj_buf, encrypt_info)
                 })?;
 
                 Ok(Either::Right(object_stream.get_buf(*idx as usize)))
@@ -257,13 +255,13 @@ impl XRefTable {
                 buf.either(
                     |buf| {
                         indirect_object_def::<_, ParserError>()
-                            .map(|o| {
+                            .try_map(|o| {
                                 let id = o.id();
                                 let o = o.take();
                                 if let Some(encrypt_info) = encrypt_info {
                                     decrypt_string(encrypt_info, id, o)
                                 } else {
-                                    o
+                                    Ok(o)
                                 }
                             })
                             .parse_next(&mut Located::new(buf))
@@ -288,48 +286,49 @@ impl XRefTable {
 }
 
 /// Decrypt HexString/LiteralString nested in object.
-fn decrypt_string(encrypt_info: &EncryptInfo, id: ObjectId, mut o: Object) -> Object {
+fn decrypt_string(encrypt_info: &EncryptInfo, id: ObjectId, mut o: Object) -> Result<Object> {
     struct Decryptor<'a>(&'a EncryptInfo, ObjectId);
 
     impl Decryptor<'_> {
-        fn hex_string(&self, s: &mut HexString) {
-            self.0.string_decrypt(self.1, &mut s.0);
+        fn hex_string(&self, s: &mut HexString) -> Result<()> {
+            self.0.string_decrypt(self.1, &mut s.0)
         }
 
-        fn literal_string(&self, s: &mut LiteralString) {
-            self.0.string_decrypt(self.1, &mut s.0);
+        fn literal_string(&self, s: &mut LiteralString) -> Result<()> {
+            self.0.string_decrypt(self.1, &mut s.0)
         }
 
-        fn dict(&self, dict: &mut Dictionary) {
+        fn dict(&self, dict: &mut Dictionary) -> Result<()> {
             dict.update(|d| {
                 for (_, v) in d.iter_mut() {
-                    self.decrypt(v);
+                    self.decrypt(v)?;
                 }
-            });
+                Ok(())
+            })
         }
 
-        fn arr(&self, arr: &mut Array) {
-            Object::update_array_items(arr, |o| self.decrypt(o));
+        fn arr(&self, arr: &mut Array) -> Result<()> {
+            Object::try_update_array_items(arr, |o| self.decrypt(o))
         }
 
-        fn stream(&self, stream: &mut Stream) {
-            self.dict(&mut stream.0);
+        fn stream(&self, stream: &mut Stream) -> Result<()> {
+            self.dict(&mut stream.0)
         }
 
-        fn decrypt(&self, o: &mut Object) {
+        fn decrypt(&self, o: &mut Object) -> Result<()> {
             match o {
                 Object::HexString(s) => self.hex_string(s),
                 Object::LiteralString(s) => self.literal_string(s),
                 Object::Dictionary(d) => self.dict(d),
                 Object::Array(arr) => self.arr(arr),
                 Object::Stream(s) => self.stream(s),
-                _ => {}
+                _ => Ok(()),
             }
         }
     }
 
-    Decryptor(encrypt_info, id).decrypt(&mut o);
-    o
+    Decryptor(encrypt_info, id).decrypt(&mut o)?;
+    Ok(o)
 }
 
 #[derive(Clone)]
@@ -346,16 +345,21 @@ impl EncryptInfo {
         }
     }
 
-    pub fn stream_decrypt(&self, filter: Option<Name>, id: ObjectId, data: &mut Vec<u8>) {
+    pub fn stream_decrypt(
+        &self,
+        filter: Option<Name>,
+        id: ObjectId,
+        data: &mut Vec<u8>,
+    ) -> Result<()> {
         self.filters
             .stream_filter(filter)
-            .decrypt(&self.encrypt_key, id, data);
+            .decrypt(&self.encrypt_key, id, data)
     }
 
-    pub fn string_decrypt(&self, id: ObjectId, data: &mut impl VecLike) {
+    pub fn string_decrypt(&self, id: ObjectId, data: &mut impl VecLike) -> Result<()> {
         self.filters
             .string_filter()
-            .decrypt(&self.encrypt_key, id, data);
+            .decrypt(&self.encrypt_key, id, data)
     }
 }
 
@@ -681,7 +685,7 @@ impl File {
         };
         let frame_set = parse_frame_set::<_, ParserError>
             .parse(&buf[..])
-            .map_err(|e| e.into_inner())
+            .map_err(ParseError::into_inner)
             .whatever_context("parse frame set")?;
         let xref = XRefTable::from_frame_set(&frame_set);
 
@@ -789,9 +793,7 @@ pub(crate) fn open_test_file_with_password(
 }
 
 #[cfg(test)]
-pub(crate) fn report_parse_err<I, T, E: std::error::Error>(
-    rv: Result<T, winnow::error::ParseError<I, E>>,
-) -> T {
+pub(crate) fn report_parse_err<I, T, E: std::error::Error>(rv: Result<T, ParseError<I, E>>) -> T {
     rv.map_err(|e| snafu::Report::from_error(e.into_inner()))
         .unwrap()
 }
