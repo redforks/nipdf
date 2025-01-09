@@ -4,7 +4,6 @@ use image::RgbaImage;
 use nipdf::{
     file::{Page, Rectangle},
     graphics::trans::{LogicDeviceToDeviceSpace, UserToUserSpace, logic_device_to_device},
-    object::ObjectValueError,
 };
 use prescript::Result;
 use tiny_skia::{Color, Pixmap};
@@ -155,10 +154,7 @@ impl RenderOptionBuilder {
     }
 }
 
-pub fn render_page(
-    page: &Page<'_>,
-    option: RenderOptionBuilder,
-) -> Result<RgbaImage, ObjectValueError> {
+pub fn render_page(page: &Page<'_>, option: RenderOptionBuilder) -> Result<RgbaImage> {
     render_steps(page, option, None, false)
 }
 
@@ -167,17 +163,17 @@ pub fn render_steps(
     option: RenderOptionBuilder,
     steps: Option<usize>,
     no_crop: bool,
-) -> Result<RgbaImage, ObjectValueError> {
-    let media_box = page.media_box();
-    let crop_box = page.crop_box();
-    let mut canvas_box = crop_box.unwrap_or(media_box);
+) -> Result<RgbaImage> {
+    let media_box = page.media_box()?;
+    let crop_box = page.crop_box()?;
+    let mut canvas_box = crop_box;
     // if canvas is empty, use default A4 size
     if canvas_box.width() == 0.0 || canvas_box.height() == 0.0 {
         canvas_box = Rectangle::from_xywh(0.0, 0.0, 597.6, 842.4);
     }
     let option = option
         .page_box(&canvas_box, page.rotate())
-        .crop((!no_crop && need_crop(crop_box, media_box)).then(|| crop_box.unwrap()))
+        .crop((!no_crop && need_crop(crop_box, media_box)).then(|| crop_box))
         .rotate(page.rotate())
         .build();
     let content = page.content()?;
@@ -185,7 +181,7 @@ pub fn render_steps(
     let mut canvas = option.create_canvas();
     if !ops.is_empty() {
         // skip render if no operations, fixes incorrect pdf files that no resources
-        let resource = page.resources();
+        let resource = page.resources()?;
         let mut renderer = Render::new(&mut canvas, option.clone(), &resource);
         if let Some(steps) = steps {
             ops.into_iter().take(steps).for_each(|op| renderer.exec(op));
@@ -197,11 +193,8 @@ pub fn render_steps(
     Ok(r)
 }
 
-fn need_crop(crop: Option<Rectangle>, media: Rectangle) -> bool {
-    match crop {
-        None => false,
-        Some(crop) => crop != media,
-    }
+fn need_crop(crop: Rectangle, media: Rectangle) -> bool {
+    crop != media
 }
 
 #[cfg(test)]

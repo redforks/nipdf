@@ -9,7 +9,7 @@ use test_case::test_case;
 #[test_case(b"1 0 obj<</ShadingType 3/ColorSpace/DeviceGray/Coords[1 1 -1 1 1 1]>>endobj"; "negative start radius")]
 #[test_case(b"1 0 obj<</ShadingType 3/ColorSpace/DeviceGray/Coords[1 1 1 1 1 -1]>>endobj"; "negative end radius")]
 fn build_invalid_radial(buf: &[u8]) -> Result<()> {
-    let xref = XRefTable::from_buf(buf);
+    let xref = XRefTable::from_buf(buf)?;
     let resolver = ObjectResolver::new(buf, &xref, None);
     let d: ShadingDict<'_, '_> = resolver
         .resolve_pdf_object(1)
