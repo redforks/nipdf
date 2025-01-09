@@ -112,7 +112,7 @@ fn parse_inline_image_with_ascii85_filter() -> Result<()> {
     let (remains, img) = inline_image::<winnow::error::ContextError<&'static str>>()
         .parse_peek(data)
         .unwrap();
-    assert_eq!(remains, b" Q\n");
+    assert_eq!(remains, b"Q\n");
     let meta = img.meta();
     assert_eq!(meta.width()?, 4772);
     assert_eq!(meta.height()?, 110);

@@ -9,7 +9,7 @@ use crate::{
     parser::object::indirect_object_def,
 };
 use hex::FromHexError;
-use log::{debug, info, warn};
+use log::{info, warn};
 use num_traits::{NumCast, Unsigned};
 use prescript::sname;
 use snafu::{OptionExt, ResultExt};
