@@ -6,10 +6,11 @@ use bitstream_io::{
 use bitvec::{prelude::Msb0, slice::BitSlice, vec::BitVec};
 use educe::Educe;
 use either::Either;
-use snafu::{ResultExt as _, Snafu};
+use snafu::{ResultExt, Snafu};
 use std::{
     io::{Cursor, SeekFrom},
     iter::repeat,
+    num::TryFromIntError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,6 +79,8 @@ pub enum DecodeError {
     // HorizontalRunColorMismatch,
     #[snafu(display("Unknown code"))]
     InvalidCode,
+    #[snafu(display("Invalid pixel"))]
+    InvalidPixel { source: TryFromIntError },
 }
 
 type Result<T> = std::result::Result<T, DecodeError>;
@@ -487,14 +490,14 @@ trait LineDecoder {
                     };
                 }
                 ProcessPEResult::Pixels1(pixels) => {
-                    line.push_pixels(pixels.0, pixels.1);
+                    line.push_pixels(pixels.0, pixels.1)?;
                     if line.line_fulfilled() {
                         return Ok(DecodeLineResult::LineFulfilled);
                     }
                 }
                 ProcessPEResult::Pixels2(p1, p2) => {
-                    line.push_pixels(p1.0, p1.1);
-                    line.push_pixels(p2.0, p2.1);
+                    line.push_pixels(p1.0, p1.1)?;
+                    line.push_pixels(p2.0, p2.1)?;
                     if line.line_fulfilled() {
                         return Ok(DecodeLineResult::LineFulfilled);
                     }
@@ -536,7 +539,10 @@ impl LineDecoder for Group4LineDecoder {
             Group4Code::Pass => {
                 let b1 = line.last.b1(line.pos, self.color.is_white());
                 let b2 = line.last.next_flip(Some(b1));
-                Ok(Pixels1((self.color, (b2 - line.pos()).try_into().unwrap())))
+                Ok(Pixels1((
+                    self.color,
+                    (b2 - line.pos()).try_into().context(InvalidPixelSnafu)?,
+                )))
             }
             Group4Code::Horizontal => {
                 let a0a1 = next_run(reader, &self.huffman, self.color)?;
@@ -677,7 +683,9 @@ impl LineDecoder for Group3_1DLineDecoder {
             PictualElement::Eol => {
                 let px = (
                     Color::White,
-                    (line.last.0.len() - line.pos()).try_into().unwrap(),
+                    (line.last.0.len() - line.pos())
+                        .try_into()
+                        .context(InvalidPixelSnafu)?,
                 );
                 if read_eol_or_eob(5, reader)? {
                     Ok(Pixels1(px))
@@ -688,7 +696,9 @@ impl LineDecoder for Group3_1DLineDecoder {
             PictualElement::TwelveZeros => {
                 let px = (
                     Color::White,
-                    (line.last.0.len() - line.pos()).try_into().unwrap(),
+                    (line.last.0.len() - line.pos())
+                        .try_into()
+                        .context(InvalidPixelSnafu)?,
                 );
                 read_eol_with_fill_padding(12, reader)?;
                 if read_eol_or_eob(5, reader)? {
@@ -728,13 +738,18 @@ impl<'a> LineBuffer<'a> {
         self.pos.unwrap_or_default() as usize
     }
 
-    pub fn push_pixels(&mut self, color: Color, counts: u16) {
+    pub fn push_pixels(&mut self, color: Color, counts: u16) -> Result<()> {
         let pos = self.pos();
         for i in pos..(pos + counts as usize) {
             self.cur.set(i, color.is_white());
         }
-        self.pos = Some((self.pos() + counts as usize).try_into().unwrap());
+        self.pos = Some(
+            (self.pos() + counts as usize)
+                .try_into()
+                .context(InvalidPixelSnafu)?,
+        );
         debug_assert!(self.pos() <= self.last.0.len());
+        Ok(())
     }
 
     pub fn take(self) -> BitVec<u8, Msb0> {
