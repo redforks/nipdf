@@ -169,7 +169,7 @@ endobj"#;
 
 #[report]
 #[test]
-fn parse_file() -> Result<(), ObjectValueError> {
+fn parse_file() -> Result<()> {
     let mut p = PathBuf::from(file!());
     assert_eq!(
         p.pop()
@@ -181,10 +181,13 @@ fn parse_file() -> Result<(), ObjectValueError> {
     p.push("sample_files");
     p.push("normal");
     p.push("SamplePdf1_12mb_6pages.pdf");
-    let buf = std::fs::read(p).unwrap();
-    let f = File::parse(buf, "").unwrap();
-    let resolver = f.resolver().unwrap();
-    assert_eq!(Some("1.5".to_owned()), f.version(&resolver)?);
+    let buf = std::fs::read(p).whatever_context("read file")?;
+    let f = File::parse(buf, "").whatever_context("parse pdf file")?;
+    let resolver = f.resolver()?;
+    assert_eq!(
+        Some("1.5".to_owned()),
+        f.version(&resolver).whatever_context("version")?
+    );
 
     Ok(())
 }

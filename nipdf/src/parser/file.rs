@@ -9,7 +9,7 @@ use crate::{
     parser::object::indirect_object_def,
 };
 use hex::FromHexError;
-use log::{info, warn};
+use log::{debug, info, warn};
 use num_traits::{NumCast, Unsigned};
 use prescript::sname;
 use snafu::{OptionExt, ResultExt};
@@ -310,22 +310,12 @@ where
     ))
 }
 
-pub(crate) fn parse_frame_set<'a, S, E>(buf: &mut S) -> PResult<FrameSet, E>
+pub(crate) fn parse_frame_set<'a, E>(buf: &mut &'a [u8]) -> PResult<FrameSet, E>
 where
-    S: Stream<Token = u8, Slice = &'a [u8]>
-        + StreamIsPartial
-        + AsBStr
-        + Compare<u8>
-        + Compare<char>
-        + Compare<&'a [u8]>
-        + Compare<Caseless<&'static str>>
-        + Clone
-        + 'a,
-    <S as Stream>::IterOffsets: Clone,
-    E: ParserError<S>
+    E: ParserError<&'a [u8]>
         + ParserError<&'a [u8]>
         + ParserError<Located<&'a [u8]>>
-        + AddContext<S>
+        + AddContext<&'a [u8]>
         + AddContext<Located<&'a [u8]>>
         + Debug
         + FromExternalError<Located<&'a [u8]>, ObjectValueError>
@@ -336,7 +326,7 @@ where
         + for<'b> FromExternalError<&'b [u8], AnyWhatever>
         + 'a,
 {
-    let bytes = buf.peek_finish().1;
+    let bytes = buf.finish();
     // find start of last cross reference section
     let mut lines = rev_iter_lines(bytes);
     let mut line = lines
@@ -366,11 +356,11 @@ where
                 .context("trailer"),
             ),
             parse_xref_stream.context("xref stream"),
-        )),)
-            .context("frame");
+        )))
+        .context("frame");
         let mut bytes = Located::new(&bytes[pos..]);
         let f = frame.parse_next(&mut bytes)?;
-        let f = Frame::new(pos, f.0.1, f.0.0);
+        let f = Frame::new(pos, f.1, f.0);
         next_pos = f
             .trailer
             .get(&sname("Prev"))
@@ -426,7 +416,7 @@ mod tests {
     #[test]
     fn test_file_trailers() {
         let buf = std::fs::read(test_file("sample_files/normal/pdfreference1.0.pdf")).unwrap();
-        let frameset = parse_frame_set::<_, ContextError<&'static str>>(&mut &buf[..]).unwrap();
+        let frameset = parse_frame_set::<ContextError<&'static str>>(&mut &buf[..]).unwrap();
         assert_eq!(2, frameset.len());
         let (f1, f2) = (&frameset[0], &frameset[1]);
         assert_eq!(f1.xref_pos, 116);
@@ -438,7 +428,7 @@ mod tests {
     #[test]
     fn test_file_trailers_xref_stream() {
         let buf = std::fs::read(test_file("sample_files/bizarre/imm5257b_1.pdf")).unwrap();
-        let frameset = parse_frame_set::<_, ContextError<&'static str>>(&mut &buf[..]).unwrap();
+        let frameset = parse_frame_set::<ContextError<&'static str>>(&mut &buf[..]).unwrap();
         assert_eq!(2, frameset.len());
     }
 }

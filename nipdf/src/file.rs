@@ -683,7 +683,7 @@ impl File {
                 None
             }
         };
-        let frame_set = parse_frame_set::<_, ParserError>
+        let frame_set = parse_frame_set::<ParserError>
             .parse(&buf[..])
             .map_err(ParseError::into_inner)
             .whatever_context("parse frame set")?;
