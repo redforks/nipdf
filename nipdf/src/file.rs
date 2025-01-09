@@ -14,7 +14,7 @@ use either::Either;
 use log::error;
 use nipdf_macro::pdf_object;
 use once_cell::unsync::OnceCell;
-use prescript::{Name, sname};
+use prescript::{Name, ParserError, sname};
 use snafu::{OptionExt as _, ResultExt as _, Snafu, whatever};
 use std::iter::repeat_with;
 use winnow::{
@@ -256,7 +256,7 @@ impl XRefTable {
             .and_then(|buf| {
                 buf.either(
                     |buf| {
-                        indirect_object_def::<_, crate::ParserError>()
+                        indirect_object_def::<_, ParserError>()
                             .map(|o| {
                                 let id = o.id();
                                 let o = o.take();
@@ -270,7 +270,7 @@ impl XRefTable {
                             .map_err(ObjectValueError::from)
                     },
                     |buf| {
-                        parser::object::<_, crate::ParserError>()
+                        parser::object::<_, ParserError>()
                             .parse(buf)
                             .map_err(ObjectValueError::from)
                     },
@@ -629,44 +629,49 @@ fn open_encrypt(
     xref: &XRefTable,
     trailer: Option<&Dictionary>,
     password: &str,
-) -> Result<Option<EncryptInfo>, FileError> {
+) -> Result<Option<EncryptInfo>> {
     let Some(trailer) = trailer else {
         return Ok(None);
     };
 
     let resolver = ObjectResolver::new(buf, xref, None);
-    let trailer = TrailerDict::new(None, trailer, &resolver)?;
-    let encrypt = trailer.encrypt().map_err(|e| {
-        drop(e);
-        FileError::InvalidFile
-    })?;
+    let trailer =
+        TrailerDict::new(None, trailer, &resolver).whatever_context("parse trailer dict")?;
+    let encrypt = trailer
+        .encrypt()
+        .map_err(|e| {
+            drop(e);
+            FileError::InvalidFile
+        })
+        .whatever_context("parse encrypt dict")?;
     let Some(encrypt) = encrypt else {
         return Ok(None);
     };
 
     assert_eq!(
         sname("Standard"),
-        encrypt.filter().map_err(|_| FileError::InvalidFile)?,
+        encrypt.filter().whatever_context("get encrypt filter")?,
         "unsupported security handler"
     );
     assert!(
         encrypt
             .sub_filter()
-            .map_err(|_| FileError::InvalidFile)?
+            .whatever_context("get encrypt sub filter")?
             .is_none(),
         "unsupported security handler (SubFilter)"
     );
 
-    let authorizer = Authorizer::new(&encrypt, &trailer).map_err(|_| FileError::InvalidFile)?;
+    let authorizer = Authorizer::new(&encrypt, &trailer).whatever_context("get authorizer info")?;
 
-    authorizer.authorize(password.as_bytes()).map_or_else(
-        || Err(FileError::InvalidPassword),
-        |k| Ok(Some(EncryptInfo::new(k, encrypt.crypt_filters()))),
-    )
+    let k = authorizer
+        .authorize(password.as_bytes())
+        .ok_or(FileError::InvalidPassword)
+        .whatever_context("check password")?;
+    Ok(Some(EncryptInfo::new(k, encrypt.crypt_filters()?)))
 }
 
 impl File {
-    pub fn parse(buf: Vec<u8>, user_password: &str) -> Result<Self, FileError> {
+    pub fn parse(buf: Vec<u8>, user_password: &str) -> Result<Self> {
         let head_ver = match header_parser().parse_next(&mut &buf[..]) {
             Ok(ver) => Some(ver),
             Err(e) => {
@@ -674,11 +679,10 @@ impl File {
                 None
             }
         };
-        let frame_set =
-            parse_frame_set::<_, ContextError<&'static str>>(&&buf[..]).map_err(|e| {
-                error!("Failed to parse frame set: {}", e);
-                FileError::InvalidFile
-            })?;
+        let frame_set = parse_frame_set::<_, ParserError>
+            .parse(&buf[..])
+            .map_err(|e| e.into_inner())
+            .whatever_context("parse frame set")?;
         let xref = XRefTable::from_frame_set(&frame_set);
 
         let trailers: Vec<_> = frame_set.into_iter().map(|f| f.trailer).collect();
@@ -692,16 +696,10 @@ impl File {
         let root_id = trailers
             .iter()
             .find_map(|t| t.get(&sname("Root")))
-            .ok_or_else(|| {
-                error!("Root entry not found in trailers");
-                FileError::InvalidFile
-            })?;
+            .whatever_context("Root entry not found in trailers")?;
         let root_id = root_id
             .reference()
-            .map_err(|e| {
-                error!("Failed to get reference from root_id: {}", e);
-                FileError::InvalidFile
-            })?
+            .whatever_context("Failed to get reference from root_id")?
             .id()
             .id();
 
@@ -784,9 +782,9 @@ pub(crate) fn open_test_file(file_path: impl AsRef<std::path::Path>) -> File {
 pub(crate) fn open_test_file_with_password(
     file_path: impl AsRef<std::path::Path>,
     p: &str,
-) -> Result<File, FileError> {
+) -> Result<File> {
     let file_path = test_file(file_path);
-    let data = std::fs::read(file_path).unwrap();
+    let data = std::fs::read(file_path).whatever_context("read file")?;
     File::parse(data, p)
 }
 

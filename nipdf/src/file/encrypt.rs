@@ -153,7 +153,7 @@ impl CryptFilters {
 }
 
 impl EncryptDict<'_, '_> {
-    pub fn crypt_filters(&self) -> CryptFilters {
+    pub fn crypt_filters(&self) -> Result<CryptFilters> {
         fn _do(this: &EncryptDict<'_, '_>) -> Result<CryptFilters> {
             if this.revision()? != StandardHandlerRevision::V4 {
                 return Ok(CryptFilters::rc4());
@@ -180,16 +180,16 @@ impl EncryptDict<'_, '_> {
         }
 
         if !matches!(
-            self.algorithm().unwrap(),
+            self.algorithm()?,
             Algorithm::Key40 | Algorithm::Key40AndMore | Algorithm::DefinedInDoc,
         ) {
-            todo!("Algorithm: {:?}", self.algorithm().unwrap());
+            todo!("Algorithm: {:?}", self.algorithm()?);
         }
 
-        _do(self).unwrap_or_else(|e| {
+        Ok(_do(self).unwrap_or_else(|e| {
             error!("failed to parse crypt filters, use Identity: {}", e);
             CryptFilters::identity()
-        })
+        }))
     }
 }
 

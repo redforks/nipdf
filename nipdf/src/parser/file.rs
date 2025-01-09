@@ -310,7 +310,7 @@ where
     ))
 }
 
-pub(crate) fn parse_frame_set<'a, S, E>(buf: &S) -> PResult<FrameSet, E>
+pub(crate) fn parse_frame_set<'a, S, E>(buf: &mut S) -> PResult<FrameSet, E>
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
@@ -426,7 +426,7 @@ mod tests {
     #[test]
     fn test_file_trailers() {
         let buf = std::fs::read(test_file("sample_files/normal/pdfreference1.0.pdf")).unwrap();
-        let frameset = parse_frame_set::<_, ContextError<&'static str>>(&&buf[..]).unwrap();
+        let frameset = parse_frame_set::<_, ContextError<&'static str>>(&mut &buf[..]).unwrap();
         assert_eq!(2, frameset.len());
         let (f1, f2) = (&frameset[0], &frameset[1]);
         assert_eq!(f1.xref_pos, 116);
@@ -438,7 +438,7 @@ mod tests {
     #[test]
     fn test_file_trailers_xref_stream() {
         let buf = std::fs::read(test_file("sample_files/bizarre/imm5257b_1.pdf")).unwrap();
-        let frameset = parse_frame_set::<_, ContextError<&'static str>>(&&buf[..]).unwrap();
+        let frameset = parse_frame_set::<_, ContextError<&'static str>>(&mut &buf[..]).unwrap();
         assert_eq!(2, frameset.len());
     }
 }
