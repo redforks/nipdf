@@ -1,4 +1,5 @@
 use crate::{
+    Result,
     function::Domains,
     graphics::{
         ColorArgs, ColorSpaceArgs, LineCapStyle, LineJoinStyle, Operation, PatternDict, Point,
@@ -11,7 +12,8 @@ use ahash::{HashMap, HashMapExt};
 use educe::Educe;
 use log::error;
 use nipdf_macro::{TryFromNameObject, pdf_object};
-use prescript::{Name, ParserError, sname};
+use prescript::{AnyWhatever, Name, ParserError, sname};
+use snafu::{OptionExt as _, ResultExt as _};
 use std::{cell::LazyCell, iter::once};
 use winnow::Parser as _;
 
@@ -76,10 +78,26 @@ impl TryFrom<&Object> for Rectangle {
         match object {
             Object::Array(arr) => {
                 let mut iter = arr.iter();
-                let left_x = iter.next().unwrap().as_number().unwrap();
-                let lower_y = iter.next().unwrap().as_number().unwrap();
-                let right_x = iter.next().unwrap().as_number().unwrap();
-                let upper_y = iter.next().unwrap().as_number().unwrap();
+                let left_x = iter
+                    .next()
+                    .whatever_context::<_, ObjectValueError>("Missing left_x value")?
+                    .as_number()
+                    .whatever_context::<_, ObjectValueError>("Invalid left_x value")?;
+                let lower_y = iter
+                    .next()
+                    .whatever_context::<_, ObjectValueError>("Missing lower_y value")?
+                    .as_number()
+                    .whatever_context::<_, ObjectValueError>("Invalid lower_y value")?;
+                let right_x = iter
+                    .next()
+                    .whatever_context::<_, ObjectValueError>("Missing right_x value")?
+                    .as_number()
+                    .whatever_context::<_, ObjectValueError>("Invalid right_x value")?;
+                let upper_y = iter
+                    .next()
+                    .whatever_context::<_, ObjectValueError>("Missing upper_y value")?
+                    .as_number()
+                    .whatever_context::<_, ObjectValueError>("Invalid upper_y value")?;
                 Ok(Self::from_lbrt(left_x, lower_y, right_x, upper_y))
             }
             _ => Err(ObjectValueError::GraphicsOperationSchemaError),
@@ -160,7 +178,11 @@ pub trait XObjectDictTrait {
 
 impl XObjectDict<'_, '_> {
     pub fn as_stream(&self) -> Result<&Stream, ObjectValueError> {
-        self.d.resolver().resolve(self.id().unwrap())?.stream()
+        let id = self
+            .id()
+            .whatever_context::<_, ObjectValueError>("XObject dictionary missing ID")?;
+
+        self.d.resolver().resolve(id)?.stream()
     }
 }
 
@@ -249,7 +271,7 @@ pub(crate) trait PageDictTrait {
 
 impl PageDict<'_, '_> {
     pub fn is_leaf(&self) -> bool {
-        self.type_name().unwrap() == sname("Page")
+        self.type_name().map(|s| s == sname("Page")).unwrap_or(true)
     }
 }
 
@@ -262,6 +284,7 @@ pub struct Page<'a> {
 
 impl<'a> Page<'a> {
     pub fn id(&self) -> RuntimeObjectId {
+        #[allow(clippy::unwrap_used, reason = "Page PDFObject always have ID")]
         self.d.id().unwrap()
     }
 
@@ -269,45 +292,50 @@ impl<'a> Page<'a> {
         once(&self.d).chain(self.parents_to_root.iter())
     }
 
-    pub fn media_box(&self) -> Rectangle {
+    pub fn media_box(&self) -> Result<Rectangle> {
         self.iter_to_root()
-            .find_map(|d| d.media_box().unwrap())
-            .expect("page must have media box")
+            .find_map(|d| d.media_box().transpose())
+            .whatever_context::<_, AnyWhatever>("page must have media box")?
+            .whatever_context("get media box")
     }
 
     pub fn rotate(&self) -> i32 {
-        self.d.rotate().unwrap()
+        self.d.rotate().unwrap_or_default()
     }
 
-    /// Return None if crop_box not exist, or empty.
-    pub fn crop_box(&self) -> Option<Rectangle> {
-        let r = self.iter_to_root().find_map(|d| d.crop_box().unwrap());
-        if let Some(r) = r {
-            if r.width() == 0.0 || r.height() == 0.0 {
-                return None;
-            }
-        }
-        r
-    }
-
-    pub fn resources(&self) -> ResourceDict<'_, '_> {
+    pub fn crop_box(&self) -> Result<Rectangle> {
         self.iter_to_root()
-            .find_map(|d| d.resources().unwrap())
-            .unwrap_or_else(|| {
-                // although document says resource dictionary is required, but some pdf file
-                // doesn't have it.
-                ResourceDict::new(None, &self.empty_dict, self.d.resolver()).unwrap()
-            })
+            .find_map(|d| d.crop_box().transpose())
+            .transpose()
+            .whatever_context("get crop box")?
+            .and_then(|r| (r.width() != 0.0 && r.height() != 0.0).then_some(r))
+            .map_or_else(|| self.media_box(), Ok)
     }
 
-    pub fn content(&self) -> Result<PageContent, ObjectValueError> {
+    pub fn resources(&self) -> Result<ResourceDict<'_, '_>> {
+        self.iter_to_root()
+            .find_map(|d| d.resources().transpose())
+            .transpose()
+            .whatever_context("get resources")?
+            .map_or_else(
+                || {
+                    // although document says resource dictionary is required, but some pdf file
+                    // doesn't have it.
+                    ResourceDict::new(None, &self.empty_dict, self.d.resolver())
+                        .whatever_context("Create default resource dictionary")
+                },
+                Ok,
+            )
+    }
+
+    pub fn content(&self) -> Result<PageContent> {
         let bufs = self
             .d
-            .contents()
-            .unwrap()
+            .contents()?
             .into_iter()
             .map(|s| {
                 s.decode(self.d.d.resolver())
+                    .whatever_context("decode stream")
                     .map(std::borrow::Cow::into_owned)
             })
             .collect::<Result<_, _>>()?;
@@ -315,18 +343,18 @@ impl<'a> Page<'a> {
     }
 
     /// Parse page tree to get all pages
-    pub(crate) fn parse(root: PageDict<'a, 'a>) -> Result<Vec<Self>, ObjectValueError> {
+    pub(crate) fn parse(root: PageDict<'a, 'a>) -> Result<Vec<Self>> {
         let mut pages = Vec::new();
         let mut parents = Vec::new();
         fn handle<'a, 'c>(
             node: PageDict<'a, 'a>,
             pages: &'c mut Vec<Page<'a>>,
             parents: &'c mut Vec<PageDict<'a, 'a>>,
-        ) -> Result<(), ObjectValueError> {
+        ) -> Result<()> {
             if node.is_leaf() {
-                pages.push(Page::from_leaf(&node, &parents[..])?);
+                pages.push(Page::from_leaf(&node, &parents[..]).whatever_context("Create Page")?);
             } else {
-                let kids = node.kids().unwrap();
+                let kids = node.kids()?;
                 parents.push(node);
                 for kid in kids {
                     handle(kid, pages, parents)?;

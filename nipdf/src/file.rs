@@ -584,12 +584,8 @@ impl<'a> Catalog<'a> {
         })
     }
 
-    pub fn pages(&self) -> Result<Vec<Page<'a>>, ObjectValueError> {
-        Page::parse(
-            self.d
-                .pages()
-                .whatever_context::<_, ObjectValueError>("resolve pages")?,
-        )
+    pub fn pages(&self) -> Result<Vec<Page<'a>>> {
+        Page::parse(self.d.pages().whatever_context("resolve pages")?)
     }
 
     pub fn ver(&self) -> Option<Name> {
