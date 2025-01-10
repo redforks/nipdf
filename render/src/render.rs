@@ -206,7 +206,7 @@ impl ColorState {
     ) -> Result<()> {
         self.color_space = cs;
         if let Some(args) = args {
-            self.set_color_args(args);
+            self.set_color_args(args)?;
         } else {
             let [r, g, b, a] = self.color_space.default_color();
             self.set_paint(
@@ -986,7 +986,7 @@ impl<'a, 'c> Render<'a, 'c> {
         args: &ColorArgs,
     ) -> Result<()> {
         let state = get_state(self)?;
-        state.set_color_args(args);
+        state.set_color_args(args)?;
         Ok(())
     }
 
@@ -1574,7 +1574,7 @@ impl<'a, 'c> Render<'a, 'c> {
             }
             ColorArgsOrName::Color(args) => {
                 let state = get_state(self)?;
-                state.set_color_args(args);
+                state.set_color_args(args)?;
                 Ok(())
             }
         }
@@ -1685,7 +1685,7 @@ impl<'a, 'c> Render<'a, 'c> {
             .page_box(&b_box, 0)
             .background_color(SkiaColor::TRANSPARENT)
             .build();
-        let mut canvas = option.create_canvas();
+        let mut canvas = option.create_canvas()?;
         let Some(mut render) =
             Render::new_nested(self.nested_level, &mut canvas, option, &resources)?
         else {
@@ -1694,7 +1694,7 @@ impl<'a, 'c> Render<'a, 'c> {
         let color_state = get_state(self)?;
         if let Some(args) = color_args {
             // set color used for paint matrix image
-            color_state.set_color_args(args);
+            color_state.set_color_args(args)?;
         }
         ops.into_iter().for_each(|op| render.exec(op));
         drop(render);

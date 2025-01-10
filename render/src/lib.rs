@@ -12,6 +12,7 @@ use nipdf::{
     graphics::trans::{LogicDeviceToDeviceSpace, UserToUserSpace, logic_device_to_device},
 };
 use prescript::Result;
+use snafu::OptionExt;
 use tiny_skia::{Color, Pixmap};
 
 mod render;
@@ -43,18 +44,29 @@ impl PageDimension {
         }
         self.transform = transform;
 
-        self.width = dimension.width().to_u32().unwrap();
-        self.height = dimension.height().to_u32().unwrap();
+        // width and height are always positive, it is acceptable if it panic because of too
+        // large page size
+        #[allow(clippy::unwrap_used)]
+        {
+            self.width = dimension.width().to_u32().unwrap();
+            self.height = dimension.height().to_u32().unwrap();
+        }
         if self.swap_wh() {
             std::mem::swap(&mut self.width, &mut self.height);
         }
     }
 
     pub fn canvas_width(&self) -> u32 {
+        // width and zoom are always positive, it is acceptable if it panic because of too
+        // large page size
+        #[allow(clippy::unwrap_used)]
         (self.width as f32 * self.zoom).to_u32().unwrap()
     }
 
     pub fn canvas_height(&self) -> u32 {
+        // height and zoom are always positive, it is acceptable if it panic because of too
+        // large page size
+        #[allow(clippy::unwrap_used)]
         (self.height as f32 * self.zoom).to_u32().unwrap()
     }
 
@@ -94,25 +106,26 @@ pub struct RenderOption {
 }
 
 impl RenderOption {
-    pub fn create_canvas(&self) -> Pixmap {
+    pub fn create_canvas(&self) -> Result<Pixmap> {
         let (w, h) = (
-            self.dimension.canvas_width() as u64,
-            self.dimension.canvas_height() as u64,
+            self.dimension.canvas_width(),
+            self.dimension.canvas_height(),
         );
         if w * h > 1024 * 1024 * 100 {
             panic!("page size too large: {}x{}", w, h);
         }
 
-        let mut r = Pixmap::new(w.try_into().unwrap(), h.try_into().unwrap()).unwrap();
+        let mut r = Pixmap::new(w, h).whatever_context("Failed create canvas")?;
         if self.background_color.is_opaque() {
             r.fill(self.background_color);
         }
-        r
+        Ok(r)
     }
 
     /// Convert canvas to image, crop if crop option not None
-    pub fn to_image(&self, canvas: Pixmap) -> RgbaImage {
-        RgbaImage::from_raw(canvas.width(), canvas.height(), canvas.take()).unwrap()
+    pub fn to_image(&self, canvas: Pixmap) -> Result<RgbaImage> {
+        RgbaImage::from_raw(canvas.width(), canvas.height(), canvas.take())
+            .whatever_context("Failed create canvas")
     }
 }
 #[derive(Educe)]
@@ -120,7 +133,12 @@ impl RenderOption {
 pub struct RenderOptionBuilder(RenderOption);
 
 impl RenderOptionBuilder {
+    /// Set zoom field, if zoom less than 0, it will be ignored.
     pub fn zoom(mut self, zoom: f32) -> Self {
+        if zoom <= 0.0 {
+            warn!("zoom less than 0, ignored");
+            return self;
+        }
         self.0.dimension.zoom = zoom;
         self
     }
@@ -184,7 +202,7 @@ pub fn render_steps(
         .build();
     let content = page.content()?;
     let ops = content.operations();
-    let mut canvas = option.create_canvas();
+    let mut canvas = option.create_canvas()?;
     if !ops.is_empty() {
         // skip render if no operations, fixes incorrect pdf files that no resources
         let resource = page.resources()?;
@@ -195,8 +213,7 @@ pub fn render_steps(
             ops.into_iter().for_each(|op| renderer.exec(op));
         };
     }
-    let r = option.to_image(canvas);
-    Ok(r)
+    option.to_image(canvas)
 }
 
 fn need_crop(crop: Rectangle, media: Rectangle) -> bool {
