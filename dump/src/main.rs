@@ -1,3 +1,8 @@
+#![warn(clippy::unwrap_used)]
+#![warn(clippy::expect_used)]
+#![cfg_attr(test, allow(clippy::unwrap_used))]
+#![cfg_attr(test, allow(clippy::expect_used))]
+
 use clap::{Command, arg, value_parser};
 use image::ImageFormat;
 use mimalloc::MiMalloc;
@@ -6,7 +11,7 @@ use nipdf::{
     object::{Object, RuntimeObjectId},
 };
 use nipdf_render::{RenderOptionBuilder, render_steps};
-use snafu::{ResultExt, Whatever};
+use snafu::{OptionExt, ResultExt, Whatever, report};
 use std::{
     collections::HashSet,
     io::{BufWriter, Cursor, copy, stdout},
@@ -145,11 +150,11 @@ fn dump_page(args: &DumpPageArgs<'_>) -> Result<()> {
     if show_total_pages {
         println!("{}", catalog.pages().whatever_context("get pages")?.len());
     } else if show_page_id {
-        let page_no = page_no.expect("page number is required");
+        let page_no = page_no.whatever_context("page number is required")?;
         let page = &catalog.pages().whatever_context("get pages")?[page_no as usize];
         println!("{}", page.id());
     } else if to_png {
-        let page_no = page_no.expect("page number is required");
+        let page_no = page_no.whatever_context("page number is required")?;
         let page = &catalog.pages().whatever_context("get pages")?[page_no as usize];
         let image = render_steps(
             page,
@@ -207,7 +212,8 @@ fn dump_object(path: &PathBuf, password: &str, id: u32) -> Result<()> {
     Ok(())
 }
 
-fn main() {
+#[report]
+fn main() -> Result<()> {
     env_logger::init();
 
     match cli().get_matches().subcommand() {
@@ -249,5 +255,4 @@ fn main() {
         ),
         _ => todo!(),
     }
-    .unwrap();
 }
