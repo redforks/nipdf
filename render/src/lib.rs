@@ -178,7 +178,7 @@ pub fn render_steps(
     }
     let option = option
         .page_box(&canvas_box, page.rotate())
-        .crop((!no_crop && need_crop(crop_box, media_box)).then(|| crop_box))
+        .crop((!no_crop && need_crop(crop_box, media_box)).then_some(crop_box))
         .rotate(page.rotate())
         .build();
     let content = page.content()?;

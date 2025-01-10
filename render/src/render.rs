@@ -756,7 +756,7 @@ impl<'a, 'c> Render<'a, 'c> {
             Operation::Stroke => self.stroke().unwrap(),
             Operation::CloseAndStroke => self.close_and_stroke().unwrap(),
             Operation::FillNonZero | Operation::FillNonZeroDeprecated => {
-                self.fill_path_non_zero().unwrap()
+                self.fill_path_non_zero().unwrap();
             }
             Operation::FillEvenOdd => self.fill_path_even_odd().unwrap(),
             Operation::FillAndStrokeNonZero => self.fill_and_stroke_non_zero().unwrap(),
