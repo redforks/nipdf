@@ -1,12 +1,17 @@
 use crate::{
     Encoding, ParserError, Result,
     machine::{Array, Machine, Value},
-    parser::{header, parse_error_to_whatever, perror_to_whatever},
+    parser::{header, parse_error_to_whatever},
     sname,
 };
 use snafu::{OptionExt as _, ResultExt as _, whatever};
 use std::{array::from_fn, borrow::Cow};
-use winnow::{Parser, binary::le_u32, combinator::preceded, token::any};
+use winnow::{
+    Parser,
+    binary::le_u32,
+    combinator::{preceded, rest, terminated},
+    token::any,
+};
 
 #[derive(Debug, PartialEq)]
 pub struct Header {
@@ -22,10 +27,11 @@ pub struct Font {
     encoding: Option<Encoding>,
 }
 
-fn parse_header(mut data: &[u8]) -> Result<Header> {
-    header
-        .parse_next(&mut data)
-        .map_err(|e| perror_to_whatever(e, "parse header"))
+fn parse_header(data: &[u8]) -> Result<Header> {
+    terminated(header, rest)
+        .parse(data)
+        .map_err(winnow::error::ParseError::into_inner)
+        .whatever_context("parse header")
 }
 
 fn parse_vec_encoding(arr: &Array) -> Result<Encoding> {

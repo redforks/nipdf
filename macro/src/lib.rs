@@ -1,6 +1,7 @@
 #![allow(clippy::expect_used)]
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::panic)]
+#![allow(clippy::todo)]
 
 use proc_macro::TokenStream;
 use proc_macro2::Span;
