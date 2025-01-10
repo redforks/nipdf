@@ -261,7 +261,7 @@ where
                     ensure_whatever!(
                         !names
                             .iter()
-                            .all(|n| n.name().map_or(false, |name| name == sname("None"))),
+                            .all(|n| n.name().is_ok_and(|name| name == sname("None"))),
                         "all color component None should not render which is not supported"
                     );
 

@@ -148,7 +148,7 @@ impl TypeValueCheck<Name> for EqualTypeValueChecker<Name> {
     }
 
     fn check(&self, v: Option<Name>) -> bool {
-        v.map_or(false, |v| v == self.value)
+        v.as_ref() == Some(&self.value)
     }
 }
 
@@ -158,7 +158,7 @@ impl TypeValueCheck<i32> for EqualTypeValueChecker<i32> {
     }
 
     fn check(&self, v: Option<i32>) -> bool {
-        v.map_or(false, |v| v == self.value)
+        v.as_ref() == Some(&self.value)
     }
 }
 
@@ -203,7 +203,7 @@ impl<V: Display + PartialEq + Clone + Debug> TypeValueCheck<V> for OneOfTypeValu
     }
 
     fn check(&self, v: Option<V>) -> bool {
-        v.map_or(false, |v| self.values.iter().any(|r| &v == r))
+        v.is_some_and(|v| self.values.iter().any(|r| &v == r))
     }
 }
 
