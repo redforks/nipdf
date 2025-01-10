@@ -3,7 +3,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 #![cfg_attr(test, allow(clippy::expect_used))]
 
-use clap::{Command, arg, value_parser};
+use clap::{Parser, Subcommand, arg};
 use image::ImageFormat;
 use mimalloc::MiMalloc;
 use nipdf::{
@@ -22,59 +22,74 @@ type Result<T, E = Whatever> = std::result::Result<T, E>;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-fn cli() -> Command {
-    Command::new("dump-pdf")
-        .about("Dump PDF file structure and contents")
-        .subcommand_required(true)
-        .subcommand(
-            Command::new("stream")
-                .about("dump stream content to stdout")
-                .arg(
-                    arg!(-f <filename> "PDF file to dump")
-                        .value_parser(value_parser!(PathBuf))
-                        .required(true),
-                )
-                .arg(arg!(-p --password <password> "Password for encrypted PDF file"))
-                .arg(
-                    arg!(<object_id> "object ID to dump")
-                        .value_parser(value_parser!(u32))
-                        .required(true),
-                )
-                .arg(arg!(--raw "Skip decoding stream content"))
-                .arg(arg!(--png "Assume stream is image, decode and convert to PNG")),
-        )
-        .subcommand(
-            Command::new("page")
-                .about("dump page content to stdout")
-                .arg(
-                    arg!(-f <filename> "PDF file to dump")
-                        .value_parser(value_parser!(PathBuf))
-                        .required(true),
-                )
-                .arg(arg!(-p --password <password> "Password for encrypted PDF file"))
-                .arg(arg!(--pages "display total page numbers"))
-                .arg(arg!(--id "display page object ID"))
-                .arg(arg!(--png "Render page to PNG"))
-                .arg(arg!(--zoom [zoom] "Zoom factor for PNG rendering, default: 1.75"))
-                .arg(arg!(--"no-crop" "Do not apply CropBox"))
-                .arg(arg!(--steps <steps> "Stop render after <steps> graphic steps"))
-                .arg(arg!([page_no] "page number (start from zero) to dump")),
-        )
-        .subcommand(
-            Command::new("object")
-                .about("dump pdf object by id")
-                .arg(
-                    arg!(-f <filename> "PDF file to dump")
-                        .value_parser(value_parser!(PathBuf))
-                        .required(true),
-                )
-                .arg(arg!(-p --password <password> "Password for encrypted PDF file"))
-                .arg(
-                    arg!([object_id] "object ID to dump")
-                        .value_parser(value_parser!(u32))
-                        .required(true),
-                ),
-        )
+#[derive(Parser)]
+#[command(name = "dump-pdf", about = "Dump PDF file structure and contents")]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    #[command(about = "dump stream content to stdout")]
+    Stream {
+        #[arg(short, long, help = "PDF file to dump")]
+        filename: PathBuf,
+
+        #[arg(short, long, help = "Password for encrypted PDF file")]
+        password: Option<String>,
+
+        #[arg(help = "object ID to dump")]
+        object_id: u32,
+
+        #[arg(long, help = "Skip decoding stream content")]
+        raw: bool,
+
+        #[arg(long, help = "Assume stream is image, decode and convert to PNG")]
+        png: bool,
+    },
+
+    #[command(about = "dump page content to stdout")]
+    Page {
+        #[arg(short, long, help = "PDF file to dump")]
+        filename: PathBuf,
+
+        #[arg(short, long, help = "Password for encrypted PDF file")]
+        password: Option<String>,
+
+        #[arg(long, help = "display total page numbers")]
+        pages: bool,
+
+        #[arg(long, help = "display page object ID")]
+        id: bool,
+
+        #[arg(long, help = "Render page to PNG")]
+        png: bool,
+
+        #[arg(long, help = "Zoom factor for PNG rendering, default: 1.75")]
+        zoom: Option<String>,
+
+        #[arg(long, help = "Do not apply CropBox")]
+        no_crop: bool,
+
+        #[arg(long, help = "Stop render after <steps> graphic steps")]
+        steps: Option<String>,
+
+        #[arg(help = "page number (start from zero) to dump")]
+        page_no: Option<String>,
+    },
+
+    #[command(about = "dump pdf object by id")]
+    Object {
+        #[arg(short, long, help = "PDF file to dump")]
+        filename: PathBuf,
+
+        #[arg(short, long, help = "Password for encrypted PDF file")]
+        password: Option<String>,
+
+        #[arg(help = "object ID to dump")]
+        object_id: u32,
+    },
 }
 
 fn open(path: impl AsRef<Path>, password: &str) -> Result<File> {
@@ -216,43 +231,47 @@ fn dump_object(path: &PathBuf, password: &str, id: u32) -> Result<()> {
 fn main() -> Result<()> {
     env_logger::init();
 
-    match cli().get_matches().subcommand() {
-        Some(("stream", sub_m)) => dump_stream(
-            sub_m.get_one("filename").unwrap(),
-            sub_m
-                .get_one::<String>("password")
-                .map_or_else(|| "", |p| p.as_str()),
-            *sub_m.get_one::<u32>("object_id").unwrap(),
-            sub_m.get_one::<bool>("raw").copied().unwrap_or_default(),
-            sub_m.get_one::<bool>("png").copied().unwrap_or_default(),
+    let cli = Cli::parse();
+
+    match cli.command {
+        Commands::Stream {
+            filename,
+            password,
+            object_id,
+            raw,
+            png,
+        } => dump_stream(
+            &filename,
+            password.as_deref().unwrap_or(""),
+            object_id,
+            raw,
+            png,
         ),
-        Some(("page", sub_m)) => dump_page(&DumpPageArgs {
-            path: sub_m.get_one::<PathBuf>("filename").unwrap(),
-            password: sub_m
-                .get_one::<String>("password")
-                .map_or_else(|| "", |p| p.as_str()),
-            page_no: sub_m
-                .get_one::<String>("page_no")
-                .and_then(|s| s.parse().ok()),
-            show_total_pages: sub_m.get_one::<bool>("pages").copied().unwrap_or_default(),
-            show_page_id: sub_m.get_one::<bool>("id").copied().unwrap_or_default(),
-            to_png: sub_m.get_one::<bool>("png").copied().unwrap_or_default(),
-            steps: sub_m
-                .get_one::<String>("steps")
-                .and_then(|s| s.parse().ok()),
-            zoom: sub_m.get_one::<String>("zoom").and_then(|s| s.parse().ok()),
-            no_crop: sub_m
-                .get_one::<bool>("no-crop")
-                .copied()
-                .unwrap_or_default(),
+        Commands::Page {
+            filename,
+            password,
+            page_no,
+            pages,
+            id,
+            png,
+            steps,
+            zoom,
+            no_crop,
+        } => dump_page(&DumpPageArgs {
+            path: &filename,
+            password: password.as_deref().unwrap_or(""),
+            page_no: page_no.and_then(|s| s.parse().ok()),
+            show_total_pages: pages,
+            show_page_id: id,
+            to_png: png,
+            steps: steps.and_then(|s| s.parse().ok()),
+            zoom: zoom.and_then(|s| s.parse().ok()),
+            no_crop,
         }),
-        Some(("object", sub_m)) => dump_object(
-            sub_m.get_one("filename").unwrap(),
-            sub_m
-                .get_one::<String>("password")
-                .map_or_else(|| "", |p| p.as_str()),
-            *sub_m.get_one::<u32>("object_id").unwrap(),
-        ),
-        _ => todo!(),
+        Commands::Object {
+            filename,
+            password,
+            object_id,
+        } => dump_object(&filename, password.as_deref().unwrap_or(""), object_id),
     }
 }
