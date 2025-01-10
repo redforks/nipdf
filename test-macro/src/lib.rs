@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+
 use glob::glob;
 use itertools::Itertools;
 use proc_macro::TokenStream;

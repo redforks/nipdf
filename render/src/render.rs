@@ -1314,7 +1314,7 @@ impl<'a, 'c> Render<'a, 'c> {
             return Ok(());
         };
         content
-            .operations()
+            .operations()?
             .into_iter()
             .for_each(|op| render.exec(op));
 

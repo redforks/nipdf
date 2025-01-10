@@ -1,3 +1,6 @@
+#![allow(clippy::panic)]
+#![allow(clippy::unwrap_used)]
+
 //! Test page render result using `insta` to ensure that the rendering result is not changed.
 //! This file checks file pdfReferenceUpdated.pdf
 use hex::ToHex;

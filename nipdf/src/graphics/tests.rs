@@ -141,7 +141,7 @@ fn test_inline_image_et() -> Result<()> {
     let content = page.content().whatever_context("get page context")?;
     // the page contains a inline image, its data contains a line begin with 'ET'
     // this test is to check if the parser can handle this case
-    content.operations();
+    content.operations()?;
 
     Ok(())
 }

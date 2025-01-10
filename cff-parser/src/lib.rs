@@ -8,6 +8,7 @@
 //!
 //! File::fonts() returns a iterator of `Font` which is a struct
 //! that provides info for that font, such as encoding, charset, etc.
+use log::error;
 use prescript::Encoding;
 use std::borrow::Cow;
 
@@ -41,10 +42,10 @@ impl<'a> Font<'a> {
     pub fn encodings(&self) -> Result<Encoding> {
         let charsets = self.top_dict_data.charsets(self.font_data)?;
         let (encodings, supplements) = self.top_dict_data.encodings(self.font_data)?;
-        let mut r = encodings.build(&charsets, self.top_dict_data.string_index());
+        let mut r = encodings.build(&charsets, self.top_dict_data.string_index())?;
         if let Some(supplements) = supplements {
             for supp in supplements {
-                supp.apply(self.top_dict_data.string_index(), &mut r);
+                supp.apply(self.top_dict_data.string_index(), &mut r)?;
             }
         }
 
@@ -81,7 +82,10 @@ impl<'a> Iterator for Fonts<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.idx < self.names_index.len() {
-            let name = self.names_index.get(self.idx);
+            let name = self.names_index.get(self.idx).unwrap_or_else(|e| {
+                error!("Error getting name: {}", e);
+                None
+            });
             let top_dict_data = self.top_dict_index.get(self.idx, self.string_index).ok()?;
             self.idx += 1;
             match name {

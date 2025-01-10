@@ -38,7 +38,7 @@ impl CharCode {
             2 => Self::Two([s[0], s[1]]),
             3 => Self::Three([s[0], s[1], s[2]]),
             4 => Self::Four([s[0], s[1], s[2], s[3]]),
-            _ => panic!("invalid bytes length"),
+            _ => unreachable!("invalid bytes length"),
         }
     }
 
@@ -79,7 +79,7 @@ impl From<&[u8]> for CharCode {
             2 => Self::Two([bytes[0], bytes[1]]),
             3 => Self::Three([bytes[0], bytes[1], bytes[2]]),
             4 => Self::Four([bytes[0], bytes[1], bytes[2], bytes[3]]),
-            _ => panic!("invalid bytes length"),
+            _ => unreachable!("invalid bytes length"),
         }
     }
 }

@@ -72,7 +72,7 @@ fn revision_v4_not_encrypt_metadata() -> Result<()> {
         pages[0]
             .content()
             .whatever_context("get page content")?
-            .operations()
+            .operations()?
             .len()
     );
     Ok(())

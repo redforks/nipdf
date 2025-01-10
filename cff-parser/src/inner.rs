@@ -12,6 +12,7 @@ use winnow::{
     PResult, Parser,
     binary::{be_u8, be_u16, be_u24, be_u32, length_repeat, length_take},
     combinator::{alt, dispatch, empty, fail, preceded, repeat, repeat_till, rest, terminated},
+    error::{ErrMode, ErrorKind, FromExternalError},
     stream::{Accumulate, Stream, StreamIsPartial},
     token::{any, take},
 };
@@ -576,17 +577,16 @@ impl<'a> Offsets<'a> {
     }
 
     /// Return data offset range of specific index. Panic if `ith` is out of range.
-    pub fn range(&self, ith: usize) -> Range<usize> {
-        self.get(ith)..self.get(ith + 1)
+    pub fn range(&self, ith: usize) -> Result<Range<usize>> {
+        Ok(self.get(ith)?..self.get(ith + 1)?)
     }
 
     /// Return data offset of specific index. The offset is 0-based.
     /// `ith` can be length of offsets, which means the end offset of last element.
     /// Panic if `ith` is out of range.
-    pub fn get(&self, ith: usize) -> usize {
-        let r = Self::_get(self.1, self.0, ith)
-            .unwrap_or_else(|e| panic!("parse offset failed: {:?}", e));
-        r as usize - 1
+    pub fn get(&self, ith: usize) -> Result<usize> {
+        let r = Self::_get(self.1, self.0, ith)?;
+        Ok(r as usize - 1)
     }
 
     /// Get offset of `ith` element
@@ -643,7 +643,7 @@ impl<'a> IndexedData<'a> {
         idx: usize,
         mut f: F,
     ) -> Result<T> {
-        let buf = self.get_bin_str(idx);
+        let buf = self.get_bin_str(idx)?;
         f.parse(buf).map_err(Into::into).context(ParseSnafu {
             message: format!("get indexed data: [{}]", idx),
         })
@@ -652,9 +652,9 @@ impl<'a> IndexedData<'a> {
     /// Get str by index. Panic if `idx` is out of range.
     /// Returns `&[u8]` instead of `&str`, because the str may not be valid utf8,
     /// `from_utf8()` returns error if str contains '\0'.
-    pub fn get_bin_str(&self, idx: usize) -> &'a [u8] {
-        let range = self.offsets.range(idx);
-        &self.data[range]
+    pub fn get_bin_str(&self, idx: usize) -> Result<&'a [u8]> {
+        let range = self.offsets.range(idx)?;
+        Ok(&self.data[range])
     }
 
     /// Get Dict by index. Panic if `idx` is out of range.
@@ -674,14 +674,16 @@ impl<'a> IndexedData<'a> {
 /// ---+-----------------------+------------------------------------------
 /// 3 | data                  | Data
 /// ---+-----------------------+------------------------------------------
-fn parse_indexed_data<'a>(buf: &'_ mut &'a [u8]) -> PResult<IndexedData<'a>, ParserError> {
+fn parse_indexed_data<'a>(buf: &mut &'a [u8]) -> PResult<IndexedData<'a>, ParserError> {
     let (n, off_size) = (be_u16, off_size_parser()).parse_next(buf)?;
     let offset_data_len = (n + 1) as usize * off_size.len();
     let offsets = take(offset_data_len)
         .try_map(|offset_data| Offsets::new(off_size, offset_data))
         .parse_next(buf)?;
 
-    let data_len = offsets.get(n as usize);
+    let data_len = offsets
+        .get(n as usize)
+        .map_err(|e| ErrMode::<ParserError>::from_external_error(buf, ErrorKind::Fail, e))?;
     take(data_len)
         .map(|data| IndexedData { offsets, data })
         .parse_next(buf)
@@ -735,13 +737,13 @@ impl<'a> NameIndex<'a> {
     }
 
     /// Get font name by index. Return None if name is marked removed.
-    pub fn get(&self, idx: usize) -> Option<Cow<'a, str>> {
-        let name = self.0.get_bin_str(idx);
-        if name.is_empty() || name[0] == 0 {
+    pub fn get(&self, idx: usize) -> Result<Option<Cow<'a, str>>> {
+        let name = self.0.get_bin_str(idx)?;
+        Ok(if name.is_empty() || name[0] == 0 {
             None
         } else {
             Some(String::from_utf8_lossy(name))
-        }
+        })
     }
 }
 
@@ -756,12 +758,12 @@ pub struct StringIndex<'a>(IndexedData<'a>);
 
 impl<'a> StringIndex<'a> {
     /// Panic if `idx` is out of range. Return None if str is marked removed
-    pub fn get(&self, idx: Sid) -> Cow<'a, str> {
-        if idx < 391 {
+    pub fn get(&self, idx: Sid) -> Result<Cow<'a, str>> {
+        Ok(if idx < 391 {
             Cow::Borrowed(STANDARD_STRINGS[idx as usize])
         } else {
-            String::from_utf8_lossy(self.0.get_bin_str((idx - 391) as usize))
-        }
+            String::from_utf8_lossy(self.0.get_bin_str((idx - 391) as usize)?)
+        })
     }
 }
 
@@ -850,10 +852,10 @@ impl Deref for SIDDict<'_> {
 impl SIDDict<'_> {
     fn resolve_sid(&self, v: &Operand) -> Result<Cow<'_, str>> {
         v.int().context(ExpectIntSnafu).and_then(|v| {
-            Ok(self.strings.get(
+            self.strings.get(
                 v.try_into()
                     .context(ParseErrorIntCastSnafu { message: "" })?,
-            ))
+            )
         })
     }
 
@@ -1090,13 +1092,7 @@ impl Charsets {
                         Ok(len) => i += len,
                         Err(e) => {
                             log::error!("Error converting range length to Sid: {:?}", e);
-                            #[cfg(debug_assertions)]
-                            panic!("Error converting range length to Sid: {:?}", e);
-                            #[cfg(not(debug_assertions))]
-                            {
-                                log::error!("Error converting range length to Sid: {:?}", e);
-                                return None;
-                            }
+                            return None;
                         }
                     }
                     if i > idx {
@@ -1167,8 +1163,9 @@ impl EncodingSupplement {
         Self { code, sid }
     }
 
-    pub fn apply(self, strings: StringIndex<'_>, encodings: &mut Encoding) {
-        encodings[self.code as usize] = name(&strings.get(self.sid));
+    pub fn apply(self, strings: StringIndex<'_>, encodings: &mut Encoding) -> Result<()> {
+        encodings[self.code as usize] = name(&strings.get(self.sid)?);
+        Ok(())
     }
 }
 
@@ -1195,9 +1192,9 @@ pub enum Encodings {
 
 impl Encodings {
     /// build encodings.
-    pub fn build(&self, charsets: &Charsets, string_index: StringIndex<'_>) -> Encoding {
+    pub fn build(&self, charsets: &Charsets, string_index: StringIndex<'_>) -> Result<Encoding> {
         const NOTDEF: Name = sname(prescript::NOTDEF);
-        match self {
+        Ok(match self {
             Self::Format0(codes) => {
                 let mut encodings = [NOTDEF; 256];
                 for (i, code) in codes.iter().enumerate() {
@@ -1205,17 +1202,12 @@ impl Encodings {
                     let gid = match gid {
                         Ok(gid) => Some(gid),
                         Err(e) => {
-                            #[cfg(debug_assertions)]
-                            panic!("Error converting index to gid: {:?}", e);
-                            #[cfg(not(debug_assertions))]
-                            {
-                                log::error!("Error converting index to gid: {:?}", e);
-                                None
-                            }
+                            log::error!("Error converting index to gid: {:?}", e);
+                            None
                         }
                     };
                     let sid = gid.and_then(|gid| charsets.resolve_sid(gid));
-                    if let Some(v) = sid.map(|sid| string_index.get(sid)) {
+                    if let Some(v) = sid.map(|sid| string_index.get(sid)).transpose()? {
                         encodings[*code as usize] = name(&v);
                     }
                 }
@@ -1225,7 +1217,11 @@ impl Encodings {
                 let mut encodings = [NOTDEF; 256];
                 for range in ranges {
                     for i in range.first..=range.first + range.n_left {
-                        if let Some(v) = charsets.resolve_sid(i).map(|sid| string_index.get(sid)) {
+                        if let Some(v) = charsets
+                            .resolve_sid(i)
+                            .map(|sid| string_index.get(sid))
+                            .transpose()?
+                        {
                             encodings[i as usize] = name(&v);
                         }
                     }
@@ -1234,7 +1230,7 @@ impl Encodings {
             }
             Self::PredefinedStandard => predefined_encodings::STANDARD,
             Self::PredefinedExpert => predefined_encodings::EXPERT,
-        }
+        })
     }
 }
 

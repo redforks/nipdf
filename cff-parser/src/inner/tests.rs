@@ -242,15 +242,15 @@ fn offsets() {
     // empty offsets
     let offsets = Offsets::new(OffSize::One, &[1_u8][..]).unwrap();
     assert_eq!(offsets.len(), 0);
-    assert_eq!(offsets.get(0), 0);
+    assert_eq!(offsets.get(0).unwrap(), 0);
 
     // two offsets
     let offsets = Offsets::new(OffSize::One, &[1_u8, 20, 30][..]).unwrap();
     assert_eq!(offsets.len(), 2);
-    assert_eq!(offsets.get(0), 0);
-    assert_eq!(offsets.get(2), 29);
-    assert_eq!(0..19, offsets.range(0));
-    assert_eq!(19..29, offsets.range(1));
+    assert_eq!(offsets.get(0).unwrap(), 0);
+    assert_eq!(offsets.get(2).unwrap(), 29);
+    assert_eq!(0..19, offsets.range(0).unwrap());
+    assert_eq!(19..29, offsets.range(1).unwrap());
 }
 
 #[test]
@@ -264,7 +264,7 @@ fn test_parse_indexed_data2() {
         .parse(&[0_u8, 1, 3, 0, 0, 1, 0, 0, 2, 10][..])
         .unwrap();
     assert_eq!(1, r.len());
-    assert_eq!(0..1, r.offsets.range(0));
+    assert_eq!(0..1, r.offsets.range(0).unwrap());
 }
 
 #[test]
@@ -282,8 +282,8 @@ fn indexed_data_get_str() {
         offsets: Offsets::new(OffSize::One, &[1_u8, 3, 6][..]).unwrap(),
         data: b"ab\0de",
     };
-    assert_eq!(b"ab", indexed_data.get_bin_str(0));
-    assert_eq!(b"\0de", indexed_data.get_bin_str(1));
+    assert_eq!(b"ab", indexed_data.get_bin_str(0).unwrap());
+    assert_eq!(b"\0de", indexed_data.get_bin_str(1).unwrap());
 }
 
 #[test]
@@ -308,10 +308,10 @@ fn string_index() {
     };
     let index = StringIndex(indexed_data);
 
-    assert_eq!(".notdef", index.get(0));
-    assert_eq!("Semibold", index.get(390));
-    assert_eq!("ab", index.get(391));
-    assert_eq!("cde", index.get(392));
+    assert_eq!(".notdef", index.get(0).unwrap());
+    assert_eq!("Semibold", index.get(390).unwrap());
+    assert_eq!("ab", index.get(391).unwrap());
+    assert_eq!("cde", index.get(392).unwrap());
 }
 
 #[test]
@@ -323,9 +323,9 @@ fn name_index() {
     let index = NameIndex(indexed_data);
 
     assert_eq!(3, index.len());
-    assert_eq!(Some("ab"), index.get(0).as_deref());
-    assert_eq!(None, index.get(1));
-    assert_eq!(Some("f"), index.get(2).as_deref());
+    assert_eq!(Some("ab"), index.get(0).unwrap().as_deref());
+    assert_eq!(None, index.get(1).unwrap());
+    assert_eq!(Some("f"), index.get(2).unwrap().as_deref());
 }
 
 #[test]
@@ -405,7 +405,7 @@ fn encoding_supplement_apply() {
     encodings[101] = sname("bar");
     let supp = EncodingSupplement::new(100, 10);
     let mut encodings = Encoding::new(encodings);
-    supp.apply(string_index, &mut encodings);
+    supp.apply(string_index, &mut encodings).unwrap();
     assert_eq!(encodings.get_str(100), STANDARD_STRINGS[10]);
     assert_eq!(encodings.get_str(101), "bar");
 }
@@ -419,11 +419,15 @@ fn build_encodings_predefined() {
     });
     assert_eq!(
         predefined_encodings::STANDARD,
-        Encodings::PredefinedStandard.build(&charsets, string_index)
+        Encodings::PredefinedStandard
+            .build(&charsets, string_index)
+            .unwrap()
     );
     assert_eq!(
         predefined_encodings::EXPERT,
-        Encodings::PredefinedExpert.build(&charsets, string_index)
+        Encodings::PredefinedExpert
+            .build(&charsets, string_index)
+            .unwrap()
     );
 }
 
@@ -435,7 +439,7 @@ fn build_encodings_format0() {
         data: b"abcde",
     });
     let encodings = Encodings::Format0(vec![1, 0, 2]);
-    let r = encodings.build(&charsets, string_index);
+    let r = encodings.build(&charsets, string_index).unwrap();
     assert_eq!(r.get_str(0), "exclamsmall");
     assert_eq!(r.get_str(1), "space");
     assert_eq!(r.get_str(2), "Hungarumlautsmall");
@@ -450,7 +454,7 @@ fn build_encodings_format1() {
         data: b"abcde",
     });
     let encodings = Encodings::Format1(vec![EncodingRange::new(1, 2), EncodingRange::new(10, 2)]);
-    let r = encodings.build(&charsets, string_index);
+    let r = encodings.build(&charsets, string_index).unwrap();
     assert_eq!(r.get_str(0), NOTDEF);
     assert_eq!(r.get_str(1), "space");
     assert_eq!(r.get_str(2), "exclamsmall");

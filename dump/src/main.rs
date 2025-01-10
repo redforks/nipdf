@@ -2,17 +2,17 @@ use clap::{Parser, Subcommand, arg};
 use image::ImageFormat;
 use mimalloc::MiMalloc;
 use nipdf::{
+    Result,
     file::File,
     object::{Object, RuntimeObjectId},
 };
 use nipdf_render::{RenderOptionBuilder, render_steps};
-use snafu::{OptionExt, ResultExt, Whatever, report};
+use snafu::{OptionExt as _, ResultExt as _, report};
 use std::{
     collections::HashSet,
     io::{BufWriter, Cursor, copy, stdout},
     path::{Path, PathBuf},
 };
-type Result<T, E = Whatever> = std::result::Result<T, E>;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -183,7 +183,7 @@ fn dump_page(args: &DumpPageArgs<'_>) -> Result<()> {
     } else if let Some(page_no) = page_no {
         let page = &catalog.pages().whatever_context("get pages")?[page_no as usize];
         let contents = page.content().whatever_context("get page content")?;
-        for op in contents.operations() {
+        for op in contents.operations()? {
             println!("{:?}", op);
         }
     }

@@ -7,7 +7,7 @@ use nipdf::{
     graphics::trans::{LogicDeviceToDeviceSpace, UserToUserSpace, logic_device_to_device},
 };
 use prescript::Result;
-use snafu::OptionExt;
+use snafu::{OptionExt, whatever};
 use tiny_skia::{Color, Pixmap};
 
 mod render;
@@ -107,7 +107,7 @@ impl RenderOption {
             self.dimension.canvas_height(),
         );
         if w * h > 1024 * 1024 * 100 {
-            panic!("page size too large: {}x{}", w, h);
+            whatever!("page size too large: {}x{}", w, h);
         }
 
         let mut r = Pixmap::new(w, h).whatever_context("Failed create canvas")?;
@@ -196,7 +196,7 @@ pub fn render_steps(
         .rotate(page.rotate())
         .build();
     let content = page.content()?;
-    let ops = content.operations();
+    let ops = content.operations()?;
     let mut canvas = option.create_canvas()?;
     if !ops.is_empty() {
         // skip render if no operations, fixes incorrect pdf files that no resources

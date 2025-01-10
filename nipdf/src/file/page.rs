@@ -390,7 +390,7 @@ impl PageContent {
         Self { bufs }
     }
 
-    pub fn operations(self) -> Vec<Operation> {
+    pub fn operations(self) -> Result<Vec<Operation>> {
         let mut data: Option<Vec<u8>> = None;
         for buf in self.bufs {
             if let Some(data) = data.as_mut() {
@@ -400,16 +400,14 @@ impl PageContent {
             }
         }
 
-        if let Some(data) = data {
-            match parse_operations::<ParserError>.parse(&data) {
-                Ok(ops) => ops,
-                Err(e) => {
-                    panic!("parse operations error: {:?}", e.into_inner());
-                }
-            }
+        Ok(if let Some(data) = data {
+            parse_operations::<ParserError>
+                .parse(&data)
+                .map_err(winnow::error::ParseError::into_inner)
+                .whatever_context("parse operations")?
         } else {
             vec![]
-        }
+        })
     }
 
     pub fn as_ref(&self) -> impl Iterator<Item = &[u8]> {

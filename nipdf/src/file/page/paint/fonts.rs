@@ -233,7 +233,7 @@ impl EncodingParser<'_, '_, '_> {
     fn default_encoding(&self) -> Result<Encoding> {
         if let Some(desc) = self.0.font_descriptor()? {
             if desc.flags()?.contains(FontDescriptorFlags::SYMBOLIC) {
-                panic!("Symbolic font must have encoding, but not found in font file");
+                whatever!("Symbolic font must have encoding, but not found in font file");
             }
         }
 
@@ -258,14 +258,8 @@ impl EncodingParser<'_, '_, '_> {
                 || match Self::load_from_file(font_name.as_ref(), font_data, is_cff) {
                     Ok(encoding) => encoding,
                     Err(e) => {
-                        #[cfg(debug_assertions)]
-                        panic!("Failed to load encoding from file: {}", e);
-
-                        #[cfg(not(debug_assertions))]
-                        {
-                            error!("Failed to load encoding from file: {}", e);
-                            None
-                        }
+                        error!("Failed to load encoding from file: {}", e);
+                        None
                     }
                 },
             )
