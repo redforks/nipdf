@@ -12,7 +12,7 @@ use nipdf::{
     },
     object::PdfObject,
 };
-use snafu::ResultExt;
+use snafu::{OptionExt, ResultExt};
 use std::rc::Rc;
 use tiny_skia::{Color, GradientStop, LinearGradient, RadialGradient, Shader, Transform};
 
@@ -156,7 +156,7 @@ fn build_radial<'a, 'b>(
         .function()
         .whatever_context("get functions")?
         .pop()
-        .unwrap()
+        .whatever_context("get last function")?
         .func()
         .whatever_context("get function")?;
     let domain = d.domain().whatever_context("get domain")?;
@@ -183,7 +183,7 @@ fn build_stops(
 ) -> Result<Vec<(f32, Color)>> {
     assert!(f.len() == 1, "todo: support functions");
 
-    let f = f.pop().unwrap();
+    let f = f.pop().whatever_context("get last function")?;
     fn create_stop<F: Function>(cs: &ColorSpace, f: &F, x: f32) -> Result<(f32, Color)> {
         let rv = f.call(&[x]).whatever_context("exec function for stop")?;
         let color = to_skia_color(cs, &rv);
