@@ -219,9 +219,10 @@ impl ColorState {
         Ok(())
     }
 
-    pub fn set_color_args(&mut self, color_args: impl AsRef<[f32]>) {
-        let color = to_skia_color(&self.color_space, color_args.as_ref());
+    pub fn set_color_args(&mut self, color_args: impl AsRef<[f32]>) -> Result<()> {
+        let color = to_skia_color(&self.color_space, color_args.as_ref())?;
         self.set_paint(PaintCreator::Color(color), None);
+        Ok(())
     }
 
     pub fn set_paint(&mut self, paint: PaintCreator, background_color: Option<SkiaColor>) {
@@ -589,7 +590,7 @@ impl Path {
 
     pub fn append_rect(&mut self, p: Point, w: f32, h: f32) -> Result<()> {
         let r = Rectangle::from_xywh(p.x, p.y, w, h);
-        self.path_builder()?.push_rect(r.into_skia());
+        self.path_builder()?.push_rect(r.into_skia()?);
         Ok(())
     }
 
@@ -696,7 +697,7 @@ impl<'a, 'c> Render<'a, 'c> {
 
         if let Some(rect) = option.crop {
             state.update_mask(
-                PathBuilder::from_rect(rect.into_skia()),
+                PathBuilder::from_rect(rect.into_skia()?),
                 FillRule::Winding,
                 true,
             )?;
@@ -1348,7 +1349,7 @@ impl<'a, 'c> Render<'a, 'c> {
             (
                 Transform::identity(),
                 ctm,
-                PathBuilder::from_rect(b_box.into_skia()),
+                PathBuilder::from_rect(b_box.into_skia()?),
             )
         } else if let Some((path, _)) = &state.mask {
             (ctm, Transform::identity(), (**path).clone())
@@ -1363,7 +1364,7 @@ impl<'a, 'c> Render<'a, 'c> {
                         self.device_width() as f32,
                         self.device_height() as f32,
                     )
-                    .into_skia(),
+                    .into_skia()?,
                 ),
             )
         };
@@ -1611,14 +1612,15 @@ impl<'a, 'c> Render<'a, 'c> {
         let shading = pattern.shading().whatever_context("get shading")?;
         // assert!(shading.b_box()?.is_none(), "TODO: support BBox of shading");
         let background_color =
-            if let Some(args) = shading.background().whatever_context("get background")? {
+            (if let Some(args) = shading.background().whatever_context("get background")? {
                 let cs = shading.color_space().whatever_context("get color space")?;
                 let cs = ColorSpace::from_args(&cs, resources.resolver(), Some(resources))
                     .whatever_context("Create ColorSpace")?;
                 Some(to_skia_color(&cs, args.as_ref()))
             } else {
                 None
-            };
+            })
+            .transpose()?;
 
         Ok(
             match build_shading(&shading, resources).whatever_context("build shading")? {

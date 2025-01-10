@@ -6,6 +6,8 @@ use nipdf::{
         color_space::{ColorComp, ColorCompConvertTo, ColorSpaceTrait, convert_color_to},
     },
 };
+use prescript::Result;
+use snafu::OptionExt as _;
 
 pub trait IntoSkia {
     type Output;
@@ -21,10 +23,11 @@ impl IntoSkia for Point {
 }
 
 impl IntoSkia for Rectangle {
-    type Output = tiny_skia::Rect;
+    type Output = Result<tiny_skia::Rect>;
 
     fn into_skia(self) -> Self::Output {
-        Self::Output::from_ltrb(self.left_x, self.lower_y, self.right_x, self.upper_y).unwrap()
+        tiny_skia::Rect::from_ltrb(self.left_x, self.lower_y, self.right_x, self.upper_y)
+            .whatever_context("to skia Rectangle")
     }
 }
 
@@ -60,13 +63,13 @@ impl<S, D> IntoSkia for Transform2D<f32, S, D> {
     }
 }
 
-pub fn to_skia_color<T>(cs: &impl ColorSpaceTrait<T>, color: &[T]) -> tiny_skia::Color
+pub fn to_skia_color<T>(cs: &impl ColorSpaceTrait<T>, color: &[T]) -> Result<tiny_skia::Color>
 where
     T: ColorComp + ColorCompConvertTo<f32>,
 {
-    let rgba = cs.to_rgba(color).unwrap();
+    let rgba = cs.to_rgba(color)?;
     let [r, g, b, a] = convert_color_to(&rgba);
-    tiny_skia::Color::from_rgba(r, g, b, a).unwrap()
+    tiny_skia::Color::from_rgba(r, g, b, a).whatever_context("skia color from rgba")
 }
 
 #[cfg(test)]
@@ -77,7 +80,7 @@ mod tests {
     #[test]
     fn rectangle_to_skia() {
         let rect = Rectangle::from_xywh(98.0, 519.0, 423.0, -399.0);
-        let skia_rect: tiny_skia::Rect = rect.into_skia();
+        let skia_rect: tiny_skia::Rect = rect.into_skia().unwrap();
         assert_eq!(
             skia_rect,
             tiny_skia::Rect::from_ltrb(98.0, 519.0 - 399.0, 98.0 + 423.0, 519.0).unwrap()

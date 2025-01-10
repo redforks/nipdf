@@ -186,7 +186,7 @@ fn build_stops(
     let f = f.pop().whatever_context("get last function")?;
     fn create_stop<F: Function>(cs: &ColorSpace, f: &F, x: f32) -> Result<(f32, Color)> {
         let rv = f.call(&[x]).whatever_context("exec function for stop")?;
-        let color = to_skia_color(cs, &rv);
+        let color = to_skia_color(cs, &rv)?;
         Ok((x, color))
     }
 
