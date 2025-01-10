@@ -31,7 +31,7 @@ use nipdf::{
     object::{ImageMask, ImageMetadata, InlineImage, Object, PdfObject, TextStringOrNumber},
 };
 use num_traits::ToPrimitive;
-use prescript::Name;
+use prescript::{Name, ParserError};
 use snafu::{OptionExt, ResultExt};
 use std::{
     borrow::Cow,
@@ -43,6 +43,7 @@ use tiny_skia::{
     Color as SkiaColor, FillRule, FilterQuality, Mask, MaskType, Paint, Path as SkiaPath,
     PathBuilder, Pixmap, PixmapPaint, PixmapRef, Rect, Stroke, StrokeDash, Transform,
 };
+use winnow::Parser as _;
 
 trait CloneOrMove {
     type Target;
@@ -515,7 +516,7 @@ impl State {
     pub fn end_text_object(&mut self) -> Result<()> {
         // if exists text clipping path, intersection to current clipping path using Winding fill
         // rule
-        let p = self.text_object.text_clipping_path.finish();
+        let p = self.text_object.text_clipping_path.finish()?;
         if let Some(p) = p {
             let p = p.to_owned();
             self.update_mask(p, FillRule::Winding, false)?;
@@ -546,48 +547,61 @@ struct Path {
 }
 
 impl Path {
-    fn path_builder(&mut self) -> &mut PathBuilder {
-        self.path.as_mut().left().unwrap()
+    fn path_builder(&mut self) -> Result<&mut PathBuilder> {
+        self.path
+            .as_mut()
+            .left()
+            .whatever_context("get path builder")
     }
 
-    pub fn close_path(&mut self) {
-        self.path_builder().close();
+    pub fn close_path(&mut self) -> Result<()> {
+        self.path_builder()?.close();
+        Ok(())
     }
 
-    pub fn move_to(&mut self, p: Point) {
-        self.path_builder().move_to(p.x, p.y);
+    pub fn move_to(&mut self, p: Point) -> Result<()> {
+        self.path_builder()?.move_to(p.x, p.y);
+        Ok(())
     }
 
-    pub fn line_to(&mut self, p: Point) {
-        self.path_builder().line_to(p.x, p.y);
+    pub fn line_to(&mut self, p: Point) -> Result<()> {
+        self.path_builder()?.line_to(p.x, p.y);
+        Ok(())
     }
 
-    pub fn curve_to(&mut self, p1: Point, p2: Point, p3: Point) {
-        self.path_builder()
+    pub fn curve_to(&mut self, p1: Point, p2: Point, p3: Point) -> Result<()> {
+        self.path_builder()?
             .cubic_to(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+        Ok(())
     }
 
-    pub fn curve_to_cur_point_as_control(&mut self, p2: Point, p3: Point) {
-        let p1 = self.path_builder().last_point().unwrap();
-        self.curve_to(Point::new(p1.x, p1.y), p2, p3);
+    pub fn curve_to_cur_point_as_control(&mut self, p2: Point, p3: Point) -> Result<()> {
+        let p1 = self
+            .path_builder()?
+            .last_point()
+            .whatever_context("get path last point")?;
+        self.curve_to(Point::new(p1.x, p1.y), p2, p3)
     }
 
-    pub fn curve_to_dest_point_as_control(&mut self, p1: Point, p3: Point) {
-        self.curve_to(p1, p3, p3);
+    pub fn curve_to_dest_point_as_control(&mut self, p1: Point, p3: Point) -> Result<()> {
+        self.curve_to(p1, p3, p3)
     }
 
-    pub fn append_rect(&mut self, p: Point, w: f32, h: f32) {
+    pub fn append_rect(&mut self, p: Point, w: f32, h: f32) -> Result<()> {
         let r = Rectangle::from_xywh(p.x, p.y, w, h);
-        self.path_builder().push_rect(r.into_skia());
+        self.path_builder()?.push_rect(r.into_skia());
+        Ok(())
     }
 
     /// Build path and clear the path builder, return None if path is empty
-    pub fn finish(&mut self) -> Option<&SkiaPath> {
+    pub fn finish(&mut self) -> Result<Option<&SkiaPath>> {
         if let Left(_) = self.path {
             let temp = Left(PathBuilder::new());
-            let pb = std::mem::replace(&mut self.path, temp).left().unwrap();
+            let pb = std::mem::replace(&mut self.path, temp)
+                .left()
+                .whatever_context("get last PathBuilder")?;
             if pb.is_empty() {
-                return None;
+                return Ok(None);
             }
 
             if let Some(p) = pb.finish() {
@@ -598,8 +612,8 @@ impl Path {
         }
 
         match &self.path {
-            Left(_) => None,
-            Right(p) => Some(p),
+            Left(_) => Ok(None),
+            Right(p) => Ok(Some(p)),
         }
     }
 
@@ -693,7 +707,7 @@ impl<'a, 'c> Render<'a, 'c> {
             canvas,
             stack: vec![state],
             path: Path::default(),
-            font_cache: FontCache::new(resources).unwrap(),
+            font_cache: FontCache::new(resources)?,
             resources,
             dimension: option.dimension,
         })
@@ -733,182 +747,203 @@ impl<'a, 'c> Render<'a, 'c> {
         self.canvas.height()
     }
 
-    fn push(&mut self) {
-        self.stack.push(self.stack.last().unwrap().clone());
+    fn push(&mut self) -> Result<()> {
+        self.stack.push(self.top()?.clone());
+        Ok(())
+    }
+
+    fn top(&self) -> Result<&State> {
+        self.stack.last().whatever_context("get stack top")
     }
 
     fn pop(&mut self) {
         if self.stack.pop().is_none() {
             // some file contains unpaired q/Q operations
-            info!("pop empty state stack");
+            warn!("pop empty state stack");
         }
     }
 
-    fn current_mut(&mut self) -> &mut State {
-        self.stack.last_mut().unwrap()
+    fn current_mut(&mut self) -> Result<&mut State> {
+        self.stack.last_mut().whatever_context("get current state")
     }
 
-    fn text_object(&self) -> &TextObject {
-        &self.stack.last().unwrap().text_object
+    fn text_object(&self) -> Result<&TextObject> {
+        Ok(&self
+            .stack
+            .last()
+            .whatever_context("get current text object")?
+            .text_object)
     }
 
-    fn text_object_mut(&mut self) -> &mut TextObject {
-        &mut self.current_mut().text_object
+    fn text_object_mut(&mut self) -> Result<&mut TextObject> {
+        Ok(&mut self.current_mut()?.text_object)
     }
 
     pub(crate) fn exec(&mut self, op: Operation) {
+        if let Err(e) = self._exec(op) {
+            warn!("exec render operation failed: {:?}", e);
+        }
+    }
+
+    fn _exec(&mut self, op: Operation) -> Result<()> {
         debug!("handle operation: {:?}", op);
         match op {
             // General Graphics State Operations
-            Operation::SetLineWidth(width) => self.current_mut().set_line_width(width),
-            Operation::SetLineCap(cap) => self.current_mut().set_line_cap(cap),
-            Operation::SetLineJoin(join) => self.current_mut().set_line_join(join),
-            Operation::SetMiterLimit(limit) => self.current_mut().set_miter_limit(limit),
+            Operation::SetLineWidth(width) => self.current_mut()?.set_line_width(width),
+            Operation::SetLineCap(cap) => self.current_mut()?.set_line_cap(cap),
+            Operation::SetLineJoin(join) => self.current_mut()?.set_line_join(join),
+            Operation::SetMiterLimit(limit) => self.current_mut()?.set_miter_limit(limit),
             Operation::SetDashPattern(pattern, phase) => {
-                self.current_mut().set_dash_pattern(&pattern, phase);
+                self.current_mut()?.set_dash_pattern(&pattern, phase);
             }
-            Operation::SetRenderIntent(intent) => self.current_mut().set_render_intent(intent),
-            Operation::SetFlatness(flatness) => self.current_mut().set_flatness(flatness),
+            Operation::SetRenderIntent(intent) => self.current_mut()?.set_render_intent(intent),
+            Operation::SetFlatness(flatness) => self.current_mut()?.set_flatness(flatness),
             Operation::SetGraphicsStateParameters(nm) => {
-                let res = self.resources.ext_g_state().unwrap();
-                let res = res.get(&nm.0).expect("ExtGState not found");
-                self.current_mut().set_graphics_state(res);
+                let res = self.resources.ext_g_state()?;
+                let res = res.get(&nm.0).whatever_context("ExtGState not found")?;
+                self.current_mut()?.set_graphics_state(res)?;
             }
 
             // Special Graphics State Operations
-            Operation::SaveGraphicsState => self.push(),
+            Operation::SaveGraphicsState => self.push()?,
             Operation::RestoreGraphicsState => self.pop(),
-            Operation::ModifyCTM(ctm) => self.current_mut().concat_ctm(ctm),
+            Operation::ModifyCTM(ctm) => self.current_mut()?.concat_ctm(ctm),
 
             // Path Construction Operations
-            Operation::MoveToNext(p) => self.path.move_to(p),
-            Operation::LineToNext(p) => self.path.line_to(p),
-            Operation::AppendBezierCurve(p1, p2, p3) => self.path.curve_to(p1, p2, p3),
+            Operation::MoveToNext(p) => self.path.move_to(p)?,
+            Operation::LineToNext(p) => self.path.line_to(p)?,
+            Operation::AppendBezierCurve(p1, p2, p3) => self.path.curve_to(p1, p2, p3)?,
             Operation::AppendBezierCurve2(p2, p3) => {
-                self.path.curve_to_cur_point_as_control(p2, p3);
+                self.path.curve_to_cur_point_as_control(p2, p3)?;
             }
             Operation::AppendBezierCurve1(p1, p3) => {
-                self.path.curve_to_dest_point_as_control(p1, p3);
+                self.path.curve_to_dest_point_as_control(p1, p3)?;
             }
-            Operation::ClosePath => self.path.close_path(),
-            Operation::AppendRectangle(p, w, h) => self.path.append_rect(p, w, h),
+            Operation::ClosePath => self.path.close_path()?,
+            Operation::AppendRectangle(p, w, h) => self.path.append_rect(p, w, h)?,
 
             // Path Painting Operation
-            Operation::Stroke => self.stroke().unwrap(),
-            Operation::CloseAndStroke => self.close_and_stroke().unwrap(),
+            Operation::Stroke => self.stroke()?,
+            Operation::CloseAndStroke => self.close_and_stroke()?,
             Operation::FillNonZero | Operation::FillNonZeroDeprecated => {
-                self.fill_path_non_zero().unwrap();
+                self.fill_path_non_zero()?;
             }
-            Operation::FillEvenOdd => self.fill_path_even_odd().unwrap(),
-            Operation::FillAndStrokeNonZero => self.fill_and_stroke_non_zero().unwrap(),
-            Operation::FillAndStrokeEvenOdd => self.fill_and_stroke_even_odd(),
-            Operation::CloseFillAndStrokeNonZero => self.close_fill_and_stroke_non_zero(),
-            Operation::CloseFillAndStrokeEvenOdd => self.close_fill_and_stroke_even_odd(),
-            Operation::EndPath => self.end_path(),
+            Operation::FillEvenOdd => self.fill_path_even_odd()?,
+            Operation::FillAndStrokeNonZero => self.fill_and_stroke_non_zero()?,
+            Operation::FillAndStrokeEvenOdd => self.fill_and_stroke_even_odd()?,
+            Operation::CloseFillAndStrokeNonZero => self.close_fill_and_stroke_non_zero()?,
+            Operation::CloseFillAndStrokeEvenOdd => self.close_fill_and_stroke_even_odd()?,
+            Operation::EndPath => self.end_path()?,
 
             // Clipping Path Operations
             Operation::ClipNonZero => {
-                let state = self.stack.last_mut().unwrap();
+                let state = self
+                    .stack
+                    .last_mut()
+                    .whatever_context("get stack top mutable ref")?;
                 state.clipping = Some(FillRule::Winding);
             }
             Operation::ClipEvenOdd => {
-                let state = self.stack.last_mut().unwrap();
+                let state = self
+                    .stack
+                    .last_mut()
+                    .whatever_context("get stack top mutable ref")?;
                 state.clipping = Some(FillRule::EvenOdd);
             }
 
             // Text Object Operations
-            Operation::BeginText => self.text_object_mut().reset(),
-            Operation::EndText => self.end_text(),
+            Operation::BeginText => self.text_object_mut()?.reset(),
+            Operation::EndText => self.end_text()?,
 
             // Text State Operations
             Operation::SetCharacterSpacing(spacing) => {
-                self.text_object_mut().set_character_spacing(spacing);
+                self.text_object_mut()?.set_character_spacing(spacing);
             }
-            Operation::SetWordSpacing(spacing) => self.text_object_mut().set_word_spacing(spacing),
+            Operation::SetWordSpacing(spacing) => self.text_object_mut()?.set_word_spacing(spacing),
             Operation::SetHorizontalScaling(scale) => {
-                self.text_object_mut().set_horizontal_scaling(scale);
+                self.text_object_mut()?.set_horizontal_scaling(scale);
             }
-            Operation::SetLeading(leading) => self.text_object_mut().set_leading(leading),
-            Operation::SetFont(name, size) => self.text_object_mut().set_font(name, size),
+            Operation::SetLeading(leading) => self.text_object_mut()?.set_leading(leading),
+            Operation::SetFont(name, size) => self.text_object_mut()?.set_font(name, size),
             Operation::SetTextRenderingMode(mode) => {
-                self.text_object_mut().set_text_rendering_mode(mode);
+                self.text_object_mut()?.set_text_rendering_mode(mode);
             }
-            Operation::SetTextRise(rise) => self.text_object_mut().set_text_rise(rise),
+            Operation::SetTextRise(rise) => self.text_object_mut()?.set_text_rise(rise),
 
             // Text Positioning Operations
-            Operation::MoveTextPosition(p) => self.text_object_mut().move_text_position(p),
+            Operation::MoveTextPosition(p) => self.text_object_mut()?.move_text_position(p),
             Operation::MoveTextPositionAndSetLeading(p) => {
-                self.text_object_mut().set_leading(-p.y);
-                self.text_object_mut().move_text_position(p);
+                self.text_object_mut()?.set_leading(-p.y);
+                self.text_object_mut()?.move_text_position(p);
             }
-            Operation::SetTextMatrix(m) => self.text_object_mut().set_text_matrix(m),
-            Operation::MoveToStartOfNextLine => self.move_to_start_of_next_line(),
+            Operation::SetTextMatrix(m) => self.text_object_mut()?.set_text_matrix(m),
+            Operation::MoveToStartOfNextLine => self.move_to_start_of_next_line()?,
 
             // Text Showing Operations
-            Operation::ShowText(text) => log_err(self.show_text(text.to_bytes().unwrap())),
+            Operation::ShowText(text) => log_err(self.show_text(text.to_bytes())),
             Operation::MoveToNextLineAndShowText(text) => {
-                self.move_to_start_of_next_line();
-                log_err(self.show_text(text.to_bytes().unwrap()));
+                self.move_to_start_of_next_line()?;
+                log_err(self.show_text(text.to_bytes()));
             }
             Operation::ShowTexts(texts) => log_err(self.show_texts(&texts)),
 
             // Color Operations
             Operation::SetStrokeColorSpace(args) => {
                 let cs =
-                    ColorSpace::from_args(&args, self.resources.resolver(), Some(self.resources))
-                        .unwrap();
-                self.set_color_and_space(Self::stroke_color_state, cs, None);
+                    ColorSpace::from_args(&args, self.resources.resolver(), Some(self.resources))?;
+                self.set_color_and_space(Self::stroke_color_state, cs, None)?;
             }
             Operation::SetFillColorSpace(args) => {
                 let cs =
-                    ColorSpace::from_args(&args, self.resources.resolver(), Some(self.resources))
-                        .unwrap();
-                self.set_color_and_space(Self::fill_color_state, cs, None);
+                    ColorSpace::from_args(&args, self.resources.resolver(), Some(self.resources))?;
+                self.set_color_and_space(Self::fill_color_state, cs, None)?;
             }
-            Operation::SetStrokeColor(args) => self.set_color_args(Self::stroke_color_state, &args),
+            Operation::SetStrokeColor(args) => {
+                self.set_color_args(Self::stroke_color_state, &args)?;
+            }
             Operation::SetStrokeGray(color) => self.set_color_and_space(
                 Self::stroke_color_state,
                 ColorSpace::DeviceGray,
                 Some(&color),
-            ),
+            )?,
             Operation::SetStrokeCMYK(color) => self.set_color_and_space(
                 Self::stroke_color_state,
                 ColorSpace::DeviceCMYK,
                 Some(&color),
-            ),
+            )?,
             Operation::SetStrokeRGB(color) => self.set_color_and_space(
                 Self::stroke_color_state,
                 ColorSpace::DeviceRGB,
                 Some(&color),
-            ),
-            Operation::SetStrokeColorOrWithPattern(color_or_name) => self
-                .set_color_or_pattern(Self::stroke_color_state, &color_or_name)
-                .unwrap(),
-            Operation::SetFillColor(args) => self.set_color_args(Self::fill_color_state, &args),
+            )?,
+            Operation::SetStrokeColorOrWithPattern(color_or_name) => {
+                self.set_color_or_pattern(Self::stroke_color_state, &color_or_name)?;
+            }
+            Operation::SetFillColor(args) => self.set_color_args(Self::fill_color_state, &args)?,
             Operation::SetFillGray(color) => self.set_color_and_space(
                 Self::fill_color_state,
                 ColorSpace::DeviceGray,
                 Some(&color),
-            ),
+            )?,
             Operation::SetFillCMYK(color) => self.set_color_and_space(
                 Self::fill_color_state,
                 ColorSpace::DeviceCMYK,
                 Some(&color),
-            ),
+            )?,
             Operation::SetFillRGB(color) => self.set_color_and_space(
                 Self::fill_color_state,
                 ColorSpace::DeviceRGB,
                 Some(&color),
-            ),
-            Operation::SetFillColorOrWithPattern(color_or_name) => self
-                .set_color_or_pattern(Self::fill_color_state, &color_or_name)
-                .unwrap(),
+            )?,
+            Operation::SetFillColorOrWithPattern(color_or_name) => {
+                self.set_color_or_pattern(Self::fill_color_state, &color_or_name)?;
+            }
 
             // Shading Operation
-            Operation::PaintShading(name) => self.paint_shading(&name).unwrap(),
+            Operation::PaintShading(name) => self.paint_shading(&name)?,
 
             // XObject Operation
-            Operation::PaintXObject(name) => self.paint_x_object(&name).unwrap(),
+            Operation::PaintXObject(name) => self.paint_x_object(&name)?,
 
             // Marked Content Operations
             Operation::DesignateMarkedContentPoint(_)
@@ -924,41 +959,49 @@ impl<'a, 'c> Render<'a, 'c> {
             Operation::SetGlyphWidth(_) | Operation::SetGlyphWidthAndBoundingBox(_, _, _) => {}
 
             Operation::PaintInlineImage(inline_image) => {
-                self.paint_inline_image(&inline_image).unwrap();
+                self.paint_inline_image(&inline_image)?;
             }
 
             _ => todo!("{:?}", op),
         }
+        Ok(())
     }
 
-    fn move_to_start_of_next_line(&mut self) {
-        let leading = self.stack.last().unwrap().text_object.leading;
-        self.text_object_mut()
+    fn move_to_start_of_next_line(&mut self) -> Result<()> {
+        let leading = self
+            .stack
+            .last()
+            .whatever_context("get stack top")?
+            .text_object
+            .leading;
+        self.text_object_mut()?
             .move_text_position(TextPoint::new(0.0, -leading));
+        Ok(())
     }
 
     fn set_color_args(
         &mut self,
-        mut get_state: impl FnMut(&mut Self) -> &mut ColorState,
+        mut get_state: impl FnMut(&mut Self) -> Result<&mut ColorState>,
         args: &ColorArgs,
-    ) {
-        let state = get_state(self);
+    ) -> Result<()> {
+        let state = get_state(self)?;
         state.set_color_args(args);
+        Ok(())
     }
 
     fn set_color_and_space(
         &mut self,
-        mut get_state: impl FnMut(&mut Self) -> &mut ColorState,
+        mut get_state: impl FnMut(&mut Self) -> Result<&mut ColorState>,
         cs: ColorSpace<f32>,
         color: Option<&[f32]>,
-    ) {
-        let state = get_state(self);
-        state.set_color_space(cs, color);
+    ) -> Result<()> {
+        let state = get_state(self)?;
+        state.set_color_space(cs, color)
     }
 
     fn stroke(&mut self) -> Result<()> {
-        if let Some(p) = self.path.finish() {
-            let state = self.stack.last().unwrap();
+        if let Some(p) = self.path.finish()? {
+            let state = self.stack.last().whatever_context("get stack top")?;
             let stroke = state.get_stroke();
             state.stroke_state.stroke(
                 self.canvas,
@@ -970,33 +1013,36 @@ impl<'a, 'c> Render<'a, 'c> {
         } else {
             debug!("stroke: empty or invalid path");
         }
-        self.end_path();
-        Ok(())
+        self.end_path()
     }
 
-    fn end_path(&mut self) {
-        let state = self.stack.last_mut().unwrap();
+    fn end_path(&mut self) -> Result<()> {
+        let state = self
+            .stack
+            .last_mut()
+            .whatever_context("get stack top mutable ref")?;
         if let Some(rule) = state.clipping {
-            if let Some(p) = self.path.finish() {
-                state.update_mask(p, rule, true);
+            if let Some(p) = self.path.finish()? {
+                state.update_mask(p, rule, true)?;
             }
             state.clipping = None;
         }
         self.path.reset();
+        Ok(())
     }
 
-    fn close_path(&mut self) {
-        self.path.close_path();
+    fn close_path(&mut self) -> Result<()> {
+        self.path.close_path()
     }
 
     fn close_and_stroke(&mut self) -> Result<()> {
-        self.close_path();
+        self.close_path()?;
         self.stroke()
     }
 
     fn _fill(&mut self, fill_rule: FillRule, reset_path: bool) -> Result<()> {
-        let state = self.stack.last().unwrap();
-        if let Some(p) = self.path.finish() {
+        let state = self.stack.last().whatever_context("get stack top")?;
+        if let Some(p) = self.path.finish()? {
             state.fill_state.fill(
                 self.canvas,
                 p,
@@ -1006,7 +1052,7 @@ impl<'a, 'c> Render<'a, 'c> {
             )?;
         }
         if reset_path {
-            self.end_path();
+            self.end_path()?;
         }
         Ok(())
     }
@@ -1021,23 +1067,22 @@ impl<'a, 'c> Render<'a, 'c> {
 
     fn fill_and_stroke_non_zero(&mut self) -> Result<()> {
         self._fill(FillRule::Winding, false)?;
-        self.stroke();
-        Ok(())
+        self.stroke()
     }
 
-    fn fill_and_stroke_even_odd(&mut self) {
-        self._fill(FillRule::EvenOdd, false);
-        self.stroke();
+    fn fill_and_stroke_even_odd(&mut self) -> Result<()> {
+        self._fill(FillRule::EvenOdd, false)?;
+        self.stroke()
     }
 
-    fn close_fill_and_stroke_non_zero(&mut self) {
-        self.close_path();
-        self.fill_and_stroke_non_zero();
+    fn close_fill_and_stroke_non_zero(&mut self) -> Result<()> {
+        self.close_path()?;
+        self.fill_and_stroke_non_zero()
     }
 
-    fn close_fill_and_stroke_even_odd(&mut self) {
-        self.close_path();
-        self.fill_and_stroke_even_odd();
+    fn close_fill_and_stroke_even_odd(&mut self) -> Result<()> {
+        self.close_path()?;
+        self.fill_and_stroke_even_odd()
     }
 
     fn load_image_as_mask(mut img: RgbaImage, state: &State, s_mask: bool) -> Result<Mask> {
@@ -1050,11 +1095,12 @@ impl<'a, 'c> Render<'a, 'c> {
             state.dimension.canvas_width(),
             state.dimension.canvas_height(),
         )
-        .unwrap();
+        .whatever_context("Create image for creating mask")?;
         img.pixels_mut()
             .for_each(|p| p[3] = if s_mask { p[0] } else { !p[0] });
 
-        let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
+        let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height())
+            .whatever_context("Create mask image")?;
         canvas.draw_pixmap(
             0,
             0,
@@ -1068,7 +1114,7 @@ impl<'a, 'c> Render<'a, 'c> {
     }
 
     fn paint_inline_image(&mut self, inline_image: &InlineImage) -> Result<()> {
-        let state = self.stack.last().unwrap();
+        let state = self.stack.last().whatever_context("get stack top")?;
         let meta = inline_image.meta();
         let img = inline_image
             .image(self.resources.resolver(), self.resources)
@@ -1091,7 +1137,7 @@ impl<'a, 'c> Render<'a, 'c> {
                     self.device_width() as f32,
                     self.device_height() as f32,
                 )
-                .unwrap(),
+                .whatever_context("create inline image rect")?,
                 &paint,
                 Transform::identity(),
                 Some(&mask),
@@ -1103,7 +1149,8 @@ impl<'a, 'c> Render<'a, 'c> {
             opacity: state.fill_state.alpha(),
             ..Default::default()
         };
-        let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
+        let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height())
+            .whatever_context("Create inline image")?;
         let state_mask = state.get_mask();
         self.canvas.draw_pixmap(
             0,
@@ -1120,17 +1167,17 @@ impl<'a, 'c> Render<'a, 'c> {
         fn load_image<'a, 'b>(
             image_dict: &XObjectDict<'a, 'b>,
             resources: &ResourceDict<'a, 'b>,
-        ) -> RgbaImage {
+        ) -> Result<RgbaImage> {
             let image = image_dict
                 .as_stream()
-                .expect("Only Image XObject supported");
-            image
+                .whatever_context("Only Image XObject supported")?;
+            Ok(image
                 .decode_image(resources.resolver(), Some(resources))
-                .unwrap()
-                .into_rgba8()
+                .whatever_context("decode image")?
+                .into_rgba8())
         }
 
-        let state = self.stack.last().unwrap();
+        let state = self.stack.last().whatever_context("get stack top")?;
 
         if x_object.image_mask().whatever_context("get image mask")? {
             let is_invert =
@@ -1156,7 +1203,7 @@ impl<'a, 'c> Render<'a, 'c> {
                     self.device_width() as f32,
                     self.device_height() as f32,
                 )
-                .unwrap(),
+                .whatever_context("Create x_object image rect")?,
                 &paint,
                 Transform::identity(),
                 Some(&mask),
@@ -1168,21 +1215,30 @@ impl<'a, 'c> Render<'a, 'c> {
             .s_mask()
             .whatever_context("read x_object s_mask")?
             .map(|s_mask| {
-                let s_mask = s_mask.as_stream().unwrap();
+                let s_mask = s_mask.as_stream().whatever_context("get s_mask stream")?;
                 let img = s_mask
                     .decode_image(self.resources.resolver(), Some(self.resources))
-                    .unwrap();
-                Self::load_image_as_mask(img.into_rgba8(), state, true).unwrap()
+                    .whatever_context("decode s_mask image")?;
+                Self::load_image_as_mask(img.into_rgba8(), state, true)
             })
             .or_else(|| {
-                let Some(ImageMask::Explicit(mask)) = x_object.mask().unwrap() else {
+                let mask = match x_object.mask() {
+                    Ok(v) => v,
+                    Err(e) => return Some(Err(e)),
+                };
+                let Some(ImageMask::Explicit(mask)) = mask else {
                     return None;
                 };
-                let img = mask
+                let img = match mask
                     .decode_image(self.resources.resolver(), Some(self.resources))
-                    .unwrap();
-                Some(Self::load_image_as_mask(img.into_rgba8(), state, false).unwrap())
-            });
+                    .whatever_context("decode mask image")
+                {
+                    Ok(v) => v,
+                    Err(e) => return Some(Err(e)),
+                };
+                Some(Self::load_image_as_mask(img.into_rgba8(), state, false))
+            })
+            .transpose()?;
 
         let paint = PixmapPaint {
             opacity: state.fill_state.alpha(),
@@ -1196,8 +1252,9 @@ impl<'a, 'c> Render<'a, 'c> {
             },
             ..Default::default()
         };
-        let img = load_image(x_object, self.resources);
-        let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height()).unwrap();
+        let img = load_image(x_object, self.resources)?;
+        let img = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height())
+            .whatever_context("Create x_object image")?;
         let state_mask = state.get_mask();
         self.canvas.draw_pixmap(
             0,
@@ -1237,7 +1294,7 @@ impl<'a, 'c> Render<'a, 'c> {
         let resources = form.resources().whatever_context("get form resources")?;
         let resources = resources.as_ref().unwrap_or(self.resources);
 
-        let state = self.stack.last().unwrap();
+        let state = self.stack.last().whatever_context("get stack top")?;
         let mut inner_state = state.clone();
         let ctm = matrix.then(&state.ctm).with_destination().with_source();
         inner_state.set_ctm(ctm);
@@ -1285,7 +1342,7 @@ impl<'a, 'c> Render<'a, 'c> {
     fn paint_axial(&mut self, axial: &Axial) -> Result<()> {
         let b_box = axial.b_box;
 
-        let state = self.stack.last().unwrap();
+        let state = self.stack.last().whatever_context("get stack top")?;
         let ctm = state.user_to_device.into_skia();
         let (shader_ctm, fill_ctm, path) = if let Some(b_box) = b_box {
             (
@@ -1333,7 +1390,7 @@ impl<'a, 'c> Render<'a, 'c> {
         let (x1, y1) = (radial.end.point.x, radial.end.point.y);
         let r0 = radial.start.r;
         let r1 = radial.end.r;
-        let state = self.stack.last().unwrap();
+        let state = self.stack.last().whatever_context("get stack top")?;
         let ctm = state.user_to_device;
         let mask = state.get_mask();
         let mut paint = Paint::default();
@@ -1363,7 +1420,7 @@ impl<'a, 'c> Render<'a, 'c> {
         }
         .ceil()
         .to_usize()
-        .unwrap();
+        .whatever_context("convert f32 steps to usize")?;
         let steps = steps.max(10);
 
         let ctm = ctm.into_skia();
@@ -1372,9 +1429,15 @@ impl<'a, 'c> Render<'a, 'c> {
                 .function
                 .call(&[1.0])
                 .whatever_context("exec function")?;
-            let mut c = radial.color_space.to_rgba(c.as_slice()).unwrap();
+            let mut c = radial
+                .color_space
+                .to_rgba(c.as_slice())
+                .whatever_context("convert to rgba")?;
             c[3] = state.fill_state.alpha();
-            paint.set_color(SkiaColor::from_rgba(c[0], c[1], c[2], c[3]).unwrap());
+            paint.set_color(
+                SkiaColor::from_rgba(c[0], c[1], c[2], c[3])
+                    .whatever_context("convert from rgba")?,
+            );
             self.canvas.fill_rect(
                 Rect::from_xywh(
                     0.0,
@@ -1382,7 +1445,7 @@ impl<'a, 'c> Render<'a, 'c> {
                     self.device_width() as f32,
                     self.device_height() as f32,
                 )
-                .unwrap(),
+                .whatever_context("create rect")?,
                 &paint,
                 Transform::identity(),
                 state.get_mask().as_deref(),
@@ -1396,10 +1459,14 @@ impl<'a, 'c> Render<'a, 'c> {
                 .function
                 .call(&[0.0])
                 .whatever_context("exec function")?;
-            let c = radial.color_space.to_rgba(c.as_slice()).unwrap();
-            paint.set_color(SkiaColor::from_rgba(c[0], c[1], c[2], c[3]).unwrap());
-            let path = PathBuilder::from_circle(x, y, r).unwrap();
-            let path = path.transform(ctm).unwrap();
+            let c = radial.color_space.to_rgba(c.as_slice())?;
+            paint.set_color(
+                SkiaColor::from_rgba(c[0], c[1], c[2], c[3]).whatever_context("from rgba")?,
+            );
+            let path = PathBuilder::from_circle(x, y, r).whatever_context("create circle")?;
+            let path = path
+                .transform(ctm)
+                .whatever_context("ctm transform circle")?;
             self.canvas.fill_path(
                 &path,
                 &paint,
@@ -1416,13 +1483,19 @@ impl<'a, 'c> Render<'a, 'c> {
                 .function
                 .call(&[t][..])
                 .whatever_context("exec function")?;
-            let c = radial.color_space.to_rgba(c.as_slice()).unwrap();
+            let c = radial
+                .color_space
+                .to_rgba(c.as_slice())
+                .whatever_context("to rgba")?;
 
             let Some(path) = PathBuilder::from_circle(x, y, r) else {
                 continue;
             };
-            let path = path.transform(ctm).unwrap();
-            paint.set_color(SkiaColor::from_rgba(c[0], c[1], c[2], c[3]).unwrap());
+            let path = path.transform(ctm).whatever_context("path ctm transform")?;
+            paint.set_color(
+                SkiaColor::from_rgba(c[0], c[1], c[2], c[3])
+                    .whatever_context("skia color from rgba")?,
+            );
             self.canvas.stroke_path(
                 &path,
                 &paint,
@@ -1450,17 +1523,17 @@ impl<'a, 'c> Render<'a, 'c> {
         }
     }
 
-    fn fill_color_state(&mut self) -> &mut ColorState {
-        &mut self.current_mut().fill_state
+    fn fill_color_state(&mut self) -> Result<&mut ColorState> {
+        Ok(&mut self.current_mut()?.fill_state)
     }
 
-    fn stroke_color_state(&mut self) -> &mut ColorState {
-        &mut self.current_mut().stroke_state
+    fn stroke_color_state(&mut self) -> Result<&mut ColorState> {
+        Ok(&mut self.current_mut()?.stroke_state)
     }
 
     fn set_color_or_pattern(
         &mut self,
-        mut get_state: impl FnMut(&mut Self) -> &mut ColorState,
+        mut get_state: impl FnMut(&mut Self) -> Result<&mut ColorState>,
         color_or_name: &ColorArgsOrName,
     ) -> Result<()> {
         match color_or_name {
@@ -1491,7 +1564,7 @@ impl<'a, 'c> Render<'a, 'c> {
                                 .shading_pattern()
                                 .whatever_context("get shading pattern")?,
                         )? {
-                            let color_state = get_state(self);
+                            let color_state = get_state(self)?;
                             color_state.set_paint(paint, background_color);
                         }
                         Ok(())
@@ -1499,7 +1572,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 }
             }
             ColorArgsOrName::Color(args) => {
-                let state = get_state(self);
+                let state = get_state(self)?;
                 state.set_color_args(args);
                 Ok(())
             }
@@ -1528,8 +1601,8 @@ impl<'a, 'c> Render<'a, 'c> {
         let _restore = if let Some(ext_g_state) =
             pattern.ext_g_state().whatever_context("read ext_g_state")?
         {
-            self.push();
-            self.current_mut().set_graphics_state(&ext_g_state);
+            self.push()?;
+            self.current_mut()?.set_graphics_state(&ext_g_state)?;
             Some(RestoreState(Some(|| self.pop())))
         } else {
             None
@@ -1540,7 +1613,8 @@ impl<'a, 'c> Render<'a, 'c> {
         let background_color =
             if let Some(args) = shading.background().whatever_context("get background")? {
                 let cs = shading.color_space().whatever_context("get color space")?;
-                let cs = ColorSpace::from_args(&cs, resources.resolver(), Some(resources)).unwrap();
+                let cs = ColorSpace::from_args(&cs, resources.resolver(), Some(resources))
+                    .whatever_context("Create ColorSpace")?;
                 Some(to_skia_color(&cs, args.as_ref()))
             } else {
                 None
@@ -1561,19 +1635,22 @@ impl<'a, 'c> Render<'a, 'c> {
     fn tiling_pattern(
         &mut self,
         canvas_size: Size2D<f32>,
-        mut get_state: impl FnMut(&mut Self) -> &mut ColorState,
+        mut get_state: impl FnMut(&mut Self) -> Result<&mut ColorState>,
         tile: &TilingPatternDict<'a, 'a>,
         color_args: Option<&ColorArgs>,
     ) -> Result<()> {
         let stream: &Object = tile
             .resolver()
-            .resolve(tile.id().unwrap())
+            .resolve(tile.id().whatever_context("get tile object id")?)
             .whatever_context("resolve tile object")?;
         let stream = stream.stream().whatever_context("get tile stream")?;
         let bytes = stream
             .decode(tile.resolver())
             .whatever_context("decode tile stream")?;
-        let ops = parse_operations::<()>(&mut bytes.as_ref()).unwrap();
+        let ops = parse_operations::<ParserError>
+            .parse(bytes.as_ref())
+            .map_err(winnow::error::ParseError::into_inner)
+            .whatever_context("parse tile pattern operations")?;
         let b_box = tile.b_box().whatever_context("get tile b_box")?;
         assert!(
             tile.x_step().whatever_context("get tile x_step")? > 0.0,
@@ -1612,7 +1689,7 @@ impl<'a, 'c> Render<'a, 'c> {
         else {
             return Ok(());
         };
-        let color_state = get_state(self);
+        let color_state = get_state(self)?;
         if let Some(args) = color_args {
             // set color used for paint matrix image
             color_state.set_color_args(args);
@@ -1627,10 +1704,13 @@ impl<'a, 'c> Render<'a, 'c> {
         Ok(())
     }
 
-    fn gen_glyph_path(glyph_render: &dyn GlyphRender<SkiaPathSink>, gid: u16) -> PathBuilder {
+    fn gen_glyph_path(
+        glyph_render: &dyn GlyphRender<SkiaPathSink>,
+        gid: u16,
+    ) -> Result<PathBuilder> {
         let mut sink = SkiaPathSink(PathBuilder::new());
-        glyph_render.render(gid, &mut sink).unwrap();
-        sink.into_inner()
+        glyph_render.render(gid, &mut sink)?;
+        Ok(sink.into_inner())
     }
 
     fn render_glyph(
@@ -1681,8 +1761,8 @@ impl<'a, 'c> Render<'a, 'c> {
                 );
             }
             TextRenderingMode::Clip => {
-                let path = path.transform(trans).unwrap();
-                text_clip_path.path_builder().push_path(&path);
+                let path = path.transform(trans).whatever_context("transform path")?;
+                text_clip_path.path_builder()?.push_path(&path);
             }
             _ => {
                 todo!("Unsupported text rendering mode: {:?}", render_mode);
@@ -1692,32 +1772,49 @@ impl<'a, 'c> Render<'a, 'c> {
     }
 
     fn show_text(&mut self, text: &[u8]) -> Result<()> {
-        let text_object = self.text_object();
+        let text_object = self.text_object()?;
         if text_object.render_mode == TextRenderingMode::Invisible {
             return Ok(());
         }
 
         let font = self
             .font_cache
-            .get_font(text_object.font_name.as_ref().unwrap())
-            .unwrap();
+            .get_font(
+                text_object
+                    .font_name
+                    .as_ref()
+                    .whatever_context("get font name")?,
+            )
+            .whatever_context("get font")?;
         debug!(
             "font: {}, type: {:?}",
-            text_object.font_name.as_ref().unwrap(),
+            text_object
+                .font_name
+                .as_ref()
+                .whatever_context("get text_object font name")?,
             font.font_type()
         );
         let op = self
             .font_cache
-            .get_op(self.text_object().font_name.as_ref().unwrap())
-            .unwrap();
-        let state = self.stack.last().unwrap();
+            .get_op(
+                self.text_object()?
+                    .font_name
+                    .as_ref()
+                    .whatever_context("get text_object font name")?,
+            )
+            .whatever_context("get font op")?;
+        let state = self.stack.last().whatever_context("get stack top")?;
         let mut text_object = state.text_object.clone();
         text_object.set_units_per_em(op.units_per_em()? as f32);
         let user_to_device = state.user_to_device.into_skia();
 
         if let Some(type3_font) = font.as_type3() {
-            let font_matrix = type3_font.matrix().unwrap();
-            let resources = type3_font.resources().unwrap();
+            let font_matrix = type3_font
+                .matrix()
+                .whatever_context("get type3 font matrix")?;
+            let resources = type3_font
+                .resources()
+                .whatever_context("get type3 font resources")?;
             let Some(mut render) = Render::new_nested(
                 self.nested_level,
                 self.canvas,
@@ -1733,7 +1830,7 @@ impl<'a, 'c> Render<'a, 'c> {
             };
 
             for ch in op.decode_chars(text)? {
-                render.current_mut().set_ctm(
+                render.current_mut()?.set_ctm(
                     text_object
                         .type3_runtime_matrix(&font_matrix)
                         .then(&state.ctm)
@@ -1746,26 +1843,34 @@ impl<'a, 'c> Render<'a, 'c> {
                     }
                 }
 
-                text_object.move_to_next_pos(op.char_width(ch).unwrap(), ch == 32);
+                text_object.move_to_next_pos(
+                    op.char_width(ch).whatever_context("get char width")?,
+                    ch == 32,
+                );
             }
         } else {
             let glyph_render = self
                 .font_cache
-                .get_glyph_render(self.text_object().font_name.as_ref().unwrap())
-                .unwrap();
+                .get_glyph_render(
+                    self.text_object()?
+                        .font_name
+                        .as_ref()
+                        .whatever_context("get font name")?,
+                )
+                .whatever_context("get font glyph render")?;
             let mut text_clip_path = Path::default();
 
             for ch in op.decode_chars(text)? {
-                let path = Self::gen_glyph_path(glyph_render, op.char_to_gid(ch)?);
+                let path = Self::gen_glyph_path(glyph_render, op.char_to_gid(ch)?)?;
                 if !path.is_empty() {
-                    let path = path.finish().unwrap();
+                    let path = path.finish().whatever_context("finish path")?;
                     // pre transform path to user space, render_glyph() will zoom line_width,
                     // pdf line_width state is in user space, but skia line_width is in device
                     // space so we need to transform path to user space,
                     // and zoom line_width in device space
                     let path = path
                         .transform(text_object.runtime_matrix().into_skia())
-                        .unwrap();
+                        .whatever_context("transform by text_object runtime matrix")?;
 
                     Self::render_glyph(
                         self.canvas,
@@ -1777,34 +1882,37 @@ impl<'a, 'c> Render<'a, 'c> {
                     )?;
                 }
 
-                text_object.move_to_next_pos(op.char_width(ch).unwrap(), ch == 32);
+                text_object.move_to_next_pos(
+                    op.char_width(ch).whatever_context("get char width")?,
+                    ch == 32,
+                );
             }
 
-            if let Some(text_clip_path) = text_clip_path.finish() {
+            if let Some(text_clip_path) = text_clip_path.finish()? {
                 text_object
                     .text_clipping_path
-                    .path_builder()
+                    .path_builder()?
                     .push_path(text_clip_path);
             }
         }
-        self.current_mut().text_object = text_object;
+        self.current_mut()?.text_object = text_object;
         Ok(())
     }
 
     fn show_texts(&mut self, texts: &[TextStringOrNumber]) -> Result<()> {
         for t in texts {
             match t {
-                TextStringOrNumber::TextString(s) => self.show_text(s.to_bytes().unwrap())?,
+                TextStringOrNumber::TextString(s) => self.show_text(s.to_bytes())?,
                 TextStringOrNumber::Number(n) => {
-                    self.text_object_mut().adjust_tj(*n);
+                    self.text_object_mut()?.adjust_tj(*n);
                 }
             }
         }
         Ok(())
     }
 
-    fn end_text(&mut self) {
-        self.current_mut().end_text_object();
+    fn end_text(&mut self) -> Result<()> {
+        self.current_mut()?.end_text_object()
     }
 }
 

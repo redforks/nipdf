@@ -6,6 +6,7 @@
 use educe::Educe;
 use euclid::Angle;
 use image::RgbaImage;
+use log::warn;
 use nipdf::{
     file::{Page, Rectangle},
     graphics::trans::{LogicDeviceToDeviceSpace, UserToUserSpace, logic_device_to_device},

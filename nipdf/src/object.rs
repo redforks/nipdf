@@ -1474,10 +1474,10 @@ pub enum TextString {
 }
 
 impl TextString {
-    pub fn to_bytes(&self) -> Result<&[u8], ObjectValueError> {
+    pub fn to_bytes(&self) -> &[u8] {
         match self {
-            TextString::Text(s) => Ok(s.as_bytes()),
-            TextString::HexText(s) => Ok(s.as_bytes()),
+            TextString::Text(s) => s.as_bytes(),
+            TextString::HexText(s) => s.as_bytes(),
         }
     }
 }
