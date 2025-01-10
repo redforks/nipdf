@@ -32,7 +32,7 @@ use nipdf::{
 };
 use num_traits::ToPrimitive;
 use prescript::Name;
-use snafu::ResultExt;
+use snafu::{OptionExt, ResultExt};
 use std::{
     borrow::Cow,
     cell::{Ref, RefCell},
@@ -74,20 +74,22 @@ enum PaintCreator {
 }
 
 impl PaintCreator {
-    fn create(&self, alpha: f32) -> Cow<'_, Paint<'_>> {
+    fn create(&self, alpha: f32) -> Result<Cow<'_, Paint<'_>>> {
         match self {
             PaintCreator::Color(c) => {
                 let mut r = Paint::default();
                 let mut c = *c;
                 c.set_alpha(alpha);
                 r.set_color(c);
-                Cow::Owned(r)
+                Ok(Cow::Owned(r))
             }
 
-            PaintCreator::Gradient((pattern, matrix)) => Cow::Owned(Paint {
-                shader: pattern.to_skia(matrix, alpha).unwrap(),
+            PaintCreator::Gradient((pattern, matrix)) => Ok(Cow::Owned(Paint {
+                shader: pattern
+                    .to_skia(matrix, alpha)
+                    .whatever_context("Create Gradient shader")?,
                 ..Default::default()
-            }),
+            })),
 
             PaintCreator::Tile((p, matrix, no_repeat)) => {
                 let mut r = Paint::default();
@@ -104,7 +106,7 @@ impl PaintCreator {
                     alpha,
                     transform.into_skia(),
                 );
-                Cow::Owned(r)
+                Ok(Cow::Owned(r))
             }
         }
     }
@@ -139,7 +141,7 @@ impl<const N: usize> MaskCache<N> {
         current: Option<MaskEntry>,
         rule: FillRule,
         create_mask: impl FnOnce() -> Mask,
-    ) -> MaskEntry {
+    ) -> Result<MaskEntry> {
         debug_assert!(!p.is_empty());
 
         let (new_path, cur_mask) = match current {
@@ -148,7 +150,10 @@ impl<const N: usize> MaskCache<N> {
                 let mut r = PathBuilder::new();
                 r.push_path(&cur.0);
                 r.push_path(p);
-                (r.finish().unwrap(), Some(Rc::clone(&cur.1)))
+                (
+                    r.finish().whatever_context("get path")?,
+                    Some(Rc::clone(&cur.1)),
+                )
             }
         };
 
@@ -156,7 +161,7 @@ impl<const N: usize> MaskCache<N> {
             if e.0.as_ref() == &new_path {
                 let entry = self.recents.swap_remove_back(i).unwrap();
                 self.recents.push_front(entry.clone());
-                return entry;
+                return Ok(entry);
             }
         }
 
@@ -167,7 +172,7 @@ impl<const N: usize> MaskCache<N> {
             self.recents.pop_back();
         }
         self.recents.push_front(entry.clone());
-        entry
+        Ok(entry)
     }
 }
 
@@ -228,20 +233,27 @@ impl ColorState {
         stroke: &Stroke,
         transform: Transform,
         mask: Option<&Mask>,
-    ) {
+    ) -> Result<()> {
         if let Some(paint) = &self.background_paint {
-            canvas.stroke_path(path, &paint.create(self.alpha()), stroke, transform, mask);
+            canvas.stroke_path(
+                path,
+                paint.create(self.alpha())?.as_ref(),
+                stroke,
+                transform,
+                mask,
+            );
         }
         canvas.stroke_path(
             path,
-            &self.paint.create(self.alpha()),
+            self.paint.create(self.alpha())?.as_ref(),
             stroke,
             transform,
             mask,
         );
+        Ok(())
     }
 
-    pub fn create_paint(&self) -> Cow<'_, Paint<'_>> {
+    pub fn create_paint(&self) -> Result<Cow<'_, Paint<'_>>> {
         self.paint.create(self.alpha())
     }
 
@@ -253,11 +265,11 @@ impl ColorState {
         fill_rule: FillRule,
         transform: Transform,
         mask: Option<&Mask>,
-    ) {
+    ) -> Result<()> {
         if let Some(paint) = &self.background_paint {
             canvas.fill_path(
                 path,
-                &paint.create(self.alpha()),
+                paint.create(self.alpha())?.as_ref(),
                 fill_rule,
                 transform,
                 mask,
@@ -265,11 +277,12 @@ impl ColorState {
         }
         canvas.fill_path(
             path,
-            &self.paint.create(self.alpha()),
+            self.paint.create(self.alpha())?.as_ref(),
             fill_rule,
             transform,
             mask,
         );
+        Ok(())
     }
 
     fn set_alpha_is_shape(&mut self, v: bool) {
@@ -365,11 +378,11 @@ impl State {
         info!("not implemented: render intent: {}", intent);
     }
 
-    fn get_fill_paint(&self) -> Cow<'_, Paint<'_>> {
+    fn get_fill_paint(&self) -> Result<Cow<'_, Paint<'_>>> {
         self.fill_state.create_paint()
     }
 
-    fn get_stroke_paint(&self) -> Cow<'_, Paint<'_>> {
+    fn get_stroke_paint(&self) -> Result<Cow<'_, Paint<'_>>> {
         self.stroke_state.create_paint()
     }
 
@@ -418,7 +431,7 @@ impl State {
         path: impl CloneOrMove<Target = SkiaPath>,
         rule: FillRule,
         flip_y: bool,
-    ) {
+    ) -> Result<()> {
         let w = self.dimension.canvas_width();
         let h = self.dimension.canvas_height();
         let new_mask = || {
@@ -438,7 +451,8 @@ impl State {
             self.mask.clone(),
             rule,
             new_mask,
-        ));
+        )?);
+        Ok(())
         // use std::sync::atomic::{AtomicU32, Ordering};
         // static mut IDX: std::sync::atomic::AtomicU32 = AtomicU32::new(0);
         // if let Some(mask) = &self.mask {
@@ -457,15 +471,16 @@ impl State {
         todo!("text knockout");
     }
 
-    pub fn end_text_object(&mut self) {
+    pub fn end_text_object(&mut self) -> Result<()> {
         // if exists text clipping path, intersection to current clipping path using Winding fill
         // rule
         let p = self.text_object.text_clipping_path.finish();
         if let Some(p) = p {
             let p = p.to_owned();
-            self.update_mask(p, FillRule::Winding, false);
+            self.update_mask(p, FillRule::Winding, false)?;
             self.text_object.text_clipping_path.reset();
         }
+        Ok(())
     }
 
     fn set_stroke_alpha(&mut self, alpha: f32) {
@@ -614,7 +629,7 @@ impl<'a, 'c> Render<'a, 'c> {
         canvas: &'c mut Pixmap,
         option: RenderOption,
         resources: &'c ResourceDict<'a, 'a>,
-    ) -> Self
+    ) -> Result<Self>
     where
         'a: 'c,
     {
@@ -629,10 +644,10 @@ impl<'a, 'c> Render<'a, 'c> {
                 PathBuilder::from_rect(rect.into_skia()),
                 FillRule::Winding,
                 true,
-            );
+            )?;
         }
 
-        Self {
+        Ok(Self {
             nested_level,
             canvas,
             stack: vec![state],
@@ -640,7 +655,7 @@ impl<'a, 'c> Render<'a, 'c> {
             font_cache: FontCache::new(resources).unwrap(),
             resources,
             dimension: option.dimension,
-        }
+        })
     }
 
     /// Return None if nested level is greater than 10, to avoid infinite loop
@@ -649,20 +664,20 @@ impl<'a, 'c> Render<'a, 'c> {
         canvas: &'c mut Pixmap,
         option: RenderOption,
         resources: &'c ResourceDict<'a, 'a>,
-    ) -> Option<Self> {
-        if cur_level < 10 {
-            Some(Self::create(cur_level + 1, canvas, option, resources))
+    ) -> Result<Option<Self>> {
+        Ok(if cur_level < 10 {
+            Some(Self::create(cur_level + 1, canvas, option, resources)?)
         } else {
             warn!("nested level is greater than 10");
             None
-        }
+        })
     }
 
     pub fn new(
         canvas: &'c mut Pixmap,
         option: RenderOption,
         resources: &'c ResourceDict<'a, 'a>,
-    ) -> Self
+    ) -> Result<Self>
     where
         'a: 'c,
     {
@@ -738,11 +753,13 @@ impl<'a, 'c> Render<'a, 'c> {
             Operation::AppendRectangle(p, w, h) => self.path.append_rect(p, w, h),
 
             // Path Painting Operation
-            Operation::Stroke => self.stroke(),
-            Operation::CloseAndStroke => self.close_and_stroke(),
-            Operation::FillNonZero | Operation::FillNonZeroDeprecated => self.fill_path_non_zero(),
-            Operation::FillEvenOdd => self.fill_path_even_odd(),
-            Operation::FillAndStrokeNonZero => self.fill_and_stroke_non_zero(),
+            Operation::Stroke => self.stroke().unwrap(),
+            Operation::CloseAndStroke => self.close_and_stroke().unwrap(),
+            Operation::FillNonZero | Operation::FillNonZeroDeprecated => {
+                self.fill_path_non_zero().unwrap()
+            }
+            Operation::FillEvenOdd => self.fill_path_even_odd().unwrap(),
+            Operation::FillAndStrokeNonZero => self.fill_and_stroke_non_zero().unwrap(),
             Operation::FillAndStrokeEvenOdd => self.fill_and_stroke_even_odd(),
             Operation::CloseFillAndStrokeNonZero => self.close_fill_and_stroke_non_zero(),
             Operation::CloseFillAndStrokeEvenOdd => self.close_fill_and_stroke_even_odd(),
@@ -898,7 +915,7 @@ impl<'a, 'c> Render<'a, 'c> {
         state.set_color_space(cs, color);
     }
 
-    fn stroke(&mut self) {
+    fn stroke(&mut self) -> Result<()> {
         if let Some(p) = self.path.finish() {
             let state = self.stack.last().unwrap();
             let stroke = state.get_stroke();
@@ -908,11 +925,12 @@ impl<'a, 'c> Render<'a, 'c> {
                 stroke,
                 state.user_to_device.into_skia(),
                 state.get_mask().as_deref(),
-            );
+            )?;
         } else {
             debug!("stroke: empty or invalid path");
         }
         self.end_path();
+        Ok(())
     }
 
     fn end_path(&mut self) {
@@ -930,12 +948,12 @@ impl<'a, 'c> Render<'a, 'c> {
         self.path.close_path();
     }
 
-    fn close_and_stroke(&mut self) {
+    fn close_and_stroke(&mut self) -> Result<()> {
         self.close_path();
-        self.stroke();
+        self.stroke()
     }
 
-    fn _fill(&mut self, fill_rule: FillRule, reset_path: bool) {
+    fn _fill(&mut self, fill_rule: FillRule, reset_path: bool) -> Result<()> {
         let state = self.stack.last().unwrap();
         if let Some(p) = self.path.finish() {
             state.fill_state.fill(
@@ -944,24 +962,26 @@ impl<'a, 'c> Render<'a, 'c> {
                 fill_rule,
                 state.user_to_device.into_skia(),
                 state.get_mask().as_deref(),
-            );
+            )?;
         }
         if reset_path {
             self.end_path();
         }
+        Ok(())
     }
 
-    fn fill_path_non_zero(&mut self) {
-        self._fill(FillRule::Winding, true);
+    fn fill_path_non_zero(&mut self) -> Result<()> {
+        self._fill(FillRule::Winding, true)
     }
 
-    fn fill_path_even_odd(&mut self) {
-        self._fill(FillRule::EvenOdd, true);
+    fn fill_path_even_odd(&mut self) -> Result<()> {
+        self._fill(FillRule::EvenOdd, true)
     }
 
-    fn fill_and_stroke_non_zero(&mut self) {
-        self._fill(FillRule::Winding, false);
+    fn fill_and_stroke_non_zero(&mut self) -> Result<()> {
+        self._fill(FillRule::Winding, false)?;
         self.stroke();
+        Ok(())
     }
 
     fn fill_and_stroke_even_odd(&mut self) {
@@ -1022,7 +1042,7 @@ impl<'a, 'c> Render<'a, 'c> {
             let mask_reversed = domain.start > domain.end;
             let mask = Self::load_image_as_mask(img, state, mask_reversed)?;
             // fill canvas with current fill paint with mask
-            let paint = state.get_fill_paint();
+            let paint = state.get_fill_paint()?;
             self.canvas.fill_rect(
                 Rect::from_xywh(
                     0.0,
@@ -1087,7 +1107,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 .whatever_context("decode x_object to image")?;
             let mask = Self::load_image_as_mask(img.into_rgba8(), state, is_invert)?;
             // fill canvas with current fill paint with mask
-            let paint = state.get_fill_paint();
+            let paint = state.get_fill_paint()?;
             self.canvas.fill_rect(
                 Rect::from_xywh(
                     0.0,
@@ -1190,7 +1210,8 @@ impl<'a, 'c> Render<'a, 'c> {
                 .state(inner_state)
                 .build(),
             resources,
-        ) else {
+        )?
+        else {
             return Ok(());
         };
         content
@@ -1546,7 +1567,7 @@ impl<'a, 'c> Render<'a, 'c> {
             .build();
         let mut canvas = option.create_canvas();
         let Some(mut render) =
-            Render::new_nested(self.nested_level, &mut canvas, option, &resources)
+            Render::new_nested(self.nested_level, &mut canvas, option, &resources)?
         else {
             return Ok(());
         };
@@ -1578,12 +1599,12 @@ impl<'a, 'c> Render<'a, 'c> {
         path: SkiaPath,
         render_mode: TextRenderingMode,
         trans: Transform,
-    ) {
+    ) -> Result<()> {
         match render_mode {
             TextRenderingMode::Fill => {
                 canvas.fill_path(
                     &path,
-                    &state.get_fill_paint(),
+                    state.get_fill_paint()?.as_ref(),
                     FillRule::Winding,
                     trans,
                     state.get_mask().as_deref(),
@@ -1596,7 +1617,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 debug!("text stroke path: {:?}", &path);
                 canvas.stroke_path(
                     &path,
-                    &state.get_stroke_paint(),
+                    state.get_stroke_paint()?.as_ref(),
                     state.get_stroke(),
                     trans,
                     state.get_mask().as_deref(),
@@ -1605,14 +1626,14 @@ impl<'a, 'c> Render<'a, 'c> {
             TextRenderingMode::FillAndStroke => {
                 canvas.fill_path(
                     &path,
-                    &state.get_fill_paint(),
+                    state.get_fill_paint()?.as_ref(),
                     FillRule::Winding,
                     trans,
                     state.get_mask().as_deref(),
                 );
                 canvas.stroke_path(
                     &path,
-                    &state.get_stroke_paint(),
+                    state.get_stroke_paint()?.as_ref(),
                     state.get_stroke(),
                     trans,
                     state.get_mask().as_deref(),
@@ -1626,6 +1647,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 todo!("Unsupported text rendering mode: {:?}", render_mode);
             }
         }
+        Ok(())
     }
 
     fn show_text(&mut self, text: &[u8]) -> Result<()> {
@@ -1664,7 +1686,8 @@ impl<'a, 'c> Render<'a, 'c> {
                     .state(state.clone())
                     .build(),
                 resources.as_ref().unwrap_or(self.resources),
-            ) else {
+            )?
+            else {
                 return Ok(());
             };
 
@@ -1710,7 +1733,7 @@ impl<'a, 'c> Render<'a, 'c> {
                         path,
                         text_object.render_mode,
                         user_to_device,
-                    );
+                    )?;
                 }
 
                 text_object.move_to_next_pos(op.char_width(ch).unwrap(), ch == 32);

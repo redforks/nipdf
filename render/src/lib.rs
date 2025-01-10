@@ -1,3 +1,8 @@
+#![warn(clippy::unwrap_used)]
+#![warn(clippy::expect_used)]
+#![cfg_attr(test, allow(clippy::unwrap_used))]
+#![cfg_attr(test, allow(clippy::expect_used))]
+
 use educe::Educe;
 use euclid::Angle;
 use image::RgbaImage;
@@ -182,7 +187,7 @@ pub fn render_steps(
     if !ops.is_empty() {
         // skip render if no operations, fixes incorrect pdf files that no resources
         let resource = page.resources()?;
-        let mut renderer = Render::new(&mut canvas, option.clone(), &resource);
+        let mut renderer = Render::new(&mut canvas, option.clone(), &resource)?;
         if let Some(steps) = steps {
             ops.into_iter().take(steps).for_each(|op| renderer.exec(op));
         } else {
