@@ -1,0 +1,4 @@
+stack-size-threshold = 128000
+allow-panic-in-tests = true
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

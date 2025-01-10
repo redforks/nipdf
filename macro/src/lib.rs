@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used)]
+#![allow(clippy::unwrap_used)]
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;

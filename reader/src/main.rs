@@ -1,8 +1,3 @@
-#![warn(clippy::unwrap_used)]
-#![warn(clippy::expect_used)]
-#![cfg_attr(test, allow(clippy::unwrap_used))]
-#![cfg_attr(test, allow(clippy::expect_used))]
-
 use clap::Parser;
 use iced::{
     Application, Command, Element, Length, Settings, Theme,

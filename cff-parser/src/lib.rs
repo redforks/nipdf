@@ -8,11 +8,6 @@
 //!
 //! File::fonts() returns a iterator of `Font` which is a struct
 //! that provides info for that font, such as encoding, charset, etc.
-#![warn(clippy::unwrap_used)]
-#![warn(clippy::expect_used)]
-#![cfg_attr(test, allow(clippy::unwrap_used))]
-#![cfg_attr(test, allow(clippy::expect_used))]
-
 use prescript::Encoding;
 use std::borrow::Cow;
 
