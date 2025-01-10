@@ -485,8 +485,8 @@ pub(crate) struct CurrentFile<'a> {
     data: &'a [u8],
     remains_pos: usize,
     hex_form: bool,
-    decryped: Option<Vec<u8>>,
-    decryped_pos: usize,
+    decrypted: Option<Vec<u8>>,
+    decrypted_pos: usize,
 }
 
 impl<'a> CurrentFile<'a> {
@@ -494,18 +494,18 @@ impl<'a> CurrentFile<'a> {
         Self {
             data,
             remains_pos: 0,
-            decryped: None,
-            decryped_pos: 0,
+            decrypted: None,
+            decrypted_pos: 0,
             hex_form: false,
         }
     }
 
     pub fn next_token(&mut self) -> Option<Token> {
-        match self.decryped {
+        match self.decrypted {
             Some(ref data) => {
-                let mut buf = &data[self.decryped_pos..];
+                let mut buf = &data[self.decrypted_pos..];
                 let r = ws_prefixed(token_parser).parse_next(&mut buf).ok();
-                self.decryped_pos = data.len() - buf.len();
+                self.decrypted_pos = data.len() - buf.len();
                 r
             }
             None => {
@@ -518,13 +518,13 @@ impl<'a> CurrentFile<'a> {
     }
 
     pub fn skip_white_space(&mut self) -> Result<()> {
-        match self.decryped {
+        match self.decrypted {
             Some(ref data) => {
-                let mut buf = &data[self.decryped_pos..];
+                let mut buf = &data[self.decrypted_pos..];
                 white_space
                     .parse_next(&mut buf)
                     .map_err(|e| perror_to_whatever(e, "skip whitespace"))?;
-                self.decryped_pos = data.len() - buf.len();
+                self.decrypted_pos = data.len() - buf.len();
             }
             None => {
                 let mut remains = &self.data[self.remains_pos..];
@@ -538,36 +538,36 @@ impl<'a> CurrentFile<'a> {
     }
 
     pub fn start_decrypt(&mut self) -> Result<()> {
-        assert!(self.decryped.is_none());
+        assert!(self.decrypted.is_none());
         self.skip_white_space()?;
         let remains = &self.data[self.remains_pos..];
         let decrypted;
         (self.hex_form, decrypted) = decrypt(EEXEC_KEY, 4, remains).whatever_context("decrypt")?;
-        self.decryped = Some(decrypted);
+        self.decrypted = Some(decrypted);
         self.remains_pos += 4;
-        self.decryped_pos = 0;
+        self.decrypted_pos = 0;
         Ok(())
     }
 
     pub fn stop_decrypt(&mut self) -> Result<()> {
-        assert!(self.decryped.is_some());
+        assert!(self.decrypted.is_some());
         self.skip_white_space()?;
         self.remains_pos += if self.hex_form {
-            self.decryped_pos * 2
+            self.decrypted_pos * 2
         } else {
-            self.decryped_pos
+            self.decrypted_pos
         };
-        self.decryped = None;
+        self.decrypted = None;
         Ok(())
     }
 
     pub fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         self.skip_white_space()?;
-        Ok(match self.decryped {
+        Ok(match self.decrypted {
             Some(ref data) => {
-                let len = buf.len().min(data.len() - self.decryped_pos);
-                buf[..len].copy_from_slice(&data[self.decryped_pos..(self.decryped_pos + len)]);
-                self.decryped_pos += len;
+                let len = buf.len().min(data.len() - self.decrypted_pos);
+                buf[..len].copy_from_slice(&data[self.decrypted_pos..(self.decrypted_pos + len)]);
+                self.decrypted_pos += len;
                 len
             }
             None => {
