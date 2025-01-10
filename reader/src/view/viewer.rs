@@ -232,7 +232,10 @@ impl Viewer {
         };
         self.navi = PageNavigator {
             current_page: no,
-            total_pages: pages.len().try_into().unwrap(),
+            total_pages: pages
+                .len()
+                .try_into()
+                .whatever_context("pages out of range")?,
         };
         self.update_cur_page_editing_from_navigation();
         #[cfg(feature = "debug")]

@@ -1,3 +1,8 @@
+#![warn(clippy::unwrap_used)]
+#![warn(clippy::expect_used)]
+#![cfg_attr(test, allow(clippy::unwrap_used))]
+#![cfg_attr(test, allow(clippy::expect_used))]
+
 use clap::Parser;
 use iced::{
     Application, Command, Element, Length, Settings, Theme,
@@ -189,8 +194,10 @@ impl Application for App {
         match message {
             AppMessage::Initialized => {}
             AppMessage::Viewer(msg) => {
-                let rv = self.mut_viewer().unwrap().update(msg);
-                self.handle_result(rv);
+                if let Some(v) = self.mut_viewer() {
+                    let rv = v.update(msg);
+                    self.handle_result(rv);
+                }
             }
 
             AppMessage::SelectFile => {
