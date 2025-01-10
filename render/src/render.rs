@@ -140,7 +140,7 @@ impl<const N: usize> MaskCache<N> {
         p: &SkiaPath,
         current: Option<MaskEntry>,
         rule: FillRule,
-        create_mask: impl FnOnce() -> Mask,
+        create_mask: impl FnOnce() -> Result<Mask>,
     ) -> Result<MaskEntry> {
         debug_assert!(!p.is_empty());
 
@@ -159,13 +159,13 @@ impl<const N: usize> MaskCache<N> {
 
         for (i, e) in self.recents.iter().enumerate() {
             if e.0.as_ref() == &new_path {
-                let entry = self.recents.swap_remove_back(i).unwrap();
-                self.recents.push_front(entry.clone());
-                return Ok(entry);
+                let e = e.clone();
+                self.recents.swap(0, i);
+                return Ok(e);
             }
         }
 
-        let mut mask: Mask = cur_mask.map_or_else(create_mask, |m| m.borrow().clone());
+        let mut mask: Mask = cur_mask.map_or_else(create_mask, |m| Ok(m.borrow().clone()))?;
         mask.intersect_path(p, rule, true, Transform::identity());
         let entry = (Rc::new(new_path), Rc::new(RefCell::new(mask)));
         if self.recents.len() == N {
@@ -198,17 +198,24 @@ impl ColorState {
     }
 
     /// Set color space, if args is None, set color to color space default color
-    pub fn set_color_space(&mut self, cs: ColorSpace<f32>, args: Option<impl AsRef<[f32]>>) {
+    pub fn set_color_space(
+        &mut self,
+        cs: ColorSpace<f32>,
+        args: Option<impl AsRef<[f32]>>,
+    ) -> Result<()> {
         self.color_space = cs;
         if let Some(args) = args {
             self.set_color_args(args);
         } else {
             let [r, g, b, a] = self.color_space.default_color();
             self.set_paint(
-                PaintCreator::Color(SkiaColor::from_rgba(r, g, b, a).unwrap()),
+                PaintCreator::Color(
+                    SkiaColor::from_rgba(r, g, b, a).whatever_context("Convert color from rgba")?,
+                ),
                 None,
             );
         }
+        Ok(())
     }
 
     pub fn set_color_args(&mut self, color_args: impl AsRef<[f32]>) {
@@ -398,19 +405,59 @@ impl State {
         self.mask.as_ref().map(|m| m.1.borrow())
     }
 
-    fn set_graphics_state(&mut self, res: &GraphicsStateParameterDict<'_, '_>) {
+    fn set_graphics_state(&mut self, res: &GraphicsStateParameterDict<'_, '_>) -> Result<()> {
         for key in res.dict().keys() {
             match key.as_str() {
-                "LW" => self.set_line_width(res.line_width().unwrap().unwrap()),
-                "LC" => self.set_line_cap(res.line_cap().unwrap().unwrap()),
-                "LJ" => self.set_line_join(res.line_join().unwrap().unwrap()),
-                "ML" => self.set_miter_limit(res.miter_limit().unwrap().unwrap()),
-                "RI" => self.set_render_intent(res.rendering_intent().unwrap().unwrap()),
-                "TK" => self.set_text_knockout_flag(res.text_knockout_flag().unwrap().unwrap()),
-                "FL" => self.set_flatness(res.flatness().unwrap().unwrap()),
-                "CA" => self.set_stroke_alpha(res.stroke_alpha().unwrap().unwrap()),
-                "ca" => self.set_fill_alpha(res.fill_alpha().unwrap().unwrap()),
-                "AIS" => self.set_alpha_is_shape(res.alpha_is_shape().unwrap().unwrap()),
+                "LW" => self.set_line_width(
+                    res.line_width()
+                        .whatever_context("get line width")?
+                        .whatever_context("unwrap line width")?,
+                ),
+                "LC" => self.set_line_cap(
+                    res.line_cap()
+                        .whatever_context("get line cap")?
+                        .whatever_context("unwrap line cap")?,
+                ),
+                "LJ" => self.set_line_join(
+                    res.line_join()
+                        .whatever_context("get line join")?
+                        .whatever_context("unwrap line join")?,
+                ),
+                "ML" => self.set_miter_limit(
+                    res.miter_limit()
+                        .whatever_context("get miter limit")?
+                        .whatever_context("unwrap miter limit")?,
+                ),
+                "RI" => self.set_render_intent(
+                    res.rendering_intent()
+                        .whatever_context("get rendering intent")?
+                        .whatever_context("unwrap rendering intent")?,
+                ),
+                "TK" => self.set_text_knockout_flag(
+                    res.text_knockout_flag()
+                        .whatever_context("get text knockout flag")?
+                        .whatever_context("unwrap text knockout flag")?,
+                ),
+                "FL" => self.set_flatness(
+                    res.flatness()
+                        .whatever_context("get flatness")?
+                        .whatever_context("unwrap flatness")?,
+                ),
+                "CA" => self.set_stroke_alpha(
+                    res.stroke_alpha()
+                        .whatever_context("get stroke alpha")?
+                        .whatever_context("unwrap stroke alpha")?,
+                ),
+                "ca" => self.set_fill_alpha(
+                    res.fill_alpha()
+                        .whatever_context("get fill alpha")?
+                        .whatever_context("unwrap fill alpha")?,
+                ),
+                "AIS" => self.set_alpha_is_shape(
+                    res.alpha_is_shape()
+                        .whatever_context("get alpha is shape")?
+                        .whatever_context("unwrap alpha is shape")?,
+                ),
                 "Type" => (),
                 "SM" => debug!("ExtGState key: SM (smoothness tolerance) not implemented"),
                 k @ ("OPM" | "op" | "OP") => {
@@ -424,6 +471,7 @@ impl State {
                 _ => info!("Unknown or unsupported ExtGState key: {}", key.as_ref()),
             }
         }
+        Ok(())
     }
 
     fn update_mask(
@@ -435,15 +483,19 @@ impl State {
         let w = self.dimension.canvas_width();
         let h = self.dimension.canvas_height();
         let new_mask = || {
-            let mut r = Mask::new(w, h).unwrap();
-            let p = PathBuilder::from_rect(Rect::from_xywh(0.0, 0.0, w as f32, h as f32).unwrap());
+            let mut r = Mask::new(w, h).whatever_context("create new mask")?;
+            let p = PathBuilder::from_rect(
+                Rect::from_xywh(0.0, 0.0, w as f32, h as f32).whatever_context("create rect")?,
+            );
             r.fill_path(&p, FillRule::Winding, true, Transform::identity());
-            r
+            Ok(r)
         };
 
         let mut path = path.clone_or_move();
         if flip_y {
-            path = path.transform(self.user_to_device.into_skia()).unwrap();
+            path = path
+                .transform(self.user_to_device.into_skia())
+                .whatever_context("transform path")?;
         }
 
         self.mask = Some(self.mask_cache.borrow_mut().update(
@@ -453,17 +505,6 @@ impl State {
             new_mask,
         )?);
         Ok(())
-        // use std::sync::atomic::{AtomicU32, Ordering};
-        // static mut IDX: std::sync::atomic::AtomicU32 = AtomicU32::new(0);
-        // if let Some(mask) = &self.mask {
-        //     dbg!(&mask.0);
-        //     mask.1
-        //         .borrow()
-        //         .save_png(format!("/tmp/mask-{:?}.png", unsafe {
-        //             IDX.fetch_add(1, Ordering::Relaxed)
-        //         }))
-        //         .unwrap();
-        // }
     }
 
     fn set_text_knockout_flag(&mut self, knockout: bool) {
