@@ -10,6 +10,7 @@ use euclid::{Length, Point2D, Transform2D};
 use log::{error, warn};
 use nipdf_macro::{OperationParser, TryFromIntObject, TryFromNameObject, pdf_object};
 use prescript::{AnyWhatever, Name, sname};
+use snafu::whatever;
 use std::{
     num::ParseIntError,
     str::{Utf8Error, from_utf8},
@@ -108,7 +109,7 @@ impl<'b> ConvertFromObject<'b> for ColorArgs {
             if let Ok(num) = o.as_number() {
                 result.push(num);
             } else {
-                todo!("color args: {:?}", o);
+                whatever!("color args: {:?}", o);
             }
         }
         result.reverse();

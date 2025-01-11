@@ -307,7 +307,7 @@ where
                         black_point,
                     }))
                 }
-                s => todo!("ColorSpace::from_args() {} color space", s),
+                s => whatever!("ColorSpace::from_args() {} color space", s),
             },
         }
     }
