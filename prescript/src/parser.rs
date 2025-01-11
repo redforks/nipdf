@@ -36,13 +36,6 @@ enum PossibleError {
     Ascii85 { source: Ascii85Error },
 }
 
-pub(crate) fn perror_to_whatever(err: ErrMode<ParserError>, msg: impl Into<String>) -> AnyWhatever {
-    match err.into_inner() {
-        Some(err) => AnyWhatever::with_source(Box::new(err), msg.into()),
-        None => todo!(),
-    }
-}
-
 pub(crate) fn parse_error_to_whatever<I>(
     err: ParseError<I, ParserError>,
     msg: impl Into<String>,

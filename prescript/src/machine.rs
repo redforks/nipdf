@@ -1,8 +1,6 @@
 use crate::{
     AnyWhatever, Name, Result, name,
-    parser::{
-        perror_to_whatever, token as token_parser, white_space, white_space_or_comment, ws_prefixed,
-    },
+    parser::{token as token_parser, white_space, white_space_or_comment, ws_prefixed},
     sname,
 };
 use educe::Educe;
@@ -17,7 +15,10 @@ use std::{
     rc::Rc,
     str::from_utf8,
 };
-use winnow::Parser;
+use winnow::{
+    Parser,
+    combinator::{preceded, rest},
+};
 
 mod decrypt;
 use decrypt::{EEXEC_KEY, decrypt};
@@ -501,39 +502,30 @@ impl<'a> CurrentFile<'a> {
     }
 
     pub fn next_token(&mut self) -> Option<Token> {
-        match self.decrypted {
-            Some(ref data) => {
-                let mut buf = &data[self.decrypted_pos..];
-                let r = ws_prefixed(token_parser).parse_next(&mut buf).ok();
-                self.decrypted_pos = data.len() - buf.len();
-                r
-            }
-            None => {
-                let mut remains = &self.data[self.remains_pos..];
-                let r = ws_prefixed(token_parser).parse_next(&mut remains).ok();
-                self.remains_pos = self.data.len() - remains.len();
-                r
-            }
-        }
+        let (data, pos) = match &self.decrypted {
+            Some(data) => (&data[..], &mut self.decrypted_pos),
+            None => (self.data, &mut self.remains_pos),
+        };
+
+        let mut buf = &data[*pos..];
+        let r = ws_prefixed(token_parser).parse_next(&mut buf).ok();
+        *pos = data.len() - buf.len();
+        r
     }
 
     pub fn skip_white_space(&mut self) -> Result<()> {
-        match self.decrypted {
-            Some(ref data) => {
-                let mut buf = &data[self.decrypted_pos..];
-                white_space
-                    .parse_next(&mut buf)
-                    .map_err(|e| perror_to_whatever(e, "skip whitespace"))?;
-                self.decrypted_pos = data.len() - buf.len();
-            }
-            None => {
-                let mut remains = &self.data[self.remains_pos..];
-                white_space
-                    .parse_next(&mut remains)
-                    .map_err(|e| perror_to_whatever(e, "skip whitespace 2"))?;
-                self.remains_pos = self.data.len() - remains.len();
-            }
-        }
+        let (data, pos) = match self.decrypted {
+            Some(ref data) => (&data[..], &mut self.decrypted_pos),
+            None => (self.data, &mut self.remains_pos),
+        };
+
+        let buf = &data[*pos..];
+        let remains = preceded(white_space, rest)
+            .parse(buf)
+            .map_err(winnow::error::ParseError::into_inner)
+            .whatever_context("skip whitespace")?;
+        *pos = data.len() - remains.len();
+
         Ok(())
     }
 
