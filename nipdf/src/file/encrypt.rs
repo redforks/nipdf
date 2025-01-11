@@ -183,7 +183,7 @@ impl EncryptDict<'_, '_> {
             self.algorithm()?,
             Algorithm::Key40 | Algorithm::Key40AndMore | Algorithm::DefinedInDoc,
         ) {
-            todo!("Algorithm: {:?}", self.algorithm()?);
+            whatever!("Algorithm: {:?}", self.algorithm()?);
         }
 
         Ok(_do(self).unwrap_or_else(|e| {

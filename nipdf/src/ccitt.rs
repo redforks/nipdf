@@ -560,15 +560,15 @@ impl LineDecoder for Group4LineDecoder {
                 Ok(Pixels1(pe))
             }
             Group4Code::EndOfBlock => {
-                assert_eq!(
-                    reader.read_huffman(&self.group4_huffman).context(IOSnafu)?,
-                    Group4Code::EndOfBlock
-                );
-                Ok(EndOfBlock)
+                // Read second EndOfBlock code
+                match reader.read_huffman(&self.group4_huffman).context(IOSnafu)? {
+                    Group4Code::EndOfBlock => Ok(EndOfBlock),
+                    _ => Err(DecodeError::InvalidCode),
+                }
             }
             Group4Code::Extension => {
-                let ext_bits: u8 = reader.read(3).context(IOSnafu)?;
-                todo!("Extension ({ext_bits})");
+                let _ext_bits: u8 = reader.read(3).context(IOSnafu)?;
+                Err(DecodeError::InvalidCode) // Extension not supported
             }
             Group4Code::NotDef => Err(DecodeError::InvalidCode),
         }
@@ -707,8 +707,10 @@ impl LineDecoder for Group3_1DLineDecoder {
                     Ok(EndOfBlock)
                 }
             }
-            PictualElement::NotDef(n) => unreachable!("NotDef({n})"),
-            c => todo!("{:?}", c),
+            PictualElement::NotDef(_) | PictualElement::MakeUp(_) => {
+                // Instead of unreachable! or todo!, return an InvalidCode error
+                Err(DecodeError::InvalidCode)
+            }
         }
     }
 }

@@ -985,8 +985,9 @@ impl CIDFontType0FontOp {
         if let NameOrStream::Name(encoding) = font.encoding()? {
             assert_eq!(encoding, "Identity-H");
         } else {
-            todo!("Only IdentityH encoding supported");
+            whatever!("Only IdentityH encoding supported");
         }
+
         let cid_fonts = font.descendant_fonts()?;
         let cid_font = &cid_fonts[0];
         let widths = cid_font.w()?;
