@@ -21,7 +21,7 @@ use log::{error, warn};
 use nipdf_macro::pdf_object;
 use num_traits::ToPrimitive;
 use prescript::{AnyWhatever, Name, sname};
-use snafu::{OptionExt, ResultExt as _};
+use snafu::{OptionExt, ResultExt as _, whatever};
 use std::{
     borrow::{Borrow, Cow},
     cell::LazyCell,
@@ -359,8 +359,8 @@ fn decode_image<'a, M: ImageMetadata>(
                     }
                     DynamicImage::ImageRgba8(img)
                 }
-                _ => todo!(
-                    "unsupported interoperate decoded stream data as image: {:?} {}",
+                _ => whatever!(
+                    "TODO: unsupported interoperate decoded stream data as image: {:?} {}",
                     color_space,
                     img_meta
                         .bits_per_component()
@@ -652,7 +652,7 @@ fn predictor_decode(
             (params.columns * params.colors * params.bits_per_component + 7) as usize / 8,
             (params.colors * params.bits_per_component + 7) as usize / 8,
         ),
-        2 => todo!("predictor 2/tiff"),
+        2 => whatever!("TODO: predictor 2/tiff"),
         _ => {
             error!("Unknown predictor: {}", params.predictor);
             Err(ObjectValueError::FilterDecodeError)
@@ -792,7 +792,7 @@ fn decode_dct<'a>(
                 .whatever_context::<_, ObjectValueError>("Failed to create GrayImage")?,
         ))),
         PixelFormat::L16 => {
-            todo!("Convert to DynamicImage::ImageLuma16")
+            whatever!("TODO: Convert to DynamicImage::ImageLuma16")
             // Problem is jpeg-decoder returns pixels in Vec<u8>, but DynamicImage::ImageLuma16
             // expect Vec<u16> I don't known is {little,big}-endian, or native-endian in
             // pixels
