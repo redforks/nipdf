@@ -389,7 +389,8 @@ pub enum Error {
     #[snafu(display("Parse error: {message}"))]
     ParseError {
         message: String,
-        source: ParserError,
+        #[snafu(source(from(ParserError, Box::new)))]
+        source: Box<ParserError>,
     },
 
     /// Error during cast integer.
@@ -401,6 +402,15 @@ pub enum Error {
 
     #[snafu(display("Required top dict value missing"))]
     RequiredDictValueMissing,
+    #[snafu(whatever, display("{message}"))]
+    GenericError {
+        message: String,
+
+        // Having a `source` is optional, but if it is present, it must
+        // have this specific attribute and type:
+        #[snafu(source(from(Box<dyn std::error::Error + Send + Sync>, Some)))]
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    },
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -879,10 +889,10 @@ impl SIDDict<'_> {
 pub struct TopDictData<'a>(SIDDict<'a>);
 
 impl<'a> TopDictData<'a> {
-    pub fn new(dict: Dict, strings: StringIndex<'a>) -> Self {
+    pub fn new(dict: Dict, strings: StringIndex<'a>) -> Result<Self> {
         let r = Self(SIDDict { dict, strings });
-        assert!(!r.0.0.contains_key(&Operator::ROS), "TODO: CIDFont");
-        r
+        ensure_whatever!(!r.0.0.contains_key(&Operator::ROS), "TODO: CIDFont");
+        Ok(r)
     }
 
     pub fn string_index(&self) -> StringIndex<'_> {
@@ -1039,7 +1049,7 @@ impl<'a> TopDictIndex<'a> {
     }
 
     pub fn get(&self, idx: usize, strings: StringIndex<'a>) -> Result<TopDictData<'a>> {
-        Ok(TopDictData::new(self.0.get_dict(idx)?, strings))
+        TopDictData::new(self.0.get_dict(idx)?, strings)
     }
 }
 
