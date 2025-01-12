@@ -659,7 +659,10 @@ impl<'a, P> Machine<'a, P> {
         match self.pop()? {
             RuntimeValue::Value(Value::Procedure(p)) => {
                 // the function may wrapped in a procedure
-                assert_eq!(ExecState::Ok, self.execute_procedure(&p)?);
+                ensure_whatever!(
+                    ExecState::Ok == self.execute_procedure(&p)?,
+                    "function failed"
+                );
             }
             RuntimeValue::Value(Value::Real(v)) => r.push(v),
             RuntimeValue::Value(Value::Integer(v)) => r.push(v as f32),
@@ -786,9 +789,8 @@ impl<'a, P> Machine<'a, P> {
 
     fn execute_procedure(&mut self, proc: &Rc<RefCell<TokenArray>>) -> MachineResult<ExecState> {
         for token in proc.borrow().iter().cloned() {
-            assert_eq!(
-                self.exec(token)?,
-                ExecState::Ok,
+            ensure_whatever!(
+                self.exec(token)? == ExecState::Ok,
                 "procedure should not return StartEExec or EndEExec"
             );
         }
@@ -1615,8 +1617,8 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
         sname("findresource") => |m: &mut Machine<'_, P>| {
             let category = m.pop()?.name()?;
             let key = m.pop()?.name()?;
-            assert_eq!(key.as_ref(), "CIDInit");
-            assert_eq!(category.as_ref(), "ProcSet", "Other kind of resources not supported");
+            ensure_whatever!(key.as_ref() == "CIDInit", "findresource CIDInit not implemented");
+            ensure_whatever!(category.as_ref() == "ProcSet", "Other kind of resources not supported");
             let proc_set = Rc::new(RefCell::new(m.p.find_proc_set_resource(&key).with_whatever_context(|| format!("find proc_set_resource {}", &key))?));
             m.variable_stack.push(proc_set.clone());
             m.push(proc_set);

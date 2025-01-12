@@ -13,7 +13,7 @@ use either::Either;
 use log::error;
 use once_cell::unsync::OnceCell;
 use phf::phf_map;
-use snafu::{OptionExt as _, ResultExt as _};
+use snafu::{OptionExt as _, ResultExt as _, ensure_whatever};
 use std::{collections::HashMap, rc::Rc, str::from_utf8};
 use tinyvec::ArrayVec;
 
@@ -840,7 +840,7 @@ impl MachinePlugin for CMapMachinePlugin<'_> {
                 },
                 "defineresource" => |m| {
                     let res_category = m.pop()?.name()?;
-                    assert_eq!(res_category, sname("CMap"));
+                    ensure_whatever!(res_category == sname("CMap"), "Not CMap resource");
                     let d = m.pop()?.dict()?;
                     let d_ref = d.borrow();
                     let cmap_name = m.pop()?.name()?;

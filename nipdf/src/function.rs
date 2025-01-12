@@ -259,7 +259,10 @@ impl FunctionDict<'_, '_> {
     }
 
     pub fn post_script_func(&self) -> Result<PostScriptFunction> {
-        assert_eq!(self.function_type()?, Type::PostScriptCalculator);
+        ensure_whatever!(
+            self.function_type()? == Type::PostScriptCalculator,
+            "Type 4 expected"
+        );
         let signature = self.type04_signature()?;
         let resolver = self.d.resolver();
         let stream = resolver
@@ -304,7 +307,7 @@ impl Signature for Type23Signature {
         let Some(range) = self.range.as_ref() else {
             return returns;
         };
-        assert_eq!(returns.len(), range.n());
+        debug_assert_eq!(returns.len(), range.n());
 
         returns
             .iter()
@@ -346,7 +349,7 @@ pub struct Type04Signature {
 
 impl Signature for Type04Signature {
     fn clip_returns(&self, returns: FunctionValue) -> FunctionValue {
-        assert_eq!(returns.len(), self.range.n());
+        debug_assert_eq!(returns.len(), self.range.n());
 
         returns
             .iter()
@@ -488,7 +491,10 @@ impl SampledFunctionDict<'_, '_> {
         let f = self.function_dict()?;
         let bits_per_sample = self.bits_per_sample()?;
         ensure_whatever!(bits_per_sample >= 8, "todo: support bits_per_sample < 8");
-        assert_eq!(InterpolationOrder::Linear, self.order()?);
+        ensure_whatever!(
+            InterpolationOrder::Linear == self.order()?,
+            "todo: support cubic interpolation"
+        );
 
         let size = self.size()?;
         let resolver = self.d.resolver();
@@ -663,7 +669,7 @@ impl InnerFunction for StitchingFunction {
     type Signature = Type23Signature;
 
     fn inner_call(&self, args: TinyVec<[f32; 4]>) -> Result<FunctionValue> {
-        assert_eq!(args.len(), 1);
+        ensure_whatever!(args.len() == 1, "expected one argument");
 
         let x = args[0];
         let function_idx = Self::find_function(&self.bounds, x);

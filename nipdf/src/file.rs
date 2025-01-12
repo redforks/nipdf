@@ -89,7 +89,10 @@ impl ObjectStream {
         encrypt_info: Option<&EncryptInfo>,
     ) -> Result<Self, ObjectValueError> {
         let d = stream.as_dict();
-        assert_eq!(sname("ObjStm"), d[&sname("Type")].name()?);
+        ensure_whatever!(
+            sname("ObjStm") == d[&sname("Type")].name()?,
+            "not object stream"
+        );
         let n = d.get(&sname("N")).map_or(Ok(0), Object::int)? as usize;
         let buf = stream.decode_without_resolve_length(file, encrypt_info)?;
         let r = object_stream_parser(n).parse(buf.as_ref())?;
@@ -652,9 +655,8 @@ fn open_encrypt(
         return Ok(None);
     };
 
-    assert_eq!(
-        sname("Standard"),
-        encrypt.filter().whatever_context("get encrypt filter")?,
+    ensure_whatever!(
+        sname("Standard") == encrypt.filter().whatever_context("get encrypt filter")?,
         "unsupported security handler"
     );
     ensure_whatever!(

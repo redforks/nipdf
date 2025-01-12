@@ -742,7 +742,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
             .whatever_context("font not found in system")?;
         let face = SYSTEM_FONTS.face(id).whatever_context("get system fonts")?;
         debug!("loaded ttf font: {:?}", &face.source);
-        assert_eq!(face.index, 0, "Only one face supported");
+        ensure_whatever!(face.index == 0, "Only one face supported");
         match face.source {
             Source::File(ref path) => {
                 Ok(std::fs::read(path).whatever_context("read ttf file from OS")?)
@@ -853,9 +853,8 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
             FontType::Type0 => {
                 let type0_font = font.type0()?;
                 let descentdant_fonts = type0_font.descendant_fonts()?;
-                assert_eq!(
-                    descentdant_fonts.len(),
-                    1,
+                ensure_whatever!(
+                    descentdant_fonts.len() == 1,
                     "Type0 font should have one descendant fonts"
                 );
                 let descentdant_font = descentdant_fonts
@@ -983,7 +982,10 @@ struct CIDFontType0FontOp {
 impl CIDFontType0FontOp {
     fn new(font: &Type0FontDict<'_, '_>) -> Result<Self> {
         if let NameOrStream::Name(encoding) = font.encoding()? {
-            assert_eq!(encoding, "Identity-H");
+            ensure_whatever!(
+                encoding == "Identity-H",
+                "Only IdentityH encoding supported"
+            );
         } else {
             whatever!("Only IdentityH encoding supported");
         }

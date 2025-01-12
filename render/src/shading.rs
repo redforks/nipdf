@@ -196,9 +196,8 @@ fn build_stops(
                 .exponential_interpolation()
                 .whatever_context("get exponential_interpolation")?;
             let eff = ef.func().whatever_context("get func")?;
-            assert_eq!(
-                ef.n().whatever_context("get n")?,
-                1f32,
+            ensure_whatever!(
+                ef.n().whatever_context("get n")? == 1f32,
                 "Only linear gradient function supported"
             );
             Ok(vec![

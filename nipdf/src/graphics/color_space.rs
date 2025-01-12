@@ -180,7 +180,7 @@ where
                 .as_str()
             {
                 "ICCBased" => {
-                    assert_eq!(2, arr.len());
+                    ensure_whatever!(2 == arr.len(), "ICCBased color space args length");
                     let id = arr[1].reference().whatever_context("get reference")?;
                     let d: ICCStreamDict<'_, '_> = resolver
                         .resolve_pdf_object(id.id().id())
@@ -196,7 +196,7 @@ where
                     }
                 }
                 "Separation" => {
-                    assert_eq!(4, arr.len());
+                    ensure_whatever!(4 == arr.len(), "Separation color space args length");
                     let alternate =
                         ColorSpaceArgs::try_from(&arr[2]).whatever_context("parse alternate")?;
                     let functions: Vec<FunctionDict<'_, '_>> = resolver
@@ -212,7 +212,7 @@ where
                     })))
                 }
                 "Indexed" => {
-                    assert_eq!(4, arr.len());
+                    ensure_whatever!(4 == arr.len(), "Indexed color space args length");
                     let base = ColorSpaceArgs::try_from(&arr[1]).whatever_context("parse base")?;
                     let base: ColorSpace<T> = Self::from_args(&base, resolver, resources)
                         .whatever_context("parse base color space")?;
@@ -225,7 +225,7 @@ where
                     Ok(Self::Indexed(Box::new(IndexedColorSpace { base, data })))
                 }
                 "CalRGB" => {
-                    assert_eq!(2, arr.len());
+                    ensure_whatever!(2 == arr.len(), "CalRGB color space args length");
                     let dict: CalRGBDict<'_, _> = resolver
                         .resolve_pdf_object2(&arr[1])
                         .whatever_context("resolve pdf object")?;
@@ -283,7 +283,7 @@ where
                     })))
                 }
                 "Lab" => {
-                    assert_eq!(2, arr.len());
+                    ensure_whatever!(2 == arr.len(), "Lab color space args length");
                     let dict: LabDict<'_, _> = resolver
                         .resolve_pdf_object2(&arr[1])
                         .whatever_context("resolve pdf object")?;
@@ -297,7 +297,7 @@ where
                     }))
                 }
                 "CalGray" => {
-                    assert_eq!(2, arr.len());
+                    ensure_whatever!(2 == arr.len(), "CalGray color space args length");
                     let dict: CalGrayDict<'_, _> = resolver
                         .resolve_pdf_object2(&arr[1])
                         .whatever_context("resolve pdf object")?;

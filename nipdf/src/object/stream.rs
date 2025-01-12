@@ -373,12 +373,12 @@ fn decode_image<'a, M: ImageMetadata>(
         }
 
         FilterDecodedData::CCITTFaxImage(data) => {
-            assert_eq!(
-                1,
-                img_meta
+            ensure_whatever!(
+                1 == img_meta
                     .bits_per_component()
                     .whatever_context::<_, ObjectValueError>("Failed to get bits per component")?
-                    .whatever_context::<_, ObjectValueError>("Bits per component is None")?
+                    .whatever_context::<_, ObjectValueError>("Bits per component is None")?,
+                "Bits per component is not 1"
             );
             decode_one_bit(
                 img_meta
@@ -582,7 +582,7 @@ fn png_predictor(
     pixel_bytes: usize,
 ) -> Result<Vec<u8>, ObjectValueError> {
     let row_with_flag_bytes = 1 + row_bytes;
-    assert_eq!(buf.len() % row_with_flag_bytes, 0);
+    ensure_whatever!(buf.len() % row_with_flag_bytes == 0, "Invalid row length");
     let first_row = vec![0u8; row_bytes];
     let mut upper_row = &first_row[..];
     let mut r = vec![0u8; buf.len() / row_with_flag_bytes * row_bytes];
@@ -888,7 +888,10 @@ impl<'a: 'b, 'b> TryFrom<&CCITTFaxDecodeParamsDict<'a, 'b>> for Flags {
 
     fn try_from(params: &CCITTFaxDecodeParamsDict<'a, 'b>) -> Result<Self, Self::Error> {
         ensure_whatever!(!params.end_of_line()?, "TODO: handle end_of_line");
-        assert_eq!(0, params.damaged_rows_before_error()?);
+        ensure_whatever!(
+            0 == params.damaged_rows_before_error()?,
+            "TODO: handle damaged_rows_before_error"
+        );
 
         Ok(Flags {
             encoded_byte_align: params.encoded_byte_align()?,
@@ -1206,7 +1209,7 @@ type ColorKey = ([u8; 4], [u8; 4]);
 /// Convert min and max color into ColorSpace, return (min, max) rgba8
 fn color_key_range(range: &Domains, cs: &ColorSpace) -> Result<ColorKey, ObjectValueError> {
     let n = cs.components();
-    assert_eq!(range.n(), n);
+    ensure_whatever!(range.n() == n, "Color key range length mismatch");
     assert!(range.n() <= 4);
 
     let mut min = [0u8; 4];
