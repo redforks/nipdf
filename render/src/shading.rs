@@ -12,7 +12,7 @@ use nipdf::{
     },
     object::PdfObject,
 };
-use snafu::{OptionExt, ResultExt};
+use snafu::{OptionExt as _, ResultExt as _, whatever};
 use std::rc::Rc;
 use tiny_skia::{Color, GradientStop, LinearGradient, RadialGradient, Shader, Transform};
 
@@ -239,8 +239,8 @@ fn build_stops(
             Ok(stops)
         }
         _ => {
-            todo!(
-                "Unsupported function type: {:?}",
+            whatever!(
+                "TODO: Unsupported function type: {:?}",
                 f.function_type().whatever_context("get function type")?
             );
         }

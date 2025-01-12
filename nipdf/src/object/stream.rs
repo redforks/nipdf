@@ -1057,11 +1057,11 @@ fn filter<'a: 'b, 'b>(
 }
 
 fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> Result<DynamicImage> {
-    fn image_color_space(img: &DynamicImage) -> ColorSpace {
+    fn image_color_space(img: &DynamicImage) -> Result<ColorSpace> {
         match img {
-            DynamicImage::ImageLuma8(_) => ColorSpace::DeviceGray,
-            DynamicImage::ImageRgb8(_) => ColorSpace::DeviceRGB,
-            _ => todo!("unsupported image color space: {:?}", img),
+            DynamicImage::ImageLuma8(_) => Ok(ColorSpace::DeviceGray),
+            DynamicImage::ImageRgb8(_) => Ok(ColorSpace::DeviceRGB),
+            _ => whatever!("TODO: unsupported image color space: {:?}", img),
         }
     }
 
@@ -1081,10 +1081,14 @@ fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> Result<Dyn
                 sep.as_ref(),
             )?));
         }
-        todo!("transform image color space from {:?} to {:?}", from, to);
+        whatever!(
+            "TODO: transform image color space from {:?} to {:?}",
+            from,
+            to
+        );
     }
 
-    let from = image_color_space(&img);
+    let from = image_color_space(&img)?;
     if &from == to {
         return Ok(img);
     }

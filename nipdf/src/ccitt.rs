@@ -372,7 +372,12 @@ fn build_run_huffman(algo: Algorithm) -> RunHuffmanTree {
             black_codes.push((PictualElement::NotDef(3),    vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 1]));
             black_codes.push((PictualElement::TwelveZeros,    vec![0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0]));
         }
-        Algorithm::Group3_2D(_) => todo!(),
+        Algorithm::Group3_2D(_) => {
+            #[allow(clippy::todo)] // 尚未找到这样的使用这个特性的 pdf 文件
+            {
+                todo!()
+            }
+        },
         Algorithm::Group4 => { },
     }
 

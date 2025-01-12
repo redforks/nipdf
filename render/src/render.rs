@@ -32,7 +32,7 @@ use nipdf::{
 };
 use num_traits::ToPrimitive;
 use prescript::{Name, ParserError};
-use snafu::{OptionExt, ResultExt};
+use snafu::{OptionExt, ResultExt, whatever};
 use std::{
     borrow::Cow,
     cell::{Ref, RefCell},
@@ -439,7 +439,7 @@ impl State {
                     res.text_knockout_flag()
                         .whatever_context("get text knockout flag")?
                         .whatever_context("unwrap text knockout flag")?,
-                ),
+                )?,
                 "FL" => self.set_flatness(
                     res.flatness()
                         .whatever_context("get flatness")?
@@ -509,9 +509,9 @@ impl State {
         Ok(())
     }
 
-    fn set_text_knockout_flag(&mut self, knockout: bool) {
+    fn set_text_knockout_flag(&mut self, knockout: bool) -> Result<()> {
         self.text_object.knockout = knockout;
-        todo!("text knockout");
+        whatever!("TODO: impl text knockout");
     }
 
     pub fn end_text_object(&mut self) -> Result<()> {
@@ -869,7 +869,7 @@ impl<'a, 'c> Render<'a, 'c> {
             Operation::SetTextRenderingMode(mode) => {
                 self.text_object_mut()?.set_text_rendering_mode(mode);
             }
-            Operation::SetTextRise(rise) => self.text_object_mut()?.set_text_rise(rise),
+            Operation::SetTextRise(rise) => self.text_object_mut()?.set_text_rise(rise)?,
 
             // Text Positioning Operations
             Operation::MoveTextPosition(p) => self.text_object_mut()?.move_text_position(p),
@@ -963,7 +963,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 self.paint_inline_image(&inline_image)?;
             }
 
-            _ => todo!("{:?}", op),
+            _ => whatever!("unimplemented operation: {:?}", op),
         }
         Ok(())
     }
@@ -1336,7 +1336,7 @@ impl<'a, 'c> Render<'a, 'c> {
         {
             XObjectType::Image => self.paint_image_x_object(x_object),
             XObjectType::Form => self.paint_form_x_object(x_object),
-            t => todo!("{:?}", t),
+            t => whatever!("TODO: {:?}", t),
         }
     }
 
@@ -1767,7 +1767,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 text_clip_path.path_builder()?.push_path(&path);
             }
             _ => {
-                todo!("Unsupported text rendering mode: {:?}", render_mode);
+                whatever!("TODO: Unsupported text rendering mode: {:?}", render_mode);
             }
         }
         Ok(())
@@ -2041,10 +2041,11 @@ impl TextObject {
         self.render_mode = mode;
     }
 
-    fn set_text_rise(&mut self, rise: f32) {
+    fn set_text_rise(&mut self, rise: f32) -> Result<()> {
         self.rise = rise;
         if rise != 0. {
-            todo!("text rise");
+            whatever!("TODO: text rise");
         }
+        Ok(())
     }
 }
