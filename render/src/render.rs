@@ -781,9 +781,7 @@ impl<'a, 'c> Render<'a, 'c> {
     }
 
     pub(crate) fn exec(&mut self, op: Operation) {
-        if let Err(e) = self._exec(op) {
-            warn!("exec render operation failed: {:?}", e);
-        }
+        log_err(self._exec(op));
     }
 
     fn _exec(&mut self, op: Operation) -> Result<()> {
