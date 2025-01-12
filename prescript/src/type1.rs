@@ -4,7 +4,7 @@ use crate::{
     parser::{header, parse_error_to_whatever},
     sname,
 };
-use snafu::{OptionExt as _, ResultExt as _, whatever};
+use snafu::{OptionExt as _, ResultExt as _, ensure_whatever, whatever};
 use std::{array::from_fn, borrow::Cow};
 use winnow::{
     Parser,
@@ -46,7 +46,7 @@ impl Font {
     pub fn parse(data: &[u8]) -> Result<Self> {
         let data = normalize_pfb(data)?;
         let header = parse_header(&data)?;
-        assert!(header.spec_ver.starts_with("1."), "Not Type1 font");
+        ensure_whatever!(header.spec_ver.starts_with("1."), "Not Type1 font");
 
         let mut machine = Machine::new(&data);
         let encoding = machine

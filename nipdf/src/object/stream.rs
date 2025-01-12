@@ -21,7 +21,7 @@ use log::{error, warn};
 use nipdf_macro::pdf_object;
 use num_traits::ToPrimitive;
 use prescript::{AnyWhatever, Name, sname};
-use snafu::{OptionExt, ResultExt as _, whatever};
+use snafu::{OptionExt, ResultExt as _, ensure_whatever, whatever};
 use std::{
     borrow::{Borrow, Cow},
     cell::LazyCell,
@@ -773,7 +773,7 @@ fn decode_dct<'a>(
     buf: &Cow<'a, [u8]>,
     params: Option<&Dictionary>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
-    assert!(
+    ensure_whatever!(
         params.is_none(),
         "TODO: handle params of {}",
         FILTER_DCT_DECODE
@@ -813,7 +813,7 @@ fn decode_jpx<'a>(
     buf: &Cow<'a, [u8]>,
     params: Option<&Dictionary>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
-    assert!(
+    ensure_whatever!(
         params.is_none(),
         "TODO: handle params of {}",
         FILTER_JPX_DECODE
@@ -887,7 +887,7 @@ impl<'a: 'b, 'b> TryFrom<&CCITTFaxDecodeParamsDict<'a, 'b>> for Flags {
     type Error = AnyWhatever;
 
     fn try_from(params: &CCITTFaxDecodeParamsDict<'a, 'b>) -> Result<Self, Self::Error> {
-        assert!(!params.end_of_line()?);
+        ensure_whatever!(!params.end_of_line()?, "TODO: handle end_of_line");
         assert_eq!(0, params.damaged_rows_before_error()?);
 
         Ok(Flags {
@@ -971,14 +971,14 @@ fn decode_ascii_hex(buf: &[u8]) -> Result<Vec<u8>, ObjectValueError> {
 }
 
 fn decode_ascii85(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, ObjectValueError> {
-    assert!(params.is_none());
+    ensure_whatever!(params.is_none(), "TODO: handle params of ascii85");
     handle_filter_error(prescript::ascii85::decode(buf), &FILTER_ASCII85_DECODE)
 }
 
-fn decode_run_length(buf: &[u8], params: Option<&Dictionary>) -> Vec<u8> {
-    assert!(params.is_none());
+fn decode_run_length(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, ObjectValueError> {
+    ensure_whatever!(params.is_none(), "TODO: handle params of run length");
     use crate::run_length::decode;
-    decode(buf)
+    Ok(decode(buf))
 }
 
 fn decode_ccitt(
@@ -1042,7 +1042,9 @@ fn filter<'a: 'b, 'b>(
         .map(FilterDecodedData::CCITTFaxImage),
         S_FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(FilterDecodedData::bytes),
         S_FILTER_ASCII_HEX_DECODE => decode_ascii_hex(&buf).map(FilterDecodedData::bytes),
-        S_FILTER_RUN_LENGTH_DECODE => Ok(FilterDecodedData::bytes(decode_run_length(&buf, params))),
+        S_FILTER_RUN_LENGTH_DECODE => {
+            Ok(FilterDecodedData::bytes(decode_run_length(&buf, params)?))
+        }
         S_FILTER_JPX_DECODE => decode_jpx(&buf, params),
         S_FILTER_LZW_DECODE => decode_lzw(
             &buf,

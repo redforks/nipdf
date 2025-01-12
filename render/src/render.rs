@@ -32,7 +32,7 @@ use nipdf::{
 };
 use num_traits::ToPrimitive;
 use prescript::{Name, ParserError};
-use snafu::{OptionExt, ResultExt, whatever};
+use snafu::{OptionExt, ResultExt, ensure_whatever, whatever};
 use std::{
     borrow::Cow,
     cell::{Ref, RefCell},
@@ -1654,11 +1654,11 @@ impl<'a, 'c> Render<'a, 'c> {
             .map_err(winnow::error::ParseError::into_inner)
             .whatever_context("parse tile pattern operations")?;
         let b_box = tile.b_box().whatever_context("get tile b_box")?;
-        assert!(
+        ensure_whatever!(
             tile.x_step().whatever_context("get tile x_step")? > 0.0,
             "negative x_step not supported"
         );
-        assert!(
+        ensure_whatever!(
             tile.y_step().whatever_context("get tile y_step")? > 0.0,
             "negative y_step not supported"
         );

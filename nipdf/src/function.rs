@@ -69,8 +69,8 @@ impl TryFrom<&Object> for Domains<f32> {
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
         let arr = obj.arr()?;
+        ensure_whatever!(arr.len() % 2 == 0, "even number of elements expected");
         let mut domains = Vec::with_capacity(arr.len() / 2);
-        assert!(arr.len() % 2 == 0);
         arr.chunks_exact(2)
             .map(|chunk| {
                 Ok::<_, ObjectValueError>(Domain::new(chunk[0].as_number()?, chunk[1].as_number()?))
@@ -88,7 +88,7 @@ impl TryFrom<&Object> for Domains<u32> {
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
         let arr = obj.arr()?;
         let mut domains = Vec::with_capacity(arr.len() / 2);
-        assert!(arr.len() % 2 == 0);
+        ensure_whatever!(arr.len() % 2 == 0, "even number of elements expected");
         arr.chunks_exact(2)
             .map(|chunk| {
                 Ok::<_, ObjectValueError>(Domain::new(
@@ -118,7 +118,7 @@ trait InnerFunction {
         let args = self.signature().clip_args(args);
         let r = self.inner_call(args)?;
         for v in &r {
-            assert!(!v.is_nan(), "{:?}", self.signature());
+            ensure_whatever!(!v.is_nan(), "NaN value");
         }
         Ok(self.signature().clip_returns(r))
     }
@@ -487,7 +487,7 @@ impl SampledFunctionDict<'_, '_> {
     pub fn func(&self) -> Result<SampledFunction> {
         let f = self.function_dict()?;
         let bits_per_sample = self.bits_per_sample()?;
-        assert!(bits_per_sample >= 8, "todo: support bits_per_sample < 8");
+        ensure_whatever!(bits_per_sample >= 8, "todo: support bits_per_sample < 8");
         assert_eq!(InterpolationOrder::Linear, self.order()?);
 
         let size = self.size()?;

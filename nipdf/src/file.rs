@@ -15,7 +15,7 @@ use log::error;
 use nipdf_macro::pdf_object;
 use once_cell::unsync::OnceCell;
 use prescript::{Name, ParserError, sname};
-use snafu::{OptionExt as _, ResultExt as _, Snafu, whatever};
+use snafu::{OptionExt as _, ResultExt as _, Snafu, ensure_whatever, whatever};
 use std::iter::repeat_with;
 use winnow::{
     Located, Parser as _,
@@ -657,7 +657,7 @@ fn open_encrypt(
         encrypt.filter().whatever_context("get encrypt filter")?,
         "unsupported security handler"
     );
-    assert!(
+    ensure_whatever!(
         encrypt
             .sub_filter()
             .whatever_context("get encrypt sub filter")?

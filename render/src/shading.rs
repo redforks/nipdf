@@ -12,7 +12,7 @@ use nipdf::{
     },
     object::PdfObject,
 };
-use snafu::{OptionExt as _, ResultExt as _, whatever};
+use snafu::{OptionExt as _, ResultExt as _, ensure_whatever, whatever};
 use std::rc::Rc;
 use tiny_skia::{Color, GradientStop, LinearGradient, RadialGradient, Shader, Transform};
 
@@ -181,7 +181,7 @@ fn build_stops(
     domain: Domain,
     mut f: Vec<FunctionDict<'_, '_>>,
 ) -> Result<Vec<(f32, Color)>> {
-    assert!(f.len() == 1, "todo: support functions");
+    ensure_whatever!(f.len() == 1, "todo: support functions");
 
     let f = f.pop().whatever_context("get last function")?;
     fn create_stop<F: Function>(cs: &ColorSpace, f: &F, x: f32) -> Result<(f32, Color)> {

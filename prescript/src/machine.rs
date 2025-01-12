@@ -5,7 +5,7 @@ use crate::{
 };
 use educe::Educe;
 use either::Either;
-use snafu::{FromString as _, OptionExt as _, ResultExt as _, Snafu, ensure};
+use snafu::{FromString as _, OptionExt as _, ResultExt as _, Snafu, ensure, ensure_whatever};
 use std::{
     cell::{Ref, RefCell},
     collections::HashMap,
@@ -530,7 +530,7 @@ impl<'a> CurrentFile<'a> {
     }
 
     pub fn start_decrypt(&mut self) -> Result<()> {
-        assert!(self.decrypted.is_none());
+        ensure_whatever!(self.decrypted.is_none(), "already decrypting");
         self.skip_white_space()?;
         let remains = &self.data[self.remains_pos..];
         let decrypted;
@@ -542,7 +542,7 @@ impl<'a> CurrentFile<'a> {
     }
 
     pub fn stop_decrypt(&mut self) -> Result<()> {
-        assert!(self.decrypted.is_some());
+        ensure_whatever!(self.decrypted.is_some(), "not decrypting");
         self.skip_white_space()?;
         self.remains_pos += if self.hex_form {
             self.decrypted_pos * 2

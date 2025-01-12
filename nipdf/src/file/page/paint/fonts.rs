@@ -26,7 +26,7 @@ use prescript::{
     cmap::{CMap, CMapRegistry},
     name, sname,
 };
-use snafu::{OptionExt, ResultExt, whatever};
+use snafu::{OptionExt, ResultExt, ensure_whatever, whatever};
 use std::{collections::HashMap, ops::RangeInclusive, rc::Rc, sync::LazyLock};
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
 use winnow::Parser as _;
@@ -1031,9 +1031,9 @@ impl FontOp for CIDFontType0FontOp {
 struct CIDToGIDMap(Box<[u8]>);
 
 impl CIDToGIDMap {
-    pub fn new(data: Vec<u8>) -> Self {
-        assert!(data.len() % 2 == 0);
-        Self(data.into())
+    pub fn new(data: Vec<u8>) -> Result<Self> {
+        ensure_whatever!(data.len() % 2 == 0, "Invalid CIDToGIDMap data length");
+        Ok(Self(data.into()))
     }
 
     pub fn to_gid(&self, ch: usize) -> Option<u16> {
@@ -1066,7 +1066,7 @@ impl<'a> CIDFontType2FontOp<'a> {
     ) -> Result<Self> {
         let cmap = match font.encoding()? {
             NameOrStream::Name(encoding_name) => {
-                assert!(
+                ensure_whatever!(
                     !(encoding_name.ends_with("-V") || encoding_name == "V"),
                     "todo: Vertical write mode '{}'",
                     encoding_name
@@ -1081,7 +1081,7 @@ impl<'a> CIDFontType2FontOp<'a> {
                     .transpose()?
             }
             NameOrStream::Stream(s) => {
-                assert!(
+                ensure_whatever!(
                     font.cmap_stream_dict()?.use_cmap()?.is_none(),
                     "font_dict.use_cmap not supported"
                 );
@@ -1100,7 +1100,7 @@ impl<'a> CIDFontType2FontOp<'a> {
                 s.decode(cid_font.resolver())
                     .whatever_context("decode stream")?
                     .into_owned(),
-            )),
+            )?),
         };
         let widths = cid_font.w()?;
 

@@ -218,7 +218,10 @@ where
                         .whatever_context("parse base color space")?;
                     let hival = arr[2].int().whatever_context("convert hival")?;
                     let data = resolve_index_data(&arr[3], resolver)?;
-                    assert!(data.len() >= (hival + 1) as usize * base.components());
+                    ensure_whatever!(
+                        data.len() >= (hival + 1) as usize * base.components(),
+                        "Indexed color space data length not match"
+                    );
                     Ok(Self::Indexed(Box::new(IndexedColorSpace { base, data })))
                 }
                 "CalRGB" => {
@@ -238,7 +241,7 @@ where
                     })))
                 }
                 "Pattern" => {
-                    assert!(arr.len() <= 2);
+                    ensure_whatever!(arr.len() <= 2, "Pattern color space args length");
                     let base = arr
                         .get(1)
                         .map(|args| {
@@ -250,7 +253,7 @@ where
                     Ok(Self::Pattern(Box::new(PatternColorSpace(base))))
                 }
                 "DeviceN" => {
-                    assert!(arr.len() == 4 || arr.len() == 5);
+                    ensure_whatever!(arr.len() == 4 || arr.len() == 5, "DeviceN color space args");
                     let names = arr[1].arr().whatever_context("get names")?;
 
                     // A DeviceN color space whose component colorant names are all None shall
@@ -416,7 +419,10 @@ pub struct DeviceRGB;
 
 impl<T: ColorComp> ColorSpaceTrait<T> for DeviceRGB {
     fn to_rgba(&self, color: &[T]) -> Result<[T; 4]> {
-        assert!(color.len() > 2);
+        ensure_whatever!(
+            color.len() > 2,
+            "DeviceRGB color must have at least 3 components"
+        );
         Ok([color[0], color[1], color[2], T::max_color()])
     }
 
@@ -776,7 +782,10 @@ where
         // no need to do conversion to rgb, it is already rgb
         // gamma and other settings are used for converting to other color space
         // such as CMYK etc.
-        assert!(color.len() > 2);
+        ensure_whatever!(
+            color.len() > 2,
+            "CalRGB color must have at least 3 components"
+        );
         Ok([color[0], color[1], color[2], T::max_color()])
     }
 
@@ -831,7 +840,7 @@ where
         }
 
         // Convert Lab color to RGB color
-        assert!(color.len() > 2);
+        ensure_whatever!(color.len() > 2, "Lab color must have at least 3 components");
 
         let li = color[0].map_input(self.ranges[0]);
         let ai = color[1].map_input(self.ranges[1]);
@@ -885,7 +894,10 @@ where
     f32: ColorCompConvertTo<T>,
 {
     fn to_rgba(&self, color: &[T]) -> Result<[T; 4]> {
-        assert!(!color.is_empty());
+        ensure_whatever!(
+            !color.is_empty(),
+            "CalGray color must have at least 1 component"
+        );
         let a: f32 = color[0].into_color_comp();
         let ag = a.powf(self.gamma);
         let [xw, yw, zw] = self.white_point;
