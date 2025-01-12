@@ -56,10 +56,12 @@ pub type Result<T, E = AnyWhatever> = std::result::Result<T, E>;
 
 #[derive(Snafu, Debug)]
 pub enum ParserError {
+    #[snafu(display("{}/{:?}", kind, context))]
     Leaf {
         kind: ErrorKind,
         context: Vec<&'static str>,
     },
+    #[snafu(display("{}/{:?}", kind, context))]
     Inter {
         kind: ErrorKind,
         context: Vec<&'static str>,
