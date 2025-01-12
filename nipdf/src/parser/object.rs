@@ -326,7 +326,7 @@ where
         + FromExternalError<S, ParseIntError>,
 {
     (
-        object_id(),
+        object_id().context("object id"),
         preceded(
             ws_prefixed0(b"obj".as_slice()),
             wsc_prefixed0(indirect_object_content),

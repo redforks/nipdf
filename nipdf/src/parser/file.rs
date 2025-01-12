@@ -6,7 +6,7 @@ use crate::{
         Dictionary, Entry, FilePos, Frame, FrameSet, IndirectObjectDef, ObjectValueError,
         RuntimeObjectId, XRefSection,
     },
-    parser::object::indirect_object_def,
+    parser::{object::indirect_object_def, ws_prefixed0},
 };
 use hex::FromHexError;
 use log::{info, warn};
@@ -251,7 +251,9 @@ where
         + AddContext<S>,
 {
     let start = input.checkpoint();
-    let IndirectObjectDef(_, s) = indirect_object_def::<S, E>().parse_next(input)?;
+    let IndirectObjectDef(_, s) = indirect_object_def::<S, E>()
+        .context("read xref stream")
+        .parse_next(input)?;
     let s = s
         .stream()
         .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?
@@ -349,10 +351,10 @@ where
         let mut frame = (alt((
             (
                 xref().context("xref"),
-                preceded(
+                ws_prefixed0(preceded(
                     terminated(b"trailer".as_slice(), eol3()),
                     terminated(dict, eol3()),
-                )
+                ))
                 .context("trailer"),
             ),
             parse_xref_stream.context("xref stream"),
@@ -430,5 +432,13 @@ mod tests {
         let buf = std::fs::read(test_file("sample_files/bizarre/imm5257b_1.pdf")).unwrap();
         let frameset = parse_frame_set::<ContextError<&'static str>>(&mut &buf[..]).unwrap();
         assert_eq!(2, frameset.len());
+    }
+
+    #[test]
+    fn whitespace_before_trailer() {
+        // 这个文件的 trailer 行之前有个多余的空行
+        let buf = std::fs::read(test_file("pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf")).unwrap();
+        let frameset = parse_frame_set::<ContextError<&'static str>>(&mut &buf[..]).unwrap();
+        assert_eq!(1, frameset.len());
     }
 }
