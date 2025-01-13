@@ -417,6 +417,27 @@ impl<'a> ObjectResolver<'a> {
         self.objects.insert(id.into(), OnceCell::with_value(v));
     }
 
+    /// Resolve object with id `id`.
+    pub fn resolve(&self, id: impl Into<RuntimeObjectId>) -> Result<&Object, ObjectValueError> {
+        let id = id.into();
+        self.objects
+            .get(&id)
+            .ok_or(ObjectValueError::ObjectIDNotFound { id })?
+            .get_or_try_init(|| {
+                self.xref_table
+                    .parse_object(self.buf, id, self.encrypt_info())
+            })
+    }
+
+    // Add the methods that were in the Resolver trait directly
+    pub fn resolve_reference<'b>(&'b self, v: &'b Object) -> Result<&'b Object, ObjectValueError> {
+        if let Object::Reference(id) = v {
+            self.resolve(id.id().id())
+        } else {
+            Ok(v)
+        }
+    }
+
     /// Resolve pdf object from object, if object is dict, use it as pdf object,
     /// if object is reference, resolve it
     pub fn resolve_pdf_object2<'b, T: PdfObject<'a, 'b>>(
@@ -434,23 +455,9 @@ impl<'a> ObjectResolver<'a> {
         id: impl Into<RuntimeObjectId>,
     ) -> Result<T, ObjectValueError> {
         let id = id.into();
-        let obj = self
-            .resolve(id)
-            .with_whatever_context::<_, _, ObjectValueError>(|_| format!("resolve object: {}", id))?
-            .as_dict()?;
-        T::new(Some(id), obj, self)
-    }
-
-    /// Resolve object with id `id`.
-    pub fn resolve(&self, id: impl Into<RuntimeObjectId>) -> Result<&Object, ObjectValueError> {
-        let id = id.into();
-        self.objects
-            .get(&id)
-            .ok_or(ObjectValueError::ObjectIDNotFound { id })?
-            .get_or_try_init(|| {
-                self.xref_table
-                    .parse_object(self.buf, id, self.encrypt_info())
-            })
+        let obj = self.resolve(id)?;
+        let dict = obj.as_dict()?;
+        T::new(Some(id), dict, self)
     }
 
     /// Return file data start from stream id indirect object till the file end
@@ -546,15 +553,6 @@ impl<'a> ObjectResolver<'a> {
             }
             _ => Err(e),
         })
-    }
-
-    // Add the methods that were in the Resolver trait directly
-    pub fn resolve_reference<'b>(&'b self, v: &'b Object) -> Result<&'b Object, ObjectValueError> {
-        if let Object::Reference(id) = v {
-            self.resolve(id.id().id())
-        } else {
-            Ok(v)
-        }
     }
 
     pub(crate) fn do_resolve_container_value<'b: 'c, 'c>(
