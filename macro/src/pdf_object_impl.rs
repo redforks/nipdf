@@ -147,6 +147,11 @@ fn nested<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &
     has_attr("nested", rt, attrs)
 }
 
+// Return left means Option<T>, right means T, Return None means not root_nested
+fn root_nested<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
+    has_attr("root_nested", rt, attrs)
+}
+
 /// Return true if `#[one_or_more]` attribute defined.
 fn one_or_more(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|attr| attr.path().is_ident("one_or_more"))
@@ -154,6 +159,10 @@ fn one_or_more(attrs: &[Attribute]) -> bool {
 
 fn self_as<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
     has_attr("self_as", rt, attrs)
+}
+
+fn root_self_as<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
+    has_attr("root_self_as", rt, attrs)
 }
 
 /// Return left means Option<T>, right means T, Return None means `try_from` attr not defined.
@@ -320,6 +329,13 @@ fn doc(attrs: &[Attribute]) -> Option<String> {
         }
         None
     })
+}
+
+/// Return true if `#[root_pdf_object]` attribute defined.
+fn is_root_pdf_object(attrs: &[Attribute]) -> bool {
+    attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("root_pdf_object"))
 }
 
 pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -551,6 +567,29 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     }
                 },
             )
+        } else if let Some(root_nested_type) = root_nested(rt, attrs) {
+            gen_option_method(
+                root_nested_type,
+                &key,
+                |ty| {
+                    let type_name = remove_generic(ty);
+                    quote! { self.d.opt_resolve_root_pdf_object::<#type_name<'_, '_>>(&prescript::sname(#key)) }
+                },
+                |ty| {
+                    if is_vec(ty) {
+                        if one_or_more(attrs) {
+                            quote! { self.d.resolve_one_or_more_root_pdf_object(&prescript::sname(#key)) }
+                        } else {
+                            quote! { self.d.resolve_root_pdf_object_array(&prescript::sname(#key)) }
+                        }
+                    } else if is_map(ty) {
+                        quote! { self.d.resolve_root_pdf_object_map(&prescript::sname(#key)) }
+                    } else {
+                        let type_name = remove_generic(ty);
+                        quote! { self.d.resolve_root_pdf_object::<#type_name<'_, '_>>(&prescript::sname(#key)) }
+                    }
+                },
+            )
         } else if let Some(try_from_type) = try_from(rt, attrs) {
             gen_option_method(
                 try_from_type,
@@ -568,7 +607,16 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 &key,
                 |_| unreachable!("self_as methods never return Option"),
                 |ty| {
-                    quote! { <#ty as crate::object::PdfObject::<'a, 'b>>::new(self.id, self.d.dict(), self.d.resolver()) }
+                    quote! { <#ty as crate::object::PdfObject::<'a, 'b>>::new(self.d.dict(), self.d.resolver()) }
+                },
+            )
+        } else if let Some(rt) = root_self_as(rt, attrs) {
+            gen_option_method(
+                rt,
+                &key,
+                |_| unreachable!("root_self_as methods never return Option"),
+                |ty| {
+                    quote! { <#ty as crate::object::RootPdfObject::<'a, 'b>>::new(self.id, self.d.dict(), self.d.resolver()) }
                 },
             )
         } else {
@@ -605,34 +653,62 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     let vis = &def.vis;
-    let tokens = quote! {
-        #[derive(Clone, Debug)]
-        #vis struct #struct_name<'a, 'b> {
-            d: crate::object::SchemaDict<'a, 'b, #valid_ty>,
-            id: Option<crate::object::RuntimeObjectId>,
+    let tokens = if is_root_pdf_object(def.attrs.as_slice()) {
+        quote! {
+            #[derive(Clone, Debug)]
+            #vis struct #struct_name<'a, 'b> {
+                id: crate::object::RuntimeObjectId,
+                d: crate::object::SchemaDict<'a, 'b, #valid_ty>,
+            }
+
+            impl<'a, 'b> crate::object::RootPdfObject<'a, 'b> for #struct_name<'a, 'b> {
+                fn new(id: crate::object::RuntimeObjectId, dict: &'b crate::object::Dictionary, r: &'b crate::file::ObjectResolver<'a>) -> Result<Self, crate::object::ObjectValueError> {
+                    let d = crate::object::SchemaDict::new(dict, r, #valid_arg)?;
+                    Ok(Self { id, d })
+                }
+
+                fn id(&self) -> crate::object::RuntimeObjectId {
+                    self.id
+                }
+
+                fn dict(&self) -> &crate::object::Dictionary {
+                    self.d.dict()
+                }
+
+                fn resolver(&self) -> &'b crate::file::ObjectResolver<'a> {
+                    self.d.resolver()
+                }
+            }
+
+            impl<'a, 'b> #struct_name<'a, 'b> {
+                #(#methods)*
+            }
         }
-
-        impl<'a, 'b> crate::object::PdfObject<'a, 'b> for #struct_name<'a, 'b> {
-            fn new(id: Option<crate::object::RuntimeObjectId>, dict: &'b crate::object::Dictionary, r: &'b crate::file::ObjectResolver<'a>) -> Result<Self, crate::object::ObjectValueError> {
-                let d = crate::object::SchemaDict::new(dict, r, #valid_arg)?;
-                Ok(Self { d, id})
+    } else {
+        quote! {
+            #[derive(Clone, Debug)]
+            #vis struct #struct_name<'a, 'b> {
+                d: crate::object::SchemaDict<'a, 'b, #valid_ty>,
             }
 
-            fn dict(&self) -> &crate::object::Dictionary {
-                self.d.dict()
+            impl<'a, 'b> crate::object::PdfObject<'a, 'b> for #struct_name<'a, 'b> {
+                fn new(dict: &'b crate::object::Dictionary, r: &'b crate::file::ObjectResolver<'a>) -> Result<Self, crate::object::ObjectValueError> {
+                    let d = crate::object::SchemaDict::new(dict, r, #valid_arg)?;
+                    Ok(Self { d })
+                }
+
+                fn dict(&self) -> &crate::object::Dictionary {
+                    self.d.dict()
+                }
+
+                fn resolver(&self) -> &'b crate::file::ObjectResolver<'a> {
+                    self.d.resolver()
+                }
             }
 
-            fn id(&self) -> Option<crate::object::RuntimeObjectId> {
-                self.id
+            impl<'a, 'b> #struct_name<'a, 'b> {
+                #(#methods)*
             }
-
-            fn resolver(&self) -> &'b crate::file::ObjectResolver<'a> {
-                self.d.resolver()
-            }
-        }
-
-        impl<'a, 'b> #struct_name<'a, 'b> {
-            #(#methods)*
         }
     };
 

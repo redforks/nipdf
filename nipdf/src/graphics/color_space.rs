@@ -200,7 +200,7 @@ where
                     let alternate =
                         ColorSpaceArgs::try_from(&arr[2]).whatever_context("parse alternate")?;
                     let function: FunctionDict<'_, '_> = resolver
-                        .resolve_pdf_object2(&arr[3])
+                        .resolve_root_pdf_object2(&arr[3])
                         .whatever_context("parse tintTransform function")?;
                     let base = Self::from_args(&alternate, resolver, resources)?;
                     Ok(Self::Separation(Box::new(SeparationColorSpace {
@@ -269,7 +269,7 @@ where
                     let alternate = ColorSpaceArgs::try_from(&arr[2])
                         .whatever_context("parse alternate colorspace")?;
                     let f: FunctionDict<'_, '_> = resolver
-                        .resolve_pdf_object2(&arr[3])
+                        .resolve_root_pdf_object2(&arr[3])
                         .whatever_context("resolve pdf object")?;
                     let base = Self::from_args(&alternate, resolver, resources)?;
                     Ok(Self::DeviceN(Box::new(DeviceNColorSpace {

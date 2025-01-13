@@ -284,7 +284,7 @@ impl EncodingParser<'_, '_, '_> {
         Ok(Some(match encoding {
             NameOrDictByRef::Name(name) => (Some(name.clone()), None),
             NameOrDictByRef::Dict(d) => {
-                let encoding_dict = EncodingDict::new(None, d, self.0.resolver())
+                let encoding_dict = EncodingDict::new(d, self.0.resolver())
                     .whatever_context("create EncodingDict")?;
                 let encoding_name = encoding_dict.base_encoding()?;
                 (encoding_name, encoding_dict.differences()?)

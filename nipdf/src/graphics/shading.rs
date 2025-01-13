@@ -80,7 +80,7 @@ pub trait AxialShadingDictTrait {
     fn domain(&self) -> Domain;
 
     #[one_or_more]
-    #[nested]
+    #[root_nested]
     fn function(&self) -> Vec<FunctionDict<'a, 'b>>;
 
     #[try_from]
@@ -135,7 +135,7 @@ pub trait RadialShadingDictTrait {
     fn domain(&self) -> Domain;
 
     #[one_or_more]
-    #[nested]
+    #[root_nested]
     fn function(&self) -> Vec<FunctionDict<'a, 'b>>;
 
     #[try_from]

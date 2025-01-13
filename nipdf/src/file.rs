@@ -5,7 +5,7 @@ use crate::{
     file::encrypt::Authorizer,
     object::{
         Array, Dictionary, Entry, FrameSet, HexString, LiteralString, Object, ObjectId,
-        ObjectValueError, PdfObject, RuntimeObjectId, Stream, TrailerDict,
+        ObjectValueError, PdfObject, RootPdfObject, RuntimeObjectId, Stream, TrailerDict,
     },
     parser::{self, header_parser, indirect_object_def, parse_frame_set, wsc_prefixed0, wsc0},
 };
@@ -366,6 +366,14 @@ impl EncryptInfo {
     }
 }
 
+pub trait ObjectKind {}
+
+pub struct Root;
+pub struct Embedded;
+
+impl ObjectKind for Root {}
+impl ObjectKind for Embedded {}
+
 /// Object impl this trait to resolve from ObjectResolver.
 pub trait RootObjectResolveable<'a, 'b>
 where
@@ -377,7 +385,20 @@ where
     ) -> Result<Self, ObjectValueError>;
 }
 
-impl<'a, 'b, T> RootObjectResolveable<'a, 'b> for T
+impl<'a, 'b, T> RootObjectResolveable<'a, 'b> for (T, Root)
+where
+    T: RootPdfObject<'a, 'b> + 'b + 'a,
+{
+    fn resolve(
+        resolver: &'b ObjectResolver<'a>,
+        id: RuntimeObjectId,
+    ) -> Result<Self, ObjectValueError> {
+        let o = resolver.resolve(id)?;
+        Ok((T::new(id, o.as_dict()?, resolver)?, Root))
+    }
+}
+
+impl<'a, 'b, T> RootObjectResolveable<'a, 'b> for (T, Embedded)
 where
     T: PdfObject<'a, 'b> + 'b + 'a,
 {
@@ -386,7 +407,7 @@ where
         id: RuntimeObjectId,
     ) -> Result<Self, ObjectValueError> {
         let o = resolver.resolve(id)?;
-        T::new(Some(id), o.as_dict()?, resolver)
+        Ok((T::new(o.as_dict()?, resolver)?, Embedded))
     }
 }
 
@@ -464,24 +485,34 @@ impl<'a> ObjectResolver<'a> {
 
     /// Resolve pdf object from object, if object is dict, use it as pdf object,
     /// if object is reference, resolve it
-    pub fn resolve_pdf_object2<'b, T>(&'b self, o: &'b Object) -> Result<T, ObjectValueError>
+    pub fn resolve_root_pdf_object2<'b, T>(&'b self, o: &'b Object) -> Result<T, ObjectValueError>
     where
-        T: RootObjectResolveable<'a, 'b> + PdfObject<'a, 'b>,
+        (T, Root): RootObjectResolveable<'a, 'b>,
     {
         match o {
             Object::Reference(ref_id) => self.resolve_pdf_object(ref_id.id().id()),
-            _ => T::new(None, o.as_dict()?, self),
+            _ => whatever!("not root pdf object"),
         }
     }
 
-    pub fn resolve_pdf_object<'b, T>(
+    pub fn resolve_pdf_object2<'b, T>(&'b self, o: &'b Object) -> Result<T, ObjectValueError>
+    where
+        T: PdfObject<'a, 'b>,
+    {
+        let o = self.resolve_reference(o)?;
+        let dict = o.as_dict()?;
+        PdfObject::new(dict, self)
+    }
+
+    pub fn resolve_pdf_object<'b, T, K>(
         &'b self,
         id: impl Into<RuntimeObjectId>,
     ) -> Result<T, ObjectValueError>
     where
-        T: RootObjectResolveable<'a, 'b>,
+        (T, K): RootObjectResolveable<'a, 'b>,
+        K: ObjectKind,
     {
-        T::resolve(self, id.into())
+        Ok(<(T, _)>::resolve(self, id.into())?.0)
     }
 
     /// Return file data start from stream id indirect object till the file end
@@ -562,9 +593,10 @@ impl<'a> ObjectResolver<'a> {
 }
 
 #[pdf_object("Catalog")]
+#[root_pdf_object]
 trait CatalogDictTrait {
     fn version(&self) -> Option<Name>;
-    #[nested]
+    #[root_nested]
     fn pages(&self) -> PageDict<'a, 'b>;
 }
 
@@ -636,8 +668,7 @@ fn open_encrypt(
     };
 
     let resolver = ObjectResolver::new(buf, xref, None);
-    let trailer =
-        TrailerDict::new(None, trailer, &resolver).whatever_context("parse trailer dict")?;
+    let trailer = TrailerDict::new(trailer, &resolver).whatever_context("parse trailer dict")?;
     let encrypt = trailer
         .encrypt()
         .map_err(|e| {

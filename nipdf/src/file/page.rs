@@ -5,7 +5,10 @@ use crate::{
         ColorArgs, ColorSpaceArgs, LineCapStyle, LineJoinStyle, Operation, PatternDict, Point,
         RenderingIntent, parse_operations, shading::ShadingDict, trans::FormToUserSpace,
     },
-    object::{Dictionary, ImageMask, Object, ObjectValueError, PdfObject, RuntimeObjectId, Stream},
+    object::{
+        Dictionary, ImageMask, Object, ObjectValueError, PdfObject, RootPdfObject as _,
+        RuntimeObjectId, Stream,
+    },
     text::FontDict,
 };
 use ahash::{HashMap, HashMapExt};
@@ -149,6 +152,7 @@ pub enum XObjectType {
 }
 
 #[pdf_object(Some("XObject"))]
+#[root_pdf_object]
 pub trait XObjectDictTrait {
     #[try_from]
     fn subtype(&self) -> XObjectType;
@@ -157,7 +161,7 @@ pub trait XObjectDictTrait {
     #[try_from]
     fn matte(&self) -> Option<ColorArgs>;
 
-    #[nested]
+    #[root_nested]
     fn s_mask(&self) -> Option<XObjectDict<'a, 'b>>;
 
     #[try_from]
@@ -178,9 +182,7 @@ pub trait XObjectDictTrait {
 
 impl XObjectDict<'_, '_> {
     pub fn as_stream(&self) -> Result<&Stream, ObjectValueError> {
-        let id = self
-            .id()
-            .whatever_context::<_, ObjectValueError>("XObject dictionary missing ID")?;
+        let id = self.id();
 
         self.d.resolver().resolve(id)?.stream()
     }
@@ -240,11 +242,11 @@ pub trait ResourceDictTrait {
     fn ext_g_state(&self) -> HashMap<Name, GraphicsStateParameterDict<'a, 'b>>;
     #[try_from]
     fn color_space(&self) -> ColorSpaceResources;
-    #[nested]
+    #[root_nested]
     fn pattern(&self) -> HashMap<Name, PatternDict<'a, 'b>>;
     #[nested]
     fn shading(&self) -> HashMap<Name, ShadingDict<'a, 'b>>;
-    #[nested]
+    #[root_nested]
     fn x_object(&self) -> HashMap<Name, XObjectDict<'a, 'b>>;
     #[nested]
     fn font(&self) -> HashMap<Name, FontDict<'a, 'b>>;
@@ -252,8 +254,9 @@ pub trait ResourceDictTrait {
 }
 
 #[pdf_object(["Pages", "Page"])]
+#[root_pdf_object]
 pub(crate) trait PageDictTrait {
-    #[nested]
+    #[root_nested]
     fn kids(&self) -> Vec<Self>;
     #[try_from]
     fn media_box(&self) -> Option<Rectangle>;
@@ -284,8 +287,7 @@ pub struct Page<'a> {
 
 impl<'a> Page<'a> {
     pub fn id(&self) -> RuntimeObjectId {
-        #[allow(clippy::unwrap_used, reason = "Page PDFObject always have ID")]
-        self.d.id().unwrap()
+        self.d.id()
     }
 
     fn iter_to_root(&self) -> impl Iterator<Item = &PageDict<'a, 'a>> {
@@ -321,7 +323,7 @@ impl<'a> Page<'a> {
                 || {
                     // although document says resource dictionary is required, but some pdf file
                     // doesn't have it.
-                    ResourceDict::new(None, &self.empty_dict, self.d.resolver())
+                    ResourceDict::new(&self.empty_dict, self.d.resolver())
                         .whatever_context("Create default resource dictionary")
                 },
                 Ok,

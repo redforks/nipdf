@@ -68,6 +68,10 @@ fn object_resolver_resolve_container_value() {
 }
 
 #[pdf_object(())]
+#[root_pdf_object]
+trait RootFooDictTrait {}
+
+#[pdf_object(())]
 trait FooDictTrait {}
 
 #[test]
@@ -82,7 +86,7 @@ endobj
     let d = resolver.resolve(1).unwrap().as_dict().unwrap();
     let d = SchemaDict::new(d, &resolver, ()).unwrap();
     assert!(
-        d.resolve_one_or_more_pdf_object::<FooDict<'_, '_>>(&sname("foo"))
+        d.resolve_one_or_more_root_pdf_object::<RootFooDict<'_, '_>>(&sname("foo"))
             .unwrap()
             .is_empty()
     );
@@ -98,10 +102,10 @@ endobj
     let d = resolver.resolve(1).unwrap().as_dict().unwrap();
     let d = SchemaDict::new(d, &resolver, ()).unwrap();
     let list = d
-        .resolve_one_or_more_pdf_object::<FooDict<'_, '_>>(&sname("foo"))
+        .resolve_one_or_more_root_pdf_object::<RootFooDict<'_, '_>>(&sname("foo"))
         .unwrap();
     assert_eq!(list.len(), 1);
-    assert_eq!(Some(2.into()), list[0].id());
+    assert_eq!(2u32, list[0].id().0);
 
     // field is array
     let buf = br#"1 0 obj
@@ -117,8 +121,6 @@ endobj
         .resolve_one_or_more_pdf_object::<FooDict<'_, '_>>(&sname("foo"))
         .unwrap();
     assert_eq!(list.len(), 2);
-    assert_eq!(None, list[0].id());
-    assert_eq!(Some(3.into()), list[1].id());
 
     Ok(())
 }

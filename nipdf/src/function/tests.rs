@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     file::{ObjectResolver, XRefTable},
-    object::PdfObject,
+    object::RootPdfObject as _,
     parser,
 };
 use assert_approx_eq::assert_approx_eq;
@@ -59,7 +59,7 @@ fn test_exponential_function() {
 
     let xref = XRefTable::empty();
     let resolver = ObjectResolver::empty(&xref);
-    let f = ExponentialInterpolationFunctionDict::new(None, &d, &resolver).unwrap();
+    let f = ExponentialInterpolationFunctionDict::new(1.into(), &d, &resolver).unwrap();
     let f = f.func().unwrap();
     assert_eq!(f.do_call(&[0.0]).unwrap(), tiny_vec![0.1_f32, 0.2_f32]);
     assert_eq!(f.do_call(&[1.0]).unwrap(), tiny_vec![0.2_f32, 0.4_f32]);
@@ -111,26 +111,6 @@ fn interpolation() {
     assert_eq!(StitchingFunction::interpolation(a, b, 0.0), 1.0);
     assert_eq!(StitchingFunction::interpolation(a, b, 0.5), 0.5);
     assert_eq!(StitchingFunction::interpolation(a, b, 1.0), 0.0);
-}
-
-#[test]
-fn stitching_function() {
-    let d = parser::dict::<_, ContextError>
-        .parse(
-            br#"<</FunctionType 3/Domain[0 1]/Bounds[0.5]/Encode[1 0 1 0]
-        /Functions[
-            <</FunctionType 2/Domain[0 1]/C0[0.1 0.2]/C1[0.2 0.4]/N 1>>
-            <</FunctionType 2/Domain[0 1]/C0[0.5 0.6]/C1[0.6 0.7]/N 1>>
-        ]>>"#
-                .as_slice(),
-        )
-        .unwrap();
-
-    let xref = XRefTable::empty();
-    let resolver = ObjectResolver::empty(&xref);
-    let f = StitchingFunctionDict::new(None, &d, &resolver).unwrap();
-    let f = f.func().unwrap();
-    assert_eq!(f.do_call(&[0f32]).unwrap(), tiny_vec![0.2_f32, 0.4_f32]);
 }
 
 #[test]

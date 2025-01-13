@@ -28,7 +28,10 @@ use nipdf::{
         },
     },
     log_err,
-    object::{ImageMask, ImageMetadata, InlineImage, Object, PdfObject, TextStringOrNumber},
+    object::{
+        ImageMask, ImageMetadata, InlineImage, Object, PdfObject, RootPdfObject as _,
+        TextStringOrNumber,
+    },
 };
 use num_traits::ToPrimitive;
 use prescript::{Name, ParserError};
@@ -1641,7 +1644,7 @@ impl<'a, 'c> Render<'a, 'c> {
     ) -> Result<()> {
         let stream: &Object = tile
             .resolver()
-            .resolve(tile.id().whatever_context("get tile object id")?)
+            .resolve(tile.id())
             .whatever_context("resolve tile object")?;
         let stream = stream.stream().whatever_context("get tile stream")?;
         let bytes = stream

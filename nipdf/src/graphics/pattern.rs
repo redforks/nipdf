@@ -12,11 +12,12 @@ pub enum PatternType {
 }
 
 #[pdf_object(Some("Pattern"))]
+#[root_pdf_object]
 pub trait PatternDictTrait {
     #[try_from]
     fn pattern_type(&self) -> PatternType;
 
-    #[self_as]
+    #[root_self_as]
     fn tiling_pattern(&self) -> TilingPatternDict<'a, 'b>;
 
     #[self_as]
@@ -38,6 +39,7 @@ pub enum TilingType {
 
 #[pdf_object(1i32)]
 #[type_field("PatternType")]
+#[root_pdf_object]
 pub trait TilingPatternDictTrait {
     #[try_from]
     fn paint_type(&self) -> TilingPaintType;

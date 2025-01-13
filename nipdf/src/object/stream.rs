@@ -1037,7 +1037,6 @@ fn filter<'a: 'b, 'b>(
         S_FILTER_CCITT_FAX => decode_ccitt(
             &buf,
             &CCITTFaxDecodeParamsDict::new(
-                None,
                 params.unwrap_or_else(|| &*empty_dict),
                 resolver.whatever_context::<_, ObjectValueError>("Need ObjectResolver")?,
             )?,
@@ -1198,7 +1197,7 @@ impl Stream {
         resources: Option<&ResourceDict<'a, '_>>,
     ) -> Result<DynamicImage, ObjectValueError> {
         let decoded = self._decode(resolver)?;
-        let img_dict = ImageDict::new(None, &self.0, resolver)?;
+        let img_dict = ImageDict::new(&self.0, resolver)?;
         decode_image(decoded, &img_dict, resolver, resources)
     }
 }

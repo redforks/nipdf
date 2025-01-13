@@ -194,6 +194,7 @@ pub enum Type {
 }
 
 #[pdf_object(())]
+#[root_pdf_object]
 pub trait FunctionDictTrait {
     #[try_from]
     fn function_type(&self) -> Type;
@@ -204,13 +205,13 @@ pub trait FunctionDictTrait {
     #[try_from]
     fn range(&self) -> Option<Domains>;
 
-    #[self_as]
+    #[root_self_as]
     fn sampled(&self) -> SampledFunctionDict<'a, 'b>;
 
-    #[self_as]
+    #[root_self_as]
     fn exponential_interpolation(&self) -> ExponentialInterpolationFunctionDict<'a, 'b>;
 
-    #[self_as]
+    #[root_self_as]
     fn stitch(&self) -> StitchingFunctionDict<'a, 'b>;
 }
 
@@ -266,7 +267,7 @@ impl FunctionDict<'_, '_> {
         let signature = self.type04_signature()?;
         let resolver = self.d.resolver();
         let stream = resolver
-            .resolve(self.id.whatever_context("id should exist")?)
+            .resolve(self.id)
             .whatever_context("resolve")?
             .stream()
             .whatever_context("get as stream")?;
@@ -399,8 +400,9 @@ pub enum InterpolationOrder {
 
 #[pdf_object(0i32)]
 #[type_field("FunctionType")]
+#[root_pdf_object]
 pub trait SampledFunctionDictTrait {
-    #[self_as]
+    #[root_self_as]
     fn function_dict(&self) -> FunctionDict<'a, 'b>;
 
     fn size(&self) -> Vec<u32>;
@@ -499,7 +501,7 @@ impl SampledFunctionDict<'_, '_> {
         let size = self.size()?;
         let resolver = self.d.resolver();
         let stream = resolver
-            .resolve(self.id.whatever_context("id should exist")?)
+            .resolve(self.id)
             .whatever_context("resolve object")?
             .stream()
             .whatever_context("get as stream")?;
@@ -534,6 +536,7 @@ impl SampledFunctionDict<'_, '_> {
 }
 
 #[pdf_object(2i32)]
+#[root_pdf_object]
 #[type_field("FunctionType")]
 pub trait ExponentialInterpolationFunctionDictTrait {
     #[default_fn(f32_zero_arr)]
@@ -544,7 +547,7 @@ pub trait ExponentialInterpolationFunctionDictTrait {
 
     fn n(&self) -> f32;
 
-    #[self_as]
+    #[root_self_as]
     fn function_dict(&self) -> FunctionDict<'a, 'b>;
 }
 
@@ -584,10 +587,11 @@ impl ExponentialInterpolationFunctionDict<'_, '_> {
 }
 
 #[pdf_object(3i32)]
+#[root_pdf_object]
 #[type_field("FunctionType")]
 pub trait StitchingFunctionDictTrait {
     /// Functions, its length is `k`
-    #[nested]
+    #[root_nested]
     fn functions(&self) -> Vec<FunctionDict<'a, 'b>>;
 
     /// The number of values shall be `k - 1`
@@ -597,7 +601,7 @@ pub trait StitchingFunctionDictTrait {
     #[try_from]
     fn encode(&self) -> Domains;
 
-    #[self_as]
+    #[root_self_as]
     fn function_dict(&self) -> FunctionDict<'a, 'b>;
 }
 

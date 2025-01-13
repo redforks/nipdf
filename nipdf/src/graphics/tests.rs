@@ -119,7 +119,7 @@ fn parse_inline_image_with_ascii85_filter() -> Result<()> {
     let xref = XRefTable::empty();
     let resolver = ObjectResolver::empty(&xref);
     let d = Dictionary::default();
-    let res_dict = ResourceDict::new(None, &d, &resolver).whatever_context("parse ResourceDict")?;
+    let res_dict = ResourceDict::new(&d, &resolver).whatever_context("parse ResourceDict")?;
     let img = img.image(&resolver, &res_dict)?;
     assert_eq!(4772, img.width());
     assert_eq!(110, img.height());

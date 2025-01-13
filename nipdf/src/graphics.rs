@@ -150,6 +150,7 @@ impl<'b> ConvertFromObject<'b> for ColorSpaceArgs {
 }
 
 #[pdf_object(())]
+#[root_pdf_object]
 trait ICCStreamDictTrait {
     fn n(&self) -> u32;
     #[try_from]

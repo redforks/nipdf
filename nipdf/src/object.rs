@@ -296,17 +296,30 @@ where
     }
 }
 
-pub trait PdfObject<'a, 'b>
+/// PdfObject that has reference id
+pub trait RootPdfObject<'a, 'b>
 where
     Self: Sized,
 {
     fn new(
-        id: Option<RuntimeObjectId>,
+        id: RuntimeObjectId,
         dict: &'b Dictionary,
         r: &'b ObjectResolver<'a>,
     ) -> Result<Self, ObjectValueError>;
 
-    fn id(&self) -> Option<RuntimeObjectId>;
+    fn id(&self) -> RuntimeObjectId;
+
+    fn dict(&self) -> &Dictionary;
+
+    fn resolver(&self) -> &'b ObjectResolver<'a>;
+}
+
+/// PdfObject that has embbed in other container object, such as Dictionary or Array.
+pub trait PdfObject<'a, 'b>
+where
+    Self: Sized,
+{
+    fn new(dict: &'b Dictionary, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError>;
 
     fn dict(&self) -> &Dictionary;
 
@@ -636,12 +649,33 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         &self,
         id: &Name,
     ) -> Result<Option<O>, ObjectValueError> {
+        if let Some((_, obj)) = self
+            ._opt_resolve_container_value(id)
+            .with_whatever_context::<_, _, ObjectValueError>(|_| {
+                format!("resolve object from dict: {}", id)
+            })?
+        {
+            match obj {
+                Object::Dictionary(d) => Ok(Some(O::new(d, self.r)?)),
+                Object::Stream(s) => Ok(Some(O::new(s.as_dict(), self.r)?)),
+                _ => Err(ObjectValueError::UnexpectedType),
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn opt_resolve_root_pdf_object<O: RootPdfObject<'a, 'b>>(
+        &self,
+        id: &Name,
+    ) -> Result<Option<O>, ObjectValueError> {
         if let Some((id, obj)) = self
             ._opt_resolve_container_value(id)
             .with_whatever_context::<_, _, ObjectValueError>(|_| {
                 format!("resolve object from dict: {}", id)
             })?
         {
+            let id = id.whatever_context::<_, ObjectValueError>("root object need id")?;
             match obj {
                 Object::Dictionary(d) => Ok(Some(O::new(id, d, self.r)?)),
                 Object::Stream(s) => Ok(Some(O::new(id, s.as_dict(), self.r)?)),
@@ -662,22 +696,51 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         let id_n_obj = self._opt_resolve_container_value(id)?;
         id_n_obj.map_or_else(
             || Ok(vec![]),
-            |(id, obj)| match obj {
-                Object::Dictionary(d) => Ok(vec![O::new(id, d, self.r)?]),
-                Object::Stream(s) => Ok(vec![O::new(id, s.as_dict(), self.r)?]),
+            |(_, obj)| match obj {
+                Object::Dictionary(d) => Ok(vec![O::new(d, self.r)?]),
+                Object::Stream(s) => Ok(vec![O::new(s.as_dict(), self.r)?]),
                 Object::Array(arr) => {
                     let mut res = Vec::with_capacity(arr.len());
                     for obj in arr.iter() {
                         let dict = self.r.resolve_reference(obj)?;
-                        res.push(O::new(
-                            obj.reference().ok().map(|id| id.id().id()),
-                            dict.as_dict()?,
-                            self.r,
-                        )?);
+                        res.push(O::new(dict.as_dict()?, self.r)?);
                     }
                     Ok(res)
                 }
                 _ => Err(ObjectValueError::UnexpectedType),
+            },
+        )
+    }
+
+    pub fn resolve_one_or_more_root_pdf_object<O>(
+        &self,
+        id: &Name,
+    ) -> Result<Vec<O>, ObjectValueError>
+    where
+        O: RootPdfObject<'a, 'b>,
+    {
+        let id_n_obj = self._opt_resolve_container_value(id)?;
+        id_n_obj.map_or_else(
+            || Ok(vec![]),
+            |(id, obj)| {
+                let id = id.whatever_context::<_, ObjectValueError>("root pdf object need id")?;
+                match obj {
+                    Object::Dictionary(d) => Ok(vec![O::new(id, d, self.r)?]),
+                    Object::Stream(s) => Ok(vec![O::new(id, s.as_dict(), self.r)?]),
+                    Object::Array(arr) => {
+                        let mut res = Vec::with_capacity(arr.len());
+                        for obj in arr.iter() {
+                            let dict = self.r.resolve_reference(obj)?;
+                            let id = obj.reference().ok().map(|id| id.id().id());
+                            let id = id.whatever_context::<_, ObjectValueError>(
+                                "root pdf object need id",
+                            )?;
+                            res.push(O::new(id, dict.as_dict()?, self.r)?);
+                        }
+                        Ok(res)
+                    }
+                    _ => Err(ObjectValueError::UnexpectedType),
+                }
             },
         )
     }
@@ -697,11 +760,29 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
                 let mut res = Vec::with_capacity(arr.len());
                 for obj in arr.iter() {
                     let dict = self.r.resolve_reference(obj)?;
-                    res.push(O::new(
-                        obj.reference().ok().map(|id| id.id().id()),
-                        dict.as_dict()?,
-                        self.r,
-                    )?);
+                    res.push(O::new(dict.as_dict()?, self.r)?);
+                }
+                Ok(res)
+            },
+        )
+    }
+
+    pub fn resolve_root_pdf_object_array<O>(&self, id: &Name) -> Result<Vec<O>, ObjectValueError>
+    where
+        O: RootPdfObject<'a, 'b>,
+    {
+        let arr = self.opt_resolve_value(id)?;
+        arr.map_or_else(
+            || Ok(vec![]),
+            |arr| {
+                let arr = arr.arr()?;
+                let mut res = Vec::with_capacity(arr.len());
+                for obj in arr.iter() {
+                    let dict = self.r.resolve_reference(obj)?;
+                    let id = obj.reference().ok().map(|id| id.id().id());
+                    let id =
+                        id.whatever_context::<_, ObjectValueError>("root pdf object need id")?;
+                    res.push(O::new(id, dict.as_dict()?, self.r)?);
                 }
                 Ok(res)
             },
@@ -734,12 +815,36 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         )
     }
 
-    fn _resolve_pdf_object<O: PdfObject<'a, 'b>>(
+    pub fn resolve_root_pdf_object_map<O>(&self, id: &Name) -> Result<HashMap<Name, O>>
+    where
+        O: RootPdfObject<'a, 'b>,
+    {
+        let dict = self
+            .opt_resolve_value(id)
+            .whatever_context("resolve pdf object")?;
+        dict.map_or_else(
+            || Ok(HashMap::default()),
+            |dict| {
+                let dict = dict.as_dict().whatever_context("Value not dict")?;
+                let mut res = HashMap::with_capacity(dict.len());
+                for k in dict.keys() {
+                    let obj: O = self
+                        ._resolve_root_pdf_object(dict, k)
+                        .whatever_context("resolve pdf object")?;
+                    res.insert(k.clone(), obj);
+                }
+                Ok(res)
+            },
+        )
+    }
+
+    fn _resolve_root_pdf_object<O: RootPdfObject<'a, 'b>>(
         &self,
         d: &'b Dictionary,
         id: &Name,
     ) -> Result<O, ObjectValueError> {
         let (id, obj) = self.r.do_resolve_container_value(d, id)?;
+        let id = id.whatever_context::<_, ObjectValueError>("root object need id")?;
         let obj = match obj {
             Object::Dictionary(d) => d,
             Object::Stream(s) => s.as_dict(),
@@ -748,11 +853,32 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         O::new(id, obj, self.r)
     }
 
+    fn _resolve_pdf_object<O: PdfObject<'a, 'b>>(
+        &self,
+        d: &'b Dictionary,
+        id: &Name,
+    ) -> Result<O, ObjectValueError> {
+        let (_, obj) = self.r.do_resolve_container_value(d, id)?;
+        let obj = match obj {
+            Object::Dictionary(d) => d,
+            Object::Stream(s) => s.as_dict(),
+            _ => return Err(ObjectValueError::UnexpectedType),
+        };
+        O::new(obj, self.r)
+    }
+
     pub fn resolve_pdf_object<O: PdfObject<'a, 'b>>(
         &self,
         id: &Name,
     ) -> Result<O, ObjectValueError> {
         self._resolve_pdf_object(self.d, id)
+    }
+
+    pub fn resolve_root_pdf_object<O: RootPdfObject<'a, 'b>>(
+        &self,
+        id: &Name,
+    ) -> Result<O, ObjectValueError> {
+        self._resolve_root_pdf_object(self.d, id)
     }
 
     pub fn as_byte_string(&self, id: &Name) -> Result<&[u8], ObjectValueError> {

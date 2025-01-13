@@ -15,8 +15,8 @@ fn build_invalid_radial(buf: &[u8]) -> Result<()> {
         .resolve_pdf_object(1)
         .whatever_context("resolve pdf object")?;
     let empty_d = Dictionary::new();
-    let resource = ResourceDict::new(None, &empty_d, &resolver)
-        .whatever_context("create empty resource dict")?;
+    let resource =
+        ResourceDict::new(&empty_d, &resolver).whatever_context("create empty resource dict")?;
     assert_eq!(None, build_radial(&d, &resource)?);
     Ok(())
 }
