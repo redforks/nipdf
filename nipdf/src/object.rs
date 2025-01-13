@@ -346,12 +346,6 @@ where
         r: &'b R,
     ) -> Result<Self, ObjectValueError>;
 
-    fn checked(
-        id: Option<RuntimeObjectId>,
-        dict: &'b Dictionary,
-        r: &'b R,
-    ) -> Result<Option<Self>, ObjectValueError>;
-
     fn id(&self) -> Option<RuntimeObjectId>;
 
     fn dict(&self) -> &Dictionary;
@@ -372,14 +366,6 @@ impl<'b, T: TypeValidator, R> SchemaDict<'b, T, R> {
     pub fn new(d: &'b Dictionary, r: &'b R, t: T) -> Result<Self, ObjectValueError> {
         t.valid(d)?;
         Ok(Self { t, d, r })
-    }
-
-    pub fn from(d: &'b Dictionary, r: &'b R, t: T) -> Result<Option<Self>, ObjectValueError> {
-        if t.check(d)? {
-            Ok(Some(Self { t, d, r }))
-        } else {
-            Ok(None)
-        }
     }
 
     pub fn dict(&self) -> &'b Dictionary {

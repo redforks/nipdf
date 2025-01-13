@@ -626,11 +626,6 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     Ok(Self { d, id })
                 }
 
-                fn checked(id: Option<crate::object::RuntimeObjectId>, dict: &'b crate::object::Dictionary, r: &'b R) -> Result<Option<Self>, crate::object::ObjectValueError> {
-                    let d = crate::object::SchemaDict::from(dict, r, #valid_arg)?;
-                    Ok(d.map(|d| Self { d, id }))
-                }
-
                 fn dict(&self) -> &crate::object::Dictionary {
                     self.d.dict()
                 }
@@ -660,11 +655,6 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 fn new(id: Option<crate::object::RuntimeObjectId>, dict: &'b crate::object::Dictionary, r: &'b crate::file::ObjectResolver<'a>) -> Result<Self, crate::object::ObjectValueError> {
                     let d = crate::object::SchemaDict::new(dict, r, #valid_arg)?;
                     Ok(Self { d, id})
-                }
-
-                fn checked(id: Option<crate::object::RuntimeObjectId>, dict: &'b crate::object::Dictionary, r: &'b crate::file::ObjectResolver<'a>) -> Result<Option<Self>, crate::object::ObjectValueError> {
-                    let d = crate::object::SchemaDict::from(dict, r, #valid_arg)?;
-                    Ok(d.map(|d| Self { d, id}))
                 }
 
                 fn dict(&self) -> &crate::object::Dictionary {
