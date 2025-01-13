@@ -193,7 +193,7 @@ fn decode_stream<'a, 'b>(
     let filter_dict = FilterDict::new(filter_dict, resolver)?;
     let mut decoded = FilterDecodedData::Bytes(buf.into());
     let filters = iter_filters(filter_dict)?;
-    if let Some(encryp_info) = encrypt_info {
+    if let Some(encrypt_info) = encrypt_info {
         let mut filters = filters.peekable();
         if !filters
             .peek()
@@ -208,7 +208,7 @@ fn decode_stream<'a, 'b>(
                     &filter_name,
                     params,
                     id,
-                    Some(encryp_info),
+                    Some(encrypt_info),
                 )?;
             }
         } else {
@@ -219,7 +219,7 @@ fn decode_stream<'a, 'b>(
                     &filter_name,
                     params,
                     id,
-                    Some(encryp_info),
+                    Some(encrypt_info),
                 )?;
             }
         }
