@@ -366,6 +366,30 @@ impl EncryptInfo {
     }
 }
 
+/// Object impl this trait to resolve from ObjectResolver.
+pub trait RootObjectResolveable<'a, 'b>
+where
+    Self: Sized + 'a + 'b,
+{
+    fn resolve(
+        resolver: &'b ObjectResolver<'a>,
+        id: RuntimeObjectId,
+    ) -> Result<Self, ObjectValueError>;
+}
+
+impl<'a, 'b, T> RootObjectResolveable<'a, 'b> for T
+where
+    T: PdfObject<'a, 'b> + 'b + 'a,
+{
+    fn resolve(
+        resolver: &'b ObjectResolver<'a>,
+        id: RuntimeObjectId,
+    ) -> Result<Self, ObjectValueError> {
+        let o = resolver.resolve(id)?;
+        T::new(Some(id), o.as_dict()?, resolver)
+    }
+}
+
 pub struct ObjectResolver<'a> {
     buf: &'a [u8],
     xref_table: &'a XRefTable,
@@ -440,24 +464,24 @@ impl<'a> ObjectResolver<'a> {
 
     /// Resolve pdf object from object, if object is dict, use it as pdf object,
     /// if object is reference, resolve it
-    pub fn resolve_pdf_object2<'b, T: PdfObject<'a, 'b>>(
-        &'b self,
-        o: &'b Object,
-    ) -> Result<T, ObjectValueError> {
+    pub fn resolve_pdf_object2<'b, T>(&'b self, o: &'b Object) -> Result<T, ObjectValueError>
+    where
+        T: RootObjectResolveable<'a, 'b> + PdfObject<'a, 'b>,
+    {
         match o {
             Object::Reference(ref_id) => self.resolve_pdf_object(ref_id.id().id()),
             _ => T::new(None, o.as_dict()?, self),
         }
     }
 
-    pub fn resolve_pdf_object<'b, T: PdfObject<'a, 'b>>(
+    pub fn resolve_pdf_object<'b, T>(
         &'b self,
         id: impl Into<RuntimeObjectId>,
-    ) -> Result<T, ObjectValueError> {
-        let id = id.into();
-        let obj = self.resolve(id)?;
-        let dict = obj.as_dict()?;
-        T::new(Some(id), dict, self)
+    ) -> Result<T, ObjectValueError>
+    where
+        T: RootObjectResolveable<'a, 'b>,
+    {
+        T::resolve(self, id.into())
     }
 
     /// Return file data start from stream id indirect object till the file end
