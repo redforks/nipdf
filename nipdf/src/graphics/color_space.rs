@@ -2,7 +2,7 @@ use super::ColorSpaceArgs;
 use crate::{
     Result,
     file::{ObjectResolver, ResourceDict},
-    function::{Domain, Domains, Function, FunctionDict, NFunc},
+    function::{Domain, Domains, Function, FunctionDict},
     graphics::ICCStreamDict,
     object::Object,
 };
@@ -199,16 +199,13 @@ where
                     ensure_whatever!(4 == arr.len(), "Separation color space args length");
                     let alternate =
                         ColorSpaceArgs::try_from(&arr[2]).whatever_context("parse alternate")?;
-                    let functions: Vec<FunctionDict<'_, '_>> = resolver
-                        .resolve_one_or_more_pdf_object(&arr[3])
-                        .whatever_context("parse functions")?;
-                    let functions: Result<Vec<_>, _> =
-                        functions.into_iter().map(|f| f.func()).collect();
-                    let function = NFunc::new_box(functions?)?;
+                    let function: FunctionDict<'_, '_> = resolver
+                        .resolve_pdf_object2(&arr[3])
+                        .whatever_context("parse tintTransform function")?;
                     let base = Self::from_args(&alternate, resolver, resources)?;
                     Ok(Self::Separation(Box::new(SeparationColorSpace {
                         alt: base,
-                        f: Rc::new(function),
+                        f: Rc::new(function.func()?),
                     })))
                 }
                 "Indexed" => {
