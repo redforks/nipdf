@@ -226,7 +226,7 @@ where
                 }
                 "CalRGB" => {
                     ensure_whatever!(2 == arr.len(), "CalRGB color space args length");
-                    let dict: CalRGBDict<'_, _> = resolver
+                    let dict: CalRGBDict<'_, '_> = resolver
                         .resolve_pdf_object2(&arr[1])
                         .whatever_context("resolve pdf object")?;
                     let gamma = dict.gamma()?;
@@ -284,7 +284,7 @@ where
                 }
                 "Lab" => {
                     ensure_whatever!(2 == arr.len(), "Lab color space args length");
-                    let dict: LabDict<'_, _> = resolver
+                    let dict: LabDict<'_, '_> = resolver
                         .resolve_pdf_object2(&arr[1])
                         .whatever_context("resolve pdf object")?;
                     let white_point = dict.white_point()?;
@@ -298,7 +298,7 @@ where
                 }
                 "CalGray" => {
                     ensure_whatever!(2 == arr.len(), "CalGray color space args length");
-                    let dict: CalGrayDict<'_, _> = resolver
+                    let dict: CalGrayDict<'_, '_> = resolver
                         .resolve_pdf_object2(&arr[1])
                         .whatever_context("resolve pdf object")?;
                     let gamma = dict.gamma()?;
@@ -702,7 +702,6 @@ impl<T: PartialEq + Debug> PartialEq for DeviceNColorSpace<T> {
 }
 
 #[pdf_object(())]
-#[stub_resolver]
 trait CalRGBDictTrait {
     #[try_from]
     fn gamma(&self) -> [f32; 3];
@@ -725,7 +724,6 @@ fn default_lab_range() -> Domains {
 }
 
 #[pdf_object(())]
-#[stub_resolver]
 trait LabDictTrait {
     #[try_from]
     #[default_fn(default_lab_range)]
@@ -740,7 +738,6 @@ trait LabDictTrait {
 }
 
 #[pdf_object(())]
-#[stub_resolver]
 trait CalGrayDictTrait {
     #[default_lit(1.0f32)]
     fn gamma(&self) -> f32;

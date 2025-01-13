@@ -126,13 +126,6 @@ fn or_default(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|attr| attr.path().is_ident("or_default"))
 }
 
-/// Return true if `#[stub_resolver]` attribute defined.
-fn stub_resolver(attrs: &[Attribute]) -> bool {
-    attrs
-        .iter()
-        .any(|attr| attr.path().is_ident("stub_resolver"))
-}
-
 enum DefaultAttr {
     Literal(ExprLit),
     Function(ExprPath),
@@ -612,67 +605,34 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     let vis = &def.vis;
-    let tokens = if stub_resolver(&def.attrs) {
-        quote! {
-            #[derive(Clone, Debug)]
-            #vis struct #struct_name<'b, R> {
-                d: crate::object::SchemaDict<'b, #valid_ty, R>,
-                id: Option<crate::object::RuntimeObjectId>,
+    let tokens = quote! {
+        #[derive(Clone, Debug)]
+        #vis struct #struct_name<'a, 'b> {
+            d: crate::object::SchemaDict<'b, #valid_ty, crate::file::ObjectResolver<'a>>,
+            id: Option<crate::object::RuntimeObjectId>,
+        }
+
+        impl<'a, 'b> crate::object::PdfObject<'b, crate::file::ObjectResolver<'a>> for #struct_name<'a, 'b> {
+            fn new(id: Option<crate::object::RuntimeObjectId>, dict: &'b crate::object::Dictionary, r: &'b crate::file::ObjectResolver<'a>) -> Result<Self, crate::object::ObjectValueError> {
+                let d = crate::object::SchemaDict::new(dict, r, #valid_arg)?;
+                Ok(Self { d, id})
             }
 
-            impl<'b, R: crate::object::Resolver> crate::object::PdfObject<'b, R> for #struct_name<'b, R> {
-                fn new(id: Option<crate::object::RuntimeObjectId>, dict: &'b crate::object::Dictionary, r: &'b R) -> Result<Self, crate::object::ObjectValueError> {
-                    let d = crate::object::SchemaDict::new(dict, r, #valid_arg)?;
-                    Ok(Self { d, id })
-                }
-
-                fn dict(&self) -> &crate::object::Dictionary {
-                    self.d.dict()
-                }
-
-                fn id(&self) -> Option<crate::object::RuntimeObjectId> {
-                    self.id
-                }
-
-                fn resolver(&self) -> &'b R {
-                    self.d.resolver()
-                }
+            fn dict(&self) -> &crate::object::Dictionary {
+                self.d.dict()
             }
 
-            impl<'b, R: crate::object::Resolver> #struct_name<'b, R> {
-                #(#methods)*
+            fn id(&self) -> Option<crate::object::RuntimeObjectId> {
+                self.id
+            }
+
+            fn resolver(&self) -> &'b crate::file::ObjectResolver<'a> {
+                self.d.resolver()
             }
         }
-    } else {
-        quote! {
-            #[derive(Clone, Debug)]
-            #vis struct #struct_name<'a, 'b> {
-                d: crate::object::SchemaDict<'b, #valid_ty, crate::file::ObjectResolver<'a>>,
-                id: Option<crate::object::RuntimeObjectId>,
-            }
 
-            impl<'a, 'b> crate::object::PdfObject<'b, crate::file::ObjectResolver<'a>> for #struct_name<'a, 'b> {
-                fn new(id: Option<crate::object::RuntimeObjectId>, dict: &'b crate::object::Dictionary, r: &'b crate::file::ObjectResolver<'a>) -> Result<Self, crate::object::ObjectValueError> {
-                    let d = crate::object::SchemaDict::new(dict, r, #valid_arg)?;
-                    Ok(Self { d, id})
-                }
-
-                fn dict(&self) -> &crate::object::Dictionary {
-                    self.d.dict()
-                }
-
-                fn id(&self) -> Option<crate::object::RuntimeObjectId> {
-                    self.id
-                }
-
-                fn resolver(&self) -> &'b crate::file::ObjectResolver<'a> {
-                    self.d.resolver()
-                }
-            }
-
-            impl<'a, 'b> #struct_name<'a, 'b> {
-                #(#methods)*
-            }
+        impl<'a, 'b> #struct_name<'a, 'b> {
+            #(#methods)*
         }
     };
 
