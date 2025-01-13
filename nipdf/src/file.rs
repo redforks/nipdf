@@ -462,7 +462,67 @@ impl<'a> ObjectResolver<'a> {
         self.objects.insert(id.into(), OnceCell::with_value(v));
     }
 
-    /// Resolve object with id `id`.
+    /// The primary “raw” lookup of a Dictionary key. It:
+    /// 1) Checks if key exists at all (otherwise returns DictKeyNotFound)
+    /// 2) If value is a reference, attempts to resolve that object
+    /// 3) Returns either (Some(resolved_ref_id), &Object) if it is/was a reference, or (None,
+    ///    &Object) if the value in the Dictionary was not a reference
+    ///
+    /// The behavior of logging errors and/or mapping “not found” errors into Ok(None)
+    /// is controlled by the two bool parameters:
+    ///   - log_error: if true, logs an error with the key name
+    ///   - not_found_is_none: if true, turns “not found” into Ok(None)
+    fn resolve_container_value_internal<'b: 'c, 'c>(
+        &'b self,
+        dict: &'c Dictionary,
+        key: &Name,
+        log_error: bool,
+        not_found_is_none: bool,
+    ) -> Result<(Option<RuntimeObjectId>, Option<&'c Object>), ObjectValueError> {
+        let Some(obj) = dict.get(key) else {
+            if not_found_is_none {
+                return Ok((None, None));
+            }
+            let e = ObjectValueError::DictKeyNotFound;
+            if log_error {
+                error!("{}: {}", e, key);
+            }
+            return Err(e);
+        };
+
+        if let Object::Reference(r) = obj {
+            let ref_id = r.id().id();
+            match self.resolve(ref_id) {
+                Ok(resolved_obj) => Ok((Some(ref_id), Some(resolved_obj))),
+                Err(ObjectValueError::ObjectIDNotFound { .. }) if not_found_is_none => {
+                    // Turn “ID not found” into None
+                    Ok((None, None))
+                }
+                Err(e) => {
+                    if log_error {
+                        error!("{}: {}", e, key);
+                    }
+                    Err(e)
+                }
+            }
+        } else {
+            // Value is not a reference: just return it as-is
+            Ok((None, Some(obj)))
+        }
+    }
+
+    /// Used in places that want both the optional reference ID (if it was a reference)
+    /// and the object itself. No logging, no “optional” behavior for DictKeyNotFound.
+    pub(crate) fn do_resolve_container_value<'b: 'c, 'c>(
+        &'b self,
+        dict: &'c Dictionary,
+        key: &Name,
+    ) -> Result<(Option<RuntimeObjectId>, &'c Object), ObjectValueError> {
+        let (id_opt, obj_opt) = self.resolve_container_value_internal(dict, key, false, false)?;
+        Ok((id_opt, obj_opt.unwrap()))
+    }
+
+    /// Resolve an object by ID, caching it in “objects”. If not in XRef, returns an error.
     pub fn resolve(&self, id: impl Into<RuntimeObjectId>) -> Result<&Object, ObjectValueError> {
         let id = id.into();
         self.objects
@@ -474,7 +534,8 @@ impl<'a> ObjectResolver<'a> {
             })
     }
 
-    // Add the methods that were in the Resolver trait directly
+    /// If the given Object is a reference, resolve that reference; otherwise return the same
+    /// Object.
     pub fn resolve_reference<'b>(&'b self, v: &'b Object) -> Result<&'b Object, ObjectValueError> {
         if let Object::Reference(id) = v {
             self.resolve(id.id().id())
@@ -483,8 +544,8 @@ impl<'a> ObjectResolver<'a> {
         }
     }
 
-    /// Resolve pdf object from object, if object is dict, use it as pdf object,
-    /// if object is reference, resolve it
+    /// For root-level PDF objects (those that implement RootObjectResolveable).
+    /// If “o” is a reference, resolv into T; else returns an error.
     pub fn resolve_root_pdf_object2<'b, T>(&'b self, o: &'b Object) -> Result<T, ObjectValueError>
     where
         (T, Root): RootObjectResolveable<'a, 'b>,
@@ -495,6 +556,7 @@ impl<'a> ObjectResolver<'a> {
         }
     }
 
+    /// For embedded PDF objects. If “o” is a reference, resolve it, then construct T from dict.
     pub fn resolve_pdf_object2<'b, T>(&'b self, o: &'b Object) -> Result<T, ObjectValueError>
     where
         T: PdfObject<'a, 'b>,
@@ -504,6 +566,8 @@ impl<'a> ObjectResolver<'a> {
         PdfObject::new(dict, self)
     }
 
+    /// Generic “resolve by ID” API that uses the “RootObjectResolveable” trait, plus the
+    /// appropriate K marker type (Root or Embedded). This dispatches to the trait’s “resolve”.
     pub fn resolve_pdf_object<'b, T, K>(
         &'b self,
         id: impl Into<RuntimeObjectId>,
@@ -515,7 +579,9 @@ impl<'a> ObjectResolver<'a> {
         Ok(<(T, _)>::resolve(self, id.into())?.0)
     }
 
-    /// Return file data start from stream id indirect object till the file end
+    /// Return the raw file bytes for a “stream” object, starting at the specified ID’s offset
+    /// in the PDF file. This is primarily for parser usage. If the object is an “InStream”,
+    /// you’ll get Right(...) from xref_table.resolve_object_buf(), so we need Left(...) here.
     pub fn stream_data(
         &self,
         id: impl Into<RuntimeObjectId>,
@@ -530,65 +596,22 @@ impl<'a> ObjectResolver<'a> {
     /// resolve it recursively. Return `None` if object is not found.
     pub fn opt_resolve_container_value<'b: 'c, 'c>(
         &'b self,
-        c: &'c Dictionary,
-        id: &Name,
+        dict: &'c Dictionary,
+        key: &Name,
     ) -> Result<Option<&'c Object>, ObjectValueError> {
-        Self::not_found_error_to_opt(self._resolve_container_value(c, id).map(|(_, o)| o))
+        let (_, obj) = self.resolve_container_value_internal(dict, key, false, true)?;
+        Ok(obj)
     }
 
     /// Resolve value from data container `c` with key `k`, if value is reference,
     /// resolve it recursively.
     pub fn resolve_container_value<'b: 'c, 'c>(
         &'b self,
-        c: &'c Dictionary,
-        id: &Name,
+        dict: &'c Dictionary,
+        key: &Name,
     ) -> Result<&'c Object, ObjectValueError> {
-        self.resolve_required_value(c, id).map(|(_, o)| o)
-    }
-
-    /// Like _resolve_container_value(), but error logs if value not exist
-    fn resolve_required_value<'b: 'c, 'c>(
-        &'b self,
-        c: &'c Dictionary,
-        id: &Name,
-    ) -> Result<(Option<RuntimeObjectId>, &'c Object), ObjectValueError> {
-        self._resolve_container_value(c, id).map_err(|e| {
-            error!("{}: {}", e, id);
-            e
-        })
-    }
-
-    fn _resolve_container_value<'b: 'c, 'c>(
-        &'b self,
-        c: &'c Dictionary,
-        id: &Name,
-    ) -> Result<(Option<RuntimeObjectId>, &'c Object), ObjectValueError> {
-        let obj = c.get(id).ok_or(ObjectValueError::DictKeyNotFound)?;
-
-        if let Object::Reference(id) = obj {
-            self.resolve(id.id().id()).map(|o| (Some(id.id().id()), o))
-        } else {
-            Ok((None, obj))
-        }
-    }
-
-    fn not_found_error_to_opt<T>(
-        o: Result<T, ObjectValueError>,
-    ) -> Result<Option<T>, ObjectValueError> {
-        o.map(Some).or_else(|e| match e {
-            ObjectValueError::ObjectIDNotFound { .. } | ObjectValueError::DictKeyNotFound => {
-                Ok(None)
-            }
-            _ => Err(e),
-        })
-    }
-
-    pub(crate) fn do_resolve_container_value<'b: 'c, 'c>(
-        &'b self,
-        c: &'c Dictionary,
-        id: &Name,
-    ) -> Result<(Option<RuntimeObjectId>, &'c Object), ObjectValueError> {
-        self._resolve_container_value(c, id)
+        let (_, obj_opt) = self.resolve_container_value_internal(dict, key, true, false)?;
+        Ok(obj_opt.unwrap())
     }
 }
 
