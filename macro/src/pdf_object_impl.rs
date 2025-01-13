@@ -568,7 +568,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 &key,
                 |_| unreachable!("self_as methods never return Option"),
                 |ty| {
-                    quote! { <#ty as crate::object::PdfObject::<_>>::new(self.id, self.d.dict(), self.d.resolver()) }
+                    quote! { <#ty as crate::object::PdfObject::<'a, 'b>>::new(self.id, self.d.dict(), self.d.resolver()) }
                 },
             )
         } else {
@@ -608,11 +608,11 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
     let tokens = quote! {
         #[derive(Clone, Debug)]
         #vis struct #struct_name<'a, 'b> {
-            d: crate::object::SchemaDict<'b, #valid_ty, crate::file::ObjectResolver<'a>>,
+            d: crate::object::SchemaDict<'a, 'b, #valid_ty>,
             id: Option<crate::object::RuntimeObjectId>,
         }
 
-        impl<'a, 'b> crate::object::PdfObject<'b, crate::file::ObjectResolver<'a>> for #struct_name<'a, 'b> {
+        impl<'a, 'b> crate::object::PdfObject<'a, 'b> for #struct_name<'a, 'b> {
             fn new(id: Option<crate::object::RuntimeObjectId>, dict: &'b crate::object::Dictionary, r: &'b crate::file::ObjectResolver<'a>) -> Result<Self, crate::object::ObjectValueError> {
                 let d = crate::object::SchemaDict::new(dict, r, #valid_arg)?;
                 Ok(Self { d, id})

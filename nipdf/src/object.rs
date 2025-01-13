@@ -1,5 +1,5 @@
 //! object mod contains data structure map to low level pdf objects
-use crate::Result;
+use crate::{Result, file::ObjectResolver};
 use ahash::{HashMap, HashMapExt};
 use educe::Educe;
 use itertools::Itertools as _;
@@ -296,74 +296,38 @@ where
     }
 }
 
-/// Abstract `ObjectResolver` out, to help
-/// `SchemaDict` works without `ObjectResolver`.
-/// Some `Dictionary` are known not contains Reference.
-pub trait Resolver {
-    fn resolve_reference<'b>(&'b self, v: &'b Object) -> Result<&'b Object, ObjectValueError>;
-
-    fn do_resolve_container_value<'b: 'c, 'c>(
-        &'b self,
-        c: &'c Dictionary,
-        id: &Name,
-    ) -> Result<(Option<RuntimeObjectId>, &'c Object), ObjectValueError>;
-}
-
-impl Resolver for () {
-    fn resolve_reference<'b>(&'b self, v: &'b Object) -> Result<&'b Object, ObjectValueError> {
-        debug_assert!(
-            !matches!(v, Object::Reference(_)),
-            "Cannot resolve id in current SchemaDict"
-        );
-        Ok(v)
-    }
-
-    fn do_resolve_container_value<'b: 'c, 'c>(
-        &'b self,
-        c: &'c Dictionary,
-        id: &Name,
-    ) -> Result<(Option<RuntimeObjectId>, &'c Object), ObjectValueError> {
-        c.get(id)
-            .map(|o| {
-                debug_assert!(
-                    !matches!(o, Object::Reference(_)),
-                    "Cannot resolve id in current SchemaDict"
-                );
-                (None, o)
-            })
-            .ok_or(ObjectValueError::DictKeyNotFound)
-    }
-}
-
-pub trait PdfObject<'b, R>
+pub trait PdfObject<'a, 'b>
 where
     Self: Sized,
-    R: Resolver,
 {
     fn new(
         id: Option<RuntimeObjectId>,
         dict: &'b Dictionary,
-        r: &'b R,
+        r: &'b ObjectResolver<'a>,
     ) -> Result<Self, ObjectValueError>;
 
     fn id(&self) -> Option<RuntimeObjectId>;
 
     fn dict(&self) -> &Dictionary;
 
-    fn resolver(&self) -> &'b R;
+    fn resolver(&self) -> &'b ObjectResolver<'a>;
 }
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct SchemaDict<'b, T: Clone + Debug, R> {
+pub struct SchemaDict<'a, 'b, T: Clone + Debug> {
     t: T,
     d: &'b Dictionary,
     #[educe(Debug(ignore))]
-    r: &'b R,
+    r: &'b ObjectResolver<'a>,
 }
 
-impl<'b, T: TypeValidator, R> SchemaDict<'b, T, R> {
-    pub fn new(d: &'b Dictionary, r: &'b R, t: T) -> Result<Self, ObjectValueError> {
+impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
+    pub fn new(
+        d: &'b Dictionary,
+        r: &'b ObjectResolver<'a>,
+        t: T,
+    ) -> Result<Self, ObjectValueError> {
         t.valid(d)?;
         Ok(Self { t, d, r })
     }
@@ -372,7 +336,7 @@ impl<'b, T: TypeValidator, R> SchemaDict<'b, T, R> {
         self.d
     }
 
-    pub fn resolver(&self) -> &'b R {
+    pub fn resolver(&self) -> &'b ObjectResolver<'a> {
         self.r
     }
 }
@@ -395,7 +359,7 @@ macro_rules! schema_access {
     };
 }
 
-impl<'b, T: TypeValidator, R: Resolver> SchemaDict<'b, T, R> {
+impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     schema_access!(bool, bool);
 
     schema_access!(int, i32);
@@ -668,7 +632,7 @@ impl<'b, T: TypeValidator, R: Resolver> SchemaDict<'b, T, R> {
             .as_string()
     }
 
-    pub fn opt_resolve_pdf_object<O: PdfObject<'b, R>>(
+    pub fn opt_resolve_pdf_object<O: PdfObject<'a, 'b>>(
         &self,
         id: &Name,
     ) -> Result<Option<O>, ObjectValueError> {
@@ -693,7 +657,7 @@ impl<'b, T: TypeValidator, R: Resolver> SchemaDict<'b, T, R> {
     /// If value not exist, return empty vector.
     pub fn resolve_one_or_more_pdf_object<O>(&self, id: &Name) -> Result<Vec<O>, ObjectValueError>
     where
-        O: PdfObject<'b, R>,
+        O: PdfObject<'a, 'b>,
     {
         let id_n_obj = self._opt_resolve_container_value(id)?;
         id_n_obj.map_or_else(
@@ -723,7 +687,7 @@ impl<'b, T: TypeValidator, R: Resolver> SchemaDict<'b, T, R> {
     /// The raw value should be an array of references.
     pub fn resolve_pdf_object_array<O>(&self, id: &Name) -> Result<Vec<O>, ObjectValueError>
     where
-        O: PdfObject<'b, R>,
+        O: PdfObject<'a, 'b>,
     {
         let arr = self.opt_resolve_value(id)?;
         arr.map_or_else(
@@ -749,7 +713,7 @@ impl<'b, T: TypeValidator, R: Resolver> SchemaDict<'b, T, R> {
     /// The raw value should be a dictionary, that key is Name and value is Dictionary.
     pub fn resolve_pdf_object_map<O>(&self, id: &Name) -> Result<HashMap<Name, O>>
     where
-        O: PdfObject<'b, R>,
+        O: PdfObject<'a, 'b>,
     {
         let dict = self
             .opt_resolve_value(id)
@@ -770,7 +734,7 @@ impl<'b, T: TypeValidator, R: Resolver> SchemaDict<'b, T, R> {
         )
     }
 
-    fn _resolve_pdf_object<O: PdfObject<'b, R>>(
+    fn _resolve_pdf_object<O: PdfObject<'a, 'b>>(
         &self,
         d: &'b Dictionary,
         id: &Name,
@@ -784,7 +748,7 @@ impl<'b, T: TypeValidator, R: Resolver> SchemaDict<'b, T, R> {
         O::new(id, obj, self.r)
     }
 
-    pub fn resolve_pdf_object<O: PdfObject<'b, R>>(
+    pub fn resolve_pdf_object<O: PdfObject<'a, 'b>>(
         &self,
         id: &Name,
     ) -> Result<O, ObjectValueError> {

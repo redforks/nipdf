@@ -5,7 +5,7 @@ use crate::{
     file::encrypt::Authorizer,
     object::{
         Array, Dictionary, Entry, FrameSet, HexString, LiteralString, Object, ObjectId,
-        ObjectValueError, PdfObject, Resolver, RuntimeObjectId, Stream, TrailerDict,
+        ObjectValueError, PdfObject, RuntimeObjectId, Stream, TrailerDict,
     },
     parser::{self, header_parser, indirect_object_def, parse_frame_set, wsc_prefixed0, wsc0},
 };
@@ -419,7 +419,7 @@ impl<'a> ObjectResolver<'a> {
 
     /// Resolve pdf object from object, if object is dict, use it as pdf object,
     /// if object is reference, resolve it
-    pub fn resolve_pdf_object2<'b, T: PdfObject<'b, Self>>(
+    pub fn resolve_pdf_object2<'b, T: PdfObject<'a, 'b>>(
         &'b self,
         o: &'b Object,
     ) -> Result<T, ObjectValueError> {
@@ -429,7 +429,7 @@ impl<'a> ObjectResolver<'a> {
         }
     }
 
-    pub fn resolve_pdf_object<'b, T: PdfObject<'b, Self>>(
+    pub fn resolve_pdf_object<'b, T: PdfObject<'a, 'b>>(
         &'b self,
         id: impl Into<RuntimeObjectId>,
     ) -> Result<T, ObjectValueError> {
@@ -512,7 +512,7 @@ impl<'a> ObjectResolver<'a> {
 
     /// Resolve pdf_object by id, if its end value is dictionary, return with one element vec.
     /// If its end value is array, return all elements in array.
-    pub fn resolve_one_or_more_pdf_object<'b, T: PdfObject<'b, Self>>(
+    pub fn resolve_one_or_more_pdf_object<'b, T: PdfObject<'a, 'b>>(
         &'b self,
         id_or_dict: &'b Object,
     ) -> Result<Vec<T>, ObjectValueError> {
@@ -547,23 +547,22 @@ impl<'a> ObjectResolver<'a> {
             _ => Err(e),
         })
     }
-}
 
-impl Resolver for ObjectResolver<'_> {
-    fn do_resolve_container_value<'b: 'c, 'c>(
-        &'b self,
-        c: &'c Dictionary,
-        id: &Name,
-    ) -> Result<(Option<RuntimeObjectId>, &'c Object), ObjectValueError> {
-        self._resolve_container_value(c, id)
-    }
-
-    fn resolve_reference<'b>(&'b self, v: &'b Object) -> Result<&'b Object, ObjectValueError> {
+    // Add the methods that were in the Resolver trait directly
+    pub fn resolve_reference<'b>(&'b self, v: &'b Object) -> Result<&'b Object, ObjectValueError> {
         if let Object::Reference(id) = v {
             self.resolve(id.id().id())
         } else {
             Ok(v)
         }
+    }
+
+    pub(crate) fn do_resolve_container_value<'b: 'c, 'c>(
+        &'b self,
+        c: &'c Dictionary,
+        id: &Name,
+    ) -> Result<(Option<RuntimeObjectId>, &'c Object), ObjectValueError> {
+        self._resolve_container_value(c, id)
     }
 }
 
