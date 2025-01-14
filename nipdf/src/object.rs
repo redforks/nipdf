@@ -723,58 +723,27 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     /// Resolve pdf_object from container, if its end value is dictionary, return with one element
     /// vec. If its end value is array, return all elements in array.
     /// If value not exist, return empty vector.
-    pub fn resolve_one_or_more_pdf_object<O>(&self, key: &Name) -> Result<Vec<O>, ObjectValueError>
-    where
-        O: PdfObject<'a, 'b>,
-    {
-        let id_n_obj = self._opt_resolve_container_value(key)?;
-        id_n_obj.map_or_else(
-            || Ok(vec![]),
-            |(_, obj)| match obj {
-                Object::Dictionary(d) => Ok(vec![O::new(d, self.r)?]),
-                Object::Stream(s) => Ok(vec![O::new(s.as_dict(), self.r)?]),
-                Object::Array(arr) => {
-                    let mut res = Vec::with_capacity(arr.len());
-                    for obj in arr.iter() {
-                        let dict = self.r.resolve_reference(obj)?;
-                        res.push(O::new(dict.as_dict()?, self.r)?);
-                    }
-                    Ok(res)
-                }
-                _ => Err(ObjectValueError::UnexpectedType),
-            },
-        )
-    }
-
-    pub fn resolve_one_or_more_root_pdf_object<O>(
+    pub fn resolve_one_or_more_pdf_object<O, K>(
         &self,
         key: &Name,
     ) -> Result<Vec<O>, ObjectValueError>
     where
-        O: RootPdfObject<'a, 'b>,
+        (O, K): CreatePdfObject<'a, 'b>,
+        K: ObjectKind,
     {
-        let id_n_obj = self._opt_resolve_container_value(key)?;
-        id_n_obj.map_or_else(
+        let o = self.d.get(key);
+        o.map_or_else(
             || Ok(vec![]),
-            |(id, obj)| {
-                let id = id.whatever_context::<_, ObjectValueError>("root pdf object need id")?;
-                match obj {
-                    Object::Dictionary(d) => Ok(vec![O::new(id, d, self.r)?]),
-                    Object::Stream(s) => Ok(vec![O::new(id, s.as_dict(), self.r)?]),
-                    Object::Array(arr) => {
-                        let mut res = Vec::with_capacity(arr.len());
-                        for obj in arr.iter() {
-                            let dict = self.r.resolve_reference(obj)?;
-                            let id = obj.reference().ok().map(Into::into);
-                            let id = id.whatever_context::<_, ObjectValueError>(
-                                "root pdf object need id",
-                            )?;
-                            res.push(O::new(id, dict.as_dict()?, self.r)?);
-                        }
-                        Ok(res)
+            |obj| match obj {
+                Object::Array(arr) => {
+                    let mut res = Vec::with_capacity(arr.len());
+                    for obj in arr.iter() {
+                        let obj = <(O, K)>::create(obj, self.r).map(|(o, _)| o)?;
+                        res.push(obj);
                     }
-                    _ => Err(ObjectValueError::UnexpectedType),
+                    Ok(res)
                 }
+                _ => <(O, K)>::create(obj, self.r).map(|(o, _)| vec![o]),
             },
         )
     }
