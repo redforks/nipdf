@@ -509,6 +509,16 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         self.r.resolve_reference(v).map(Some)
     }
 
+    fn resolve_required_value(&self, key: &Name) -> Result<&'b Object, ObjectValueError> {
+        self.d
+            .get(key)
+            .ok_or_else(|| ObjectValueError::DictSchemaError {
+                schema: self.t.schema_type(),
+                key: key.clone(),
+            })
+            .and_then(|o| self.r.resolve_reference(o))
+    }
+
     pub fn opt_u16(&self, key: &Name) -> Result<Option<u16>, ObjectValueError> {
         self.opt_int(key).and_then(|i| {
             i.map(|i| i.try_into().whatever_context("i32 convert to u16"))
@@ -552,12 +562,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     }
 
     pub fn required_f32(&self, key: &Name) -> Result<f32, ObjectValueError> {
-        self.opt_resolve_value(key)?
-            .ok_or_else(|| ObjectValueError::DictSchemaError {
-                schema: self.t.schema_type(),
-                key: key.clone(),
-            })?
-            .as_number()
+        self.resolve_required_value(key)?.as_number()
     }
 
     pub fn opt_object(&self, key: &Name) -> Result<Option<&'b Object>, ObjectValueError> {
@@ -595,11 +600,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         key: &Name,
         f: impl Fn(&Object) -> Result<V, ObjectValueError>,
     ) -> Result<Vec<V>, ObjectValueError> {
-        self.opt_resolve_value(key)?
-            .ok_or_else(|| ObjectValueError::DictSchemaError {
-                schema: self.t.schema_type(),
-                key: key.clone(),
-            })?
+        self.resolve_required_value(key)?
             .arr()?
             .iter()
             .map(f)
@@ -698,12 +699,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     }
 
     pub fn required_str(&self, key: &Name) -> Result<&str, ObjectValueError> {
-        self.opt_resolve_value(key)?
-            .ok_or_else(|| ObjectValueError::DictSchemaError {
-                schema: self.t.schema_type(),
-                key: key.clone(),
-            })?
-            .as_string()
+        self.resolve_required_value(key)?.as_string()
     }
 
     pub fn opt_resolve_pdf_object<O, K>(&self, key: &Name) -> Result<Option<O>, ObjectValueError>
