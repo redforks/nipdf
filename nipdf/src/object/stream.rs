@@ -1,4 +1,4 @@
-use super::{Dictionary, Object, ObjectId, ObjectValueError};
+use super::{Dictionary, Object, ObjectId, ObjectValueError, SchemaDict};
 use crate::{
     Result,
     ccitt::{Algorithm as CCITTAlgorithm, Flags},
@@ -476,38 +476,13 @@ struct LZWDeflateDecodeParams {
 impl LZWDeflateDecodeParams {
     pub fn new(d: &Dictionary, r: Option<&ObjectResolver<'_>>) -> Result<Self, ObjectValueError> {
         Ok(if let Some(r) = r {
+            let d = SchemaDict::new(d, r, ())?;
             Self {
-                predictor: r
-                    .opt_resolve_container_value(d, &sname("Predictor"))?
-                    .map_or(Ok(1), |o| {
-                        o.int()
-                            .whatever_context::<_, ObjectValueError>("Failed to get Predictor")
-                    })?,
-                colors: r
-                    .opt_resolve_container_value(d, &sname("Colors"))?
-                    .map_or(Ok(1), |o| {
-                        o.int()
-                            .whatever_context::<_, ObjectValueError>("Failed to get Colors")
-                    })?,
-                bits_per_component: r
-                    .opt_resolve_container_value(d, &sname("BitsPerComponent"))?
-                    .map_or(Ok(8), |o| {
-                        o.int().whatever_context::<_, ObjectValueError>(
-                            "Failed to get BitsPerComponent",
-                        )
-                    })?,
-                columns: r
-                    .opt_resolve_container_value(d, &sname("Columns"))?
-                    .map_or(Ok(1), |o| {
-                        o.int()
-                            .whatever_context::<_, ObjectValueError>("Failed to get Columns")
-                    })?,
-                early_change: r
-                    .opt_resolve_container_value(d, &sname("EarlyChange"))?
-                    .map_or(Ok(1), |o| {
-                        o.int()
-                            .whatever_context::<_, ObjectValueError>("Failed to get EarlyChange")
-                    })?,
+                predictor: d.opt_int(&sname("Predictor"))?.unwrap_or(1),
+                colors: d.opt_int(&sname("Colors"))?.unwrap_or(1),
+                bits_per_component: d.opt_int(&sname("BitsPerComponent"))?.unwrap_or(8),
+                columns: d.opt_int(&sname("Columns"))?.unwrap_or(1),
+                early_change: d.opt_int(&sname("EarlyChange"))?.unwrap_or(1),
             }
         } else {
             Self {

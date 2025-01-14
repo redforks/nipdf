@@ -458,55 +458,6 @@ impl<'a> ObjectResolver<'a> {
         self.objects.insert(id.into(), OnceCell::with_value(v));
     }
 
-    /// The primary “raw” lookup of a Dictionary key. It:
-    /// 1) Checks if key exists at all (otherwise returns DictKeyNotFound)
-    /// 2) If value is a reference, attempts to resolve that object
-    /// 3) Returns either (Some(resolved_ref_id), &Object) if it is/was a reference, or (None,
-    ///    &Object) if the value in the Dictionary was not a reference
-    ///
-    /// The behavior of logging errors and/or mapping “not found” errors into Ok(None)
-    /// is controlled by the two bool parameters:
-    ///   - log_error: if true, logs an error with the key name
-    ///   - not_found_is_none: if true, turns “not found” into Ok(None)
-    fn resolve_container_value_internal<'b: 'c, 'c>(
-        &'b self,
-        dict: &'c Dictionary,
-        key: &Name,
-        log_error: bool,
-        not_found_is_none: bool,
-    ) -> Result<(Option<RuntimeObjectId>, Option<&'c Object>), ObjectValueError> {
-        let Some(obj) = dict.get(key) else {
-            if not_found_is_none {
-                return Ok((None, None));
-            }
-            let e = ObjectValueError::DictKeyNotFound;
-            if log_error {
-                error!("{}: {}", e, key);
-            }
-            return Err(e);
-        };
-
-        if let Object::Reference(r) = obj {
-            let ref_id = r.into();
-            match self.resolve(ref_id) {
-                Ok(resolved_obj) => Ok((Some(ref_id), Some(resolved_obj))),
-                Err(ObjectValueError::ObjectIDNotFound { .. }) if not_found_is_none => {
-                    // Turn “ID not found” into None
-                    Ok((None, None))
-                }
-                Err(e) => {
-                    if log_error {
-                        error!("{}: {}", e, key);
-                    }
-                    Err(e)
-                }
-            }
-        } else {
-            // Value is not a reference: just return it as-is
-            Ok((None, Some(obj)))
-        }
-    }
-
     /// Resolve an object by ID, caching it in “objects”. If not in XRef, returns an error.
     pub fn resolve(&self, id: impl Into<RuntimeObjectId>) -> Result<&Object, ObjectValueError> {
         let id = id.into();
@@ -563,17 +514,6 @@ impl<'a> ObjectResolver<'a> {
             .resolve_object_buf(self.buf, id, self.encrypt_info())?
             .left()
             .whatever_context("stream should not in ObjectStream")
-    }
-
-    /// Resolve value from data container `c` with key `k`, if value is reference,
-    /// resolve it recursively. Return `None` if object is not found.
-    pub fn opt_resolve_container_value<'b: 'c, 'c>(
-        &'b self,
-        dict: &'c Dictionary,
-        key: &Name,
-    ) -> Result<Option<&'c Object>, ObjectValueError> {
-        let (_, obj) = self.resolve_container_value_internal(dict, key, false, true)?;
-        Ok(obj)
     }
 }
 
