@@ -642,7 +642,9 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 fn id(&self) -> crate::object::RuntimeObjectId {
                     self.id
                 }
+            }
 
+            impl<'a, 'b> crate::object::PdfObjectCore<'a, 'b> for #struct_name<'a, 'b> {
                 fn dict(&self) -> &crate::object::Dictionary {
                     self.d.dict()
                 }
@@ -668,7 +670,9 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     let d = crate::object::SchemaDict::new(dict, r, #valid_arg)?;
                     Ok(Self { d })
                 }
+            }
 
+            impl<'a, 'b> crate::object::PdfObjectCore<'a, 'b> for #struct_name<'a, 'b> {
                 fn dict(&self) -> &crate::object::Dictionary {
                     self.d.dict()
                 }

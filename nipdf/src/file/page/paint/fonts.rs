@@ -5,7 +5,7 @@ use crate::{
         NameOrDictByRef, NameOrStream, Operation, Point, parse_operations,
         trans::{GlyphLength, GlyphToTextSpace},
     },
-    object::{PdfObject, Stream},
+    object::{PdfObject, PdfObjectCore as _, Stream},
     text::{
         CIDFontType, CIDFontWidths, EncodingDict, EncodingDifferences, FontDescriptorDict,
         FontDescriptorFlags, FontDict, FontType, Type0FontDict, Type3FontDict,

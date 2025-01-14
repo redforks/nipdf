@@ -6,8 +6,8 @@ use crate::{
         RenderingIntent, parse_operations, shading::ShadingDict, trans::FormToUserSpace,
     },
     object::{
-        Dictionary, ImageMask, Object, ObjectValueError, PdfObject, RootPdfObject as _,
-        RuntimeObjectId, Stream,
+        Dictionary, ImageMask, Object, ObjectValueError, PdfObject, PdfObjectCore as _,
+        RootPdfObject as _, RuntimeObjectId, Stream,
     },
     text::FontDict,
 };

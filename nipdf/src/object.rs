@@ -317,8 +317,14 @@ pub trait ObjectKind {}
 pub struct Root;
 pub struct Embedded;
 
+pub trait PdfObjectCore<'a, 'b> {
+    fn dict(&self) -> &Dictionary;
+
+    fn resolver(&self) -> &'b ObjectResolver<'a>;
+}
+
 /// PdfObject that has reference id
-pub trait RootPdfObject<'a, 'b>
+pub trait RootPdfObject<'a, 'b>: PdfObjectCore<'a, 'b>
 where
     Self: Sized,
 {
@@ -329,22 +335,14 @@ where
     ) -> Result<Self, ObjectValueError>;
 
     fn id(&self) -> RuntimeObjectId;
-
-    fn dict(&self) -> &Dictionary;
-
-    fn resolver(&self) -> &'b ObjectResolver<'a>;
 }
 
 /// PdfObject that has embbed in other container object, such as Dictionary or Array.
-pub trait PdfObject<'a, 'b>
+pub trait PdfObject<'a, 'b>: PdfObjectCore<'a, 'b>
 where
     Self: Sized,
 {
     fn new(dict: &'b Dictionary, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError>;
-
-    fn dict(&self) -> &Dictionary;
-
-    fn resolver(&self) -> &'b ObjectResolver<'a>;
 }
 
 #[derive(Educe)]
