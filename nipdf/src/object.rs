@@ -872,6 +872,15 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         )
     }
 
+    fn required_value(&self, key: &Name) -> Result<&'b Object, ObjectValueError> {
+        self.d
+            .get(key)
+            .ok_or_else(|| ObjectValueError::DictSchemaError {
+                schema: self.t.schema_type(),
+                key: key.clone(),
+            })
+    }
+
     fn _resolve_root_pdf_object<O>(
         &self,
         d: &'b Dictionary,
@@ -895,18 +904,13 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         O::new(obj, self.r)
     }
 
-    pub fn resolve_pdf_object<O>(&self, key: &Name) -> Result<O, ObjectValueError>
+    pub fn resolve_pdf_object<O, K>(&self, key: &Name) -> Result<O, ObjectValueError>
     where
-        O: PdfObject<'a, 'b>,
+        K: ObjectKind,
+        (O, K): CreatePdfObject<'a, 'b>,
     {
-        self._resolve_pdf_object(self.d, key)
-    }
-
-    pub fn resolve_root_pdf_object<O>(&self, key: &Name) -> Result<O, ObjectValueError>
-    where
-        O: RootPdfObject<'a, 'b>,
-    {
-        self._resolve_root_pdf_object(self.d, key)
+        let o = self.required_value(key)?;
+        <(O, K)>::create(o, self.r).map(|(o, _)| o)
     }
 
     pub fn as_byte_string(&self, key: &Name) -> Result<&[u8], ObjectValueError> {

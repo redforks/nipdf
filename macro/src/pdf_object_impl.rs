@@ -563,7 +563,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                         quote! { self.d.resolve_pdf_object_map(&prescript::sname(#key)) }
                     } else {
                         let type_name = remove_generic(ty);
-                        quote! { self.d.resolve_pdf_object::<#type_name<'_, '_>>(&prescript::sname(#key)) }
+                        quote! { self.d.resolve_pdf_object::<#type_name<'_, '_>, _>(&prescript::sname(#key)) }
                     }
                 },
             )
@@ -586,7 +586,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                         quote! { self.d.resolve_root_pdf_object_map(&prescript::sname(#key)) }
                     } else {
                         let type_name = remove_generic(ty);
-                        quote! { self.d.resolve_root_pdf_object::<#type_name<'_, '_>>(&prescript::sname(#key)) }
+                        quote! { self.d.resolve_pdf_object::<#type_name<'_, '_>, _>(&prescript::sname(#key)) }
                     }
                 },
             )
