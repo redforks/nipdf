@@ -29,7 +29,7 @@ use nipdf::{
     },
     log_err,
     object::{
-        ImageMask, ImageMetadata, InlineImage, Object, PdfObject, RootPdfObject as _,
+        ImageMask, ImageMetadata, InlineImage, Object, PdfObjectCore as _, RootPdfObject as _,
         TextStringOrNumber,
     },
 };

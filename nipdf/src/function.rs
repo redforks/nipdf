@@ -205,13 +205,13 @@ pub trait FunctionDictTrait {
     #[try_from]
     fn range(&self) -> Option<Domains>;
 
-    #[root_self_as]
+    #[self_as]
     fn sampled(&self) -> SampledFunctionDict<'a, 'b>;
 
-    #[root_self_as]
+    #[self_as]
     fn exponential_interpolation(&self) -> ExponentialInterpolationFunctionDict<'a, 'b>;
 
-    #[root_self_as]
+    #[self_as]
     fn stitch(&self) -> StitchingFunctionDict<'a, 'b>;
 }
 
@@ -402,7 +402,7 @@ pub enum InterpolationOrder {
 #[type_field("FunctionType")]
 #[root_pdf_object]
 pub trait SampledFunctionDictTrait {
-    #[root_self_as]
+    #[self_as]
     fn function_dict(&self) -> FunctionDict<'a, 'b>;
 
     fn size(&self) -> Vec<u32>;
@@ -547,7 +547,7 @@ pub trait ExponentialInterpolationFunctionDictTrait {
 
     fn n(&self) -> f32;
 
-    #[root_self_as]
+    #[self_as]
     fn function_dict(&self) -> FunctionDict<'a, 'b>;
 }
 
@@ -601,7 +601,7 @@ pub trait StitchingFunctionDictTrait {
     #[try_from]
     fn encode(&self) -> Domains;
 
-    #[root_self_as]
+    #[self_as]
     fn function_dict(&self) -> FunctionDict<'a, 'b>;
 }
 

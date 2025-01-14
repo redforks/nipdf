@@ -1,7 +1,7 @@
 use super::*;
 use nipdf::{
     file::{ObjectResolver, XRefTable},
-    object::Dictionary,
+    object::{Dictionary, PdfObject as _},
 };
 use test_case::test_case;
 

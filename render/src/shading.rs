@@ -10,7 +10,7 @@ use nipdf::{
         shading::{AxialCoords, RadialCoords, ShadingDict, ShadingType},
         trans::UserToLogicDeviceSpace,
     },
-    object::PdfObject,
+    object::PdfObjectCore as _,
 };
 use snafu::{OptionExt as _, ResultExt as _, ensure_whatever, whatever};
 use std::rc::Rc;

@@ -17,7 +17,7 @@ pub trait PatternDictTrait {
     #[try_from]
     fn pattern_type(&self) -> PatternType;
 
-    #[root_self_as]
+    #[self_as]
     fn tiling_pattern(&self) -> TilingPatternDict<'a, 'b>;
 
     #[self_as]

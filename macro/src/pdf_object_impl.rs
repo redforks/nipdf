@@ -156,10 +156,6 @@ fn self_as<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, 
     has_attr("self_as", rt, attrs)
 }
 
-fn root_self_as<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
-    has_attr("root_self_as", rt, attrs)
-}
-
 /// Return left means Option<T>, right means T, Return None means `try_from` attr not defined.
 fn try_from<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
     has_attr("try_from", rt, attrs)
@@ -579,16 +575,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 &key,
                 |_| unreachable!("self_as methods never return Option"),
                 |ty| {
-                    quote! { <#ty as crate::object::PdfObject::<'a, 'b>>::new(self.d.dict(), self.d.resolver()) }
-                },
-            )
-        } else if let Some(rt) = root_self_as(rt, attrs) {
-            gen_option_method(
-                rt,
-                &key,
-                |_| unreachable!("root_self_as methods never return Option"),
-                |ty| {
-                    quote! { <#ty as crate::object::RootPdfObject::<'a, 'b>>::new(self.id, self.d.dict(), self.d.resolver()) }
+                    quote! { <Self as crate::object::ToPdfObject::<(#ty, _, _)>>::to_pdf_object(self).map(|v| v.0) }
                 },
             )
         } else {
@@ -645,7 +632,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
 
             impl<'a, 'b> crate::object::PdfObjectCore<'a, 'b> for #struct_name<'a, 'b> {
-                fn dict(&self) -> &crate::object::Dictionary {
+                fn dict(&self) -> &'b crate::object::Dictionary {
                     self.d.dict()
                 }
 
@@ -673,7 +660,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
 
             impl<'a, 'b> crate::object::PdfObjectCore<'a, 'b> for #struct_name<'a, 'b> {
-                fn dict(&self) -> &crate::object::Dictionary {
+                fn dict(&self) -> &'b crate::object::Dictionary {
                     self.d.dict()
                 }
 

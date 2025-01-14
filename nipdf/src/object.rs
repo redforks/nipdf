@@ -318,7 +318,7 @@ pub struct Root;
 pub struct Embedded;
 
 pub trait PdfObjectCore<'a, 'b> {
-    fn dict(&self) -> &Dictionary;
+    fn dict(&self) -> &'b Dictionary;
 
     fn resolver(&self) -> &'b ObjectResolver<'a>;
 }
@@ -343,6 +343,40 @@ where
     Self: Sized,
 {
     fn new(dict: &'b Dictionary, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError>;
+}
+
+pub trait ToPdfObject<T> {
+    fn to_pdf_object(&self) -> Result<T, ObjectValueError>;
+}
+
+impl<'a: 'b, 'b, F, T> ToPdfObject<(T, Root, Root)> for F
+where
+    F: RootPdfObject<'a, 'b>,
+    T: RootPdfObject<'a, 'b>,
+{
+    fn to_pdf_object(&self) -> Result<(T, Root, Root), ObjectValueError> {
+        T::new(self.id(), self.dict(), self.resolver()).map(|o| (o, Root, Root))
+    }
+}
+
+impl<'a: 'b, 'b, F, T> ToPdfObject<(T, Root, Embedded)> for F
+where
+    F: RootPdfObject<'a, 'b>,
+    T: PdfObject<'a, 'b>,
+{
+    fn to_pdf_object(&self) -> Result<(T, Root, Embedded), ObjectValueError> {
+        T::new(self.dict(), self.resolver()).map(|o| (o, Root, Embedded))
+    }
+}
+
+impl<'a: 'b, 'b, F, T> ToPdfObject<(T, Embedded, Embedded)> for F
+where
+    F: PdfObject<'a, 'b>,
+    T: PdfObject<'a, 'b>,
+{
+    fn to_pdf_object(&self) -> Result<(T, Embedded, Embedded), ObjectValueError> {
+        T::new(self.dict(), self.resolver()).map(|o| (o, Embedded, Embedded))
+    }
 }
 
 #[derive(Educe)]
