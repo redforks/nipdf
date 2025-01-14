@@ -31,6 +31,22 @@ impl IndirectObjectDef {
     pub fn take(self) -> Object {
         self.1
     }
+
+    pub fn to_runtime_object_id(&self) -> RuntimeObjectId {
+        self.into()
+    }
+}
+
+impl From<IndirectObjectDef> for RuntimeObjectId {
+    fn from(value: IndirectObjectDef) -> Self {
+        value.0.id
+    }
+}
+
+impl From<&IndirectObjectDef> for RuntimeObjectId {
+    fn from(value: &IndirectObjectDef) -> Self {
+        value.0.id
+    }
 }
 
 #[derive(PartialEq, Debug, Clone, Default, Educe)]

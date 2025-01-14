@@ -159,14 +159,14 @@ impl XRefTable {
         .whatever_context("parse xref table objects")?;
         let mut id_offset = IDOffsetMap::new();
         for o in objects {
-            let search_key = format!("{} {} obj", o.id().id(), o.id().generation());
+            let search_key = format!("{} {} obj", o.to_runtime_object_id(), o.id().generation());
             let pos: u32 = buf
                 .windows(search_key.len())
                 .position(|w| w == search_key.as_bytes())
                 .whatever_context("get object position")?
                 .try_into()
                 .whatever_context("convert position into u32")?;
-            id_offset.insert(o.id().id(), ObjectPos::Offset(pos));
+            id_offset.insert(o.into(), ObjectPos::Offset(pos));
         }
 
         Ok(Self::new(id_offset))
