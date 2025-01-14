@@ -161,7 +161,7 @@ pub trait XObjectDictTrait {
     #[try_from]
     fn matte(&self) -> Option<ColorArgs>;
 
-    #[root_nested]
+    #[nested]
     fn s_mask(&self) -> Option<XObjectDict<'a, 'b>>;
 
     #[try_from]
@@ -242,11 +242,11 @@ pub trait ResourceDictTrait {
     fn ext_g_state(&self) -> HashMap<Name, GraphicsStateParameterDict<'a, 'b>>;
     #[try_from]
     fn color_space(&self) -> ColorSpaceResources;
-    #[root_nested]
+    #[nested]
     fn pattern(&self) -> HashMap<Name, PatternDict<'a, 'b>>;
     #[nested]
     fn shading(&self) -> HashMap<Name, ShadingDict<'a, 'b>>;
-    #[root_nested]
+    #[nested]
     fn x_object(&self) -> HashMap<Name, XObjectDict<'a, 'b>>;
     #[nested]
     fn font(&self) -> HashMap<Name, FontDict<'a, 'b>>;
@@ -256,7 +256,7 @@ pub trait ResourceDictTrait {
 #[pdf_object(["Pages", "Page"])]
 #[root_pdf_object]
 pub(crate) trait PageDictTrait {
-    #[root_nested]
+    #[nested]
     fn kids(&self) -> Vec<Self>;
     #[try_from]
     fn media_box(&self) -> Option<Rectangle>;

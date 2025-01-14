@@ -603,7 +603,7 @@ impl<'a> ObjectResolver<'a> {
 #[root_pdf_object]
 trait CatalogDictTrait {
     fn version(&self) -> Option<Name>;
-    #[root_nested]
+    #[nested]
     fn pages(&self) -> PageDict<'a, 'b>;
 }
 

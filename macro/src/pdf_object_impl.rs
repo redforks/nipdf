@@ -147,11 +147,6 @@ fn nested<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &
     has_attr("nested", rt, attrs)
 }
 
-// Return left means Option<T>, right means T, Return None means not root_nested
-fn root_nested<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type, &'a Type>> {
-    has_attr("root_nested", rt, attrs)
-}
-
 /// Return true if `#[one_or_more]` attribute defined.
 fn one_or_more(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|attr| attr.path().is_ident("one_or_more"))
@@ -547,29 +542,6 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         } else if let Some(nested_type) = nested(rt, attrs) {
             gen_option_method(
                 nested_type,
-                &key,
-                |ty| {
-                    let type_name = remove_generic(ty);
-                    quote! { self.d.opt_resolve_pdf_object::<#type_name<'_, '_>, _>(&prescript::sname(#key)) }
-                },
-                |ty| {
-                    if is_vec(ty) {
-                        if one_or_more(attrs) {
-                            quote! { self.d.resolve_one_or_more_pdf_object(&prescript::sname(#key)) }
-                        } else {
-                            quote! { self.d.resolve_pdf_object_array(&prescript::sname(#key)) }
-                        }
-                    } else if is_map(ty) {
-                        quote! { self.d.resolve_pdf_object_map(&prescript::sname(#key)) }
-                    } else {
-                        let type_name = remove_generic(ty);
-                        quote! { self.d.resolve_pdf_object::<#type_name<'_, '_>, _>(&prescript::sname(#key)) }
-                    }
-                },
-            )
-        } else if let Some(root_nested_type) = root_nested(rt, attrs) {
-            gen_option_method(
-                root_nested_type,
                 &key,
                 |ty| {
                     let type_name = remove_generic(ty);

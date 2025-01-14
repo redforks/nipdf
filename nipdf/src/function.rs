@@ -591,7 +591,7 @@ impl ExponentialInterpolationFunctionDict<'_, '_> {
 #[type_field("FunctionType")]
 pub trait StitchingFunctionDictTrait {
     /// Functions, its length is `k`
-    #[root_nested]
+    #[nested]
     fn functions(&self) -> Vec<FunctionDict<'a, 'b>>;
 
     /// The number of values shall be `k - 1`
