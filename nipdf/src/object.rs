@@ -407,20 +407,6 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     }
 }
 
-macro_rules! schema_access {
-    ($method:ident, $t:ty) => {
-        paste! {
-            pub fn $method(&self, key: &Name) -> Result<$t, ObjectValueError> {
-                self.required::<$t>(key)
-            }
-
-            pub fn [<opt_ $method>](&self, key: &Name) -> Result<Option<$t>, ObjectValueError> {
-                self.opt::<$t>(key)
-            }
-        }
-    };
-}
-
 /// Trait to abstract creation of PdfObject / RootPdfObject
 pub trait CreatePdfObject<'a, 'b>: Sized {
     fn create(o: &'b Object, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError>;
@@ -462,13 +448,7 @@ where
 }
 
 impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
-    schema_access!(bool, bool);
-
-    schema_access!(int, i32);
-
-    schema_access!(name, Name);
-
-    fn required<V>(&self, key: &Name) -> Result<V, ObjectValueError>
+    pub fn required<V>(&self, key: &Name) -> Result<V, ObjectValueError>
     where
         V: for<'d> TryFrom<&'d Object, Error = ObjectValueError>,
     {
@@ -479,7 +459,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         })
     }
 
-    fn opt<V>(&self, key: &Name) -> Result<Option<V>, ObjectValueError>
+    pub fn opt<V>(&self, key: &Name) -> Result<Option<V>, ObjectValueError>
     where
         V: for<'d> TryFrom<&'d Object, Error = ObjectValueError>,
     {
@@ -509,19 +489,19 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     }
 
     pub fn opt_u16(&self, key: &Name) -> Result<Option<u16>, ObjectValueError> {
-        self.opt_int(key).and_then(|i| {
+        self.opt::<i32>(key).and_then(|i| {
             i.map(|i| i.try_into().whatever_context("i32 convert to u16"))
                 .transpose()
         })
     }
 
     pub fn required_u16(&self, key: &Name) -> Result<u16, ObjectValueError> {
-        self.int(key)
+        self.required::<i32>(key)
             .and_then(|i| i.try_into().whatever_context("i32 convert to u16"))
     }
 
     pub fn opt_u32(&self, key: &Name) -> Result<Option<u32>, ObjectValueError> {
-        self.opt_int(key).map(|i| {
+        self.opt::<i32>(key).map(|i| {
             // i32 as u32 as a no-op, so it is safe to use `as` operator.
             // truncate is expected here, so allow it.
             #[allow(clippy::cast_possible_truncation)]
@@ -531,17 +511,17 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn required_u32(&self, key: &Name) -> Result<u32, ObjectValueError> {
         // i32 as u32 as a no-op, so it is safe to use `as` operator.
-        self.int(key).map(|i| i as u32)
+        self.required::<i32>(key).map(|i| i as u32)
     }
 
     pub fn opt_u8(&self, key: &Name) -> Result<Option<u8>, ObjectValueError> {
-        self.opt_int(key)?
+        self.opt::<i32>(key)?
             .map(|i| i.try_into().whatever_context("i32 convert to u8"))
             .transpose()
     }
 
     pub fn required_u8(&self, key: &Name) -> Result<u8, ObjectValueError> {
-        self.int(key)
+        self.required::<i32>(key)
             .and_then(|i| i.try_into().whatever_context("i32 convert to u8"))
     }
 

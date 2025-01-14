@@ -478,11 +478,11 @@ impl LZWDeflateDecodeParams {
         Ok(if let Some(r) = r {
             let d = SchemaDict::new(d, r, ())?;
             Self {
-                predictor: d.opt_int(&sname("Predictor"))?.unwrap_or(1),
-                colors: d.opt_int(&sname("Colors"))?.unwrap_or(1),
-                bits_per_component: d.opt_int(&sname("BitsPerComponent"))?.unwrap_or(8),
-                columns: d.opt_int(&sname("Columns"))?.unwrap_or(1),
-                early_change: d.opt_int(&sname("EarlyChange"))?.unwrap_or(1),
+                predictor: d.opt(&sname("Predictor"))?.unwrap_or(1),
+                colors: d.opt(&sname("Colors"))?.unwrap_or(1),
+                bits_per_component: d.opt(&sname("BitsPerComponent"))?.unwrap_or(8),
+                columns: d.opt(&sname("Columns"))?.unwrap_or(1),
+                early_change: d.opt(&sname("EarlyChange"))?.unwrap_or(1),
             }
         } else {
             Self {

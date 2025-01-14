@@ -172,11 +172,11 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
     };
 
     if rt == &(parse_quote! { Name }) {
-        Some("name")
+        Some("required")
     } else if rt == &(parse_quote! { &str }) || rt == &(parse_quote!(&'b str)) {
         Some("required_str")
     } else if rt == &(parse_quote!(Option<Name>)) {
-        Some("opt_name")
+        Some("opt")
     } else if rt == &(parse_quote!(Option<&str>)) || rt == &(parse_quote!(Option<&'b str>)) {
         Some("opt_str")
     } else if rt == &(parse_quote!(u32)) {
@@ -188,9 +188,9 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
     } else if rt == &(parse_quote!(Option<u16>)) {
         Some("opt_u16")
     } else if rt == &(parse_quote!(i32)) {
-        Some("int")
+        Some("required")
     } else if rt == &(parse_quote!(Option<i32>)) {
-        Some("opt_int")
+        Some("opt")
     } else if rt == &(parse_quote!(f32)) {
         Some("required_f32")
     } else if rt == &(parse_quote!(Option<f32>)) {
@@ -198,9 +198,9 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
     } else if rt == &(parse_quote!(Option<u8>)) {
         Some("opt_u8")
     } else if rt == &(parse_quote!(Option<bool>)) {
-        Some("opt_bool")
+        Some("opt")
     } else if rt == &(parse_quote!(bool)) {
-        Some("bool")
+        Some("required")
     } else if rt == &(parse_quote!(Vec<&Stream>)) {
         Some("opt_single_or_arr_stream")
     } else if rt == &(parse_quote!(Vec<u32>)) {
