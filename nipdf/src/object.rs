@@ -547,34 +547,6 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
             .and_then(|o| self.r.resolve_reference(o))
     }
 
-    /// Resolve pdf_object from container, if its end value is dictionary, return with one element
-    /// vec. If its end value is array, return all elements in array.
-    /// If value not exist, return empty vector.
-    pub fn resolve_one_or_more_pdf_object<O, K>(
-        &self,
-        key: &Name,
-    ) -> Result<Vec<O>, ObjectValueError>
-    where
-        (O, K): CreateFromSchemaDict<'a, 'b>,
-        K: ObjectKind,
-    {
-        let o = self.d.get(key);
-        o.map_or_else(
-            || Ok(vec![]),
-            |obj| match obj {
-                Object::Array(arr) => {
-                    let mut res = Vec::with_capacity(arr.len());
-                    for obj in arr.iter() {
-                        let obj = <(O, K)>::create(obj, self.r).map(|(o, _)| o)?;
-                        res.push(obj);
-                    }
-                    Ok(res)
-                }
-                _ => <(O, K)>::create(obj, self.r).map(|(o, _)| vec![o]),
-            },
-        )
-    }
-
     /// Resolve root pdf_objects from data container `c` with key `k`, if value is reference,
     /// resolve it recursively. Return empty vector if object is not found.
     /// The raw value should be an array of references.

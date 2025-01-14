@@ -1,6 +1,5 @@
 use super::*;
-use crate::object::{Object, SchemaDict};
-use prescript::sname;
+use crate::object::Object;
 use snafu::report;
 use std::path::PathBuf;
 
@@ -54,57 +53,6 @@ trait RootFooDictTrait {}
 
 #[pdf_object(())]
 trait FooDictTrait {}
-
-#[test]
-fn resolve_container_one_or_more_pdf_object() -> Result<()> {
-    // field not exist
-    let buf = br#"1 0 obj
-<<>>
-endobj
-"#;
-    let xref = XRefTable::from_buf(buf)?;
-    let resolver = ObjectResolver::new(buf, &xref, None);
-    let d = resolver.resolve(1).unwrap().as_dict().unwrap();
-    let d = SchemaDict::new(d, &resolver, ()).unwrap();
-    assert!(
-        d.resolve_one_or_more_pdf_object::<RootFooDict<'_, '_>, _>(&sname("foo"))
-            .unwrap()
-            .is_empty()
-    );
-
-    // field is dictionary
-    let buf = br#"1 0 obj
-<</foo 2 0 R>>
-endobj
-2 0 obj<<>>endobj
-"#;
-    let xref = XRefTable::from_buf(buf)?;
-    let resolver = ObjectResolver::new(buf, &xref, None);
-    let d = resolver.resolve(1).unwrap().as_dict().unwrap();
-    let d = SchemaDict::new(d, &resolver, ()).unwrap();
-    let list = d
-        .resolve_one_or_more_pdf_object::<RootFooDict<'_, '_>, _>(&sname("foo"))
-        .unwrap();
-    assert_eq!(list.len(), 1);
-    assert_eq!(2u32, list[0].id().0);
-
-    // field is array
-    let buf = br#"1 0 obj
-<</foo [<<>> 3 0 R]>>
-endobj
-3 0 obj<<>>endobj
-"#;
-    let xref = XRefTable::from_buf(buf)?;
-    let resolver = ObjectResolver::new(buf, &xref, None);
-    let d = resolver.resolve(1).unwrap().as_dict().unwrap();
-    let d = SchemaDict::new(d, &resolver, ()).unwrap();
-    let list = d
-        .resolve_one_or_more_pdf_object::<FooDict<'_, '_>, _>(&sname("foo"))
-        .unwrap();
-    assert_eq!(list.len(), 2);
-
-    Ok(())
-}
 
 #[report]
 #[test]
