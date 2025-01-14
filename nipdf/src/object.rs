@@ -894,12 +894,9 @@ impl From<Vec<Object>> for Object {
 }
 
 impl Object {
+    #[cfg(test)]
     pub fn new_ref(id: u32) -> Self {
         Self::Reference(Reference::new(id, 0))
-    }
-
-    pub fn is_null(&self) -> bool {
-        matches!(self, Self::Null)
     }
 
     /// Return either type value. Panic if value is not either type.
