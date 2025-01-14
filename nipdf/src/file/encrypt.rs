@@ -78,7 +78,6 @@ pub trait EncryptDictTrait {
     fn user_password_hash(&self) -> &[u8];
 
     #[key("CF")]
-    #[one_or_more]
     #[nested]
     fn crypt_filter_params(&self) -> HashMap<Name, CryptFilterDict<'_, '_>>;
 
