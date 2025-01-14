@@ -1123,9 +1123,9 @@ copy_value_access!(reference, Reference, Reference);
 
 impl Object {
     #[doc = r" Return None if value not specific type."]
-    pub fn opt_name(&self) -> Option<Name> {
+    pub fn opt_name(&self) -> Option<&Name> {
         match self {
-            Self::Name(v) => Some(v.clone()),
+            Self::Name(v) => Some(v),
             _ => None,
         }
     }
@@ -1144,12 +1144,6 @@ impl TryFrom<&Object> for Name {
 
     fn try_from(value: &Object) -> Result<Self, Self::Error> {
         value.name()
-    }
-}
-
-impl From<&Object> for Option<Name> {
-    fn from(value: &Object) -> Self {
-        value.opt_name()
     }
 }
 
