@@ -312,8 +312,6 @@ where
     }
 }
 
-pub trait ObjectKind {}
-
 pub struct Root;
 pub struct Embedded;
 

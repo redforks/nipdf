@@ -5,8 +5,7 @@ use crate::{
     file::encrypt::Authorizer,
     object::{
         Array, Dictionary, Embedded, Entry, FrameSet, HexString, LiteralString, Object, ObjectId,
-        ObjectKind, ObjectValueError, PdfObject, Root, RootPdfObject, RuntimeObjectId, Stream,
-        TrailerDict,
+        ObjectValueError, PdfObject, Root, RootPdfObject, RuntimeObjectId, Stream, TrailerDict,
     },
     parser::{self, header_parser, indirect_object_def, parse_frame_set, wsc_prefixed0, wsc0},
 };
@@ -366,6 +365,8 @@ impl EncryptInfo {
             .decrypt(&self.encrypt_key, id, data)
     }
 }
+
+pub trait ObjectKind {}
 
 impl ObjectKind for Root {}
 impl ObjectKind for Embedded {}
