@@ -4,7 +4,7 @@ use crate::{RenderOptionBuilder, Result, render_page};
 use insta::assert_ron_snapshot;
 use md5::{Digest, Md5};
 use nipdf::file::File;
-use snafu::ResultExt;
+use snafu::{ResultExt, report};
 
 /// Open file for testing. `file_path` relate to current crate directory.
 fn open_test_file(file_path: impl AsRef<std::path::Path>) -> File {
@@ -110,11 +110,14 @@ fn ttf_font_cmap_trimmed_table_mapping() {
     );
 }
 
+#[report]
 #[test]
-fn axial_shade_with_sample_function() {
-    assert_ron_snapshot!(
-        &decode_file_page("pdf.js/web/compressed.tracemonkey-pldi-09.pdf", 10).unwrap()
-    );
+fn axial_shade_with_sample_function() -> Result<()> {
+    assert_ron_snapshot!(&decode_file_page(
+        "pdf.js/web/compressed.tracemonkey-pldi-09.pdf",
+        10
+    )?);
+    Ok(())
 }
 
 #[test]

@@ -416,7 +416,8 @@ pub trait CreateFromSchemaDict<'a, 'b>: Sized {
 macro_rules! create_from_schema_dict_try_from {
     ($t: ty) => {
         impl<'a, 'b> CreateFromSchemaDict<'a, 'b> for $t {
-            fn create(o: &'b Object, _: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
+            fn create(o: &'b Object, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
+                let o = r.resolve_reference(o)?;
                 <$t>::try_from(o)
             }
         }
@@ -440,6 +441,7 @@ where
     T: CreateFromSchemaDict<'b, 'b>,
 {
     fn create(o: &'b Object, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
+        let o = r.resolve_reference(o)?;
         let arr = o.arr()?;
         arr.iter().map(|o| T::create(o, r)).collect()
     }
@@ -486,15 +488,17 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         V: CreateFromSchemaDict<'a, 'b>,
     {
         let r = self.resolver();
-        self.required_object(key).and_then(move |o| V::create(o, r))
+        self.required_value(key).and_then(move |o| V::create(o, r))
     }
 
     pub fn opt<V>(&self, key: &Name) -> Result<Option<V>, ObjectValueError>
     where
         V: CreateFromSchemaDict<'a, 'b>,
     {
-        self.opt_object(key)
-            .and_then(|o| o.map(|o| V::create(o, self.resolver())).transpose())
+        self.d
+            .get(key)
+            .map(|o| V::create(o, self.resolver()))
+            .transpose()
     }
 
     /// Return default value if not exist, error if not expected type.
@@ -511,13 +515,9 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     where
         V: CreateFromSchemaDict<'a, 'b>,
     {
-        let resolver = self.resolver();
-        let v = self.opt_object(key)?;
+        let v = self.d.get(key);
         match v {
-            Some(Object::Array(arr)) => arr
-                .iter()
-                .map(|o| V::create(resolver.resolve_reference(o)?, self.resolver()))
-                .collect(),
+            Some(Object::Array(arr)) => arr.iter().map(|o| V::create(o, self.resolver())).collect(),
             Some(o) => Ok(vec![V::create(o, self.resolver())?]),
             None => Ok(vec![]),
         }
@@ -530,7 +530,6 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         let v = self.required_object(key)?.dict()?;
         let mut res = HashMap::with_capacity(v.len());
         for (k, v) in v.iter() {
-            let v = self.resolver().resolve_reference(v)?;
             res.insert(k.clone(), V::create(v, self.resolver())?);
         }
         Ok(res)
@@ -546,17 +545,6 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     pub fn required_object(&self, key: &Name) -> Result<&'b Object, ObjectValueError> {
         self.required_value(key)
             .and_then(|o| self.r.resolve_reference(o))
-    }
-
-    pub fn opt_resolve_pdf_object<O, K>(&self, key: &Name) -> Result<Option<O>, ObjectValueError>
-    where
-        (O, K): CreateFromSchemaDict<'a, 'b>,
-        K: ObjectKind,
-    {
-        self.d
-            .get(key)
-            .map(|o| <(O, K)>::create(o, self.r).map(|(o, _)| o))
-            .transpose()
     }
 
     /// Resolve pdf_object from container, if its end value is dictionary, return with one element
@@ -644,15 +632,6 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
                 schema: self.t.schema_type(),
                 key: key.clone(),
             })
-    }
-
-    pub fn resolve_pdf_object<O, K>(&self, key: &Name) -> Result<O, ObjectValueError>
-    where
-        K: ObjectKind,
-        (O, K): CreateFromSchemaDict<'a, 'b>,
-    {
-        let o = self.required_value(key)?;
-        <(O, K)>::create(o, self.r).map(|(o, _)| o)
     }
 }
 
