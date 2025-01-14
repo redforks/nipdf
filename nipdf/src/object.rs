@@ -1604,6 +1604,12 @@ impl Reference {
     }
 }
 
+impl From<Reference> for RuntimeObjectId {
+    fn from(reference: Reference) -> Self {
+        reference.id().id
+    }
+}
+
 #[cfg(test)]
 impl From<u32> for Object {
     fn from(value: u32) -> Self {

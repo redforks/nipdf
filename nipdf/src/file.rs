@@ -544,18 +544,6 @@ impl<'a> ObjectResolver<'a> {
         }
     }
 
-    /// For root-level PDF objects (those that implement RootObjectResolveable).
-    /// If “o” is a reference, resolv into T; else returns an error.
-    pub fn resolve_root_pdf_object2<'b, T>(&'b self, o: &'b Object) -> Result<T, ObjectValueError>
-    where
-        (T, Root): RootObjectResolveable<'a, 'b>,
-    {
-        match o {
-            Object::Reference(ref_id) => self.resolve_pdf_object(ref_id.id().id()),
-            _ => whatever!("not root pdf object"),
-        }
-    }
-
     /// For embedded PDF objects. If “o” is a reference, resolve it, then construct T from dict.
     pub fn resolve_pdf_object2<'b, T>(&'b self, o: &'b Object) -> Result<T, ObjectValueError>
     where

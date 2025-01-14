@@ -183,7 +183,7 @@ where
                     ensure_whatever!(2 == arr.len(), "ICCBased color space args length");
                     let id = arr[1].reference().whatever_context("get reference")?;
                     let d: ICCStreamDict<'_, '_> = resolver
-                        .resolve_pdf_object(id.id().id())
+                        .resolve_pdf_object(id)
                         .whatever_context("resolve pdf object")?;
                     match d.alternate()?.as_ref() {
                         Some(args) => Self::from_args(args, resolver, resources),
@@ -199,9 +199,13 @@ where
                     ensure_whatever!(4 == arr.len(), "Separation color space args length");
                     let alternate =
                         ColorSpaceArgs::try_from(&arr[2]).whatever_context("parse alternate")?;
-                    let function: FunctionDict<'_, '_> = resolver
-                        .resolve_root_pdf_object2(&arr[3])
-                        .whatever_context("parse tintTransform function")?;
+                    let function: FunctionDict<'_, '_> =
+                        resolver
+                            .resolve_pdf_object((&arr[3]).reference().whatever_context(
+                                "separation function expected to be root object",
+                            )?)
+                            .whatever_context("resolve separation function")?;
+                    // .whatever_context("parse tintTransform function")?;
                     let base = Self::from_args(&alternate, resolver, resources)?;
                     Ok(Self::Separation(Box::new(SeparationColorSpace {
                         alt: base,
@@ -269,8 +273,12 @@ where
                     let alternate = ColorSpaceArgs::try_from(&arr[2])
                         .whatever_context("parse alternate colorspace")?;
                     let f: FunctionDict<'_, '_> = resolver
-                        .resolve_root_pdf_object2(&arr[3])
-                        .whatever_context("resolve pdf object")?;
+                        .resolve_pdf_object(
+                            (&arr[3])
+                                .reference()
+                                .whatever_context("DeviceN function should be root object")?,
+                        )
+                        .whatever_context("resolve DeviceN function")?;
                     let base = Self::from_args(&alternate, resolver, resources)?;
                     Ok(Self::DeviceN(Box::new(DeviceNColorSpace {
                         n: n.try_into()
