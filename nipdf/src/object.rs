@@ -517,6 +517,15 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     {
         let v = self.d.get(key);
         match v {
+            Some(v @ Object::Reference(reference)) => {
+                let o = self.r.resolve(reference)?;
+                match o {
+                    Object::Array(arr) => {
+                        arr.iter().map(|o| V::create(o, self.resolver())).collect()
+                    }
+                    _ => Ok(vec![V::create(v, self.resolver())?]),
+                }
+            }
             Some(Object::Array(arr)) => arr.iter().map(|o| V::create(o, self.resolver())).collect(),
             Some(o) => Ok(vec![V::create(o, self.resolver())?]),
             None => Ok(vec![]),
@@ -545,29 +554,6 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     pub fn required_object(&self, key: &Name) -> Result<&'b Object, ObjectValueError> {
         self.required_value(key)
             .and_then(|o| self.r.resolve_reference(o))
-    }
-
-    /// Resolve root pdf_objects from data container `c` with key `k`, if value is reference,
-    /// resolve it recursively. Return empty vector if object is not found.
-    /// The raw value should be an array of references.
-    pub fn resolve_pdf_object_array<O, K>(&self, key: &Name) -> Result<Vec<O>, ObjectValueError>
-    where
-        (O, K): CreateFromSchemaDict<'a, 'b>,
-        K: ObjectKind,
-    {
-        let arr = self.opt_object(key)?;
-        arr.map_or_else(
-            || Ok(vec![]),
-            |arr| {
-                let arr = arr.arr()?;
-                let mut res = Vec::with_capacity(arr.len());
-                for obj in arr.iter() {
-                    let obj: O = <(O, K)>::create(obj, self.r).map(|(o, _)| o)?;
-                    res.push(obj);
-                }
-                Ok(res)
-            },
-        )
     }
 
     /// Resolve pdf object from data container `c` with key `k`, if value is reference,
