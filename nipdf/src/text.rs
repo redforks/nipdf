@@ -159,7 +159,7 @@ pub trait Type3FontDictTrait {
     #[try_from]
     #[key("FontMatrix")]
     fn matrix(&self) -> GlyphToTextSpace;
-    fn char_procs(&self) -> HashMap<Name, Stream>;
+    fn char_procs(&self) -> HashMap<Name, &'b Stream>;
     #[try_from]
     fn encoding(&self) -> Option<NameOrDictByRef<'b>>;
     fn first_char(&self) -> u32;

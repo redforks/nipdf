@@ -1,5 +1,4 @@
 use super::*;
-use crate::file::{ObjectResolver, XRefTable};
 use prescript::sname;
 use static_assertions::assert_impl_all;
 use test_case::test_case;
@@ -82,26 +81,6 @@ fn one_of_type_value_checker() {
     assert!(!checker.check(Some(sname("blah"))));
     assert!(checker.check(Some(sname("Page"))));
     assert!(checker.check(Some(sname("Pages"))));
-}
-
-#[test_case(None => Vec::<u32>::new())]
-#[test_case(Some(&[]) => Vec::<u32>::new())]
-#[test_case(Some(&[1, 2]) => vec![1, 2])]
-fn schema_ref_id_arr(ids: Option<&[u32]>) -> Vec<u32> {
-    let mut d = HashMap::new();
-    if let Some(ids) = ids {
-        let ids: Array = ids.iter().map(|id| Object::new_ref(*id)).collect();
-        d.insert(sname("ids"), ids.into());
-    }
-    let xref = XRefTable::empty();
-    let resolver = ObjectResolver::empty(&xref);
-    let d = Dictionary::from(d);
-    let d = SchemaDict::new(&d, &resolver, ()).unwrap();
-    d.ref_id_arr(&sname("ids"))
-        .unwrap()
-        .into_iter()
-        .map(|id| id.0)
-        .collect()
 }
 
 #[test_case(Object::Null => "null")]

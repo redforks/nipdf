@@ -450,17 +450,56 @@ where
 impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     pub fn required<V>(&self, key: &Name) -> Result<V, ObjectValueError>
     where
-        V: for<'d> TryFrom<&'d Object, Error = ObjectValueError>,
+        V: TryFrom<&'b Object, Error = ObjectValueError>,
     {
         self.required_object(key).and_then(TryInto::try_into)
     }
 
     pub fn opt<V>(&self, key: &Name) -> Result<Option<V>, ObjectValueError>
     where
-        V: for<'d> TryFrom<&'d Object, Error = ObjectValueError>,
+        V: TryFrom<&'b Object, Error = ObjectValueError>,
     {
         self.opt_object(key)
             .and_then(|o| o.map(|o| o.try_into()).transpose())
+    }
+
+    /// Return default value if not exist, error if not expected type.
+    pub fn or_default<V>(&self, key: &Name) -> Result<V, ObjectValueError>
+    where
+        V: Default + TryFrom<&'b Object, Error = ObjectValueError>,
+    {
+        self.opt(key).map(|v| v.unwrap_or_default())
+    }
+
+    /// If value not exist, return empty vector.
+    /// If value is array, return all elements in array, otherwise return with one element vec.
+    pub fn zero_one_or_more<V>(&self, key: &Name) -> Result<Vec<V>, ObjectValueError>
+    where
+        V: TryFrom<&'b Object, Error = ObjectValueError>,
+    {
+        let resolver = self.resolver();
+        let v = self.opt_object(key)?;
+        match v {
+            Some(Object::Array(arr)) => arr
+                .iter()
+                .map(|o| resolver.resolve_reference(o)?.try_into())
+                .collect(),
+            Some(o) => Ok(vec![TryInto::try_into(o)?]),
+            None => Ok(vec![]),
+        }
+    }
+
+    pub fn map_dict<V>(&self, key: &Name) -> Result<HashMap<Name, V>, ObjectValueError>
+    where
+        V: TryFrom<&'b Object, Error = ObjectValueError> + 'b,
+    {
+        let v = self.required_object(key)?.dict()?;
+        let mut res = HashMap::with_capacity(v.len());
+        for (k, v) in v.iter() {
+            let v = self.resolver().resolve_reference(v)?;
+            res.insert(k.clone(), v.try_into()?);
+        }
+        Ok(res)
     }
 
     pub fn opt_object(&self, key: &Name) -> Result<Option<&'b Object>, ObjectValueError> {
@@ -473,173 +512,6 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     pub fn required_object(&self, key: &Name) -> Result<&'b Object, ObjectValueError> {
         self.required_value(key)
             .and_then(|o| self.r.resolve_reference(o))
-    }
-
-    pub fn opt_u16(&self, key: &Name) -> Result<Option<u16>, ObjectValueError> {
-        self.opt::<i32>(key).and_then(|i| {
-            i.map(|i| i.try_into().whatever_context("i32 convert to u16"))
-                .transpose()
-        })
-    }
-
-    pub fn required_u16(&self, key: &Name) -> Result<u16, ObjectValueError> {
-        self.required::<i32>(key)
-            .and_then(|i| i.try_into().whatever_context("i32 convert to u16"))
-    }
-
-    pub fn opt_u32(&self, key: &Name) -> Result<Option<u32>, ObjectValueError> {
-        self.opt::<i32>(key).map(|i| {
-            // i32 as u32 as a no-op, so it is safe to use `as` operator.
-            // truncate is expected here, so allow it.
-            #[allow(clippy::cast_possible_truncation)]
-            i.map(|i| i as u32)
-        })
-    }
-
-    pub fn required_u32(&self, key: &Name) -> Result<u32, ObjectValueError> {
-        // i32 as u32 as a no-op, so it is safe to use `as` operator.
-        self.required::<i32>(key).map(|i| i as u32)
-    }
-
-    pub fn opt_u8(&self, key: &Name) -> Result<Option<u8>, ObjectValueError> {
-        self.opt::<i32>(key)?
-            .map(|i| i.try_into().whatever_context("i32 convert to u8"))
-            .transpose()
-    }
-
-    pub fn required_u8(&self, key: &Name) -> Result<u8, ObjectValueError> {
-        self.required::<i32>(key)
-            .and_then(|i| i.try_into().whatever_context("i32 convert to u8"))
-    }
-
-    pub fn opt_f32(&self, key: &Name) -> Result<Option<f32>, ObjectValueError> {
-        self.opt_object(key)?
-            .map_or(Ok(None), |o| o.as_number().map(Some))
-    }
-
-    pub fn required_f32(&self, key: &Name) -> Result<f32, ObjectValueError> {
-        self.required_object(key)?.as_number()
-    }
-
-    /// Return empty vec if not exist, error if not array
-    pub fn u32_arr(&self, key: &Name) -> Result<Vec<u32>, ObjectValueError> {
-        self.opt_arr_map(key, |o| o.as_int().map(|i| i as u32))
-            .map(Option::unwrap_or_default)
-    }
-
-    /// Return empty vec if not exist, error if not array
-    pub fn f32_arr(&self, key: &Name) -> Result<Vec<f32>, ObjectValueError> {
-        self.opt_arr_map(key, Object::as_number)
-            .map(Option::unwrap_or_default)
-    }
-
-    pub fn opt_f32_arr(&self, key: &Name) -> Result<Option<Vec<f32>>, ObjectValueError> {
-        self.opt_arr_map(key, Object::as_number)
-            .map(Option::unwrap_or_default)
-            .map(Some)
-    }
-
-    pub fn required_arr_map<V>(
-        &self,
-        key: &Name,
-        f: impl Fn(&Object) -> Result<V, ObjectValueError>,
-    ) -> Result<Vec<V>, ObjectValueError> {
-        self.required_object(key)?.arr()?.iter().map(f).collect()
-    }
-
-    pub fn opt_arr_map<V>(
-        &self,
-        key: &Name,
-        f: impl Fn(&Object) -> Result<V, ObjectValueError>,
-    ) -> Result<Option<Vec<V>>, ObjectValueError> {
-        self.opt_object(key)?
-            .map_or(Ok(None), |o| o.arr().map(Some))?
-            .map(|arr| arr.iter().map(f).collect())
-            .transpose()
-    }
-
-    pub fn opt_arr(&self, key: &Name) -> Result<Option<&'b Array>, ObjectValueError> {
-        self.opt_object(key)?
-            .map_or(Ok(None), |o| o.arr().map(Some))
-    }
-
-    pub fn opt_single_or_arr_stream(
-        &self,
-        key: &Name,
-    ) -> Result<Vec<&'b Stream>, ObjectValueError> {
-        let resolver = self.resolver();
-        let v = self.d.get(key);
-        match v {
-            Some(Object::Array(arr)) => arr
-                .iter()
-                .map(|o| resolver.resolve_reference(o)?.stream())
-                .collect(),
-            Some(o) => resolver.resolve_reference(o)?.stream().map(|o| vec![o]),
-            None => Ok(vec![]),
-        }
-    }
-
-    pub fn opt_dict(&self, key: &Name) -> Result<Option<&'b Dictionary>, ObjectValueError> {
-        self.opt_object(key)?
-            .map_or(Ok(None), |o| o.as_dict().map(Some))
-    }
-
-    pub fn required_dict(&self, key: &Name) -> Result<&'b Dictionary, ObjectValueError> {
-        self.opt_dict(key).and_then(|o| {
-            o.ok_or_else(|| ObjectValueError::DictSchemaError {
-                schema: self.t.schema_type(),
-                key: key.clone(),
-            })
-        })
-    }
-
-    pub fn required_ref(&self, key: &Name) -> Result<RuntimeObjectId, ObjectValueError> {
-        self.d
-            .get(key)
-            .ok_or_else(|| ObjectValueError::DictSchemaError {
-                schema: self.t.schema_type(),
-                key: key.clone(),
-            })?
-            .reference()
-            .map(Into::into)
-    }
-
-    pub fn opt_ref(&self, key: &Name) -> Result<Option<RuntimeObjectId>, ObjectValueError> {
-        self.d
-            .get(key)
-            .map_or(Ok(None), |o| o.reference().map(|r| Some(r.into())))
-    }
-
-    pub fn ref_id_arr(&self, key: &Name) -> Result<Vec<RuntimeObjectId>, ObjectValueError> {
-        self.opt_arr_map(key, |o| o.reference().map(Into::into))
-            .map(Option::unwrap_or_default)
-    }
-
-    pub fn stream_dict(&self, key: &Name) -> Result<HashMap<Name, Stream>, ObjectValueError> {
-        let resolver = self.resolver();
-        let v = self.d.get(key).ok_or(ObjectValueError::DictKeyNotFound)?;
-        let v = self.r.resolve_reference(v)?;
-        let v = v.dict()?;
-        let mut res = HashMap::with_capacity(v.len());
-        for (k, v) in v.iter() {
-            let v = resolver.resolve_reference(v)?;
-            res.insert(k.clone(), v.stream()?.clone());
-        }
-        Ok(res)
-    }
-
-    pub fn opt_stream(&self, key: &Name) -> Result<Option<&'b Stream>, ObjectValueError> {
-        self.opt_object(key)?
-            .map_or(Ok(None), |o| o.stream().map(Some))
-    }
-
-    pub fn opt_str(&self, key: &Name) -> Result<Option<&str>, ObjectValueError> {
-        self.opt_object(key)?
-            .map_or(Ok(None), |o| o.as_string().map(Some))
-    }
-
-    pub fn required_str(&self, key: &Name) -> Result<&str, ObjectValueError> {
-        self.required_object(key)?.as_string()
     }
 
     pub fn opt_resolve_pdf_object<O, K>(&self, key: &Name) -> Result<Option<O>, ObjectValueError>
@@ -747,15 +619,6 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     {
         let o = self.required_value(key)?;
         <(O, K)>::create(o, self.r).map(|(o, _)| o)
-    }
-
-    pub fn as_byte_string(&self, key: &Name) -> Result<&[u8], ObjectValueError> {
-        self.opt_object(key)?
-            .ok_or_else(|| ObjectValueError::DictSchemaError {
-                schema: self.t.schema_type(),
-                key: key.clone(),
-            })?
-            .as_byte_string()
     }
 }
 
@@ -963,9 +826,120 @@ macro_rules! ref_value_access {
     };
 }
 
+impl TryFrom<&Object> for u16 {
+    type Error = ObjectValueError;
+
+    fn try_from(value: &Object) -> Result<Self, Self::Error> {
+        #[allow(clippy::cast_possible_truncation)]
+        value.as_int().map(|v| v as u16)
+    }
+}
+
+impl TryFrom<&Object> for u32 {
+    type Error = ObjectValueError;
+
+    fn try_from(value: &Object) -> Result<Self, Self::Error> {
+        #[allow(clippy::cast_possible_truncation)]
+        value.as_int().map(|v| v as u32)
+    }
+}
+
+impl TryFrom<&Object> for u8 {
+    type Error = ObjectValueError;
+
+    fn try_from(value: &Object) -> Result<Self, Self::Error> {
+        #[allow(clippy::cast_possible_truncation)]
+        value.as_int().map(|v| v as u8)
+    }
+}
+
+impl Object {
+    /// Return None if value not specific type.
+    pub fn opt_real(&self) -> Option<f32> {
+        match self {
+            Self::Number(v) => Some(*v),
+            Self::Integer(v) => Some(*v as f32),
+            _ => None,
+        }
+    }
+
+    /// Return `ObjectValueError::UnexpectedType` if value not expected type.
+    pub fn real(&self) -> Result<f32, ObjectValueError> {
+        match self {
+            Self::Number(v) => Ok(*v),
+            Self::Integer(v) => Ok(*v as f32),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
+    }
+}
+
+impl TryFrom<&Object> for f32 {
+    type Error = ObjectValueError;
+
+    fn try_from(value: &Object) -> Result<Self, Self::Error> {
+        value.real()
+    }
+}
+
+impl From<&Object> for Option<f32> {
+    fn from(value: &Object) -> Self {
+        value.opt_real()
+    }
+}
+
+impl TryFrom<&Object> for RuntimeObjectId {
+    type Error = ObjectValueError;
+
+    fn try_from(value: &Object) -> std::result::Result<Self, Self::Error> {
+        value.reference().map(Into::into)
+    }
+}
+
+impl<'a> TryFrom<&'a Object> for &'a Dictionary {
+    type Error = ObjectValueError;
+
+    fn try_from(value: &'a Object) -> Result<Self, Self::Error> {
+        value.as_dict()
+    }
+}
+
+impl<'a> TryFrom<&'a Object> for &'a Stream {
+    type Error = ObjectValueError;
+
+    fn try_from(value: &'a Object) -> Result<Self, Self::Error> {
+        value.stream()
+    }
+}
+
+impl<'a> TryFrom<&'a Object> for &'a str {
+    type Error = ObjectValueError;
+
+    fn try_from(value: &'a Object) -> Result<Self, Self::Error> {
+        value.as_string()
+    }
+}
+
+impl<'a> TryFrom<&'a Object> for &'a [u8] {
+    type Error = ObjectValueError;
+
+    fn try_from(value: &'a Object) -> Result<Self, Self::Error> {
+        value.as_byte_string()
+    }
+}
+
+impl<'a, T> TryFrom<&'a Object> for Vec<T>
+where
+    T: TryFrom<&'a Object, Error = ObjectValueError>,
+{
+    type Error = ObjectValueError;
+
+    fn try_from(value: &'a Object) -> Result<Self, Self::Error> {
+        value.arr()?.iter().map(T::try_from).collect()
+    }
+}
+
 copy_value_access!(bool, Bool, bool);
 copy_value_access!(int, Integer, i32);
-copy_value_access!(real, Number, f32);
 ref_value_access!(literal_str, LiteralString, &LiteralString);
 ref_value_access!(hex_str, HexString, &HexString);
 ref_value_access!(dict, Dictionary, &Dictionary);
