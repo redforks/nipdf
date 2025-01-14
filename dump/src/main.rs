@@ -209,13 +209,10 @@ fn dump_object(path: &PathBuf, password: &str, id: u32) -> Result<()> {
                 .whatever_context("render")?;
             print!("\n\n\n");
 
-            id_wait_scanned.extend(obj.iter_values().filter_map(|o| {
-                if let Object::Reference(r) = o {
-                    Some(r.id().id())
-                } else {
-                    None
-                }
-            }));
+            id_wait_scanned.extend(
+                obj.iter_values()
+                    .filter_map(|o| o.opt_reference().map(RuntimeObjectId::from)),
+            );
         }
     }
 

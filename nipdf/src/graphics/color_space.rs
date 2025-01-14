@@ -327,9 +327,7 @@ fn resolve_index_data(o: &Object, resolver: &ObjectResolver<'_>) -> Result<Vec<u
         Object::HexString(s) => s.as_bytes().into(),
         Object::LiteralString(s) => s.as_bytes().into(),
         Object::Reference(id) => {
-            let o = resolver
-                .resolve(id.id().id())
-                .whatever_context("resolve object")?;
+            let o = resolver.resolve(id).whatever_context("resolve object")?;
             match o {
                 Object::HexString(s) => s.as_bytes().into(),
                 Object::LiteralString(s) => s.as_bytes().into(),

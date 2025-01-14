@@ -112,7 +112,7 @@ impl<'a, 'b> FilterDict<'a, 'b> {
             Object::Name(n) => vec![n.clone()],
             Object::Reference(id) => Self::get_filters(
                 r.whatever_context::<_, ObjectValueError>("ObjectResolver is None")?
-                    .resolve(id.id().id())?,
+                    .resolve(id)?,
                 r,
             )?,
             _ => {
@@ -152,7 +152,7 @@ impl<'a, 'b> FilterDict<'a, 'b> {
                     Object::Reference(r) => self
                         .r
                         .whatever_context::<_, ObjectValueError>("ObjectResolver is None")?
-                        .resolve(r.id().id())
+                        .resolve(r)
                         .and_then(|o| o.as_dict().map(Some)),
                     _ => {
                         error!("DecodeParms is not Dictionary or Array of Dictionary");
@@ -1163,9 +1163,7 @@ impl Stream {
 
             match (l, resolver) {
                 (Object::Integer(l), _) => Ok(*l as u32),
-                (Object::Reference(id), Some(resolver)) => {
-                    Ok(resolver.resolve(id.id().id())?.int()? as u32)
-                }
+                (Object::Reference(id), Some(resolver)) => Ok(resolver.resolve(id)?.int()? as u32),
                 _ => {
                     error!("Length is not Integer or Reference, {:?}", l);
                     Err(ObjectValueError::UnexpectedType)

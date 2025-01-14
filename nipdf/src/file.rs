@@ -231,7 +231,7 @@ impl XRefTable {
                     let length = stream.0.get("Length").cloned();
                     if let Some(Object::Reference(id)) = length {
                         let v = self
-                            .parse_object(buf, id.id().id(), None)
+                            .parse_object(buf, id, None)
                             .whatever_context::<_, ObjectValueError>("parse object")?;
                         stream.0.update(|d| {
                             d.insert(sname("Length"), v);
@@ -491,7 +491,7 @@ impl<'a> ObjectResolver<'a> {
         };
 
         if let Object::Reference(r) = obj {
-            let ref_id = r.id().id();
+            let ref_id = r.into();
             match self.resolve(ref_id) {
                 Ok(resolved_obj) => Ok((Some(ref_id), Some(resolved_obj))),
                 Err(ObjectValueError::ObjectIDNotFound { .. }) if not_found_is_none => {
@@ -538,7 +538,7 @@ impl<'a> ObjectResolver<'a> {
     /// Object.
     pub fn resolve_reference<'b>(&'b self, v: &'b Object) -> Result<&'b Object, ObjectValueError> {
         if let Object::Reference(id) = v {
-            self.resolve(id.id().id())
+            self.resolve(id)
         } else {
             Ok(v)
         }

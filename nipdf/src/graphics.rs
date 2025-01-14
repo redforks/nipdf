@@ -131,7 +131,7 @@ impl<'b> TryFrom<&'b Object> for ColorSpaceArgs {
         match object {
             Object::Name(name) => Ok(Self::Name(name.clone())),
             Object::Array(arr) => Ok(Self::Array(arr.clone())),
-            Object::Reference(id) => Ok(Self::Ref(id.id().id())),
+            Object::Reference(id) => Ok(Self::Ref(id.into())),
             _ => {
                 error!("Can not parse ColorSpaceArgs from {:?}", object);
                 Err(ObjectValueError::GraphicsOperationSchemaError)

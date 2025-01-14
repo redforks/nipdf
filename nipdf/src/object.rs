@@ -600,17 +600,17 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
                 key: id.clone(),
             })?
             .reference()
-            .map(|r| r.id().id())
+            .map(Into::into)
     }
 
     pub fn opt_ref(&self, id: &Name) -> Result<Option<RuntimeObjectId>, ObjectValueError> {
         self.d
             .get(id)
-            .map_or(Ok(None), |o| o.reference().map(|r| Some(r.id().id())))
+            .map_or(Ok(None), |o| o.reference().map(|r| Some(r.into())))
     }
 
     pub fn ref_id_arr(&self, id: &Name) -> Result<Vec<RuntimeObjectId>, ObjectValueError> {
-        self.opt_arr_map(id, |o| o.reference().map(|r| r.id().id()))
+        self.opt_arr_map(id, |o| o.reference().map(Into::into))
             .map(Option::unwrap_or_default)
     }
 
@@ -731,7 +731,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
                         let mut res = Vec::with_capacity(arr.len());
                         for obj in arr.iter() {
                             let dict = self.r.resolve_reference(obj)?;
-                            let id = obj.reference().ok().map(|id| id.id().id());
+                            let id = obj.reference().ok().map(Into::into);
                             let id = id.whatever_context::<_, ObjectValueError>(
                                 "root pdf object need id",
                             )?;
@@ -779,7 +779,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
                 let mut res = Vec::with_capacity(arr.len());
                 for obj in arr.iter() {
                     let dict = self.r.resolve_reference(obj)?;
-                    let id = obj.reference().ok().map(|id| id.id().id());
+                    let id = obj.reference().ok().map(Into::into);
                     let id =
                         id.whatever_context::<_, ObjectValueError>("root pdf object need id")?;
                     res.push(O::new(id, dict.as_dict()?, self.r)?);
@@ -1344,7 +1344,7 @@ impl Object {
             Object::Stream(s) => dict_to_doc(s.as_dict())
                 .append(RcDoc::line())
                 .append(RcDoc::text("<<stream>>")),
-            Object::Reference(r) => RcDoc::as_string(r.id().id())
+            Object::Reference(r) => RcDoc::as_string(r.to_runtime_object_id())
                 .append(RcDoc::space())
                 .append(RcDoc::as_string(r.id().generation()))
                 .append(RcDoc::space())
@@ -1602,10 +1602,20 @@ impl Reference {
     pub fn id(&self) -> ObjectId {
         self.0
     }
+
+    pub fn to_runtime_object_id(self) -> RuntimeObjectId {
+        self.into()
+    }
 }
 
 impl From<Reference> for RuntimeObjectId {
     fn from(reference: Reference) -> Self {
+        reference.id().id
+    }
+}
+
+impl From<&Reference> for RuntimeObjectId {
+    fn from(reference: &Reference) -> Self {
         reference.id().id
     }
 }
