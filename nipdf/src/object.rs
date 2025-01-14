@@ -782,9 +782,10 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     /// Resolve root pdf_objects from data container `c` with key `k`, if value is reference,
     /// resolve it recursively. Return empty vector if object is not found.
     /// The raw value should be an array of references.
-    pub fn resolve_pdf_object_array<O>(&self, key: &Name) -> Result<Vec<O>, ObjectValueError>
+    pub fn resolve_pdf_object_array<O, K>(&self, key: &Name) -> Result<Vec<O>, ObjectValueError>
     where
-        O: PdfObject<'a, 'b>,
+        (O, K): CreatePdfObject<'a, 'b>,
+        K: ObjectKind,
     {
         let arr = self.opt_resolve_value(key)?;
         arr.map_or_else(
@@ -793,30 +794,8 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
                 let arr = arr.arr()?;
                 let mut res = Vec::with_capacity(arr.len());
                 for obj in arr.iter() {
-                    let dict = self.r.resolve_reference(obj)?;
-                    res.push(O::new(dict.as_dict()?, self.r)?);
-                }
-                Ok(res)
-            },
-        )
-    }
-
-    pub fn resolve_root_pdf_object_array<O>(&self, key: &Name) -> Result<Vec<O>, ObjectValueError>
-    where
-        O: RootPdfObject<'a, 'b>,
-    {
-        let arr = self.opt_resolve_value(key)?;
-        arr.map_or_else(
-            || Ok(vec![]),
-            |arr| {
-                let arr = arr.arr()?;
-                let mut res = Vec::with_capacity(arr.len());
-                for obj in arr.iter() {
-                    let dict = self.r.resolve_reference(obj)?;
-                    let id = obj.reference().ok().map(Into::into);
-                    let id =
-                        id.whatever_context::<_, ObjectValueError>("root pdf object need id")?;
-                    res.push(O::new(id, dict.as_dict()?, self.r)?);
+                    let obj: O = <(O, K)>::create(obj, self.r).map(|(o, _)| o)?;
+                    res.push(obj);
                 }
                 Ok(res)
             },

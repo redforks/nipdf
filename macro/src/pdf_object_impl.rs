@@ -580,7 +580,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                         if one_or_more(attrs) {
                             quote! { self.d.resolve_one_or_more_root_pdf_object(&prescript::sname(#key)) }
                         } else {
-                            quote! { self.d.resolve_root_pdf_object_array(&prescript::sname(#key)) }
+                            quote! { self.d.resolve_pdf_object_array(&prescript::sname(#key)) }
                         }
                     } else if is_map(ty) {
                         quote! { self.d.resolve_pdf_object_map(&prescript::sname(#key)) }
