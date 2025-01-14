@@ -373,16 +373,16 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 macro_rules! schema_access {
     ($method:ident, $t:ty) => {
         paste! {
-            pub fn $method(&self, id: &Name) -> Result<$t, ObjectValueError> {
-                self.required::<$t>(id)
+            pub fn $method(&self, key: &Name) -> Result<$t, ObjectValueError> {
+                self.required::<$t>(key)
             }
 
-            pub fn [<opt_ $method>](&self, id: &Name) -> Result<Option<$t>, ObjectValueError> {
-                self.opt::<$t>(id)
+            pub fn [<opt_ $method>](&self, key: &Name) -> Result<Option<$t>, ObjectValueError> {
+                self.opt::<$t>(key)
             }
 
-            pub fn [<$method _or>](&self, id: &Name, v: $t) -> Result<$t, ObjectValueError> {
-                self.or(id, v)
+            pub fn [<$method _or>](&self, key: &Name, v: $t) -> Result<$t, ObjectValueError> {
+                self.or(key, v)
             }
         }
     };
@@ -395,22 +395,22 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     schema_access!(name, Name);
 
-    pub fn required<V: for<'d> TryFrom<&'d Object, Error = ObjectValueError>>(
-        &self,
-        id: &Name,
-    ) -> Result<V, ObjectValueError> {
-        let v = self.dict().get(id);
+    pub fn required<V>(&self, key: &Name) -> Result<V, ObjectValueError>
+    where
+        V: for<'d> TryFrom<&'d Object, Error = ObjectValueError>,
+    {
+        let v = self.dict().get(key);
         v.map_or(Err(ObjectValueError::DictKeyNotFound), |v| {
             let v = self.r.resolve_reference(v)?;
             v.try_into()
         })
     }
 
-    pub fn opt<V: for<'d> TryFrom<&'d Object, Error = ObjectValueError>>(
-        &self,
-        id: &Name,
-    ) -> Result<Option<V>, ObjectValueError> {
-        let v = self.dict().get(id);
+    pub fn opt<V>(&self, key: &Name) -> Result<Option<V>, ObjectValueError>
+    where
+        V: for<'d> TryFrom<&'d Object, Error = ObjectValueError>,
+    {
+        let v = self.dict().get(key);
         v.map(|v| {
             let v = self.r.resolve_reference(v)?;
             v.try_into()
@@ -418,20 +418,19 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         .transpose()
     }
 
-    pub fn or<V: for<'d> TryFrom<&'d Object, Error = ObjectValueError>>(
-        &self,
-        id: &Name,
-        default: V,
-    ) -> Result<V, ObjectValueError> {
-        self.opt(id).map(|o| o.unwrap_or(default))
+    pub fn or<V>(&self, key: &Name, default: V) -> Result<V, ObjectValueError>
+    where
+        V: for<'d> TryFrom<&'d Object, Error = ObjectValueError>,
+    {
+        self.opt(key).map(|o| o.unwrap_or(default))
     }
 
     fn _opt_resolve_container_value(
         &self,
-        id: &Name,
+        key: &Name,
     ) -> Result<Option<(Option<RuntimeObjectId>, &'b Object)>, ObjectValueError> {
         self.r
-            .do_resolve_container_value(self.d, id)
+            .do_resolve_container_value(self.d, key)
             .map(Some)
             .or_else(|e| match e {
                 ObjectValueError::ObjectIDNotFound { .. } | ObjectValueError::DictKeyNotFound => {
@@ -441,9 +440,9 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
             })
     }
 
-    fn opt_resolve_value(&self, id: &Name) -> Result<Option<&'b Object>, ObjectValueError> {
+    fn opt_resolve_value(&self, key: &Name) -> Result<Option<&'b Object>, ObjectValueError> {
         self.r
-            .do_resolve_container_value(self.d, id)
+            .do_resolve_container_value(self.d, key)
             .map(|(_, o)| o)
             .map(Some)
             .or_else(|e| match e {
@@ -454,24 +453,24 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
             })
     }
 
-    fn opt_get(&self, id: &Name) -> Result<Option<&'b Object>, ObjectValueError> {
-        self.opt_resolve_value(id)
+    fn opt_get(&self, key: &Name) -> Result<Option<&'b Object>, ObjectValueError> {
+        self.opt_resolve_value(key)
     }
 
-    pub fn opt_u16(&self, id: &Name) -> Result<Option<u16>, ObjectValueError> {
-        self.opt_int(id).and_then(|i| {
+    pub fn opt_u16(&self, key: &Name) -> Result<Option<u16>, ObjectValueError> {
+        self.opt_int(key).and_then(|i| {
             i.map(|i| i.try_into().whatever_context("i32 convert to u16"))
                 .transpose()
         })
     }
 
-    pub fn required_u16(&self, id: &Name) -> Result<u16, ObjectValueError> {
-        self.int(id)
+    pub fn required_u16(&self, key: &Name) -> Result<u16, ObjectValueError> {
+        self.int(key)
             .and_then(|i| i.try_into().whatever_context("i32 convert to u16"))
     }
 
-    pub fn opt_u32(&self, id: &Name) -> Result<Option<u32>, ObjectValueError> {
-        self.opt_int(id).map(|i| {
+    pub fn opt_u32(&self, key: &Name) -> Result<Option<u32>, ObjectValueError> {
+        self.opt_int(key).map(|i| {
             // i32 as u32 as a no-op, so it is safe to use `as` operator.
             // truncate is expected here, so allow it.
             #[allow(clippy::cast_possible_truncation)]
@@ -479,87 +478,87 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         })
     }
 
-    pub fn required_u32(&self, id: &Name) -> Result<u32, ObjectValueError> {
+    pub fn required_u32(&self, key: &Name) -> Result<u32, ObjectValueError> {
         // i32 as u32 as a no-op, so it is safe to use `as` operator.
-        self.int(id).map(|i| i as u32)
+        self.int(key).map(|i| i as u32)
     }
 
-    pub fn u32_or(&self, id: &Name, default: u32) -> Result<u32, ObjectValueError> {
-        self.opt_u32(id).map(|i| i.unwrap_or(default))
+    pub fn u32_or(&self, key: &Name, default: u32) -> Result<u32, ObjectValueError> {
+        self.opt_u32(key).map(|i| i.unwrap_or(default))
     }
 
-    pub fn opt_u8(&self, id: &Name) -> Result<Option<u8>, ObjectValueError> {
-        self.opt_int(id)?
+    pub fn opt_u8(&self, key: &Name) -> Result<Option<u8>, ObjectValueError> {
+        self.opt_int(key)?
             .map(|i| i.try_into().whatever_context("i32 convert to u8"))
             .transpose()
     }
 
-    pub fn required_u8(&self, id: &Name) -> Result<u8, ObjectValueError> {
-        self.int(id)
+    pub fn required_u8(&self, key: &Name) -> Result<u8, ObjectValueError> {
+        self.int(key)
             .and_then(|i| i.try_into().whatever_context("i32 convert to u8"))
     }
 
-    pub fn u8_or(&self, id: &Name, default: u8) -> Result<u8, ObjectValueError> {
-        self.opt_u8(id).map(|i| i.unwrap_or(default))
+    pub fn u8_or(&self, key: &Name, default: u8) -> Result<u8, ObjectValueError> {
+        self.opt_u8(key).map(|i| i.unwrap_or(default))
     }
 
-    pub fn opt_f32(&self, id: &Name) -> Result<Option<f32>, ObjectValueError> {
-        self.opt_get(id)?
+    pub fn opt_f32(&self, key: &Name) -> Result<Option<f32>, ObjectValueError> {
+        self.opt_get(key)?
             .map_or(Ok(None), |o| o.as_number().map(Some))
     }
 
-    pub fn required_f32(&self, id: &Name) -> Result<f32, ObjectValueError> {
-        self.opt_get(id)?
+    pub fn required_f32(&self, key: &Name) -> Result<f32, ObjectValueError> {
+        self.opt_get(key)?
             .ok_or_else(|| ObjectValueError::DictSchemaError {
                 schema: self.t.schema_type(),
-                key: id.clone(),
+                key: key.clone(),
             })?
             .as_number()
     }
 
-    pub fn f32_or(&self, id: &Name, default: f32) -> Result<f32, ObjectValueError> {
-        self.opt_f32(id).map(|i| i.unwrap_or(default))
+    pub fn f32_or(&self, key: &Name, default: f32) -> Result<f32, ObjectValueError> {
+        self.opt_f32(key).map(|i| i.unwrap_or(default))
     }
 
-    pub fn opt_object(&self, id: &Name) -> Result<Option<&'b Object>, ObjectValueError> {
-        self.opt_get(id)
+    pub fn opt_object(&self, key: &Name) -> Result<Option<&'b Object>, ObjectValueError> {
+        self.opt_get(key)
     }
 
-    pub fn required_object(&self, id: &Name) -> Result<&'b Object, ObjectValueError> {
-        self.opt_object(id)?
+    pub fn required_object(&self, key: &Name) -> Result<&'b Object, ObjectValueError> {
+        self.opt_object(key)?
             .ok_or_else(|| ObjectValueError::DictSchemaError {
                 schema: self.t.schema_type(),
-                key: id.clone(),
+                key: key.clone(),
             })
     }
 
     /// Return empty vec if not exist, error if not array
-    pub fn u32_arr(&self, id: &Name) -> Result<Vec<u32>, ObjectValueError> {
-        self.opt_arr_map(id, |o| o.as_int().map(|i| i as u32))
+    pub fn u32_arr(&self, key: &Name) -> Result<Vec<u32>, ObjectValueError> {
+        self.opt_arr_map(key, |o| o.as_int().map(|i| i as u32))
             .map(Option::unwrap_or_default)
     }
 
     /// Return empty vec if not exist, error if not array
-    pub fn f32_arr(&self, id: &Name) -> Result<Vec<f32>, ObjectValueError> {
-        self.opt_arr_map(id, Object::as_number)
+    pub fn f32_arr(&self, key: &Name) -> Result<Vec<f32>, ObjectValueError> {
+        self.opt_arr_map(key, Object::as_number)
             .map(Option::unwrap_or_default)
     }
 
-    pub fn opt_f32_arr(&self, id: &Name) -> Result<Option<Vec<f32>>, ObjectValueError> {
-        self.opt_arr_map(id, Object::as_number)
+    pub fn opt_f32_arr(&self, key: &Name) -> Result<Option<Vec<f32>>, ObjectValueError> {
+        self.opt_arr_map(key, Object::as_number)
             .map(Option::unwrap_or_default)
             .map(Some)
     }
 
     pub fn required_arr_map<V>(
         &self,
-        id: &Name,
+        key: &Name,
         f: impl Fn(&Object) -> Result<V, ObjectValueError>,
     ) -> Result<Vec<V>, ObjectValueError> {
-        self.opt_get(id)?
+        self.opt_get(key)?
             .ok_or_else(|| ObjectValueError::DictSchemaError {
                 schema: self.t.schema_type(),
-                key: id.clone(),
+                key: key.clone(),
             })?
             .arr()?
             .iter()
@@ -569,22 +568,25 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn opt_arr_map<V>(
         &self,
-        id: &Name,
+        key: &Name,
         f: impl Fn(&Object) -> Result<V, ObjectValueError>,
     ) -> Result<Option<Vec<V>>, ObjectValueError> {
-        self.opt_get(id)?
+        self.opt_get(key)?
             .map_or(Ok(None), |o| o.arr().map(Some))?
             .map(|arr| arr.iter().map(f).collect())
             .transpose()
     }
 
-    pub fn opt_arr(&self, id: &Name) -> Result<Option<&'b Array>, ObjectValueError> {
-        self.opt_get(id)?.map_or(Ok(None), |o| o.arr().map(Some))
+    pub fn opt_arr(&self, key: &Name) -> Result<Option<&'b Array>, ObjectValueError> {
+        self.opt_get(key)?.map_or(Ok(None), |o| o.arr().map(Some))
     }
 
-    pub fn opt_single_or_arr_stream(&self, id: &Name) -> Result<Vec<&'b Stream>, ObjectValueError> {
+    pub fn opt_single_or_arr_stream(
+        &self,
+        key: &Name,
+    ) -> Result<Vec<&'b Stream>, ObjectValueError> {
         let resolver = self.resolver();
-        match self._opt_resolve_container_value(id)? {
+        match self._opt_resolve_container_value(key)? {
             Some((_, Object::Array(arr))) => arr
                 .iter()
                 .map(|o| resolver.resolve_reference(o)?.stream())
@@ -594,47 +596,47 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         }
     }
 
-    pub fn opt_dict(&self, id: &Name) -> Result<Option<&'b Dictionary>, ObjectValueError> {
-        self.opt_get(id)?
+    pub fn opt_dict(&self, key: &Name) -> Result<Option<&'b Dictionary>, ObjectValueError> {
+        self.opt_get(key)?
             .map_or(Ok(None), |o| o.as_dict().map(Some))
     }
 
-    pub fn required_dict(&self, id: &Name) -> Result<&'b Dictionary, ObjectValueError> {
-        self.opt_dict(id).and_then(|o| {
+    pub fn required_dict(&self, key: &Name) -> Result<&'b Dictionary, ObjectValueError> {
+        self.opt_dict(key).and_then(|o| {
             o.ok_or_else(|| ObjectValueError::DictSchemaError {
                 schema: self.t.schema_type(),
-                key: id.clone(),
+                key: key.clone(),
             })
         })
     }
 
-    pub fn required_ref(&self, id: &Name) -> Result<RuntimeObjectId, ObjectValueError> {
+    pub fn required_ref(&self, key: &Name) -> Result<RuntimeObjectId, ObjectValueError> {
         self.d
-            .get(id)
+            .get(key)
             .ok_or_else(|| ObjectValueError::DictSchemaError {
                 schema: self.t.schema_type(),
-                key: id.clone(),
+                key: key.clone(),
             })?
             .reference()
             .map(Into::into)
     }
 
-    pub fn opt_ref(&self, id: &Name) -> Result<Option<RuntimeObjectId>, ObjectValueError> {
+    pub fn opt_ref(&self, key: &Name) -> Result<Option<RuntimeObjectId>, ObjectValueError> {
         self.d
-            .get(id)
+            .get(key)
             .map_or(Ok(None), |o| o.reference().map(|r| Some(r.into())))
     }
 
-    pub fn ref_id_arr(&self, id: &Name) -> Result<Vec<RuntimeObjectId>, ObjectValueError> {
-        self.opt_arr_map(id, |o| o.reference().map(Into::into))
+    pub fn ref_id_arr(&self, key: &Name) -> Result<Vec<RuntimeObjectId>, ObjectValueError> {
+        self.opt_arr_map(key, |o| o.reference().map(Into::into))
             .map(Option::unwrap_or_default)
     }
 
-    pub fn stream_dict(&self, id: &Name) -> Result<HashMap<Name, Stream>, ObjectValueError> {
+    pub fn stream_dict(&self, key: &Name) -> Result<HashMap<Name, Stream>, ObjectValueError> {
         let resolver = self.resolver();
         let mut res = HashMap::new();
         let (_, v) = self
-            ._opt_resolve_container_value(id)?
+            ._opt_resolve_container_value(key)?
             .ok_or(ObjectValueError::DictKeyNotFound)?;
         for (k, v) in v.dict()?.iter() {
             let v = resolver.resolve_reference(v)?;
@@ -643,32 +645,33 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         Ok(res)
     }
 
-    pub fn opt_stream(&self, id: &Name) -> Result<Option<&'b Stream>, ObjectValueError> {
-        self.opt_get(id)?.map_or(Ok(None), |o| o.stream().map(Some))
+    pub fn opt_stream(&self, key: &Name) -> Result<Option<&'b Stream>, ObjectValueError> {
+        self.opt_get(key)?
+            .map_or(Ok(None), |o| o.stream().map(Some))
     }
 
-    pub fn opt_str(&self, id: &Name) -> Result<Option<&str>, ObjectValueError> {
-        self.opt_get(id)?
+    pub fn opt_str(&self, key: &Name) -> Result<Option<&str>, ObjectValueError> {
+        self.opt_get(key)?
             .map_or(Ok(None), |o| o.as_string().map(Some))
     }
 
-    pub fn required_str(&self, id: &Name) -> Result<&str, ObjectValueError> {
-        self.opt_get(id)?
+    pub fn required_str(&self, key: &Name) -> Result<&str, ObjectValueError> {
+        self.opt_get(key)?
             .ok_or_else(|| ObjectValueError::DictSchemaError {
                 schema: self.t.schema_type(),
-                key: id.clone(),
+                key: key.clone(),
             })?
             .as_string()
     }
 
-    pub fn opt_resolve_pdf_object<O: PdfObject<'a, 'b>>(
-        &self,
-        id: &Name,
-    ) -> Result<Option<O>, ObjectValueError> {
+    pub fn opt_resolve_pdf_object<O>(&self, key: &Name) -> Result<Option<O>, ObjectValueError>
+    where
+        O: PdfObject<'a, 'b>,
+    {
         if let Some((_, obj)) = self
-            ._opt_resolve_container_value(id)
+            ._opt_resolve_container_value(key)
             .with_whatever_context::<_, _, ObjectValueError>(|_| {
-                format!("resolve object from dict: {}", id)
+                format!("resolve object from dict: {}", key)
             })?
         {
             match obj {
@@ -681,14 +684,14 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         }
     }
 
-    pub fn opt_resolve_root_pdf_object<O: RootPdfObject<'a, 'b>>(
-        &self,
-        id: &Name,
-    ) -> Result<Option<O>, ObjectValueError> {
+    pub fn opt_resolve_root_pdf_object<O>(&self, key: &Name) -> Result<Option<O>, ObjectValueError>
+    where
+        O: RootPdfObject<'a, 'b>,
+    {
         if let Some((id, obj)) = self
-            ._opt_resolve_container_value(id)
+            ._opt_resolve_container_value(key)
             .with_whatever_context::<_, _, ObjectValueError>(|_| {
-                format!("resolve object from dict: {}", id)
+                format!("resolve object from dict: {}", key)
             })?
         {
             let id = id.whatever_context::<_, ObjectValueError>("root object need id")?;
@@ -705,11 +708,11 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     /// Resolve pdf_object from container, if its end value is dictionary, return with one element
     /// vec. If its end value is array, return all elements in array.
     /// If value not exist, return empty vector.
-    pub fn resolve_one_or_more_pdf_object<O>(&self, id: &Name) -> Result<Vec<O>, ObjectValueError>
+    pub fn resolve_one_or_more_pdf_object<O>(&self, key: &Name) -> Result<Vec<O>, ObjectValueError>
     where
         O: PdfObject<'a, 'b>,
     {
-        let id_n_obj = self._opt_resolve_container_value(id)?;
+        let id_n_obj = self._opt_resolve_container_value(key)?;
         id_n_obj.map_or_else(
             || Ok(vec![]),
             |(_, obj)| match obj {
@@ -730,12 +733,12 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn resolve_one_or_more_root_pdf_object<O>(
         &self,
-        id: &Name,
+        key: &Name,
     ) -> Result<Vec<O>, ObjectValueError>
     where
         O: RootPdfObject<'a, 'b>,
     {
-        let id_n_obj = self._opt_resolve_container_value(id)?;
+        let id_n_obj = self._opt_resolve_container_value(key)?;
         id_n_obj.map_or_else(
             || Ok(vec![]),
             |(id, obj)| {
@@ -764,11 +767,11 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     /// Resolve root pdf_objects from data container `c` with key `k`, if value is reference,
     /// resolve it recursively. Return empty vector if object is not found.
     /// The raw value should be an array of references.
-    pub fn resolve_pdf_object_array<O>(&self, id: &Name) -> Result<Vec<O>, ObjectValueError>
+    pub fn resolve_pdf_object_array<O>(&self, key: &Name) -> Result<Vec<O>, ObjectValueError>
     where
         O: PdfObject<'a, 'b>,
     {
-        let arr = self.opt_resolve_value(id)?;
+        let arr = self.opt_resolve_value(key)?;
         arr.map_or_else(
             || Ok(vec![]),
             |arr| {
@@ -783,11 +786,11 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         )
     }
 
-    pub fn resolve_root_pdf_object_array<O>(&self, id: &Name) -> Result<Vec<O>, ObjectValueError>
+    pub fn resolve_root_pdf_object_array<O>(&self, key: &Name) -> Result<Vec<O>, ObjectValueError>
     where
         O: RootPdfObject<'a, 'b>,
     {
-        let arr = self.opt_resolve_value(id)?;
+        let arr = self.opt_resolve_value(key)?;
         arr.map_or_else(
             || Ok(vec![]),
             |arr| {
@@ -808,12 +811,12 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     /// Resolve pdf object from data container `c` with key `k`, if value is reference,
     /// resolve it recursively. Return empty Map if object is not found.
     /// The raw value should be a dictionary, that key is Name and value is Dictionary.
-    pub fn resolve_pdf_object_map<O>(&self, id: &Name) -> Result<HashMap<Name, O>>
+    pub fn resolve_pdf_object_map<O>(&self, key: &Name) -> Result<HashMap<Name, O>>
     where
         O: PdfObject<'a, 'b>,
     {
         let dict = self
-            .opt_resolve_value(id)
+            .opt_resolve_value(key)
             .whatever_context("resolve pdf object")?;
         dict.map_or_else(
             || Ok(HashMap::default()),
@@ -831,12 +834,12 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         )
     }
 
-    pub fn resolve_root_pdf_object_map<O>(&self, id: &Name) -> Result<HashMap<Name, O>>
+    pub fn resolve_root_pdf_object_map<O>(&self, key: &Name) -> Result<HashMap<Name, O>>
     where
         O: RootPdfObject<'a, 'b>,
     {
         let dict = self
-            .opt_resolve_value(id)
+            .opt_resolve_value(key)
             .whatever_context("resolve pdf object")?;
         dict.map_or_else(
             || Ok(HashMap::default()),
@@ -854,12 +857,15 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         )
     }
 
-    fn _resolve_root_pdf_object<O: RootPdfObject<'a, 'b>>(
+    fn _resolve_root_pdf_object<O>(
         &self,
         d: &'b Dictionary,
-        id: &Name,
-    ) -> Result<O, ObjectValueError> {
-        let (id, obj) = self.r.do_resolve_container_value(d, id)?;
+        key: &Name,
+    ) -> Result<O, ObjectValueError>
+    where
+        O: RootPdfObject<'a, 'b>,
+    {
+        let (id, obj) = self.r.do_resolve_container_value(d, key)?;
         let id = id.whatever_context::<_, ObjectValueError>("root object need id")?;
         let obj = match obj {
             Object::Dictionary(d) => d,
@@ -869,12 +875,11 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         O::new(id, obj, self.r)
     }
 
-    fn _resolve_pdf_object<O: PdfObject<'a, 'b>>(
-        &self,
-        d: &'b Dictionary,
-        id: &Name,
-    ) -> Result<O, ObjectValueError> {
-        let (_, obj) = self.r.do_resolve_container_value(d, id)?;
+    fn _resolve_pdf_object<O>(&self, d: &'b Dictionary, key: &Name) -> Result<O, ObjectValueError>
+    where
+        O: PdfObject<'a, 'b>,
+    {
+        let (_, obj) = self.r.do_resolve_container_value(d, key)?;
         let obj = match obj {
             Object::Dictionary(d) => d,
             Object::Stream(s) => s.as_dict(),
@@ -883,25 +888,25 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         O::new(obj, self.r)
     }
 
-    pub fn resolve_pdf_object<O: PdfObject<'a, 'b>>(
-        &self,
-        id: &Name,
-    ) -> Result<O, ObjectValueError> {
-        self._resolve_pdf_object(self.d, id)
+    pub fn resolve_pdf_object<O>(&self, key: &Name) -> Result<O, ObjectValueError>
+    where
+        O: PdfObject<'a, 'b>,
+    {
+        self._resolve_pdf_object(self.d, key)
     }
 
-    pub fn resolve_root_pdf_object<O: RootPdfObject<'a, 'b>>(
-        &self,
-        id: &Name,
-    ) -> Result<O, ObjectValueError> {
-        self._resolve_root_pdf_object(self.d, id)
+    pub fn resolve_root_pdf_object<O>(&self, key: &Name) -> Result<O, ObjectValueError>
+    where
+        O: RootPdfObject<'a, 'b>,
+    {
+        self._resolve_root_pdf_object(self.d, key)
     }
 
-    pub fn as_byte_string(&self, id: &Name) -> Result<&[u8], ObjectValueError> {
-        self.opt_get(id)?
+    pub fn as_byte_string(&self, key: &Name) -> Result<&[u8], ObjectValueError> {
+        self.opt_get(key)?
             .ok_or_else(|| ObjectValueError::DictSchemaError {
                 schema: self.t.schema_type(),
-                key: id.clone(),
+                key: key.clone(),
             })?
             .as_byte_string()
     }
