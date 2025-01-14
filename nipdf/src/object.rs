@@ -408,11 +408,44 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 }
 
 /// Trait to abstract creation of PdfObject / RootPdfObject
-pub trait CreatePdfObject<'a, 'b>: Sized {
+pub trait CreateFromSchemaDict<'a, 'b>: Sized {
     fn create(o: &'b Object, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError>;
 }
 
-impl<'a, 'b, T> CreatePdfObject<'a, 'b> for (T, Root)
+/// impl CreateFromSchemaDict for type impl TryFrom trait
+macro_rules! create_from_schema_dict_try_from {
+    ($t: ty) => {
+        impl<'a, 'b> CreateFromSchemaDict<'a, 'b> for $t {
+            fn create(o: &'b Object, _: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
+                <$t>::try_from(o)
+            }
+        }
+    };
+}
+create_from_schema_dict_try_from!(u8);
+create_from_schema_dict_try_from!(u16);
+create_from_schema_dict_try_from!(RuntimeObjectId);
+create_from_schema_dict_try_from!(i32);
+create_from_schema_dict_try_from!(u32);
+create_from_schema_dict_try_from!(f32);
+create_from_schema_dict_try_from!(bool);
+create_from_schema_dict_try_from!(Name);
+create_from_schema_dict_try_from!(&'b Dictionary);
+create_from_schema_dict_try_from!(&'b Stream);
+create_from_schema_dict_try_from!(&'b str);
+create_from_schema_dict_try_from!(&'b [u8]);
+
+impl<'a, 'b, T> CreateFromSchemaDict<'a, 'b> for Vec<T>
+where
+    T: CreateFromSchemaDict<'b, 'b>,
+{
+    fn create(o: &'b Object, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
+        let arr = o.arr()?;
+        arr.iter().map(|o| T::create(o, r)).collect()
+    }
+}
+
+impl<'a, 'b, T> CreateFromSchemaDict<'a, 'b> for (T, Root)
 where
     T: RootPdfObject<'a, 'b>,
 {
@@ -432,7 +465,7 @@ where
     }
 }
 
-impl<'a, 'b, T> CreatePdfObject<'a, 'b> for (T, Embedded)
+impl<'a, 'b, T> CreateFromSchemaDict<'a, 'b> for (T, Embedded)
 where
     T: PdfObject<'a, 'b>,
 {
@@ -450,23 +483,24 @@ where
 impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     pub fn required<V>(&self, key: &Name) -> Result<V, ObjectValueError>
     where
-        V: TryFrom<&'b Object, Error = ObjectValueError>,
+        V: CreateFromSchemaDict<'a, 'b>,
     {
-        self.required_object(key).and_then(TryInto::try_into)
+        let r = self.resolver();
+        self.required_object(key).and_then(move |o| V::create(o, r))
     }
 
     pub fn opt<V>(&self, key: &Name) -> Result<Option<V>, ObjectValueError>
     where
-        V: TryFrom<&'b Object, Error = ObjectValueError>,
+        V: CreateFromSchemaDict<'a, 'b>,
     {
         self.opt_object(key)
-            .and_then(|o| o.map(|o| o.try_into()).transpose())
+            .and_then(|o| o.map(|o| V::create(o, self.resolver())).transpose())
     }
 
     /// Return default value if not exist, error if not expected type.
     pub fn or_default<V>(&self, key: &Name) -> Result<V, ObjectValueError>
     where
-        V: Default + TryFrom<&'b Object, Error = ObjectValueError>,
+        V: CreateFromSchemaDict<'a, 'b> + Default,
     {
         self.opt(key).map(|v| v.unwrap_or_default())
     }
@@ -475,29 +509,29 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     /// If value is array, return all elements in array, otherwise return with one element vec.
     pub fn zero_one_or_more<V>(&self, key: &Name) -> Result<Vec<V>, ObjectValueError>
     where
-        V: TryFrom<&'b Object, Error = ObjectValueError>,
+        V: CreateFromSchemaDict<'a, 'b>,
     {
         let resolver = self.resolver();
         let v = self.opt_object(key)?;
         match v {
             Some(Object::Array(arr)) => arr
                 .iter()
-                .map(|o| resolver.resolve_reference(o)?.try_into())
+                .map(|o| V::create(resolver.resolve_reference(o)?, self.resolver()))
                 .collect(),
-            Some(o) => Ok(vec![TryInto::try_into(o)?]),
+            Some(o) => Ok(vec![V::create(o, self.resolver())?]),
             None => Ok(vec![]),
         }
     }
 
     pub fn map_dict<V>(&self, key: &Name) -> Result<HashMap<Name, V>, ObjectValueError>
     where
-        V: TryFrom<&'b Object, Error = ObjectValueError> + 'b,
+        V: CreateFromSchemaDict<'a, 'b>,
     {
         let v = self.required_object(key)?.dict()?;
         let mut res = HashMap::with_capacity(v.len());
         for (k, v) in v.iter() {
             let v = self.resolver().resolve_reference(v)?;
-            res.insert(k.clone(), v.try_into()?);
+            res.insert(k.clone(), V::create(v, self.resolver())?);
         }
         Ok(res)
     }
@@ -516,7 +550,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn opt_resolve_pdf_object<O, K>(&self, key: &Name) -> Result<Option<O>, ObjectValueError>
     where
-        (O, K): CreatePdfObject<'a, 'b>,
+        (O, K): CreateFromSchemaDict<'a, 'b>,
         K: ObjectKind,
     {
         self.d
@@ -533,7 +567,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         key: &Name,
     ) -> Result<Vec<O>, ObjectValueError>
     where
-        (O, K): CreatePdfObject<'a, 'b>,
+        (O, K): CreateFromSchemaDict<'a, 'b>,
         K: ObjectKind,
     {
         let o = self.d.get(key);
@@ -558,7 +592,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     /// The raw value should be an array of references.
     pub fn resolve_pdf_object_array<O, K>(&self, key: &Name) -> Result<Vec<O>, ObjectValueError>
     where
-        (O, K): CreatePdfObject<'a, 'b>,
+        (O, K): CreateFromSchemaDict<'a, 'b>,
         K: ObjectKind,
     {
         let arr = self.opt_object(key)?;
@@ -581,7 +615,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     /// The raw value should be a dictionary, that key is Name and value is Dictionary.
     pub fn resolve_pdf_object_map<O, K>(&self, key: &Name) -> Result<HashMap<Name, O>>
     where
-        (O, K): CreatePdfObject<'a, 'b>,
+        (O, K): CreateFromSchemaDict<'a, 'b>,
         K: ObjectKind,
     {
         let dict = self
@@ -615,7 +649,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     pub fn resolve_pdf_object<O, K>(&self, key: &Name) -> Result<O, ObjectValueError>
     where
         K: ObjectKind,
-        (O, K): CreatePdfObject<'a, 'b>,
+        (O, K): CreateFromSchemaDict<'a, 'b>,
     {
         let o = self.required_value(key)?;
         <(O, K)>::create(o, self.r).map(|(o, _)| o)

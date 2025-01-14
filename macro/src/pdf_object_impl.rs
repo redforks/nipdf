@@ -641,6 +641,18 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
             }
 
+            impl<'a, 'b> crate::object::CreateFromSchemaDict<'a, 'b> for #struct_name<'a, 'b> {
+                fn create(o: &'b crate::object::Object, r: &'b crate::file::ObjectResolver<'a>) -> Result<Self, crate::object::ObjectValueError> {
+                    use snafu::{OptionExt as _, ResultExt as _};
+                    let id = o
+                        .reference()
+                        .map(Into::into)
+                        .whatever_context::<_, crate::object::ObjectValueError>("root pdf object need id")?;
+                    let o = r.resolve(id)?;
+                    <Self as crate::object::RootPdfObject>::new(id, o.as_dict()?, r)
+                }
+            }
+
             impl<'a, 'b> #struct_name<'a, 'b> {
                 #(#methods)*
             }
@@ -666,6 +678,13 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
 
                 fn resolver(&self) -> &'b crate::file::ObjectResolver<'a> {
                     self.d.resolver()
+                }
+            }
+
+            impl<'a, 'b> crate::object::CreateFromSchemaDict<'a, 'b> for #struct_name<'a, 'b> {
+                fn create(o: &'b crate::object::Object, r: &'b crate::file::ObjectResolver<'a>) -> Result<Self, crate::object::ObjectValueError> {
+                    let o = r.resolve_reference(o)?;
+                    <Self as crate::object::PdfObject>::new(o.as_dict()?, r)
                 }
             }
 
