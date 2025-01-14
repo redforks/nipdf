@@ -575,17 +575,6 @@ impl<'a> ObjectResolver<'a> {
         let (_, obj) = self.resolve_container_value_internal(dict, key, false, true)?;
         Ok(obj)
     }
-
-    /// Resolve value from data container `c` with key `k`, if value is reference,
-    /// resolve it recursively.
-    pub fn resolve_container_value<'b: 'c, 'c>(
-        &'b self,
-        dict: &'c Dictionary,
-        key: &Name,
-    ) -> Result<&'c Object, ObjectValueError> {
-        let (_, obj_opt) = self.resolve_container_value_internal(dict, key, true, false)?;
-        Ok(obj_opt.unwrap())
-    }
 }
 
 #[pdf_object("Catalog")]

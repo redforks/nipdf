@@ -48,19 +48,6 @@ fn object_resolver() -> Result<(), ObjectValueError> {
     Ok(())
 }
 
-#[test]
-fn object_resolver_resolve_container_value() {
-    let dict = b"<</a 1>>";
-    let dict = parser::dict::<_, ContextError>.parse(&dict[..]).unwrap();
-    let xref = XRefTable::empty();
-    let resolver = ObjectResolver::empty(&xref);
-
-    assert!(matches!(
-        resolver.resolve_container_value(&dict, &sname("b")),
-        Err(ObjectValueError::DictKeyNotFound)
-    ));
-}
-
 #[pdf_object(())]
 #[root_pdf_object]
 trait RootFooDictTrait {}

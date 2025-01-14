@@ -95,20 +95,12 @@ fn predictor() {
     let width = exp_image.width();
     let exp = exp_image.into_bytes();
 
-    let decoded = decode_stream("sample_files/filters/predictor.pdf", 23, |d, resolver| {
+    let decoded = decode_stream("sample_files/filters/predictor.pdf", 23, |d, _resolver| {
         let params = d
             .get(&sname("DecodeParms"))
             .unwrap()
             .as_dict()
             .whatever_context("get DecodeParms dict")?;
-        assert_eq!(
-            15,
-            resolver
-                .resolve_container_value(params, &sname("Predictor"))
-                .whatever_context("get Predictor")?
-                .int()
-                .whatever_context("convert predictor to int")?
-        );
         assert_eq!(3, params["Colors"].int().unwrap());
         assert_eq!(8, params["BitsPerComponent"].int().unwrap());
         Ok(())
