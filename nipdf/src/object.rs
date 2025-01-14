@@ -503,16 +503,10 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     }
 
     fn opt_resolve_value(&self, key: &Name) -> Result<Option<&'b Object>, ObjectValueError> {
-        self.r
-            .do_resolve_container_value(self.d, key)
-            .map(|(_, o)| o)
-            .map(Some)
-            .or_else(|e| match e {
-                ObjectValueError::ObjectIDNotFound { .. } | ObjectValueError::DictKeyNotFound => {
-                    Ok(None)
-                }
-                _ => Err(e),
-            })
+        let Some(v) = self.d.get(key) else {
+            return Ok(None);
+        };
+        self.r.resolve_reference(v).map(Some)
     }
 
     fn opt_get(&self, key: &Name) -> Result<Option<&'b Object>, ObjectValueError> {

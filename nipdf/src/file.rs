@@ -507,17 +507,6 @@ impl<'a> ObjectResolver<'a> {
         }
     }
 
-    /// Used in places that want both the optional reference ID (if it was a reference)
-    /// and the object itself. No logging, no “optional” behavior for DictKeyNotFound.
-    pub(crate) fn do_resolve_container_value<'b: 'c, 'c>(
-        &'b self,
-        dict: &'c Dictionary,
-        key: &Name,
-    ) -> Result<(Option<RuntimeObjectId>, &'c Object), ObjectValueError> {
-        let (id_opt, obj_opt) = self.resolve_container_value_internal(dict, key, false, false)?;
-        Ok((id_opt, obj_opt.unwrap()))
-    }
-
     /// Resolve an object by ID, caching it in “objects”. If not in XRef, returns an error.
     pub fn resolve(&self, id: impl Into<RuntimeObjectId>) -> Result<&Object, ObjectValueError> {
         let id = id.into();

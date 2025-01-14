@@ -55,12 +55,6 @@ fn object_resolver_resolve_container_value() {
     let xref = XRefTable::empty();
     let resolver = ObjectResolver::empty(&xref);
 
-    assert_eq!(
-        resolver
-            .do_resolve_container_value(&dict, &sname("a"))
-            .unwrap(),
-        (None, &Object::Integer(1))
-    );
     assert!(matches!(
         resolver.resolve_container_value(&dict, &sname("b")),
         Err(ObjectValueError::DictKeyNotFound)
