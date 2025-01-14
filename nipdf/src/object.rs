@@ -447,41 +447,6 @@ where
     }
 }
 
-impl<'a, 'b, T> CreateFromSchemaDict<'a, 'b> for (T, Root)
-where
-    T: RootPdfObject<'a, 'b>,
-{
-    fn create(o: &'b Object, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
-        let id = o
-            .reference()
-            .map(Into::into)
-            .whatever_context::<_, ObjectValueError>("root pdf object need id")?;
-        let o = r.resolve(id)?;
-        T::new(
-            id,
-            o.as_dict()
-                .whatever_context::<_, ObjectValueError>("pdf object need create from dict")?,
-            r,
-        )
-        .map(|o| (o, Root))
-    }
-}
-
-impl<'a, 'b, T> CreateFromSchemaDict<'a, 'b> for (T, Embedded)
-where
-    T: PdfObject<'a, 'b>,
-{
-    fn create(o: &'b Object, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
-        let o = r.resolve_reference(o)?;
-        T::new(
-            o.as_dict()
-                .whatever_context::<_, ObjectValueError>("pdf object need create from dict")?,
-            r,
-        )
-        .map(|o| (o, Embedded))
-    }
-}
-
 impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     pub fn required<V>(&self, key: &Name) -> Result<V, ObjectValueError>
     where
@@ -536,7 +501,11 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     where
         V: CreateFromSchemaDict<'a, 'b>,
     {
-        let v = self.required_object(key)?.dict()?;
+        let v = self.opt_object(key)?;
+        let Some(v) = v else {
+            return Ok(HashMap::new());
+        };
+        let v = v.as_dict()?;
         let mut res = HashMap::with_capacity(v.len());
         for (k, v) in v.iter() {
             res.insert(k.clone(), V::create(v, self.resolver())?);
@@ -554,33 +523,6 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     pub fn required_object(&self, key: &Name) -> Result<&'b Object, ObjectValueError> {
         self.required_value(key)
             .and_then(|o| self.r.resolve_reference(o))
-    }
-
-    /// Resolve pdf object from data container `c` with key `k`, if value is reference,
-    /// resolve it recursively. Return empty Map if object is not found.
-    /// The raw value should be a dictionary, that key is Name and value is Dictionary.
-    pub fn resolve_pdf_object_map<O, K>(&self, key: &Name) -> Result<HashMap<Name, O>>
-    where
-        (O, K): CreateFromSchemaDict<'a, 'b>,
-        K: ObjectKind,
-    {
-        let dict = self
-            .opt_object(key)
-            .whatever_context("resolve pdf object")?;
-        dict.map_or_else(
-            || Ok(HashMap::default()),
-            |dict| {
-                let dict = dict.as_dict().whatever_context("Value not dict")?;
-                let mut res = HashMap::with_capacity(dict.len());
-                for (k, o) in dict.iter() {
-                    let obj: O = <(O, K)>::create(o, self.r)
-                        .map(|(o, _)| o)
-                        .whatever_context("resolve pdf object")?;
-                    res.insert(k.clone(), obj);
-                }
-                Ok(res)
-            },
-        )
     }
 
     fn required_value(&self, key: &Name) -> Result<&'b Object, ObjectValueError> {
