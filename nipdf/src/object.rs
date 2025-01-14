@@ -903,7 +903,7 @@ impl Object {
     }
 
     /// Return either type value. Panic if value is not either type.
-    pub fn either<'a, U, V>(&'a self) -> Result<Either<U, V>, ObjectValueError>
+    fn either<'a, U, V>(&'a self) -> Result<Either<U, V>, ObjectValueError>
     where
         U: Clone + TryFrom<&'a Self, Error = ObjectValueError>,
         V: Clone + TryFrom<&'a Self, Error = ObjectValueError>,
