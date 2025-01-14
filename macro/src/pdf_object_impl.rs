@@ -550,7 +550,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 &key,
                 |ty| {
                     let type_name = remove_generic(ty);
-                    quote! { self.d.opt_resolve_pdf_object::<#type_name<'_, '_>>(&prescript::sname(#key)) }
+                    quote! { self.d.opt_resolve_pdf_object::<#type_name<'_, '_>, _>(&prescript::sname(#key)) }
                 },
                 |ty| {
                     if is_vec(ty) {
@@ -573,7 +573,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 &key,
                 |ty| {
                     let type_name = remove_generic(ty);
-                    quote! { self.d.opt_resolve_root_pdf_object::<#type_name<'_, '_>>(&prescript::sname(#key)) }
+                    quote! { self.d.opt_resolve_pdf_object::<#type_name<'_, '_>, _>(&prescript::sname(#key)) }
                 },
                 |ty| {
                     if is_vec(ty) {

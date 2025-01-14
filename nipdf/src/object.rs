@@ -312,6 +312,11 @@ where
     }
 }
 
+pub trait ObjectKind {}
+
+pub struct Root;
+pub struct Embedded;
+
 /// PdfObject that has reference id
 pub trait RootPdfObject<'a, 'b>
 where
@@ -386,6 +391,46 @@ macro_rules! schema_access {
             }
         }
     };
+}
+
+/// Trait to abstract creation of PdfObject / RootPdfObject
+pub trait CreatePdfObject<'a, 'b>: Sized {
+    fn create(o: &'b Object, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError>;
+}
+
+impl<'a, 'b, T> CreatePdfObject<'a, 'b> for (T, Root)
+where
+    T: RootPdfObject<'a, 'b>,
+{
+    fn create(o: &'b Object, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
+        let id = o
+            .reference()
+            .map(Into::into)
+            .whatever_context::<_, ObjectValueError>("root pdf object need id")?;
+        let o = r.resolve(id)?;
+        T::new(
+            id,
+            o.as_dict()
+                .whatever_context::<_, ObjectValueError>("pdf object need create from dict")?,
+            r,
+        )
+        .map(|o| (o, Root))
+    }
+}
+
+impl<'a, 'b, T> CreatePdfObject<'a, 'b> for (T, Embedded)
+where
+    T: PdfObject<'a, 'b>,
+{
+    fn create(o: &'b Object, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
+        let o = r.resolve_reference(o)?;
+        T::new(
+            o.as_dict()
+                .whatever_context::<_, ObjectValueError>("pdf object need create from dict")?,
+            r,
+        )
+        .map(|o| (o, Embedded))
+    }
 }
 
 impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
@@ -664,45 +709,15 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
             .as_string()
     }
 
-    pub fn opt_resolve_pdf_object<O>(&self, key: &Name) -> Result<Option<O>, ObjectValueError>
+    pub fn opt_resolve_pdf_object<O, K>(&self, key: &Name) -> Result<Option<O>, ObjectValueError>
     where
-        O: PdfObject<'a, 'b>,
+        (O, K): CreatePdfObject<'a, 'b>,
+        K: ObjectKind,
     {
-        if let Some((_, obj)) = self
-            ._opt_resolve_container_value(key)
-            .with_whatever_context::<_, _, ObjectValueError>(|_| {
-                format!("resolve object from dict: {}", key)
-            })?
-        {
-            match obj {
-                Object::Dictionary(d) => Ok(Some(O::new(d, self.r)?)),
-                Object::Stream(s) => Ok(Some(O::new(s.as_dict(), self.r)?)),
-                _ => Err(ObjectValueError::UnexpectedType),
-            }
-        } else {
-            Ok(None)
-        }
-    }
-
-    pub fn opt_resolve_root_pdf_object<O>(&self, key: &Name) -> Result<Option<O>, ObjectValueError>
-    where
-        O: RootPdfObject<'a, 'b>,
-    {
-        if let Some((id, obj)) = self
-            ._opt_resolve_container_value(key)
-            .with_whatever_context::<_, _, ObjectValueError>(|_| {
-                format!("resolve object from dict: {}", key)
-            })?
-        {
-            let id = id.whatever_context::<_, ObjectValueError>("root object need id")?;
-            match obj {
-                Object::Dictionary(d) => Ok(Some(O::new(id, d, self.r)?)),
-                Object::Stream(s) => Ok(Some(O::new(id, s.as_dict(), self.r)?)),
-                _ => Err(ObjectValueError::UnexpectedType),
-            }
-        } else {
-            Ok(None)
-        }
+        self.d
+            .get(key)
+            .map(|o| <(O, K)>::create(o, self.r).map(|(o, _)| o))
+            .transpose()
     }
 
     /// Resolve pdf_object from container, if its end value is dictionary, return with one element
@@ -867,11 +882,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     {
         let (id, obj) = self.r.do_resolve_container_value(d, key)?;
         let id = id.whatever_context::<_, ObjectValueError>("root object need id")?;
-        let obj = match obj {
-            Object::Dictionary(d) => d,
-            Object::Stream(s) => s.as_dict(),
-            _ => return Err(ObjectValueError::UnexpectedType),
-        };
+        let obj = obj.as_dict()?;
         O::new(id, obj, self.r)
     }
 
@@ -880,11 +891,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         O: PdfObject<'a, 'b>,
     {
         let (_, obj) = self.r.do_resolve_container_value(d, key)?;
-        let obj = match obj {
-            Object::Dictionary(d) => d,
-            Object::Stream(s) => s.as_dict(),
-            _ => return Err(ObjectValueError::UnexpectedType),
-        };
+        let obj = obj.as_dict()?;
         O::new(obj, self.r)
     }
 
