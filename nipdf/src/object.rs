@@ -502,21 +502,6 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         self.opt(key).map(|o| o.unwrap_or(default))
     }
 
-    fn _opt_resolve_container_value(
-        &self,
-        key: &Name,
-    ) -> Result<Option<(Option<RuntimeObjectId>, &'b Object)>, ObjectValueError> {
-        self.r
-            .do_resolve_container_value(self.d, key)
-            .map(Some)
-            .or_else(|e| match e {
-                ObjectValueError::ObjectIDNotFound { .. } | ObjectValueError::DictKeyNotFound => {
-                    Ok(None)
-                }
-                _ => Err(e),
-            })
-    }
-
     fn opt_resolve_value(&self, key: &Name) -> Result<Option<&'b Object>, ObjectValueError> {
         self.r
             .do_resolve_container_value(self.d, key)
@@ -651,13 +636,14 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         key: &Name,
     ) -> Result<Vec<&'b Stream>, ObjectValueError> {
         let resolver = self.resolver();
-        match self._opt_resolve_container_value(key)? {
-            Some((_, Object::Array(arr))) => arr
+        let v = self.d.get(key);
+        match v {
+            Some(Object::Array(arr)) => arr
                 .iter()
                 .map(|o| resolver.resolve_reference(o)?.stream())
                 .collect(),
+            Some(o) => resolver.resolve_reference(o)?.stream().map(|o| vec![o]),
             None => Ok(vec![]),
-            Some((_, o)) => resolver.resolve_reference(o)?.stream().map(|o| vec![o]),
         }
     }
 
@@ -699,11 +685,11 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn stream_dict(&self, key: &Name) -> Result<HashMap<Name, Stream>, ObjectValueError> {
         let resolver = self.resolver();
-        let mut res = HashMap::new();
-        let (_, v) = self
-            ._opt_resolve_container_value(key)?
-            .ok_or(ObjectValueError::DictKeyNotFound)?;
-        for (k, v) in v.dict()?.iter() {
+        let v = self.d.get(key).ok_or(ObjectValueError::DictKeyNotFound)?;
+        let v = self.r.resolve_reference(v)?;
+        let v = v.dict()?;
+        let mut res = HashMap::with_capacity(v.len());
+        for (k, v) in v.iter() {
             let v = resolver.resolve_reference(v)?;
             res.insert(k.clone(), v.stream()?.clone());
         }
