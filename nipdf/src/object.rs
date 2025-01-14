@@ -826,9 +826,10 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     /// Resolve pdf object from data container `c` with key `k`, if value is reference,
     /// resolve it recursively. Return empty Map if object is not found.
     /// The raw value should be a dictionary, that key is Name and value is Dictionary.
-    pub fn resolve_pdf_object_map<O>(&self, key: &Name) -> Result<HashMap<Name, O>>
+    pub fn resolve_pdf_object_map<O, K>(&self, key: &Name) -> Result<HashMap<Name, O>>
     where
-        O: PdfObject<'a, 'b>,
+        (O, K): CreatePdfObject<'a, 'b>,
+        K: ObjectKind,
     {
         let dict = self
             .opt_resolve_value(key)
@@ -838,32 +839,9 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
             |dict| {
                 let dict = dict.as_dict().whatever_context("Value not dict")?;
                 let mut res = HashMap::with_capacity(dict.len());
-                for k in dict.keys() {
-                    let obj: O = self
-                        ._resolve_pdf_object(dict, k)
-                        .whatever_context("resolve pdf object")?;
-                    res.insert(k.clone(), obj);
-                }
-                Ok(res)
-            },
-        )
-    }
-
-    pub fn resolve_root_pdf_object_map<O>(&self, key: &Name) -> Result<HashMap<Name, O>>
-    where
-        O: RootPdfObject<'a, 'b>,
-    {
-        let dict = self
-            .opt_resolve_value(key)
-            .whatever_context("resolve pdf object")?;
-        dict.map_or_else(
-            || Ok(HashMap::default()),
-            |dict| {
-                let dict = dict.as_dict().whatever_context("Value not dict")?;
-                let mut res = HashMap::with_capacity(dict.len());
-                for k in dict.keys() {
-                    let obj: O = self
-                        ._resolve_root_pdf_object(dict, k)
+                for (k, o) in dict.iter() {
+                    let obj: O = <(O, K)>::create(o, self.r)
+                        .map(|(o, _)| o)
                         .whatever_context("resolve pdf object")?;
                     res.insert(k.clone(), obj);
                 }
@@ -879,29 +857,6 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
                 schema: self.t.schema_type(),
                 key: key.clone(),
             })
-    }
-
-    fn _resolve_root_pdf_object<O>(
-        &self,
-        d: &'b Dictionary,
-        key: &Name,
-    ) -> Result<O, ObjectValueError>
-    where
-        O: RootPdfObject<'a, 'b>,
-    {
-        let (id, obj) = self.r.do_resolve_container_value(d, key)?;
-        let id = id.whatever_context::<_, ObjectValueError>("root object need id")?;
-        let obj = obj.as_dict()?;
-        O::new(id, obj, self.r)
-    }
-
-    fn _resolve_pdf_object<O>(&self, d: &'b Dictionary, key: &Name) -> Result<O, ObjectValueError>
-    where
-        O: PdfObject<'a, 'b>,
-    {
-        let (_, obj) = self.r.do_resolve_container_value(d, key)?;
-        let obj = obj.as_dict()?;
-        O::new(obj, self.r)
     }
 
     pub fn resolve_pdf_object<O, K>(&self, key: &Name) -> Result<O, ObjectValueError>
