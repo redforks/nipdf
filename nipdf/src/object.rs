@@ -312,8 +312,11 @@ where
     }
 }
 
-pub struct Root;
-pub struct Embedded;
+mod private {
+    pub struct Root;
+    pub struct Embedded;
+}
+pub(crate) use private::*;
 
 pub trait PdfObjectCore<'a, 'b> {
     fn dict(&self) -> &'b Dictionary;
