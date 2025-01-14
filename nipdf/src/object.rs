@@ -417,10 +417,6 @@ macro_rules! schema_access {
             pub fn [<opt_ $method>](&self, key: &Name) -> Result<Option<$t>, ObjectValueError> {
                 self.opt::<$t>(key)
             }
-
-            pub fn [<$method _or>](&self, key: &Name, v: $t) -> Result<$t, ObjectValueError> {
-                self.or(key, v)
-            }
         }
     };
 }
@@ -493,13 +489,6 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
             v.try_into()
         })
         .transpose()
-    }
-
-    fn or<V>(&self, key: &Name, default: V) -> Result<V, ObjectValueError>
-    where
-        V: for<'d> TryFrom<&'d Object, Error = ObjectValueError>,
-    {
-        self.opt(key).map(|o| o.unwrap_or(default))
     }
 
     fn opt_resolve_value(&self, key: &Name) -> Result<Option<&'b Object>, ObjectValueError> {
