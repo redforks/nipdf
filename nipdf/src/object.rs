@@ -472,7 +472,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     schema_access!(name, Name);
 
-    pub fn required<V>(&self, key: &Name) -> Result<V, ObjectValueError>
+    fn required<V>(&self, key: &Name) -> Result<V, ObjectValueError>
     where
         V: for<'d> TryFrom<&'d Object, Error = ObjectValueError>,
     {
@@ -483,7 +483,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         })
     }
 
-    pub fn opt<V>(&self, key: &Name) -> Result<Option<V>, ObjectValueError>
+    fn opt<V>(&self, key: &Name) -> Result<Option<V>, ObjectValueError>
     where
         V: for<'d> TryFrom<&'d Object, Error = ObjectValueError>,
     {
@@ -495,7 +495,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         .transpose()
     }
 
-    pub fn or<V>(&self, key: &Name, default: V) -> Result<V, ObjectValueError>
+    fn or<V>(&self, key: &Name, default: V) -> Result<V, ObjectValueError>
     where
         V: for<'d> TryFrom<&'d Object, Error = ObjectValueError>,
     {
@@ -560,10 +560,6 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         self.int(key).map(|i| i as u32)
     }
 
-    pub fn u32_or(&self, key: &Name, default: u32) -> Result<u32, ObjectValueError> {
-        self.opt_u32(key).map(|i| i.unwrap_or(default))
-    }
-
     pub fn opt_u8(&self, key: &Name) -> Result<Option<u8>, ObjectValueError> {
         self.opt_int(key)?
             .map(|i| i.try_into().whatever_context("i32 convert to u8"))
@@ -573,10 +569,6 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     pub fn required_u8(&self, key: &Name) -> Result<u8, ObjectValueError> {
         self.int(key)
             .and_then(|i| i.try_into().whatever_context("i32 convert to u8"))
-    }
-
-    pub fn u8_or(&self, key: &Name, default: u8) -> Result<u8, ObjectValueError> {
-        self.opt_u8(key).map(|i| i.unwrap_or(default))
     }
 
     pub fn opt_f32(&self, key: &Name) -> Result<Option<f32>, ObjectValueError> {
@@ -591,10 +583,6 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
                 key: key.clone(),
             })?
             .as_number()
-    }
-
-    pub fn f32_or(&self, key: &Name, default: f32) -> Result<f32, ObjectValueError> {
-        self.opt_f32(key).map(|i| i.unwrap_or(default))
     }
 
     pub fn opt_object(&self, key: &Name) -> Result<Option<&'b Object>, ObjectValueError> {
