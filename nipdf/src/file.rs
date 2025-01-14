@@ -544,8 +544,8 @@ impl<'a> ObjectResolver<'a> {
         }
     }
 
-    /// For embedded PDF objects. If “o” is a reference, resolve it, then construct T from dict.
-    pub fn resolve_pdf_object2<'b, T>(&'b self, o: &'b Object) -> Result<T, ObjectValueError>
+    /// If `o` is dict or stream, construct PdfObject from it, resolve it if `o` is reference.
+    pub fn as_pdf_object<'b, T>(&'b self, o: &'b Object) -> Result<T, ObjectValueError>
     where
         T: PdfObject<'a, 'b>,
     {

@@ -228,7 +228,7 @@ where
                 "CalRGB" => {
                     ensure_whatever!(2 == arr.len(), "CalRGB color space args length");
                     let dict: CalRGBDict<'_, '_> = resolver
-                        .resolve_pdf_object2(&arr[1])
+                        .as_pdf_object(&arr[1])
                         .whatever_context("resolve pdf object")?;
                     let gamma = dict.gamma()?;
                     let matrix = dict.matrix()?;
@@ -290,7 +290,7 @@ where
                 "Lab" => {
                     ensure_whatever!(2 == arr.len(), "Lab color space args length");
                     let dict: LabDict<'_, '_> = resolver
-                        .resolve_pdf_object2(&arr[1])
+                        .as_pdf_object(&arr[1])
                         .whatever_context("resolve pdf object")?;
                     let white_point = dict.white_point()?;
                     let ranges = dict.range()?;
@@ -304,7 +304,7 @@ where
                 "CalGray" => {
                     ensure_whatever!(2 == arr.len(), "CalGray color space args length");
                     let dict: CalGrayDict<'_, '_> = resolver
-                        .resolve_pdf_object2(&arr[1])
+                        .as_pdf_object(&arr[1])
                         .whatever_context("resolve pdf object")?;
                     let gamma = dict.gamma()?;
                     let white_point = dict.white_point()?;
