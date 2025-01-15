@@ -6,7 +6,7 @@ use crate::{
         Dictionary, Entry, FilePos, Frame, FrameSet, IndirectObjectDef, ObjectValueError,
         RuntimeObjectId, XRefSection,
     },
-    parser::{object::indirect_object_def, ws_prefixed0, ws1},
+    parser::{object::indirect_object_def, ws1},
 };
 use hex::FromHexError;
 use log::{info, warn};
@@ -73,7 +73,7 @@ where
         + Compare<u8>
         + Compare<&'a [u8]>
         + 'a,
-    E: ParserError<S> + 'a,
+    E: ParserError<S> + 'a + AddContext<S> + FromExternalError<S, ParseIntError>,
 {
     preceded(
         (wsc0(), b"xref".as_slice(), eol3()),
@@ -81,11 +81,20 @@ where
             1..,
             terminated(separated_pair(dec_uint, b' ', dec_uint), wsc1()).flat_map(
                 |(start_id, count): (u32, u32)| {
+                    info!("start_id, count: {}/{}", start_id, count);
                     let entry = seq! {
                         FilePos(
                             take(10usize).parse_to(),
                             _: b' ',
-                            take(5usize).parse_to(),
+                            take(5usize).try_map(|s| {
+                                from_utf8(s).unwrap().parse::<u16>().or_else(|e| {
+                                    // Many PDFs use 65536 as a special value to indicate that the object is not in use.
+                                    if s == b"65536" {
+                                        Ok(65535)
+                                    } else {
+                                        Err(e)
+                                    }})
+                            }),
                             _: b' ',
                             alt((b'n'.value(true),b'f'.value(false))),
                             _: take(2usize) // 2 bytes eol
@@ -349,15 +358,21 @@ where
     while let Some(pos) = next_pos {
         info!("trailer frame pos: {}", pos);
         let mut frame = alt((
+            parse_xref_stream.context("xref stream"),
             (
                 xref().context("xref"),
-                ws_prefixed0(preceded(
-                    terminated(b"trailer".as_slice().context("trailer"), ws1()),
-                    terminated(ws_prefixed0(dict).context("trailer dict"), ws1()),
-                )),
+                seq! {
+                    (
+                        _: wsc0(),
+                        _: b"trailer".as_slice().context("trailer"),
+                        _: wsc1(),
+                        dict.context("trailer dict"),
+                        _: ws1(),
+                    )
+                }
+                .map(|v| v.0),
             )
                 .context("xref table"),
-            parse_xref_stream.context("xref stream"),
         ))
         .context("frame");
         let mut bytes = Located::new(&bytes[pos..]);
