@@ -80,6 +80,7 @@ itertools = "0.13"
 clap = { version = "4.5", features = ["derive"] }
 mimalloc = "0.1"
 snafu = { version = "0.8.5" }
+colog = "1.3.0"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

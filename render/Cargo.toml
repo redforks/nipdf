@@ -31,7 +31,7 @@ maplit = "1.0"
 criterion = "0.5"
 mimalloc.workspace = true
 phf.workspace = true
-colog = "1.3.0"
+colog.workspace = true
 
 [[bench]]
 name = "page_render"

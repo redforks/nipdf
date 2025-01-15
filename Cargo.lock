@@ -2675,6 +2675,7 @@ name = "nipdf-dump"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "colog",
  "env_logger",
  "image 0.25.5",
  "mimalloc",

@@ -221,7 +221,7 @@ fn dump_object(path: &PathBuf, password: &str, id: u32) -> Result<()> {
 
 #[report]
 fn main() -> Result<()> {
-    env_logger::init();
+    colog::init();
 
     let cli = Cli::parse();
 
