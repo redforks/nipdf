@@ -1161,6 +1161,11 @@ impl Stream {
         data.into_bytes()
     }
 
+    /// Guess stream is image or not.
+    pub fn guess_is_image<'a>(&self, resolver: &ObjectResolver<'a>) -> bool {
+        ImageDict::new(&self.0, resolver).is_ok()
+    }
+
     pub fn decode_image<'a>(
         &self,
         resolver: &ObjectResolver<'a>,

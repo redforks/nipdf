@@ -27,11 +27,14 @@ fn scan_objects() -> Result<(), Whatever> {
                         "resolve object".to_owned(),
                     ));
                 }
-                Ok(Object::Stream(s)) => s
-                    .decode(&resolver)
-                    .map(|_| ())
-                    .or_else(|_| s.decode_image(&resolver, None).map(|_| ()))
-                    .whatever_context("decode stream")?,
+                Ok(Object::Stream(s)) => {
+                    if s.guess_is_image(&resolver) {
+                        s.decode_image(&resolver, None)
+                            .whatever_context("decode stream as image")?;
+                    } else {
+                        s.decode(&resolver).whatever_context("decode stream")?;
+                    }
+                }
                 _ => {}
             }
 
