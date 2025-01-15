@@ -300,6 +300,48 @@ where
     ))
 }
 
+/// Return parser to parse [Object] without reference.
+///
+/// It is used to parse objects of page content stream. In page content stream, object reference
+/// is not allowed. It prevents content like `1 1 0 RG` to be parsed as (int, reference, and 'G').
+///
+/// References inside dictionary is okay.
+pub(crate) fn object_inside_page_stream<'a, S, E>() -> impl Parser<S, Object, E> + 'a
+where
+    S: Stream<Token = u8, Slice = &'a [u8]>
+        + StreamIsPartial
+        + AsBStr
+        + Compare<u8>
+        + Compare<char>
+        + Compare<&'a [u8]>
+        + Compare<Caseless<&'static str>>
+        + 'a,
+    <S as Stream>::IterOffsets: Clone,
+    E: ParserError<S>
+        + 'a
+        + ParserError<&'a [u8]>
+        + FromExternalError<S, ObjectValueError>
+        + FromExternalError<S, FromHexError>
+        + FromExternalError<S, ParseIntError>,
+{
+    let bool = alt((
+        b"true".as_slice().value(Object::Bool(true)),
+        b"false".as_slice().value(Object::Bool(false)),
+    ));
+    let name = name().map(Object::Name);
+    let quoted_string = parse_quoted_string.map(Object::LiteralString);
+
+    alt((
+        bool,
+        number(),
+        name,
+        quoted_string,
+        hex_string(),
+        array,
+        dict.output_into(),
+    ))
+}
+
 /// Return parser to parse indirect object definition.
 ///
 /// If stream dict length is reference, parser will end at after the `stream<eol>`, because

@@ -5,7 +5,7 @@ mod object;
 pub(crate) use file::{header as header_parser, parse_frame_set};
 #[cfg(test)]
 pub(crate) use object::hex_string;
-pub(crate) use object::{dict, dict_body, indirect_object_def, object};
+pub(crate) use object::{dict, dict_body, indirect_object_def, object, object_inside_page_stream};
 use winnow::{
     Parser,
     combinator::{alt, cond, delimited, opt, preceded, repeat},

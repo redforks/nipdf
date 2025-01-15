@@ -645,7 +645,10 @@ where
 {
     let operator = take_till(1.., b" \t\n\r%[<(/".as_slice())
         .try_map(|buf| Ok::<_, Utf8Error>(ObjectOrOperator::Operator(from_utf8(buf)?)));
-    let mut object_or_operator = alt((parser::object().map(ObjectOrOperator::Object), operator));
+    let mut object_or_operator = alt((
+        parser::object_inside_page_stream().map(ObjectOrOperator::Object),
+        operator,
+    ));
     let mut operands = Vec::with_capacity(8);
     let mut r = vec![];
     loop {
