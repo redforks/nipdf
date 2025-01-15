@@ -265,8 +265,7 @@ where
         .parse_next(input)?;
     let s = s
         .as_stream()
-        .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?
-        .clone();
+        .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?;
     let d = CrossReferenceStreamDict::new(s.as_dict())
         .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?;
     input.reset(&start);
@@ -317,7 +316,7 @@ where
     })?;
     Ok((
         r.map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?,
-        s.take_dict(),
+        s.as_dict().clone(),
     ))
 }
 
