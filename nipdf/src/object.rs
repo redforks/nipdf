@@ -17,7 +17,7 @@ use tinyvec::TinyVec;
 mod stream;
 pub use stream::*;
 pub type Array = Rc<[Object]>;
-use snafu::{OptionExt, ResultExt, Snafu};
+use snafu::{OptionExt, ResultExt, Snafu, whatever};
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct IndirectObjectDef(pub(crate) ObjectId, pub(crate) Object);
@@ -794,14 +794,14 @@ impl Object {
     pub fn name(&self) -> Result<Name, ObjectValueError> {
         match self {
             Self::Name(v) => Ok(v.clone()),
-            _ => Err(ObjectValueError::UnexpectedType),
+            _ => whatever!("Expected name or integer, got {:?}", self),
         }
     }
 
     pub fn as_name(&self) -> Result<&Name, ObjectValueError> {
         match self {
             Self::Name(v) => Ok(v),
-            _ => Err(ObjectValueError::UnexpectedType),
+            _ => whatever!("Expected name or integer, got {:?}", self),
         }
     }
 
@@ -812,7 +812,7 @@ impl Object {
             Object::Number(v) => v
                 .to_i32()
                 .whatever_context::<_, ObjectValueError>("convert f32 to int"),
-            _ => Err(ObjectValueError::UnexpectedType),
+            _ => whatever!("Expected number or integer, got {:?}", self),
         }
     }
 
@@ -820,7 +820,7 @@ impl Object {
         match self {
             Object::Number(v) => Ok(*v),
             Object::Integer(v) => Ok(*v as f32),
-            _ => Err(ObjectValueError::UnexpectedType),
+            _ => whatever!("Expected number or integer, got {:?}", self),
         }
     }
 
@@ -828,7 +828,7 @@ impl Object {
         match self {
             Object::Dictionary(d) => Ok(d),
             Object::Stream(s) => Ok(s.as_dict()),
-            _ => Err(ObjectValueError::UnexpectedType),
+            _ => whatever!("Expected stream or dictionary, got {:?}", self),
         }
     }
 
@@ -839,7 +839,7 @@ impl Object {
             Object::HexString(s) => s
                 .as_str()
                 .whatever_context::<_, ObjectValueError>("convert HexString to str"),
-            _ => Err(ObjectValueError::UnexpectedType),
+            _ => whatever!("Expected LiteralString or HexString, got {:?}", self),
         }
     }
 
@@ -848,7 +848,7 @@ impl Object {
         match self {
             Object::LiteralString(s) => Ok(s.as_bytes()),
             Object::HexString(s) => Ok(s.as_bytes()),
-            _ => Err(ObjectValueError::UnexpectedType),
+            _ => whatever!("Expected LiteralString or HexString, got {:?}", self),
         }
     }
 
