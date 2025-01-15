@@ -142,7 +142,14 @@ static PASSWORD: phf::Map<&'static str, &'static str> = phf::phf_map! {
 /// If f ends with ".link", file content is a http url, download
 /// that file to `$flag_file.pdf`, skip the download if `$flag_file.pdf` exists.
 #[pdf_file_test_cases]
+#[snafu::report]
 fn render(f: &str) -> Result<()> {
+    use std::sync::Once;
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        colog::init();
+    });
+
     // return if f ends with one of IGNORED
     if IGNORED.iter().any(|s| f.ends_with(s)) {
         return Ok(());
@@ -182,11 +189,11 @@ fn render(f: &str) -> Result<()> {
         }
     }
 
-    let buf = std::fs::read(file_path).unwrap();
+    let buf = std::fs::read(file_path).whatever_context("read file")?;
     let file_name = Path::new(file_path).file_name().unwrap().to_str().unwrap();
     let pdf = File::parse(buf, PASSWORD.get(file_name).copied().unwrap_or(""))
-        .unwrap_or_else(|_| panic!("failed to parse {f:?}"));
-    let resolver = pdf.resolver().unwrap();
+        .whatever_context("open pdf file")?;
+    let resolver = pdf.resolver().whatever_context("get resolver")?;
     let catalog = pdf.catalog(&resolver).whatever_context("parse catalog")?;
     for (idx, page) in catalog
         .pages()
