@@ -90,7 +90,7 @@ impl ObjectStream {
     ) -> Result<Self, ObjectValueError> {
         let d = stream.as_dict();
         ensure_whatever!(
-            sname("ObjStm") == d[&sname("Type")].name()?,
+            &sname("ObjStm") == d[&sname("Type")].as_name()?,
             "not object stream"
         );
         let n = d.get(&sname("N")).map_or(Ok(0), Object::int)? as usize;
@@ -713,7 +713,7 @@ pub(crate) fn decode_stream<
     let stream = resolver
         .resolve(id.try_into().whatever_context("convert id")?)
         .whatever_context("resolve object")?
-        .stream()
+        .as_stream()
         .whatever_context("resolve stream")?;
     f_assert(stream.as_dict(), &resolver)?;
     Ok(stream

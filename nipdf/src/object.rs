@@ -7,7 +7,6 @@ use paste::paste;
 use prescript::Name;
 use std::{
     borrow::{Borrow, Cow},
-    convert::identity,
     fmt::{Debug, Display},
     iter::Peekable,
     rc::Rc,
@@ -443,7 +442,7 @@ where
 {
     fn create(o: &'b Object, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
         let o = r.resolve_reference(o)?;
-        let arr = o.arr()?;
+        let arr = o.as_arr()?;
         arr.iter().map(|o| T::create(o, r)).collect()
     }
 }
@@ -662,6 +661,16 @@ impl<E: Debug> From<winnow::error::ErrMode<E>> for ObjectValueError {
     }
 }
 
+/// Pdf basic object types.
+///
+/// Access methods:
+///
+///   1. For Copy types: `typename() -> Result<$type, ObjectValueError>`, return error if value not
+/// expected type.
+///   1. For Reference types: `as_typename() -> Result<&$type, ObjectValueError>`, return error if
+/// value not expected type.
+///   1. `opt_typename() -> Option<$type>`, return None if value not specific type, for both Copy
+/// and Reference types.
 #[derive(Clone, PartialEq, Debug)]
 pub enum Object {
     Null,
@@ -681,14 +690,6 @@ macro_rules! copy_value_access {
     ($method:ident, $branch:ident, $t:ty) => {
         impl Object {
             paste! {
-                /// Return None if value not specific type.
-                pub fn [<opt_ $method>](&self) -> Option<$t> {
-                    match self {
-                        Self::$branch(v) => Some(*v),
-                        _ => None,
-                    }
-                }
-
                 /// Return `ObjectValueError::UnexpectedType` if value not expected type.
                 pub fn $method(&self) -> Result<$t, ObjectValueError> {
                     match self {
@@ -706,30 +707,14 @@ macro_rules! copy_value_access {
                 value.$method()
             }
         }
-
-        impl From<&Object> for Option<$t> {
-            paste! {
-                fn from(value: &Object) -> Self {
-                    value.[<opt_ $method>]()
-                }
-            }
-        }
     };
 }
 macro_rules! ref_value_access {
     ($method:ident, $branch:ident, $t:ty) => {
         impl Object {
             paste! {
-                /// Return None if value not specific type.
-                pub fn [<opt_ $method>](&self) -> Option<$t> {
-                    match self {
-                        Self::$branch(v) => Some(&v),
-                        _ => None,
-                    }
-                }
-
                 /// Return `ObjectValueError::UnexpectedType` if value not expected type.
-                pub fn $method(&self) -> Result<$t, ObjectValueError> {
+                pub fn [<as_ $method>](&self) -> Result<$t, ObjectValueError> {
                     match self {
                         Self::$branch(v) => Ok(&v),
                         _ => Err(ObjectValueError::UnexpectedType),
@@ -745,7 +730,7 @@ impl TryFrom<&Object> for u16 {
 
     fn try_from(value: &Object) -> Result<Self, Self::Error> {
         #[allow(clippy::cast_possible_truncation)]
-        value.as_int().map(|v| v as u16)
+        value.int().map(|v| v as u16)
     }
 }
 
@@ -754,7 +739,7 @@ impl TryFrom<&Object> for u32 {
 
     fn try_from(value: &Object) -> Result<Self, Self::Error> {
         #[allow(clippy::cast_possible_truncation)]
-        value.as_int().map(|v| v as u32)
+        value.int().map(|v| v as u32)
     }
 }
 
@@ -763,27 +748,15 @@ impl TryFrom<&Object> for u8 {
 
     fn try_from(value: &Object) -> Result<Self, Self::Error> {
         #[allow(clippy::cast_possible_truncation)]
-        value.as_int().map(|v| v as u8)
+        value.int().map(|v| v as u8)
     }
 }
 
-impl Object {
-    /// Return None if value not specific type.
-    pub fn opt_real(&self) -> Option<f32> {
-        match self {
-            Self::Number(v) => Some(*v),
-            Self::Integer(v) => Some(*v as f32),
-            _ => None,
-        }
-    }
+impl TryFrom<&Object> for i32 {
+    type Error = ObjectValueError;
 
-    /// Return `ObjectValueError::UnexpectedType` if value not expected type.
-    pub fn real(&self) -> Result<f32, ObjectValueError> {
-        match self {
-            Self::Number(v) => Ok(*v),
-            Self::Integer(v) => Ok(*v as f32),
-            _ => Err(ObjectValueError::UnexpectedType),
-        }
+    fn try_from(value: &Object) -> Result<Self, Self::Error> {
+        value.int()
     }
 }
 
@@ -791,13 +764,7 @@ impl TryFrom<&Object> for f32 {
     type Error = ObjectValueError;
 
     fn try_from(value: &Object) -> Result<Self, Self::Error> {
-        value.real()
-    }
-}
-
-impl From<&Object> for Option<f32> {
-    fn from(value: &Object) -> Self {
-        value.opt_real()
+        value.number()
     }
 }
 
@@ -821,7 +788,7 @@ impl<'a> TryFrom<&'a Object> for &'a Stream {
     type Error = ObjectValueError;
 
     fn try_from(value: &'a Object) -> Result<Self, Self::Error> {
-        value.stream()
+        value.as_stream()
     }
 }
 
@@ -829,7 +796,7 @@ impl<'a> TryFrom<&'a Object> for &'a str {
     type Error = ObjectValueError;
 
     fn try_from(value: &'a Object) -> Result<Self, Self::Error> {
-        value.as_string()
+        value.as_str()
     }
 }
 
@@ -837,47 +804,25 @@ impl<'a> TryFrom<&'a Object> for &'a [u8] {
     type Error = ObjectValueError;
 
     fn try_from(value: &'a Object) -> Result<Self, Self::Error> {
-        value.as_byte_string()
+        value.as_bstr()
     }
 }
 
-impl<'a, T> TryFrom<&'a Object> for Vec<T>
+impl<T> TryFrom<&Object> for Vec<T>
 where
-    T: TryFrom<&'a Object, Error = ObjectValueError>,
+    T: Copy + for<'a> TryFrom<&'a Object, Error = ObjectValueError>,
 {
     type Error = ObjectValueError;
 
-    fn try_from(value: &'a Object) -> Result<Self, Self::Error> {
-        value.arr()?.iter().map(T::try_from).collect()
+    fn try_from(value: &Object) -> Result<Self, Self::Error> {
+        value.as_arr()?.iter().map(T::try_from).collect()
     }
 }
 
 copy_value_access!(bool, Bool, bool);
-copy_value_access!(int, Integer, i32);
-ref_value_access!(literal_str, LiteralString, &LiteralString);
-ref_value_access!(hex_str, HexString, &HexString);
-ref_value_access!(dict, Dictionary, &Dictionary);
 ref_value_access!(arr, Array, &Array);
 ref_value_access!(stream, Stream, &Stream);
 copy_value_access!(reference, Reference, Reference);
-
-impl Object {
-    #[doc = r" Return None if value not specific type."]
-    pub fn opt_name(&self) -> Option<&Name> {
-        match self {
-            Self::Name(v) => Some(v),
-            _ => None,
-        }
-    }
-
-    #[doc = r" Return `ObjectValueError::UnexpectedType` if value not expected type."]
-    pub fn name(&self) -> Result<Name, ObjectValueError> {
-        match self {
-            Self::Name(v) => Ok(v.clone()),
-            _ => Err(ObjectValueError::UnexpectedType),
-        }
-    }
-}
 
 impl TryFrom<&Object> for Name {
     type Error = ObjectValueError;
@@ -899,37 +844,38 @@ impl Object {
         Self::Reference(Reference::new(id, 0))
     }
 
-    /// Return either type value. Panic if value is not either type.
-    fn either<'a, U, V>(&'a self) -> Result<Either<U, V>, ObjectValueError>
-    where
-        U: Clone + TryFrom<&'a Self, Error = ObjectValueError>,
-        V: Clone + TryFrom<&'a Self, Error = ObjectValueError>,
-    {
-        match U::try_from(self) {
-            Ok(u) => Ok(Either::Left(u)),
-            Err(_) => V::try_from(self).map(Either::Right),
+    /// Return `ObjectValueError::UnexpectedType` if value not expected type.
+    pub fn name(&self) -> Result<Name, ObjectValueError> {
+        match self {
+            Self::Name(v) => Ok(v.clone()),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
+    }
+
+    pub fn as_name(&self) -> Result<&Name, ObjectValueError> {
+        match self {
+            Self::Name(v) => Ok(v),
+            _ => Err(ObjectValueError::UnexpectedType),
         }
     }
 
     /// Get number as i32, if value is f32, convert to i32, error otherwise.
-    pub fn as_int(&self) -> Result<i32, ObjectValueError> {
-        self.either::<f32, i32>()
-            .map(|v| {
-                v.map_either(
-                    |v| {
-                        v.to_i32()
-                            .whatever_context::<_, ObjectValueError>("convert f32 to int")
-                    },
-                    Ok,
-                )
-                .into_inner()
-            })
-            .and_then(identity)
+    pub fn int(&self) -> Result<i32, ObjectValueError> {
+        match self {
+            Object::Integer(v) => Ok(*v),
+            Object::Number(v) => v
+                .to_i32()
+                .whatever_context::<_, ObjectValueError>("convert f32 to int"),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
     }
 
-    pub fn as_number(&self) -> Result<f32, ObjectValueError> {
-        self.either::<f32, i32>()
-            .map(|v| v.map_either(|v| v, |v| v as f32).into_inner())
+    pub fn number(&self) -> Result<f32, ObjectValueError> {
+        match self {
+            Object::Number(v) => Ok(*v),
+            Object::Integer(v) => Ok(*v as f32),
+            _ => Err(ObjectValueError::UnexpectedType),
+        }
     }
 
     pub fn as_dict(&self) -> Result<&Dictionary, ObjectValueError> {
@@ -940,22 +886,8 @@ impl Object {
         }
     }
 
-    pub fn into_arr(self) -> Result<Array, ObjectValueError> {
-        match self {
-            Object::Array(a) => Ok(a),
-            _ => Err(ObjectValueError::UnexpectedType),
-        }
-    }
-
-    pub fn as_text_string(&self) -> Result<&str, ObjectValueError> {
-        match self {
-            Object::LiteralString(s) => s.as_str(),
-            _ => Err(ObjectValueError::UnexpectedType),
-        }
-    }
-
     /// Return decoded string from LiteralString or HexString
-    pub fn as_string(&self) -> Result<&str, ObjectValueError> {
+    pub fn as_str(&self) -> Result<&str, ObjectValueError> {
         match self {
             Object::LiteralString(s) => s.as_str(),
             Object::HexString(s) => s
@@ -966,7 +898,7 @@ impl Object {
     }
 
     /// Decode Literal string and hex string into bytes.
-    pub fn as_byte_string(&self) -> Result<&[u8], ObjectValueError> {
+    pub fn as_bstr(&self) -> Result<&[u8], ObjectValueError> {
         match self {
             Object::LiteralString(s) => Ok(s.as_bytes()),
             Object::HexString(s) => Ok(s.as_bytes()),
@@ -986,7 +918,7 @@ impl Object {
     }
 
     /// Update array items in place, if array is shared, clone it first.
-    pub fn update_array_items(arr: &mut Array, mut f: impl FnMut(&mut Object)) {
+    pub(crate) fn update_array_items(arr: &mut Array, mut f: impl FnMut(&mut Object)) {
         match Rc::get_mut(arr) {
             Some(r) => {
                 for o in r.iter_mut() {
@@ -1004,7 +936,7 @@ impl Object {
         }
     }
 
-    pub fn try_update_array_items(
+    pub(crate) fn try_update_array_items(
         arr: &mut Array,
         mut f: impl FnMut(&mut Object) -> Result<()>,
     ) -> Result<()> {
@@ -1031,19 +963,18 @@ impl<const N: usize> TryFrom<&Object> for [f32; N] {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.arr()?;
+        let arr = obj.as_arr()?;
         if arr.len() != N {
             return Err(ObjectValueError::UnexpectedType);
         }
         let mut r = [0.0; N];
         for (i, v) in arr.iter().enumerate() {
-            r[i] = v.as_number()?;
+            r[i] = v.number()?;
         }
         Ok(r)
     }
 }
 
-use either::Either;
 use euclid::Length;
 use num_traits::ToPrimitive;
 use pretty::RcDoc;

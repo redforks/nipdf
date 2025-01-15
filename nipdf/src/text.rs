@@ -203,10 +203,10 @@ impl CIDFontWidths {
     }
 }
 
-impl<'b> TryFrom<&'b Object> for CIDFontWidths {
+impl TryFrom<&Object> for CIDFontWidths {
     type Error = ObjectValueError;
 
-    fn try_from(obj: &'b Object) -> Result<Self, Self::Error> {
+    fn try_from(obj: &Object) -> Result<Self, Self::Error> {
         let mut widths = Vec::new();
         let Object::Array(arr) = obj else {
             return Err(Self::Error::UnexpectedType);
@@ -221,7 +221,7 @@ impl<'b> TryFrom<&'b Object> for CIDFontWidths {
                     let mut width = Vec::with_capacity(arr.len());
                     for num in arr.iter() {
                         let num = num
-                            .as_number()?
+                            .number()?
                             .to_u16()
                             .whatever_context::<_, ObjectValueError>("should be u16")?;
                         width.push(num);
@@ -234,7 +234,7 @@ impl<'b> TryFrom<&'b Object> for CIDFontWidths {
                         first: first as u32,
                         last: *last as u32,
                         width: width
-                            .as_number()?
+                            .number()?
                             .to_u16()
                             .whatever_context::<_, ObjectValueError>("should be u16")?,
                     });

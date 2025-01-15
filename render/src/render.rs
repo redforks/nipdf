@@ -1646,7 +1646,7 @@ impl<'a, 'c> Render<'a, 'c> {
             .resolver()
             .resolve(tile.id())
             .whatever_context("resolve tile object")?;
-        let stream = stream.stream().whatever_context("get tile stream")?;
+        let stream = stream.as_stream().whatever_context("get tile stream")?;
         let bytes = stream
             .decode(tile.resolver())
             .whatever_context("decode tile stream")?;

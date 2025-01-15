@@ -40,11 +40,11 @@ impl TryFrom<&Object> for Domain<f32> {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.arr()?;
+        let arr = obj.as_arr()?;
         if arr.len() != 2 {
             return Err(ObjectValueError::UnexpectedType);
         }
-        Ok(Self::new(arr[0].as_number()?, arr[1].as_number()?))
+        Ok(Self::new(arr[0].number()?, arr[1].number()?))
     }
 }
 
@@ -52,7 +52,7 @@ impl TryFrom<&Object> for Domain<u32> {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.arr()?;
+        let arr = obj.as_arr()?;
         if arr.len() != 2 {
             return Err(ObjectValueError::UnexpectedType);
         }
@@ -68,12 +68,12 @@ impl TryFrom<&Object> for Domains<f32> {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.arr()?;
+        let arr = obj.as_arr()?;
         ensure_whatever!(arr.len() % 2 == 0, "even number of elements expected");
         let mut domains = Vec::with_capacity(arr.len() / 2);
         arr.chunks_exact(2)
             .map(|chunk| {
-                Ok::<_, ObjectValueError>(Domain::new(chunk[0].as_number()?, chunk[1].as_number()?))
+                Ok::<_, ObjectValueError>(Domain::new(chunk[0].number()?, chunk[1].number()?))
             })
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
@@ -86,7 +86,7 @@ impl TryFrom<&Object> for Domains<u32> {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.arr()?;
+        let arr = obj.as_arr()?;
         let mut domains = Vec::with_capacity(arr.len() / 2);
         ensure_whatever!(arr.len() % 2 == 0, "even number of elements expected");
         arr.chunks_exact(2)
@@ -269,7 +269,7 @@ impl FunctionDict<'_, '_> {
         let stream = resolver
             .resolve(self.id)
             .whatever_context("resolve")?
-            .stream()
+            .as_stream()
             .whatever_context("get as stream")?;
         let script = stream.decode(resolver).whatever_context("decode stream")?;
         Ok(PostScriptFunction::new(
@@ -503,7 +503,7 @@ impl SampledFunctionDict<'_, '_> {
         let stream = resolver
             .resolve(self.id)
             .whatever_context("resolve object")?
-            .stream()
+            .as_stream()
             .whatever_context("get as stream")?;
         let sample_data = stream.decode(resolver).whatever_context("decode stream")?;
         let signature = f.type04_signature()?;

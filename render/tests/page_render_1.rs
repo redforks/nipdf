@@ -30,7 +30,7 @@ fn decode_image(id: u32) -> Result<String> {
     let resolver = f.resolver()?;
     let obj = resolver.resolve(id).whatever_context("resolve object")?;
     let image = obj
-        .stream()
+        .as_stream()
         .whatever_context("decode stream")?
         .decode_image(&resolver, None)
         .whatever_context("decode image")?;

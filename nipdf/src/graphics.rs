@@ -36,17 +36,17 @@ impl<S, T> TryFrom<&Object> for Transform2D<f32, S, T> {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.arr()?;
+        let arr = obj.as_arr()?;
         if arr.len() != 6 {
             return Err(ObjectValueError::UnexpectedType);
         }
         Ok(Self::new(
-            arr[0].as_number()?,
-            arr[1].as_number()?,
-            arr[2].as_number()?,
-            arr[3].as_number()?,
-            arr[4].as_number()?,
-            arr[5].as_number()?,
+            arr[0].number()?,
+            arr[1].number()?,
+            arr[2].number()?,
+            arr[3].number()?,
+            arr[4].number()?,
+            arr[5].number()?,
         ))
     }
 }
@@ -106,7 +106,7 @@ impl<'b> ConvertFromObject<'b> for ColorArgs {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
         let mut result = Vec::with_capacity(objects.len());
         while let Some(o) = objects.pop() {
-            if let Ok(num) = o.as_number() {
+            if let Ok(num) = o.number() {
                 result.push(num);
             } else {
                 whatever!("color args: {:?}", o);
@@ -164,7 +164,7 @@ impl<'b, const N: usize> ConvertFromObject<'b> for [f32; N] {
             result[N - 1 - i] = objects
                 .pop()
                 .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
-                .as_number()?;
+                .number()?;
         }
         Ok(result)
     }
@@ -176,17 +176,13 @@ impl TryFrom<&Object> for ColorArgs {
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
         Ok(Self(match obj {
             Object::Array(arr) => match arr.len() {
-                1 => vec![arr[0].as_number()?],
-                3 => vec![
-                    arr[0].as_number()?,
-                    arr[1].as_number()?,
-                    arr[2].as_number()?,
-                ],
+                1 => vec![arr[0].number()?],
+                3 => vec![arr[0].number()?, arr[1].number()?, arr[2].number()?],
                 4 => vec![
-                    arr[0].as_number()?,
-                    arr[1].as_number()?,
-                    arr[2].as_number()?,
-                    arr[3].as_number()?,
+                    arr[0].number()?,
+                    arr[1].number()?,
+                    arr[2].number()?,
+                    arr[3].number()?,
                 ],
                 _ => return Err(ObjectValueError::GraphicsOperationSchemaError),
             },
@@ -200,27 +196,27 @@ impl<'b, S, T> ConvertFromObject<'b> for Transform2D<f32, S, T> {
         let f = objects
             .pop()
             .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
-            .as_number()?;
+            .number()?;
         let e = objects
             .pop()
             .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
-            .as_number()?;
+            .number()?;
         let d = objects
             .pop()
             .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
-            .as_number()?;
+            .number()?;
         let c = objects
             .pop()
             .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
-            .as_number()?;
+            .number()?;
         let b = objects
             .pop()
             .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
-            .as_number()?;
+            .number()?;
         let a = objects
             .pop()
             .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
-            .as_number()?;
+            .number()?;
         Ok(Self::new(a, b, c, d, e, f))
     }
 }
@@ -480,7 +476,7 @@ impl<'b, T: for<'c> ConvertFromObject<'c>> ConvertFromObject<'b> for Vec<T> {
         let mut arr: Vec<_> = objects
             .pop()
             .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
-            .into_arr()?
+            .as_arr()?
             .iter()
             .cloned()
             .collect();
@@ -545,7 +541,7 @@ impl<'b> ConvertFromObject<'b> for f32 {
         objects
             .pop()
             .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
-            .as_number()
+            .number()
     }
 }
 
@@ -554,7 +550,7 @@ impl<'b, U> ConvertFromObject<'b> for Length<f32, U> {
         objects
             .pop()
             .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
-            .as_number()
+            .number()
             .map(|n| Length::new(n))
     }
 }
@@ -565,7 +561,7 @@ impl<'b> ConvertFromObject<'b> for String {
         objects
             .pop()
             .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
-            .as_text_string()
+            .as_str()
             .map(ToOwned::to_owned)
     }
 }
@@ -599,11 +595,11 @@ impl<'b, U> ConvertFromObject<'b> for Point2D<f32, U> {
         let y = objects
             .pop()
             .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
-            .as_number()?;
+            .number()?;
         let x = objects
             .pop()
             .ok_or(ObjectValueError::GraphicsOperationSchemaError)?
-            .as_number()?;
+            .number()?;
         Ok(Self::new(x, y))
     }
 }

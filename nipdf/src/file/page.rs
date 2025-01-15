@@ -84,22 +84,22 @@ impl TryFrom<&Object> for Rectangle {
                 let left_x = iter
                     .next()
                     .whatever_context::<_, ObjectValueError>("Missing left_x value")?
-                    .as_number()
+                    .number()
                     .whatever_context::<_, ObjectValueError>("Invalid left_x value")?;
                 let lower_y = iter
                     .next()
                     .whatever_context::<_, ObjectValueError>("Missing lower_y value")?
-                    .as_number()
+                    .number()
                     .whatever_context::<_, ObjectValueError>("Invalid lower_y value")?;
                 let right_x = iter
                     .next()
                     .whatever_context::<_, ObjectValueError>("Missing right_x value")?
-                    .as_number()
+                    .number()
                     .whatever_context::<_, ObjectValueError>("Invalid right_x value")?;
                 let upper_y = iter
                     .next()
                     .whatever_context::<_, ObjectValueError>("Missing upper_y value")?
-                    .as_number()
+                    .number()
                     .whatever_context::<_, ObjectValueError>("Invalid upper_y value")?;
                 Ok(Self::from_lbrt(left_x, lower_y, right_x, upper_y))
             }
@@ -184,7 +184,7 @@ impl XObjectDict<'_, '_> {
     pub fn as_stream(&self) -> Result<&Stream, ObjectValueError> {
         let id = self.id();
 
-        self.d.resolver().resolve(id)?.stream()
+        self.d.resolver().resolve(id)?.as_stream()
     }
 }
 

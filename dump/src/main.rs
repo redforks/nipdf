@@ -211,7 +211,7 @@ fn dump_object(path: &PathBuf, password: &str, id: u32) -> Result<()> {
 
             id_wait_scanned.extend(
                 obj.iter_values()
-                    .filter_map(|o| o.opt_reference().map(RuntimeObjectId::from)),
+                    .filter_map(|o| o.reference().ok().map(RuntimeObjectId::from)),
             );
         }
     }

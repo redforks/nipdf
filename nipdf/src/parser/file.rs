@@ -188,7 +188,7 @@ impl CrossReferenceStreamDict {
         let w = d
             .get(&sname("W"))
             .ok_or(ObjectValueError::DictKeyNotFound)?
-            .arr()?
+            .as_arr()?
             .iter()
             .map(|o| o.int().map(|v| v as u32))
             .collect::<Result<Vec<_>, _>>()?;
@@ -255,7 +255,7 @@ where
         .context("read xref stream")
         .parse_next(input)?;
     let s = s
-        .stream()
+        .as_stream()
         .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?
         .clone();
     let d = CrossReferenceStreamDict::new(s.as_dict())

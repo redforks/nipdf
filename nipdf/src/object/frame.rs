@@ -9,14 +9,14 @@ impl TryFrom<&Object> for DocId {
     type Error = ObjectValueError;
 
     fn try_from(o: &Object) -> Result<Self, Self::Error> {
-        let arr = o.arr()?;
+        let arr = o.as_arr()?;
         if arr.len() != 2 {
             return Err(ObjectValueError::UnexpectedType);
         }
 
         Ok(Self(
-            arr[0].as_byte_string()?.into(),
-            arr[1].as_byte_string()?.into(),
+            arr[0].as_bstr()?.into(),
+            arr[1].as_bstr()?.into(),
         ))
     }
 }

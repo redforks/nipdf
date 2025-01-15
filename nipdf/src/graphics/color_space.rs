@@ -175,7 +175,7 @@ where
                 }
             },
             ColorSpaceArgs::Array(arr) => match arr[0]
-                .name()
+                .as_name()
                 .whatever_context("get ColorSpace name")?
                 .as_str()
             {
@@ -255,7 +255,7 @@ where
                 }
                 "DeviceN" => {
                     ensure_whatever!(arr.len() == 4 || arr.len() == 5, "DeviceN color space args");
-                    let names = arr[1].arr().whatever_context("get names")?;
+                    let names = arr[1].as_arr().whatever_context("get names")?;
 
                     // A DeviceN color space whose component colorant names are all None shall
                     // always discard its output, just  the same as a Separation color space for
@@ -265,7 +265,7 @@ where
                     ensure_whatever!(
                         !names
                             .iter()
-                            .all(|n| n.name().is_ok_and(|name| name == sname("None"))),
+                            .all(|n| n.as_name().is_ok_and(|name| name == &sname("None"))),
                         "all color component None should not render which is not supported"
                     );
 

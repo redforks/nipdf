@@ -40,7 +40,7 @@ impl TryFrom<&Object> for Extend {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.arr()?;
+        let arr = obj.as_arr()?;
         if arr.len() != 2 {
             return Err(ObjectValueError::UnexpectedType);
         }
@@ -58,13 +58,13 @@ impl TryFrom<&Object> for AxialCoords {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.arr()?;
+        let arr = obj.as_arr()?;
         if arr.len() != 4 {
             return Err(ObjectValueError::UnexpectedType);
         }
         Ok(Self {
-            start: Point::new(arr[0].as_number()?, arr[1].as_number()?),
-            end: Point::new(arr[2].as_number()?, arr[3].as_number()?),
+            start: Point::new(arr[0].number()?, arr[1].number()?),
+            end: Point::new(arr[2].number()?, arr[3].number()?),
         })
     }
 }
@@ -106,18 +106,18 @@ impl TryFrom<&Object> for RadialCoords {
     type Error = ObjectValueError;
 
     fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.arr()?;
+        let arr = obj.as_arr()?;
         if arr.len() != 6 {
             return Err(ObjectValueError::UnexpectedType);
         }
         Ok(Self {
             start: RadialCircle {
-                point: Point::new(arr[0].as_number()?, arr[1].as_number()?),
-                r: arr[2].as_number()?,
+                point: Point::new(arr[0].number()?, arr[1].number()?),
+                r: arr[2].number()?,
             },
             end: RadialCircle {
-                point: Point::new(arr[3].as_number()?, arr[4].as_number()?),
-                r: arr[5].as_number()?,
+                point: Point::new(arr[3].number()?, arr[4].number()?),
+                r: arr[5].number()?,
             },
         })
     }
