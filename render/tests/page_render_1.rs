@@ -194,6 +194,7 @@ fn render(f: &str) -> Result<()> {
                 err?;
             }
         }
+        info!("cached pdf file: {}", pdf_file.to_str().unwrap());
     }
 
     let buf = std::fs::read(file_path).whatever_context("read file")?;
