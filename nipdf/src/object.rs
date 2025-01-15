@@ -784,12 +784,6 @@ copy_value_access!(reference, Reference, Reference);
 ref_value_access!(arr, Array, &Array);
 ref_value_access!(stream, Stream, &Stream);
 
-impl From<Vec<Object>> for Object {
-    fn from(v: Vec<Object>) -> Self {
-        Self::Array(v.into())
-    }
-}
-
 impl Object {
     #[cfg(test)]
     pub fn new_ref(id: u32) -> Self {
@@ -991,83 +985,6 @@ impl Display for PrettyNumber {
     }
 }
 
-impl From<Stream> for Object {
-    fn from(value: Stream) -> Self {
-        Self::Stream(value)
-    }
-}
-
-impl From<Array> for Object {
-    fn from(value: Array) -> Self {
-        Self::Array(value)
-    }
-}
-
-impl From<Reference> for Object {
-    fn from(value: Reference) -> Self {
-        Self::Reference(value)
-    }
-}
-
-impl From<Dictionary> for Object {
-    fn from(value: Dictionary) -> Self {
-        Self::Dictionary(value)
-    }
-}
-
-impl From<Name> for Object {
-    fn from(value: Name) -> Self {
-        Self::Name(value)
-    }
-}
-
-/// Convert [u8] to Object based on first char,
-/// if start with '(' or '<', convert to LiteralString or HexString
-/// if start with '/' convert to Name, panic otherwise
-#[cfg(test)]
-impl<'a> From<&'a [u8]> for Object {
-    fn from(value: &'a [u8]) -> Self {
-        use winnow::{Parser as _, error::ContextError};
-        assert!(!value.is_empty());
-        match value[0] {
-            b'(' => Self::LiteralString(LiteralString::new(value)),
-            b'<' => crate::parser::hex_string::<_, ContextError>()
-                .parse(value)
-                .unwrap(),
-            b'/' => Self::Name(prescript::name(from_utf8(&value[1..]).unwrap())),
-            _ => panic!("invalid object"),
-        }
-    }
-}
-
-/// Convert &str to Object based on first char,
-/// if start with '(' or '<', convert to LiteralString or HexString
-/// if start with '/' convert to Name, panic otherwise
-#[cfg(test)]
-impl<'a> From<&'a str> for Object {
-    fn from(value: &'a str) -> Self {
-        value.as_bytes().into()
-    }
-}
-
-impl From<f32> for Object {
-    fn from(value: f32) -> Self {
-        Self::Number(value)
-    }
-}
-
-impl From<i32> for Object {
-    fn from(value: i32) -> Self {
-        Self::Integer(value)
-    }
-}
-
-impl From<bool> for Object {
-    fn from(value: bool) -> Self {
-        Self::Bool(value)
-    }
-}
-
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct LiteralString(pub(crate) InnerString);
 
@@ -1166,12 +1083,6 @@ impl LiteralString {
     }
 }
 
-impl From<LiteralString> for Object {
-    fn from(value: LiteralString) -> Self {
-        Self::LiteralString(value)
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum TextString {
     Text(LiteralString),
@@ -1215,12 +1126,6 @@ impl HexString {
     }
 }
 
-impl From<HexString> for Object {
-    fn from(value: HexString) -> Self {
-        Self::HexString(value)
-    }
-}
-
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
 pub struct Reference(ObjectId);
 
@@ -1250,10 +1155,76 @@ impl From<&Reference> for RuntimeObjectId {
     }
 }
 
+/// Macro to implement From<T> for Object for various types
+macro_rules! impl_from_object {
+    // For types that directly map to an Object variant
+    ($type:ty, $variant:ident) => {
+        impl From<$type> for Object {
+            fn from(value: $type) -> Self {
+                Self::$variant(value)
+            }
+        }
+    };
+}
+
+#[cfg(test)]
+impl_from_object!(f32, Number);
+#[cfg(test)]
+impl_from_object!(i32, Integer);
+#[cfg(test)]
+impl_from_object!(bool, Bool);
+#[cfg(test)]
+impl_from_object!(Array, Array);
+#[cfg(test)]
+impl_from_object!(Name, Name);
+#[cfg(test)]
+impl_from_object!(HexString, HexString);
+#[cfg(test)]
+impl_from_object!(LiteralString, LiteralString);
+
+/// Convert [u8] to Object based on first char,
+/// if start with '(' or '<', convert to LiteralString or HexString
+/// if start with '/' convert to Name, panic otherwise
+#[cfg(test)]
+impl From<&[u8]> for Object {
+    fn from(value: &[u8]) -> Self {
+        use winnow::{Parser as _, error::ContextError};
+        assert!(!value.is_empty());
+        match value[0] {
+            b'(' => Self::LiteralString(LiteralString::new(value)),
+            b'<' => crate::parser::hex_string::<_, ContextError>()
+                .parse(value)
+                .unwrap(),
+            b'/' => Self::Name(prescript::name(from_utf8(&value[1..]).unwrap())),
+            _ => panic!("invalid object"),
+        }
+    }
+}
+
+impl_from_object!(Stream, Stream);
+impl_from_object!(Reference, Reference);
+impl_from_object!(Dictionary, Dictionary);
+
+/// Convert &str to Object based on first char,
+/// if start with '(' or '<', convert to LiteralString or HexString
+/// if start with '/' convert to Name, panic otherwise
+#[cfg(test)]
+impl From<&str> for Object {
+    fn from(value: &str) -> Self {
+        value.as_bytes().into()
+    }
+}
+
 #[cfg(test)]
 impl From<u32> for Object {
     fn from(value: u32) -> Self {
         Self::Reference(Reference::new(value, 0))
+    }
+}
+
+impl From<Vec<Object>> for Object {
+    fn from(v: Vec<Object>) -> Self {
+        Self::Array(v.into())
     }
 }
 
