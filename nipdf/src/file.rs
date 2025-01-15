@@ -19,6 +19,7 @@ use snafu::{OptionExt as _, ResultExt as _, Snafu, ensure_whatever, whatever};
 use std::iter::repeat_with;
 use winnow::{
     Located, Parser as _,
+    combinator::{rest, terminated},
     error::{ContextError, ParseError},
     stream::{Compare, StreamIsPartial},
 };
@@ -257,8 +258,8 @@ impl XRefTable {
             .and_then(|buf| {
                 buf.either(
                     |buf| {
-                        indirect_object_def::<_, ParserError>()
-                            .try_map(|o| {
+                        terminated(
+                            indirect_object_def::<_, ParserError>().try_map(|o| {
                                 let id = o.id();
                                 let o = o.take();
                                 if let Some(encrypt_info) = encrypt_info {
@@ -266,14 +267,18 @@ impl XRefTable {
                                 } else {
                                     Ok(o)
                                 }
-                            })
-                            .parse_next(&mut Located::new(buf))
-                            .map_err(ObjectValueError::from)
+                            }),
+                            rest,
+                        )
+                        .parse(Located::new(buf))
+                        .map_err(ParseError::into_inner)
+                        .with_whatever_context(|_| format!("parse object {}", id))
                     },
                     |buf| {
-                        parser::object::<_, ParserError>()
+                        terminated(parser::object::<_, ParserError>(), wsc0())
                             .parse(buf)
-                            .map_err(ObjectValueError::from)
+                            .map_err(ParseError::into_inner)
+                            .with_whatever_context(|_| format!("parse inside stream object {}", id))
                     },
                 )
             })

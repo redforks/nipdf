@@ -188,6 +188,7 @@ where
     E: ParserError<S>
         + 'a
         + ParserError<&'a [u8]>
+        + AddContext<S, &'static str>
         + FromExternalError<S, ObjectValueError>
         + FromExternalError<S, FromHexError>
         + FromExternalError<S, ParseIntError>,
@@ -213,6 +214,7 @@ where
     E: ParserError<S>
         + 'a
         + ParserError<&'a [u8]>
+        + AddContext<S, &'static str>
         + FromExternalError<S, ObjectValueError>
         + FromExternalError<S, FromHexError>
         + FromExternalError<S, ParseIntError>,
@@ -236,11 +238,17 @@ where
     E: ParserError<S>
         + 'a
         + ParserError<&'a [u8]>
+        + AddContext<S, &'static str>
         + FromExternalError<S, ObjectValueError>
         + FromExternalError<S, FromHexError>
         + FromExternalError<S, ParseIntError>,
 {
-    delimited(b"<<".as_slice(), dict_body(), (wsc0(), b">>".as_slice())).parse_next(input)
+    delimited(
+        b"<<".as_slice(),
+        dict_body().context("dict body"),
+        (wsc0(), b">>".as_slice()),
+    )
+    .parse_next(input)
 }
 
 fn object_id<'a, S, E>() -> impl Parser<S, ObjectId, E> + 'a
@@ -275,6 +283,7 @@ where
     E: ParserError<S>
         + 'a
         + ParserError<&'a [u8]>
+        + AddContext<S, &'static str>
         + FromExternalError<S, ObjectValueError>
         + FromExternalError<S, FromHexError>
         + FromExternalError<S, ParseIntError>,
@@ -320,6 +329,7 @@ where
     E: ParserError<S>
         + 'a
         + ParserError<&'a [u8]>
+        + AddContext<S, &'static str>
         + FromExternalError<S, ObjectValueError>
         + FromExternalError<S, FromHexError>
         + FromExternalError<S, ParseIntError>,

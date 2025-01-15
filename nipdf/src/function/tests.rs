@@ -5,9 +5,10 @@ use crate::{
     parser,
 };
 use assert_approx_eq::assert_approx_eq;
+use prescript::ParserError;
 use std::slice::from_ref;
 use test_case::test_case;
-use winnow::{Parser as _, error::ContextError};
+use winnow::Parser as _;
 
 #[test]
 fn test_clip_args() {
@@ -53,7 +54,7 @@ fn test_clip_returns() {
 
 #[test]
 fn test_exponential_function() {
-    let d = parser::dict::<_, ContextError>
+    let d = parser::dict::<_, ParserError>
         .parse(br#"<</FunctionType 2/Domain[0 1]/C0[0.1 0.2]/C1[0.2 0.4]/N 1>>"#.as_slice())
         .unwrap();
 
