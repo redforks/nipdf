@@ -6,7 +6,7 @@ use crate::{
         Dictionary, Entry, FilePos, Frame, FrameSet, IndirectObjectDef, ObjectValueError,
         RuntimeObjectId, XRefSection,
     },
-    parser::{object::indirect_object_def, ws1},
+    parser::{object::indirect_object_def, ws1, wsc_prefixed0},
 };
 use hex::FromHexError;
 use log::{info, warn};
@@ -365,7 +365,7 @@ where
 
         info!("trailer frame pos: {}", pos);
         let mut frame = alt((
-            parse_xref_stream.context("xref stream"),
+            wsc_prefixed0(parse_xref_stream).context("xref stream"),
             (
                 xref().context("xref"),
                 seq! {
