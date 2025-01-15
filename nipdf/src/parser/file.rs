@@ -348,17 +348,18 @@ where
     let mut next_pos = Some(pos);
     while let Some(pos) = next_pos {
         info!("trailer frame pos: {}", pos);
-        let mut frame = (alt((
+        let mut frame = alt((
             (
                 xref().context("xref"),
                 ws_prefixed0(preceded(
                     terminated(b"trailer".as_slice(), eol3()),
-                    terminated(dict, eol3()),
+                    terminated(ws_prefixed0(dict), eol3()),
                 ))
                 .context("trailer"),
-            ),
+            )
+                .context("xref table"),
             parse_xref_stream.context("xref stream"),
-        )))
+        ))
         .context("frame");
         let mut bytes = Located::new(&bytes[pos..]);
         let f = frame.parse_next(&mut bytes)?;
