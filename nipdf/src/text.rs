@@ -63,7 +63,7 @@ pub trait FontDictTrait {
 #[pdf_object(("Font", "Type0"))]
 pub trait Type0FontDictTrait {
     #[typ("Name")]
-    fn base_font(&self) -> &str;
+    fn base_font(&self) -> &'b str;
     #[try_from]
     fn encoding(&self) -> NameOrStream<'b>;
     #[nested]
@@ -140,7 +140,7 @@ impl FontDict<'_, '_> {
 #[pdf_object(("Font", "TrueType"))]
 pub trait TrueTypeFontDictTrait {
     #[typ("Name")]
-    fn base_font(&self) -> &str;
+    fn base_font(&self) -> &'b str;
     fn first_char(&self) -> u32;
     fn last_char(&self) -> u32;
     fn widths(&self) -> Vec<u32>;
@@ -298,7 +298,7 @@ impl From<FontStretch> for fontdb::Stretch {
 pub trait FontDescriptorDictTrait {
     fn font_name(&self) -> Name;
 
-    fn font_family(&self) -> Option<&str>;
+    fn font_family(&self) -> Option<&'b str>;
 
     #[try_from]
     fn font_stretch(&self) -> Option<FontStretch>;
@@ -345,7 +345,7 @@ pub trait FontDescriptorDictTrait {
 
     fn font_file3(&self) -> Option<&'b Stream>;
 
-    fn char_set(&self) -> Option<&str>;
+    fn char_set(&self) -> Option<&'b str>;
 }
 
 bitflags! {

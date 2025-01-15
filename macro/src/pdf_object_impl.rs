@@ -167,7 +167,6 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
     };
 
     if rt == &(parse_quote! { Name })
-        || rt == &(parse_quote! { &str })
         || rt == &(parse_quote!(&'b str))
         || rt == &(parse_quote!(u32))
         || rt == &(parse_quote!(u16))
@@ -176,11 +175,10 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         || rt == &(parse_quote!(bool))
         || rt == &(parse_quote!(&'b Dictionary))
         || rt == &(parse_quote!(RuntimeObjectId))
-        || rt == &(parse_quote!(&[u8]))
+        || rt == &(parse_quote!(&'b [u8]))
     {
         Some("required")
     } else if rt == &(parse_quote!(Option<Name>))
-        || rt == &(parse_quote!(Option<&str>))
         || rt == &(parse_quote!(Option<&'b str>))
         || rt == &(parse_quote!(Option<u32>))
         || rt == &(parse_quote!(Option<u16>))
@@ -199,7 +197,7 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         || (rt == &(parse_quote!(Vec<RuntimeObjectId>)) && get_type().is_some_and(|s| s == "Ref"))
     {
         Some("or_default")
-    } else if rt == &(parse_quote!(Vec<&Stream>)) {
+    } else if rt == &(parse_quote!(Vec<&'b Stream>)) {
         Some("zero_one_or_more")
     } else if rt == &(parse_quote!(HashMap<Name, &'b Stream>)) {
         Some("map_dict")

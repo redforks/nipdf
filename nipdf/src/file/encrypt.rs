@@ -71,11 +71,11 @@ pub trait EncryptDictTrait {
 
     /// 32-byte long string.
     #[key("O")]
-    fn owner_password_hash(&self) -> &[u8];
+    fn owner_password_hash(&self) -> &'b [u8];
 
     /// 32-byte long string.
     #[key("U")]
-    fn user_password_hash(&self) -> &[u8];
+    fn user_password_hash(&self) -> &'b [u8];
 
     #[key("CF")]
     #[nested]
