@@ -97,7 +97,7 @@ where
                             }),
                             _: b' ',
                             alt((b'n'.value(true),b'f'.value(false))),
-                            _: take(2usize) // 2 bytes eol
+                            _: wsc1() // should be 2 bytes eol, but some invalid pdf file use single \n
                         )
                     };
                     repeat::<_, _, Vec<_>, _, _>(count as usize, entry)
