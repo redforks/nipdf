@@ -105,7 +105,7 @@ impl<'a, 'b> FilterDict<'a, 'b> {
         r: Option<&'b ObjectResolver<'a>>,
     ) -> Result<Vec<Name>, ObjectValueError> {
         Ok(match v {
-            Object::Array(vals) => vals.iter().map(|v| v.name()).collect::<Result<_, _>>()?,
+            Object::Array(vals) => vals.iter().map(Object::name).collect::<Result<_, _>>()?,
             Object::Name(n) => vec![n.clone()],
             Object::Reference(id) => Self::get_filters(
                 r.whatever_context::<_, ObjectValueError>("ObjectResolver is None")?

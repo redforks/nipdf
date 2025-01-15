@@ -166,68 +166,43 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         })
     };
 
-    if rt == &(parse_quote! { Name }) {
+    if rt == &(parse_quote! { Name })
+        || rt == &(parse_quote! { &str })
+        || rt == &(parse_quote!(&'b str))
+        || rt == &(parse_quote!(u32))
+        || rt == &(parse_quote!(u16))
+        || rt == &(parse_quote!(i32))
+        || rt == &(parse_quote!(f32))
+        || rt == &(parse_quote!(bool))
+        || rt == &(parse_quote!(&'b Dictionary))
+        || rt == &(parse_quote!(RuntimeObjectId))
+        || rt == &(parse_quote!(&[u8]))
+    {
         Some("required")
-    } else if rt == &(parse_quote! { &str }) || rt == &(parse_quote!(&'b str)) {
-        Some("required")
-    } else if rt == &(parse_quote!(Option<Name>)) {
+    } else if rt == &(parse_quote!(Option<Name>))
+        || rt == &(parse_quote!(Option<&str>))
+        || rt == &(parse_quote!(Option<&'b str>))
+        || rt == &(parse_quote!(Option<u32>))
+        || rt == &(parse_quote!(Option<u16>))
+        || rt == &(parse_quote!(Option<i32>))
+        || rt == &(parse_quote!(Option<f32>))
+        || rt == &(parse_quote!(Option<u8>))
+        || rt == &(parse_quote!(Option<bool>))
+        || rt == &(parse_quote!(Option<Vec<f32>>))
+        || rt == &(parse_quote!(Option<&'b Dictionary>))
+        || rt == &(parse_quote!(Option<&'b Stream>))
+        || rt == &(parse_quote!(Option<RuntimeObjectId>))
+    {
         Some("opt")
-    } else if rt == &(parse_quote!(Option<&str>)) || rt == &(parse_quote!(Option<&'b str>)) {
-        Some("opt")
-    } else if rt == &(parse_quote!(u32)) {
-        Some("required")
-    } else if rt == &(parse_quote!(Option<u32>)) {
-        Some("opt")
-    } else if rt == &(parse_quote!(u16)) {
-        Some("required")
-    } else if rt == &(parse_quote!(Option<u16>)) {
-        Some("opt")
-    } else if rt == &(parse_quote!(i32)) {
-        Some("required")
-    } else if rt == &(parse_quote!(Option<i32>)) {
-        Some("opt")
-    } else if rt == &(parse_quote!(f32)) {
-        Some("required")
-    } else if rt == &(parse_quote!(Option<f32>)) {
-        Some("opt")
-    } else if rt == &(parse_quote!(Option<u8>)) {
-        Some("opt")
-    } else if rt == &(parse_quote!(Option<bool>)) {
-        Some("opt")
-    } else if rt == &(parse_quote!(bool)) {
-        Some("required")
+    } else if rt == &(parse_quote!(Vec<f32>))
+        || (rt == &(parse_quote!(Vec<u32>)) && get_type().is_none_or(|s| s != "Ref"))
+        || (rt == &(parse_quote!(Vec<RuntimeObjectId>)) && get_type().is_some_and(|s| s == "Ref"))
+    {
+        Some("or_default")
     } else if rt == &(parse_quote!(Vec<&Stream>)) {
         Some("zero_one_or_more")
-    } else if rt == &(parse_quote!(Vec<u32>)) {
-        if get_type().is_some_and(|s| s == "Ref") {
-            unreachable!()
-        } else {
-            Some("or_default")
-        }
-    } else if rt == &(parse_quote!(Vec<RuntimeObjectId>)) {
-        if get_type().is_some_and(|s| s == "Ref") {
-            Some("or_default")
-        } else {
-            unreachable!()
-        }
-    } else if rt == &(parse_quote!(Vec<f32>)) {
-        Some("or_default")
-    } else if rt == &(parse_quote!(Option<Vec<f32>>)) {
-        Some("opt")
-    } else if rt == &(parse_quote!(Option<&'b Dictionary>)) {
-        Some("opt")
-    } else if rt == &(parse_quote!(&'b Dictionary)) {
-        Some("required")
     } else if rt == &(parse_quote!(HashMap<Name, &'b Stream>)) {
         Some("map_dict")
-    } else if rt == &(parse_quote!(Option<&'b Stream>)) {
-        Some("opt")
-    } else if rt == &(parse_quote!(RuntimeObjectId)) {
-        Some("required")
-    } else if rt == &(parse_quote!(Option<RuntimeObjectId>)) {
-        Some("opt")
-    } else if rt == &(parse_quote!(&[u8])) {
-        Some("required")
     } else {
         None
     }

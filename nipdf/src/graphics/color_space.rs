@@ -201,7 +201,7 @@ where
                         ColorSpaceArgs::try_from(&arr[2]).whatever_context("parse alternate")?;
                     let function: FunctionDict<'_, '_> =
                         resolver
-                            .resolve_pdf_object((&arr[3]).reference().whatever_context(
+                            .resolve_pdf_object((arr[3]).reference().whatever_context(
                                 "separation function expected to be root object",
                             )?)
                             .whatever_context("resolve separation function")?;
@@ -274,7 +274,7 @@ where
                         .whatever_context("parse alternate colorspace")?;
                     let f: FunctionDict<'_, '_> = resolver
                         .resolve_pdf_object(
-                            (&arr[3])
+                            (arr[3])
                                 .reference()
                                 .whatever_context("DeviceN function should be root object")?,
                         )

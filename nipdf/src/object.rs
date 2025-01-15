@@ -471,7 +471,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     where
         V: CreateFromSchemaDict<'a, 'b> + Default,
     {
-        self.opt(key).map(|v| v.unwrap_or_default())
+        self.opt(key).map(Option::unwrap_or_default)
     }
 
     /// If value not exist, return empty vector.
@@ -666,11 +666,11 @@ impl<E: Debug> From<winnow::error::ErrMode<E>> for ObjectValueError {
 /// Access methods:
 ///
 ///   1. For Copy types: `typename() -> Result<$type, ObjectValueError>`, return error if value not
-/// expected type.
+///      expected type.
 ///   1. For Reference types: `as_typename() -> Result<&$type, ObjectValueError>`, return error if
-/// value not expected type.
+///      value not expected type.
 ///   1. `opt_typename() -> Option<$type>`, return None if value not specific type, for both Copy
-/// and Reference types.
+///      and Reference types.
 #[derive(Clone, PartialEq, Debug)]
 pub enum Object {
     Null,
@@ -686,6 +686,67 @@ pub enum Object {
     Reference(Reference),
 }
 
+/// Macro to implement TryFrom<&Object> for various types
+macro_rules! impl_try_from_object {
+    // For simple types that directly use Object methods
+    ($type:ty, $method:ident) => {
+        impl TryFrom<&Object> for $type {
+            type Error = ObjectValueError;
+
+            fn try_from(value: &Object) -> Result<Self, Self::Error> {
+                value.$method()
+            }
+        }
+    };
+
+    // For types that need type casting
+    ($type:ty, $method:ident, $cast:expr) => {
+        impl TryFrom<&Object> for $type {
+            type Error = ObjectValueError;
+
+            fn try_from(value: &Object) -> Result<Self, Self::Error> {
+                value.$method().map($cast)
+            }
+        }
+    };
+
+    // For reference types
+    ($type:ty, $as_method:ident, ref) => {
+        impl<'a> TryFrom<&'a Object> for &'a $type {
+            type Error = ObjectValueError;
+
+            fn try_from(value: &'a Object) -> Result<Self, Self::Error> {
+                value.$as_method()
+            }
+        }
+    };
+}
+
+impl_try_from_object!(i32, int);
+impl_try_from_object!(bool, bool);
+impl_try_from_object!(Reference, reference);
+impl_try_from_object!(u16, int, |v: i32| v as u16);
+impl_try_from_object!(u32, int, |v: i32| v as u32);
+impl_try_from_object!(u8, int, |v: i32| v as u8);
+impl_try_from_object!(RuntimeObjectId, reference, Into::into);
+impl_try_from_object!(f32, number);
+impl_try_from_object!(Name, name);
+impl_try_from_object!(Dictionary, as_dict, ref);
+impl_try_from_object!(Stream, as_stream, ref);
+impl_try_from_object!(str, as_str, ref);
+impl_try_from_object!([u8], as_bstr, ref);
+
+impl<T> TryFrom<&Object> for Vec<T>
+where
+    T: Copy + for<'a> TryFrom<&'a Object, Error = ObjectValueError>,
+{
+    type Error = ObjectValueError;
+
+    fn try_from(value: &Object) -> Result<Self, Self::Error> {
+        value.as_arr()?.iter().map(T::try_from).collect()
+    }
+}
+
 macro_rules! copy_value_access {
     ($method:ident, $branch:ident, $t:ty) => {
         impl Object {
@@ -699,16 +760,9 @@ macro_rules! copy_value_access {
                 }
             }
         }
-
-        impl TryFrom<&Object> for $t {
-            type Error = ObjectValueError;
-
-            fn try_from(value: &Object) -> Result<Self, Self::Error> {
-                value.$method()
-            }
-        }
     };
 }
+
 macro_rules! ref_value_access {
     ($method:ident, $branch:ident, $t:ty) => {
         impl Object {
@@ -725,112 +779,10 @@ macro_rules! ref_value_access {
     };
 }
 
-impl TryFrom<&Object> for u16 {
-    type Error = ObjectValueError;
-
-    fn try_from(value: &Object) -> Result<Self, Self::Error> {
-        #[allow(clippy::cast_possible_truncation)]
-        value.int().map(|v| v as u16)
-    }
-}
-
-impl TryFrom<&Object> for u32 {
-    type Error = ObjectValueError;
-
-    fn try_from(value: &Object) -> Result<Self, Self::Error> {
-        #[allow(clippy::cast_possible_truncation)]
-        value.int().map(|v| v as u32)
-    }
-}
-
-impl TryFrom<&Object> for u8 {
-    type Error = ObjectValueError;
-
-    fn try_from(value: &Object) -> Result<Self, Self::Error> {
-        #[allow(clippy::cast_possible_truncation)]
-        value.int().map(|v| v as u8)
-    }
-}
-
-impl TryFrom<&Object> for i32 {
-    type Error = ObjectValueError;
-
-    fn try_from(value: &Object) -> Result<Self, Self::Error> {
-        value.int()
-    }
-}
-
-impl TryFrom<&Object> for f32 {
-    type Error = ObjectValueError;
-
-    fn try_from(value: &Object) -> Result<Self, Self::Error> {
-        value.number()
-    }
-}
-
-impl TryFrom<&Object> for RuntimeObjectId {
-    type Error = ObjectValueError;
-
-    fn try_from(value: &Object) -> std::result::Result<Self, Self::Error> {
-        value.reference().map(Into::into)
-    }
-}
-
-impl<'a> TryFrom<&'a Object> for &'a Dictionary {
-    type Error = ObjectValueError;
-
-    fn try_from(value: &'a Object) -> Result<Self, Self::Error> {
-        value.as_dict()
-    }
-}
-
-impl<'a> TryFrom<&'a Object> for &'a Stream {
-    type Error = ObjectValueError;
-
-    fn try_from(value: &'a Object) -> Result<Self, Self::Error> {
-        value.as_stream()
-    }
-}
-
-impl<'a> TryFrom<&'a Object> for &'a str {
-    type Error = ObjectValueError;
-
-    fn try_from(value: &'a Object) -> Result<Self, Self::Error> {
-        value.as_str()
-    }
-}
-
-impl<'a> TryFrom<&'a Object> for &'a [u8] {
-    type Error = ObjectValueError;
-
-    fn try_from(value: &'a Object) -> Result<Self, Self::Error> {
-        value.as_bstr()
-    }
-}
-
-impl<T> TryFrom<&Object> for Vec<T>
-where
-    T: Copy + for<'a> TryFrom<&'a Object, Error = ObjectValueError>,
-{
-    type Error = ObjectValueError;
-
-    fn try_from(value: &Object) -> Result<Self, Self::Error> {
-        value.as_arr()?.iter().map(T::try_from).collect()
-    }
-}
-
 copy_value_access!(bool, Bool, bool);
+copy_value_access!(reference, Reference, Reference);
 ref_value_access!(arr, Array, &Array);
 ref_value_access!(stream, Stream, &Stream);
-copy_value_access!(reference, Reference, Reference);
-
-impl TryFrom<&Object> for Name {
-    type Error = ObjectValueError;
-
-    fn try_from(value: &Object) -> Result<Self, Self::Error> {
-        value.name()
-    }
-}
 
 impl From<Vec<Object>> for Object {
     fn from(v: Vec<Object>) -> Self {
