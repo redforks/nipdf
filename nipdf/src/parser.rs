@@ -28,7 +28,7 @@ pub(crate) fn is_white_space(b: u8) -> bool {
 }
 
 /// Return eol parser that has 3 alternative: '\n', '\r', or "\r\n"
-fn eol3<'a, S, E>() -> impl Parser<S, (), E>
+pub(crate) fn eol3<'a, S, E>() -> impl Parser<S, (), E>
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8>,
     E: ParserError<S> + 'a,

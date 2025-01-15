@@ -4,10 +4,10 @@ use crate::{
         Array, Dictionary, InlineImage, InlineStream, Object, ObjectValueError, RuntimeObjectId,
         Stream, TextString, TextStringOrNumber,
     },
-    parser::{self, whitespace, wsc_prefixed0, wsc0},
+    parser::{self, eol3, whitespace, wsc_prefixed0, wsc0},
 };
 use euclid::{Length, Point2D, Transform2D};
-use log::{error, warn};
+use log::{debug, error, warn};
 use nipdf_macro::{OperationParser, TryFromIntObject, TryFromNameObject, pdf_object};
 use prescript::{AnyWhatever, Name, sname};
 use snafu::whatever;
@@ -624,7 +624,7 @@ where
 {
     seq! {(
         wsc_prefixed0(parser::dict_body()).context("dict_body"),
-        _: wsc0(), _: b"ID".as_slice(), _:any,
+        _: wsc0(), _: b"ID".as_slice(), _: alt((eol3(), any.void())), // after ID should has one single whitespace, but some invalid pdf use \r\n
         repeat_till(1.., any, (alt((b" EI".as_slice(), b"\nEI".as_slice())), whitespace())).map(|(o, _)| o).context("image data"),
     )}
     .try_map(|(d, data): (Dictionary, Vec<u8>)| {
@@ -665,6 +665,7 @@ where
                     warn!("Invalid operation '{}': {:?}", op, e);
                     None
                 });
+                debug!("Operation: {:?}", opt_op);
                 match opt_op {
                     Some(
                         Operation::BeginCompatibilitySection | Operation::EndCompatibilitySection,
