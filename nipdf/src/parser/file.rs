@@ -6,7 +6,7 @@ use crate::{
         Dictionary, Entry, FilePos, Frame, FrameSet, IndirectObjectDef, ObjectValueError,
         RuntimeObjectId, XRefSection,
     },
-    parser::{object::indirect_object_def, ws_prefixed0},
+    parser::{object::indirect_object_def, ws_prefixed0, ws1},
 };
 use hex::FromHexError;
 use log::{info, warn};
@@ -352,10 +352,9 @@ where
             (
                 xref().context("xref"),
                 ws_prefixed0(preceded(
-                    terminated(b"trailer".as_slice(), eol3()),
-                    terminated(ws_prefixed0(dict), eol3()),
-                ))
-                .context("trailer"),
+                    terminated(b"trailer".as_slice().context("trailer"), ws1()),
+                    terminated(ws_prefixed0(dict).context("trailer dict"), ws1()),
+                )),
             )
                 .context("xref table"),
             parse_xref_stream.context("xref stream"),

@@ -57,6 +57,7 @@ fn replace_dead_link(f: &str) -> Option<&'_ str> {
 }
 
 fn download_file(url: &str, p: impl AsRef<Path>) -> Result<()> {
+    info!("Download file: {}", url);
     let resp = download(url).call().whatever_context("download pdf file")?;
     let f = std::fs::File::create(p.as_ref()).whatever_context("create cache file")?;
     let mut f = BufWriter::new(f);
@@ -159,10 +160,11 @@ fn render(f: &str) -> Result<()> {
 
     let hash_file: String = Md5::digest(f.as_bytes()).as_slice().encode_hex();
     let mut hash_file = Path::join(Path::new(env!["CARGO_TARGET_TMPDIR"]), hash_file);
-    eprintln!("{}.pdf", hash_file.to_str().unwrap());
+    info!("work on file: {}", f);
     hash_file.set_extension("ok");
     let hash_file = hash_file;
     if hash_file.exists() {
+        info!("hash file exist, skip this previous succeed file");
         return Ok(());
     }
 

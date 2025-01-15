@@ -103,6 +103,15 @@ where
     repeat::<_, _, (), _, _>(1.., wsc()).void()
 }
 
+/// Matches 1 or more whitespace, but not allow comment.
+pub fn ws1<'a, S, E>() -> impl Parser<S, (), E> + 'a
+where
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+    E: ParserError<S> + 'a,
+{
+    repeat::<_, _, (), _, _>(1.., whitespace()).void()
+}
+
 /// Convert a parser to a parser that prefixed with 0 or more whitespace and/or comment.
 pub(crate) fn wsc_prefixed0<'a, S, F, O, E>(inner: F) -> impl Parser<S, O, E> + 'a
 where
