@@ -334,7 +334,7 @@ where
     let mut line = lines
         .next()
         .ok_or_else(|| ErrMode::from_error_kind(buf, ErrorKind::Eof))?;
-    b"%%EOF".as_slice().parse_next(&mut line)?;
+    b"%%EOF".as_slice().context("EOF").parse_next(&mut line)?;
     let mut line = lines
         .next()
         .ok_or_else(|| ErrMode::from_error_kind(buf, ErrorKind::Eof))?;
