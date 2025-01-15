@@ -68,6 +68,7 @@ pub enum ParserError {
         #[snafu(source(from(ParserError, Box::new)))]
         source: Box<ParserError>,
     },
+    #[snafu(display("{}/{:?}", kind, context))]
     Other {
         kind: ErrorKind,
         context: Vec<&'static str>,
