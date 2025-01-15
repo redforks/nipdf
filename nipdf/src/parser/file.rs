@@ -355,7 +355,14 @@ where
 
     let mut r = Vec::new();
     let mut next_pos = Some(pos);
+    let mut seen_positions = vec![];
     while let Some(pos) = next_pos {
+        if seen_positions.contains(&pos) {
+            warn!("Detected recursive xref section at position: {}", pos);
+            break;
+        }
+        seen_positions.push(pos);
+
         info!("trailer frame pos: {}", pos);
         let mut frame = alt((
             parse_xref_stream.context("xref stream"),
