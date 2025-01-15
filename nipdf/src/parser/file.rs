@@ -365,7 +365,7 @@ where
                     (
                         _: wsc0(),
                         _: b"trailer".as_slice().context("trailer"),
-                        _: wsc1(),
+                        _: wsc0(),
                         dict.context("trailer dict"),
                         _: ws1(),
                     )
