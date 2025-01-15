@@ -164,7 +164,10 @@ fn render(f: &str) -> Result<()> {
     hash_file.set_extension("ok");
     let hash_file = hash_file;
     if hash_file.exists() {
-        info!("hash file exist, skip this previous succeed file");
+        info!(
+            "hash file {} exist, skip this previous succeed file",
+            hash_file.to_str().unwrap(),
+        );
         return Ok(());
     }
 
