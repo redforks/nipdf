@@ -8,6 +8,7 @@ mod run_length;
 pub mod text;
 use prescript::ParserError;
 pub use prescript::{AnyWhatever, Result};
+use snafu::Report;
 use std::error::Error;
 
 /// Error logging if the result is an error, panic in debug mode
@@ -18,7 +19,7 @@ pub fn log_err<E: Error>(v: Result<(), E>) {
         #[allow(clippy::panic)]
         {
             #[cfg(debug_assertions)]
-            panic!("{}", e);
+            panic!("{}", Report::from_error(e));
         }
     }
 }
