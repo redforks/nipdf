@@ -1,13 +1,17 @@
 use crate::{
     Result,
-    object::{Object, ObjectValueError},
+    file::ObjectResolver,
+    object::{
+        CreateFromSchemaDict, Object, ObjectValueError, PdfObject as _, RootPdfObject as _,
+        RuntimeObjectId,
+    },
 };
 use educe::Educe;
 #[cfg(test)]
 use mockall::automock;
 use nipdf_macro::{TryFromIntObject, pdf_object};
 use num_traits::ToPrimitive;
-use prescript::PdfFunc;
+use prescript::{PdfFunc, sname};
 use snafu::{OptionExt as _, ResultExt as _, ensure_whatever};
 use tinyvec::{TinyVec, tiny_vec};
 
@@ -127,22 +131,107 @@ trait InnerFunction {
 
     /// Called by `self.call()`, args and return value are clipped by signature.
     fn inner_call(&self, args: FunctionValue) -> Result<FunctionValue>;
+
+    /// Return the domain stops of the function. Helps to build shading stops.
+    fn stops(&self) -> impl Iterator<Item = f32> + 'static;
 }
 
 #[cfg_attr(test, automock)]
 pub trait Function {
     fn call(&self, args: &[f32]) -> Result<FunctionValue>;
+    fn stops(&self) -> Box<dyn Iterator<Item = f32>>;
 }
 
 impl<Inner: InnerFunction> Function for Inner {
     fn call(&self, args: &[f32]) -> Result<FunctionValue> {
         self.do_call(args)
     }
+
+    fn stops(&self) -> Box<dyn Iterator<Item = f32>> {
+        Box::new(self.stops())
+    }
 }
 
 impl Function for Box<dyn Function> {
     fn call(&self, args: &[f32]) -> Result<FunctionValue> {
         self.as_ref().call(args)
+    }
+
+    fn stops(&self) -> Box<dyn Iterator<Item = f32>> {
+        self.as_ref().stops()
+    }
+}
+
+impl<'a, 'b> CreateFromSchemaDict<'a, 'b> for Box<dyn Function> {
+    fn create(o: &'b Object, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
+        let id: Option<RuntimeObjectId> = o.reference().ok().map(Into::into);
+        let dict = r.resolve_reference(o)?.as_dict()?;
+
+        // Get function type from dictionary
+        let function_type = dict
+            .get(&sname("FunctionType"))
+            .ok_or(ObjectValueError::DictKeyNotFound)?;
+        let function_type = Type::try_from(function_type)?;
+
+        // Create function based on type
+        match function_type {
+            Type::Sampled => {
+                let dict = SampledFunctionDict::new(
+                    id.whatever_context::<_, ObjectValueError>(
+                        "Sampled function should be root object",
+                    )?,
+                    dict,
+                    r,
+                )?;
+                Ok(Box::new(
+                    dict.func()
+                        .whatever_context::<_, ObjectValueError>("Parse Sampled function")?,
+                ))
+            }
+
+            Type::ExponentialInterpolation => {
+                let dict = ExponentialInterpolationFunctionDict::new(dict, r)?;
+                Ok(Box::new(
+                    dict.func().whatever_context::<_, ObjectValueError>(
+                        "Parse Exponential Interpolation function",
+                    )?,
+                ))
+            }
+
+            Type::Stitching => {
+                let dict = StitchingFunctionDict::new(dict, r)?;
+                Ok(Box::new(
+                    dict.func()
+                        .whatever_context::<_, ObjectValueError>("Parse Stitching function")?,
+                ))
+            }
+
+            Type::PostScriptCalculator => {
+                // Get required fields
+                let domain = dict
+                    .get(&sname("Domain"))
+                    .ok_or(ObjectValueError::DictKeyNotFound)
+                    .and_then(|o| Domains::try_from(o))?;
+
+                let range = dict
+                    .get(&sname("Range"))
+                    .ok_or(ObjectValueError::DictKeyNotFound)
+                    .and_then(|o| Domains::try_from(o))?;
+
+                let signature = Type04Signature::new(domain, range);
+
+                // Get stream data
+                let stream = r.resolve_reference(o)?.as_stream()?;
+                let script = stream
+                    .decode(r)
+                    .whatever_context::<_, ObjectValueError>("decode stream")?;
+
+                Ok(Box::new(PostScriptFunction::new(
+                    signature,
+                    script.into_owned().into_boxed_slice(),
+                )))
+            }
+        }
     }
 }
 
@@ -152,28 +241,6 @@ pub enum Type {
     ExponentialInterpolation = 2,
     Stitching = 3,
     PostScriptCalculator = 4,
-}
-
-#[pdf_object(())]
-#[root_pdf_object]
-pub trait FunctionDictTrait {
-    #[try_from]
-    fn function_type(&self) -> Type;
-
-    #[try_from]
-    fn domain(&self) -> Domains;
-
-    #[try_from]
-    fn range(&self) -> Option<Domains>;
-
-    #[self_as]
-    fn sampled(&self) -> SampledFunctionDict<'a, 'b>;
-
-    #[self_as]
-    fn exponential_interpolation(&self) -> ExponentialInterpolationFunctionDict<'a, 'b>;
-
-    #[self_as]
-    fn stitch(&self) -> StitchingFunctionDict<'a, 'b>;
 }
 
 pub struct PostScriptFunction {
@@ -203,52 +270,9 @@ impl InnerFunction for PostScriptFunction {
         let r = self.f.exec(&args).whatever_context("exec function")?;
         Ok(r.into_iter().collect())
     }
-}
 
-impl FunctionDict<'_, '_> {
-    fn type23_signature(&self) -> Result<Type23Signature> {
-        Ok(Type23Signature {
-            domain: self.domain()?,
-            range: self.range()?,
-        })
-    }
-
-    fn type04_signature(&self) -> Result<Type04Signature> {
-        Ok(Type04Signature {
-            domain: self.domain()?,
-            range: self.range()?.whatever_context("range should exist")?,
-        })
-    }
-
-    pub fn post_script_func(&self) -> Result<PostScriptFunction> {
-        ensure_whatever!(
-            self.function_type()? == Type::PostScriptCalculator,
-            "Type 4 expected"
-        );
-        let signature = self.type04_signature()?;
-        let resolver = self.d.resolver();
-        let stream = resolver
-            .resolve(self.id)
-            .whatever_context("resolve")?
-            .as_stream()
-            .whatever_context("get as stream")?;
-        let script = stream.decode(resolver).whatever_context("decode stream")?;
-        Ok(PostScriptFunction::new(
-            signature,
-            script.into_owned().into_boxed_slice(),
-        ))
-    }
-
-    /// Create boxed Function for this Function dict.
-    pub fn func(&self) -> Result<Box<dyn Function>> {
-        match self.function_type()? {
-            Type::Sampled => Ok(Box::new(self.sampled()?.func()?)),
-            Type::ExponentialInterpolation => {
-                Ok(Box::new(self.exponential_interpolation()?.func()?))
-            }
-            Type::Stitching => Ok(Box::new(self.stitch()?.func()?)),
-            Type::PostScriptCalculator => Ok(Box::new(self.post_script_func()?)),
-        }
+    fn stops(&self) -> impl Iterator<Item = f32> + 'static {
+        Err("TODO: PostScriptFunction::stops()").into_iter()
     }
 }
 
@@ -363,9 +387,6 @@ pub enum InterpolationOrder {
 #[type_field("FunctionType")]
 #[root_pdf_object]
 pub trait SampledFunctionDictTrait {
-    #[self_as]
-    fn function_dict(&self) -> FunctionDict<'a, 'b>;
-
     fn size(&self) -> Vec<u32>;
     fn bits_per_sample(&self) -> u32;
 
@@ -378,6 +399,12 @@ pub trait SampledFunctionDictTrait {
 
     #[try_from]
     fn decode(&self) -> Option<Domains>;
+
+    #[try_from]
+    fn domain(&self) -> Domains;
+
+    #[try_from]
+    fn range(&self) -> Option<Domains>;
 }
 
 /// struct to implement Function trait for SampledFunctionDict,
@@ -393,7 +420,7 @@ pub struct SampledFunction {
 }
 
 impl SampledFunction {
-    pub fn samples(&self) -> usize {
+    fn samples(&self) -> usize {
         // NOTE: assume bits_per_sample is 8
         self.samples.len() / self.signature.n_returns()
     }
@@ -446,12 +473,27 @@ impl InnerFunction for SampledFunction {
     fn signature(&self) -> &Self::Signature {
         &self.signature
     }
+
+    fn stops(&self) -> impl Iterator<Item = f32> + 'static {
+        let domain = &self.signature.domain.0[0];
+        let samples = self.samples().min(256);
+        let t0 = euclid::default::Length::new(domain.start);
+        let t1 = euclid::default::Length::new(domain.end);
+
+        (0..samples).map(move |i| t0.lerp(t1, i as f32 / (samples - 1) as f32).0)
+    }
 }
 
 impl SampledFunctionDict<'_, '_> {
+    fn type04_signature(&self) -> Result<Type04Signature> {
+        Ok(Type04Signature {
+            domain: self.domain()?,
+            range: self.range()?.whatever_context("range should exist")?,
+        })
+    }
+
     /// Return SampledFunction instance which implements Function trait.
     pub fn func(&self) -> Result<SampledFunction> {
-        let f = self.function_dict()?;
         let bits_per_sample = self.bits_per_sample()?;
         ensure_whatever!(bits_per_sample >= 8, "todo: support bits_per_sample < 8");
         ensure_whatever!(
@@ -467,7 +509,7 @@ impl SampledFunctionDict<'_, '_> {
             .as_stream()
             .whatever_context("get as stream")?;
         let sample_data = stream.decode(resolver).whatever_context("decode stream")?;
-        let signature = f.type04_signature()?;
+        let signature = self.type04_signature()?;
         ensure_whatever!(
             sample_data.len() >= size[0] as usize * signature.n_returns(),
             "Sample data length is insufficient"
@@ -483,7 +525,7 @@ impl SampledFunctionDict<'_, '_> {
             }),
             decode: self.decode()?.map_or_else(
                 || {
-                    f.range()
+                    self.range()
                         .whatever_context("get range")?
                         .whatever_context("range should exist in sampled function")
                 },
@@ -497,7 +539,6 @@ impl SampledFunctionDict<'_, '_> {
 }
 
 #[pdf_object(2i32)]
-#[root_pdf_object]
 #[type_field("FunctionType")]
 pub trait ExponentialInterpolationFunctionDictTrait {
     #[default_fn(f32_zero_arr)]
@@ -508,8 +549,11 @@ pub trait ExponentialInterpolationFunctionDictTrait {
 
     fn n(&self) -> f32;
 
-    #[self_as]
-    fn function_dict(&self) -> FunctionDict<'a, 'b>;
+    #[try_from]
+    fn domain(&self) -> Domains;
+
+    #[try_from]
+    fn range(&self) -> Option<Domains>;
 }
 
 pub struct ExponentialInterpolationFunction {
@@ -533,28 +577,36 @@ impl InnerFunction for ExponentialInterpolationFunction {
     fn signature(&self) -> &Type23Signature {
         &self.signature
     }
+
+    fn stops(&self) -> impl Iterator<Item = f32> + 'static {
+        // For exponential interpolation, we just need start and end points
+        // of the domain, similar to how build_stops() handles it
+        let domain = &self.signature.domain.0[0]; // Get first domain
+        vec![domain.start, domain.end].into_iter()
+    }
 }
 
 impl ExponentialInterpolationFunctionDict<'_, '_> {
-    pub fn func(&self) -> Result<ExponentialInterpolationFunction> {
-        let f = self.function_dict()?;
+    fn func(&self) -> Result<ExponentialInterpolationFunction> {
         Ok(ExponentialInterpolationFunction {
             c0: self.c0()?,
             c1: self.c1()?,
             n: self.n()?,
-            signature: f.type23_signature()?,
+            signature: self.type23_signature()?,
+        })
+    }
+
+    fn type23_signature(&self) -> Result<Type23Signature> {
+        Ok(Type23Signature {
+            domain: self.domain()?,
+            range: self.range()?,
         })
     }
 }
 
 #[pdf_object(3i32)]
-#[root_pdf_object]
 #[type_field("FunctionType")]
 pub trait StitchingFunctionDictTrait {
-    /// Functions, its length is `k`
-    #[nested]
-    fn functions(&self) -> Vec<FunctionDict<'a, 'b>>;
-
     /// The number of values shall be `k - 1`
     fn bounds(&self) -> Vec<f32>;
 
@@ -562,23 +614,24 @@ pub trait StitchingFunctionDictTrait {
     #[try_from]
     fn encode(&self) -> Domains;
 
-    #[self_as]
-    fn function_dict(&self) -> FunctionDict<'a, 'b>;
+    #[try_from]
+    fn domain(&self) -> Domains;
+
+    #[try_from]
+    fn range(&self) -> Option<Domains>;
 }
 
 impl StitchingFunctionDict<'_, '_> {
-    pub fn func(&self) -> Result<StitchingFunction> {
-        let functions = self
-            .functions()?
-            .into_iter()
-            .map(|f| f.func())
-            .collect::<Result<_>>()?;
+    fn func(&self) -> Result<StitchingFunction> {
+        let functions: Vec<Box<dyn Function>> = self
+            .d
+            .zero_one_or_more(&sname("Functions"))
+            .whatever_context("get stitching Functions")?;
         let bounds = self.bounds()?;
         let encode = self.encode()?;
-        let f = self.function_dict()?;
         let signature = Type23Signature {
-            domain: f.domain()?,
-            range: f.range()?,
+            domain: self.domain()?,
+            range: self.range()?,
         };
         Ok(StitchingFunction {
             functions,
@@ -654,6 +707,17 @@ impl InnerFunction for StitchingFunction {
 
     fn signature(&self) -> &Type23Signature {
         &self.signature
+    }
+
+    fn stops(&self) -> impl Iterator<Item = f32> + 'static {
+        let domain = self.domains().0[0];
+        let mut stops = Vec::with_capacity(self.bounds.len() + 2);
+        stops.push(domain.start);
+        for t in &self.bounds {
+            stops.push(*t);
+        }
+        stops.push(domain.end);
+        stops.into_iter()
     }
 }
 

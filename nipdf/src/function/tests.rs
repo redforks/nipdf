@@ -1,7 +1,6 @@
 use super::*;
 use crate::{
     file::{ObjectResolver, XRefTable},
-    object::RootPdfObject as _,
     parser,
 };
 use assert_approx_eq::assert_approx_eq;
@@ -60,7 +59,7 @@ fn test_exponential_function() {
 
     let xref = XRefTable::empty();
     let resolver = ObjectResolver::empty(&xref);
-    let f = ExponentialInterpolationFunctionDict::new(1.into(), &d, &resolver).unwrap();
+    let f = ExponentialInterpolationFunctionDict::new(&d, &resolver).unwrap();
     let f = f.func().unwrap();
     assert_eq!(f.do_call(&[0.0]).unwrap(), tiny_vec![0.1_f32, 0.2_f32]);
     assert_eq!(f.do_call(&[1.0]).unwrap(), tiny_vec![0.2_f32, 0.4_f32]);

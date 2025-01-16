@@ -1624,7 +1624,7 @@ impl<'a, 'c> Render<'a, 'c> {
             .transpose()?;
 
         Ok(
-            match build_shading(&shading, resources).whatever_context("build shading")? {
+            match build_shading(&shading, resources).whatever_context("build shading pattern")? {
                 Some(shading) => Some((
                     shading,
                     pattern.matrix().whatever_context("get pattern matrix")?,

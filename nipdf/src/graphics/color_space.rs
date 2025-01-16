@@ -2,9 +2,9 @@ use super::ColorSpaceArgs;
 use crate::{
     Result,
     file::{ObjectResolver, ResourceDict},
-    function::{Domain, Domains, Function, FunctionDict},
+    function::{Domain, Domains, Function},
     graphics::ICCStreamDict,
-    object::Object,
+    object::{CreateFromSchemaDict, Object},
 };
 use educe::Educe;
 use nipdf_macro::pdf_object;
@@ -199,17 +199,13 @@ where
                     ensure_whatever!(4 == arr.len(), "Separation color space args length");
                     let alternate =
                         ColorSpaceArgs::try_from(&arr[2]).whatever_context("parse alternate")?;
-                    let function: FunctionDict<'_, '_> =
-                        resolver
-                            .resolve_pdf_object((arr[3]).reference().whatever_context(
-                                "separation function expected to be root object",
-                            )?)
-                            .whatever_context("resolve separation function")?;
-                    // .whatever_context("parse tintTransform function")?;
+                    let function: Box<dyn Function> =
+                        Box::<dyn Function>::create(&arr[3], resolver)
+                            .whatever_context("parse tintTransform function")?;
                     let base = Self::from_args(&alternate, resolver, resources)?;
                     Ok(Self::Separation(Box::new(SeparationColorSpace {
                         alt: base,
-                        f: Rc::new(function.func()?),
+                        f: Rc::new(function),
                     })))
                 }
                 "Indexed" => {
@@ -272,19 +268,14 @@ where
                     let n = names.len();
                     let alternate = ColorSpaceArgs::try_from(&arr[2])
                         .whatever_context("parse alternate colorspace")?;
-                    let f: FunctionDict<'_, '_> = resolver
-                        .resolve_pdf_object(
-                            (arr[3])
-                                .reference()
-                                .whatever_context("DeviceN function should be root object")?,
-                        )
-                        .whatever_context("resolve DeviceN function")?;
+                    let f: Box<dyn Function> = Box::<dyn Function>::create(&arr[3], resolver)
+                        .whatever_context("DeviceN function should be root object")?;
                     let base = Self::from_args(&alternate, resolver, resources)?;
                     Ok(Self::DeviceN(Box::new(DeviceNColorSpace {
                         n: n.try_into()
                             .whatever_context("conversion to usize failed")?,
                         alt: base,
-                        f: Rc::new(f.func()?),
+                        f: Rc::new(f),
                     })))
                 }
                 "Lab" => {

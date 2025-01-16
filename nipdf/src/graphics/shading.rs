@@ -1,11 +1,14 @@
 use super::Point;
 use crate::{
+    Result,
     file::Rectangle,
-    function::{Domain, FunctionDict, default_domain},
+    function::{Domain, Function, default_domain},
     graphics::{ColorArgs, ColorSpaceArgs},
     object::{Object, ObjectValueError},
 };
 use nipdf_macro::{TryFromIntObject, pdf_object};
+use prescript::{AnyWhatever, sname};
+use snafu::ResultExt;
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromIntObject)]
 pub enum ShadingType {
@@ -79,15 +82,20 @@ pub trait AxialShadingDictTrait {
     #[default_fn(default_domain)]
     fn domain(&self) -> Domain;
 
-    #[nested]
-    fn function(&self) -> Vec<FunctionDict<'a, 'b>>;
-
     #[try_from]
     #[or_default]
     fn extend(&self) -> Extend;
 
     #[try_from]
     fn b_box(&self) -> Option<Rectangle>;
+}
+
+impl AxialShadingDict<'_, '_> {
+    pub fn functions(&self) -> Result<Vec<Box<dyn Function>>> {
+        self.d
+            .zero_one_or_more(&sname("Function"))
+            .whatever_context::<_, AnyWhatever>("get axial functions")
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -133,12 +141,17 @@ pub trait RadialShadingDictTrait {
     #[default_fn(default_domain)]
     fn domain(&self) -> Domain;
 
-    #[nested]
-    fn function(&self) -> Vec<FunctionDict<'a, 'b>>;
-
     #[try_from]
     #[or_default]
     fn extend(&self) -> Extend;
+}
+
+impl RadialShadingDict<'_, '_> {
+    pub fn functions(&self) -> Result<Vec<Box<dyn Function>>> {
+        self.d
+            .zero_one_or_more(&sname("Function"))
+            .whatever_context::<_, AnyWhatever>("get radial functions")
+    }
 }
 
 #[pdf_object(())]
