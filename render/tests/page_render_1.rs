@@ -184,8 +184,7 @@ fn render(f: &str) -> Result<()> {
                 let url = std::fs::read_to_string(f).whatever_context("read file")?;
                 let url = url.trim();
                 let mut err = Ok(());
-                for url in url.split("http").filter(|f| !f.is_empty()) {
-                    let url = format!("http{}", url);
+                for url in url.lines().filter(|f| !f.is_empty()) {
                     err = download_file(&url, &pdf_file);
                     if err.is_ok() {
                         break;
