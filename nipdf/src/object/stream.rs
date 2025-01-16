@@ -18,7 +18,7 @@ use bitstream_io::{BigEndian, BitReader};
 use image::{DynamicImage, GrayImage, Luma, RgbImage, Rgba, RgbaImage};
 use jpeg_decoder::PixelFormat;
 use log::{error, warn};
-use nipdf_macro::pdf_object;
+use nipdf_macro::{TryFromIntObject, pdf_object};
 use num_traits::ToPrimitive;
 use prescript::{AnyWhatever, Name, sname};
 use snafu::{OptionExt, ResultExt as _, ensure_whatever, whatever};
@@ -741,14 +741,30 @@ fn decode_flate(buf: &[u8], params: LZWDeflateDecodeParams) -> Result<Vec<u8>, O
     deflate(buf).and_then(|r| predictor_decode(r, &params))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Default, TryFromIntObject)]
+enum DCTColorTransform {
+    #[default]
+    NoTransform = 0,
+    RgbToCmyk = 1,
+}
+
+#[pdf_object(())]
+trait DCTDecodeParamsDictTrait {
+    #[or_default]
+    #[try_from]
+    fn color_transform(&self) -> DCTColorTransform;
+}
+
 fn decode_dct<'a>(
     buf: &Cow<'a, [u8]>,
-    params: Option<&Dictionary>,
+    params: &DCTDecodeParamsDict<'_, '_>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     ensure_whatever!(
-        params.is_none(),
-        "TODO: handle params of {}",
-        FILTER_DCT_DECODE
+        params
+            .color_transform()
+            .whatever_context::<_, ObjectValueError>("get color_transform")?
+            == DCTColorTransform::NoTransform,
+        "TODO: handle DCTDceode color_transform of",
     );
 
     use jpeg_decoder::Decoder;
@@ -1005,7 +1021,13 @@ fn filter<'a: 'b, 'b>(
             LZWDeflateDecodeParams::new(params.unwrap_or_else(|| &*empty_dict), resolver)?,
         )
         .map(FilterDecodedData::bytes),
-        S_FILTER_DCT_DECODE => decode_dct(&buf, params),
+        S_FILTER_DCT_DECODE => decode_dct(
+            &buf,
+            &DCTDecodeParamsDict::new(
+                params.unwrap_or_else(|| &*empty_dict),
+                resolver.whatever_context::<_, ObjectValueError>("Need ObjectResolver")?,
+            )?,
+        ),
         S_FILTER_CCITT_FAX => decode_ccitt(
             &buf,
             &CCITTFaxDecodeParamsDict::new(
