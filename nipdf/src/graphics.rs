@@ -20,7 +20,7 @@ use winnow::{
     combinator::{alt, repeat_till},
     error::{AddContext, FromExternalError, ParserError},
     seq,
-    token::{any, take_till},
+    token::{any, one_of, take_till},
 };
 
 pub mod color_space;
@@ -625,7 +625,10 @@ where
     seq! {(
         wsc_prefixed0(parser::dict_body()).context("dict_body"),
         _: wsc0(), _: b"ID".as_slice(), _: alt((eol3(), any.void())), // after ID should has one single whitespace, but some invalid pdf use \r\n
-        repeat_till(1.., any, (alt((b" EI".as_slice(), b"\nEI".as_slice())), whitespace())).map(|(o, _)| o).context("image data"),
+        alt((
+            repeat_till(1.., any, (one_of(b" \n"), b"EI".as_slice(), whitespace())).map(|(o, _)| o).context("inline image end with '[spaceOrNewLine]EI[wsc]'"),
+            repeat_till(1.., any, (b"EI".as_slice(), whitespace())).map(|(o, _)| o).context("inline image end with 'EI[wsc]'"),
+        ))
     )}
     .try_map(|(d, data): (Dictionary, Vec<u8>)| {
         InlineStream::new(d, &data).decode_image()
