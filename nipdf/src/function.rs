@@ -8,7 +8,7 @@ use mockall::automock;
 use nipdf_macro::{TryFromIntObject, pdf_object};
 use num_traits::ToPrimitive;
 use prescript::PdfFunc;
-use snafu::{OptionExt as _, ResultExt as _, ensure_whatever, whatever};
+use snafu::{OptionExt as _, ResultExt as _, ensure_whatever};
 use tinyvec::{TinyVec, tiny_vec};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -143,45 +143,6 @@ impl<Inner: InnerFunction> Function for Inner {
 impl Function for Box<dyn Function> {
     fn call(&self, args: &[f32]) -> Result<FunctionValue> {
         self.as_ref().call(args)
-    }
-}
-
-/// Combine functions to create a new function. These functions called with
-/// the same arguments as the original function, and returns only one value.
-/// The end result gather the results of the component functions into an vec.
-pub struct NFunc(Vec<Box<dyn Function>>);
-
-impl NFunc {
-    /// If one element in `functions`, returns it directly.
-    /// Returns `NFunc` otherwise.
-    pub fn new_box(functions: Vec<Box<dyn Function>>) -> Result<Box<dyn Function>> {
-        if functions.len() == 1 {
-            Ok(functions
-                .into_iter()
-                .next()
-                .whatever_context("Expected at least one function")?)
-        } else {
-            Ok(Box::new(Self::new(functions)?))
-        }
-    }
-
-    /// Returns error if any of the functions has more than one return value.
-    pub fn new(functions: Vec<Box<dyn Function>>) -> Result<Self> {
-        if functions.is_empty() {
-            whatever!("at least one function is required")
-        }
-
-        Ok(Self(functions))
-    }
-}
-
-impl Function for NFunc {
-    fn call(&self, args: &[f32]) -> Result<FunctionValue> {
-        let mut r = FunctionValue::new();
-        for f in &self.0 {
-            r.extend_from_slice(&f.call(args)?);
-        }
-        Ok(r)
     }
 }
 
