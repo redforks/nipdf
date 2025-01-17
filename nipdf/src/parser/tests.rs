@@ -32,6 +32,8 @@ fn test_eol_2_cr() {
 #[test_case(b"%foo\nbar" => (b"bar".as_ref(), b"foo".as_ref()); "comment with trailing data")]
 #[test_case(b"%foo\rbar" => (b"bar".as_ref(), b"foo".as_ref()); "comment with trailing data and CR")]
 #[test_case(b"%foo\r\nbar" => (b"bar".as_ref(), b"foo".as_ref()); "comment with trailing data and CRLF")]
+#[test_case(b"%" => (b"".as_ref(), b"".as_ref()); "empty comment end with EOF")]
+#[test_case(b"%foo" => (b"".as_ref(), b"foo".as_ref()); "comment end with EOF")]
 fn test_comment(input: &[u8]) -> (&[u8], &[u8]) {
     comment::<_, ParserError>().parse_peek(input).unwrap()
 }

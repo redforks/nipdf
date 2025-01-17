@@ -8,7 +8,7 @@ pub(crate) use object::hex_string;
 pub(crate) use object::{dict, dict_body, indirect_object_def, object, object_inside_page_stream};
 use winnow::{
     Parser,
-    combinator::{alt, cond, delimited, opt, preceded, repeat},
+    combinator::{alt, cond, delimited, eof, opt, preceded, repeat},
     error::ParserError,
     stream::{Compare, ContainsToken, Stream, StreamIsPartial},
     token::{one_of, take_till},
@@ -56,7 +56,11 @@ where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8>,
     E: ParserError<S> + 'a,
 {
-    delimited(b'%', take_till(0.., [b'\n', b'\r']), eol3())
+    delimited(
+        b'%',
+        take_till(0.., [b'\n', b'\r']),
+        alt((eol3().void(), eof.void())),
+    )
 }
 
 /// Return parser that parse one of whitespace characters.
