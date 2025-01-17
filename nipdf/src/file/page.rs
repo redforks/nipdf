@@ -405,7 +405,7 @@ impl PageContent {
             parse_operations::<ParserError>
                 .parse(&data)
                 .map_err(winnow::error::ParseError::into_inner)
-                .whatever_context("parse operations")?
+                .whatever_context("parse page operations")?
         } else {
             vec![]
         })

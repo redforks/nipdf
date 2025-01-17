@@ -647,9 +647,12 @@ where
         + 'static,
 {
     let operator = take_till(1.., b" \t\n\r%[<(/".as_slice())
-        .try_map(|buf| Ok::<_, Utf8Error>(ObjectOrOperator::Operator(from_utf8(buf)?)));
+        .try_map(|buf| Ok::<_, Utf8Error>(ObjectOrOperator::Operator(from_utf8(buf)?)))
+        .context("operator");
     let mut object_or_operator = alt((
-        parser::object_inside_page_stream().map(ObjectOrOperator::Object),
+        parser::object_inside_page_stream()
+            .map(ObjectOrOperator::Object)
+            .context("operands"),
         operator,
     ));
     let mut operands = Vec::with_capacity(8);
@@ -662,7 +665,10 @@ where
             }
             return Ok(r);
         }
-        let oo = object_or_operator.parse_next(buf)?;
+        let oo = object_or_operator.parse_next(buf).map_err(|e| {
+            dbg!(&buf);
+            e
+        })?;
         match oo {
             ObjectOrOperator::Object(o) => operands.push(o),
             ObjectOrOperator::Operator(op) => {
