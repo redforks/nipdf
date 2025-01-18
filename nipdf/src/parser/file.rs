@@ -392,7 +392,7 @@ where
         .context("frame");
         let mut bytes = Located::new(&bytes[pos..]);
         let f = frame.parse_next(&mut bytes)?;
-        let f = Frame::new(pos, f.1, f.0);
+        let f = Frame::new(f.1, f.0);
         next_pos = f
             .trailer
             .get(&sname("Prev"))
@@ -451,8 +451,6 @@ mod tests {
         let frameset = parse_frame_set::<ContextError<&'static str>>(&mut &buf[..]).unwrap();
         assert_eq!(2, frameset.len());
         let (f1, f2) = (&frameset[0], &frameset[1]);
-        assert_eq!(f1.xref_pos, 116);
-        assert_eq!(f2.xref_pos, 1513589);
         assert_eq!(f1.trailer.get(&sname("Size")).unwrap().int().unwrap(), 4963);
         assert_eq!(f2.trailer.get(&sname("Size")).unwrap().int().unwrap(), 1046);
     }

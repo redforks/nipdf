@@ -14,10 +14,7 @@ impl TryFrom<&Object> for DocId {
             return Err(ObjectValueError::UnexpectedType);
         }
 
-        Ok(Self(
-            arr[0].as_bstr()?.into(),
-            arr[1].as_bstr()?.into(),
-        ))
+        Ok(Self(arr[0].as_bstr()?.into(), arr[1].as_bstr()?.into()))
     }
 }
 
@@ -36,15 +33,13 @@ pub trait TrailerDictTrait {
 #[derive(Debug, PartialEq, Clone)]
 /// Frame contains things like xref, trailer, caused by incremental update. See [FrameSet]
 pub struct Frame {
-    pub xref_pos: usize,
     pub trailer: Dictionary,
     pub xref_section: XRefSection,
 }
 
 impl Frame {
-    pub fn new(xref_pos: usize, trailer: Dictionary, xref_section: XRefSection) -> Self {
+    pub fn new(trailer: Dictionary, xref_section: XRefSection) -> Self {
         Self {
-            xref_pos,
             trailer,
             xref_section,
         }
