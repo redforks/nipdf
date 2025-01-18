@@ -59,8 +59,7 @@ pub trait EncryptDictTrait {
     fn algorithm(&self) -> Algorithm;
 
     #[key("Length")]
-    #[default(40)]
-    fn key_length(&self) -> u32;
+    fn key_length(&self) -> Option<u32>;
 
     #[key("P")]
     fn permission_flags(&self) -> u32;
@@ -152,6 +151,16 @@ impl CryptFilters {
 }
 
 impl EncryptDict<'_, '_> {
+    fn effective_key_length(&self) -> Result<u32> {
+        let algorithm = self.algorithm()?;
+        Ok(match (algorithm, self.key_length()?) {
+            (Algorithm::Key40 | Algorithm::Key40AndMore, None) => 40,
+            (Algorithm::DefinedInDoc, None) => 128,
+            (_, Some(length)) => length,
+            _ => whatever!("Invalid algorithm and key length combination"),
+        })
+    }
+
     pub fn crypt_filters(&self) -> Result<CryptFilters> {
         fn _do(this: &EncryptDict<'_, '_>) -> Result<CryptFilters> {
             if this.revision()? != StandardHandlerRevision::V4 {
@@ -333,7 +342,7 @@ impl Authorizer {
         user_hash.copy_from_slice(&d.user_password_hash()?[..32]);
         Ok(Self {
             revision: d.revision()?,
-            key_length: d.key_length()? as usize,
+            key_length: d.effective_key_length()? as usize,
             owner_hash,
             user_hash,
             permission_flags: d.permission_flags()?,
