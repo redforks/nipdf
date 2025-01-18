@@ -25,8 +25,8 @@ use winnow::{
     binary::{be_u8, be_u16, be_u24, be_u32},
     combinator::{alt, delimited, empty, fail, preceded, repeat, separated_pair, seq, terminated},
     error::{AddContext, ContextError, ErrMode, ErrorKind, FromExternalError, ParserError},
-    stream::{AsBStr, AsChar, Compare, Location, Stream, StreamIsPartial},
-    token::{one_of, take},
+    stream::{AsBStr, AsChar, Compare, FindSlice, Location, Stream, StreamIsPartial},
+    token::{one_of, take, take_until},
 };
 
 /// Parser to parse file header, return pdf file version string, such as "1.7".
@@ -72,11 +72,17 @@ where
         + StreamIsPartial
         + Compare<u8>
         + Compare<&'a [u8]>
+        + FindSlice<&'a [u8]>
         + 'a,
     E: ParserError<S> + 'a + AddContext<S> + FromExternalError<S, ParseIntError>,
 {
     preceded(
-        (wsc0(), b"xref".as_slice(), eol3()),
+        (
+            // startxref may set incorrect position of xref, skip any non xref bytes.
+            take_until(0.., b"xref".as_slice()),
+            b"xref".as_slice(),
+            eol3(),
+        ),
         repeat(
             1..,
             terminated(separated_pair(dec_uint, b' ', dec_uint), wsc1()).flat_map(
@@ -364,6 +370,9 @@ where
 
         info!("trailer frame pos: {}", pos);
         let mut frame = alt((
+            // NOTE: must try parse_xref_stream before xref, because xref parser will skip to
+            // next position of "xref" keyword to allow parse broken file, which
+            // may be the start of xref stream.
             parse_xref_stream.context("xref stream"),
             (
                 xref().context("xref"),
