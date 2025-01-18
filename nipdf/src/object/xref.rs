@@ -45,5 +45,3 @@ impl Entry {
         }
     }
 }
-
-pub type Section = Vec<(u32, Entry)>;

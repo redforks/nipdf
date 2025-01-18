@@ -3,8 +3,7 @@ use crate::{
     AnyWhatever,
     function::{Domain, Domains},
     object::{
-        Dictionary, Entry, FilePos, Frame, FrameSet, IndirectObjectDef, ObjectValueError,
-        RuntimeObjectId, XRefSection,
+        Dictionary, Entry, FilePos, Frame, IndirectObjectDef, ObjectValueError, RuntimeObjectId,
     },
     parser::{object::indirect_object_def, ws1},
 };
@@ -66,7 +65,7 @@ impl XRefSubSection {
     }
 }
 
-fn xref<'a, S, E>() -> impl Parser<S, XRefSection, E> + 'a
+fn xref<'a, S, E>() -> impl Parser<S, Vec<(u32, Entry)>, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
@@ -243,7 +242,7 @@ where
     }
 }
 
-fn parse_xref_stream<'a, S, E>(input: &mut S) -> PResult<(XRefSection, Dictionary), E>
+fn parse_xref_stream<'a, S, E>(input: &mut S) -> PResult<(Vec<(u32, Entry)>, Dictionary), E>
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
@@ -326,7 +325,7 @@ where
     ))
 }
 
-pub(crate) fn parse_frame_set<'a, E>(buf: &mut &'a [u8]) -> PResult<FrameSet, E>
+pub(crate) fn parse_frame_set<'a, E>(buf: &mut &'a [u8]) -> PResult<Vec<Frame>, E>
 where
     E: ParserError<&'a [u8]>
         + ParserError<&'a [u8]>

@@ -590,7 +590,7 @@ impl ObjectId {
 }
 
 mod xref;
-pub use xref::{Entry as XRefEntry, Section as XRefSection, *};
+pub use xref::{Entry as XRefEntry, *};
 
 mod frame;
 use crate::graphics::trans::ThousandthsOfText;

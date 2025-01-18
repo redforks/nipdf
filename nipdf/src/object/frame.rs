@@ -1,4 +1,4 @@
-use super::{Dictionary, Object, ObjectValueError, RuntimeObjectId, XRefSection};
+use super::{Dictionary, Entry, Object, ObjectValueError, RuntimeObjectId};
 use crate::file::EncryptDict;
 use nipdf_macro::pdf_object;
 
@@ -34,16 +34,14 @@ pub trait TrailerDictTrait {
 /// Frame contains things like xref, trailer, caused by incremental update. See [FrameSet]
 pub struct Frame {
     pub trailer: Dictionary,
-    pub xref_section: XRefSection,
+    pub xref_section: Vec<(u32, Entry)>,
 }
 
 impl Frame {
-    pub fn new(trailer: Dictionary, xref_section: XRefSection) -> Self {
+    pub fn new(trailer: Dictionary, xref_section: Vec<(u32, Entry)>) -> Self {
         Self {
             trailer,
             xref_section,
         }
     }
 }
-
-pub type FrameSet = Vec<Frame>;

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 #[test]
 fn xref_table_resolve_object_buf() {
     let buf = b"1234567890";
-    let mut id_offset = IDOffsetMap::default();
+    let mut id_offset = HashMap::default();
     id_offset.insert(1.into(), ObjectPos::Offset(5));
     id_offset.insert(2.into(), ObjectPos::Offset(3));
     let xref_table = XRefTable::new(id_offset);
@@ -29,7 +29,7 @@ fn xref_table_resolve_object_buf() {
 #[test]
 fn object_resolver() -> Result<(), ObjectValueError> {
     let buf = b"   2 0 obj 5 endobj 1 0 obj null endobj 3 0 obj 2 0 R endobj";
-    let mut id_offset = IDOffsetMap::default();
+    let mut id_offset = HashMap::default();
     id_offset.insert(1.into(), ObjectPos::Offset(20));
     id_offset.insert(2.into(), ObjectPos::Offset(3));
     id_offset.insert(3.into(), ObjectPos::Offset(40));

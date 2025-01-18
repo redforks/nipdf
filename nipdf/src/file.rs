@@ -4,7 +4,7 @@ use crate::{
     Result,
     file::encrypt::Authorizer,
     object::{
-        Array, Dictionary, Embedded, Entry, FrameSet, HexString, LiteralString, Object, ObjectId,
+        Array, Dictionary, Embedded, Entry, Frame, HexString, LiteralString, Object, ObjectId,
         ObjectValueError, PdfObject, Root, RootPdfObject, RuntimeObjectId, Stream, TrailerDict,
     },
     parser::{self, header_parser, indirect_object_def, parse_frame_set, wsc_prefixed0, wsc0},
@@ -46,8 +46,6 @@ impl<'a> From<&'a Entry> for ObjectPos {
         }
     }
 }
-
-type IDOffsetMap = HashMap<RuntimeObjectId, ObjectPos>;
 
 /// Object stream stores multiple objects in a stream. See section 7.5.7
 #[derive(Debug)]
@@ -113,13 +111,13 @@ impl ObjectStream {
 
 #[derive(Debug)]
 pub struct XRefTable {
-    id_offset: IDOffsetMap,
+    id_offset: HashMap<RuntimeObjectId, ObjectPos>,
     // object id -> offset
     object_streams: HashMap<RuntimeObjectId, OnceCell<ObjectStream>>, // stream id -> ObjectStream
 }
 
 impl XRefTable {
-    pub fn new(id_offset: IDOffsetMap) -> Self {
+    pub fn new(id_offset: HashMap<RuntimeObjectId, ObjectPos>) -> Self {
         let object_stream = id_offset
             .values()
             .filter_map(|e| {
@@ -141,7 +139,7 @@ impl XRefTable {
     #[cfg(test)]
     pub fn empty() -> Self {
         Self {
-            id_offset: IDOffsetMap::default(),
+            id_offset: HashMap::default(),
             object_streams: HashMap::new(),
         }
     }
@@ -158,7 +156,7 @@ impl XRefTable {
         .parse(Located::new(buf))
         .map_err(ParseError::into_inner)
         .whatever_context("parse xref table objects")?;
-        let mut id_offset = IDOffsetMap::new();
+        let mut id_offset = HashMap::new();
         for o in objects {
             let search_key = format!("{} {} obj", o.to_runtime_object_id(), o.id().generation());
             let pos: u32 = buf
@@ -173,8 +171,8 @@ impl XRefTable {
         Ok(Self::new(id_offset))
     }
 
-    fn scan(frame_set: &FrameSet) -> IDOffsetMap {
-        let mut r = IDOffsetMap::with_capacity(5000);
+    fn scan(frame_set: &Vec<Frame>) -> HashMap<RuntimeObjectId, ObjectPos> {
+        let mut r = HashMap::with_capacity(5000);
         for (id, entry) in frame_set.iter().rev().flat_map(|f| f.xref_section.iter()) {
             if entry.is_used() {
                 r.insert(RuntimeObjectId(*id), entry.into());
@@ -185,7 +183,7 @@ impl XRefTable {
         r
     }
 
-    pub fn from_frame_set(frame_set: &FrameSet) -> Self {
+    pub fn from_frame_set(frame_set: &Vec<Frame>) -> Self {
         Self::new(Self::scan(frame_set))
     }
 
