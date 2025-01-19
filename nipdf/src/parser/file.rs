@@ -11,7 +11,7 @@ use hex::FromHexError;
 use log::{info, warn};
 use num_traits::{NumCast, Unsigned};
 use prescript::sname;
-use snafu::{OptionExt, ResultExt, ensure_whatever};
+use snafu::{OptionExt, ResultExt};
 use std::{
     borrow::Cow,
     fmt::Debug,

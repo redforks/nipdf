@@ -881,13 +881,16 @@ pub(crate) fn open_test_file_with_password(
 
 #[cfg(test)]
 pub(crate) fn report_parse_err<I, T, E: std::error::Error>(rv: Result<T, ParseError<I, E>>) -> T {
-    rv.map_err(|e| snafu::Report::from_error(e.into_inner()))
-        .unwrap()
+    use snafu::Report;
+
+    rv.map_err(|e| Report::from_error(e.into_inner())).unwrap()
 }
 
 #[cfg(test)]
 pub(crate) fn report_peek_err<T, E: std::error::Error>(rv: PResult<T, E>) -> T {
-    rv.map_err(|e| snafu::Report::from_error(e.into_inner().unwrap()))
+    use snafu::Report;
+
+    rv.map_err(|e| Report::from_error(e.into_inner().unwrap()))
         .unwrap()
 }
 
