@@ -12,10 +12,6 @@ impl FilePos {
         self.0
     }
 
-    pub fn generation(&self) -> u16 {
-        self.1
-    }
-
     pub fn is_used(&self) -> bool {
         self.2
     }

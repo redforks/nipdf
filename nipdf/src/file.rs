@@ -7,7 +7,10 @@ use crate::{
         Array, Dictionary, Embedded, Entry, Frame, HexString, LiteralString, Object, ObjectId,
         ObjectValueError, PdfObject, Root, RootPdfObject, RuntimeObjectId, Stream, TrailerDict,
     },
-    parser::{self, header_parser, indirect_object_def, parse_frame_set, wsc_prefixed0, wsc0},
+    parser::{
+        self, header_parser, indirect_object_def, object_id, parse_frame_set, wsc_prefixed0, wsc0,
+        wsc1,
+    },
 };
 use ahash::{HashMap, HashMapExt};
 use either::Either;
@@ -18,10 +21,11 @@ use prescript::{Name, ParserError, sname};
 use snafu::{OptionExt as _, ResultExt as _, Snafu, ensure_whatever, whatever};
 use std::iter::repeat_with;
 use winnow::{
-    Located, Parser as _,
-    combinator::{rest, terminated},
+    Located, PResult, Parser as _,
+    combinator::{alt, repeat, rest, terminated},
     error::{ContextError, ParseError},
     stream::{Compare, StreamIsPartial},
+    token::{any, take_until},
 };
 
 pub mod page;
@@ -630,15 +634,65 @@ fn open_encrypt(
     Ok(Some(EncryptInfo::new(k, encrypt.crypt_filters()?)))
 }
 
+fn index_xref<'a, E>(
+    data: &mut Located<&'a [u8]>,
+) -> PResult<(Vec<usize>, Vec<(ObjectId, usize)>), E>
+where
+    E: winnow::error::ParserError<Located<&'a [u8]>> + 'a,
+{
+    const TRAILER_BYTES: &[u8] = b"trailer";
+    let mut trailer_positions = Vec::new();
+    let mut entries = Vec::new();
+
+    let parse_trailer_position_after_xref = (b"xref".as_slice(), take_until(1.., TRAILER_BYTES))
+        .span()
+        .map(|r| trailer_positions.push(r.end));
+    let parse_indirect_object =
+        (object_id().with_span(), wsc1(), b"obj".as_slice()).map(|((obj_id, range), ..)| {
+            entries.push((obj_id, range.start));
+        });
+    let mut parser = repeat::<_, _, (), _, _>(
+        1..,
+        alt((
+            wsc1().void(),
+            parse_trailer_position_after_xref,
+            parse_indirect_object,
+            any.void(),
+        )),
+    );
+    parser.parse_next(data)?;
+    drop(parser);
+
+    Ok((trailer_positions, entries))
+}
+
+fn parse_header(buf: &[u8]) -> Option<String> {
+    match header_parser().parse_next(&mut &buf[..]) {
+        Ok(ver) => Some(ver.to_owned()),
+        Err(e) => {
+            log::warn!("Failed to parse header: {}", e);
+            None
+        }
+    }
+}
+
+fn get_root_id(trailers: &[Dictionary]) -> Result<RuntimeObjectId> {
+    let root_id = trailers
+        .iter()
+        .find_map(|t| t.get(&sname("Root")))
+        .whatever_context("Root entry not found in trailers")?;
+    let root_id = root_id
+        .reference()
+        .whatever_context("Failed to get reference from root_id")?
+        .id()
+        .id();
+    Ok(root_id)
+}
+
 impl File {
-    pub fn parse(buf: Vec<u8>, user_password: &str) -> Result<Self> {
-        let head_ver = match header_parser().parse_next(&mut &buf[..]) {
-            Ok(ver) => Some(ver),
-            Err(e) => {
-                log::warn!("Failed to parse header: {}", e);
-                None
-            }
-        };
+    fn normal_parse(buf: Vec<u8>, user_password: &str) -> Result<Self> {
+        let head_ver = parse_header(&buf);
+
         let frame_set = parse_frame_set::<ParserError>
             .parse(&buf[..])
             .map_err(ParseError::into_inner)
@@ -653,23 +707,92 @@ impl File {
             user_password,
         )?;
 
-        let root_id = trailers
-            .iter()
-            .find_map(|t| t.get(&sname("Root")))
-            .whatever_context("Root entry not found in trailers")?;
-        let root_id = root_id
-            .reference()
-            .whatever_context("Failed to get reference from root_id")?
-            .id()
-            .id();
-
         Ok(Self {
-            head_ver: head_ver.map(ToOwned::to_owned),
-            root_id,
+            head_ver,
+            root_id: get_root_id(&trailers)?,
             data: buf,
             xref,
             encrypt_info: encrypt_key,
         })
+    }
+
+    pub fn parse(buf: Vec<u8>, user_password: &str) -> Result<Self> {
+        // Try normal parsing first
+        match Self::normal_parse(buf.clone(), user_password) {
+            Ok(file) => Ok(file),
+            Err(e) => {
+                // Log the normal parse error
+                log::warn!("Normal PDF parsing failed, attempting rebuild: {}", e);
+
+                // Fallback to rebuilding xref table
+                Self::build_xref(buf, user_password)
+            }
+        }
+    }
+
+    /// Do not use xref/trailer/encrypt info from file, scan them from buf.
+    ///
+    /// Used for corruptted xref/trailer/encrypt pdf file.
+    pub fn build_xref(buf: Vec<u8>, user_password: &str) -> Result<Self> {
+        let head_ver = parse_header(&buf);
+
+        // Scan the file for trailer positions and object entries
+        let (trailer_positions, object_entries) = index_xref::<ParserError>
+            .parse(Located::new(&buf))
+            .map_err(ParseError::into_inner)
+            .whatever_context("scan file for xref entries")?;
+
+        // Build id_offset map from object entries
+        let mut id_offset = HashMap::with_capacity(object_entries.len());
+        for (obj_id, offset) in object_entries {
+            id_offset.insert(
+                RuntimeObjectId(obj_id.id().0),
+                ObjectPos::Offset(offset.try_into().whatever_context("convert offset")?),
+            );
+        }
+
+        // Create XRef table
+        let xref = XRefTable::new(id_offset);
+
+        // Parse trailers
+        let mut trailers = Vec::with_capacity(trailer_positions.len());
+        for pos in trailer_positions {
+            if let Ok((_, _, dict)) = terminated(
+                (
+                    b"trailer".as_slice(),
+                    wsc0::<_, ParserError>(),
+                    parser::dict,
+                ),
+                rest,
+            )
+            .parse(&buf[pos..])
+            {
+                trailers.push(dict);
+            }
+        }
+
+        // Get encrypt info if file is encrypted
+        let encrypt_key = open_encrypt(
+            &buf,
+            &xref,
+            trailers.iter().find(|d| d.contains_key(&sname("Encrypt"))),
+            user_password,
+        )?;
+
+        Ok(Self {
+            head_ver,
+            root_id: get_root_id(&trailers)?,
+            data: buf,
+            xref,
+            encrypt_info: encrypt_key,
+        })
+    }
+
+    /// Return file data by consuming self.
+    ///
+    /// Used for corruptted xref/trailer/encrypt pdf file to rebuild file with `Self::build_xref()`.
+    pub fn into_data(self) -> Vec<u8> {
+        self.data
     }
 
     pub fn resolver(&self) -> Result<ObjectResolver<'_>> {
@@ -755,7 +878,7 @@ pub(crate) fn report_parse_err<I, T, E: std::error::Error>(rv: Result<T, ParseEr
 }
 
 #[cfg(test)]
-pub(crate) fn report_peek_err<T, E: std::error::Error>(rv: winnow::PResult<T, E>) -> T {
+pub(crate) fn report_peek_err<T, E: std::error::Error>(rv: PResult<T, E>) -> T {
     rv.map_err(|e| snafu::Report::from_error(e.into_inner().unwrap()))
         .unwrap()
 }

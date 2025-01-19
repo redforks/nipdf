@@ -251,7 +251,7 @@ where
     .parse_next(input)
 }
 
-fn object_id<'a, S, E>() -> impl Parser<S, ObjectId, E> + 'a
+pub(crate) fn object_id<'a, S, E>() -> impl Parser<S, ObjectId, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
     E: ParserError<S> + 'a,

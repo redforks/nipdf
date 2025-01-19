@@ -78,3 +78,20 @@ fn parse_file() -> Result<()> {
 
     Ok(())
 }
+
+#[report]
+#[test]
+fn build_xref() -> Result<()> {
+    let f = test_file("pdf.js/test/pdfs/helloworld-bad.pdf");
+    let buf = std::fs::read(&f).whatever_context("read file")?;
+    let f = File::parse(buf, "").whatever_context("build xref")?;
+    let resolver = f.resolver()?;
+    // now it is ok.
+    for i in 1..resolver.n() {
+        resolver
+            .resolve(i as u32)
+            .whatever_context("resolve object")?;
+    }
+
+    Ok(())
+}

@@ -31,7 +31,7 @@ pub trait TrailerDictTrait {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-/// Frame contains things like xref, trailer, caused by incremental update. See [FrameSet]
+/// Frame contains things like xref, trailer, caused by incremental update.
 pub struct Frame {
     pub trailer: Dictionary,
     pub xref_section: Vec<(u32, Entry)>,
