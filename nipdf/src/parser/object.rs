@@ -1,4 +1,4 @@
-use super::{eol2, eol3, ws_prefixed0, ws_prefixed1, wsc_prefixed0, wsc0};
+use super::{eol2, eol3, ws_prefixed0, ws_prefixed1, wsc_prefixed0, wsc0, wsc1};
 use crate::{
     object::{
         BufPos, Dictionary, HexString, IndirectObjectDef, InnerString, LiteralString, Object,
@@ -17,7 +17,7 @@ use std::{
 use winnow::{
     PResult, Parser,
     ascii::{Caseless, dec_uint, float},
-    combinator::{alt, delimited, preceded, repeat, rest, terminated},
+    combinator::{alt, delimited, preceded, repeat, repeat_till, rest, terminated},
     error::{AddContext, ErrMode, ErrorKind, FromExternalError, ParserError},
     stream::{AsBStr, AsChar, Compare, ContainsToken, Location, Stream, StreamIsPartial},
     token::{any, take, take_till, take_while},
@@ -441,8 +441,15 @@ where
             if let Some(len) = len {
                 (
                     take(len),
-                    wsc_prefixed0(b"endstream".as_slice()),
-                    wsc_prefixed0(terminated(b"endobj".as_slice(), wsc0())),
+                    // pdf file may broken, so we need to repeat till `endstream` and `endobj`
+                    repeat_till::<_, _, (), _, _, _, _>(
+                        0..,
+                        any,
+                        (
+                            wsc_prefixed0(b"endstream".as_slice()),
+                            wsc_prefixed0(terminated(b"endobj".as_slice(), wsc0())),
+                        ),
+                    ),
                 )
                     .parse_next(buf)?;
             }
