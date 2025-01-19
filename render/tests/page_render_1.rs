@@ -67,36 +67,13 @@ fn download_file(url: &str, p: impl AsRef<Path>) -> Result<()> {
 }
 
 /// These files are very rare and odd, not to be tested
-const IGNORED: [&str; 16] = [
-    // xpdf, mupdf, are all failed to open
-    "bug1020226.pdf",
+const IGNORED: [&str; 7] = [
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
     "bug1050040.pdf",
-    // the link is dead
-    "bug1037816.pdf.link",
-    // corrupt content at the end of file, xpdf, mupdf okay, qpdf failed(although it tried to
-    // recover) see: xpdf/PDFDoc.cc PDFDoc::setup2()
-    "bug1250079.pdf",
-    // incorrect startxref pos, and incorrect page content operations
-    "bug1130815.pdf.link",
-    // Contains JBIG2Decode stream, an image format likes CCITT, only one crate can decode JBig2:
-    // `jbig2dec`, ffi to `jbig2dec` written in C, which is AGPL license.
-    // `xpdf` and `pdf.js` implement its own decoder. AGPL can link with Apache libs
-    // I'll dive into this after other features implemented. Crate `jbig2dec` need forked to
-    // support JBIG2 Global stream
-    "bug1064894.pdf.link",
-    // damaged file, xpdf/mupdf/qpdf all failed to open,
-    // maybe can be read using Linearized PDF (Annex F)
-    "bpl13210.pdf.link",
-    // incorrect startxref pos, need to fix xref.
-    // xpdf says: attempting to reconstruct xref table...
-    "bug1606566.pdf",
+    // invalid object format, mupdf failed to parse, mupdf says no page
+    "bug1020226.pdf",
     // todo: render Type 4 Shadings
     "bug1260585.pdf.link",
-    // todo: rebuild xref table, because:
-    // 1. startxref point to incorrect pos
-    // 1. xref table not correct, for example object 6 offset is wrong-
-    "bug1795263.pdf",
     // contains jpeg2k image using cmyk color space,
     // `jpeg2k` crate failed handle it
     "bug1199237.pdf.link",
@@ -126,10 +103,6 @@ const IGNORED: [&str; 16] = [
     "close-path-bug.pdf",
     // encrypted by pdf 2.0, Revision 6
     "empty_protected.pdf",
-    // xpdf failed to open, mupdf okay with warnings, no EOF marker
-    "annotation-as.pdf.link",
-    // broken xref table, xpdf, mupd failed to open, okular can open but rendered nothing
-    "GHOSTSCRIPT-698804-1-fuzzed.pdf",
 ];
 
 static PASSWORD: phf::Map<&'static str, &'static str> = phf::phf_map! {

@@ -277,10 +277,15 @@ impl XRefTable {
                         .with_whatever_context(|_| format!("parse object {}", id))
                     },
                     |buf| {
-                        terminated(parser::object::<_, ParserError>(), wsc0())
-                            .parse(buf)
-                            .map_err(ParseError::into_inner)
-                            .with_whatever_context(|_| format!("parse inside stream object {}", id))
+                        terminated(
+                            parser::object::<_, ParserError>(),
+                            /* some invalid pdf file contains endobj after data,
+                             * pdf.js/test/pdfs/bug1037816.pdf, use rest to ignore it */
+                            rest,
+                        )
+                        .parse(buf)
+                        .map_err(ParseError::into_inner)
+                        .with_whatever_context(|_| format!("parse inside stream object {}", id))
                     },
                 )
             })
