@@ -11,7 +11,7 @@ use hex::FromHexError;
 use log::{info, warn};
 use num_traits::{NumCast, Unsigned};
 use prescript::sname;
-use snafu::{OptionExt, ResultExt};
+use snafu::{OptionExt, ResultExt, ensure_whatever};
 use std::{
     borrow::Cow,
     fmt::Debug,
@@ -380,6 +380,9 @@ where
                 .context("xref table"),
         ))
         .context("frame");
+        if pos >= bytes.len() {
+            return Err(ErrMode::from_error_kind(buf, ErrorKind::Eof));
+        }
         let mut bytes = Located::new(&bytes[pos..]);
         let f = frame.parse_next(&mut bytes)?;
         let f = Frame::new(f.1, f.0);
