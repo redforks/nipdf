@@ -29,7 +29,10 @@ use prescript::{
 use snafu::{OptionExt, ResultExt, ensure_whatever, whatever};
 use std::{collections::HashMap, ops::RangeInclusive, rc::Rc, sync::LazyLock};
 use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
-use winnow::Parser as _;
+use winnow::{
+    Parser as _,
+    combinator::{rest, terminated},
+};
 
 /// FontWidth used in Type1 and TrueType fonts
 struct FirstLastFontWidth {
@@ -1346,7 +1349,7 @@ impl<'a, 'b> Type3Font<'a, 'b> {
             let data = stream
                 .decode(d.resolver())
                 .whatever_context("decode stream")?;
-            let ops = parse_operations::<crate::ParserError>
+            let ops = terminated(parse_operations::<crate::ParserError>, rest)
                 .parse(&data[..])
                 .map_err(winnow::error::ParseError::into_inner)
                 .whatever_context("parse type3 operation")?;

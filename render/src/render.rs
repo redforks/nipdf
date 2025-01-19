@@ -46,7 +46,10 @@ use tiny_skia::{
     Color as SkiaColor, FillRule, FilterQuality, Mask, MaskType, Paint, Path as SkiaPath,
     PathBuilder, Pixmap, PixmapPaint, PixmapRef, Rect, Stroke, StrokeDash, Transform,
 };
-use winnow::Parser as _;
+use winnow::{
+    Parser as _,
+    combinator::{rest, terminated},
+};
 
 trait CloneOrMove {
     type Target;
@@ -1650,7 +1653,7 @@ impl<'a, 'c> Render<'a, 'c> {
         let bytes = stream
             .decode(tile.resolver())
             .whatever_context("decode tile stream")?;
-        let ops = parse_operations::<ParserError>
+        let ops = terminated(parse_operations::<ParserError>, rest)
             .parse(bytes.as_ref())
             .map_err(winnow::error::ParseError::into_inner)
             .whatever_context("parse tile pattern operations")?;

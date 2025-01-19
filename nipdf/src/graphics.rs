@@ -690,7 +690,11 @@ where
                     }
                     Some(op) => r.push(op),
                     None => {
-                        warn!("Unknown operation: {:?}", op);
+                        warn!(
+                            "Unknown operation: '{:?}', possible broken page content, abort parsing",
+                            op
+                        );
+                        return Ok(r);
                     }
                 }
                 // Some pdf files has bug that has extra operands

@@ -18,7 +18,10 @@ use nipdf_macro::{TryFromNameObject, pdf_object};
 use prescript::{AnyWhatever, Name, ParserError, sname};
 use snafu::{OptionExt as _, ResultExt as _};
 use std::{cell::LazyCell, iter::once};
-use winnow::Parser as _;
+use winnow::{
+    Parser as _,
+    combinator::{rest, terminated},
+};
 
 pub mod paint;
 
@@ -402,7 +405,7 @@ impl PageContent {
         }
 
         Ok(if let Some(data) = data {
-            parse_operations::<ParserError>
+            terminated(parse_operations::<ParserError>, rest)
                 .parse(&data)
                 .map_err(winnow::error::ParseError::into_inner)
                 .whatever_context("parse page operations")?
