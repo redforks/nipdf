@@ -67,7 +67,7 @@ fn download_file(url: &str, p: impl AsRef<Path>) -> Result<()> {
 }
 
 /// These files are very rare and odd, not to be tested
-const IGNORED: [&str; 7] = [
+const IGNORED: [&str; 8] = [
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
     "bug1050040.pdf",
     // invalid object format, mupdf failed to parse, mupdf says no page
@@ -77,6 +77,9 @@ const IGNORED: [&str; 7] = [
     // contains jpeg2k image using cmyk color space,
     // `jpeg2k` crate failed handle it
     "bug1199237.pdf.link",
+    // chrome failed to open this file. xpdf/mupdf works okay.
+    // file end with document id that never complete.
+    "bug1250079.pdf",
     // CMap stream /CM10 incorrect:
     //
     // ```
