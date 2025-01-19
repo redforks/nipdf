@@ -18,7 +18,7 @@ use log::error;
 use nipdf_macro::pdf_object;
 use once_cell::unsync::OnceCell;
 use prescript::{Name, ParserError, sname};
-use snafu::{OptionExt as _, ResultExt as _, Snafu, ensure_whatever, whatever};
+use snafu::{OptionExt as _, Report, ResultExt as _, Snafu, ensure_whatever, whatever};
 use std::iter::repeat_with;
 use winnow::{
     Located, PResult, Parser as _,
@@ -727,7 +727,10 @@ impl File {
             Ok(file) => Ok(file),
             Err(e) => {
                 // Log the normal parse error
-                log::warn!("Normal PDF parsing failed, attempting rebuild: {}", e);
+                log::warn!(
+                    "Normal PDF parsing failed, attempting rebuild: {}",
+                    Report::from_error(e)
+                );
 
                 // Fallback to rebuilding xref table
                 Self::build_xref(buf, user_password)
