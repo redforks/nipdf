@@ -1,8 +1,9 @@
 use super::{eol2, eol3, ws_prefixed0, ws_prefixed1, wsc_prefixed0, wsc0};
 use crate::{
+    ObjectValueError,
     object::{
         BufPos, Dictionary, HexString, IndirectObjectDef, InnerString, LiteralString, Object,
-        ObjectId, ObjectValueError, Reference, Stream as PdfStream,
+        ObjectId, Reference, Stream as PdfStream,
     },
     parser::is_whitespace,
 };

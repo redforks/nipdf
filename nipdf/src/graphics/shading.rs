@@ -1,10 +1,10 @@
 use super::Point;
 use crate::{
-    Result,
+    ObjectValueError, Result,
     file::Rectangle,
     function::{Domain, Function, default_domain},
     graphics::{ColorArgs, ColorSpaceArgs},
-    object::{Object, ObjectValueError},
+    object::Object,
 };
 use nipdf_macro::{TryFromIntObject, pdf_object};
 use prescript::{AnyWhatever, sname};

@@ -1,5 +1,5 @@
 //! object mod contains data structure map to low level pdf objects
-use crate::{Result, file::ObjectResolver};
+use crate::{ObjectValueError, Result, file::ObjectResolver};
 use ahash::{HashMap, HashMapExt};
 use educe::Educe;
 use itertools::Itertools as _;
@@ -17,7 +17,7 @@ use tinyvec::TinyVec;
 mod stream;
 pub use stream::*;
 pub type Array = Rc<[Object]>;
-use snafu::{OptionExt, ResultExt, Snafu, whatever};
+use snafu::{OptionExt as _, ResultExt as _, whatever};
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct IndirectObjectDef(pub(crate) ObjectId, pub(crate) Object);
@@ -614,71 +614,6 @@ pub use xref::{Entry as XRefEntry, *};
 mod frame;
 use crate::graphics::trans::ThousandthsOfText;
 pub use frame::*;
-
-#[derive(Debug, Snafu)]
-pub enum ObjectValueError {
-    #[snafu(display("unexpected type"))]
-    UnexpectedType,
-    #[snafu(display("invalid hex string"))]
-    InvalidHexString,
-    #[snafu(display("invalid name format"))]
-    InvalidNameFormat,
-    #[snafu(display("Name not in dictionary"))]
-    DictNameMissing,
-    #[snafu(display("Reference target not found"))]
-    ReferenceTargetNotFound,
-    #[snafu(display("External stream not supported"))]
-    ExternalStreamNotSupported,
-    #[snafu(display("Unknown filter"))]
-    UnknownFilter,
-    #[snafu(display("Filter decode error"))]
-    FilterDecodeError,
-    #[snafu(display("Stream not image"))]
-    StreamNotImage,
-    #[snafu(display("Stream is not bytes"))]
-    StreamIsNotBytes,
-    #[snafu(display("Stream length not defined"))]
-    StreamLengthNotDefined,
-    #[snafu(display("Object not found by id {id}"))]
-    ObjectIDNotFound { id: RuntimeObjectId },
-    #[snafu(display("Parse error: {message}"))]
-    ParseError { message: String },
-    #[snafu(display("Unexpected dict schema type, schema: {schema}"))]
-    DictSchemaUnExpectedType { schema: String },
-    #[snafu(display("Dict schema error, schema: {schema}, key: {key}"))]
-    DictSchemaError { schema: String, key: Name },
-    #[snafu(display("Graphics operation schema error"))]
-    GraphicsOperationSchemaError,
-    #[snafu(display("Dict key not found"))]
-    DictKeyNotFound,
-    #[snafu(whatever, display("{message}"))]
-    GenericError {
-        message: String,
-
-        // Having a `source` is optional, but if it is present, it must
-        // have this specific attribute and type:
-        #[snafu(source(from(Box<dyn std::error::Error + Send + Sync>, Some)))]
-        source: Option<Box<dyn std::error::Error + Send + Sync>>,
-    },
-}
-
-impl<I: winnow::stream::AsBStr, E: Display> From<winnow::error::ParseError<I, E>>
-    for ObjectValueError
-{
-    fn from(e: winnow::error::ParseError<I, E>) -> Self {
-        Self::ParseError {
-            message: format!("{}", e),
-        }
-    }
-}
-
-impl<E: Debug> From<winnow::error::ErrMode<E>> for ObjectValueError {
-    fn from(e: winnow::error::ErrMode<E>) -> Self {
-        Self::ParseError {
-            message: format!("{}", e),
-        }
-    }
-}
 
 /// Pdf basic object types.
 ///

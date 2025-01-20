@@ -1,10 +1,8 @@
 use super::{dict, eol3, wsc0, wsc1};
 use crate::{
-    AnyWhatever,
+    AnyWhatever, ObjectValueError,
     function::{Domain, Domains},
-    object::{
-        Dictionary, Entry, FilePos, Frame, IndirectObjectDef, ObjectValueError, RuntimeObjectId,
-    },
+    object::{Dictionary, Entry, FilePos, Frame, IndirectObjectDef, RuntimeObjectId},
     parser::{object::indirect_object_def, ws1},
 };
 use hex::FromHexError;

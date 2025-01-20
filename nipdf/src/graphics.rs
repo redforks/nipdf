@@ -1,8 +1,9 @@
 use crate::{
+    ObjectValueError,
     graphics::trans::TextToUserSpace,
     object::{
-        Array, Dictionary, InlineImage, InlineStream, Object, ObjectValueError, RuntimeObjectId,
-        Stream, TextString, TextStringOrNumber,
+        Array, Dictionary, InlineImage, InlineStream, Object, RuntimeObjectId, Stream, TextString,
+        TextStringOrNumber,
     },
     parser::{self, eol3, whitespace, wsc_prefixed0, wsc0},
 };

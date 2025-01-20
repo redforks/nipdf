@@ -1,11 +1,11 @@
 //! Contains types of PDF file structures.
 
 use crate::{
-    Result,
+    ObjectResolveSnafu, ObjectValueError, Result,
     file::encrypt::Authorizer,
     object::{
         Array, Dictionary, Embedded, Entry, Frame, HexString, LiteralString, Object, ObjectId,
-        ObjectValueError, PdfObject, Root, RootPdfObject, RuntimeObjectId, Stream, TrailerDict,
+        PdfObject, Root, RootPdfObject, RuntimeObjectId, Stream, TrailerDict,
     },
     parser::{
         self, header_parser, indirect_object_def, object_id, parse_frame_set, wsc_prefixed0, wsc0,
@@ -472,6 +472,9 @@ impl<'a> ObjectResolver<'a> {
     }
 
     /// Resolve an object by ID, caching it in “objects”. If not in XRef, returns an error.
+    ///
+    /// Returns [ObjectValueError::ObjectResolveError] if resolve object failed.
+    /// Returns [ObjectValueError::ObjectIDNotFound] if object not found.
     pub fn resolve(&self, id: impl Into<RuntimeObjectId>) -> Result<&Object, ObjectValueError> {
         let id = id.into();
         self.objects
@@ -480,6 +483,7 @@ impl<'a> ObjectResolver<'a> {
             .get_or_try_init(|| {
                 self.xref_table
                     .parse_object(self.buf, id, self.encrypt_info())
+                    .context(ObjectResolveSnafu)
             })
     }
 

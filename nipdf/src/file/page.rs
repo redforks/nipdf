@@ -1,13 +1,13 @@
 use crate::{
-    Result,
+    ObjectValueError, Result,
     function::Domains,
     graphics::{
         ColorArgs, ColorSpaceArgs, LineCapStyle, LineJoinStyle, Operation, PatternDict, Point,
         RenderingIntent, parse_operations, shading::ShadingDict, trans::FormToUserSpace,
     },
     object::{
-        Dictionary, ImageMask, Object, ObjectValueError, PdfObject, PdfObjectCore as _,
-        RootPdfObject as _, RuntimeObjectId, Stream,
+        Dictionary, ImageMask, Object, PdfObject, PdfObjectCore as _, RootPdfObject as _,
+        RuntimeObjectId, Stream,
     },
     text::FontDict,
 };

@@ -1,8 +1,8 @@
 use glob::glob;
 use nipdf::{
-    Result,
+    ObjectValueError, Result,
     file::File,
-    object::{Object, ObjectValueError, RuntimeObjectId},
+    object::{Object, RuntimeObjectId},
 };
 use snafu::{FromString as _, ResultExt as _, Whatever, report};
 

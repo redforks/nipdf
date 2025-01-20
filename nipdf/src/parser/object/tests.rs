@@ -2,6 +2,7 @@ use super::*;
 use crate::{
     ParserError,
     file::{report_parse_err, report_peek_err},
+    object::{ObjectId, Reference, Stream as PdfStream},
 };
 use prescript::sname;
 use test_case::test_case;

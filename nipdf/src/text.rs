@@ -1,8 +1,8 @@
 use crate::{
-    Result,
+    ObjectValueError, Result,
     file::{Rectangle, ResourceDict},
     graphics::{NameOrDictByRef, NameOrStream, trans::GlyphToTextSpace},
-    object::{Object, ObjectValueError, Stream},
+    object::{Object, Stream},
 };
 use ahash::{HashMap, HashMapExt};
 use bitflags::bitflags;

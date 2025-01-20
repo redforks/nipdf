@@ -1,10 +1,7 @@
 use crate::{
-    Result,
+    ObjectValueError, Result,
     file::ObjectResolver,
-    object::{
-        CreateFromSchemaDict, Object, ObjectValueError, PdfObject as _, RootPdfObject as _,
-        RuntimeObjectId,
-    },
+    object::{CreateFromSchemaDict, Object, PdfObject as _, RootPdfObject as _, RuntimeObjectId},
 };
 use educe::Educe;
 #[cfg(test)]
