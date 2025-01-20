@@ -1770,6 +1770,17 @@ impl<'a, 'c> Render<'a, 'c> {
                 let path = path.transform(trans).whatever_context("transform path")?;
                 text_clip_path.path_builder()?.push_path(&path);
             }
+            TextRenderingMode::FillAndClip => {
+                canvas.fill_path(
+                    &path,
+                    state.get_fill_paint()?.as_ref(),
+                    FillRule::Winding,
+                    trans,
+                    state.get_mask().as_deref(),
+                );
+                let path = path.transform(trans).whatever_context("transform path")?;
+                text_clip_path.path_builder()?.push_path(&path);
+            }
             _ => {
                 whatever!("TODO: Unsupported text rendering mode: {:?}", render_mode);
             }
