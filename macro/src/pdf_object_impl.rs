@@ -165,7 +165,7 @@ fn deep_resolve_try_from<'a>(
     has_attr("deep_resolve_try_from", rt, attrs)
 }
 
-fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<(&'static str, bool)> {
+fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
     let get_type = || {
         attrs.iter().find_map(|attr| {
             attr.path().is_ident("typ").then(|| {
@@ -186,7 +186,7 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<(&'static str, b
         || rt == &(parse_quote!(RuntimeObjectId))
         || rt == &(parse_quote!(&'b [u8]))
     {
-        Some(("required", true))
+        Some("required")
     } else if rt == &(parse_quote!(Option<Name>))
         || rt == &(parse_quote!(Option<&'b str>))
         || rt == &(parse_quote!(Option<u32>))
@@ -200,16 +200,16 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<(&'static str, b
         || rt == &(parse_quote!(Option<&'b Stream>))
         || rt == &(parse_quote!(Option<RuntimeObjectId>))
     {
-        Some(("opt", true))
+        Some("opt")
     } else if rt == &(parse_quote!(Vec<f32>))
         || (rt == &(parse_quote!(Vec<u32>)) && get_type().is_none_or(|s| s != "Ref"))
         || (rt == &(parse_quote!(Vec<RuntimeObjectId>)) && get_type().is_some_and(|s| s == "Ref"))
     {
-        Some(("or_default", true))
+        Some("or_default")
     } else if rt == &(parse_quote!(Vec<&'b Stream>)) {
-        Some(("zero_one_or_more", true))
+        Some("zero_one_or_more")
     } else if rt == &(parse_quote!(HashMap<Name, &'b Stream>)) {
-        Some(("map_dict", true))
+        Some("map_dict")
     } else {
         None
     }
@@ -508,11 +508,10 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         let key = key_attr(attrs).unwrap_or_else(|| snake_case_to_pascal(&name.to_string()));
 
         let mut has_whatever_context = false;
-        let mut method = if let Some(method_name) =
-            schema_method_name(rt, &attrs[..]).map(|(m, whatever_marked)| {
-                has_whatever_context = whatever_marked;
-                Ident::new(m, name.span())
-            }) {
+        let mut method = if let Some(method_name) = schema_method_name(rt, &attrs[..]).map(|m| {
+            has_whatever_context = true;
+            Ident::new(m, name.span())
+        }) {
             quote! { self.d.#method_name(&prescript::sname(#key)) }
         } else if let Some(nested_type) = nested(rt, attrs) {
             has_whatever_context = true;
