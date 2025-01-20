@@ -448,26 +448,27 @@ where
 }
 
 impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
-    pub fn required<V>(&self, key: &Name) -> Result<V, ObjectValueError>
+    pub fn required<V>(&self, key: &Name) -> Result<V>
     where
         V: CreateFromSchemaDict<'a, 'b>,
     {
         let r = self.resolver();
-        self.required_value(key).and_then(move |o| V::create(o, r))
+        self.required_value(key)
+            .and_then(move |o| V::create(o, r).whatever_context("create"))
     }
 
-    pub fn opt<V>(&self, key: &Name) -> Result<Option<V>, ObjectValueError>
+    pub fn opt<V>(&self, key: &Name) -> Result<Option<V>>
     where
         V: CreateFromSchemaDict<'a, 'b>,
     {
         self.d
             .get(key)
-            .map(|o| V::create(o, self.resolver()))
+            .map(|o| V::create(o, self.resolver()).whatever_context("create"))
             .transpose()
     }
 
     /// Return default value if not exist, error if not expected type.
-    pub fn or_default<V>(&self, key: &Name) -> Result<V, ObjectValueError>
+    pub fn or_default<V>(&self, key: &Name) -> Result<V>
     where
         V: CreateFromSchemaDict<'a, 'b> + Default,
     {
@@ -476,28 +477,40 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     /// If value not exist, return empty vector.
     /// If value is array, return all elements in array, otherwise return with one element vec.
-    pub fn zero_one_or_more<V>(&self, key: &Name) -> Result<Vec<V>, ObjectValueError>
+    pub fn zero_one_or_more<V>(&self, key: &Name) -> Result<Vec<V>>
     where
         V: CreateFromSchemaDict<'a, 'b>,
     {
+        let with_err =
+            |_: &mut ObjectValueError| format!("resolve zero_one_or_more porerty: {}", &key);
         let v = self.d.get(key);
         match v {
             Some(v @ Object::Reference(reference)) => {
-                let o = self.r.resolve(reference)?;
+                let o = self.r.resolve(reference).with_whatever_context(with_err)?;
                 match o {
-                    Object::Array(arr) => {
-                        arr.iter().map(|o| V::create(o, self.resolver())).collect()
-                    }
-                    _ => Ok(vec![V::create(v, self.resolver())?]),
+                    Object::Array(arr) => arr
+                        .iter()
+                        .map(|o| V::create(o, self.resolver()))
+                        .collect::<Result<_, _>>()
+                        .with_whatever_context(with_err),
+                    _ => Ok(vec![
+                        V::create(v, self.resolver()).with_whatever_context(with_err)?,
+                    ]),
                 }
             }
-            Some(Object::Array(arr)) => arr.iter().map(|o| V::create(o, self.resolver())).collect(),
-            Some(o) => Ok(vec![V::create(o, self.resolver())?]),
+            Some(Object::Array(arr)) => arr
+                .iter()
+                .map(|o| V::create(o, self.resolver()))
+                .collect::<Result<_, _>>()
+                .with_whatever_context(with_err),
+            Some(o) => Ok(vec![
+                V::create(o, self.resolver()).with_whatever_context(with_err)?,
+            ]),
             None => Ok(vec![]),
         }
     }
 
-    pub fn map_dict<V>(&self, key: &Name) -> Result<HashMap<Name, V>, ObjectValueError>
+    pub fn map_dict<V>(&self, key: &Name) -> Result<HashMap<Name, V>>
     where
         V: CreateFromSchemaDict<'a, 'b>,
     {
@@ -505,33 +518,39 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         let Some(v) = v else {
             return Ok(HashMap::new());
         };
-        let v = v.as_dict()?;
+        let v = v.as_dict().whatever_context("as dict")?;
         let mut res = HashMap::with_capacity(v.len());
         for (k, v) in v.iter() {
-            res.insert(k.clone(), V::create(v, self.resolver())?);
+            res.insert(
+                k.clone(),
+                V::create(v, self.resolver()).whatever_context("create")?,
+            );
         }
         Ok(res)
     }
 
-    pub fn opt_object(&self, key: &Name) -> Result<Option<&'b Object>, ObjectValueError> {
+    pub fn opt_object(&self, key: &Name) -> Result<Option<&'b Object>> {
         let Some(v) = self.d.get(key) else {
             return Ok(None);
         };
-        self.r.resolve_reference(v).map(Some)
+        self.r
+            .resolve_reference(v)
+            .map(Some)
+            .with_whatever_context(|_| format!("resolve reference for key: {}", key))
     }
 
-    pub fn required_object(&self, key: &Name) -> Result<&'b Object, ObjectValueError> {
-        self.required_value(key)
-            .and_then(|o| self.r.resolve_reference(o))
+    pub fn required_object(&self, key: &Name) -> Result<&'b Object> {
+        self.required_value(key).and_then(|o| {
+            self.r
+                .resolve_reference(o)
+                .whatever_context("resolve reference")
+        })
     }
 
-    fn required_value(&self, key: &Name) -> Result<&'b Object, ObjectValueError> {
+    fn required_value(&self, key: &Name) -> Result<&'b Object> {
         self.d
             .get(key)
-            .ok_or_else(|| ObjectValueError::DictSchemaError {
-                schema: self.t.schema_type(),
-                key: key.clone(),
-            })
+            .with_whatever_context(|| format!("required value for key: {}", key))
     }
 }
 

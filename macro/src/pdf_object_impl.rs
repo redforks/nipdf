@@ -165,7 +165,7 @@ fn deep_resolve_try_from<'a>(
     has_attr("deep_resolve_try_from", rt, attrs)
 }
 
-fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
+fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<(&'static str, bool)> {
     let get_type = || {
         attrs.iter().find_map(|attr| {
             attr.path().is_ident("typ").then(|| {
@@ -186,7 +186,7 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         || rt == &(parse_quote!(RuntimeObjectId))
         || rt == &(parse_quote!(&'b [u8]))
     {
-        Some("required")
+        Some(("required", true))
     } else if rt == &(parse_quote!(Option<Name>))
         || rt == &(parse_quote!(Option<&'b str>))
         || rt == &(parse_quote!(Option<u32>))
@@ -200,16 +200,16 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         || rt == &(parse_quote!(Option<&'b Stream>))
         || rt == &(parse_quote!(Option<RuntimeObjectId>))
     {
-        Some("opt")
+        Some(("opt", true))
     } else if rt == &(parse_quote!(Vec<f32>))
         || (rt == &(parse_quote!(Vec<u32>)) && get_type().is_none_or(|s| s != "Ref"))
         || (rt == &(parse_quote!(Vec<RuntimeObjectId>)) && get_type().is_some_and(|s| s == "Ref"))
     {
-        Some("or_default")
+        Some(("or_default", true))
     } else if rt == &(parse_quote!(Vec<&'b Stream>)) {
-        Some("zero_one_or_more")
+        Some(("zero_one_or_more", true))
     } else if rt == &(parse_quote!(HashMap<Name, &'b Stream>)) {
-        Some("map_dict")
+        Some(("map_dict", true))
     } else {
         None
     }
@@ -229,18 +229,17 @@ fn remove_generic(t: &Type) -> Type {
 
 fn gen_option_method(
     ty: Either<&Type, &Type>,
-    key: &str,
     f_left: impl FnOnce(&Type) -> proc_macro2::TokenStream,
     f_right: impl FnOnce(&Type) -> proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
     match ty {
         Either::Left(t) => {
             let body = f_left(unwrap_option_type(t));
-            quote! ( #body.whatever_context::<_, prescript::AnyWhatever>(#key) )
+            quote! ( #body )
         }
         Either::Right(t) => {
             let body = f_right(t);
-            quote! ( #body.whatever_context::<_, prescript::AnyWhatever>(#key) )
+            quote! ( #body )
         }
     }
 }
@@ -510,14 +509,15 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
 
         let mut has_whatever_context = false;
         let mut method = if let Some(method_name) =
-            schema_method_name(rt, &attrs[..]).map(|m| Ident::new(m, name.span()))
-        {
+            schema_method_name(rt, &attrs[..]).map(|(m, whatever_marked)| {
+                has_whatever_context = whatever_marked;
+                Ident::new(m, name.span())
+            }) {
             quote! { self.d.#method_name(&prescript::sname(#key)) }
         } else if let Some(nested_type) = nested(rt, attrs) {
             has_whatever_context = true;
             gen_option_method(
                 nested_type,
-                &key,
                 |ty| {
                     let type_name = remove_generic(ty);
                     quote! { self.d.opt::<#type_name<'_, '_>>(&prescript::sname(#key)) }
@@ -537,34 +537,32 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             has_whatever_context = true;
             gen_option_method(
                 try_from_type,
-                &key,
                 |ty| {
-                    quote! { self.d.opt_object(&prescript::sname(#key)).whatever_context::<_, prescript::AnyWhatever>(#key)?.map(|d| <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from(d)).transpose() }
+                    quote! { self.d.opt_object(&prescript::sname(#key))?.map(|d| <#ty>::try_from(d).whatever_context::<_, prescript::AnyWhatever>(#key)).transpose() }
                 },
                 |ty| {
-                    quote! { <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from( self.d.required_object(&prescript::sname(#key)).whatever_context::<_, prescript::AnyWhatever>(#key)?) }
+                    quote! { <#ty>::try_from(self.d.required_object(&prescript::sname(#key))?).whatever_context::<_, prescript::AnyWhatever>(#key) }
                 },
             )
         } else if let Some(try_from_type) = deep_resolve_try_from(rt, attrs) {
             has_whatever_context = true;
             gen_option_method(
                 try_from_type,
-                &key,
                 |ty| {
                     quote! {
-                        self.d.opt_object(&prescript::sname(#key)).whatever_context::<_, prescript::AnyWhatever>(#key)?
+                        self.d.opt_object(&prescript::sname(#key))?
                             .map(|d| {
                                 use crate::object::PdfObjectCore as _;
                                 let resolver = self.resolver();
                                 let d = resolver.resolve_deep_reference(d)?;
                                 <#ty>::try_from(d.as_ref())
-                            }).transpose()
+                            }).transpose().whatever_context::<_, prescript::AnyWhatever>(#key)
                     }
                 },
                 |ty| {
                     quote! {
                         use crate::object::PdfObjectCore as _;
-                        let d = self.d.required_object(&prescript::sname(#key)).whatever_context::<_, prescript::AnyWhatever>(#key)?;
+                        let d = self.d.required_object(&prescript::sname(#key))?;
                         let resolver = self.resolver();
                         let d = resolver.resolve_deep_reference(d).whatever_context::<_, prescript::AnyWhatever>(#key)?;
                         <#ty>::try_from(d.as_ref()).whatever_context::<_, prescript::AnyWhatever>(#key)
@@ -574,7 +572,6 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         } else if let Some(rt) = self_as(rt, attrs) {
             gen_option_method(
                 rt,
-                &key,
                 |_| unreachable!("self_as methods never return Option"),
                 |ty| {
                     quote! { <Self as crate::object::ToPdfObject::<(#ty, _, _)>>::to_pdf_object(self).map(|v| v.0) }
