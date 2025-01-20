@@ -499,11 +499,13 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
 
         let key = key_attr(attrs).unwrap_or_else(|| snake_case_to_pascal(&name.to_string()));
 
+        let mut has_whatever_context = false;
         let mut method = if let Some(method_name) =
             schema_method_name(rt, &attrs[..]).map(|m| Ident::new(m, name.span()))
         {
             quote! { self.d.#method_name(&prescript::sname(#key)) }
         } else if let Some(nested_type) = nested(rt, attrs) {
+            has_whatever_context = true;
             gen_option_method(
                 nested_type,
                 &key,
@@ -523,6 +525,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 },
             )
         } else if let Some(try_from_type) = try_from(rt, attrs) {
+            has_whatever_context = true;
             gen_option_method(
                 try_from_type,
                 &key,
@@ -530,7 +533,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     quote! { self.d.opt_object(&prescript::sname(#key)).whatever_context::<_, prescript::AnyWhatever>(#key)?.map(|d| <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from(d)).transpose() }
                 },
                 |ty| {
-                    quote! { <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from( self.d.required_object(&prescript::sname(#key)).unwrap()) }
+                    quote! { <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from( self.d.required_object(&prescript::sname(#key)).whatever_context::<_, prescript::AnyWhatever>(#key)?) }
                 },
             )
         } else if let Some(rt) = self_as(rt, attrs) {
@@ -556,16 +559,23 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
         }
 
-        let method = if let Some(doc) = doc(attrs) {
+        let doc = if let Some(doc) = doc(attrs) {
+            quote! { #[doc = #doc] }
+        } else {
+            quote! {}
+        };
+
+        let method = if has_whatever_context {
             quote! {
-                #[doc = #doc]
+                #doc
                 pub fn #name(&self) -> std::result::Result<#rt, prescript::AnyWhatever> {
                     use snafu::ResultExt as _;
-                    #method.whatever_context::<_, prescript::AnyWhatever>(#key)
+                    #method
                 }
             }
         } else {
             quote! {
+                #doc
                 pub fn #name(&self) -> std::result::Result<#rt, prescript::AnyWhatever> {
                     use snafu::ResultExt as _;
                     #method.whatever_context::<_, prescript::AnyWhatever>(#key)
