@@ -716,8 +716,10 @@ where
         1..,
         alt((
             wsc1().void(),
-            parse_trailer_position_after_xref,
             parse_indirect_object,
+            // fix: prevent match "startxref" by parse_trailer_position_after_xref()
+            b"startxref".as_slice().void(),
+            parse_trailer_position_after_xref,
             any.void(),
         )),
     );
