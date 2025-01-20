@@ -156,6 +156,15 @@ fn try_from<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type,
     has_attr("try_from", rt, attrs)
 }
 
+/// Return left means Option<T>, right means T, Return None means `deep_resolve_try_from` attr not
+/// defined.
+fn deep_resolve_try_from<'a>(
+    rt: &'a Type,
+    attrs: &'a [Attribute],
+) -> Option<Either<&'a Type, &'a Type>> {
+    has_attr("deep_resolve_try_from", rt, attrs)
+}
+
 fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
     let get_type = || {
         attrs.iter().find_map(|attr| {
@@ -534,6 +543,32 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 },
                 |ty| {
                     quote! { <#ty as std::convert::TryFrom<&crate::object::Object>>::try_from( self.d.required_object(&prescript::sname(#key)).whatever_context::<_, prescript::AnyWhatever>(#key)?) }
+                },
+            )
+        } else if let Some(try_from_type) = deep_resolve_try_from(rt, attrs) {
+            has_whatever_context = true;
+            gen_option_method(
+                try_from_type,
+                &key,
+                |ty| {
+                    quote! {
+                        self.d.opt_object(&prescript::sname(#key)).whatever_context::<_, prescript::AnyWhatever>(#key)?
+                            .map(|d| {
+                                use crate::object::PdfObjectCore as _;
+                                let resolver = self.resolver();
+                                let d = resolver.resolve_deep_reference(d)?;
+                                <#ty>::try_from(d.as_ref())
+                            }).transpose()
+                    }
+                },
+                |ty| {
+                    quote! {
+                        use crate::object::PdfObjectCore as _;
+                        let d = self.d.required_object(&prescript::sname(#key)).whatever_context::<_, prescript::AnyWhatever>(#key)?;
+                        let resolver = self.resolver();
+                        let d = resolver.resolve_deep_reference(d).whatever_context::<_, prescript::AnyWhatever>(#key)?;
+                        <#ty>::try_from(d.as_ref()).whatever_context::<_, prescript::AnyWhatever>(#key)
+                    }
                 },
             )
         } else if let Some(rt) = self_as(rt, attrs) {
