@@ -187,7 +187,7 @@ fn render(f: &str) -> Result<()> {
         .enumerate()
     {
         info!("Page: {}", idx);
-        let option = RenderOptionBuilder::new().zoom(0.75);
+        let option = RenderOptionBuilder::new().zoom(0.75).fail_fast(true);
         render_page(&page, option).whatever_context("render page")?;
     }
     std::fs::write(&hash_file, "").whatever_context("write hsah file")?;

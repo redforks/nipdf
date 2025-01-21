@@ -786,8 +786,8 @@ impl<'a, 'c> Render<'a, 'c> {
         Ok(&mut self.current_mut()?.text_object)
     }
 
-    pub(crate) fn exec(&mut self, op: Operation) {
-        log_err(self._exec(op));
+    pub(crate) fn exec(&mut self, op: Operation) -> Result<()> {
+        self._exec(op)
     }
 
     fn _exec(&mut self, op: Operation) -> Result<()> {
@@ -1331,7 +1331,7 @@ impl<'a, 'c> Render<'a, 'c> {
             .operations()
             .whatever_context("get page operations")?
             .into_iter()
-            .for_each(|op| render.exec(op));
+            .try_for_each(|op| render.exec(op))?;
 
         debug!("End render form");
         Ok(())
@@ -1714,7 +1714,7 @@ impl<'a, 'c> Render<'a, 'c> {
             // set color used for paint matrix image
             color_state.set_color_args(args)?;
         }
-        ops.into_iter().for_each(|op| render.exec(op));
+        ops.into_iter().try_for_each(|op| render.exec(op))?;
         drop(render);
         color_state.paint = PaintCreator::Tile((
             canvas,
@@ -1875,7 +1875,7 @@ impl<'a, 'c> Render<'a, 'c> {
                     type3_font.get_glyph(op.char_to_gid(ch).whatever_context("get char to gid")?)
                 {
                     for op in glyph.operations() {
-                        render.exec(op.clone());
+                        render.exec(op.clone())?;
                     }
                 }
 

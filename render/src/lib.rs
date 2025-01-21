@@ -1,4 +1,5 @@
 use educe::Educe;
+use either::Either;
 use euclid::Angle;
 use image::RgbaImage;
 use log::warn;
@@ -98,6 +99,10 @@ pub struct RenderOption {
     state: Option<State>,
     rotate: i32,
     dimension: PageDimension,
+    /// If true, operations that result in errors will cause the render to fail immediately.
+    /// If false, errors will be logged and rendering will continue.
+    #[educe(Default = false)]
+    fail_fast: bool,
 }
 
 impl RenderOption {
@@ -163,6 +168,11 @@ impl RenderOptionBuilder {
         self
     }
 
+    pub fn fail_fast(mut self, fail_fast: bool) -> Self {
+        self.0.fail_fast = fail_fast;
+        self
+    }
+
     fn state(mut self, state: State) -> Self {
         self.0.state = Some(state);
         self
@@ -204,11 +214,20 @@ pub fn render_steps(
         // skip render if no operations, fixes incorrect pdf files that no resources
         let resource = page.resources().whatever_context("get page resources")?;
         let mut renderer = Render::new(&mut canvas, option.clone(), &resource)?;
-        if let Some(steps) = steps {
-            ops.into_iter().take(steps).for_each(|op| renderer.exec(op));
+
+        let iter = if let Some(steps) = steps {
+            Either::Left(ops.into_iter().take(steps))
         } else {
-            ops.into_iter().for_each(|op| renderer.exec(op));
+            Either::Right(ops.into_iter())
         };
+
+        for op in iter {
+            match renderer.exec(op) {
+                Ok(_) => (),
+                Err(e) if option.fail_fast => return Err(e),
+                Err(e) => log::error!("Operation failed: {}", e),
+            }
+        }
     }
     option.to_image(canvas)
 }
