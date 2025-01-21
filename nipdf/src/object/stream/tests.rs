@@ -100,7 +100,7 @@ fn predictor() {
             .get(&sname("DecodeParms"))
             .unwrap()
             .as_dict()
-            .whatever_context("get DecodeParms dict")?;
+            .whatever_context::<_, ObjectValueError>("get DecodeParms dict")?;
         assert_eq!(3, params["Colors"].int().unwrap());
         assert_eq!(8, params["BitsPerComponent"].int().unwrap());
         Ok(())

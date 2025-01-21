@@ -1,6 +1,6 @@
 use super::ColorSpaceArgs;
 use crate::{
-    Result,
+    ObjectValueError, Result,
     file::{ObjectResolver, ResourceDict},
     function::{Domain, Domains, Function},
     graphics::ICCStreamDict,
@@ -154,9 +154,11 @@ where
     ) -> Result<Self> {
         match args {
             ColorSpaceArgs::Ref(id) => {
-                let obj = resolver.resolve(*id).whatever_context("resolve object")?;
-                let args =
-                    ColorSpaceArgs::try_from(obj).whatever_context("parse ColorSpaceArgs")?;
+                let obj = resolver
+                    .resolve(*id)
+                    .whatever_context::<_, ObjectValueError>("resolve object")?;
+                let args = ColorSpaceArgs::try_from(obj)
+                    .whatever_context::<_, ObjectValueError>("parse ColorSpaceArgs")?;
                 Self::from_args(&args, resolver, resources)
             }
             ColorSpaceArgs::Name(name) => match name.as_str() {
@@ -166,25 +168,30 @@ where
                 "Pattern" => Ok(Self::Pattern(Box::new(PatternColorSpace(None)))),
                 _ => {
                     let color_spaces = resources
-                        .whatever_context("resources not provided")?
+                        .whatever_context::<_, ObjectValueError>("resources not provided")?
                         .color_space()?;
                     let args = color_spaces
                         .get(name)
-                        .whatever_context("ColorSpace::from_args() color space not found")?;
+                        .whatever_context::<_, ObjectValueError>(
+                            "ColorSpace::from_args() color space not found",
+                        )?;
                     Self::from_args(args, resolver, resources)
                 }
             },
             ColorSpaceArgs::Array(arr) => match arr[0]
                 .as_name()
-                .whatever_context("get ColorSpace name")?
+                .whatever_context::<_, ObjectValueError>("get ColorSpace name")?
                 .as_str()
             {
                 "ICCBased" => {
                     ensure_whatever!(2 == arr.len(), "ICCBased color space args length");
-                    let id = arr[1].reference().whatever_context("get reference")?;
-                    let d: ICCStreamDict<'_, '_> = resolver
-                        .resolve_pdf_object(id)
-                        .whatever_context("resolve pdf object")?;
+                    let id = arr[1]
+                        .reference()
+                        .whatever_context::<_, ObjectValueError>("get reference")?;
+                    let d: ICCStreamDict<'_, '_> =
+                        resolver
+                            .resolve_pdf_object(id)
+                            .whatever_context::<_, ObjectValueError>("resolve pdf object")?;
                     match d.alternate()?.as_ref() {
                         Some(args) => Self::from_args(args, resolver, resources),
                         None => match d.n()? {
@@ -197,11 +204,13 @@ where
                 }
                 "Separation" => {
                     ensure_whatever!(4 == arr.len(), "Separation color space args length");
-                    let alternate =
-                        ColorSpaceArgs::try_from(&arr[2]).whatever_context("parse alternate")?;
+                    let alternate = ColorSpaceArgs::try_from(&arr[2])
+                        .whatever_context::<_, ObjectValueError>("parse alternate")?;
                     let function: Box<dyn Function> =
                         Box::<dyn Function>::create(&arr[3], resolver)
-                            .whatever_context("parse tintTransform function")?;
+                            .whatever_context::<_, ObjectValueError>(
+                                "parse tintTransform function",
+                            )?;
                     let base = Self::from_args(&alternate, resolver, resources)?;
                     Ok(Self::Separation(Box::new(SeparationColorSpace {
                         alt: base,
@@ -210,10 +219,14 @@ where
                 }
                 "Indexed" => {
                     ensure_whatever!(4 == arr.len(), "Indexed color space args length");
-                    let base = ColorSpaceArgs::try_from(&arr[1]).whatever_context("parse base")?;
-                    let base: ColorSpace<T> = Self::from_args(&base, resolver, resources)
-                        .whatever_context("parse base color space")?;
-                    let hival = arr[2].int().whatever_context("convert hival")?;
+                    let base = ColorSpaceArgs::try_from(&arr[1])
+                        .whatever_context::<_, ObjectValueError>("parse base")?;
+                    let base: ColorSpace<T> =
+                        Self::from_args(&base, resolver, resources)
+                            .whatever_context::<_, ObjectValueError>("parse base color space")?;
+                    let hival = arr[2]
+                        .int()
+                        .whatever_context::<_, ObjectValueError>("convert hival")?;
                     let data = resolve_index_data(&arr[3], resolver)?;
                     ensure_whatever!(
                         data.len() >= (hival + 1) as usize * base.components(),
@@ -223,9 +236,10 @@ where
                 }
                 "CalRGB" => {
                     ensure_whatever!(2 == arr.len(), "CalRGB color space args length");
-                    let dict: CalRGBDict<'_, '_> = resolver
-                        .as_pdf_object(&arr[1])
-                        .whatever_context("resolve pdf object")?;
+                    let dict: CalRGBDict<'_, '_> =
+                        resolver
+                            .as_pdf_object(&arr[1])
+                            .whatever_context::<_, ObjectValueError>("resolve pdf object")?;
                     let gamma = dict.gamma()?;
                     let matrix = dict.matrix()?;
                     let black_point = dict.black_point()?;
@@ -242,8 +256,8 @@ where
                     let base = arr
                         .get(1)
                         .map(|args| {
-                            let base =
-                                ColorSpaceArgs::try_from(args).whatever_context("parse base")?;
+                            let base = ColorSpaceArgs::try_from(args)
+                                .whatever_context::<_, ObjectValueError>("parse base")?;
                             Self::from_args(&base, resolver, resources)
                         })
                         .transpose()?;
@@ -251,7 +265,9 @@ where
                 }
                 "DeviceN" => {
                     ensure_whatever!(arr.len() == 4 || arr.len() == 5, "DeviceN color space args");
-                    let names = arr[1].as_arr().whatever_context("get names")?;
+                    let names = arr[1]
+                        .as_arr()
+                        .whatever_context::<_, ObjectValueError>("get names")?;
 
                     // A DeviceN color space whose component colorant names are all None shall
                     // always discard its output, just  the same as a Separation color space for
@@ -267,13 +283,16 @@ where
 
                     let n = names.len();
                     let alternate = ColorSpaceArgs::try_from(&arr[2])
-                        .whatever_context("parse alternate colorspace")?;
+                        .whatever_context::<_, ObjectValueError>("parse alternate colorspace")?;
                     let f: Box<dyn Function> = Box::<dyn Function>::create(&arr[3], resolver)
-                        .whatever_context("DeviceN function should be root object")?;
+                        .whatever_context::<_, ObjectValueError>(
+                        "DeviceN function should be root object",
+                    )?;
                     let base = Self::from_args(&alternate, resolver, resources)?;
                     Ok(Self::DeviceN(Box::new(DeviceNColorSpace {
-                        n: n.try_into()
-                            .whatever_context("conversion to usize failed")?,
+                        n: n.try_into().whatever_context::<_, ObjectValueError>(
+                            "conversion to usize failed",
+                        )?,
                         alt: base,
                         f: Rc::new(f),
                     })))
@@ -282,7 +301,7 @@ where
                     ensure_whatever!(2 == arr.len(), "Lab color space args length");
                     let dict: LabDict<'_, '_> = resolver
                         .as_pdf_object(&arr[1])
-                        .whatever_context("resolve pdf object")?;
+                        .whatever_context::<_, ObjectValueError>("resolve pdf object")?;
                     let white_point = dict.white_point()?;
                     let ranges = dict.range()?;
                     let black_point = dict.black_point()?;
@@ -294,9 +313,10 @@ where
                 }
                 "CalGray" => {
                     ensure_whatever!(2 == arr.len(), "CalGray color space args length");
-                    let dict: CalGrayDict<'_, '_> = resolver
-                        .as_pdf_object(&arr[1])
-                        .whatever_context("resolve pdf object")?;
+                    let dict: CalGrayDict<'_, '_> =
+                        resolver
+                            .as_pdf_object(&arr[1])
+                            .whatever_context::<_, ObjectValueError>("resolve pdf object")?;
                     let gamma = dict.gamma()?;
                     let white_point = dict.white_point()?;
                     let black_point = dict.black_point()?;
@@ -318,13 +338,15 @@ fn resolve_index_data(o: &Object, resolver: &ObjectResolver<'_>) -> Result<Vec<u
         Object::HexString(s) => s.as_bytes().into(),
         Object::LiteralString(s) => s.as_bytes().into(),
         Object::Reference(id) => {
-            let o = resolver.resolve(id).whatever_context("resolve object")?;
+            let o = resolver
+                .resolve(id)
+                .whatever_context::<_, ObjectValueError>("resolve object")?;
             match o {
                 Object::HexString(s) => s.as_bytes().into(),
                 Object::LiteralString(s) => s.as_bytes().into(),
                 Object::Stream(s) => s
                     .decode(resolver)
-                    .whatever_context("decode stream")?
+                    .whatever_context::<_, ObjectValueError>("decode stream")?
                     .into_owned(),
                 _ => whatever!("Unexpected object type when resolve indexed color space data"),
             }
@@ -527,7 +549,7 @@ where
     fn to_rgba(&self, color: &[T]) -> Result<[T; 4]> {
         self.0
             .as_ref()
-            .whatever_context("Pattern CS base CS not set")?
+            .whatever_context::<_, ObjectValueError>("Pattern CS base CS not set")?
             .to_rgba(color)
     }
 
@@ -621,7 +643,7 @@ where
         let c = self
             .f
             .call(&[color[0].into_color_comp()])
-            .whatever_context("Function call failed")?;
+            .whatever_context::<_, ObjectValueError>("Function call failed")?;
         let mut r = [T::max_color(); 4];
         c.iter()
             .zip(r.iter_mut())
@@ -660,7 +682,7 @@ where
         let c = self
             .f
             .call(color.as_slice())
-            .whatever_context("Function call failed")?;
+            .whatever_context::<_, ObjectValueError>("Function call failed")?;
         let mut r = [T::max_color(); 4];
         c.iter()
             .zip(r.iter_mut())

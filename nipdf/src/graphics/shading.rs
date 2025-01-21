@@ -7,7 +7,7 @@ use crate::{
     object::Object,
 };
 use nipdf_macro::{TryFromIntObject, pdf_object};
-use prescript::{AnyWhatever, sname};
+use prescript::sname;
 use snafu::ResultExt;
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromIntObject)]
@@ -94,7 +94,7 @@ impl AxialShadingDict<'_, '_> {
     pub fn functions(&self) -> Result<Vec<Box<dyn Function>>> {
         self.d
             .zero_one_or_more(&sname("Function"))
-            .whatever_context::<_, AnyWhatever>("get axial functions")
+            .whatever_context("get axial functions")
     }
 }
 
@@ -150,7 +150,7 @@ impl RadialShadingDict<'_, '_> {
     pub fn functions(&self) -> Result<Vec<Box<dyn Function>>> {
         self.d
             .zero_one_or_more(&sname("Function"))
-            .whatever_context::<_, AnyWhatever>("get radial functions")
+            .whatever_context("get radial functions")
     }
 }
 

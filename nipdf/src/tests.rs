@@ -18,7 +18,7 @@ fn nested_object_resolve_error() {
         message: "outer error".to_string(),
         source: Some(Box::new(nested_error)),
     };
-    let error = AnyWhatever::with_source(Box::new(error), "outer outer".to_owned());
+    let error = ObjectValueError::with_source(Box::new(error), "outer outer".to_owned());
     assert!(ObjectValueError::is_object_resolve_error(&error));
 }
 

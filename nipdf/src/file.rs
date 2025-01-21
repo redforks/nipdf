@@ -159,16 +159,16 @@ impl XRefTable {
         )
         .parse(Located::new(buf))
         .map_err(ParseError::into_inner)
-        .whatever_context("parse xref table objects")?;
+        .whatever_context::<_, ObjectValueError>("parse xref table objects")?;
         let mut id_offset = HashMap::new();
         for o in objects {
             let search_key = format!("{} {} obj", o.to_runtime_object_id(), o.id().generation());
             let pos: u32 = buf
                 .windows(search_key.len())
                 .position(|w| w == search_key.as_bytes())
-                .whatever_context("get object position")?
+                .whatever_context::<_, ObjectValueError>("get object position")?
                 .try_into()
-                .whatever_context("convert position into u32")?;
+                .whatever_context::<_, ObjectValueError>("convert position into u32")?;
             id_offset.insert(o.into(), ObjectPos::Offset(pos));
         }
 
@@ -612,7 +612,11 @@ impl<'a> Catalog<'a> {
     }
 
     pub fn pages(&self) -> Result<Vec<Page<'a>>> {
-        Page::parse(self.d.pages().whatever_context("resolve pages")?)
+        Page::parse(
+            self.d
+                .pages()
+                .whatever_context::<_, ObjectValueError>("resolve pages")?,
+        )
     }
 
     pub fn ver(&self) -> Option<Name> {
@@ -662,36 +666,41 @@ fn open_encrypt(
     };
 
     let resolver = ObjectResolver::new(buf, xref, None);
-    let trailer = TrailerDict::new(trailer, &resolver).whatever_context("parse trailer dict")?;
+    let trailer = TrailerDict::new(trailer, &resolver)
+        .whatever_context::<_, ObjectValueError>("parse trailer dict")?;
     let encrypt = trailer
         .encrypt()
         .map_err(|e| {
             drop(e);
             FileError::InvalidFile
         })
-        .whatever_context("parse encrypt dict")?;
+        .whatever_context::<_, ObjectValueError>("parse encrypt dict")?;
     let Some(encrypt) = encrypt else {
         return Ok(None);
     };
 
     ensure_whatever!(
-        sname("Standard") == encrypt.filter().whatever_context("get encrypt filter")?,
+        sname("Standard")
+            == encrypt
+                .filter()
+                .whatever_context::<_, ObjectValueError>("get encrypt filter")?,
         "unsupported security handler"
     );
     ensure_whatever!(
         encrypt
             .sub_filter()
-            .whatever_context("get encrypt sub filter")?
+            .whatever_context::<_, ObjectValueError>("get encrypt sub filter")?
             .is_none(),
         "unsupported security handler (SubFilter)"
     );
 
-    let authorizer = Authorizer::new(&encrypt, &trailer).whatever_context("get authorizer info")?;
+    let authorizer = Authorizer::new(&encrypt, &trailer)
+        .whatever_context::<_, ObjectValueError>("get authorizer info")?;
 
     let k = authorizer
         .authorize(password.as_bytes())
         .ok_or(FileError::InvalidPassword)
-        .whatever_context("check password")?;
+        .whatever_context::<_, ObjectValueError>("check password")?;
     Ok(Some(EncryptInfo::new(k, encrypt.crypt_filters()?)))
 }
 
@@ -743,10 +752,10 @@ fn get_root_id(trailers: &[Dictionary]) -> Result<RuntimeObjectId> {
     let root_id = trailers
         .iter()
         .find_map(|t| t.get(&sname("Root")))
-        .whatever_context("Root entry not found in trailers")?;
+        .whatever_context::<_, ObjectValueError>("Root entry not found in trailers")?;
     let root_id = root_id
         .reference()
-        .whatever_context("Failed to get reference from root_id")?
+        .whatever_context::<_, ObjectValueError>("Failed to get reference from root_id")?
         .id()
         .id();
     Ok(root_id)
@@ -759,7 +768,7 @@ impl File {
         let frame_set = parse_frame_set::<ParserError>
             .parse(&buf[..])
             .map_err(ParseError::into_inner)
-            .whatever_context("parse frame set")?;
+            .whatever_context::<_, ObjectValueError>("parse frame set")?;
         let xref = XRefTable::from_frame_set(&frame_set);
 
         let trailers: Vec<_> = frame_set.into_iter().map(|f| f.trailer).collect();
@@ -806,14 +815,18 @@ impl File {
         let (trailer_positions, object_entries) = index_xref::<ParserError>
             .parse(Located::new(&buf))
             .map_err(ParseError::into_inner)
-            .whatever_context("scan file for xref entries")?;
+            .whatever_context::<_, ObjectValueError>("scan file for xref entries")?;
 
         // Build id_offset map from object entries
         let mut id_offset = HashMap::with_capacity(object_entries.len());
         for (obj_id, offset) in object_entries {
             id_offset.insert(
                 RuntimeObjectId(obj_id.id().0),
-                ObjectPos::Offset(offset.try_into().whatever_context("convert offset")?),
+                ObjectPos::Offset(
+                    offset
+                        .try_into()
+                        .whatever_context::<_, ObjectValueError>("convert offset")?,
+                ),
             );
         }
 
@@ -903,14 +916,17 @@ pub(crate) fn decode_stream<
     let f = open_test_file(file_path);
     let resolver = f.resolver()?;
     let stream = resolver
-        .resolve(id.try_into().whatever_context("convert id")?)
-        .whatever_context("resolve object")?
+        .resolve(
+            id.try_into()
+                .whatever_context::<_, ObjectValueError>("convert id")?,
+        )
+        .whatever_context::<_, ObjectValueError>("resolve object")?
         .as_stream()
-        .whatever_context("resolve stream")?;
+        .whatever_context::<_, ObjectValueError>("resolve stream")?;
     f_assert(stream.as_dict(), &resolver)?;
     Ok(stream
         .decode(&resolver)
-        .whatever_context("decode stream")?
+        .whatever_context::<_, ObjectValueError>("decode stream")?
         .into_owned())
 }
 
@@ -933,7 +949,7 @@ pub(crate) fn open_test_file_with_password(
     p: &str,
 ) -> Result<File> {
     let file_path = test_file(file_path);
-    let data = std::fs::read(file_path).whatever_context("read file")?;
+    let data = std::fs::read(file_path).whatever_context::<_, ObjectValueError>("read file")?;
     File::parse(data, p)
 }
 

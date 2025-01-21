@@ -15,7 +15,7 @@ use ahash::{HashMap, HashMapExt};
 use educe::Educe;
 use log::error;
 use nipdf_macro::{TryFromNameObject, pdf_object};
-use prescript::{AnyWhatever, Name, ParserError, sname};
+use prescript::{Name, ParserError, sname};
 use snafu::{OptionExt as _, ResultExt as _};
 use std::{cell::LazyCell, iter::once};
 use winnow::{
@@ -299,7 +299,7 @@ impl<'a> Page<'a> {
     pub fn media_box(&self) -> Result<Rectangle> {
         self.iter_to_root()
             .find_map(|d| d.media_box().transpose())
-            .whatever_context::<_, AnyWhatever>("page must have media box")?
+            .whatever_context::<_, ObjectValueError>("page must have media box")?
             .whatever_context("get media box")
     }
 
@@ -311,7 +311,7 @@ impl<'a> Page<'a> {
         self.iter_to_root()
             .find_map(|d| d.crop_box().transpose())
             .transpose()
-            .whatever_context("get crop box")?
+            .whatever_context::<_, ObjectValueError>("get crop box")?
             .and_then(|r| (r.width() != 0.0 && r.height() != 0.0).then_some(r))
             .map_or_else(|| self.media_box(), Ok)
     }
@@ -320,7 +320,7 @@ impl<'a> Page<'a> {
         self.iter_to_root()
             .find_map(|d| d.resources().transpose())
             .transpose()
-            .whatever_context("get resources")?
+            .whatever_context::<_, ObjectValueError>("get resources")?
             .map_or_else(
                 || {
                     // although document says resource dictionary is required, but some pdf file
@@ -339,7 +339,7 @@ impl<'a> Page<'a> {
             .into_iter()
             .map(|s| {
                 s.decode(self.d.d.resolver())
-                    .whatever_context("decode stream")
+                    .whatever_context::<_, ObjectValueError>("decode stream")
                     .map(std::borrow::Cow::into_owned)
             })
             .collect::<Result<_, _>>()?;
@@ -356,7 +356,10 @@ impl<'a> Page<'a> {
             parents: &'c mut Vec<PageDict<'a, 'a>>,
         ) -> Result<()> {
             if node.is_leaf() {
-                pages.push(Page::from_leaf(&node, &parents[..]).whatever_context("Create Page")?);
+                pages.push(
+                    Page::from_leaf(&node, &parents[..])
+                        .whatever_context::<_, ObjectValueError>("Create Page")?,
+                );
             } else {
                 let kids = node.kids()?;
                 parents.push(node);
@@ -408,7 +411,7 @@ impl PageContent {
             terminated(parse_operations::<ParserError>, rest)
                 .parse(&data)
                 .map_err(winnow::error::ParseError::into_inner)
-                .whatever_context("parse page operations")?
+                .whatever_context::<_, ObjectValueError>("parse page operations")?
         } else {
             vec![]
         })

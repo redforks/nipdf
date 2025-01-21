@@ -264,7 +264,10 @@ impl InnerFunction for PostScriptFunction {
     #[doc = " Called by `self.call()`, args and return value are clipped by signature."]
     fn inner_call(&self, args: FunctionValue) -> Result<FunctionValue> {
         let args = args.into_iter().collect::<Vec<_>>();
-        let r = self.f.exec(&args).whatever_context("exec function")?;
+        let r = self
+            .f
+            .exec(&args)
+            .whatever_context::<_, ObjectValueError>("exec function")?;
         Ok(r.into_iter().collect())
     }
 
@@ -444,7 +447,7 @@ impl InnerFunction for SampledFunction {
                 + arg
                     .round()
                     .to_u32()
-                    .whatever_context("convert to u32")?
+                    .whatever_context::<_, ObjectValueError>("convert to u32")?
                     .clamp(0, *size - 1);
         }
         let idx = idx as usize;
@@ -485,7 +488,9 @@ impl SampledFunctionDict<'_, '_> {
     fn type04_signature(&self) -> Result<Type04Signature> {
         Ok(Type04Signature {
             domain: self.domain()?,
-            range: self.range()?.whatever_context("range should exist")?,
+            range: self
+                .range()?
+                .whatever_context::<_, ObjectValueError>("range should exist")?,
         })
     }
 
@@ -502,10 +507,12 @@ impl SampledFunctionDict<'_, '_> {
         let resolver = self.d.resolver();
         let stream = resolver
             .resolve(self.id)
-            .whatever_context("resolve object")?
+            .whatever_context::<_, ObjectValueError>("resolve object")?
             .as_stream()
-            .whatever_context("get as stream")?;
-        let sample_data = stream.decode(resolver).whatever_context("decode stream")?;
+            .whatever_context::<_, ObjectValueError>("get as stream")?;
+        let sample_data = stream
+            .decode(resolver)
+            .whatever_context::<_, ObjectValueError>("decode stream")?;
         let signature = self.type04_signature()?;
         ensure_whatever!(
             sample_data.len() >= size[0] as usize * signature.n_returns(),
@@ -523,8 +530,10 @@ impl SampledFunctionDict<'_, '_> {
             decode: self.decode()?.map_or_else(
                 || {
                     self.range()
-                        .whatever_context("get range")?
-                        .whatever_context("range should exist in sampled function")
+                        .whatever_context::<_, ObjectValueError>("get range")?
+                        .whatever_context::<_, ObjectValueError>(
+                            "range should exist in sampled function",
+                        )
                 },
                 Ok,
             )?,
@@ -620,10 +629,10 @@ pub trait StitchingFunctionDictTrait {
 
 impl StitchingFunctionDict<'_, '_> {
     fn func(&self) -> Result<StitchingFunction> {
-        let functions: Vec<Box<dyn Function>> = self
-            .d
-            .zero_one_or_more(&sname("Functions"))
-            .whatever_context("get stitching Functions")?;
+        let functions: Vec<Box<dyn Function>> =
+            self.d
+                .zero_one_or_more(&sname("Functions"))
+                .whatever_context::<_, ObjectValueError>("get stitching Functions")?;
         let bounds = self.bounds()?;
         let encode = self.encode()?;
         let signature = Type23Signature {

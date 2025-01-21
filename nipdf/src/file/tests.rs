@@ -68,12 +68,13 @@ fn parse_file() -> Result<()> {
     p.push("sample_files");
     p.push("normal");
     p.push("SamplePdf1_12mb_6pages.pdf");
-    let buf = std::fs::read(p).whatever_context("read file")?;
-    let f = File::parse(buf, "").whatever_context("parse pdf file")?;
+    let buf = std::fs::read(p).whatever_context::<_, ObjectValueError>("read file")?;
+    let f = File::parse(buf, "").whatever_context::<_, ObjectValueError>("parse pdf file")?;
     let resolver = f.resolver()?;
     assert_eq!(
         Some("1.5".to_owned()),
-        f.version(&resolver).whatever_context("version")?
+        f.version(&resolver)
+            .whatever_context::<_, ObjectValueError>("version")?
     );
 
     Ok(())
@@ -83,14 +84,14 @@ fn parse_file() -> Result<()> {
 #[test]
 fn build_xref() -> Result<()> {
     let f = test_file("pdf.js/test/pdfs/helloworld-bad.pdf");
-    let buf = std::fs::read(&f).whatever_context("read file")?;
-    let f = File::parse(buf, "").whatever_context("build xref")?;
+    let buf = std::fs::read(&f).whatever_context::<_, ObjectValueError>("read file")?;
+    let f = File::parse(buf, "").whatever_context::<_, ObjectValueError>("build xref")?;
     let resolver = f.resolver()?;
     // now it is ok.
     for i in 1..resolver.n() {
         resolver
             .resolve(i as u32)
-            .whatever_context("resolve object")?;
+            .whatever_context::<_, ObjectValueError>("resolve object")?;
     }
 
     Ok(())

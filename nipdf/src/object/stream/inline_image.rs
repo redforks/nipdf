@@ -40,14 +40,14 @@ impl<'a> InlineStreamDict<'a> {
 impl ImageMetadata for InlineStreamDict<'_> {
     fn width(&self) -> Result<u32> {
         self.alt_get(&sname("Width"), &sname("W"), |o| o.int().map(|v| v as u32))
-            .whatever_context("get width")?
-            .whatever_context("Missing Width")
+            .whatever_context::<_, ObjectValueError>("get width")?
+            .whatever_context::<_, ObjectValueError>("Missing Width")
     }
 
     fn height(&self) -> Result<u32> {
         self.alt_get(&sname("Height"), &sname("H"), |o| o.int().map(|v| v as u32))
-            .whatever_context("get height")?
-            .whatever_context("Missing Height")
+            .whatever_context::<_, ObjectValueError>("get height")?
+            .whatever_context::<_, ObjectValueError>("Missing Height")
     }
 
     fn bits_per_component(&self) -> Result<Option<u8>> {
@@ -75,7 +75,7 @@ impl ImageMetadata for InlineStreamDict<'_> {
     fn image_mask(&self) -> Result<bool> {
         Ok(self
             .alt_get(&sname("ImageMask"), &sname("IM"), Object::bool)
-            .whatever_context("get ImageMask")?
+            .whatever_context::<_, ObjectValueError>("get ImageMask")?
             .unwrap_or(false))
     }
 }
@@ -148,7 +148,7 @@ impl InlineImage {
         resources: &ResourceDict<'_, '_>,
     ) -> Result<DynamicImage> {
         let decoded_data = decode_stream(&self.0, &self.1, Some(resolver), None, None)
-            .whatever_context("decode stream")?;
+            .whatever_context::<_, ObjectValueError>("decode stream")?;
         decode_image(
             decoded_data,
             &InlineStreamDict(&self.0),

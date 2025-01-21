@@ -7,9 +7,10 @@ pub mod parser;
 mod run_length;
 pub mod text;
 use prescript::ParserError;
-pub use prescript::{AnyWhatever, Result};
 use snafu::{Report, Snafu};
 use std::error::Error;
+
+pub type Result<T, E = ObjectValueError> = std::result::Result<T, E>;
 
 /// Error logging if the result is an error, panic in debug mode
 pub fn log_err<E: Error>(v: Result<(), E>) {

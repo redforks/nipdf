@@ -1,6 +1,6 @@
 use super::{dict, eol3, wsc0, wsc1};
 use crate::{
-    AnyWhatever, ObjectValueError,
+    ObjectValueError,
     function::{Domain, Domains},
     object::{Dictionary, Entry, FilePos, Frame, IndirectObjectDef, RuntimeObjectId},
     parser::{object::indirect_object_def, ws1},
@@ -216,7 +216,7 @@ fn segment_parser<'a, T, S, E>(n: u32, default_value: T) -> Box<dyn Parser<S, T,
 where
     T: Unsigned + NumCast + Copy + From<u8> + From<u16> + 'static,
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
-    E: ParserError<S> + FromExternalError<S, AnyWhatever> + 'a,
+    E: ParserError<S> + FromExternalError<S, ObjectValueError> + 'a,
 {
     use num_traits::cast;
 
@@ -224,12 +224,8 @@ where
         0 => Box::new(empty.value(default_value)),
         1 => Box::new(be_u8.output_into()),
         2 => Box::new(be_u16.output_into()),
-        3 => Box::new(
-            be_u24.try_map(|v| cast(v).whatever_context::<_, AnyWhatever>("Cast from u32")),
-        ),
-        4 => Box::new(
-            be_u32.try_map(|v| cast(v).whatever_context::<_, AnyWhatever>("Cast from u32")),
-        ),
+        3 => Box::new(be_u24.try_map(|v| cast(v).whatever_context("Cast from u32"))),
+        4 => Box::new(be_u32.try_map(|v| cast(v).whatever_context("Cast from u32"))),
         _ => Box::new(fail),
     }
 }
@@ -253,7 +249,7 @@ where
         + FromExternalError<S, FromHexError>
         + FromExternalError<S, ParseIntError>
         + FromExternalError<S, TryFromIntError>
-        + FromExternalError<S, AnyWhatever>
+        + FromExternalError<S, ObjectValueError>
         + AddContext<S>,
 {
     let start = input.checkpoint();
@@ -289,11 +285,11 @@ where
     )
     .fold(
         || Ok(Vec::new()),
-        |r: Result<_, AnyWhatever>, (a, b, c)| {
+        |r: Result<_, ObjectValueError>, (a, b, c)| {
             let mut r = r?;
             let next_id = id_iter
                 .next()
-                .whatever_context("expect more entries in XRefStream")?;
+                .whatever_context::<_, ObjectValueError>("expect more entries in XRefStream")?;
             match a {
                 0 => r.push((next_id, Entry::in_file(0, c, false))),
                 1 => r.push((next_id, Entry::in_file(b, c, true))),
@@ -329,8 +325,8 @@ where
         + FromExternalError<Located<&'a [u8]>, FromHexError>
         + FromExternalError<Located<&'a [u8]>, ParseIntError>
         + FromExternalError<Located<&'a [u8]>, TryFromIntError>
-        + FromExternalError<Located<&'a [u8]>, AnyWhatever>
-        + for<'b> FromExternalError<&'b [u8], AnyWhatever>
+        + FromExternalError<Located<&'a [u8]>, ObjectValueError>
+        + for<'b> FromExternalError<&'b [u8], ObjectValueError>
         + 'a,
 {
     let bytes = buf.finish();

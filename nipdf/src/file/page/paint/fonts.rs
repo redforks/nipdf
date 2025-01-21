@@ -1,5 +1,5 @@
 use crate::{
-    Result,
+    ObjectValueError, Result,
     file::{ObjectResolver, page::ResourceDict},
     graphics::{
         NameOrDictByRef, NameOrStream, Operation, Point, parse_operations,
@@ -52,8 +52,8 @@ impl FirstLastFontWidth {
 
         let default_width = font.default_width()?;
 
-        let range = first_char.whatever_context("get first_char")?
-            ..=last_char.whatever_context("get last_char")?;
+        let range = first_char.whatever_context::<_, ObjectValueError>("get first_char")?
+            ..=last_char.whatever_context::<_, ObjectValueError>("get last_char")?;
         Ok(Some(Self {
             range,
             default_width,
@@ -83,7 +83,7 @@ impl<'a> FreeTypeFontWidth<'a> {
     pub fn glyph_width(&self, gid: u32) -> Result<u32> {
         self.font
             .advance(gid)
-            .whatever_context("get gid advance")?
+            .whatever_context::<_, ObjectValueError>("get gid advance")?
             .x()
             .to_u32()
             .whatever_context("convert advance to u32")
@@ -207,20 +207,21 @@ impl EncodingParser<'_, '_, '_> {
     fn load_from_file(font_name: &str, font_data: &[u8], is_cff: bool) -> Result<Option<Encoding>> {
         if is_cff {
             info!("scan encoding from cff font. ({})", font_name);
-            let cff_file: CffFile<'_> =
-                CffFile::open(font_data).whatever_context("Open cff file")?;
+            let cff_file: CffFile<'_> = CffFile::open(font_data)
+                .whatever_context::<_, ObjectValueError>("Open cff file")?;
             let font: CffFont<'_> = cff_file
                 .iter()
-                .whatever_context("iter fonts from cff file")?
+                .whatever_context::<_, ObjectValueError>("iter fonts from cff file")?
                 .next()
-                .whatever_context("no font in cff?")?;
+                .whatever_context::<_, ObjectValueError>("no font in cff?")?;
             Ok(Some(
                 font.encodings()
-                    .whatever_context("parse cff file encodings")?,
+                    .whatever_context::<_, ObjectValueError>("parse cff file encodings")?,
             ))
         } else {
             info!("scan encoding from type1 font. ({})", font_name);
-            let type1_font = prescript::Font::parse(font_data)?;
+            let type1_font = prescript::Font::parse(font_data)
+                .whatever_context::<_, ObjectValueError>("parse type1 font encoding")?;
             Ok(type1_font.encoding().cloned())
         }
     }
@@ -255,7 +256,7 @@ impl EncodingParser<'_, '_, '_> {
         let font_name = self
             .0
             .font_name()
-            .whatever_context("parse type1 font name")?;
+            .whatever_context::<_, ObjectValueError>("parse type1 font name")?;
         let r = Self::resolve_by_encoding_or_font_name(&encoding_pair, font_name.as_ref())
             .or_else(
                 || match Self::load_from_file(font_name.as_ref(), font_data, is_cff) {
@@ -288,7 +289,7 @@ impl EncodingParser<'_, '_, '_> {
             NameOrDictByRef::Name(name) => (Some(name.clone()), None),
             NameOrDictByRef::Dict(d) => {
                 let encoding_dict = EncodingDict::new(d, self.0.resolver())
-                    .whatever_context("create EncodingDict")?;
+                    .whatever_context::<_, ObjectValueError>("create EncodingDict")?;
                 let encoding_name = encoding_dict.base_encoding()?;
                 (encoding_name, encoding_dict.differences()?)
             }
@@ -340,9 +341,10 @@ impl FontOp for Type1FontOp<'_> {
 
     /// Use font.glyph_for_char() if encoding is None or encoding.replace() returns None
     fn char_to_gid(&self, ch: u32) -> Result<u16> {
-        let gid_name = self
-            .encoding
-            .get_str(ch.try_into().whatever_context("char to u8")?);
+        let gid_name = self.encoding.get_str(
+            ch.try_into()
+                .whatever_context::<_, ObjectValueError>("char to u8")?,
+        );
         if let Some(r) = self.font.glyph_by_name(gid_name) {
             r.try_into().whatever_context("convert glyph id to u16")
         } else {
@@ -392,7 +394,7 @@ impl<'a> Type1Font<'a> {
         debug_assert_eq!(data.capacity(), data.len());
 
         let font = FontKitFont::from_bytes(data.clone().into(), 0)
-            .whatever_context("create FontKitFont")?;
+            .whatever_context::<_, ObjectValueError>("create FontKitFont")?;
         Ok(Self {
             font_data: data,
             is_cff,
@@ -452,7 +454,10 @@ impl FontOp for TTFParserFontOp<'_> {
 
     fn char_to_gid(&self, ch: u32) -> Result<u16> {
         if let Some(encoding) = self.encoding.as_ref() {
-            let glyph_name = encoding.get_str(ch.try_into().whatever_context("Convert ch to u8")?);
+            let glyph_name = encoding.get_str(
+                ch.try_into()
+                    .whatever_context::<_, ObjectValueError>("Convert ch to u8")?,
+            );
             if glyph_name != NOTDEF {
                 if let Some(r) = self.face.glyph_index_by_name(glyph_name) {
                     return Ok(r.0);
@@ -461,7 +466,9 @@ impl FontOp for TTFParserFontOp<'_> {
                     // use Adobe Glyph List to convert glyph name to unicode
                     if let Some(unicode) = GLYPH_NAME_TO_UNICODE.get(glyph_name) {
                         if let Some(gid) = self.face.glyph_index(
-                            char::from_u32(*unicode).whatever_context("convert unicode to char")?,
+                            char::from_u32(*unicode).whatever_context::<_, ObjectValueError>(
+                                "convert unicode to char",
+                            )?,
                         ) {
                             return Ok(gid.0);
                         }
@@ -484,7 +491,8 @@ impl FontOp for TTFParserFontOp<'_> {
         Ok(GlyphLength::new(
             self.face
                 .glyph_hor_advance(GlyphId(self.char_to_gid(ch)?))
-                .whatever_context("get glyph horizontal advance")? as f32,
+                .whatever_context::<_, ObjectValueError>("get glyph horizontal advance")?
+                as f32,
         ))
     }
 
@@ -528,7 +536,8 @@ impl<P: PathSink> Font<P> for TTFParserFont<'_, '_> {
     }
 
     fn create_op(&self, _cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
-        let face = TTFFace::parse(&self.data, 0).whatever_context("parse TTFFace")?;
+        let face = TTFFace::parse(&self.data, 0)
+            .whatever_context::<_, ObjectValueError>("parse TTFFace")?;
         let encoding = EncodingParser(&self.font_dict).ttf()?;
         Ok(Box::new(TTFParserFontOp::new(
             face,
@@ -538,7 +547,8 @@ impl<P: PathSink> Font<P> for TTFParserFont<'_, '_> {
     }
 
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
-        let face = TTFFace::parse(&self.data, 0).whatever_context("parse TTFFace")?;
+        let face = TTFFace::parse(&self.data, 0)
+            .whatever_context::<_, ObjectValueError>("parse TTFFace")?;
         Ok(Box::new(TTFParserGlyphRender { face }))
     }
 }
@@ -727,11 +737,14 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
 
         let mut q = Query {
             families: &families,
-            weight: desc.font_weight()?.map_or(Ok(Weight::NORMAL), |v| {
-                Ok(Weight(
-                    v.try_into().whatever_context("Convert to fontdb::Weight")?,
-                ))
-            })?,
+            weight: desc
+                .font_weight()?
+                .map_or(Ok::<_, ObjectValueError>(Weight::NORMAL), |v| {
+                    Ok(Weight(
+                        v.try_into()
+                            .whatever_context::<_, ObjectValueError>("Convert to fontdb::Weight")?,
+                    ))
+                })?,
             style,
             ..Default::default()
         };
@@ -742,14 +755,15 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
 
         let id = SYSTEM_FONTS
             .query(&q)
-            .whatever_context("font not found in system")?;
-        let face = SYSTEM_FONTS.face(id).whatever_context("get system fonts")?;
+            .whatever_context::<_, ObjectValueError>("font not found in system")?;
+        let face = SYSTEM_FONTS
+            .face(id)
+            .whatever_context::<_, ObjectValueError>("get system fonts")?;
         debug!("loaded ttf font: {:?}", &face.source);
         ensure_whatever!(face.index == 0, "Only one face supported");
         match face.source {
-            Source::File(ref path) => {
-                Ok(std::fs::read(path).whatever_context("read ttf file from OS")?)
-            }
+            Source::File(ref path) => Ok(std::fs::read(path)
+                .whatever_context::<_, ObjectValueError>("read ttf file from OS")?),
             Source::Binary(ref bytes) | Source::SharedFile(_, ref bytes) => {
                 Ok(bytes.as_ref().as_ref().to_owned())
             }
@@ -758,7 +772,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
 
     fn load_embed_font_bytes(resolver: &ObjectResolver<'_>, s: &Stream) -> Result<Vec<u8>> {
         Ok(s.decode(resolver)
-            .whatever_context("decode stream")?
+            .whatever_context::<_, ObjectValueError>("decode stream")?
             .into_owned())
     }
 
@@ -845,7 +859,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                 let tt = font.truetype()?;
                 let desc = tt
                     .font_descriptor()?
-                    .whatever_context("get true type font desc")?;
+                    .whatever_context::<_, ObjectValueError>("get true type font desc")?;
                 Ok(Some(Self::load_ttf_parser_font(
                     FontType::TrueType,
                     font,
@@ -863,15 +877,15 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                 let descentdant_font = descentdant_fonts
                     .into_iter()
                     .next()
-                    .whatever_context("get type0 font desc")?;
+                    .whatever_context::<_, ObjectValueError>("get type0 font desc")?;
                 match descentdant_font.subtype()? {
                     CIDFontType::CIDFontType0 => {
                         let desc = descentdant_font
                             .font_descriptor()?
-                            .whatever_context("get CIDFontType0 desc")?;
-                        let stream = desc
-                            .font_file3()?
-                            .whatever_context("get CIDFontType0 font stream")?;
+                            .whatever_context::<_, ObjectValueError>("get CIDFontType0 desc")?;
+                        let stream = desc.font_file3()?.whatever_context::<_, ObjectValueError>(
+                            "get CIDFontType0 font stream",
+                        )?;
                         Ok(Some(Box::new(CIDFontType0Font::new(
                             font,
                             Self::load_embed_font_bytes(descentdant_font.resolver(), stream)?,
@@ -880,7 +894,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                     CIDFontType::CIDFontType2 => {
                         let desc = descentdant_font
                             .font_descriptor()?
-                            .whatever_context("get CIDFontType2 desc")?;
+                            .whatever_context::<_, ObjectValueError>("get CIDFontType2 desc")?;
 
                         Ok(Some(Self::load_ttf_parser_font(
                             FontType::Type0,
@@ -900,7 +914,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                     );
                     let desc = font
                         .font_descriptor()?
-                        .whatever_context("get Type1 font desc")?;
+                        .whatever_context::<_, ObjectValueError>("get Type1 font desc")?;
                     Ok(Some(Self::load_ttf_parser_font(
                         FontType::Type1,
                         font,
@@ -940,7 +954,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                         debug!("Create {} font_op", k.as_str());
                         ops.insert(k.clone(), v.create_op(&mut cmap_registry)?);
                     }
-                    Ok(ops)
+                    Ok::<_, ObjectValueError>(ops)
                 },
                 |fonts| {
                     let mut renders = HashMap::with_capacity(fonts.len());
@@ -1025,7 +1039,7 @@ impl FontOp for CIDFontType0FontOp {
             .as_ref()
             .map(|w| w.char_width(ch))
             .transpose()
-            .whatever_context("get char width")?
+            .whatever_context::<_, ObjectValueError>("get char width")?
             .flatten()
             .unwrap_or(self.default_width) as f32;
         Ok(GlyphLength::new(char_width))
@@ -1080,8 +1094,8 @@ impl<'a> CIDFontType2FontOp<'a> {
                     .then(|| {
                         cmap_registry
                             .get(&name(encoding_name))
-                            .whatever_context("Get cmap")?
-                            .whatever_context("Get cmap")
+                            .whatever_context::<_, ObjectValueError>("Get cmap")?
+                            .whatever_context::<_, ObjectValueError>("Get cmap")
                     })
                     .transpose()?
             }
@@ -1092,8 +1106,12 @@ impl<'a> CIDFontType2FontOp<'a> {
                 );
                 let data = s
                     .decode(font.resolver())
-                    .whatever_context("decode cmap from stream")?;
-                Some(cmap_registry.add_cmap_file(data.as_ref())?)
+                    .whatever_context::<_, ObjectValueError>("decode cmap from stream")?;
+                Some(
+                    cmap_registry
+                        .add_cmap_file(data.as_ref())
+                        .whatever_context::<_, ObjectValueError>("add cmap file")?,
+                )
             }
         };
 
@@ -1103,7 +1121,7 @@ impl<'a> CIDFontType2FontOp<'a> {
             NameOrStream::Name(_) => None,
             NameOrStream::Stream(s) => Some(CIDToGIDMap::new(
                 s.decode(cid_font.resolver())
-                    .whatever_context("decode stream")?
+                    .whatever_context::<_, ObjectValueError>("decode stream")?
                     .into_owned(),
             )?),
         };
@@ -1128,7 +1146,7 @@ fn glyph_index(face: &TTFFace<'_>, ch: u32) -> Result<Option<u16>> {
     for subtable in face
         .tables()
         .cmap
-        .whatever_context("get cmap from TTF Face")?
+        .whatever_context::<_, ObjectValueError>("get cmap from TTF Face")?
         .subtables
     {
         if let Some(id) = subtable.glyph_index(ch) {
@@ -1148,7 +1166,14 @@ impl FontOp for CIDFontType2FontOp<'_> {
                     .map(|ch| (ch[0] as u32) << 8 | ch[1] as u32)
                     .collect())
             },
-            |cmap| Ok(cmap.map(s)?.into_iter().map(|ch| ch.0 as u32).collect()),
+            |cmap| {
+                Ok(cmap
+                    .map(s)
+                    .whatever_context::<_, ObjectValueError>("map code to cid")?
+                    .into_iter()
+                    .map(|ch| ch.0 as u32)
+                    .collect())
+            },
         )
     }
 
@@ -1190,7 +1215,7 @@ impl FontOp for CIDFontType2FontOp<'_> {
             .as_ref()
             .map(|w| w.char_width(ch))
             .transpose()
-            .whatever_context("get char width")?
+            .whatever_context::<_, ObjectValueError>("get char width")?
             .flatten()
             .unwrap_or(self.default_width) as f32;
         if self.units_per_em != 1000 {
@@ -1213,7 +1238,7 @@ struct CIDFontType0Font<'a, 'b> {
 impl<'a, 'b> CIDFontType0Font<'a, 'b> {
     fn new(font_dict: FontDict<'a, 'b>, data: Vec<u8>) -> Result<Self> {
         let font = FontKitFont::from_bytes(data.into(), 0)
-            .whatever_context("decode FontKitFont for Type0")?;
+            .whatever_context::<_, ObjectValueError>("decode FontKitFont for Type0")?;
         Ok(Self { font_dict, font })
     }
 }
@@ -1228,7 +1253,7 @@ struct CIDFontType2Font<'a, 'b> {
 impl<'a, 'b> CIDFontType2Font<'a, 'b> {
     fn new(font_is_embed: bool, data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> Result<Self> {
         let font = FontKitFont::from_bytes(data.clone().into(), 0)
-            .whatever_context("decode FontKitFont for Type2")?;
+            .whatever_context::<_, ObjectValueError>("decode FontKitFont for Type2")?;
         Ok(Self {
             data,
             font,
@@ -1245,7 +1270,7 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
 
     fn create_op(&self, cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
         let face = TTFFace::parse(&self.data, 0)
-            .whatever_context("decode TTFFace font for CIDFontType2")?;
+            .whatever_context::<_, ObjectValueError>("decode TTFFace font for CIDFontType2")?;
         Ok(Box::new(CIDFontType2FontOp::new(
             cmap_registry,
             face,
@@ -1297,13 +1322,13 @@ impl<'a> Type3FontOp<'a> {
 
         Ok(Self {
             font_width: FirstLastFontWidth::from(font_dict)?
-                .whatever_context("Get FirstLastFontWidth")?,
+                .whatever_context::<_, ObjectValueError>("Get FirstLastFontWidth")?,
             name_to_gid,
             encoding,
             units_per_em: (1.0 / matrix.m11)
                 .abs()
                 .to_u16()
-                .whatever_context("units_per_em to u16")?,
+                .whatever_context::<_, ObjectValueError>("units_per_em to u16")?,
         })
     }
 }
@@ -1314,9 +1339,10 @@ impl FontOp for Type3FontOp<'_> {
     }
 
     fn char_to_gid(&self, ch: u32) -> Result<u16> {
-        let gid_name = self
-            .encoding
-            .get_str(ch.try_into().whatever_context("convert ch to u8")?);
+        let gid_name = self.encoding.get_str(
+            ch.try_into()
+                .whatever_context::<_, ObjectValueError>("convert ch to u8")?,
+        );
         if let Some(gid) = self.name_to_gid.get(gid_name) {
             Ok(*gid)
         } else {
@@ -1348,11 +1374,11 @@ impl<'a, 'b> Type3Font<'a, 'b> {
             debug!("parse Type3 glyph: {}", name.as_str());
             let data = stream
                 .decode(d.resolver())
-                .whatever_context("decode stream")?;
+                .whatever_context::<_, ObjectValueError>("decode stream")?;
             let ops = terminated(parse_operations::<crate::ParserError>, rest)
                 .parse(&data[..])
                 .map_err(winnow::error::ParseError::into_inner)
-                .whatever_context("parse type3 operation")?;
+                .whatever_context::<_, ObjectValueError>("parse type3 operation")?;
             r.push((name.clone(), Type3Glyph(ops.into())));
         }
 
@@ -1368,7 +1394,7 @@ impl<'a, 'b> Type3Font<'a, 'b> {
             let gid = glyphs
                 .len()
                 .try_into()
-                .whatever_context("glyphs length convert to u16")?;
+                .whatever_context::<_, ObjectValueError>("glyphs length convert to u16")?;
             glyphs.push(glyph);
             glyph_ids.insert(name, gid);
         }

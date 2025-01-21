@@ -119,7 +119,8 @@ fn parse_inline_image_with_ascii85_filter() -> Result<()> {
     let xref = XRefTable::empty();
     let resolver = ObjectResolver::empty(&xref);
     let d = Dictionary::default();
-    let res_dict = ResourceDict::new(&d, &resolver).whatever_context("parse ResourceDict")?;
+    let res_dict = ResourceDict::new(&d, &resolver)
+        .whatever_context::<_, ObjectValueError>("parse ResourceDict")?;
     let img = img.image(&resolver, &res_dict)?;
     assert_eq!(4772, img.width());
     assert_eq!(110, img.height());
@@ -134,11 +135,17 @@ fn parse_inline_image_with_ascii85_filter() -> Result<()> {
 fn test_inline_image_et() -> Result<()> {
     let f = open_test_file("sample_files/xobject/inline-image.pdf");
     let resolver = f.resolver()?;
-    let catalog = f.catalog(&resolver).whatever_context("resolve catalog")?;
-    let pages = catalog.pages().whatever_context("resolve pages")?;
+    let catalog = f
+        .catalog(&resolver)
+        .whatever_context::<_, ObjectValueError>("resolve catalog")?;
+    let pages = catalog
+        .pages()
+        .whatever_context::<_, ObjectValueError>("resolve pages")?;
     let page = &pages[0];
 
-    let content = page.content().whatever_context("get page context")?;
+    let content = page
+        .content()
+        .whatever_context::<_, ObjectValueError>("get page context")?;
     // the page contains a inline image, its data contains a line begin with 'ET'
     // this test is to check if the parser can handle this case
     content.operations()?;

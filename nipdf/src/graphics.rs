@@ -10,7 +10,7 @@ use crate::{
 use euclid::{Length, Point2D, Transform2D};
 use log::{debug, error, warn};
 use nipdf_macro::{OperationParser, TryFromIntObject, TryFromNameObject, pdf_object};
-use prescript::{AnyWhatever, Name, sname};
+use prescript::{Name, sname};
 use snafu::whatever;
 use std::{
     num::ParseIntError,
@@ -619,7 +619,7 @@ where
         + FromExternalError<&'a [u8], ObjectValueError>
         + FromExternalError<&'a [u8], ParseIntError>
         + FromExternalError<&'a [u8], hex::FromHexError>
-        + FromExternalError<&'a [u8], AnyWhatever>
+        + FromExternalError<&'a [u8], ObjectValueError>
         + AddContext<&'a [u8], &'static str>
         + 'static,
 {
@@ -643,7 +643,7 @@ where
         + FromExternalError<&'a [u8], ParseIntError>
         + FromExternalError<&'a [u8], hex::FromHexError>
         + FromExternalError<&'a [u8], Utf8Error>
-        + FromExternalError<&'a [u8], AnyWhatever>
+        + FromExternalError<&'a [u8], ObjectValueError>
         + AddContext<&'a [u8], &'static str>
         + 'static,
 {

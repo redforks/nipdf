@@ -1,5 +1,5 @@
 use crate::{
-    Result,
+    ObjectValueError, Result,
     object::{ObjectId, TrailerDict},
 };
 use ahash::{HashMap, HashMapExt};
@@ -346,7 +346,10 @@ impl Authorizer {
             owner_hash,
             user_hash,
             permission_flags: d.permission_flags()?,
-            doc_id: trailer.id()?.whatever_context("get trailer id")?.0,
+            doc_id: trailer
+                .id()?
+                .whatever_context::<_, ObjectValueError>("get trailer id")?
+                .0,
             encrypt_metadata: d.encrypt_metadata()?,
         })
     }

@@ -1,5 +1,5 @@
 use super::*;
-use crate::file::open_test_file_with_password;
+use crate::{ObjectValueError, file::open_test_file_with_password};
 use hex_literal::hex;
 use snafu::{ResultExt, report};
 
@@ -60,18 +60,18 @@ fn test_authorize_user_v3() {
 #[test]
 fn revision_v4_not_encrypt_metadata() -> Result<()> {
     let file = open_test_file_with_password("pdf.js/test/pdfs/bug1782186.pdf", "Hello")
-        .whatever_context("open test file with password")?;
+        .whatever_context::<_, ObjectValueError>("open test file with password")?;
     let resolver = file.resolver()?;
     let pages = file
         .catalog(&resolver)
-        .whatever_context("parse catalog")?
+        .whatever_context::<_, ObjectValueError>("parse catalog")?
         .pages()
-        .whatever_context("parse pages")?;
+        .whatever_context::<_, ObjectValueError>("parse pages")?;
     assert_eq!(
         16,
         pages[0]
             .content()
-            .whatever_context("get page content")?
+            .whatever_context::<_, ObjectValueError>("get page content")?
             .operations()?
             .len()
     );

@@ -537,10 +537,10 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             gen_option_method(
                 try_from_type,
                 |ty| {
-                    quote! { self.d.opt_object(&prescript::sname(#key))?.map(|d| <#ty>::try_from(d).whatever_context::<_, prescript::AnyWhatever>(#key)).transpose() }
+                    quote! { self.d.opt_object(&prescript::sname(#key))?.map(|d| <#ty>::try_from(d).whatever_context::<_, crate::ObjectValueError>(#key)).transpose() }
                 },
                 |ty| {
-                    quote! { <#ty>::try_from(self.d.required_object(&prescript::sname(#key))?).whatever_context::<_, prescript::AnyWhatever>(#key) }
+                    quote! { <#ty>::try_from(self.d.required_object(&prescript::sname(#key))?).whatever_context::<_, crate::ObjectValueError>(#key) }
                 },
             )
         } else if let Some(try_from_type) = deep_resolve_try_from(rt, attrs) {
@@ -555,7 +555,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                                 let resolver = self.resolver();
                                 let d = resolver.resolve_deep_reference(d)?;
                                 <#ty>::try_from(d.as_ref())
-                            }).transpose().whatever_context::<_, prescript::AnyWhatever>(#key)
+                            }).transpose().whatever_context::<_, crate::ObjectValueError>(#key)
                     }
                 },
                 |ty| {
@@ -563,8 +563,8 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                         use crate::object::PdfObjectCore as _;
                         let d = self.d.required_object(&prescript::sname(#key))?;
                         let resolver = self.resolver();
-                        let d = resolver.resolve_deep_reference(d).whatever_context::<_, prescript::AnyWhatever>(#key)?;
-                        <#ty>::try_from(d.as_ref()).whatever_context::<_, prescript::AnyWhatever>(#key)
+                        let d = resolver.resolve_deep_reference(d).whatever_context::<_, crate::ObjectValueError>(#key)?;
+                        <#ty>::try_from(d.as_ref()).whatever_context::<_, crate::ObjectValueError>(#key)
                     }
                 },
             )
@@ -599,7 +599,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         let method = if has_whatever_context {
             quote! {
                 #doc
-                pub fn #name(&self) -> std::result::Result<#rt, prescript::AnyWhatever> {
+                pub fn #name(&self) -> std::result::Result<#rt, crate::ObjectValueError> {
                     use snafu::ResultExt as _;
                     #method
                 }
@@ -607,9 +607,9 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         } else {
             quote! {
                 #doc
-                pub fn #name(&self) -> std::result::Result<#rt, prescript::AnyWhatever> {
+                pub fn #name(&self) -> std::result::Result<#rt, crate::ObjectValueError> {
                     use snafu::ResultExt as _;
-                    #method.whatever_context::<_, prescript::AnyWhatever>(#key)
+                    #method.whatever_context::<_, crate::ObjectValueError>(#key)
                 }
             }
         };
