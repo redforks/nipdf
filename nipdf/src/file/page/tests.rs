@@ -13,8 +13,11 @@ fn rectangle_from_array(
     x2: impl Into<Object>,
     y2: impl Into<Object>,
 ) -> (f32, f32, f32, f32) {
-    let arr = vec![x1.into(), y1.into(), x2.into(), y2.into()].into();
-    let rect = Rectangle::try_from(&arr).unwrap();
+    let arr: Object = vec![x1.into(), y1.into(), x2.into(), y2.into()].into();
+    let xref = XRefTable::empty();
+    let resolver = ObjectResolver::empty(&xref);
+    let arr = ObjectWithResolver::new(&arr, &resolver);
+    let rect = Rectangle::try_from(arr).unwrap();
     (rect.left_x, rect.lower_y, rect.right_x, rect.upper_y)
 }
 

@@ -507,14 +507,11 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
 
         let key = key_attr(attrs).unwrap_or_else(|| snake_case_to_pascal(&name.to_string()));
 
-        let mut has_whatever_context = false;
-        let mut method = if let Some(method_name) = schema_method_name(rt, &attrs[..]).map(|m| {
-            has_whatever_context = true;
-            Ident::new(m, name.span())
-        }) {
+        let mut method = if let Some(method_name) =
+            schema_method_name(rt, &attrs[..]).map(|m| Ident::new(m, name.span()))
+        {
             quote! { self.d.#method_name(&prescript::sname(#key)) }
         } else if let Some(nested_type) = nested(rt, attrs) {
-            has_whatever_context = true;
             gen_option_method(
                 nested_type,
                 |ty| {
@@ -533,18 +530,16 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 },
             )
         } else if let Some(try_from_type) = try_from(rt, attrs) {
-            has_whatever_context = true;
             gen_option_method(
                 try_from_type,
                 |ty| {
-                    quote! { self.d.opt_object(&prescript::sname(#key))?.map(|d| <#ty>::try_from(d).whatever_context::<_, crate::ObjectValueError>(#key)).transpose() }
+                    quote! { self.d.opt_object(&prescript::sname(#key))?.map(|d| <#ty>::try_from(d)).transpose() }
                 },
                 |ty| {
-                    quote! { <#ty>::try_from(self.d.required_object(&prescript::sname(#key))?).whatever_context::<_, crate::ObjectValueError>(#key) }
+                    quote! { <#ty>::try_from(self.d.required_object(&prescript::sname(#key))?) }
                 },
             )
         } else if let Some(try_from_type) = deep_resolve_try_from(rt, attrs) {
-            has_whatever_context = true;
             gen_option_method(
                 try_from_type,
                 |ty| {
@@ -553,9 +548,9 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                             .map(|d| {
                                 use crate::object::PdfObjectCore as _;
                                 let resolver = self.resolver();
-                                let d = resolver.resolve_deep_reference(d)?;
-                                <#ty>::try_from(d.as_ref())
-                            }).transpose().whatever_context::<_, crate::ObjectValueError>(#key)
+                                let d = crate::object::ObjectWithResolver::new(d, resolver);
+                                <#ty>::try_from(d)
+                            }).transpose()
                     }
                 },
                 |ty| {
@@ -563,8 +558,8 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                         use crate::object::PdfObjectCore as _;
                         let d = self.d.required_object(&prescript::sname(#key))?;
                         let resolver = self.resolver();
-                        let d = resolver.resolve_deep_reference(d).whatever_context::<_, crate::ObjectValueError>(#key)?;
-                        <#ty>::try_from(d.as_ref()).whatever_context::<_, crate::ObjectValueError>(#key)
+                        let d = crate::object::ObjectWithResolver::new(d, resolver);
+                        <#ty>::try_from(d)
                     }
                 },
             )
@@ -596,21 +591,11 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             quote! {}
         };
 
-        let method = if has_whatever_context {
-            quote! {
-                #doc
-                pub fn #name(&self) -> std::result::Result<#rt, crate::ObjectValueError> {
-                    use snafu::ResultExt as _;
-                    #method
-                }
-            }
-        } else {
-            quote! {
-                #doc
-                pub fn #name(&self) -> std::result::Result<#rt, crate::ObjectValueError> {
-                    use snafu::ResultExt as _;
-                    #method.whatever_context::<_, crate::ObjectValueError>(#key)
-                }
+        let method = quote! {
+            #doc
+            pub fn #name(&self) -> std::result::Result<#rt, crate::ObjectValueError> {
+                use snafu::ResultExt as _;
+                #method
             }
         };
         methods.push(method);

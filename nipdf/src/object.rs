@@ -692,9 +692,9 @@ impl<'a, 'b> SchemaArray<'a, 'b> {
         self.arr.is_empty()
     }
 
-    /// Get iterator over array items
-    pub fn iter(&self) -> impl Iterator<Item = &Object> {
-        self.arr.iter()
+    /// Get iterator over array items, each item is resolved for possible reference
+    pub fn iter(&self) -> impl Iterator<Item = Result<&Object>> {
+        self.arr.iter().map(|o| self.resolver.resolve_reference(o))
     }
 
     /// Try to convert all items to type V

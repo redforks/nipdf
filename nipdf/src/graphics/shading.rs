@@ -86,7 +86,7 @@ pub trait AxialShadingDictTrait {
     #[or_default]
     fn extend(&self) -> Extend;
 
-    #[try_from]
+    #[deep_resolve_try_from]
     fn b_box(&self) -> Option<Rectangle>;
 }
 
@@ -165,7 +165,7 @@ pub trait ShadingDictTrait {
     #[try_from]
     fn background(&self) -> Option<ColorArgs>;
 
-    #[try_from]
+    #[deep_resolve_try_from]
     fn b_box(&self) -> Option<Rectangle>;
 
     #[or_default]

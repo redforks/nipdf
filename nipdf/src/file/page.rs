@@ -6,8 +6,8 @@ use crate::{
         RenderingIntent, parse_operations, shading::ShadingDict, trans::FormToUserSpace,
     },
     object::{
-        Dictionary, ImageMask, Object, PdfObject, PdfObjectCore as _, RootPdfObject as _,
-        RuntimeObjectId, Stream,
+        Dictionary, ImageMask, Object, ObjectWithResolver, PdfObject, PdfObjectCore as _,
+        RootPdfObject as _, RuntimeObjectId, Stream,
     },
     text::FontDict,
 };
@@ -77,37 +77,29 @@ impl Rectangle {
 
 /// Convert from raw array, auto re-order to (left_x, lower_y, right_x, upper_y),
 /// see PDF 32000-1:2008 7.9.5
-impl TryFrom<&Object> for Rectangle {
+impl<'a, 'b> TryFrom<ObjectWithResolver<'a, 'b>> for Rectangle {
     type Error = ObjectValueError;
 
-    fn try_from(object: &Object) -> Result<Self, Self::Error> {
-        match object {
-            Object::Array(arr) => {
-                let mut iter = arr.iter();
-                let left_x = iter
-                    .next()
-                    .whatever_context::<_, ObjectValueError>("Missing left_x value")?
-                    .number()
-                    .whatever_context::<_, ObjectValueError>("Invalid left_x value")?;
-                let lower_y = iter
-                    .next()
-                    .whatever_context::<_, ObjectValueError>("Missing lower_y value")?
-                    .number()
-                    .whatever_context::<_, ObjectValueError>("Invalid lower_y value")?;
-                let right_x = iter
-                    .next()
-                    .whatever_context::<_, ObjectValueError>("Missing right_x value")?
-                    .number()
-                    .whatever_context::<_, ObjectValueError>("Invalid right_x value")?;
-                let upper_y = iter
-                    .next()
-                    .whatever_context::<_, ObjectValueError>("Missing upper_y value")?
-                    .number()
-                    .whatever_context::<_, ObjectValueError>("Invalid upper_y value")?;
-                Ok(Self::from_lbrt(left_x, lower_y, right_x, upper_y))
-            }
-            _ => Err(ObjectValueError::GraphicsOperationSchemaError),
-        }
+    fn try_from(object: ObjectWithResolver<'a, 'b>) -> Result<Self, Self::Error> {
+        let arr = object.into_schema_array()?;
+        let mut iter = arr.iter();
+        let left_x = iter
+            .next()
+            .whatever_context::<_, ObjectValueError>("get left_x value")??
+            .number()?;
+        let lower_y = iter
+            .next()
+            .whatever_context::<_, ObjectValueError>("get lower_y value")??
+            .number()?;
+        let right_x = iter
+            .next()
+            .whatever_context::<_, ObjectValueError>("get right_x value")??
+            .number()?;
+        let upper_y = iter
+            .next()
+            .whatever_context::<_, ObjectValueError>("get upper_y value")??
+            .number()?;
+        Ok(Self::from_lbrt(left_x, lower_y, right_x, upper_y))
     }
 }
 
