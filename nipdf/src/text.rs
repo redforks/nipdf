@@ -153,7 +153,7 @@ pub trait TrueTypeFontDictTrait {
 
 #[pdf_object(("Font", "Type3"))]
 pub trait Type3FontDictTrait {
-    #[deep_resolve_try_from]
+    #[try_from]
     #[key("FontBBox")]
     fn b_box(&self) -> Rectangle;
     #[try_from]
@@ -310,7 +310,7 @@ pub trait FontDescriptorDictTrait {
     #[try_from]
     fn flags(&self) -> FontDescriptorFlags;
 
-    #[deep_resolve_try_from]
+    #[try_from]
     fn font_b_box(&self) -> Rectangle;
 
     fn italic_angle(&self) -> f32;

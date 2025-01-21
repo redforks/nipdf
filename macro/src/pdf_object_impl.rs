@@ -156,15 +156,6 @@ fn try_from<'a>(rt: &'a Type, attrs: &'a [Attribute]) -> Option<Either<&'a Type,
     has_attr("try_from", rt, attrs)
 }
 
-/// Return left means Option<T>, right means T, Return None means `deep_resolve_try_from` attr not
-/// defined.
-fn deep_resolve_try_from<'a>(
-    rt: &'a Type,
-    attrs: &'a [Attribute],
-) -> Option<Either<&'a Type, &'a Type>> {
-    has_attr("deep_resolve_try_from", rt, attrs)
-}
-
 fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
     let get_type = || {
         attrs.iter().find_map(|attr| {
@@ -530,22 +521,6 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 },
             )
         } else if let Some(try_from_type) = try_from(rt, attrs) {
-            gen_option_method(
-                try_from_type,
-                |ty| {
-                    quote! {
-                        let d: Option<crate::object::ObjectWithResolver> = self.d.opt(&prescript::sname(#key))?;
-                        d.map(|d| <#ty>::try_from(d)).transpose()
-                    }
-                },
-                |ty| {
-                    quote! {
-                        let d: crate::object::ObjectWithResolver = self.d.required(&prescript::sname(#key))?;
-                        <#ty>::try_from(d)
-                    }
-                },
-            )
-        } else if let Some(try_from_type) = deep_resolve_try_from(rt, attrs) {
             gen_option_method(
                 try_from_type,
                 |ty| {

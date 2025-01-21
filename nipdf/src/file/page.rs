@@ -185,7 +185,7 @@ impl XObjectDict<'_, '_> {
 
 #[pdf_object((Some("XObject"), "Form"))]
 pub trait FormXObjectDictTrait {
-    #[deep_resolve_try_from]
+    #[try_from]
     fn b_box(&self) -> Rectangle;
 
     #[try_from]
@@ -246,9 +246,9 @@ pub trait ResourceDictTrait {
 pub(crate) trait PageDictTrait {
     #[nested]
     fn kids(&self) -> Vec<Self>;
-    #[deep_resolve_try_from]
+    #[try_from]
     fn media_box(&self) -> Option<Rectangle>;
-    #[deep_resolve_try_from]
+    #[try_from]
     fn crop_box(&self) -> Option<Rectangle>;
     #[nested]
     fn resources(&self) -> Option<ResourceDict<'a, 'b>>;

@@ -47,7 +47,7 @@ pub trait TilingPatternDictTrait {
     #[try_from]
     fn tiling_type(&self) -> TilingType;
 
-    #[deep_resolve_try_from]
+    #[try_from]
     fn b_box(&self) -> Rectangle;
 
     fn x_step(&self) -> f32;
