@@ -544,21 +544,13 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 try_from_type,
                 |ty| {
                     quote! {
-                        self.d.opt_object(&prescript::sname(#key))?
-                            .map(|d| {
-                                use crate::object::PdfObjectCore as _;
-                                let resolver = self.resolver();
-                                let d = crate::object::ObjectWithResolver::new(d, resolver);
-                                <#ty>::try_from(d)
-                            }).transpose()
+                        let d: Option<crate::object::ObjectWithResolver> = self.d.opt(&prescript::sname(#key))?;
+                        d.map(|d| <#ty>::try_from(d)).transpose()
                     }
                 },
                 |ty| {
                     quote! {
-                        use crate::object::PdfObjectCore as _;
-                        let d = self.d.required_object(&prescript::sname(#key))?;
-                        let resolver = self.resolver();
-                        let d = crate::object::ObjectWithResolver::new(d, resolver);
+                        let d: crate::object::ObjectWithResolver = self.d.required(&prescript::sname(#key))?;
                         <#ty>::try_from(d)
                     }
                 },

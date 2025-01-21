@@ -16,7 +16,7 @@ fn rectangle_from_array(
     let arr: Object = vec![x1.into(), y1.into(), x2.into(), y2.into()].into();
     let xref = XRefTable::empty();
     let resolver = ObjectResolver::empty(&xref);
-    let arr = ObjectWithResolver::new(&arr, &resolver);
+    let arr = ObjectWithResolver::new(&arr, &resolver).unwrap();
     let rect = Rectangle::try_from(arr).unwrap();
     (rect.left_x, rect.lower_y, rect.right_x, rect.upper_y)
 }

@@ -568,14 +568,15 @@ pub struct ObjectWithResolver<'a, 'b> {
 }
 
 impl<'a, 'b> ObjectWithResolver<'a, 'b> {
-    pub fn new(obj: &'b Object, resolver: &'b ObjectResolver<'a>) -> Self {
-        Self { obj, resolver }
+    /// Create ObjectWithResolver from object and resolver, return error if resolve reference
+    /// failed.
+    pub fn new(obj: &'b Object, resolver: &'b ObjectResolver<'a>) -> Result<Self> {
+        let obj = resolver.resolve_reference(obj)?;
+        Ok(Self { obj, resolver })
     }
 
-    pub fn resolve_reference(&self) -> Result<&'b Object> {
-        self.resolver
-            .resolve_reference(self.obj)
-            .whatever_context("resolve reference")
+    fn resolve_reference(&self) -> Result<&'b Object> {
+        self.resolver.resolve_reference(self.obj)
     }
 
     /// Expect self is Dictionary, convert self to SchemaDict
@@ -594,6 +595,12 @@ impl<'a, 'b> ObjectWithResolver<'a, 'b> {
             .as_arr()
             .whatever_context::<_, ObjectValueError>("expected array")?;
         Ok(SchemaArray::new(arr, self.resolver))
+    }
+}
+
+impl<'a, 'b> FromSchemaContainer<'a, 'b> for ObjectWithResolver<'a, 'b> {
+    fn create(o: &'b Object, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
+        ObjectWithResolver::new(o, r)
     }
 }
 
