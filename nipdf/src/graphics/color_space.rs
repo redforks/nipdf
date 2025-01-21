@@ -4,7 +4,7 @@ use crate::{
     file::{ObjectResolver, ResourceDict},
     function::{Domain, Domains, Function},
     graphics::ICCStreamDict,
-    object::{CreateFromSchemaDict, Object},
+    object::{FromSchemaContainer, Object},
 };
 use educe::Educe;
 use nipdf_macro::pdf_object;

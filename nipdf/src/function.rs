@@ -1,7 +1,7 @@
 use crate::{
     ObjectValueError, Result,
     file::ObjectResolver,
-    object::{CreateFromSchemaDict, Object, PdfObject as _, RootPdfObject as _, RuntimeObjectId},
+    object::{FromSchemaContainer, Object, PdfObject as _, RootPdfObject as _, RuntimeObjectId},
 };
 use educe::Educe;
 #[cfg(test)]
@@ -159,7 +159,7 @@ impl Function for Box<dyn Function> {
     }
 }
 
-impl<'a, 'b> CreateFromSchemaDict<'a, 'b> for Box<dyn Function> {
+impl<'a, 'b> FromSchemaContainer<'a, 'b> for Box<dyn Function> {
     fn create(o: &'b Object, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
         let id: Option<RuntimeObjectId> = o.reference().ok().map(Into::into);
         let dict = r.resolve_reference(o)?.as_dict()?;

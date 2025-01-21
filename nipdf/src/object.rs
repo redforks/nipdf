@@ -408,14 +408,14 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 }
 
 /// Trait to abstract creation of PdfObject / RootPdfObject
-pub trait CreateFromSchemaDict<'a, 'b>: Sized {
+pub trait FromSchemaContainer<'a, 'b>: Sized {
     fn create(o: &'b Object, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError>;
 }
 
 /// impl CreateFromSchemaDict for type impl TryFrom trait
 macro_rules! create_from_schema_dict_try_from {
     ($t: ty) => {
-        impl<'a, 'b> CreateFromSchemaDict<'a, 'b> for $t {
+        impl<'a, 'b> FromSchemaContainer<'a, 'b> for $t {
             fn create(o: &'b Object, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
                 let o = r.resolve_reference(o)?;
                 <$t>::try_from(o)
@@ -436,9 +436,9 @@ create_from_schema_dict_try_from!(&'b Stream);
 create_from_schema_dict_try_from!(&'b str);
 create_from_schema_dict_try_from!(&'b [u8]);
 
-impl<'a, 'b, T> CreateFromSchemaDict<'a, 'b> for Vec<T>
+impl<'a, 'b, T> FromSchemaContainer<'a, 'b> for Vec<T>
 where
-    T: CreateFromSchemaDict<'b, 'b>,
+    T: FromSchemaContainer<'b, 'b>,
 {
     fn create(o: &'b Object, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
         let o = r.resolve_reference(o)?;
@@ -450,7 +450,7 @@ where
 impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     pub fn required<V>(&self, key: &Name) -> Result<V>
     where
-        V: CreateFromSchemaDict<'a, 'b>,
+        V: FromSchemaContainer<'a, 'b>,
     {
         let r = self.resolver();
         self.required_value(key)
@@ -459,7 +459,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn opt<V>(&self, key: &Name) -> Result<Option<V>>
     where
-        V: CreateFromSchemaDict<'a, 'b>,
+        V: FromSchemaContainer<'a, 'b>,
     {
         self.d
             .get(key)
@@ -470,7 +470,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     /// Return default value if not exist, error if not expected type.
     pub fn or_default<V>(&self, key: &Name) -> Result<V>
     where
-        V: CreateFromSchemaDict<'a, 'b> + Default,
+        V: FromSchemaContainer<'a, 'b> + Default,
     {
         self.opt(key).map(Option::unwrap_or_default)
     }
@@ -479,7 +479,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     /// If value is array, return all elements in array, otherwise return with one element vec.
     pub fn zero_one_or_more<V>(&self, key: &Name) -> Result<Vec<V>>
     where
-        V: CreateFromSchemaDict<'a, 'b>,
+        V: FromSchemaContainer<'a, 'b>,
     {
         let with_err =
             |_: &mut ObjectValueError| format!("resolve zero_one_or_more porerty: {}", &key);
@@ -512,7 +512,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
 
     pub fn map_dict<V>(&self, key: &Name) -> Result<HashMap<Name, V>>
     where
-        V: CreateFromSchemaDict<'a, 'b>,
+        V: FromSchemaContainer<'a, 'b>,
     {
         let v = self.opt_object(key)?;
         let Some(v) = v else {
@@ -602,7 +602,7 @@ impl<'a, 'b> SchemaArray<'a, 'b> {
     /// Get value at index, error if index out of bounds or wrong type
     pub fn required<V>(&self, index: usize) -> Result<V>
     where
-        V: CreateFromSchemaDict<'a, 'b>,
+        V: FromSchemaContainer<'a, 'b>,
     {
         let o = self
             .arr
@@ -614,7 +614,7 @@ impl<'a, 'b> SchemaArray<'a, 'b> {
     /// Get optional value at index, None if index out of bounds
     pub fn opt<V>(&self, index: usize) -> Result<Option<V>>
     where
-        V: CreateFromSchemaDict<'a, 'b>,
+        V: FromSchemaContainer<'a, 'b>,
     {
         match self.arr.get(index) {
             Some(o) => V::create(o, self.resolver)
@@ -688,7 +688,7 @@ impl<'a, 'b> SchemaArray<'a, 'b> {
     /// Try to convert all items to type V
     pub fn to_vec<V>(&self) -> Result<Vec<V>>
     where
-        V: CreateFromSchemaDict<'a, 'b>,
+        V: FromSchemaContainer<'a, 'b>,
     {
         self.arr
             .iter()
