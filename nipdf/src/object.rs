@@ -453,8 +453,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         V: FromSchemaContainer<'a, 'b>,
     {
         let r = self.resolver();
-        self.required_value(key)
-            .and_then(move |o| V::create(o, r).whatever_context("create"))
+        self.required_value(key).and_then(move |o| V::create(o, r))
     }
 
     pub fn opt<V>(&self, key: &Name) -> Result<Option<V>>
@@ -463,7 +462,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     {
         self.d
             .get(key)
-            .map(|o| V::create(o, self.resolver()).whatever_context("create"))
+            .map(|o| V::create(o, self.resolver()))
             .transpose()
     }
 
@@ -528,10 +527,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
             .whatever_context::<_, ObjectValueError>("as dict")?;
         let mut res = HashMap::with_capacity(v.len());
         for (k, v) in v.iter() {
-            res.insert(
-                k.clone(),
-                V::create(v, self.resolver()).whatever_context::<_, ObjectValueError>("create")?,
-            );
+            res.insert(k.clone(), V::create(v, self.resolver())?);
         }
         Ok(res)
     }
@@ -547,11 +543,8 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     }
 
     pub fn required_object(&self, key: &Name) -> Result<&'b Object> {
-        self.required_value(key).and_then(|o| {
-            self.r
-                .resolve_reference(o)
-                .whatever_context("resolve reference")
-        })
+        self.required_value(key)
+            .and_then(|o| self.r.resolve_reference(o))
     }
 
     fn required_value(&self, key: &Name) -> Result<&'b Object> {
@@ -581,19 +574,12 @@ impl<'a, 'b> ObjectWithResolver<'a, 'b> {
 
     /// Expect self is Dictionary, convert self to SchemaDict
     pub fn into_schema_dict(self) -> Result<SchemaDict<'a, 'b, ()>> {
-        let d = self
-            .resolve_reference()?
-            .as_dict()
-            .whatever_context::<_, ObjectValueError>("expected dict")?;
+        let d = self.resolve_reference()?.as_dict()?;
         SchemaDict::new(d, self.resolver, ())
-            .whatever_context::<_, ObjectValueError>("Create SchemaDict")
     }
 
     pub fn into_schema_array(self) -> Result<SchemaArray<'a, 'b>> {
-        let arr = self
-            .resolve_reference()?
-            .as_arr()
-            .whatever_context::<_, ObjectValueError>("expected array")?;
+        let arr = self.resolve_reference()?.as_arr()?;
         Ok(SchemaArray::new(arr, self.resolver))
     }
 }
@@ -625,7 +611,7 @@ impl<'a, 'b> SchemaArray<'a, 'b> {
             .with_whatever_context::<_, _, ObjectValueError>(|| {
                 format!("index out of bounds: {}", index)
             })?;
-        V::create(o, self.resolver).whatever_context::<_, ObjectValueError>("create")
+        V::create(o, self.resolver)
     }
 
     /// Get optional value at index, None if index out of bounds
@@ -634,31 +620,22 @@ impl<'a, 'b> SchemaArray<'a, 'b> {
         V: FromSchemaContainer<'a, 'b>,
     {
         match self.arr.get(index) {
-            Some(o) => V::create(o, self.resolver)
-                .map(Some)
-                .whatever_context("create"),
+            Some(o) => V::create(o, self.resolver).map(Some),
             None => Ok(None),
         }
     }
 
     pub fn required_schema_dict(&self, index: usize) -> Result<SchemaDict<'a, 'b, ()>> {
         let o = self.required_object(index)?;
-        let d = o
-            .as_dict()
-            .whatever_context::<_, ObjectValueError>("expected schema array item be dict")?;
+        let d = o.as_dict()?;
         SchemaDict::new(d, self.resolver, ())
-            .whatever_context::<_, ObjectValueError>("required schema dict from schema array")
     }
 
     pub fn opt_schema_dict(&self, index: usize) -> Result<Option<SchemaDict<'a, 'b, ()>>> {
         match self.opt_object(index)? {
             Some(o) => {
-                let d = o.as_dict().whatever_context::<_, ObjectValueError>(
-                    "expected schema array item be dict",
-                )?;
-                SchemaDict::new(d, self.resolver, ())
-                    .whatever_context::<_, ObjectValueError>("opt schema dict from schema array")
-                    .map(Some)
+                let d = o.as_dict()?;
+                SchemaDict::new(d, self.resolver, ()).map(Some)
             }
             None => Ok(None),
         }
@@ -672,19 +649,13 @@ impl<'a, 'b> SchemaArray<'a, 'b> {
             .with_whatever_context::<_, _, ObjectValueError>(|| {
                 format!("index out of bounds: {}", index)
             })?;
-        self.resolver
-            .resolve_reference(o)
-            .whatever_context("resolve reference")
+        self.resolver.resolve_reference(o)
     }
 
     /// Get optional object at index after resolving references
     pub fn opt_object(&self, index: usize) -> Result<Option<&'b Object>> {
         match self.arr.get(index) {
-            Some(o) => self
-                .resolver
-                .resolve_reference(o)
-                .map(Some)
-                .whatever_context("resolve reference"),
+            Some(o) => self.resolver.resolve_reference(o).map(Some),
             None => Ok(None),
         }
     }
@@ -713,7 +684,6 @@ impl<'a, 'b> SchemaArray<'a, 'b> {
             .iter()
             .map(|o| V::create(o, self.resolver))
             .collect::<Result<Vec<_>, _>>()
-            .whatever_context("SchemaArray to Vec")
     }
 }
 
