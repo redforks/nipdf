@@ -155,7 +155,11 @@ fn build_radial<'a, 'b>(
         return Ok(None);
     }
 
-    let function = d.functions()?.pop().whatever_context("get last function")?;
+    let function = d
+        .functions()
+        .whatever_context("get functions")?
+        .pop()
+        .whatever_context("get last function")?;
     let domain = d.domain().whatever_context("get domain")?;
     let extend = d.extend().whatever_context("get extend")?;
     Ok(Some(Radial {

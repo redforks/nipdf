@@ -2681,6 +2681,7 @@ dependencies = [
  "mimalloc",
  "nipdf",
  "nipdf-render",
+ "prescript",
  "snafu",
 ]
 
@@ -2707,6 +2708,7 @@ dependencies = [
  "mimalloc",
  "nipdf",
  "nipdf-render",
+ "prescript",
  "snafu",
 ]
 

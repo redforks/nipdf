@@ -8,7 +8,7 @@ use iced::{
 use iced_aw::{Card, modal};
 use log::error;
 use mimalloc::MiMalloc;
-use nipdf::AnyWhatever;
+use prescript::AnyWhatever;
 use std::sync::Arc;
 use view::{
     error::ErrorView,

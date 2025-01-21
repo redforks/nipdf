@@ -7,7 +7,7 @@ use nipdf::{
     graphics::trans::{LogicDeviceToDeviceSpace, UserToUserSpace, logic_device_to_device},
 };
 use prescript::Result;
-use snafu::{OptionExt, whatever};
+use snafu::{OptionExt, ResultExt, whatever};
 use tiny_skia::{Color, Pixmap};
 
 mod render;
@@ -183,8 +183,8 @@ pub fn render_steps(
     steps: Option<usize>,
     no_crop: bool,
 ) -> Result<RgbaImage> {
-    let media_box = page.media_box()?;
-    let crop_box = page.crop_box()?;
+    let media_box = page.media_box().whatever_context("get page media box")?;
+    let crop_box = page.crop_box().whatever_context("get page crop box")?;
     let mut canvas_box = crop_box;
     // if canvas is empty, use default A4 size
     if canvas_box.width() == 0.0 || canvas_box.height() == 0.0 {
@@ -195,12 +195,14 @@ pub fn render_steps(
         .crop((!no_crop && need_crop(crop_box, media_box)).then_some(crop_box))
         .rotate(page.rotate())
         .build();
-    let content = page.content()?;
-    let ops = content.operations()?;
+    let content = page.content().whatever_context("get page content")?;
+    let ops = content
+        .operations()
+        .whatever_context("get page operations")?;
     let mut canvas = option.create_canvas()?;
     if !ops.is_empty() {
         // skip render if no operations, fixes incorrect pdf files that no resources
-        let resource = page.resources()?;
+        let resource = page.resources().whatever_context("get page resources")?;
         let mut renderer = Render::new(&mut canvas, option.clone(), &resource)?;
         if let Some(steps) = steps {
             ops.into_iter().take(steps).for_each(|op| renderer.exec(op));

@@ -34,8 +34,8 @@ use nipdf::{
     },
 };
 use num_traits::ToPrimitive;
-use prescript::{Name, ParserError};
-use snafu::{OptionExt, ResultExt, ensure_whatever, whatever};
+use prescript::{AnyWhatever, Name, ParserError};
+use snafu::{FromString, OptionExt, ResultExt, ensure_whatever, whatever};
 use std::{
     borrow::Cow,
     cell::{Ref, RefCell},
@@ -714,7 +714,7 @@ impl<'a, 'c> Render<'a, 'c> {
             canvas,
             stack: vec![state],
             path: Path::default(),
-            font_cache: FontCache::new(resources)?,
+            font_cache: FontCache::new(resources).whatever_context("Create font cache")?,
             resources,
             dimension: option.dimension,
         })
@@ -804,7 +804,10 @@ impl<'a, 'c> Render<'a, 'c> {
             Operation::SetRenderIntent(intent) => self.current_mut()?.set_render_intent(intent),
             Operation::SetFlatness(flatness) => self.current_mut()?.set_flatness(flatness),
             Operation::SetGraphicsStateParameters(nm) => {
-                let res = self.resources.ext_g_state()?;
+                let res = self
+                    .resources
+                    .ext_g_state()
+                    .whatever_context("get page resources")?;
                 let res = res.get(&nm.0).whatever_context("ExtGState not found")?;
                 self.current_mut()?.set_graphics_state(res)?;
             }
@@ -895,12 +898,14 @@ impl<'a, 'c> Render<'a, 'c> {
             // Color Operations
             Operation::SetStrokeColorSpace(args) => {
                 let cs =
-                    ColorSpace::from_args(&args, self.resources.resolver(), Some(self.resources))?;
+                    ColorSpace::from_args(&args, self.resources.resolver(), Some(self.resources))
+                        .whatever_context("Create ColorSpace")?;
                 self.set_color_and_space(Self::stroke_color_state, cs, None)?;
             }
             Operation::SetFillColorSpace(args) => {
                 let cs =
-                    ColorSpace::from_args(&args, self.resources.resolver(), Some(self.resources))?;
+                    ColorSpace::from_args(&args, self.resources.resolver(), Some(self.resources))
+                        .whatever_context("Create ColorSpace")?;
                 self.set_color_and_space(Self::fill_color_state, cs, None)?;
             }
             Operation::SetStrokeColor(args) => {
@@ -1229,7 +1234,12 @@ impl<'a, 'c> Render<'a, 'c> {
             .or_else(|| {
                 let mask = match x_object.mask() {
                     Ok(v) => v,
-                    Err(e) => return Some(Err(e)),
+                    Err(e) => {
+                        return Some(Err(AnyWhatever::with_source(
+                            Box::new(e),
+                            "get x_object mask".to_owned(),
+                        )));
+                    }
                 };
                 let Some(ImageMask::Explicit(mask)) = mask else {
                     return None;
@@ -1318,7 +1328,8 @@ impl<'a, 'c> Render<'a, 'c> {
             return Ok(());
         };
         content
-            .operations()?
+            .operations()
+            .whatever_context("get page operations")?
             .into_iter()
             .for_each(|op| render.exec(op));
 
@@ -1464,7 +1475,10 @@ impl<'a, 'c> Render<'a, 'c> {
                 .function
                 .call(&[0.0])
                 .whatever_context("exec function")?;
-            let c = radial.color_space.to_rgba(c.as_slice())?;
+            let c = radial
+                .color_space
+                .to_rgba(c.as_slice())
+                .whatever_context("to rgba")?;
             paint.set_color(
                 SkiaColor::from_rgba(c[0], c[1], c[2], c[3]).whatever_context("from rgba")?,
             );
@@ -1715,7 +1729,9 @@ impl<'a, 'c> Render<'a, 'c> {
         gid: u16,
     ) -> Result<PathBuilder> {
         let mut sink = SkiaPathSink(PathBuilder::new());
-        glyph_render.render(gid, &mut sink)?;
+        glyph_render
+            .render(gid, &mut sink)
+            .whatever_context("render glyph")?;
         Ok(sink.into_inner())
     }
 
@@ -1822,7 +1838,8 @@ impl<'a, 'c> Render<'a, 'c> {
             .whatever_context("get font op")?;
         let state = self.stack.last().whatever_context("get stack top")?;
         let mut text_object = state.text_object.clone();
-        text_object.set_units_per_em(op.units_per_em()? as f32);
+        text_object
+            .set_units_per_em(op.units_per_em().whatever_context("get units per em")? as f32);
         let user_to_device = state.user_to_device.into_skia();
 
         if let Some(type3_font) = font.as_type3() {
@@ -1846,7 +1863,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 return Ok(());
             };
 
-            for ch in op.decode_chars(text)? {
+            for ch in op.decode_chars(text).whatever_context("decode chars")? {
                 render.current_mut()?.set_ctm(
                     text_object
                         .type3_runtime_matrix(&font_matrix)
@@ -1854,7 +1871,9 @@ impl<'a, 'c> Render<'a, 'c> {
                         .with_destination()
                         .with_source(),
                 );
-                if let Some(glyph) = type3_font.get_glyph(op.char_to_gid(ch)?) {
+                if let Some(glyph) =
+                    type3_font.get_glyph(op.char_to_gid(ch).whatever_context("get char to gid")?)
+                {
                     for op in glyph.operations() {
                         render.exec(op.clone());
                     }
@@ -1877,8 +1896,11 @@ impl<'a, 'c> Render<'a, 'c> {
                 .whatever_context("get font glyph render")?;
             let mut text_clip_path = Path::default();
 
-            for ch in op.decode_chars(text)? {
-                let path = Self::gen_glyph_path(glyph_render, op.char_to_gid(ch)?)?;
+            for ch in op.decode_chars(text).whatever_context("decode chars")? {
+                let path = Self::gen_glyph_path(
+                    glyph_render,
+                    op.char_to_gid(ch).whatever_context("get char to gid")?,
+                )?;
                 if !path.is_empty() {
                     let path = path.finish().whatever_context("finish path")?;
                     // pre transform path to user space, render_glyph() will zoom line_width,

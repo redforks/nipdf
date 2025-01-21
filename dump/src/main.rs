@@ -2,11 +2,11 @@ use clap::{Parser, Subcommand, arg};
 use image::ImageFormat;
 use mimalloc::MiMalloc;
 use nipdf::{
-    Result,
     file::File,
     object::{Object, RuntimeObjectId},
 };
 use nipdf_render::{RenderOptionBuilder, render_steps};
+use prescript::Result;
 use snafu::{OptionExt as _, ResultExt as _, report};
 use std::{
     collections::HashSet,
@@ -183,7 +183,10 @@ fn dump_page(args: &DumpPageArgs<'_>) -> Result<()> {
     } else if let Some(page_no) = page_no {
         let page = &catalog.pages().whatever_context("get pages")?[page_no as usize];
         let contents = page.content().whatever_context("get page content")?;
-        for op in contents.operations()? {
+        for op in contents
+            .operations()
+            .whatever_context("get page operations")?
+        {
             println!("{:?}", op);
         }
     }

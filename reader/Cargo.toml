@@ -21,6 +21,7 @@ log.workspace = true
 mimalloc.workspace = true
 clap.workspace = true
 snafu.workspace = true
+prescript = { version = "0.1.0", path = "../prescript" }
 
 [lints]
 workspace = true
