@@ -554,6 +554,150 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     }
 }
 
+/// Object and resolver, to allow resolve reference from object
+pub struct ObjectWithResolver<'a, 'b> {
+    pub obj: &'b Object,
+    pub resolver: &'b ObjectResolver<'a>,
+}
+
+impl<'a, 'b> ObjectWithResolver<'a, 'b> {
+    pub fn new(obj: &'b Object, resolver: &'b ObjectResolver<'a>) -> Self {
+        Self { obj, resolver }
+    }
+
+    pub fn resolve_reference(&self) -> Result<&'b Object> {
+        self.resolver
+            .resolve_reference(self.obj)
+            .whatever_context("resolve reference")
+    }
+
+    /// Expect self is Dictionary, convert self to SchemaDict
+    pub fn into_schema_dict(self) -> Result<SchemaDict<'a, 'b, ()>> {
+        let d = self
+            .resolve_reference()?
+            .as_dict()
+            .whatever_context("expected dict")?;
+        SchemaDict::new(d, self.resolver, ()).whatever_context("Create SchemaDict")
+    }
+
+    pub fn into_schema_array(self) -> Result<SchemaArray<'a, 'b>> {
+        let arr = self
+            .resolve_reference()?
+            .as_arr()
+            .whatever_context("expected array")?;
+        Ok(SchemaArray::new(arr, self.resolver))
+    }
+}
+
+pub struct SchemaArray<'a, 'b> {
+    arr: &'b Array,
+    resolver: &'b ObjectResolver<'a>,
+}
+
+impl<'a, 'b> SchemaArray<'a, 'b> {
+    pub fn new(arr: &'b Array, resolver: &'b ObjectResolver<'a>) -> Self {
+        Self { arr, resolver }
+    }
+
+    /// Get value at index, error if index out of bounds or wrong type
+    pub fn required<V>(&self, index: usize) -> Result<V>
+    where
+        V: CreateFromSchemaDict<'a, 'b>,
+    {
+        let o = self
+            .arr
+            .get(index)
+            .with_whatever_context(|| format!("index out of bounds: {}", index))?;
+        V::create(o, self.resolver).whatever_context("create")
+    }
+
+    /// Get optional value at index, None if index out of bounds
+    pub fn opt<V>(&self, index: usize) -> Result<Option<V>>
+    where
+        V: CreateFromSchemaDict<'a, 'b>,
+    {
+        match self.arr.get(index) {
+            Some(o) => V::create(o, self.resolver)
+                .map(Some)
+                .whatever_context("create"),
+            None => Ok(None),
+        }
+    }
+
+    pub fn required_schema_dict(&self, index: usize) -> Result<SchemaDict<'a, 'b, ()>> {
+        let o = self.required_object(index)?;
+        let d = o
+            .as_dict()
+            .whatever_context("expected schema array item be dict")?;
+        SchemaDict::new(d, self.resolver, ())
+            .whatever_context("required schema dict from schema array")
+    }
+
+    pub fn opt_schema_dict(&self, index: usize) -> Result<Option<SchemaDict<'a, 'b, ()>>> {
+        match self.opt_object(index)? {
+            Some(o) => {
+                let d = o
+                    .as_dict()
+                    .whatever_context("expected schema array item be dict")?;
+                SchemaDict::new(d, self.resolver, ())
+                    .whatever_context("opt schema dict from schema array")
+                    .map(Some)
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Get object at index after resolving any references
+    pub fn required_object(&self, index: usize) -> Result<&'b Object> {
+        let o = self
+            .arr
+            .get(index)
+            .with_whatever_context(|| format!("index out of bounds: {}", index))?;
+        self.resolver
+            .resolve_reference(o)
+            .whatever_context("resolve reference")
+    }
+
+    /// Get optional object at index after resolving references
+    pub fn opt_object(&self, index: usize) -> Result<Option<&'b Object>> {
+        match self.arr.get(index) {
+            Some(o) => self
+                .resolver
+                .resolve_reference(o)
+                .map(Some)
+                .whatever_context("resolve reference"),
+            None => Ok(None),
+        }
+    }
+
+    /// Get length of array
+    pub fn len(&self) -> usize {
+        self.arr.len()
+    }
+
+    /// Check if array is empty
+    pub fn is_empty(&self) -> bool {
+        self.arr.is_empty()
+    }
+
+    /// Get iterator over array items
+    pub fn iter(&self) -> impl Iterator<Item = &Object> {
+        self.arr.iter()
+    }
+
+    /// Try to convert all items to type V
+    pub fn to_vec<V>(&self) -> Result<Vec<V>>
+    where
+        V: CreateFromSchemaDict<'a, 'b>,
+    {
+        self.arr
+            .iter()
+            .map(|o| V::create(o, self.resolver))
+            .collect::<Result<Vec<_>, _>>()
+            .whatever_context("SchemaArray to Vec")
+    }
+}
+
 /// Object id has id and generation, at runtime, generation
 /// is not used, RuntimeObjectId removes generation to save space.
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
