@@ -1,20 +1,23 @@
-use super::{Dictionary, Entry, Object, ObjectValueError, RuntimeObjectId};
+use super::{Dictionary, Entry, Object, ObjectValueError, ObjectWithResolver, RuntimeObjectId};
 use crate::file::EncryptDict;
 use nipdf_macro::pdf_object;
 
 /// Document id, two binary string.
 pub struct DocId(pub Box<[u8]>, pub Box<[u8]>);
 
-impl TryFrom<&Object> for DocId {
+impl TryFrom<ObjectWithResolver<'_, '_>> for DocId {
     type Error = ObjectValueError;
 
-    fn try_from(o: &Object) -> Result<Self, Self::Error> {
-        let arr = o.as_arr()?;
+    fn try_from(o: ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
+        let arr = o.into_schema_array()?;
         if arr.len() != 2 {
             return Err(ObjectValueError::UnexpectedType);
         }
 
-        Ok(Self(arr[0].as_bstr()?.into(), arr[1].as_bstr()?.into()))
+        Ok(Self(
+            arr.required_object(0)?.as_bstr()?.into(),
+            arr.required_object(1)?.as_bstr()?.into(),
+        ))
     }
 }
 

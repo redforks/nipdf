@@ -560,6 +560,18 @@ pub struct ObjectWithResolver<'a, 'b> {
     pub resolver: &'b ObjectResolver<'a>,
 }
 
+#[cfg(test)]
+pub(crate) fn try_from<
+    T: for<'a, 'b> TryFrom<ObjectWithResolver<'a, 'b>, Error = ObjectValueError>,
+>(
+    o: Object,
+) -> Result<T> {
+    let xref = crate::file::XRefTable::empty();
+    let resolver = ObjectResolver::empty(&xref);
+    let o = ObjectWithResolver::new(&o, &resolver)?;
+    T::try_from(o)
+}
+
 impl<'a, 'b> ObjectWithResolver<'a, 'b> {
     /// Create ObjectWithResolver from object and resolver, return error if resolve reference
     /// failed.
@@ -581,6 +593,10 @@ impl<'a, 'b> ObjectWithResolver<'a, 'b> {
     pub fn into_schema_array(self) -> Result<SchemaArray<'a, 'b>> {
         let arr = self.resolve_reference()?.as_arr()?;
         Ok(SchemaArray::new(arr, self.resolver))
+    }
+
+    pub fn into_object(self) -> &'b Object {
+        self.obj
     }
 }
 
@@ -992,17 +1008,17 @@ impl Object {
     }
 }
 
-impl<const N: usize> TryFrom<&Object> for [f32; N] {
+impl<const N: usize> TryFrom<ObjectWithResolver<'_, '_>> for [f32; N] {
     type Error = ObjectValueError;
 
-    fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.as_arr()?;
+    fn try_from(obj: ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
+        let arr = obj.into_schema_array()?;
         if arr.len() != N {
             return Err(ObjectValueError::UnexpectedType);
         }
         let mut r = [0.0; N];
-        for (i, v) in arr.iter().enumerate() {
-            r[i] = v.number()?;
+        for i in 0..N {
+            r[i] = arr.required_object(i)?.number()?;
         }
         Ok(r)
     }

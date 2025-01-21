@@ -1,7 +1,10 @@
 use crate::{
     ObjectValueError, Result,
     file::ObjectResolver,
-    object::{FromSchemaContainer, Object, PdfObject as _, RootPdfObject as _, RuntimeObjectId},
+    object::{
+        FromSchemaContainer, Object, ObjectWithResolver, PdfObject as _, RootPdfObject as _,
+        RuntimeObjectId,
+    },
 };
 use educe::Educe;
 #[cfg(test)]
@@ -37,27 +40,33 @@ pub fn default_domain() -> Domain {
     Domain::new(0.0, 1.0)
 }
 
-impl TryFrom<&Object> for Domain<f32> {
+impl TryFrom<ObjectWithResolver<'_, '_>> for Domain<f32> {
     type Error = ObjectValueError;
 
-    fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.as_arr()?;
+    fn try_from(obj: ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
+        let arr = obj.into_schema_array()?;
         if arr.len() != 2 {
             return Err(ObjectValueError::UnexpectedType);
         }
-        Ok(Self::new(arr[0].number()?, arr[1].number()?))
+        Ok(Self::new(
+            arr.required_object(0)?.number()?,
+            arr.required_object(1)?.number()?,
+        ))
     }
 }
 
-impl TryFrom<&Object> for Domain<u32> {
+impl TryFrom<ObjectWithResolver<'_, '_>> for Domain<u32> {
     type Error = ObjectValueError;
 
-    fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.as_arr()?;
+    fn try_from(obj: ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
+        let arr = obj.into_schema_array()?;
         if arr.len() != 2 {
             return Err(ObjectValueError::UnexpectedType);
         }
-        Ok(Self::new(arr[0].int()? as u32, arr[1].int()? as u32))
+        Ok(Self::new(
+            arr.required_object(0)?.int()? as u32,
+            arr.required_object(1)?.int()? as u32,
+        ))
     }
 }
 
@@ -79,6 +88,23 @@ impl TryFrom<&Object> for Domains<f32> {
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
             .for_each(|domain| domains.push(domain));
+        Ok(Self(domains))
+    }
+}
+
+impl TryFrom<ObjectWithResolver<'_, '_>> for Domains<f32> {
+    type Error = ObjectValueError;
+
+    fn try_from(obj: ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
+        let arr = obj.into_schema_array()?;
+        ensure_whatever!(arr.len() % 2 == 0, "even number of elements expected");
+        let mut domains = Vec::with_capacity(arr.len() / 2);
+        for i in (0..arr.len()).step_by(2) {
+            domains.push(Domain::new(
+                arr.required_object(i)?.number()?,
+                arr.required_object(i + 1)?.number()?,
+            ));
+        }
         Ok(Self(domains))
     }
 }

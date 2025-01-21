@@ -2,7 +2,7 @@ use crate::{
     ObjectValueError, Result,
     file::{Rectangle, ResourceDict},
     graphics::{NameOrDictByRef, NameOrStream, trans::GlyphToTextSpace},
-    object::{Object, Stream},
+    object::{Object, ObjectWithResolver, Stream},
 };
 use ahash::{HashMap, HashMapExt};
 use bitflags::bitflags;
@@ -203,19 +203,19 @@ impl CIDFontWidths {
     }
 }
 
-impl TryFrom<&Object> for CIDFontWidths {
+impl TryFrom<ObjectWithResolver<'_, '_>> for CIDFontWidths {
     type Error = ObjectValueError;
 
-    fn try_from(obj: &Object) -> Result<Self, Self::Error> {
+    fn try_from(obj: ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
         let mut widths = Vec::new();
-        let Object::Array(arr) = obj else {
-            return Err(Self::Error::UnexpectedType);
-        };
+        let arr = obj.into_schema_array()?;
 
-        let mut iter = arr.iter();
-        while let Some(first) = iter.next() {
-            let first = first.int()?;
-            let second = iter.next().ok_or(Self::Error::UnexpectedType)?;
+        let mut i = 0;
+        while i < arr.len() {
+            let first = arr.required_object(i)?.int()?;
+            i += 1;
+            let second = arr.required_object(i)?;
+            i += 1;
             match second {
                 Object::Array(arr) => {
                     let mut width = Vec::with_capacity(arr.len());
@@ -229,14 +229,16 @@ impl TryFrom<&Object> for CIDFontWidths {
                     widths.push(CIDFontWidthGroup::NConsecutive((first as u32, width)));
                 }
                 Object::Integer(last) => {
-                    let width = iter.next().ok_or(Self::Error::UnexpectedType)?;
+                    let width = arr
+                        .required_object(i)?
+                        .number()?
+                        .to_u16()
+                        .whatever_context::<_, ObjectValueError>("should be u16")?;
+                    i += 1;
                     widths.push(CIDFontWidthGroup::FirstLast {
                         first: first as u32,
                         last: *last as u32,
-                        width: width
-                            .number()?
-                            .to_u16()
-                            .whatever_context::<_, ObjectValueError>("should be u16")?,
+                        width,
                     });
                 }
                 _ => return Err(Self::Error::UnexpectedType),
@@ -379,23 +381,21 @@ impl EncodingDifferences<'_> {
 /// Parse Differences field in Encoding object, which is an array of
 /// character code and one or several glyph names. First name is mapped
 /// to character code, second name is mapped to character code + 1, and so on.
-impl<'b> TryFrom<&'b Object> for EncodingDifferences<'b> {
+impl<'b> TryFrom<ObjectWithResolver<'_, 'b>> for EncodingDifferences<'b> {
     type Error = ObjectValueError;
 
-    fn try_from(obj: &'b Object) -> Result<Self, Self::Error> {
+    fn try_from(obj: ObjectWithResolver<'_, 'b>) -> Result<Self, Self::Error> {
         let mut map = HashMap::new();
-        let Object::Array(arr) = obj else {
-            return Err(Self::Error::UnexpectedType);
-        };
+        let arr = obj.into_schema_array()?;
 
-        let mut iter = arr.iter();
-        let Some(o) = iter.next() else {
+        if arr.len() == 0 {
             return Ok(EncodingDifferences(map));
-        };
+        }
 
-        let mut code = o.int()?;
-        for o in iter {
-            match o {
+        let mut code = arr.required_object(0)?.int()?;
+
+        for i in 1..arr.len() {
+            match arr.required_object(i)? {
                 Object::Name(name) => {
                     map.insert(
                         code.try_into()
@@ -413,7 +413,6 @@ impl<'b> TryFrom<&'b Object> for EncodingDifferences<'b> {
         Ok(EncodingDifferences(map))
     }
 }
-
 /// Encoding object for Non Type0 and Type3 fonts
 #[pdf_object(Some("Encoding"))]
 pub trait EncodingDictTrait {

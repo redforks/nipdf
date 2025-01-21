@@ -4,7 +4,7 @@ use crate::{
     file::Rectangle,
     function::{Domain, Function, default_domain},
     graphics::{ColorArgs, ColorSpaceArgs},
-    object::Object,
+    object::{Object, ObjectWithResolver},
 };
 use nipdf_macro::{TryFromIntObject, pdf_object};
 use prescript::sname;
@@ -39,15 +39,15 @@ impl Extend {
     }
 }
 
-impl TryFrom<&Object> for Extend {
+impl TryFrom<ObjectWithResolver<'_, '_>> for Extend {
     type Error = ObjectValueError;
 
-    fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.as_arr()?;
+    fn try_from(obj: ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
+        let arr = obj.into_schema_array()?;
         if arr.len() != 2 {
             return Err(ObjectValueError::UnexpectedType);
         }
-        Ok(Self(arr[0].bool()?, arr[1].bool()?))
+        Ok(Self(arr.required(0)?, arr.required(1)?))
     }
 }
 
@@ -57,17 +57,23 @@ pub struct AxialCoords {
     pub end: Point,
 }
 
-impl TryFrom<&Object> for AxialCoords {
+impl TryFrom<ObjectWithResolver<'_, '_>> for AxialCoords {
     type Error = ObjectValueError;
 
-    fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.as_arr()?;
+    fn try_from(obj: ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
+        let arr = obj.into_schema_array()?;
         if arr.len() != 4 {
             return Err(ObjectValueError::UnexpectedType);
         }
         Ok(Self {
-            start: Point::new(arr[0].number()?, arr[1].number()?),
-            end: Point::new(arr[2].number()?, arr[3].number()?),
+            start: Point::new(
+                arr.required_object(0)?.number()?,
+                arr.required_object(1)?.number()?,
+            ),
+            end: Point::new(
+                arr.required_object(2)?.number()?,
+                arr.required_object(3)?.number()?,
+            ),
         })
     }
 }
@@ -110,22 +116,28 @@ pub struct RadialCoords {
     pub end: RadialCircle,
 }
 
-impl TryFrom<&Object> for RadialCoords {
+impl TryFrom<ObjectWithResolver<'_, '_>> for RadialCoords {
     type Error = ObjectValueError;
 
-    fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.as_arr()?;
+    fn try_from(obj: ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
+        let arr = obj.into_schema_array()?;
         if arr.len() != 6 {
             return Err(ObjectValueError::UnexpectedType);
         }
         Ok(Self {
             start: RadialCircle {
-                point: Point::new(arr[0].number()?, arr[1].number()?),
-                r: arr[2].number()?,
+                point: Point::new(
+                    arr.required_object(0)?.number()?,
+                    arr.required_object(1)?.number()?,
+                ),
+                r: arr.required_object(2)?.number()?,
             },
             end: RadialCircle {
-                point: Point::new(arr[3].number()?, arr[4].number()?),
-                r: arr[5].number()?,
+                point: Point::new(
+                    arr.required_object(3)?.number()?,
+                    arr.required_object(4)?.number()?,
+                ),
+                r: arr.required_object(5)?.number()?,
             },
         })
     }

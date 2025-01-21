@@ -2,8 +2,8 @@ use crate::{
     ObjectValueError,
     graphics::trans::TextToUserSpace,
     object::{
-        Array, Dictionary, InlineImage, InlineStream, Object, RuntimeObjectId, Stream, TextString,
-        TextStringOrNumber,
+        Array, Dictionary, InlineImage, InlineStream, Object, ObjectWithResolver, RuntimeObjectId,
+        Stream, TextString, TextStringOrNumber,
     },
     parser::{self, eol3, whitespace, wsc_prefixed0, wsc0},
 };
@@ -33,21 +33,21 @@ pub(crate) use pattern::*;
 pub mod shading;
 pub use shading::{Extend, RadialCircle};
 
-impl<S, T> TryFrom<&Object> for Transform2D<f32, S, T> {
+impl<S, T> TryFrom<ObjectWithResolver<'_, '_>> for Transform2D<f32, S, T> {
     type Error = ObjectValueError;
 
-    fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        let arr = obj.as_arr()?;
+    fn try_from(obj: ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
+        let arr = obj.into_schema_array()?;
         if arr.len() != 6 {
             return Err(ObjectValueError::UnexpectedType);
         }
         Ok(Self::new(
-            arr[0].number()?,
-            arr[1].number()?,
-            arr[2].number()?,
-            arr[3].number()?,
-            arr[4].number()?,
-            arr[5].number()?,
+            arr.required_object(0)?.number()?,
+            arr.required_object(1)?.number()?,
+            arr.required_object(2)?.number()?,
+            arr.required_object(3)?.number()?,
+            arr.required_object(4)?.number()?,
+            arr.required_object(5)?.number()?,
         ))
     }
 }
@@ -141,6 +141,22 @@ impl<'b> TryFrom<&'b Object> for ColorSpaceArgs {
     }
 }
 
+impl TryFrom<ObjectWithResolver<'_, '_>> for ColorSpaceArgs {
+    type Error = ObjectValueError;
+
+    fn try_from(obj: ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
+        match obj.obj {
+            Object::Name(name) => Ok(Self::Name(name.clone())),
+            Object::Array(arr) => Ok(Self::Array(arr.clone())),
+            Object::Reference(id) => Ok(Self::Ref(id.into())),
+            _ => {
+                error!("Can not parse ColorSpaceArgs from {:?}", obj.obj);
+                Err(ObjectValueError::GraphicsOperationSchemaError)
+            }
+        }
+    }
+}
+
 impl<'b> ConvertFromObject<'b> for ColorSpaceArgs {
     fn convert_from_object(objects: &'b mut Vec<Object>) -> Result<Self, ObjectValueError> {
         let o = objects
@@ -171,22 +187,24 @@ impl<'b, const N: usize> ConvertFromObject<'b> for [f32; N] {
     }
 }
 
-impl TryFrom<&Object> for ColorArgs {
+impl TryFrom<ObjectWithResolver<'_, '_>> for ColorArgs {
     type Error = ObjectValueError;
 
-    fn try_from(obj: &Object) -> Result<Self, Self::Error> {
-        Ok(Self(match obj {
-            Object::Array(arr) => match arr.len() {
-                1 => vec![arr[0].number()?],
-                3 => vec![arr[0].number()?, arr[1].number()?, arr[2].number()?],
-                4 => vec![
-                    arr[0].number()?,
-                    arr[1].number()?,
-                    arr[2].number()?,
-                    arr[3].number()?,
-                ],
-                _ => return Err(ObjectValueError::GraphicsOperationSchemaError),
-            },
+    fn try_from(obj: ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
+        let arr = obj.into_schema_array()?;
+        Ok(Self(match arr.len() {
+            1 => vec![arr.required_object(0)?.number()?],
+            3 => vec![
+                arr.required_object(0)?.number()?,
+                arr.required_object(1)?.number()?,
+                arr.required_object(2)?.number()?,
+            ],
+            4 => vec![
+                arr.required_object(0)?.number()?,
+                arr.required_object(1)?.number()?,
+                arr.required_object(2)?.number()?,
+                arr.required_object(3)?.number()?,
+            ],
             _ => return Err(ObjectValueError::GraphicsOperationSchemaError),
         }))
     }
@@ -243,11 +261,11 @@ pub enum NameOrDictByRef<'b> {
     Dict(&'b Dictionary),
 }
 
-impl<'b> TryFrom<&'b Object> for NameOrDictByRef<'b> {
+impl<'a, 'b> TryFrom<ObjectWithResolver<'a, 'b>> for NameOrDictByRef<'b> {
     type Error = ObjectValueError;
 
-    fn try_from(obj: &'b Object) -> Result<Self, Self::Error> {
-        match obj {
+    fn try_from(o: ObjectWithResolver<'a, 'b>) -> Result<Self, Self::Error> {
+        match o.obj {
             Object::Name(name) => Ok(NameOrDictByRef::Name(name)),
             Object::Dictionary(dict) => Ok(NameOrDictByRef::Dict(dict)),
             _ => Err(ObjectValueError::GraphicsOperationSchemaError),
@@ -269,11 +287,11 @@ impl NameOrStream<'_> {
     }
 }
 
-impl<'b> TryFrom<&'b Object> for NameOrStream<'b> {
+impl<'a, 'b> TryFrom<ObjectWithResolver<'a, 'b>> for NameOrStream<'b> {
     type Error = ObjectValueError;
 
-    fn try_from(obj: &'b Object) -> Result<Self, Self::Error> {
-        match obj {
+    fn try_from(obj: ObjectWithResolver<'a, 'b>) -> Result<Self, Self::Error> {
+        match obj.obj {
             Object::Name(name) => Ok(NameOrStream::Name(name)),
             Object::Stream(stream) => Ok(NameOrStream::Stream(stream)),
             _ => Err(ObjectValueError::GraphicsOperationSchemaError),

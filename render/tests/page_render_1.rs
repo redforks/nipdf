@@ -27,7 +27,7 @@ fn decode_image(id: u32) -> Result<String> {
     let path = "../nipdf/sample_files/bizarre/pdfReferenceUpdated.pdf";
     let buf = std::fs::read(path).whatever_context("parse pdf file")?;
     let f = File::parse(buf, "").unwrap_or_else(|_| panic!("failed to parse {path:?}"));
-    let resolver = f.resolver()?;
+    let resolver = f.resolver().whatever_context("get object resolver")?;
     let obj = resolver.resolve(id).whatever_context("resolve object")?;
     let image = obj
         .as_stream()

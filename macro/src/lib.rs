@@ -36,6 +36,13 @@ pub fn try_from_name_object(input: TokenStream) -> TokenStream {
             }
         }
 
+        impl<'a, 'b> TryFrom<crate::object::ObjectWithResolver<'a, 'b>> for #t {
+            type Error = crate::ObjectValueError;
+            fn try_from(object: crate::object::ObjectWithResolver<'a, 'b>) -> Result<Self, Self::Error> {
+                object.into_object().try_into()
+            }
+        }
+
         impl<'b> crate::graphics::ConvertFromObject<'b> for #t {
             fn convert_from_object(objects: &'b mut Vec<crate::object::Object>) -> Result<Self, crate::ObjectValueError> {
                 let o = objects.pop().unwrap();
@@ -71,9 +78,16 @@ pub fn try_from_int_object(input: TokenStream) -> TokenStream {
             parse_quote!( #digit=> Ok(#t::#b))
         });
     let tokens = quote! {
-        impl<'b> TryFrom<&'b crate::object::Object> for #t {
+        impl<'a, 'b> TryFrom<crate::object::ObjectWithResolver<'a, 'b>> for #t {
             type Error = crate::ObjectValueError;
-            fn try_from(object: &'b crate::object::Object) -> Result<Self, Self::Error> {
+            fn try_from(object: crate::object::ObjectWithResolver<'a, 'b>) -> Result<Self, Self::Error> {
+                 object.into_object().try_into()
+            }
+        }
+
+        impl TryFrom<&crate::object::Object> for #t {
+            type Error = crate::ObjectValueError;
+            fn try_from(object: &crate::object::Object) -> Result<Self, Self::Error> {
                 let n = object.int()?;
                 match n {
                     #( #arms, )*
@@ -99,11 +113,11 @@ pub fn try_from_int_object_for_bitflags(input: TokenStream) -> TokenStream {
     let t = parse_macro_input!(input as ItemStruct);
     let t = t.ident;
     let tokens = quote! {
-        impl TryFrom<&crate::object::Object> for #t {
+        impl TryFrom<crate::object::ObjectWithResolver<'_, '_>> for #t {
             type Error = crate::ObjectValueError;
 
-            fn try_from(object: &crate::object::Object) -> Result<Self, Self::Error> {
-                let n = object.int()?;
+            fn try_from(object: crate::object::ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
+                let n = object.into_object().int()?;
                 Ok(<#t as bitflags::Flags>::from_bits_truncate(n as u32))
             }
         }

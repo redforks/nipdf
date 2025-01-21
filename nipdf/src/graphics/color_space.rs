@@ -4,7 +4,7 @@ use crate::{
     file::{ObjectResolver, ResourceDict},
     function::{Domain, Domains, Function},
     graphics::ICCStreamDict,
-    object::{FromSchemaContainer, Object},
+    object::{FromSchemaContainer, Object, ObjectWithResolver},
 };
 use educe::Educe;
 use nipdf_macro::pdf_object;
@@ -157,8 +157,7 @@ where
                 let obj = resolver
                     .resolve(*id)
                     .whatever_context::<_, ObjectValueError>("resolve object")?;
-                let args = ColorSpaceArgs::try_from(obj)
-                    .whatever_context::<_, ObjectValueError>("parse ColorSpaceArgs")?;
+                let args = ColorSpaceArgs::try_from(ObjectWithResolver::new(obj, resolver)?)?;
                 Self::from_args(&args, resolver, resources)
             }
             ColorSpaceArgs::Name(name) => match name.as_str() {
@@ -204,8 +203,8 @@ where
                 }
                 "Separation" => {
                     ensure_whatever!(4 == arr.len(), "Separation color space args length");
-                    let alternate = ColorSpaceArgs::try_from(&arr[2])
-                        .whatever_context::<_, ObjectValueError>("parse alternate")?;
+                    let alternate =
+                        ColorSpaceArgs::try_from(ObjectWithResolver::new(&arr[2], resolver)?)?;
                     let function: Box<dyn Function> =
                         Box::<dyn Function>::create(&arr[3], resolver)
                             .whatever_context::<_, ObjectValueError>(
@@ -219,8 +218,8 @@ where
                 }
                 "Indexed" => {
                     ensure_whatever!(4 == arr.len(), "Indexed color space args length");
-                    let base = ColorSpaceArgs::try_from(&arr[1])
-                        .whatever_context::<_, ObjectValueError>("parse base")?;
+                    let base =
+                        ColorSpaceArgs::try_from(ObjectWithResolver::new(&arr[1], resolver)?)?;
                     let base: ColorSpace<T> =
                         Self::from_args(&base, resolver, resources)
                             .whatever_context::<_, ObjectValueError>("parse base color space")?;
@@ -256,8 +255,8 @@ where
                     let base = arr
                         .get(1)
                         .map(|args| {
-                            let base = ColorSpaceArgs::try_from(args)
-                                .whatever_context::<_, ObjectValueError>("parse base")?;
+                            let base =
+                                ColorSpaceArgs::try_from(ObjectWithResolver::new(args, resolver)?)?;
                             Self::from_args(&base, resolver, resources)
                         })
                         .transpose()?;
@@ -282,8 +281,8 @@ where
                     );
 
                     let n = names.len();
-                    let alternate = ColorSpaceArgs::try_from(&arr[2])
-                        .whatever_context::<_, ObjectValueError>("parse alternate colorspace")?;
+                    let alternate =
+                        ColorSpaceArgs::try_from(ObjectWithResolver::new(&arr[2], resolver)?)?;
                     let f: Box<dyn Function> = Box::<dyn Function>::create(&arr[3], resolver)
                         .whatever_context::<_, ObjectValueError>(
                         "DeviceN function should be root object",

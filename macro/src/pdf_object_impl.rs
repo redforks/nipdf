@@ -533,10 +533,16 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             gen_option_method(
                 try_from_type,
                 |ty| {
-                    quote! { self.d.opt_object(&prescript::sname(#key))?.map(|d| <#ty>::try_from(d)).transpose() }
+                    quote! {
+                        let d: Option<crate::object::ObjectWithResolver> = self.d.opt(&prescript::sname(#key))?;
+                        d.map(|d| <#ty>::try_from(d)).transpose()
+                    }
                 },
                 |ty| {
-                    quote! { <#ty>::try_from(self.d.required_object(&prescript::sname(#key))?) }
+                    quote! {
+                        let d: crate::object::ObjectWithResolver = self.d.required(&prescript::sname(#key))?;
+                        <#ty>::try_from(d)
+                    }
                 },
             )
         } else if let Some(try_from_type) = deep_resolve_try_from(rt, attrs) {

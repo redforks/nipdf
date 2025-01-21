@@ -2,7 +2,7 @@ use super::*;
 use crate::{
     file::{decode_stream, test_file},
     function::Domain,
-    object::Name,
+    object::{Name, try_from},
 };
 use miniz_oxide::deflate::compress_to_vec;
 use snafu::ResultExt;
@@ -129,7 +129,7 @@ fn image_mask_try_from_object() {
             0.2.into(), 0.8.into(), // domain 3
         ].into(),
     );
-    let mask = ImageMask::try_from(&o).unwrap();
+    let mask = try_from::<ImageMask>(o).unwrap();
     assert_eq!(
         mask,
         ImageMask::ColorKey(Domains(vec![
@@ -147,7 +147,7 @@ fn image_mask_try_from_object() {
         ObjectId::empty(),
     );
     let o = Object::Stream(stream.clone());
-    let mask = ImageMask::try_from(&o).unwrap();
+    let mask = try_from::<ImageMask>(o).unwrap();
     assert_eq!(mask, ImageMask::Explicit(Rc::new(stream)));
 }
 

@@ -1,4 +1,4 @@
-use super::{Dictionary, Object, ObjectId, ObjectValueError, SchemaDict};
+use super::{Dictionary, Object, ObjectId, ObjectValueError, ObjectWithResolver, SchemaDict};
 use crate::{
     Result,
     ccitt::{Algorithm as CCITTAlgorithm, Flags},
@@ -834,10 +834,11 @@ pub enum ImageMask {
     ColorKey(Domains),
 }
 
-impl TryFrom<&Object> for ImageMask {
+impl TryFrom<ObjectWithResolver<'_, '_>> for ImageMask {
     type Error = ObjectValueError;
 
-    fn try_from(v: &Object) -> Result<Self, Self::Error> {
+    fn try_from(v: ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
+        let v = v.into_object();
         Ok(match v {
             Object::Stream(s) => Self::Explicit(Rc::new(s.clone())),
             Object::Array(_) => {
@@ -904,11 +905,11 @@ impl<'a: 'b, 'b> TryFrom<&CCITTFaxDecodeParamsDict<'a, 'b>> for Flags {
     }
 }
 
-impl<'b> TryFrom<&'b Object> for CCITTAlgorithm {
+impl<'a, 'b> TryFrom<ObjectWithResolver<'a, 'b>> for CCITTAlgorithm {
     type Error = ObjectValueError;
 
-    fn try_from(v: &'b Object) -> Result<Self, Self::Error> {
-        Ok(match v.int()? {
+    fn try_from(v: ObjectWithResolver<'a, 'b>) -> Result<Self, Self::Error> {
+        Ok(match v.into_object().int()? {
             0 => Self::Group3_1D,
             k @ 1.. => Self::Group3_2D(
                 k.try_into()

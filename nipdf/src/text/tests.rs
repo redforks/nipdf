@@ -1,11 +1,15 @@
 use super::*;
+use crate::file::ObjectResolver;
 use prescript::sname;
 
 #[test]
 fn try_from_object_encoding_differences() {
     // empty
     let obj = Object::Array(vec![].into());
-    let res = EncodingDifferences::try_from(&obj).unwrap();
+    let xref = crate::file::XRefTable::empty();
+    let resolver = ObjectResolver::empty(&xref);
+    let o = ObjectWithResolver::new(&obj, &resolver).unwrap();
+    let res: EncodingDifferences<'_> = o.try_into().unwrap();
     assert!(res.0.is_empty());
 
     // normal
@@ -19,7 +23,8 @@ fn try_from_object_encoding_differences() {
         ]
         .into(),
     );
-    let res = EncodingDifferences::try_from(&obj).unwrap();
+    let o = ObjectWithResolver::new(&obj, &resolver).unwrap();
+    let res: EncodingDifferences<'_> = o.try_into().unwrap();
     assert_eq!(res.0.len(), 3);
     assert_eq!(res.0[&1], "A");
     assert_eq!(res.0[&3], "B");

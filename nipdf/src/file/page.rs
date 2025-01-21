@@ -210,24 +210,17 @@ pub trait FormXObjectDictTrait {
 #[educe(Deref)]
 pub struct ColorSpaceResources(HashMap<Name, ColorSpaceArgs>);
 
-impl<'b> TryFrom<&'b Object> for ColorSpaceResources {
+impl<'a, 'b> TryFrom<ObjectWithResolver<'a, 'b>> for ColorSpaceResources {
     type Error = ObjectValueError;
 
-    fn try_from(object: &'b Object) -> Result<Self, Self::Error> {
+    fn try_from(object: ObjectWithResolver<'a, 'b>) -> Result<Self, Self::Error> {
         let mut map = HashMap::new();
-        match object {
-            Object::Dictionary(dict) => {
-                for (k, v) in dict.iter() {
-                    let cs = ColorSpaceArgs::try_from(v)?;
-                    map.insert(k.clone(), cs);
-                }
-                Ok(Self(map))
-            }
-            _ => {
-                error!("{:?}", object);
-                Err(ObjectValueError::GraphicsOperationSchemaError)
-            }
+        let d = object.into_schema_dict()?;
+        for (k, v) in d.dict().iter() {
+            let cs = ColorSpaceArgs::try_from(ObjectWithResolver::new(v, d.resolver())?)?;
+            map.insert(k.clone(), cs);
         }
+        Ok(Self(map))
     }
 }
 
