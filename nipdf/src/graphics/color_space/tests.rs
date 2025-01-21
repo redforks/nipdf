@@ -22,6 +22,14 @@ fn rgb_to_rgb() {
 }
 
 #[test]
+fn fix_rgb_f32_as_u8() {
+    let color_space = DeviceRGB;
+    let color = [1f32, 255., 0.];
+    let rgba = color_space.to_rgba(&color);
+    assert_eq!(rgba.unwrap(), [1.0 / 255.0, 1.0, 0., 1.0]);
+}
+
+#[test]
 fn cmyk_to_rgb() {
     let color_space = DeviceCMYK;
     let color = [0, 0, 0, 0];

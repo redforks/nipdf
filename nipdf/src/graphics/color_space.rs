@@ -22,6 +22,11 @@ pub trait ColorComp: Copy + Debug + PartialOrd {
     /// Max value of color component, for float color component must be 1.0
     fn max_color() -> Self;
 
+    /// Fix float color component as u8 color component.
+    ///
+    /// Sometimes 255.0 used, actually should be 1.0, used u8 color value in f32 color space
+    fn fix_f32_as_u8(self) -> Self;
+
     /// Clamp color component to range [min_color(), max_color()]
     fn clamp(self) -> Self {
         if self < Self::min_color() {
@@ -78,6 +83,10 @@ impl ColorComp for u8 {
     fn max_color() -> Self {
         255
     }
+
+    fn fix_f32_as_u8(self) -> Self {
+        self
+    }
 }
 
 impl ColorComp for f32 {
@@ -87,6 +96,10 @@ impl ColorComp for f32 {
 
     fn max_color() -> Self {
         1.0
+    }
+
+    fn fix_f32_as_u8(self) -> Self {
+        self / 255.0
     }
 }
 
@@ -132,7 +145,7 @@ pub enum ColorSpace<T: Debug + PartialEq = f32> {
     DeviceN(Box<DeviceNColorSpace<T>>),
     Lab(LabColorSpace),
     CalGray(CalGrayColorSpace),
-    /// Without this, complier complains T is not referenced in any of enum branches
+    /// Without this, compiler complains T is not referenced in any of enum branches
     _Phantom(T),
 }
 
@@ -438,6 +451,14 @@ impl<T: ColorComp> ColorSpaceTrait<T> for DeviceRGB {
             color.len() > 2,
             "DeviceRGB color must have at least 3 components"
         );
+        if color.iter().take(3).any(|c| c > &T::max_color()) {
+            return Ok([
+                color[0].fix_f32_as_u8(),
+                color[1].fix_f32_as_u8(),
+                color[2].fix_f32_as_u8(),
+                T::max_color(),
+            ]);
+        }
         Ok([color[0], color[1], color[2], T::max_color()])
     }
 
