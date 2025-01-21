@@ -19,7 +19,7 @@ use nipdf_macro::pdf_object;
 use once_cell::unsync::OnceCell;
 use prescript::{Name, ParserError, sname};
 use snafu::{OptionExt as _, Report, ResultExt as _, Snafu, ensure_whatever, whatever};
-use std::{borrow::Cow, iter::repeat_with};
+use std::iter::repeat_with;
 use winnow::{
     Located, PResult, Parser as _,
     combinator::{alt, repeat, rest, terminated},
@@ -494,58 +494,6 @@ impl<'a> ObjectResolver<'a> {
             self.resolve(id)
         } else {
             Ok(v)
-        }
-    }
-
-    /// Recursively resolves references in an object and its nested structures.
-    /// If the object is a reference, resolves it. If it's a dictionary or array,
-    /// recursively resolves any references within it.
-    ///
-    /// Stream not hndled, because stream won't exist in Dictionary.
-    pub fn resolve_deep_reference<'b>(
-        &'b self,
-        v: &'b Object,
-    ) -> Result<Cow<'b, Object>, ObjectValueError> {
-        match v {
-            Object::Reference(id) => Ok(Cow::Owned(self.resolve(id)?.clone())),
-            Object::Dictionary(dict) => {
-                let mut modified = false;
-                let mut new_dict = HashMap::with_capacity(dict.len());
-
-                for (key, value) in dict.iter() {
-                    let resolved = self.resolve_deep_reference(value)?;
-                    if matches!(resolved, Cow::Owned(_)) {
-                        modified = true;
-                    }
-                    new_dict.insert(key.clone(), resolved.into_owned());
-                }
-
-                if modified {
-                    Ok(Cow::Owned(Object::Dictionary(Dictionary::from(new_dict))))
-                } else {
-                    Ok(Cow::Borrowed(v))
-                }
-            }
-            Object::Array(arr) => {
-                let mut modified = false;
-                let mut new_arr = Vec::with_capacity(arr.len());
-
-                for item in arr.iter() {
-                    let resolved = self.resolve_deep_reference(item)?;
-                    if matches!(resolved, Cow::Owned(_)) {
-                        modified = true;
-                    }
-                    new_arr.push(resolved.into_owned());
-                }
-
-                if modified {
-                    Ok(Cow::Owned(Object::Array(new_arr.into())))
-                } else {
-                    Ok(Cow::Borrowed(v))
-                }
-            }
-            // For other types, return as-is
-            _ => Ok(Cow::Borrowed(v)),
         }
     }
 
