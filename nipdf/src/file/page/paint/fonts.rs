@@ -5,7 +5,7 @@ use crate::{
         NameOrDictByRef, NameOrStream, Operation, Point, parse_operations,
         trans::{GlyphLength, GlyphToTextSpace},
     },
-    object::{PdfObject, PdfObjectCore as _, Stream},
+    object::{Dictionary, Object, PdfObject, PdfObjectCore as _, Stream},
     text::{
         CIDFontType, CIDFontWidths, EncodingDict, EncodingDifferences, FontDescriptorDict,
         FontDescriptorFlags, FontDict, FontType, Type0FontDict, Type3FontDict,
@@ -779,25 +779,39 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
     fn load_ttf_parser_font<'a, 'b>(
         font_type: FontType,
         font: FontDict<'a, 'b>,
-        desc: &FontDescriptorDict<'a, 'b>,
+        desc: Option<&FontDescriptorDict<'a, 'b>>,
     ) -> Result<Box<dyn Font<P> + 'b>> {
-        let (is_embed, ttf_bytes) = match desc.font_file2()? {
-            Some(stream) => {
-                // if font is invalid, load from os
-                let bytes = Self::load_embed_font_bytes(desc.resolver(), stream)?;
-                match TTFFace::parse(&bytes, 0) {
-                    Result::Ok(_) => (true, bytes),
-                    Err(e) => {
-                        warn!(
-                            "Failed load embed ttf-font '{}', try load from OS: {}",
-                            desc.font_name()?,
-                            e
-                        );
-                        (false, Self::load_true_type_from_os(desc)?)
+        let (is_embed, ttf_bytes) = match desc {
+            Some(desc) => {
+                match desc.font_file2()? {
+                    Some(stream) => {
+                        // if font is invalid, load from os
+                        let bytes = Self::load_embed_font_bytes(desc.resolver(), stream)?;
+                        match TTFFace::parse(&bytes, 0) {
+                            Result::Ok(_) => (true, bytes),
+                            Err(e) => {
+                                warn!(
+                                    "Failed load embed ttf-font '{}', try load from OS: {}",
+                                    desc.font_name()?,
+                                    e
+                                );
+                                (false, Self::load_true_type_from_os(desc)?)
+                            }
+                        }
                     }
+                    None => (false, Self::load_true_type_from_os(desc)?),
                 }
             }
-            None => (false, Self::load_true_type_from_os(desc)?),
+            None => {
+                let d: Dictionary = [
+                    (sname("FontName"), Object::Name(font.base_font()?)),
+                    (sname("Flags"), Object::Integer(0)),
+                ]
+                .into_iter()
+                .collect();
+                let desc = FontDescriptorDict::new(&d, font.resolver())?;
+                (false, Self::load_true_type_from_os(&desc)?)
+            }
         };
         if font_type == FontType::Type0 {
             Ok(Box::new(CIDFontType2Font::new(is_embed, ttf_bytes, font)?))
@@ -857,13 +871,11 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         match font.subtype()? {
             FontType::TrueType => {
                 let tt = font.truetype()?;
-                let desc = tt
-                    .font_descriptor()?
-                    .whatever_context::<_, ObjectValueError>("get true type font desc")?;
+                let desc = tt.font_descriptor()?;
                 Ok(Some(Self::load_ttf_parser_font(
                     FontType::TrueType,
                     font,
-                    &desc,
+                    desc.as_ref(),
                 )?))
             }
 
@@ -899,7 +911,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                         Ok(Some(Self::load_ttf_parser_font(
                             FontType::Type0,
                             font,
-                            &desc,
+                            Some(&desc),
                         )?))
                     }
                 }
@@ -918,7 +930,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                     Ok(Some(Self::load_ttf_parser_font(
                         FontType::Type1,
                         font,
-                        &desc,
+                        Some(&desc),
                     )?))
                 }),
 
