@@ -1200,7 +1200,7 @@ impl Stream {
     }
 
     /// Guess stream is image or not.
-    pub fn guess_is_image<'a>(&self, resolver: &ObjectResolver<'a>) -> bool {
+    pub fn guess_is_image(&self, resolver: &ObjectResolver<'_>) -> bool {
         ImageDict::new(&self.0, resolver).is_ok()
     }
 

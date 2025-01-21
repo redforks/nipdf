@@ -23,7 +23,7 @@ fn read_sample_file(file_path: impl AsRef<std::path::Path>) -> Vec<u8> {
 fn render_page_no(file_path: impl AsRef<std::path::Path>, no: usize) -> Result<RgbaImage> {
     let buf = read_sample_file(file_path);
     let f = File::parse(buf, "").whatever_context("parse pdf file")?;
-    let resolver = f.resolver()?;
+    let resolver = f.resolver().whatever_context("get resolver")?;
     let pages = f
         .catalog(&resolver)
         .whatever_context("parse catalog")?

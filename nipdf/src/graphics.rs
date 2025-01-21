@@ -684,10 +684,7 @@ where
             }
             return Ok(r);
         }
-        let oo = object_or_operator.parse_next(buf).map_err(|e| {
-            dbg!(&buf);
-            e
-        })?;
+        let oo = object_or_operator.parse_next(buf)?;
         match oo {
             ObjectOrOperator::Object(o) => operands.push(o),
             ObjectOrOperator::Operator(op) => {

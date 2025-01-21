@@ -4,7 +4,7 @@ use crate::{
     file::Rectangle,
     function::{Domain, Function, default_domain},
     graphics::{ColorArgs, ColorSpaceArgs},
-    object::{Object, ObjectWithResolver},
+    object::ObjectWithResolver,
 };
 use nipdf_macro::{TryFromIntObject, pdf_object};
 use prescript::sname;

@@ -1,4 +1,4 @@
-use super::{Dictionary, Entry, Object, ObjectValueError, ObjectWithResolver, RuntimeObjectId};
+use super::{Dictionary, Entry, ObjectValueError, ObjectWithResolver, RuntimeObjectId};
 use crate::file::EncryptDict;
 use nipdf_macro::pdf_object;
 

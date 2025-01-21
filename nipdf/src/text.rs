@@ -388,7 +388,7 @@ impl<'b> TryFrom<ObjectWithResolver<'_, 'b>> for EncodingDifferences<'b> {
         let mut map = HashMap::new();
         let arr = obj.into_schema_array()?;
 
-        if arr.len() == 0 {
+        if arr.is_empty() {
             return Ok(EncodingDifferences(map));
         }
 

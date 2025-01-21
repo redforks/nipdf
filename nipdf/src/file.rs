@@ -175,7 +175,7 @@ impl XRefTable {
         Ok(Self::new(id_offset))
     }
 
-    fn scan(frame_set: &Vec<Frame>) -> HashMap<RuntimeObjectId, ObjectPos> {
+    fn scan(frame_set: &[Frame]) -> HashMap<RuntimeObjectId, ObjectPos> {
         let mut r = HashMap::with_capacity(5000);
         for (id, entry) in frame_set.iter().rev().flat_map(|f| f.xref_section.iter()) {
             if entry.is_used() {
@@ -187,7 +187,7 @@ impl XRefTable {
         r
     }
 
-    pub fn from_frame_set(frame_set: &Vec<Frame>) -> Self {
+    pub fn from_frame_set(frame_set: &[Frame]) -> Self {
         Self::new(Self::scan(frame_set))
     }
 

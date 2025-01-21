@@ -234,12 +234,12 @@ impl<'a, 'b> FromSchemaContainer<'a, 'b> for Box<dyn Function> {
                 let domain = dict
                     .get(&sname("Domain"))
                     .ok_or(ObjectValueError::DictKeyNotFound)
-                    .and_then(|o| Domains::try_from(o))?;
+                    .and_then(Domains::try_from)?;
 
                 let range = dict
                     .get(&sname("Range"))
                     .ok_or(ObjectValueError::DictKeyNotFound)
-                    .and_then(|o| Domains::try_from(o))?;
+                    .and_then(Domains::try_from)?;
 
                 let signature = Type04Signature::new(domain, range);
 

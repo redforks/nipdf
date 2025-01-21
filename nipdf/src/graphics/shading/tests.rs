@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    file::{ObjectResolver, XRefTable},
-    object::try_from,
-};
+use crate::object::try_from;
 
 #[test]
 fn radial_coords_try_from() {

@@ -91,20 +91,16 @@ impl ObjectValueError {
                 ObjectValueError::ObjectResolveError { .. } => true,
 
                 // Recursively check source for GenericError
-                ObjectValueError::GenericError { source, .. } => {
-                    if let Some(source) = source {
-                        Self::is_object_resolve_error(source.as_ref())
-                    } else {
-                        false
-                    }
-                }
+                ObjectValueError::GenericError {
+                    source: Some(source),
+                    ..
+                } => Self::is_object_resolve_error(source.as_ref()),
 
                 // All other error variants
                 _ => false,
             }
         } else {
-            err.source()
-                .map_or(false, |source| Self::is_object_resolve_error(source))
+            err.source().is_some_and(Self::is_object_resolve_error)
         }
     }
 }

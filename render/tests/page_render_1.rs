@@ -163,7 +163,7 @@ fn render(f: &str) -> Result<()> {
                 let url = url.trim();
                 let mut err = Ok(());
                 for url in url.lines().filter(|f| !f.is_empty()) {
-                    err = download_file(&url, &pdf_file);
+                    err = download_file(url, &pdf_file);
                     if err.is_ok() {
                         break;
                     }

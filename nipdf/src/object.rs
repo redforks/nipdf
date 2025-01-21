@@ -1017,8 +1017,8 @@ impl<const N: usize> TryFrom<ObjectWithResolver<'_, '_>> for [f32; N] {
             return Err(ObjectValueError::UnexpectedType);
         }
         let mut r = [0.0; N];
-        for i in 0..N {
-            r[i] = arr.required_object(i)?.number()?;
+        for (i, item) in r.iter_mut().enumerate().take(N) {
+            *item = arr.required_object(i)?.number()?;
         }
         Ok(r)
     }

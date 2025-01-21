@@ -6,14 +6,13 @@ use crate::{
         RenderingIntent, parse_operations, shading::ShadingDict, trans::FormToUserSpace,
     },
     object::{
-        Dictionary, ImageMask, Object, ObjectWithResolver, PdfObject, PdfObjectCore as _,
+        Dictionary, ImageMask, ObjectWithResolver, PdfObject, PdfObjectCore as _,
         RootPdfObject as _, RuntimeObjectId, Stream,
     },
     text::FontDict,
 };
 use ahash::{HashMap, HashMapExt};
 use educe::Educe;
-use log::error;
 use nipdf_macro::{TryFromNameObject, pdf_object};
 use prescript::{Name, ParserError, sname};
 use snafu::{OptionExt as _, ResultExt as _};
