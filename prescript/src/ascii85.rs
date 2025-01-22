@@ -22,8 +22,8 @@ use snafu::Snafu;
 pub enum Ascii85Error {
     #[snafu(display("Misaligned 'z' in input"))]
     MisalignedZ,
-    #[snafu(display("Input char is out of range for Ascii85"))]
-    CharOutOfRange,
+    #[snafu(display("Input char '{}' is out of range for Ascii85", digit))]
+    CharOutOfRange { digit: u8 },
 }
 
 pub fn decode(input: &[u8]) -> Result<Vec<u8>, Ascii85Error> {
@@ -46,8 +46,18 @@ pub fn decode(input: &[u8]) -> Result<Vec<u8>, Ascii85Error> {
     while end_idx > start_idx && input[end_idx - 1].is_ascii_whitespace() {
         end_idx -= 1;
     }
-    if end_idx >= 2 && input[end_idx - 2..end_idx] == [b'~', b'>'] {
-        end_idx -= 2;
+    // Trim end '~>', '~' and '>' maybe separate by whitespace (include end of line)
+    if end_idx >= 2 && input[end_idx - 1] == b'>' {
+        let original_end_idx = end_idx;
+        end_idx -= 1;
+        while end_idx > start_idx && input[end_idx - 1].is_ascii_whitespace() {
+            end_idx -= 1;
+        }
+        if end_idx >= 1 && input[end_idx - 1] == b'~' {
+            end_idx -= 1;
+        } else {
+            end_idx = original_end_idx;
+        }
     }
 
     for &digit in input[start_idx..end_idx]
@@ -64,7 +74,7 @@ pub fn decode(input: &[u8]) -> Result<Vec<u8>, Ascii85Error> {
         }
 
         if !(33..=117).contains(&digit) {
-            return Err(Ascii85Error::CharOutOfRange);
+            return Err(Ascii85Error::CharOutOfRange { digit });
         }
 
         decode_digit(digit, &mut counter, &mut chunk, &mut result);
