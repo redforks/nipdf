@@ -257,7 +257,8 @@ where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
     E: ParserError<S> + 'a,
 {
-    (dec_uint, ws_prefixed1(dec_uint)).map(|(id, gen): (u32, u16)| ObjectId::new(id, gen))
+    let id = take_while(1.., '0'..='9').parse_to::<u32>();
+    (id, ws_prefixed1(dec_uint)).map(|(id, gen): (u32, u16)| ObjectId::new(id, gen))
 }
 
 fn reference<'a, S, E>() -> impl Parser<S, Object, E> + 'a

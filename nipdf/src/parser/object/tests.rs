@@ -5,6 +5,7 @@ use crate::{
     object::{ObjectId, Reference, Stream as PdfStream},
 };
 use prescript::sname;
+use snafu::report;
 use test_case::test_case;
 use winnow::Located;
 
@@ -51,6 +52,7 @@ fn new_hex_string(s: &str) -> Object {
     Dictionary::from(dict)
 }); "dictionary with name and integer")]
 #[test_case("1 0 R" => Object::Reference(Reference::new(1, 0)); "reference")]
+#[test_case("0000000014 0 R" => Object::Reference(Reference::new(14, 0)); "reference id with zeros")]
 fn parse_object(buf: &str) -> Object {
     report_parse_err(object::<_, ParserError>().parse(buf.as_bytes()))
 }
@@ -78,6 +80,7 @@ fn test_parse_quoted_string(input: &[u8]) -> (&[u8], String) {
     (rest, r.as_str().unwrap().to_string())
 }
 
+#[report]
 #[test]
 fn test_parse_indirect_object_def() -> Result<(), ParserError> {
     let o = indirect_object_def::<_, ParserError>()
@@ -130,6 +133,15 @@ fn test_parse_indirect_object_def() -> Result<(), ParserError> {
             ObjectId::new(100, 1)
         ))
     );
+
+    let o = indirect_object_def::<_, ParserError>()
+        .parse(Located::new(b"0000000015 0 obj\n1\nendobj\n".as_slice()))
+        .map_err(winnow::error::ParseError::into_inner)?;
+    assert_eq!(o.0, ObjectId::new(15, 0));
+    let o = indirect_object_def::<_, ParserError>()
+        .parse(Located::new(b"0000000000 0 obj\n1\nendobj\n".as_slice()))
+        .map_err(winnow::error::ParseError::into_inner)?;
+    assert_eq!(o.0, ObjectId::new(0, 0));
 
     Ok(())
 }
