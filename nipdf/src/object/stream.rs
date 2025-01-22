@@ -25,7 +25,6 @@ use snafu::{OptionExt, ResultExt as _, ensure_whatever, whatever};
 use std::{
     borrow::{Borrow, Cow},
     cell::LazyCell,
-    fmt::Display,
     iter::{once, repeat},
     ops::Range,
     rc::Rc,
@@ -52,9 +51,10 @@ const FILTER_CRYPT: Name = sname(S_FILTER_CRYPT);
 #[cfg(test)]
 const FILTER_FLATE_DECODE: Name = sname("FlateDecode");
 // const FILTER_LZW_DECODE: Name = sname("LZWDecode");
-const FILTER_CCITT_FAX: Name = sname("CCITTFaxDecode");
+// const FILTER_CCITT_FAX: Name = sname("CCITTFaxDecode");
+#[cfg(test)]
 const FILTER_DCT_DECODE: Name = sname("DCTDecode");
-const FILTER_ASCII85_DECODE: Name = sname("ASCII85Decode");
+// const FILTER_ASCII85_DECODE: Name = sname("ASCII85Decode");
 // const FILTER_RUN_LENGTH_DECODE: Name = sname("RunLengthDecode");
 const FILTER_JPX_DECODE: Name = sname("JPXDecode");
 
@@ -487,17 +487,6 @@ pub struct Stream(
     pub(crate) ObjectId,
 );
 
-/// error!() log if r is error, returns `Err<ObjectValueError::FilterDecodeError>`
-fn handle_filter_error<V, E: Display>(
-    r: Result<V, E>,
-    filter_name: &Name,
-) -> Result<V, ObjectValueError> {
-    r.map_err(|err| {
-        error!("Failed to decode stream using {}: {}", filter_name, &err);
-        ObjectValueError::FilterDecodeError
-    })
-}
-
 #[derive(Clone, Copy)]
 struct LZWDeflateDecodeParams {
     predictor: i32,
@@ -821,7 +810,9 @@ fn decode_dct<'a>(
 
     use jpeg_decoder::Decoder;
     let mut decoder = Decoder::new(buf.as_ref());
-    let pixels = handle_filter_error(decoder.decode(), &FILTER_DCT_DECODE)?;
+    let pixels = decoder
+        .decode()
+        .whatever_context::<_, ObjectValueError>("Failed to decode DCT image")?;
     let info = decoder
         .info()
         .whatever_context::<_, ObjectValueError>("Failed to get decoder info")?;
@@ -860,8 +851,11 @@ fn decode_jpx<'a>(
     );
 
     use jpeg2k::Image;
-    let img = handle_filter_error(Image::from_bytes(buf.borrow()), &FILTER_JPX_DECODE)?;
-    let img = handle_filter_error((&img).try_into(), &FILTER_JPX_DECODE)?;
+    let img = Image::from_bytes(buf.borrow())
+        .whatever_context::<_, ObjectValueError>("Failed to decode JPX image")?;
+    let img = (&img)
+        .try_into()
+        .whatever_context::<_, ObjectValueError>("Failed to convert JPX image")?;
     Ok(FilterDecodedData::Image(img))
 }
 
@@ -1016,7 +1010,7 @@ fn decode_ascii_hex(buf: &[u8]) -> Result<Vec<u8>, ObjectValueError> {
 
 fn decode_ascii85(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, ObjectValueError> {
     ensure_whatever!(params.is_none(), "TODO: handle params of ascii85");
-    handle_filter_error(prescript::ascii85::decode(buf), &FILTER_ASCII85_DECODE)
+    prescript::ascii85::decode(buf).whatever_context("decode ascii85")
 }
 
 fn decode_run_length(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, ObjectValueError> {
@@ -1047,7 +1041,9 @@ fn decode_ccitt(
             .try_into()
             .whatever_context::<_, ObjectValueError>("Failed to convert params to Flags")?,
     };
-    let image = handle_filter_error(decoder.decode(input), &FILTER_CCITT_FAX)?;
+    let image = decoder
+        .decode(input)
+        .whatever_context::<_, ObjectValueError>("Failed to decode CCITT image")?;
     Ok(image)
 }
 
