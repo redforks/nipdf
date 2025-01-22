@@ -7,7 +7,7 @@ pub mod parser;
 mod run_length;
 pub mod text;
 use prescript::ParserError;
-use snafu::{Report, Snafu};
+use snafu::Snafu;
 use std::error::Error;
 
 pub type Result<T, E = ObjectValueError> = std::result::Result<T, E>;
@@ -20,7 +20,7 @@ pub fn log_err<E: Error>(v: Result<(), E>) {
         #[allow(clippy::panic)]
         {
             #[cfg(debug_assertions)]
-            panic!("{}", Report::from_error(e));
+            panic!("{}", snafu::Report::from_error(e));
         }
     }
 }
