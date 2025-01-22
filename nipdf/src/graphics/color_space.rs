@@ -112,11 +112,10 @@ where
 }
 
 /// Convert color to rgba color space, convert result to f32 or u8 by T generic type.
-pub fn color_to_rgba<F, T, CS>(cs: &CS, color: &[F]) -> [T; 4]
+pub fn color_to_rgba<F, T>(cs: &dyn ColorSpaceTrait<F>, color: &[F]) -> [T; 4]
 where
     F: ColorComp,
     T: ColorComp,
-    CS: ColorSpaceTrait<F>,
     F: ColorCompConvertTo<T>,
 {
     match cs.to_rgba(color) {

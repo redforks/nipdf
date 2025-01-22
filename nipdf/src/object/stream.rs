@@ -1108,43 +1108,43 @@ fn filter<'a: 'b, 'b>(
 }
 
 fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> Result<DynamicImage> {
-    fn image_color_space(img: &DynamicImage) -> Result<ColorSpace> {
-        match img {
-            DynamicImage::ImageLuma8(_) => Ok(ColorSpace::DeviceGray),
-            DynamicImage::ImageRgb8(_) => Ok(ColorSpace::DeviceRGB),
-            _ => whatever!("TODO: unsupported image color space: {:?}", img),
-        }
+    let from = match img {
+        DynamicImage::ImageLuma8(_) => ColorSpace::DeviceGray,
+        DynamicImage::ImageRgb8(_) => ColorSpace::DeviceRGB,
+        _ => whatever!("TODO: unsupported image color space: {:?}", img),
+    };
+    if &from == to {
+        return Ok(img);
     }
 
-    fn transform(img: DynamicImage, from: &ColorSpace, to: &ColorSpace) -> Result<DynamicImage> {
-        fn convert_cs(img: &GrayImage, cs: &impl ColorSpaceTrait<f32>) -> Result<RgbaImage> {
-            let mut r = RgbaImage::new(img.width(), img.height());
-            for (p, dest_p) in img.pixels().zip(r.pixels_mut()) {
-                let color: [u8; 4] = color_to_rgba(cs, &[p[0].into_color_comp()]);
-                *dest_p = Rgba(color);
-            }
-            Ok(r)
+    fn convert_cs(img: &GrayImage, cs: &dyn ColorSpaceTrait<f32>) -> Result<RgbaImage> {
+        let mut r = RgbaImage::new(img.width(), img.height());
+        for (p, dest_p) in img.pixels().zip(r.pixels_mut()) {
+            let color: [u8; 4] = color_to_rgba(cs, &[p[0].into_color_comp()]);
+            *dest_p = Rgba(color);
         }
+        Ok(r)
+    }
 
-        if let (ColorSpace::DeviceGray, ColorSpace::Separation(sep)) = (from, to) {
+    match (&from, to) {
+        (ColorSpace::DeviceGray, ColorSpace::Separation(sep)) => {
             return Ok(DynamicImage::ImageRgba8(convert_cs(
                 &img.into_luma8(),
                 sep.as_ref(),
             )?));
         }
-        whatever!(
+        (ColorSpace::DeviceGray, ColorSpace::DeviceN(cs)) => {
+            return Ok(DynamicImage::ImageRgba8(convert_cs(
+                &img.into_luma8(),
+                cs.as_ref(),
+            )?));
+        }
+        _ => whatever!(
             "TODO: transform image color space from {:?} to {:?}",
             from,
             to
-        );
+        ),
     }
-
-    let from = image_color_space(&img)?;
-    if &from == to {
-        return Ok(img);
-    }
-
-    transform(img, &from, to)
 }
 
 impl Stream {
