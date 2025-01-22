@@ -73,7 +73,7 @@ where
     E: ParserError<S> + 'a + AddContext<S> + FromExternalError<S, ParseIntError>,
 {
     preceded(
-        (wsc0(), b"xref".as_slice(), eol3()),
+        (wsc0(), b"xref".as_slice(), ws1()),
         repeat(
             1..,
             terminated(separated_pair(dec_uint, b' ', zero_prefixed_uint()), wsc1()).flat_map(
@@ -146,7 +146,7 @@ impl<'a> Iterator for LinesRev<'a> {
             if let Some(eol_pos) = self
                 .remaining
                 .iter()
-                .rposition(|&b| b == b'\n' || b == b'\r')
+                .rposition(|&b| b == b'\n' || b == b'\r' || b == b' ')
             {
                 // Extract the line after the last EOL
                 let line = &self.remaining[eol_pos + 1..];
@@ -156,7 +156,7 @@ impl<'a> Iterator for LinesRev<'a> {
                 let new_end = self
                     .remaining
                     .iter()
-                    .rposition(|&b| b != b'\n' && b != b'\r')
+                    .rposition(|&b| b != b'\n' && b != b'\r' || b != b' ')
                     .map_or(0, |pos| pos + 1);
                 self.remaining = &self.remaining[..new_end];
                 // Return the line if it's not empty
@@ -329,7 +329,16 @@ where
         + for<'b> FromExternalError<&'b [u8], ObjectValueError>
         + 'a,
 {
-    let bytes = buf.finish();
+    let mut bytes = buf.finish();
+    // Trim bytes after %%EOF search from end
+    let mut pos = 0;
+    for (i, w) in bytes.windows(5).rev().enumerate() {
+        if w == b"%%EOF" {
+            pos = bytes.len() - i;
+            break;
+        }
+    }
+    bytes = &bytes[..pos];
     // find start of last cross reference section
     let mut lines = rev_iter_lines(bytes);
     let mut line = lines

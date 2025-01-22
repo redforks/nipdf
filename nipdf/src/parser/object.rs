@@ -18,7 +18,7 @@ use std::{
 use winnow::{
     PResult, Parser,
     ascii::{Caseless, dec_uint, float},
-    combinator::{alt, delimited, preceded, repeat, repeat_till, rest, terminated},
+    combinator::{alt, delimited, opt, preceded, repeat, repeat_till, rest, terminated},
     error::{AddContext, ErrMode, ErrorKind, FromExternalError, ParserError},
     stream::{AsBStr, AsChar, Compare, ContainsToken, Location, Stream, StreamIsPartial},
     token::{any, take, take_till, take_while},
@@ -391,8 +391,8 @@ where
     (
         wsc_prefixed0(object_id()).context("object id"),
         preceded(
-            ws_prefixed0(b"obj".as_slice()),
-            wsc_prefixed0(indirect_object_content),
+            ws_prefixed0(b"obj".as_slice()).context("obj tag"),
+            wsc_prefixed0(indirect_object_content).context("indirect object data"),
         ),
     )
         .map(|(id, dict_or_bufpos)| match dict_or_bufpos {
@@ -457,8 +457,14 @@ where
                         0..,
                         any,
                         (
-                            wsc_prefixed0(b"endstream".as_slice()),
-                            wsc_prefixed0(terminated(b"endobj".as_slice(), wsc0())),
+                            // in pdf.js/test/pdfs/issue10004.pdf.link, use 'endstrea' instead of
+                            // 'endstream'
+                            wsc0(),
+                            b"endstrea".as_slice(),
+                            opt(b'm'),
+                            wsc0(),
+                            b"endobj".as_slice(),
+                            wsc0(),
                         ),
                     ),
                 )
