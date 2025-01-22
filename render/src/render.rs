@@ -517,7 +517,9 @@ impl State {
 
     fn set_text_knockout_flag(&mut self, knockout: bool) -> Result<()> {
         self.text_object.knockout = knockout;
-        whatever!("TODO: impl text knockout");
+        // default value of knockout is true, so set to true don't change anything
+        ensure_whatever!(knockout, "TODO: impl text knockout");
+        Ok(())
     }
 
     pub fn end_text_object(&mut self) -> Result<()> {
