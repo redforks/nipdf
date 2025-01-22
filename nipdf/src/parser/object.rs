@@ -252,13 +252,22 @@ where
     .parse_next(input)
 }
 
+pub(crate) fn zero_prefixed_uint<'a, T, S, E>() -> impl Parser<S, T, E> + 'a
+where
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+    E: ParserError<S> + 'a,
+    T: std::str::FromStr + 'static,
+{
+    take_while(1.., '0'..='9').parse_to::<T>()
+}
+
 pub(crate) fn object_id<'a, S, E>() -> impl Parser<S, ObjectId, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
     E: ParserError<S> + 'a,
 {
-    let id = take_while(1.., '0'..='9').parse_to::<u32>();
-    (id, ws_prefixed1(dec_uint)).map(|(id, gen): (u32, u16)| ObjectId::new(id, gen))
+    (zero_prefixed_uint(), ws_prefixed1(dec_uint))
+        .map(|(id, gen): (u32, u16)| ObjectId::new(id, gen))
 }
 
 fn reference<'a, S, E>() -> impl Parser<S, Object, E> + 'a

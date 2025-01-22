@@ -1,4 +1,4 @@
-use super::{dict, eol3, wsc0, wsc1};
+use super::{dict, eol3, object::zero_prefixed_uint, wsc0, wsc1};
 use crate::{
     ObjectValueError,
     function::{Domain, Domains},
@@ -76,7 +76,7 @@ where
         (wsc0(), b"xref".as_slice(), eol3()),
         repeat(
             1..,
-            terminated(separated_pair(dec_uint, b' ', dec_uint), wsc1()).flat_map(
+            terminated(separated_pair(dec_uint, b' ', zero_prefixed_uint()), wsc1()).flat_map(
                 |(start_id, count): (u32, u32)| {
                     info!("start_id, count: {}/{}", start_id, count);
                     let entry = seq! {
@@ -339,7 +339,7 @@ where
     let mut line = lines
         .next()
         .ok_or_else(|| ErrMode::from_error_kind(buf, ErrorKind::Eof))?;
-    let pos: usize = dec_uint(&mut line)?;
+    let pos: usize = zero_prefixed_uint().parse_next(&mut line)?;
     let mut line = lines
         .next()
         .ok_or_else(|| ErrMode::from_error_kind(buf, ErrorKind::Eof))?;
@@ -421,6 +421,22 @@ mod tests {
             ],
             xref().parse(&buf[..])?
         );
+
+        let buf = b"xref
+0 0000000003
+0000000000 65535 n
+0000000015 00000 n
+0000000214 00000 n
+";
+        assert_eq!(
+            vec![
+                (0, Entry::InFile(FilePos(0, 65535, true))),
+                (1, Entry::InFile(FilePos(15, 0, true))),
+                (2, Entry::InFile(FilePos(214, 0, true))),
+            ],
+            xref().parse(&buf[..])?
+        );
+
         Ok(())
     }
 
