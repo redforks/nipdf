@@ -237,7 +237,19 @@ impl EncodingParser<'_, '_, '_> {
     fn default_encoding(&self) -> Result<Encoding> {
         if let Some(desc) = self.0.font_descriptor()? {
             if desc.flags()?.contains(FontDescriptorFlags::SYMBOLIC) {
-                whatever!("Symbolic font must have encoding, but not found in font file");
+                // If the font is symbolic, try to use the encoding from the FontDict
+                if let Some(encoding_pair) = self.encoding_pair()? {
+                    if let Some(encoding_name) = encoding_pair.0 {
+                        if let Some(encoding) = Self::by_name(&encoding_name) {
+                            return Ok(encoding);
+                        }
+                    }
+                }
+                warn!(
+                    "Symbolic font '{}' no encoding in font dict and file, use empty encoding",
+                    desc.font_name()?
+                );
+                return Ok(Encoding::default());
             }
         }
 
@@ -256,7 +268,7 @@ impl EncodingParser<'_, '_, '_> {
         let font_name = self
             .0
             .font_name()
-            .whatever_context::<_, ObjectValueError>("parse type1 font name")?;
+            .whatever_context::<_, ObjectValueError>("get type1 font name")?;
         let r = Self::resolve_by_encoding_or_font_name(&encoding_pair, font_name.as_ref())
             .or_else(
                 || match Self::load_from_file(font_name.as_ref(), font_data, is_cff) {
