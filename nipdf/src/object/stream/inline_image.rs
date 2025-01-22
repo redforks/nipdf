@@ -1,7 +1,7 @@
 //! Inline Image and Inline Image Stream
 //!
 //! InlineImage decode from InlineImageStream
-use super::{ImageMetadata, decode_image, decode_stream};
+use super::{ImageMetadata, decode_image, decode_inline_stream};
 use crate::{
     Result,
     file::{ObjectResolver, ResourceDict},
@@ -147,15 +147,15 @@ impl InlineImage {
         resolver: &ObjectResolver<'_>,
         resources: &ResourceDict<'_, '_>,
     ) -> Result<DynamicImage> {
-        let decoded_data = decode_stream(&self.0, &self.1, Some(resolver), None, None)
-            .whatever_context::<_, ObjectValueError>("decode stream")?;
+        let decoded_data = decode_inline_stream(&self.0, &self.1, Some(resolver))
+            .whatever_context::<_, ObjectValueError>("decode inline image stream")?;
         decode_image(
             decoded_data,
             &InlineStreamDict(&self.0),
             resolver,
             Some(resources),
         )
-        .whatever_context("decode image")
+        .whatever_context("decode inline image")
     }
 }
 

@@ -17,7 +17,7 @@ use crate::{
 use bitstream_io::{BigEndian, BitReader};
 use image::{DynamicImage, GrayImage, Luma, RgbImage, Rgba, RgbaImage};
 use jpeg_decoder::PixelFormat;
-use log::{debug, error, warn};
+use log::{error, warn};
 use nipdf_macro::{TryFromIntObject, pdf_object};
 use num_traits::ToPrimitive;
 use prescript::{Name, sname};
@@ -177,6 +177,34 @@ fn iter_filters<'b>(
         .zip(params.into_iter().chain(repeat(None))))
 }
 
+/// Like [decode_stream], but for inline image stream, no need to decrypt, because inline image
+/// data is decrypted before parse inline image Operation.
+fn decode_inline_stream<'a, 'b>(
+    filter_dict: &'b Dictionary,
+    buf: impl Into<Cow<'a, [u8]>>,
+    resolver: Option<&ObjectResolver<'a>>,
+) -> Result<FilterDecodedData<'a>, ObjectValueError> {
+    let filter_dict = FilterDict::new(filter_dict, resolver)?;
+    let mut decoded = FilterDecodedData::Bytes(buf.into());
+    let filters = iter_filters(filter_dict)?;
+
+    for (filter_name, params) in filters {
+        decoded = filter(
+            decoded.into_bytes()?,
+            resolver,
+            &filter_name,
+            params,
+            None, // id is always None for inline streams
+            None, // encrypt_info is always None for inline streams
+        )
+        .with_whatever_context::<_, _, ObjectValueError>(|_| {
+            format!("apply filter '{}'", &filter_name)
+        })?;
+    }
+
+    Ok(decoded)
+}
+
 /// Provides common implementation to decode stream data,
 /// to share implementation for `Stream` and `InlineStream`
 fn decode_stream<'a, 'b>(
@@ -199,7 +227,6 @@ fn decode_stream<'a, 'b>(
             // pre a Crypt filter if enabled encrypt and Crypt not a first filter
             let filters = once((FILTER_CRYPT, None)).chain(filters);
             for (filter_name, params) in filters {
-                debug!("Applying filter: {}", filter_name);
                 decoded = filter(
                     decoded.into_bytes()?,
                     resolver,
@@ -207,11 +234,13 @@ fn decode_stream<'a, 'b>(
                     params,
                     id,
                     Some(encrypt_info),
-                )?;
+                )
+                .with_whatever_context::<_, _, ObjectValueError>(|_| {
+                    format!("apply filter '{}'", &filter_name)
+                })?;
             }
         } else {
             for (filter_name, params) in filters {
-                debug!("Applying filter: {}", filter_name);
                 decoded = filter(
                     decoded.into_bytes()?,
                     resolver,
@@ -219,12 +248,14 @@ fn decode_stream<'a, 'b>(
                     params,
                     id,
                     Some(encrypt_info),
-                )?;
+                )
+                .with_whatever_context::<_, _, ObjectValueError>(|_| {
+                    format!("apply filter '{}'", &filter_name)
+                })?;
             }
         }
     } else {
         for (filter_name, params) in filters {
-            debug!("Applying filter: {}", filter_name);
             decoded = filter(
                 decoded.into_bytes()?,
                 resolver,
@@ -232,7 +263,10 @@ fn decode_stream<'a, 'b>(
                 params,
                 id,
                 None,
-            )?;
+            )
+            .with_whatever_context::<_, _, ObjectValueError>(|_| {
+                format!("apply filter '{}'", &filter_name)
+            })?;
         }
     }
 
