@@ -318,6 +318,10 @@ impl Decryptor for AesDecryptor {
             .decrypt_padded_mut::<Pkcs7>(data.as_mut_slice())
             .is_err()
         {
+            if data.as_mut_slice().len() == 0 {
+                // ignore unpad error on empty data
+                return Ok(());
+            }
             whatever!("UnpadError on decode Aes128Cbc");
         }
         Ok(())

@@ -17,7 +17,7 @@ use crate::{
 use bitstream_io::{BigEndian, BitReader};
 use image::{DynamicImage, GrayImage, Luma, RgbImage, Rgba, RgbaImage};
 use jpeg_decoder::PixelFormat;
-use log::{error, warn};
+use log::{debug, error, warn};
 use nipdf_macro::{TryFromIntObject, pdf_object};
 use num_traits::ToPrimitive;
 use prescript::{Name, sname};
@@ -199,6 +199,7 @@ fn decode_stream<'a, 'b>(
             // pre a Crypt filter if enabled encrypt and Crypt not a first filter
             let filters = once((FILTER_CRYPT, None)).chain(filters);
             for (filter_name, params) in filters {
+                debug!("Applying filter: {}", filter_name);
                 decoded = filter(
                     decoded.into_bytes()?,
                     resolver,
@@ -210,6 +211,7 @@ fn decode_stream<'a, 'b>(
             }
         } else {
             for (filter_name, params) in filters {
+                debug!("Applying filter: {}", filter_name);
                 decoded = filter(
                     decoded.into_bytes()?,
                     resolver,
@@ -222,6 +224,7 @@ fn decode_stream<'a, 'b>(
         }
     } else {
         for (filter_name, params) in filters {
+            debug!("Applying filter: {}", filter_name);
             decoded = filter(
                 decoded.into_bytes()?,
                 resolver,
@@ -1125,6 +1128,10 @@ impl Stream {
 
     pub fn take_dict(self) -> Dictionary {
         self.0
+    }
+
+    pub fn id(&self) -> ObjectId {
+        self.2
     }
 
     #[cfg(test)]

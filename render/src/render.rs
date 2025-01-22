@@ -1199,10 +1199,12 @@ impl<'a, 'c> Render<'a, 'c> {
                 };
             let x_object = x_object
                 .as_stream()
-                .whatever_context("decode x_object stream")?;
+                .whatever_context("get x_object stream")?;
             let img = x_object
                 .decode_image(self.resources.resolver(), Some(self.resources))
-                .whatever_context("decode x_object to image")?;
+                .with_whatever_context(|_| {
+                    format!("decode x_object to image, id: {:?}", x_object.id())
+                })?;
             let mask = Self::load_image_as_mask(img.into_rgba8(), state, is_invert)?;
             // fill canvas with current fill paint with mask
             let paint = state.get_fill_paint()?;
@@ -1302,9 +1304,12 @@ impl<'a, 'c> Render<'a, 'c> {
         let stream = x_object
             .as_stream()
             .whatever_context("read x_object stream")?;
+        debug!("stream: {:?}", stream);
         let stream = stream
             .decode(self.resources.resolver())
-            .whatever_context("decode x_object stream")?;
+            .with_whatever_context(|_| {
+                format!("decode x_object to image, id: {:?}", stream.id())
+            })?;
         let content = PageContent::new(vec![stream.into_owned()]);
         let resources = form.resources().whatever_context("get form resources")?;
         let resources = resources.as_ref().unwrap_or(self.resources);
