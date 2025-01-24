@@ -1185,7 +1185,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 .whatever_context("Only Image XObject supported")?;
             Ok(image
                 .decode_image(resources.resolver(), Some(resources))
-                .whatever_context("decode image")?
+                .with_whatever_context(|_| format!("decode image {:?}", image.id()))?
                 .into_rgba8())
         }
 

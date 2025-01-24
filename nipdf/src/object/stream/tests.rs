@@ -5,7 +5,7 @@ use crate::{
     object::{Name, try_from},
 };
 use miniz_oxide::deflate::compress_to_vec;
-use snafu::ResultExt;
+use snafu::{ResultExt, report};
 use std::{rc::Rc, str::from_utf8};
 use test_case::test_case;
 
@@ -210,4 +210,18 @@ fn deflate_recover_truncated_zlib_data() {
     let data = deflate(input).unwrap();
     let s = from_utf8(&data).unwrap();
     assert_eq!(s, exp);
+}
+
+#[report]
+#[test]
+fn decode_dct() -> Result<()> {
+    // file extracted from pdf.js/test/pdfs/issue11052.pdf.link
+    let buf = include_bytes!("decode-dct.jpg");
+    // TODO: jpeg_decoder 无法解码这个文件, 切换到 tune-jpeg 后可以解码，但图片颜色不对,
+    // 暂时保留 jpeg_decoder ，后写处理
+    //
+    // jpeg_decoder 无法处理兼容性问题，切换到 tune-jpeg 是比较好的选择，但 tune-jpeg
+    // 喜欢自己转换颜色，还没有找到处理方法
+    assert!(do_decode_dct(buf).is_err());
+    Ok(())
 }

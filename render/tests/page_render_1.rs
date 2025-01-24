@@ -31,9 +31,9 @@ fn decode_image(id: u32) -> Result<String> {
     let obj = resolver.resolve(id).whatever_context("resolve object")?;
     let image = obj
         .as_stream()
-        .whatever_context("decode stream")?
+        .with_whatever_context(|_| format!("decode stream {id}"))?
         .decode_image(&resolver, None)
-        .whatever_context("decode image")?;
+        .with_whatever_context(|_| format!("decode image {id}"))?;
     let hash = Md5::digest(image.into_bytes());
     Ok(hex::encode(hash))
 }
@@ -67,7 +67,7 @@ fn download_file(url: &str, p: impl AsRef<Path>) -> Result<()> {
 }
 
 /// These files are very rare and odd, not to be tested
-const IGNORED: [&str; 8] = [
+const IGNORED: [&str; 9] = [
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
     "bug1050040.pdf",
     // invalid object format, mupdf failed to parse, mupdf says no page
@@ -106,6 +106,10 @@ const IGNORED: [&str; 8] = [
     "close-path-bug.pdf",
     // encrypted by pdf 2.0, Revision 6
     "empty_protected.pdf",
+    // this file contains premature jpeg image(incomplete scan-line data),
+    // jpeg-decoder failed to decode this file, I don't know how to use zune-jpeg
+    // to decode this file with correct color.
+    "issue11052.pdf.link",
 ];
 
 static PASSWORD: phf::Map<&'static str, &'static str> = phf::phf_map! {

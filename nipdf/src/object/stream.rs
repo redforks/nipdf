@@ -16,12 +16,11 @@ use crate::{
 };
 use bitstream_io::{BigEndian, BitReader};
 use image::{DynamicImage, GrayImage, Luma, RgbImage, Rgba, RgbaImage};
-use jpeg_decoder::PixelFormat;
 use log::{error, warn};
 use nipdf_macro::{TryFromIntObject, pdf_object};
 use num_traits::ToPrimitive;
 use prescript::{Name, sname};
-use snafu::{OptionExt, ResultExt as _, ensure_whatever, whatever};
+use snafu::{OptionExt as _, ResultExt as _, ensure_whatever, whatever};
 use std::{
     borrow::{Borrow, Cow},
     cell::LazyCell,
@@ -796,20 +795,9 @@ trait DCTDecodeParamsDictTrait {
     fn color_transform(&self) -> DCTColorTransform;
 }
 
-fn decode_dct<'a>(
-    buf: &Cow<'a, [u8]>,
-    params: &DCTDecodeParamsDict<'_, '_>,
-) -> Result<FilterDecodedData<'a>, ObjectValueError> {
-    ensure_whatever!(
-        params
-            .color_transform()
-            .whatever_context::<_, ObjectValueError>("get color_transform")?
-            == DCTColorTransform::NoTransform,
-        "TODO: handle DCTDceode color_transform of",
-    );
-
-    use jpeg_decoder::Decoder;
-    let mut decoder = Decoder::new(buf.as_ref());
+fn do_decode_dct<'a>(buf: &[u8]) -> Result<FilterDecodedData<'a>, ObjectValueError> {
+    use jpeg_decoder::{Decoder, PixelFormat};
+    let mut decoder = Decoder::new(buf);
     let pixels = decoder
         .decode()
         .whatever_context::<_, ObjectValueError>("Failed to decode DCT image")?;
@@ -838,6 +826,21 @@ fn decode_dct<'a>(
             pixels,
         ))),
     }
+}
+
+fn decode_dct<'a>(
+    buf: &[u8],
+    params: &DCTDecodeParamsDict<'_, '_>,
+) -> Result<FilterDecodedData<'a>, ObjectValueError> {
+    ensure_whatever!(
+        params
+            .color_transform()
+            .whatever_context::<_, ObjectValueError>("get color_transform")?
+            == DCTColorTransform::NoTransform,
+        "TODO: handle DCTDceode color_transform of",
+    );
+
+    do_decode_dct(buf.as_ref())
 }
 
 fn decode_jpx<'a>(
@@ -1104,15 +1107,6 @@ fn filter<'a: 'b, 'b>(
 }
 
 fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> Result<DynamicImage> {
-    let from = match img {
-        DynamicImage::ImageLuma8(_) => ColorSpace::DeviceGray,
-        DynamicImage::ImageRgb8(_) => ColorSpace::DeviceRGB,
-        _ => whatever!("TODO: unsupported image color space: {:?}", img),
-    };
-    if &from == to {
-        return Ok(img);
-    }
-
     fn convert_cs(img: &GrayImage, cs: &dyn ColorSpaceTrait<f32>) -> Result<RgbaImage> {
         let mut r = RgbaImage::new(img.width(), img.height());
         for (p, dest_p) in img.pixels().zip(r.pixels_mut()) {
@@ -1122,22 +1116,46 @@ fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> Result<Dyn
         Ok(r)
     }
 
-    match (&from, to) {
-        (ColorSpace::DeviceGray, ColorSpace::Separation(sep)) => {
+    fn convert_rgba_cs(img: &RgbaImage, cs: &dyn ColorSpaceTrait<f32>) -> Result<RgbaImage> {
+        let mut r = RgbaImage::new(img.width(), img.height());
+        for (p, dest_p) in img.pixels().zip(r.pixels_mut()) {
+            let color: [u8; 4] = color_to_rgba(cs, &[
+                p[0].into_color_comp(),
+                p[1].into_color_comp(),
+                p[2].into_color_comp(),
+                p[3].into_color_comp(),
+            ]);
+            *dest_p = Rgba(color);
+        }
+        Ok(r)
+    }
+
+    match (&img, to) {
+        (DynamicImage::ImageLuma8(_), ColorSpace::DeviceGray)
+        | (DynamicImage::ImageRgb8(_), ColorSpace::DeviceRGB) => {
+            return Ok(img);
+        }
+        (DynamicImage::ImageLuma8(_), ColorSpace::Separation(sep)) => {
             return Ok(DynamicImage::ImageRgba8(convert_cs(
                 &img.into_luma8(),
                 sep.as_ref(),
             )?));
         }
-        (ColorSpace::DeviceGray, ColorSpace::DeviceN(cs)) => {
+        (DynamicImage::ImageRgb8(_), ColorSpace::DeviceN(cs)) => {
             return Ok(DynamicImage::ImageRgba8(convert_cs(
                 &img.into_luma8(),
                 cs.as_ref(),
             )?));
         }
+        (DynamicImage::ImageRgba8(_), cs) => {
+            return Ok(DynamicImage::ImageRgba8(convert_rgba_cs(
+                &img.into_rgba8(),
+                cs,
+            )?));
+        }
         _ => whatever!(
             "TODO: transform image color space from {:?} to {:?}",
-            from,
+            img.color(),
             to
         ),
     }
