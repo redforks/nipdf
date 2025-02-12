@@ -107,6 +107,6 @@ fn pretty_print(o: impl Into<Object>) -> String {
 fn f32_arr_try_from_object() {
     let arr = vec![1.0f32.into(), 2.0f32.into()];
     let o = Object::Array(arr.into());
-    let arr2: [f32; 2] = try_from(o).unwrap();
+    let arr2: [f32; 2] = try_from(&o).unwrap();
     assert_eq!([1.0f32, 2.0f32], arr2);
 }

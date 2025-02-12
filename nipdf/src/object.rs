@@ -564,7 +564,7 @@ pub struct ObjectWithResolver<'a, 'b> {
 pub(crate) fn try_from<
     T: for<'a, 'b> TryFrom<ObjectWithResolver<'a, 'b>, Error = ObjectValueError>,
 >(
-    o: Object,
+    o: &Object,
 ) -> Result<T> {
     let xref = crate::file::XRefTable::empty();
     let resolver = ObjectResolver::empty(&xref);

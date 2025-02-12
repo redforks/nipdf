@@ -99,7 +99,7 @@ fn transform_try_from_array() {
     use euclid::default::Transform2D;
     let arr = vec![1.into(), 2.into(), 3.into(), 4.into(), 5.into(), 6.into()];
     let o = arr.into();
-    let act = try_from::<Transform2D<_>>(o).unwrap();
+    let act = try_from::<Transform2D<_>>(&o).unwrap();
     assert_eq!(act, Transform2D::new(1f32, 2f32, 3f32, 4f32, 5f32, 6f32));
 }
 

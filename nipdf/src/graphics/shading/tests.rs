@@ -12,7 +12,7 @@ fn radial_coords_try_from() {
         6.into(),
     ]
     .into();
-    let coords = try_from::<RadialCoords>(o).unwrap();
+    let coords = try_from::<RadialCoords>(&o).unwrap();
     assert_eq!(coords, RadialCoords {
         start: RadialCircle {
             point: Point::new(1., 2.),
@@ -28,7 +28,7 @@ fn radial_coords_try_from() {
 #[test]
 fn axias_coords_try_from() {
     let o = vec![1.into(), 2_f32.into(), 3.into(), 4.into()].into();
-    let coords = try_from::<AxialCoords>(o).unwrap();
+    let coords = try_from::<AxialCoords>(&o).unwrap();
     assert_eq!(coords, AxialCoords {
         start: Point::new(1., 2.),
         end: Point::new(3., 4.),
