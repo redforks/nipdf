@@ -21,11 +21,11 @@ use prescript::{Name, ParserError, sname};
 use snafu::{OptionExt as _, Report, ResultExt as _, Snafu, ensure_whatever, whatever};
 use std::iter::repeat_with;
 use winnow::{
-    Located, PResult, Parser as _,
-    combinator::{alt, repeat, rest, terminated},
-    error::{ContextError, ParseError},
+    LocatingSlice, ModalResult, Parser as _,
+    combinator::{alt, repeat, terminated},
+    error::{ContextError, ErrMode, ParseError},
     stream::{Compare, StreamIsPartial},
-    token::{any, take_until},
+    token::{any, rest, take_until},
 };
 
 pub mod page;
@@ -67,7 +67,7 @@ where
 {
     use winnow::{
         ascii::{dec_uint, space1},
-        combinator::{preceded, repeat, rest, terminated},
+        combinator::{preceded, repeat, terminated},
     };
     (
         repeat(
@@ -157,7 +157,7 @@ impl XRefTable {
             repeat(1.., wsc_prefixed0(indirect_object_def::<_, ParserError>())),
             wsc0(),
         )
-        .parse(Located::new(buf))
+        .parse(LocatingSlice::new(buf))
         .map_err(ParseError::into_inner)
         .whatever_context::<_, ObjectValueError>("parse xref table objects")?;
         let mut id_offset = HashMap::new();
@@ -201,7 +201,7 @@ impl XRefTable {
     ) -> Result<Either<&'a [u8], &'b [u8]>, ObjectValueError> {
         fn parse_indirect_stream(input: &[u8]) -> Result<Stream, ObjectValueError> {
             let (_, o) = indirect_object_def::<_, ContextError<&'static str>>()
-                .parse_peek(Located::new(input))?;
+                .parse_peek(LocatingSlice::new(input))?;
             let Object::Stream(s) = o.take() else {
                 whatever!("expected stream");
             };
@@ -272,7 +272,7 @@ impl XRefTable {
                             }),
                             rest,
                         )
-                        .parse(Located::new(buf))
+                        .parse(LocatingSlice::new(buf))
                         .map_err(ParseError::into_inner)
                         .with_whatever_context(|_| format!("parse object {}", id))
                     },
@@ -653,10 +653,10 @@ fn open_encrypt(
 }
 
 fn index_xref<'a, E>(
-    data: &mut Located<&'a [u8]>,
-) -> PResult<(Vec<usize>, Vec<(ObjectId, usize)>), E>
+    data: &mut LocatingSlice<&'a [u8]>,
+) -> ModalResult<(Vec<usize>, Vec<(ObjectId, usize)>), E>
 where
-    E: winnow::error::ParserError<Located<&'a [u8]>> + 'a,
+    E: winnow::error::ParserError<LocatingSlice<&'a [u8]>> + 'a,
 {
     const TRAILER_BYTES: &[u8] = b"trailer";
     let mut trailer_positions = Vec::new();
@@ -761,7 +761,7 @@ impl File {
 
         // Scan the file for trailer positions and object entries
         let (trailer_positions, object_entries) = index_xref::<ParserError>
-            .parse(Located::new(&buf))
+            .parse(LocatingSlice::new(&buf))
             .map_err(ParseError::into_inner)
             .whatever_context::<_, ObjectValueError>("scan file for xref entries")?;
 
@@ -787,7 +787,7 @@ impl File {
             if let Ok((_, _, dict)) = terminated(
                 (
                     b"trailer".as_slice(),
-                    wsc0::<_, ParserError>(),
+                    wsc0::<_, ErrMode<ParserError>>(),
                     parser::dict,
                 ),
                 rest,
@@ -909,7 +909,7 @@ pub(crate) fn report_parse_err<I, T, E: std::error::Error>(rv: Result<T, ParseEr
 }
 
 #[cfg(test)]
-pub(crate) fn report_peek_err<T, E: std::error::Error>(rv: PResult<T, E>) -> T {
+pub(crate) fn report_peek_err<T, E: std::error::Error>(rv: ModalResult<T, E>) -> T {
     use snafu::Report;
 
     rv.map_err(|e| Report::from_error(e.into_inner().unwrap()))

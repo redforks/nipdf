@@ -15,10 +15,7 @@ use std::{
     rc::Rc,
     str::from_utf8,
 };
-use winnow::{
-    Parser,
-    combinator::{preceded, rest},
-};
+use winnow::{Parser, combinator::preceded, error::ContextError, token::rest};
 
 mod decrypt;
 use decrypt::{EEXEC_KEY, decrypt};
@@ -508,7 +505,9 @@ impl<'a> CurrentFile<'a> {
         };
 
         let mut buf = &data[*pos..];
-        let r = ws_prefixed(token_parser).parse_next(&mut buf).ok();
+        let r = ws_prefixed(token_parser::<ContextError>)
+            .parse_next(&mut buf)
+            .ok();
         *pos = data.len() - buf.len();
         r
     }
@@ -520,7 +519,7 @@ impl<'a> CurrentFile<'a> {
         };
 
         let buf = &data[*pos..];
-        let remains = preceded(white_space, rest)
+        let remains = preceded(white_space::<crate::ParserError>, rest)
             .parse(buf)
             .map_err(winnow::error::ParseError::into_inner)
             .whatever_context("skip whitespace")?;
@@ -576,7 +575,7 @@ impl<'a> CurrentFile<'a> {
         use winnow::combinator::repeat;
 
         let remains = &self.data[self.remains_pos..];
-        repeat::<_, _, (), _, _>(.., white_space_or_comment)
+        repeat::<_, _, (), _, _>(.., white_space_or_comment::<crate::ParserError>)
             .parse(remains)
             .map_err(|e| {
                 let e = e.into_inner();

@@ -17,11 +17,11 @@ use std::{
     str::from_utf8,
 };
 use winnow::{
-    Located, PResult, Parser,
+    LocatingSlice, ModalResult, Parser,
     ascii::{Caseless, dec_uint},
     binary::{be_u8, be_u16, be_u24, be_u32},
     combinator::{alt, delimited, empty, fail, preceded, repeat, separated_pair, seq, terminated},
-    error::{AddContext, ContextError, ErrMode, ErrorKind, FromExternalError, ParserError},
+    error::{AddContext, ContextError, ErrMode, FromExternalError, ParserError},
     stream::{AsBStr, AsChar, Compare, Location, Stream, StreamIsPartial},
     token::{one_of, take},
 };
@@ -230,7 +230,7 @@ where
     }
 }
 
-fn parse_xref_stream<'a, S, E>(input: &mut S) -> PResult<(Vec<(u32, Entry)>, Dictionary), E>
+fn parse_xref_stream<'a, S, E>(input: &mut S) -> ModalResult<(Vec<(u32, Entry)>, Dictionary), E>
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
@@ -258,14 +258,14 @@ where
         .parse_next(input)?;
     let s = s
         .as_stream()
-        .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?;
+        .map_err(|e| ErrMode::from_external_error(input, e))?;
     let d = CrossReferenceStreamDict::new(s.as_dict())
-        .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?;
+        .map_err(|e| ErrMode::from_external_error(input, e))?;
     input.reset(&start);
     let buf: &'a [u8] = input.finish();
     let data: Cow<'a, [u8]> = s
         .decode_without_resolve_length(buf, None)
-        .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?;
+        .map_err(|e| ErrMode::from_external_error(input, e))?;
     let (a, b, c) = (d.w[0], d.w[1], d.w[2]);
     debug_assert_eq!(
         data.len() % (a + b + c) as usize,
@@ -305,27 +305,27 @@ where
     .parse_next(&mut data.as_ref())
     .map_err(|e| {
         warn!("Error when parse xref stream entries: {:?}", e);
-        ErrMode::from_error_kind(input, ErrorKind::Fail)
+        ErrMode::from_input(input)
     })?;
     Ok((
-        r.map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?,
+        r.map_err(|e| ErrMode::from_external_error(input, e))?,
         s.as_dict().clone(),
     ))
 }
 
-pub(crate) fn parse_frame_set<'a, E>(buf: &mut &'a [u8]) -> PResult<Vec<Frame>, E>
+pub(crate) fn parse_frame_set<'a, E>(buf: &mut &'a [u8]) -> ModalResult<Vec<Frame>, E>
 where
     E: ParserError<&'a [u8]>
         + ParserError<&'a [u8]>
-        + ParserError<Located<&'a [u8]>>
+        + ParserError<LocatingSlice<&'a [u8]>>
         + AddContext<&'a [u8]>
-        + AddContext<Located<&'a [u8]>>
+        + AddContext<LocatingSlice<&'a [u8]>>
         + Debug
-        + FromExternalError<Located<&'a [u8]>, ObjectValueError>
-        + FromExternalError<Located<&'a [u8]>, FromHexError>
-        + FromExternalError<Located<&'a [u8]>, ParseIntError>
-        + FromExternalError<Located<&'a [u8]>, TryFromIntError>
-        + FromExternalError<Located<&'a [u8]>, ObjectValueError>
+        + FromExternalError<LocatingSlice<&'a [u8]>, ObjectValueError>
+        + FromExternalError<LocatingSlice<&'a [u8]>, FromHexError>
+        + FromExternalError<LocatingSlice<&'a [u8]>, ParseIntError>
+        + FromExternalError<LocatingSlice<&'a [u8]>, TryFromIntError>
+        + FromExternalError<LocatingSlice<&'a [u8]>, ObjectValueError>
         + for<'b> FromExternalError<&'b [u8], ObjectValueError>
         + 'a,
 {
@@ -341,17 +341,11 @@ where
     bytes = &bytes[..pos];
     // find start of last cross reference section
     let mut lines = rev_iter_lines(bytes);
-    let mut line = lines
-        .next()
-        .ok_or_else(|| ErrMode::from_error_kind(buf, ErrorKind::Eof))?;
+    let mut line = lines.next().ok_or_else(|| ErrMode::from_input(buf))?;
     b"%%EOF".as_slice().context("EOF").parse_next(&mut line)?;
-    let mut line = lines
-        .next()
-        .ok_or_else(|| ErrMode::from_error_kind(buf, ErrorKind::Eof))?;
+    let mut line = lines.next().ok_or_else(|| ErrMode::from_input(buf))?;
     let pos: usize = zero_prefixed_uint().parse_next(&mut line)?;
-    let mut line = lines
-        .next()
-        .ok_or_else(|| ErrMode::from_error_kind(buf, ErrorKind::Eof))?;
+    let mut line = lines.next().ok_or_else(|| ErrMode::from_input(buf))?;
     b"startxref".as_slice().parse_next(&mut line)?;
 
     let mut r = Vec::new();
@@ -384,9 +378,9 @@ where
         ))
         .context("frame");
         if pos >= bytes.len() {
-            return Err(ErrMode::from_error_kind(buf, ErrorKind::Eof));
+            return Err(ErrMode::from_input(buf));
         }
-        let mut bytes = Located::new(&bytes[pos..]);
+        let mut bytes = LocatingSlice::new(&bytes[pos..]);
         let f = frame.parse_next(&mut bytes)?;
         let f = Frame::new(f.1, f.0);
         next_pos = f
@@ -398,7 +392,7 @@ where
                     .whatever_context::<_, ObjectValueError>("Prev to usize")
             })
             .transpose()
-            .map_err(|e| ErrMode::from_external_error(&bytes, ErrorKind::Fail, e))?;
+            .map_err(|e| ErrMode::from_external_error(&bytes, e))?;
         r.push(f);
     }
     Ok(r)
@@ -428,7 +422,7 @@ mod tests {
                 (23, Entry::InFile(FilePos(25518, 2, true))),
                 (24, Entry::InFile(FilePos(25635, 0, true))),
             ],
-            xref().parse(&buf[..])?
+            xref::<_, prescript::ParserError>().parse(&buf[..])?
         );
 
         let buf = b"xref
@@ -443,7 +437,7 @@ mod tests {
                 (1, Entry::InFile(FilePos(15, 0, true))),
                 (2, Entry::InFile(FilePos(214, 0, true))),
             ],
-            xref().parse(&buf[..])?
+            xref::<_, prescript::ParserError>().parse(&buf[..])?
         );
 
         Ok(())

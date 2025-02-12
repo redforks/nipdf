@@ -17,9 +17,9 @@ use std::{
     str::{Utf8Error, from_utf8},
 };
 use winnow::{
-    PResult, Parser,
+    ModalResult, Parser,
     combinator::{alt, repeat_till},
-    error::{AddContext, FromExternalError, ParserError},
+    error::{AddContext, ErrMode, FromExternalError, ParserError},
     seq,
     token::{any, one_of, take_till},
 };
@@ -631,7 +631,7 @@ enum ObjectOrOperator<'a> {
 
 /// Parses `Operation::PaintInlineImage` operation.
 /// `input` start after `BI`, parses dictionary and image data, consumes EI.
-fn inline_image<'a, E>() -> impl Parser<&'a [u8], InlineImage, E>
+fn inline_image<'a, E>() -> impl Parser<&'a [u8], InlineImage, ErrMode<E>>
 where
     E: ParserError<&'a [u8]>
         + FromExternalError<&'a [u8], ObjectValueError>
@@ -654,7 +654,7 @@ where
     })
 }
 
-pub fn parse_operations<'a, E>(buf: &mut &'a [u8]) -> PResult<Vec<Operation>, E>
+pub fn parse_operations<'a, E>(buf: &mut &'a [u8]) -> ModalResult<Vec<Operation>, E>
 where
     E: ParserError<&'a [u8]>
         + FromExternalError<&'a [u8], ObjectValueError>

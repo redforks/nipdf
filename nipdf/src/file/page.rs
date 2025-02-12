@@ -17,10 +17,7 @@ use nipdf_macro::{TryFromNameObject, pdf_object};
 use prescript::{Name, ParserError, sname};
 use snafu::{OptionExt as _, ResultExt as _};
 use std::{cell::LazyCell, iter::once};
-use winnow::{
-    Parser as _,
-    combinator::{rest, terminated},
-};
+use winnow::{Parser as _, combinator::terminated, token::rest};
 
 pub mod paint;
 

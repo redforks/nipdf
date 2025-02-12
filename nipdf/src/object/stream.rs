@@ -840,7 +840,7 @@ fn decode_dct<'a>(
         "TODO: handle DCTDceode color_transform of",
     );
 
-    do_decode_dct(buf.as_ref())
+    do_decode_dct(buf)
 }
 
 fn decode_jpx<'a>(
@@ -1133,25 +1133,25 @@ fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> Result<Dyn
     match (&img, to) {
         (DynamicImage::ImageLuma8(_), ColorSpace::DeviceGray)
         | (DynamicImage::ImageRgb8(_), ColorSpace::DeviceRGB) => {
-            return Ok(img);
+            Ok(img)
         }
         (DynamicImage::ImageLuma8(_), ColorSpace::Separation(sep)) => {
-            return Ok(DynamicImage::ImageRgba8(convert_cs(
+            Ok(DynamicImage::ImageRgba8(convert_cs(
                 &img.into_luma8(),
                 sep.as_ref(),
-            )?));
+            )?))
         }
         (DynamicImage::ImageRgb8(_), ColorSpace::DeviceN(cs)) => {
-            return Ok(DynamicImage::ImageRgba8(convert_cs(
+            Ok(DynamicImage::ImageRgba8(convert_cs(
                 &img.into_luma8(),
                 cs.as_ref(),
-            )?));
+            )?))
         }
         (DynamicImage::ImageRgba8(_), cs) => {
-            return Ok(DynamicImage::ImageRgba8(convert_rgba_cs(
+            Ok(DynamicImage::ImageRgba8(convert_rgba_cs(
                 &img.into_rgba8(),
                 cs,
-            )?));
+            )?))
         }
         _ => whatever!(
             "TODO: transform image color space from {:?} to {:?}",

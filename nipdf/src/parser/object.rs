@@ -16,12 +16,12 @@ use std::{
     num::{ParseIntError, TryFromIntError},
 };
 use winnow::{
-    PResult, Parser,
+    ModalResult, Parser,
     ascii::{Caseless, dec_uint, float},
-    combinator::{alt, delimited, opt, preceded, repeat, repeat_till, rest, terminated},
-    error::{AddContext, ErrMode, ErrorKind, FromExternalError, ParserError},
+    combinator::{alt, delimited, opt, preceded, repeat, repeat_till, terminated},
+    error::{AddContext, ErrMode, FromExternalError, ParserError},
     stream::{AsBStr, AsChar, Compare, ContainsToken, Location, Stream, StreamIsPartial},
-    token::{any, take, take_till, take_while},
+    token::{any, rest, take, take_till, take_while},
 };
 
 fn name<'a, S, E>() -> impl Parser<S, Name, E> + 'a
@@ -60,7 +60,7 @@ fn normalize_name(buf: &[u8]) -> Result<Name, ObjectValueError> {
     Ok(prescript::name(&String::from_utf8_lossy(&result)))
 }
 
-fn number<'a, S, E>() -> impl Parser<S, Object, E> + 'a
+fn number<'a, S, E>() -> impl Parser<S, Object, ErrMode<E>> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
@@ -72,7 +72,7 @@ where
     <S as Stream>::IterOffsets: Clone,
     E: ParserError<S> + 'a + ParserError<&'a [u8]>,
 {
-    fn fallback<E>(buf: &mut &[u8]) -> PResult<Object, E> {
+    fn fallback<E>(buf: &mut &[u8]) -> ModalResult<Object, E> {
         buf.finish();
         Ok(Object::Integer(0))
     }
@@ -94,7 +94,7 @@ enum LiteralStringFragment<'a> {
     Nested(LiteralString),
 }
 
-fn parse_quoted_string<'a, S, E>(input: &mut S) -> PResult<LiteralString, E>
+fn parse_quoted_string<'a, S, E>(input: &mut S) -> ModalResult<LiteralString, E>
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
     E: ParserError<S> + 'a + FromExternalError<S, ParseIntError>,
@@ -175,7 +175,7 @@ where
     delimited(b'<', parser.try_map(decode_hex), b'>').map(Object::HexString)
 }
 
-fn array<'a, S, E>(input: &mut S) -> PResult<Object, E>
+fn array<'a, S, E>(input: &mut S) -> ModalResult<Object, E>
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
@@ -201,7 +201,7 @@ where
 }
 
 /// Parse Dictionary body, i.e, Dictionary without '<<' and '>>' quote.
-pub(crate) fn dict_body<'a, S, E>() -> impl Parser<S, Dictionary, E> + 'a
+pub(crate) fn dict_body<'a, S, E>() -> impl Parser<S, Dictionary, ErrMode<E>> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
@@ -225,7 +225,7 @@ where
     repeat::<_, _, HashMap<_, _>, _, _>(0.., (key, value)).map(Dictionary::from)
 }
 
-pub(crate) fn dict<'a, S, E>(input: &mut S) -> PResult<Dictionary, E>
+pub(crate) fn dict<'a, S, E>(input: &mut S) -> ModalResult<Dictionary, E>
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
@@ -280,7 +280,7 @@ where
 }
 
 /// Return parser to parse [Object].
-pub(crate) fn object<'a, S, E>() -> impl Parser<S, Object, E> + 'a
+pub(crate) fn object<'a, S, E>() -> impl Parser<S, Object, ErrMode<E>> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
@@ -326,7 +326,7 @@ where
 /// is not allowed. It prevents content like `1 1 0 RG` to be parsed as (int, reference, and 'G').
 ///
 /// References inside dictionary is okay.
-pub(crate) fn object_inside_page_stream<'a, S, E>() -> impl Parser<S, Object, E> + 'a
+pub(crate) fn object_inside_page_stream<'a, S, E>() -> impl Parser<S, Object, ErrMode<E>> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
@@ -367,7 +367,7 @@ where
 ///
 /// If stream dict length is reference, parser will end at after the `stream<eol>`, because
 /// stream length not known at this point.
-pub(crate) fn indirect_object_def<'a, S, E>() -> impl Parser<S, IndirectObjectDef, E> + 'a
+pub(crate) fn indirect_object_def<'a, S, E>() -> impl Parser<S, IndirectObjectDef, ErrMode<E>> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
@@ -405,7 +405,7 @@ where
 
 fn indirect_object_content<'a, S, E>(
     buf: &mut S,
-) -> PResult<Either<Object, (Dictionary, BufPos)>, E>
+) -> ModalResult<Either<Object, (Dictionary, BufPos)>, E>
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial
@@ -432,10 +432,9 @@ where
         return Ok(Either::Left(o));
     };
     let len: Option<u32> = match dict.get("Length") {
-        Some(Object::Integer(l)) => Some(
-            u32::try_from(*l)
-                .map_err(|e| ErrMode::from_external_error(buf, ErrorKind::Assert, e))?,
-        ),
+        Some(Object::Integer(l)) => {
+            Some(u32::try_from(*l).map_err(|e| ErrMode::from_external_error(buf, e))?)
+        }
         Some(Object::Reference(_)) => None,
         _ => {
             (wsc0(), b"endobj".as_slice(), wsc0()).parse_next(buf)?;
@@ -474,7 +473,7 @@ where
                 range
                     .end
                     .try_into()
-                    .map_err(|e| ErrMode::from_external_error(buf, ErrorKind::Assert, e))?,
+                    .map_err(|e| ErrMode::from_external_error(buf, e))?,
                 len,
             );
             Ok(Either::Right((dict, bufpos)))

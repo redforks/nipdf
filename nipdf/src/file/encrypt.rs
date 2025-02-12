@@ -318,7 +318,7 @@ impl Decryptor for AesDecryptor {
             .decrypt_padded_mut::<Pkcs7>(data.as_mut_slice())
             .is_err()
         {
-            if data.as_mut_slice().len() == 0 {
+            if data.as_mut_slice().is_empty() {
                 // ignore unpad error on empty data
                 return Ok(());
             }

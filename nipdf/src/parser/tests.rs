@@ -19,7 +19,7 @@ fn test_eol_2(input: &[u8]) -> &'_ [u8] {
 
 #[test]
 fn test_eol_2_cr() {
-    let e = eol2::<_, ParserError>()
+    let e = eol2::<_, ErrMode<ParserError>>()
         .parse_next(&mut b"\r".as_ref())
         .unwrap_err();
     assert!(matches!(e, ErrMode::<ParserError>::Backtrack(_)));

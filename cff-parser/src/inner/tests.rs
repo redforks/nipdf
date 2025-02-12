@@ -3,7 +3,7 @@ use map_macro::hash_map;
 use prescript::NOTDEF;
 use std::{collections::hash_map::DefaultHasher, hash::Hasher};
 use test_case::test_case;
-use winnow::binary::be_i16;
+use winnow::{binary::be_i16, error::ContextError};
 
 #[test_case(&[0x8b] => 0)]
 #[test_case(&[0xef] => 100)]
@@ -15,13 +15,13 @@ use winnow::binary::be_i16;
 #[test_case(&[0x1d, 0x00, 0x01, 0x86, 0xa0] => 100000)]
 #[test_case(&[0x1d, 0xff, 0xfe, 0x79, 0x60] => -100000)]
 fn test_integer_parser(buf: &[u8]) -> i32 {
-    integer_parser().parse(buf).unwrap()
+    integer_parser::<ContextError>().parse(buf).unwrap()
 }
 
 #[test_case(&[0x1e, 0xe2, 0xa2, 0x5f] , -2.25)]
 #[test_case(&[0x1e, 0x0a, 0x14, 0x05, 0x41, 0xc3, 0xff] , 0.140541e-3)]
 fn test_real_parser(buf: &[u8], exp: f32) {
-    let r = real_parser().parse(buf).unwrap();
+    let r = real_parser::<_, ContextError>().parse(buf).unwrap();
     assert!((r - exp).abs() < 1e-6, "exp: {}, act: {}", exp, r);
 }
 
@@ -30,24 +30,24 @@ fn test_real_parser(buf: &[u8], exp: f32) {
 #[test_case(&[12, 0] => Operator::escaped(0))]
 #[test_case(&[12, 21] => Operator::escaped(21))]
 fn test_operator_parser(buf: &[u8]) -> Operator {
-    operator_parser().parse(buf).unwrap()
+    operator_parser::<ContextError>().parse(buf).unwrap()
 }
 
 #[test]
 fn test_off_size_parser() {
-    let r = off_size_parser().parse(&[1u8]).unwrap();
+    let r = off_size_parser::<ContextError>().parse(&[1u8]).unwrap();
     assert_eq!(r, OffSize::One);
 
-    let r = off_size_parser().parse(&[2u8]).unwrap();
+    let r = off_size_parser::<ContextError>().parse(&[2u8]).unwrap();
     assert_eq!(r, OffSize::Two);
 
-    let r = off_size_parser().parse(&[3u8]).unwrap();
+    let r = off_size_parser::<ContextError>().parse(&[3u8]).unwrap();
     assert_eq!(r, OffSize::Three);
 
-    let r = off_size_parser().parse(&[4u8]).unwrap();
+    let r = off_size_parser::<ContextError>().parse(&[4u8]).unwrap();
     assert_eq!(r, OffSize::Four);
 
-    let e = off_size_parser().parse(&[5u8]);
+    let e = off_size_parser::<ContextError>().parse(&[5u8]);
     assert!(e.is_err());
 }
 
@@ -62,7 +62,7 @@ fn off_size_len(off_size: OffSize) -> usize {
 #[test]
 fn test_header_parser() {
     let buf: [u8; 4] = [1, 0, 4, 1];
-    let r = header_parser().parse(&buf[..]).unwrap();
+    let r = header_parser::<ContextError>().parse(&buf[..]).unwrap();
     assert_eq!(r, Header {
         major: 1,
         minor: 0,
@@ -77,7 +77,7 @@ fn test_header_parser() {
 #[test_case(&[0x1e, 0xe2, 0xa2, 0x5f, 0x1e, 0xe2, 0xa2, 0x5f] => Operand::RealArray(vec![-2.25, -2.25]))]
 #[test_case(&[0x8b, 0x1e, 0xe2, 0xa2, 0x5f, 0xef] => Operand::RealArray(vec![0.0, -2.25, 100.0]))]
 fn test_operand_parser(buf: &[u8]) -> Operand {
-    operand_parser().parse(buf).unwrap()
+    operand_parser::<ContextError>().parse(buf).unwrap()
 }
 
 #[test]
@@ -97,7 +97,7 @@ fn test_operator_hash() {
 fn test_dict_parser() {
     // dict with one item
     let buf = [0x8b_u8, 1];
-    let r = dict_parser().parse(&buf[..]).unwrap();
+    let r = dict_parser::<ContextError>().parse(&buf[..]).unwrap();
     assert_eq!(
         r,
         Dict(hash_map! {
@@ -107,7 +107,7 @@ fn test_dict_parser() {
 
     // dict with two items
     let buf = [0x8b_u8, 1, 0xef, 2];
-    let r = dict_parser().parse(&buf[..]).unwrap();
+    let r = dict_parser::<ContextError>().parse(&buf[..]).unwrap();
     assert_eq!(
         r,
         Dict(hash_map! {
@@ -256,11 +256,13 @@ fn offsets() {
 #[test]
 fn test_parse_indexed_data2() {
     // empty index off_size 2 bytes
-    let r = parse_indexed_data.parse(&[0_u8, 0, 2, 0, 1][..]).unwrap();
+    let r = parse_indexed_data::<ContextError>
+        .parse(&[0_u8, 0, 2, 0, 1][..])
+        .unwrap();
     assert_eq!(0, r.len());
 
     // index with one items, off_size 3 bytes
-    let r = parse_indexed_data
+    let r = parse_indexed_data::<ContextError>
         .parse(&[0_u8, 1, 3, 0, 0, 1, 0, 0, 2, 10][..])
         .unwrap();
     assert_eq!(1, r.len());

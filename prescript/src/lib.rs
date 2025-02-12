@@ -15,7 +15,7 @@ pub use encoding::Encoding;
 pub use pdf_fn::PdfFunc;
 pub use type1::Font;
 use winnow::{
-    error::{AddContext, ErrorConvert, ErrorKind, FromExternalError, ParseError},
+    error::{AddContext, ErrorConvert, FromExternalError, ParseError},
     stream::Stream,
 };
 
@@ -56,21 +56,16 @@ pub type Result<T, E = AnyWhatever> = std::result::Result<T, E>;
 
 #[derive(Snafu, Debug)]
 pub enum ParserError {
-    #[snafu(display("{}/{:?}", kind, context))]
-    Leaf {
-        kind: ErrorKind,
-        context: Vec<&'static str>,
-    },
-    #[snafu(display("{}/{:?}", kind, context))]
+    #[snafu(display("{:?}", context))]
+    Leaf { context: Vec<&'static str> },
+    #[snafu(display("{:?}", context))]
     Inter {
-        kind: ErrorKind,
         context: Vec<&'static str>,
         #[snafu(source(from(ParserError, Box::new)))]
         source: Box<ParserError>,
     },
-    #[snafu(display("{}/{:?}", kind, context))]
+    #[snafu(display("{:?}", context))]
     Other {
-        kind: ErrorKind,
         context: Vec<&'static str>,
         source: Box<dyn Error + Sync + Send + 'static>,
     },
@@ -113,26 +108,27 @@ impl<I: Stream> AddContext<I, &'static str> for ParserError {
 }
 
 impl<I: Stream> winnow::error::ParserError<I> for ParserError {
-    fn from_error_kind(_: &I, kind: ErrorKind) -> Self {
-        Self::Leaf {
-            kind,
-            context: Vec::new(),
-        }
-    }
+    type Inner = Self;
 
-    fn append(self, _: &I, _: &<I as Stream>::Checkpoint, kind: ErrorKind) -> Self {
+    fn append(self, _: &I, _: &<I as Stream>::Checkpoint) -> Self {
         Self::Inter {
-            kind,
             context: vec![],
             source: Box::new(self),
         }
     }
+
+    fn from_input(_input: &I) -> Self {
+        Self::Leaf { context: vec![] }
+    }
+
+    fn into_inner(self) -> winnow::Result<Self::Inner, Self> {
+        Ok(self)
+    }
 }
 
 impl<I, E: Error + Send + Sync + 'static> FromExternalError<I, E> for ParserError {
-    fn from_external_error(_: &I, kind: ErrorKind, e: E) -> Self {
+    fn from_external_error(_: &I, e: E) -> Self {
         Self::Other {
-            kind,
             context: vec![],
             source: Box::new(e),
         }

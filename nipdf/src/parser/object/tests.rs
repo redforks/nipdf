@@ -7,7 +7,7 @@ use crate::{
 use prescript::sname;
 use snafu::report;
 use test_case::test_case;
-use winnow::Located;
+use winnow::LocatingSlice;
 
 fn new_hex_string(s: &str) -> Object {
     Object::HexString(HexString(s.as_bytes().into()))
@@ -84,12 +84,12 @@ fn test_parse_quoted_string(input: &[u8]) -> (&[u8], String) {
 #[test]
 fn test_parse_indirect_object_def() -> Result<(), ParserError> {
     let o = indirect_object_def::<_, ParserError>()
-        .parse(Located::new(b"100 0 obj\n<<>>\nendobj\n".as_slice()))
+        .parse(LocatingSlice::new(b"100 0 obj\n<<>>\nendobj\n".as_slice()))
         .map_err(winnow::error::ParseError::into_inner)?;
     assert_eq!(o.1, Dictionary::default().into());
 
     let o = indirect_object_def::<_, ParserError>()
-        .parse(Located::new(b"100 0 obj<<>>endobj\n".as_slice()))
+        .parse(LocatingSlice::new(b"100 0 obj<<>>endobj\n".as_slice()))
         .map_err(winnow::error::ParseError::into_inner)?;
     assert_eq!(o.1, Dictionary::default().into());
 
@@ -97,14 +97,14 @@ fn test_parse_indirect_object_def() -> Result<(), ParserError> {
     dict.insert(sname("Length"), Object::Integer(2));
     let dict = Dictionary::from(dict);
     let o = indirect_object_def::<_, ParserError>()
-        .parse(Located::new(
+        .parse(LocatingSlice::new(
             b"100 0 obj\n<</Length 2>>\nendobj\n".as_slice(),
         ))
         .map_err(winnow::error::ParseError::into_inner)?;
     assert_eq!(o.1, dict.clone().into());
 
     let o = indirect_object_def::<_, ParserError>()
-        .parse(Located::new(
+        .parse(LocatingSlice::new(
             b"100 1 obj\n<</Length 2>>\nstream\n  \nendstream\nendobj\n".as_slice(),
         ))
         .map_err(winnow::error::ParseError::into_inner)?;
@@ -121,7 +121,7 @@ fn test_parse_indirect_object_def() -> Result<(), ParserError> {
     dict.insert(sname("Length"), Object::Reference(Reference::new(10, 0)));
     let dict = Dictionary::from(dict);
     let o = indirect_object_def::<_, ParserError>()
-        .parse(Located::new(
+        .parse(LocatingSlice::new(
             b"100 1 obj\n<</Length 10 0 R>>\nstream\n".as_slice(),
         ))
         .map_err(winnow::error::ParseError::into_inner)?;
@@ -135,11 +135,15 @@ fn test_parse_indirect_object_def() -> Result<(), ParserError> {
     );
 
     let o = indirect_object_def::<_, ParserError>()
-        .parse(Located::new(b"0000000015 0 obj\n1\nendobj\n".as_slice()))
+        .parse(LocatingSlice::new(
+            b"0000000015 0 obj\n1\nendobj\n".as_slice(),
+        ))
         .map_err(winnow::error::ParseError::into_inner)?;
     assert_eq!(o.0, ObjectId::new(15, 0));
     let o = indirect_object_def::<_, ParserError>()
-        .parse(Located::new(b"0000000000 0 obj\n1\nendobj\n".as_slice()))
+        .parse(LocatingSlice::new(
+            b"0000000000 0 obj\n1\nendobj\n".as_slice(),
+        ))
         .map_err(winnow::error::ParseError::into_inner)?;
     assert_eq!(o.0, ObjectId::new(0, 0));
 

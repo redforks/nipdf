@@ -491,7 +491,7 @@ dependencies = [
  "prescript",
  "snafu",
  "test-case",
- "winnow",
+ "winnow 0.7.2",
 ]
 
 [[package]]
@@ -2667,7 +2667,7 @@ dependencies = [
  "tinyvec",
  "ttf-parser 0.25.0",
  "weezl",
- "winnow",
+ "winnow 0.7.2",
 ]
 
 [[package]]
@@ -2737,7 +2737,7 @@ dependencies = [
  "test-case",
  "tiny-skia",
  "ureq",
- "winnow",
+ "winnow 0.7.2",
 ]
 
 [[package]]
@@ -3290,7 +3290,7 @@ dependencies = [
  "test-case",
  "test-log",
  "tinyvec",
- "winnow",
+ "winnow 0.7.2",
 ]
 
 [[package]]
@@ -4257,7 +4257,7 @@ checksum = "4ae48d6208a266e853d946088ed816055e556cc6028c5e8e2b84d9fa5dd7c7f5"
 dependencies = [
  "indexmap",
  "toml_datetime",
- "winnow",
+ "winnow 0.6.26",
 ]
 
 [[package]]
@@ -5184,9 +5184,18 @@ dependencies = [
 
 [[package]]
 name = "winnow"
-version = "0.6.20"
+version = "0.6.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36c1fec1a2bb5866f07c25f68c26e565c4c200aebb96d7e55710c19d3e8ac49b"
+checksum = "1e90edd2ac1aa278a5c4599b1d89cf03074b610800f866d4026dc199d7929a28"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
+name = "winnow"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59690dea168f2198d1a3b0cac23b8063efcd11012f10ae4698f284808c8ef603"
 dependencies = [
  "memchr",
 ]

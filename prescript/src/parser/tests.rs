@@ -2,6 +2,7 @@ use super::*;
 use crate::machine::name_token;
 use either::{Left, Right};
 use test_case::test_case;
+use winnow::error::ContextError;
 
 macro_rules! tokens {
     () => {
@@ -21,7 +22,7 @@ fn test_parse_header() {
             font_name: "Times-Roman".to_owned(),
             font_ver: "001.002".to_owned(),
         },
-        header.parse(buf).unwrap()
+        header::<ContextError>.parse(buf).unwrap()
     );
 
     let buf = b"%!AdobeFont-1.1: Times-Roman 001.002\n";
@@ -31,7 +32,7 @@ fn test_parse_header() {
             font_name: "Times-Roman".to_owned(),
             font_ver: "001.002".to_owned(),
         },
-        header.parse(buf).unwrap()
+        header::<ContextError>.parse(buf).unwrap()
     );
 
     let buf = b"%!PS-AdobeFont-1.0: NimbusSanL-Regu 1.05a\r";
@@ -41,7 +42,7 @@ fn test_parse_header() {
             font_name: "NimbusSanL-Regu".to_owned(),
             font_ver: "1.05a".to_owned(),
         },
-        header.parse(buf).unwrap()
+        header::<ContextError>.parse(buf).unwrap()
     );
 
     let buf = b"%!FontType1-1.0: DUTCH.801.ROMAN.-.SWA..TM. 001.000\n";
@@ -51,16 +52,18 @@ fn test_parse_header() {
             font_name: "DUTCH.801.ROMAN.-.SWA..TM.".to_owned(),
             font_ver: "001.000".to_owned(),
         },
-        header.parse(buf).unwrap()
+        header::<ContextError>.parse(buf).unwrap()
     );
 }
 
 #[test]
 fn test_parse_comment() {
-    (comment, b'\n').parse(b"% comment\n").unwrap();
-    (comment, b'\n').parse(b"%\n").unwrap();
-    (comment, b"\r\n").parse(b"%\r\n").unwrap();
-    (comment, b'\x0c')
+    (comment::<ContextError>, b'\n')
+        .parse(b"% comment\n")
+        .unwrap();
+    (comment::<ContextError>, b'\n').parse(b"%\n").unwrap();
+    (comment::<ContextError>, b"\r\n").parse(b"%\r\n").unwrap();
+    (comment::<ContextError>, b'\x0c')
         .parse(b"% end with form feed\x0c")
         .unwrap();
 }
@@ -70,7 +73,9 @@ fn test_parse_comment() {
 #[test_case(b"\r\n\n", b"\n")]
 #[test_case(b"\rfoo", b"foo")]
 fn parse_loose_line_ending(buf: &[u8], remains: &[u8]) {
-    (loose_line_ending, remains).parse(buf).unwrap();
+    (loose_line_ending::<ContextError>, remains)
+        .parse(buf)
+        .unwrap();
 }
 
 #[test_case(b"1" => Left(1))]
@@ -94,7 +99,7 @@ fn parse_loose_line_ending(buf: &[u8], remains: &[u8]) {
 #[test_case(b"2#1000" => Left(0b1000))]
 #[test_case(b"36#z" => Left(35))]
 fn test_int_or_float(buf: &[u8]) -> Either<i32, f32> {
-    int_or_float.parse(buf).unwrap()
+    int_or_float::<ContextError>.parse(buf).unwrap()
 }
 
 #[test_case(b"()" => &b""[..]; "empty")]
@@ -121,7 +126,7 @@ new line)" => &b"foo\nnew line"[..])]
 #[test_case(b"<~~>" => &b""[..]; "empty ascii85")]
 #[test_case(b"<~!!!!!~>" => &b"\0\0\0\0"[..]; "0 ascii85")]
 fn test_string(buf: &[u8]) -> Vec<u8> {
-    string.parse(buf).unwrap().to_vec()
+    string::<ContextError>.parse(buf).unwrap().to_vec()
 }
 
 #[test_case("abc", "" => "abc")]
@@ -130,7 +135,7 @@ fn test_string(buf: &[u8]) -> Vec<u8> {
 #[test_case("a1\t", "\t" => "a1")]
 #[test_case("a1(", "(" => "a1")]
 fn test_executable_name<'a>(buf: &'a str, remains: &'a str) -> &'a str {
-    (executable_name, remains.as_bytes())
+    (executable_name::<ContextError>, remains.as_bytes())
         .parse(buf.as_bytes())
         .unwrap()
         .0
@@ -141,7 +146,7 @@ fn test_executable_name<'a>(buf: &'a str, remains: &'a str) -> &'a str {
 #[test_case("/Name/Second", "/Second" => "Name"; "with second")]
 #[test_case("/Name(foo)Bar", "(foo)Bar" => "Name"; "with string")]
 fn test_literal_name<'a>(buf: &'a str, remains: &'a str) -> &'a str {
-    (literal_name, remains.as_bytes())
+    (literal_name::<ContextError>, remains.as_bytes())
         .parse(buf.as_bytes())
         .unwrap()
         .0
@@ -151,7 +156,7 @@ fn test_literal_name<'a>(buf: &'a str, remains: &'a str) -> &'a str {
 #[test_case("{ { } }"=> tokens![tokens![]]; "nested empty")]
 #[test_case("{ 10 1.5 ($) [/foo] }"=> tokens![10, 1.5, *b"$", name_token("["), "foo", name_token("]")]; "values")]
 fn test_procedure(buf: &str) -> TokenArray {
-    procedure.parse(buf.as_bytes()).unwrap()
+    procedure::<ContextError>.parse(buf.as_bytes()).unwrap()
 }
 
 #[test_case("10", "", 10i32)]
@@ -159,6 +164,9 @@ fn test_procedure(buf: &str) -> TokenArray {
 fn test_token(buf: &str, remains: &str, exp: impl Into<Token>) {
     assert_eq!(
         exp.into(),
-        (token, remains.as_bytes()).parse(buf.as_bytes()).unwrap().0
+        (token::<ContextError>, remains.as_bytes())
+            .parse(buf.as_bytes())
+            .unwrap()
+            .0
     );
 }

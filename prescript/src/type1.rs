@@ -1,5 +1,5 @@
 use crate::{
-    Encoding, ParserError, Result,
+    Encoding, Result,
     machine::{Array, Machine, Value},
     parser::{header, parse_error_to_whatever},
     sname,
@@ -9,8 +9,8 @@ use std::{array::from_fn, borrow::Cow};
 use winnow::{
     Parser,
     binary::le_u32,
-    combinator::{preceded, rest, terminated},
-    token::any,
+    combinator::{preceded, terminated},
+    token::{any, rest},
 };
 
 #[derive(Debug, PartialEq)]
@@ -28,7 +28,7 @@ pub struct Font {
 }
 
 fn parse_header(data: &[u8]) -> Result<Header> {
-    terminated(header, rest)
+    terminated(header::<crate::ParserError>, rest)
         .parse(data)
         .map_err(winnow::error::ParseError::into_inner)
         .whatever_context("parse header")
@@ -88,7 +88,7 @@ fn normalize_pfb(data: &[u8]) -> Result<Cow<'_, [u8]>> {
     let mut data = data.to_vec();
     let mut pos = 0;
     for _ in 0..3 {
-        let section_len = preceded((0x80u8, any), le_u32::<_, ParserError>)
+        let section_len = preceded((0x80u8, any::<_, crate::ParserError>), le_u32)
             .parse(&data[pos..(6 + pos)])
             .map_err(|e| parse_error_to_whatever(e, "get pfb section len"))?
             as usize;
@@ -96,7 +96,7 @@ fn normalize_pfb(data: &[u8]) -> Result<Cow<'_, [u8]>> {
         pos += section_len;
     }
 
-    Parser::<_, _, ParserError>::parse(&mut &b"\x80\x03"[..], &data[pos..])
+    Parser::<_, _, crate::ParserError>::parse(&mut &b"\x80\x03"[..], &data[pos..])
         .map_err(|e| parse_error_to_whatever(e, "skip pfb tag"))?;
     data.drain(pos..);
 

@@ -1,5 +1,5 @@
 use crate::{
-    AnyWhatever, ParserError,
+    AnyWhatever,
     ascii85::{self, Ascii85Error},
     machine::{Token, TokenArray, Value},
     name,
@@ -10,22 +10,22 @@ use snafu::FromString as _;
 use std::{
     cell::RefCell,
     iter::once,
-    num::ParseIntError,
+    num::{ParseFloatError, ParseIntError},
     rc::Rc,
     str::{Utf8Error, from_utf8},
     string::FromUtf8Error,
 };
 use winnow::{
-    PResult, Parser,
+    ModalResult, Parser,
     ascii::hex_digit1,
     combinator::{alt, delimited, dispatch, fail, opt, preceded, repeat, terminated},
-    error::{ErrMode, ErrorKind, FromExternalError, ParseError, ParserError as _},
+    error::{ErrMode, FromExternalError, ParseError, ParserError},
     stream::{AsChar, Stream},
     token::{any, literal, one_of, take_till, take_while},
 };
 
 #[derive(snafu::Snafu, Debug)]
-enum PossibleError {
+pub enum PossibleError {
     #[snafu(transparent)]
     Utf8 { source: Utf8Error },
     #[snafu(transparent)]
@@ -36,8 +36,8 @@ enum PossibleError {
     Ascii85 { source: Ascii85Error },
 }
 
-pub(crate) fn parse_error_to_whatever<I>(
-    err: ParseError<I, ParserError>,
+pub(crate) fn parse_error_to_whatever<I, E: std::error::Error + Send + Sync + 'static>(
+    err: ParseError<I, E>,
     msg: impl Into<String>,
 ) -> AnyWhatever {
     let e = err.into_inner();
@@ -52,7 +52,10 @@ pub(crate) fn parse_error_to_whatever<I>(
 /// The first token is the version of the Type 1 specification that the font
 /// conforms to. The second token is the font name. The third token is the
 /// font version.
-pub fn header(input: &mut &[u8]) -> PResult<Header, ParserError> {
+pub fn header<'a, E>(input: &mut &'a [u8]) -> ModalResult<Header, E>
+where
+    E: ParserError<&'a [u8]> + FromExternalError<&'a [u8], FromUtf8Error>,
+{
     preceded(
         literal(b"%!"),
         alt((b"PS-AdobeFont", b"AdobeFont", b"FontType1")),
@@ -69,15 +72,15 @@ pub fn header(input: &mut &[u8]) -> PResult<Header, ParserError> {
 
     Ok(Header {
         spec_ver: String::from_utf8(spec_ver.to_owned())
-            .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?,
+            .map_err(|e| ErrMode::from_external_error(input, e))?,
         font_name: String::from_utf8(font_name.to_owned())
-            .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?,
+            .map_err(|e| ErrMode::from_external_error(input, e))?,
         font_ver: String::from_utf8(font_ver.to_owned())
-            .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?,
+            .map_err(|e| ErrMode::from_external_error(input, e))?,
     })
 }
 
-fn comment(input: &mut &[u8]) -> PResult<(), ParserError> {
+fn comment<'a, E: ParserError<&'a [u8]>>(input: &mut &'a [u8]) -> ModalResult<(), E> {
     preceded(
         literal(b"%"),
         take_till(0.., |c| c == b'\n' || c == b'\r' || c == b'\x0c'),
@@ -110,24 +113,34 @@ fn is_regular_char(b: u8) -> bool {
 }
 
 /// Parses one or more white space bytes
-pub fn white_space<'a>(input: &mut &'a [u8]) -> PResult<&'a [u8], ParserError> {
+pub fn white_space<'a, E>(input: &mut &'a [u8]) -> ModalResult<&'a [u8], E>
+where
+    E: ParserError<&'a [u8]>,
+{
     take_while(1.., is_white_space).parse_next(input)
 }
 
-pub fn white_space_or_comment(input: &mut &[u8]) -> PResult<(), ParserError> {
+pub fn white_space_or_comment<'a, E>(input: &mut &'a [u8]) -> ModalResult<(), E>
+where
+    E: ParserError<&'a [u8]>,
+{
     alt((white_space.value(()), comment)).parse_next(input)
 }
 
 /// Ignore preceded whitespace and/or comments
-pub fn ws_prefixed<'a, P, O>(p: P) -> impl Parser<&'a [u8], O, ParserError>
+pub fn ws_prefixed<'a, P, O, E>(p: P) -> impl Parser<&'a [u8], O, ErrMode<E>>
 where
-    P: Parser<&'a [u8], O, ParserError>,
+    P: Parser<&'a [u8], O, ErrMode<E>>,
+    E: ParserError<&'a [u8]>,
 {
     preceded(repeat::<_, _, (), _, _>(.., white_space_or_comment), p)
 }
 
 /// Matches '\n', '\r', '\r\n'
-fn loose_line_ending(input: &mut &[u8]) -> PResult<(), ParserError> {
+fn loose_line_ending<'a, E>(input: &mut &'a [u8]) -> ModalResult<(), E>
+where
+    E: ParserError<&'a [u8]>,
+{
     match input.first() {
         Some(b'\n') => {
             input.next_token();
@@ -144,7 +157,13 @@ fn loose_line_ending(input: &mut &[u8]) -> PResult<(), ParserError> {
     }
 }
 
-fn int_or_float(input: &mut &[u8]) -> PResult<Either<i32, f32>, ParserError> {
+fn int_or_float<'a, E>(input: &mut &'a [u8]) -> ModalResult<Either<i32, f32>, E>
+where
+    E: ParserError<&'a [u8]>
+        + FromExternalError<&'a [u8], Utf8Error>
+        + FromExternalError<&'a [u8], ParseIntError>
+        + FromExternalError<&'a [u8], ParseFloatError>,
+{
     let buf = (
         one_of(('0'..='9', '+', '-', '.')),
         take_while(0.., ('0'..='9', 'a'..='z', 'A'..='Z', '.', '-', '+', '#')),
@@ -154,44 +173,46 @@ fn int_or_float(input: &mut &[u8]) -> PResult<Either<i32, f32>, ParserError> {
     if let Some(pos) = memchr::memchr(b'#', buf) {
         let (radix, num) = buf.split_at(pos);
         let radix = from_utf8(radix)
-            .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?
+            .map_err(|e| ErrMode::from_external_error(input, e))?
             .parse::<u32>()
-            .map_err(|_| ErrMode::from_error_kind(input, ErrorKind::Tag))?;
+            .map_err(|_| ErrMode::from_input(input))?;
         let num = i32::from_str_radix(
-            from_utf8(&num[1..])
-                .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?,
+            from_utf8(&num[1..]).map_err(|e| ErrMode::from_external_error(input, e))?,
             radix,
         )
-        .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Tag, e))?;
+        .map_err(|e| ErrMode::from_external_error(input, e))?;
         return Ok(Either::Left(num));
     }
 
     if memchr::memchr3(b'.', b'e', b'E', buf).is_some() {
         Ok(Either::Right(
             from_utf8(buf)
-                .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?
+                .map_err(|e| ErrMode::from_external_error(input, e))?
                 .parse::<f32>()
-                .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Tag, e))?,
+                .map_err(|e| ErrMode::from_external_error(input, e))?,
         ))
     } else {
         Ok(
             match from_utf8(buf)
-                .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?
+                .map_err(|e| ErrMode::from_external_error(input, e))?
                 .parse::<i32>()
             {
                 Ok(v) => Either::Left(v),
                 Err(_) => Either::Right(
                     from_utf8(buf)
-                        .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))?
+                        .map_err(|e| ErrMode::from_external_error(input, e))?
                         .parse::<f32>()
-                        .map_err(|e| ErrMode::from_external_error(input, ErrorKind::Tag, e))?,
+                        .map_err(|e| ErrMode::from_external_error(input, e))?,
                 ),
             },
         )
     }
 }
 
-fn string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
+fn string<'a, E>(input: &mut &'a [u8]) -> ModalResult<Box<[u8]>, E>
+where
+    E: ParserError<&'a [u8]> + FromExternalError<&'a [u8], PossibleError>,
+{
     enum StringFragment<'a> {
         Literal(&'a [u8]),
         EscapedChar(u8),
@@ -199,12 +220,17 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
         Nested(Box<[u8]>),
     }
 
-    fn literal_fragment<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>, ParserError> {
+    fn literal_fragment<'a, E: ParserError<&'a [u8]>>(
+        input: &mut &'a [u8],
+    ) -> ModalResult<StringFragment<'a>, E> {
         let buf = take_till(1.., (b'(', b')', b'\\')).parse_next(input)?;
         Ok(StringFragment::Literal(buf))
     }
 
-    fn escaped_char<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>, ParserError> {
+    fn escaped_char<'a, E>(input: &mut &'a [u8]) -> ModalResult<StringFragment<'a>, E>
+    where
+        E: ParserError<&'a [u8]> + FromExternalError<&'a [u8], PossibleError>,
+    {
         let parse_oct_byte = take_while(1..=3, |c: u8| c.is_oct_digit()).try_map(|buf| {
             Ok::<_, PossibleError>((u16::from_str_radix(from_utf8(buf)?, 8)? & 0xff) as u8)
         });
@@ -226,12 +252,17 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
         Ok(StringFragment::EscapedChar(c))
     }
 
-    fn escaped_newline<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>, ParserError> {
+    fn escaped_newline<'a, E: ParserError<&'a [u8]>>(
+        input: &mut &'a [u8],
+    ) -> ModalResult<StringFragment<'a>, E> {
         preceded(literal(b"\\"), loose_line_ending).parse_next(input)?;
         Ok(StringFragment::EscapedNewLine)
     }
 
-    fn build_string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
+    fn build_string<'a, E>(input: &mut &'a [u8]) -> ModalResult<Box<[u8]>, E>
+    where
+        E: ParserError<&'a [u8]> + FromExternalError<&'a [u8], PossibleError>,
+    {
         repeat(0.., fragment)
             .fold(Vec::new, |mut r, frag| {
                 match frag {
@@ -248,7 +279,10 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
             .map(Into::into)
     }
 
-    fn nested<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>, ParserError> {
+    fn nested<'a, E>(input: &mut &'a [u8]) -> ModalResult<StringFragment<'a>, E>
+    where
+        E: ParserError<&'a [u8]> + FromExternalError<&'a [u8], PossibleError>,
+    {
         let frag = delimited(b'(', opt(build_string), b')').parse_next(input)?;
         Ok(StringFragment::Nested(match frag {
             Some(s) => s,
@@ -256,17 +290,26 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
         }))
     }
 
-    fn fragment<'a>(input: &mut &'a [u8]) -> PResult<StringFragment<'a>, ParserError> {
+    fn fragment<'a, E>(input: &mut &'a [u8]) -> ModalResult<StringFragment<'a>, E>
+    where
+        E: ParserError<&'a [u8]> + FromExternalError<&'a [u8], PossibleError>,
+    {
         alt((literal_fragment, escaped_char, escaped_newline, nested)).parse_next(input)
     }
 
-    fn literal_string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
+    fn literal_string<'a, E>(input: &mut &'a [u8]) -> ModalResult<Box<[u8]>, E>
+    where
+        E: ParserError<&'a [u8]> + FromExternalError<&'a [u8], PossibleError>,
+    {
         terminated(build_string, b')').parse_next(input)
     }
 
     /// String encoded in hex wrapped in "<>", e.g. <0123456789ABCDEF>
     /// White space are ignored, if last byte is missing, it is assumed to be 0.
-    fn hex_string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
+    fn hex_string<'a, E>(input: &mut &'a [u8]) -> ModalResult<Box<[u8]>, E>
+    where
+        E: ParserError<&'a [u8]> + FromExternalError<&'a [u8], PossibleError>,
+    {
         let bytes = repeat(0.., alt((hex_digit1, white_space)))
             .fold(Vec::new, |mut bytes, frag| {
                 if !is_white_space(frag[0]) {
@@ -289,7 +332,10 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
         terminated(bytes, b'>').parse_next(input)
     }
 
-    fn ascii85(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
+    fn ascii85<'a, E>(input: &mut &'a [u8]) -> ModalResult<Box<[u8]>, E>
+    where
+        E: ParserError<&'a [u8]> + FromExternalError<&'a [u8], PossibleError>,
+    {
         delimited(
             b'~',
             take_while(0.., |c| c != b'~')
@@ -299,7 +345,10 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
         .parse_next(input)
     }
 
-    fn hex_or_85(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
+    fn hex_or_85<'a, E>(input: &mut &'a [u8]) -> ModalResult<Box<[u8]>, E>
+    where
+        E: ParserError<&'a [u8]> + FromExternalError<&'a [u8], PossibleError>,
+    {
         alt((hex_string, ascii85)).parse_next(input)
     }
 
@@ -311,27 +360,50 @@ fn string(input: &mut &[u8]) -> PResult<Box<[u8]>, ParserError> {
     .parse_next(input)
 }
 
-fn executable_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str, ParserError> {
+fn executable_name<'a, E>(input: &mut &'a [u8]) -> ModalResult<&'a str, E>
+where
+    E: ParserError<&'a [u8]> + FromExternalError<&'a [u8], Utf8Error>,
+{
     take_while(1.., is_regular_char)
         .try_map(from_utf8)
         .parse_next(input)
 }
 
-fn literal_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str, ParserError> {
+fn literal_name<'a, E>(input: &mut &'a [u8]) -> ModalResult<&'a str, E>
+where
+    E: ParserError<&'a [u8]> + FromExternalError<&'a [u8], Utf8Error>,
+{
     preceded('/', take_while(0.., is_regular_char).try_map(from_utf8)).parse_next(input)
 }
 
-fn procedure(input: &mut &[u8]) -> PResult<TokenArray, ParserError> {
+fn procedure<'a, E>(input: &mut &'a [u8]) -> ModalResult<TokenArray, E>
+where
+    E: ParserError<&'a [u8]>
+        + FromExternalError<&'a [u8], Utf8Error>
+        + FromExternalError<&'a [u8], ParseIntError>
+        + FromExternalError<&'a [u8], ParseFloatError>
+        + FromExternalError<&'a [u8], PossibleError>,
+{
     delimited(b'{', repeat(0.., ws_prefixed(token)), ws_prefixed(b'}')).parse_next(input)
 }
 
 /// Parses '[', ']', '<<', '>>' and convert them to String.
-fn special_name<'a>(input: &mut &'a [u8]) -> PResult<&'a str, ParserError> {
+fn special_name<'a, E>(input: &mut &'a [u8]) -> ModalResult<&'a str, E>
+where
+    E: ParserError<&'a [u8]> + FromExternalError<&'a [u8], Utf8Error>,
+{
     let buf = take_while(1..=2, (b'[', ']', b"<<", b">>")).parse_next(input)?;
-    from_utf8(buf).map_err(|e| ErrMode::from_external_error(input, ErrorKind::Fail, e))
+    from_utf8(buf).map_err(|e| ErrMode::from_external_error(input, e))
 }
 
-pub fn token(input: &mut &[u8]) -> PResult<Token, ParserError> {
+pub fn token<'a, E>(input: &mut &'a [u8]) -> ModalResult<Token, E>
+where
+    E: ParserError<&'a [u8]>
+        + FromExternalError<&'a [u8], Utf8Error>
+        + FromExternalError<&'a [u8], ParseIntError>
+        + FromExternalError<&'a [u8], ParseFloatError>
+        + FromExternalError<&'a [u8], PossibleError>,
+{
     alt((
         int_or_float.map(|v| Token::Literal(v.either(Value::Integer, Value::Real))),
         string.map(|s| Token::Literal(Vec::from(s).into())),

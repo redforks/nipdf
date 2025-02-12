@@ -1,5 +1,5 @@
 use paste::paste;
-use prescript::{Encoding, Name, ParserError, name, sname};
+use prescript::{Encoding, Name, name, sname};
 use snafu::prelude::*;
 use std::{
     borrow::Cow,
@@ -9,12 +9,12 @@ use std::{
     ops::{Deref, Range, RangeInclusive},
 };
 use winnow::{
-    PResult, Parser,
+    ModalResult, Parser,
     binary::{be_u8, be_u16, be_u24, be_u32, length_repeat, length_take},
-    combinator::{alt, dispatch, empty, fail, preceded, repeat, repeat_till, rest, terminated},
-    error::{ErrMode, ErrorKind, FromExternalError},
-    stream::{Accumulate, Stream, StreamIsPartial},
-    token::{any, take},
+    combinator::{alt, dispatch, empty, fail, preceded, repeat, repeat_till, terminated},
+    error::{ErrMode, ErrorConvert, FromExternalError, ParseError, ParserError},
+    stream::{Accumulate, Compare, Stream, StreamIsPartial},
+    token::{any, rest, take},
 };
 
 mod predefined_charsets;
@@ -78,23 +78,23 @@ impl Operand {
 }
 
 /// Return parser to parse integer
-fn integer_parser<'a>() -> impl Parser<&'a [u8], i32, ParserError> {
+fn integer_parser<'a, E: ParserError<&'a [u8]>>() -> impl Parser<&'a [u8], i32, E> {
     dispatch! {any;
-        v@32..=246  => |_: &mut &[u8]| Ok((v as i32) - 139),
-        v@247..=250 => |buf: &mut &[u8]| {
+        v@32..=246  => |_: &mut &'a [u8]| Ok((v as i32) - 139),
+        v@247..=250 => |buf: &mut &'a [u8]| {
             let b1 = any(buf)?;
             Ok(((v as i32) - 247) * 256 + (b1 as i32) + 108)
         },
-        v@251..=254 => |buf: &mut &[u8]| {
+        v@251..=254 => |buf: &mut &'a [u8]| {
             let b1 = any(buf)?;
             Ok(-((v as i32) - 251) * 256 - (b1 as i32) - 108)
         },
-        28 => |buf: &mut &[u8]| {
+        28 => |buf: &mut &'a [u8]| {
             let b1 = any(buf)?;
             let b2 = any(buf)?;
             Ok(((b1 as i16) << 8 | b2 as i16) as i32)
         },
-        29 => |buf: &mut &[u8]| {
+        29 => |buf: &mut &'a [u8]| {
             let b1 = any(buf)?;
             let b2 = any(buf)?;
             let b3 = any(buf)?;
@@ -126,7 +126,11 @@ fn integer_parser<'a>() -> impl Parser<&'a [u8], i32, ParserError> {
 /// always padded to a full byte. Thus, the value –2.25 is  encoded by the byte
 /// sequence (1e e2 a2 5f) and the value  0.140541E–3 by the sequence (1e 0a 14
 /// 05 41 c3 ff).
-fn real_parser<'a>() -> impl Parser<&'a [u8], f32, ParserError> {
+fn real_parser<I, E>() -> impl Parser<I, f32, E>
+where
+    I: Stream<Token = u8> + Clone + StreamIsPartial + Compare<u8>,
+    E: ParserError<I> + ParserError<(I, usize)> + ErrorConvert<E>,
+{
     use winnow::binary::bits::{bits, pattern, take};
 
     #[derive(PartialEq, Debug)]
@@ -214,7 +218,7 @@ fn real_parser<'a>() -> impl Parser<&'a [u8], f32, ParserError> {
         30u8,
         bits(repeat_till::<_, _, Real, _, _, _, _>(
             1..,
-            take::<_, u8, _, ParserError>(4u8),
+            take::<_, u8, _, E>(4u8),
             pattern(0xfu8, 4u8),
         )),
     )
@@ -225,12 +229,15 @@ fn real_parser<'a>() -> impl Parser<&'a [u8], f32, ParserError> {
 /// Operand maybe integer/real/bool/intArray/realArray, if multiple operands
 /// are provided, item types must be same, either int or real, returned as
 /// intArray/realArray.
-fn operand_parser<'a>() -> impl Parser<&'a [u8], Operand, ParserError> {
+fn operand_parser<'a, E>() -> impl Parser<&'a [u8], Operand, E>
+where
+    E: ParserError<&'a [u8]> + ErrorConvert<E> + ParserError<(&'a [u8], usize)>,
+{
     fn post_process(v: Vec<Operand>) -> Operand {
         // if v has one element, return that element
         // if all elements are all int, return int_array
         // if all elements are all real, return real_array
-        // otherwize, convert all elements to real, and return real_array
+        // otherwise, convert all elements to real, and return real_array
         if v.len() == 1 {
             return v[0].clone();
         }
@@ -363,7 +370,7 @@ impl Hash for Operator {
     }
 }
 
-fn operator_parser<'a>() -> impl Parser<&'a [u8], Operator, ParserError> {
+fn operator_parser<'a, E: ParserError<&'a [u8]>>() -> impl Parser<&'a [u8], Operator, E> {
     let escaped = preceded(12u8, any).map(Operator::escaped);
     let normal = any.map(Operator::new);
     alt((escaped, normal))
@@ -389,8 +396,8 @@ pub enum Error {
     #[snafu(display("Parse error: {message}"))]
     ParseError {
         message: String,
-        #[snafu(source(from(ParserError, Box::new)))]
-        source: Box<ParserError>,
+        #[snafu(source(from(prescript::ParserError, Box::new)))]
+        source: Box<prescript::ParserError>,
     },
 
     /// Error during cast integer.
@@ -535,7 +542,10 @@ impl Dict {
 /// Return Dict parser.
 /// Dict stored as a sequence of operators and operands. The operands are
 /// stored before the operators.
-fn dict_parser<'a>() -> impl Parser<&'a [u8], Dict, ParserError> {
+fn dict_parser<'a, E>() -> impl Parser<&'a [u8], Dict, E>
+where
+    E: ParserError<&'a [u8]> + ParserError<(&'a [u8], usize)> + ErrorConvert<E>,
+{
     let parse_item = (operand_parser(), operator_parser());
     repeat(1.., parse_item)
 }
@@ -557,7 +567,7 @@ impl OffSize {
     }
 }
 
-fn off_size_parser<'a>() -> impl Parser<&'a [u8], OffSize, ParserError> {
+fn off_size_parser<'a, E: ParserError<&'a [u8]>>() -> impl Parser<&'a [u8], OffSize, E> {
     dispatch! {any;
         1 => empty.value(OffSize::One),
         2 => empty.value(OffSize::Two),
@@ -604,12 +614,18 @@ impl<'a> Offsets<'a> {
         // skip ith off_size bytes
         let buf = &data[ith * off_size.len()..];
         match off_size {
-            OffSize::One => ignore_rest(be_u8.map(|v| v as u32)).parse(buf),
-            OffSize::Two => ignore_rest(be_u16.map(|v| v as u32)).parse(buf),
-            OffSize::Three => ignore_rest(be_u24.map(|v| v)).parse(buf),
-            OffSize::Four => ignore_rest(be_u32).parse(buf),
+            OffSize::One => {
+                ignore_rest(be_u8::<_, prescript::ParserError>.map(|v| v as u32)).parse(buf)
+            }
+            OffSize::Two => {
+                ignore_rest(be_u16::<_, prescript::ParserError>.map(|v| v as u32)).parse(buf)
+            }
+            OffSize::Three => {
+                ignore_rest(be_u24::<_, prescript::ParserError>.map(|v| v)).parse(buf)
+            }
+            OffSize::Four => ignore_rest(be_u32::<_, prescript::ParserError>).parse(buf),
         }
-        .map_err(Into::<ParserError>::into)
+        .map_err(ParseError::into_inner)
         .context(ParseSnafu {
             message: "parse OffSize".to_owned(),
         })
@@ -619,18 +635,19 @@ impl<'a> Offsets<'a> {
 fn ignore_rest<I, O, E, P>(p: P) -> impl Parser<I, O, E>
 where
     I: Stream,
-    E: winnow::error::ParserError<I>,
+    E: ParserError<I>,
     P: Parser<I, O, E>,
 {
     terminated(p, rest)
 }
 
-fn parse_ignore_rest<I, O, P>(p: P, buf: I) -> Result<O, ParserError>
+fn parse_ignore_rest<I, O, P, E: ParserError<I>>(p: P, buf: I) -> Result<O, E::Inner>
 where
     I: Stream + StreamIsPartial,
-    P: Parser<I, O, ParserError>,
+    P: Parser<I, O, E>,
+    E::Inner: ParserError<I>,
 {
-    ignore_rest(p).parse(buf).map_err(Into::into)
+    ignore_rest(p).parse(buf).map_err(ParseError::into_inner)
 }
 
 /// Data with an index(offset) for quick access memory
@@ -648,7 +665,7 @@ impl<'a> IndexedData<'a> {
 
     /// Get value by index, use parser to decode data.
     /// Panic if `idx` is out of range.
-    pub fn get<T: 'a, F: Parser<&'a [u8], T, ParserError>>(
+    pub fn get<T: 'a, F: Parser<&'a [u8], T, prescript::ParserError>>(
         &self,
         idx: usize,
         mut f: F,
@@ -684,7 +701,10 @@ impl<'a> IndexedData<'a> {
 /// ---+-----------------------+------------------------------------------
 /// 3 | data                  | Data
 /// ---+-----------------------+------------------------------------------
-fn parse_indexed_data<'a>(buf: &mut &'a [u8]) -> PResult<IndexedData<'a>, ParserError> {
+fn parse_indexed_data<'a, E>(buf: &mut &'a [u8]) -> ModalResult<IndexedData<'a>, E>
+where
+    E: ParserError<&'a [u8]> + FromExternalError<&'a [u8], Error>,
+{
     let (n, off_size) = (be_u16, off_size_parser()).parse_next(buf)?;
     let offset_data_len = (n + 1) as usize * off_size.len();
     let offsets = take(offset_data_len)
@@ -693,21 +713,30 @@ fn parse_indexed_data<'a>(buf: &mut &'a [u8]) -> PResult<IndexedData<'a>, Parser
 
     let data_len = offsets
         .get(n as usize)
-        .map_err(|e| ErrMode::<ParserError>::from_external_error(buf, ErrorKind::Fail, e))?;
+        .map_err(|e| ErrMode::<E>::from_external_error(buf, e))?;
     take(data_len)
         .map(|data| IndexedData { offsets, data })
         .parse_next(buf)
 }
 
-fn name_index_parser<'a>() -> impl Parser<&'a [u8], NameIndex<'a>, ParserError> {
+fn name_index_parser<'a, E>() -> impl Parser<&'a [u8], NameIndex<'a>, ErrMode<E>>
+where
+    E: ParserError<&'a [u8]> + FromExternalError<&'a [u8], Error>,
+{
     parse_indexed_data.map(NameIndex)
 }
 
-fn string_index_parser<'a>() -> impl Parser<&'a [u8], StringIndex<'a>, ParserError> {
+fn string_index_parser<'a, E>() -> impl Parser<&'a [u8], StringIndex<'a>, ErrMode<E>>
+where
+    E: ParserError<&'a [u8]> + FromExternalError<&'a [u8], Error>,
+{
     parse_indexed_data.map(StringIndex)
 }
 
-fn top_dict_index_parser<'a>() -> impl Parser<&'a [u8], TopDictIndex<'a>, ParserError> {
+fn top_dict_index_parser<'a, E>() -> impl Parser<&'a [u8], TopDictIndex<'a>, ErrMode<E>>
+where
+    E: ParserError<&'a [u8]> + FromExternalError<&'a [u8], Error>,
+{
     parse_indexed_data.map(TopDictIndex)
 }
 
@@ -720,7 +749,7 @@ pub struct Header {
     pub off_size: OffSize,
 }
 
-fn header_parser<'a>() -> impl Parser<&'a [u8], Header, ParserError> {
+fn header_parser<'a, E: ParserError<&'a [u8]>>() -> impl Parser<&'a [u8], Header, E> {
     (be_u8, be_u8, be_u8, off_size_parser()).map(|(major, minor, hdr_size, off_size)| Header {
         major,
         minor,
@@ -730,7 +759,7 @@ fn header_parser<'a>() -> impl Parser<&'a [u8], Header, ParserError> {
 }
 
 pub fn parse_header(buf: &[u8]) -> Result<Header> {
-    parse_ignore_rest(header_parser(), buf).context(ParseSnafu {
+    parse_ignore_rest(header_parser::<prescript::ParserError>(), buf).context(ParseSnafu {
         message: "parse header".to_owned(),
     })
 }
@@ -1122,7 +1151,7 @@ impl Charsets {
 /// 2: format2, n_ranges (first, n_left: u16) SID
 ///
 /// Predefined charsets has no format byte, handled by TopDict::charsets().
-fn charsets_parser<'a>(n_glyphs: u16) -> impl Parser<&'a [u8], Charsets, ParserError> {
+fn charsets_parser<'a>(n_glyphs: u16) -> impl Parser<&'a [u8], Charsets, prescript::ParserError> {
     fn covers(r: &[RangeInclusive<Sid>]) -> usize {
         let mut covers = 0;
         for range in r {
@@ -1131,10 +1160,13 @@ fn charsets_parser<'a>(n_glyphs: u16) -> impl Parser<&'a [u8], Charsets, ParserE
         covers
     }
 
-    fn range_parser<'a, LEFT: Parser<&'a [u8], u16, ParserError>>(
+    fn range_parser<'a, LEFT>(
         n_glyphs: u16,
         mut n_left_parser: LEFT,
-    ) -> impl Parser<&'a [u8], Vec<RangeInclusive<Sid>>, ParserError> {
+    ) -> impl Parser<&'a [u8], Vec<RangeInclusive<Sid>>, prescript::ParserError>
+    where
+        LEFT: Parser<&'a [u8], u16, prescript::ParserError>,
+    {
         // let n_left_parser = n_left_parser();
         move |buf: &mut &'a [u8]| {
             let mut parse_item =
@@ -1144,16 +1176,16 @@ fn charsets_parser<'a>(n_glyphs: u16) -> impl Parser<&'a [u8], Charsets, ParserE
                 match (n_glyphs as usize).cmp(&covers(&ranges[..])) {
                     std::cmp::Ordering::Equal => return Ok(ranges),
                     std::cmp::Ordering::Greater => ranges.push(parse_item.parse_next(buf)?),
-                    std::cmp::Ordering::Less => fail.parse_next(buf)?,
+                    std::cmp::Ordering::Less => fail::<_, _, prescript::ParserError>(buf)?,
                 }
             }
         }
     }
 
     let n_glyphs = n_glyphs - 1; // 0 is always .notdef, not exist in charsets
-    dispatch! {any;
+    dispatch! {any::<_, prescript::ParserError>;
         0 => repeat(n_glyphs as usize,  be_u16).map(Charsets::Format0),
-        1 => range_parser(n_glyphs,  be_u8::<&'a [u8], ParserError>.output_into()).map(Charsets::Format1),
+        1 => range_parser(n_glyphs,  be_u8::<&'a [u8], prescript::ParserError>.output_into()).map(Charsets::Format1),
         2 => range_parser(n_glyphs,  be_u16).map(Charsets::Format2),
         _ => fail,
     }
@@ -1256,7 +1288,7 @@ impl Encodings {
 /// EncodingSuppliments is a sequence of code (u8) and sid (u16) preceeded with `nSups` (u8),
 /// which is the count of EncodingSuppliment.
 fn encodings_parser<'a>()
--> impl Parser<&'a [u8], (Encodings, Option<Vec<EncodingSupplement>>), ParserError> {
+-> impl Parser<&'a [u8], (Encodings, Option<Vec<EncodingSupplement>>), prescript::ParserError> {
     let mut format0 = length_take(be_u8).map(|v: &[u8]| Encodings::Format0(v.to_owned()));
     let mut format1 = length_repeat(
         be_u8,
@@ -1265,7 +1297,7 @@ fn encodings_parser<'a>()
     .map(Encodings::Format1);
     let supplement_parser = (be_u8, be_u16).map(|(code, sid)| EncodingSupplement::new(code, sid));
     let mut supplements_parser = length_repeat(be_u8, supplement_parser).map(Some);
-    dispatch! { be_u8;
+    dispatch! { be_u8::<_, prescript::ParserError>;
         0 => (format0.by_ref(), empty.value(None)),
         1 => (format1.by_ref(), empty.value(None)),
         0x80 => (format0.by_ref(),  supplements_parser.by_ref()),
