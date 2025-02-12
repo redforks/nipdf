@@ -1132,27 +1132,20 @@ fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> Result<Dyn
 
     match (&img, to) {
         (DynamicImage::ImageLuma8(_), ColorSpace::DeviceGray)
-        | (DynamicImage::ImageRgb8(_), ColorSpace::DeviceRGB) => {
-            Ok(img)
-        }
-        (DynamicImage::ImageLuma8(_), ColorSpace::Separation(sep)) => {
-            Ok(DynamicImage::ImageRgba8(convert_cs(
-                &img.into_luma8(),
-                sep.as_ref(),
-            )?))
-        }
-        (DynamicImage::ImageRgb8(_), ColorSpace::DeviceN(cs)) => {
-            Ok(DynamicImage::ImageRgba8(convert_cs(
-                &img.into_luma8(),
-                cs.as_ref(),
-            )?))
-        }
-        (DynamicImage::ImageRgba8(_), cs) => {
-            Ok(DynamicImage::ImageRgba8(convert_rgba_cs(
-                &img.into_rgba8(),
-                cs,
-            )?))
-        }
+        | (DynamicImage::ImageRgb8(_), ColorSpace::DeviceRGB) => Ok(img),
+        (DynamicImage::ImageLuma8(_), ColorSpace::Separation(sep)) => Ok(DynamicImage::ImageRgba8(
+            convert_cs(&img.into_luma8(), sep.as_ref())?,
+        )),
+        (DynamicImage::ImageLuma8(_), ColorSpace::Indexed(cs)) => Ok(DynamicImage::ImageRgba8(
+            convert_cs(&img.into_luma8(), cs.as_ref())?,
+        )),
+        (DynamicImage::ImageRgb8(_), ColorSpace::DeviceN(cs)) => Ok(DynamicImage::ImageRgba8(
+            convert_cs(&img.into_luma8(), cs.as_ref())?,
+        )),
+        (DynamicImage::ImageRgba8(_), cs) => Ok(DynamicImage::ImageRgba8(convert_rgba_cs(
+            &img.into_rgba8(),
+            cs,
+        )?)),
         _ => whatever!(
             "TODO: transform image color space from {:?} to {:?}",
             img.color(),
