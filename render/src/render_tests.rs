@@ -23,7 +23,7 @@ fn decode_file_page(path: &str, page_no: usize) -> Result<String> {
     let page = &pages[page_no];
     let option = RenderOptionBuilder::new().zoom(1.5);
     let bytes = render_page(page, option)
-        .whatever_context("render page")?
+        .with_whatever_context(|_| format!("render page: {}", page_no))?
         .into_vec();
     let hash = Md5::digest(&bytes[..]);
     Ok(hex::encode(hash))

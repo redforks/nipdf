@@ -955,7 +955,9 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
     where
         'a: 'c,
     {
-        let font_res = resource.font()?;
+        let font_res = resource
+            .font()
+            .whatever_context::<_, ObjectValueError>("get font resource")?;
         let mut fonts = HashMap::with_capacity(font_res.len());
         for (k, v) in font_res {
             info!("load font: {:?}", k);

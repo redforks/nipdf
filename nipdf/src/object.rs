@@ -527,7 +527,12 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
             .whatever_context::<_, ObjectValueError>("as dict")?;
         let mut res = HashMap::with_capacity(v.len());
         for (k, v) in v.iter() {
-            res.insert(k.clone(), V::create(v, self.resolver())?);
+            res.insert(
+                k.clone(),
+                V::create(v, self.resolver()).with_whatever_context::<_, _, ObjectValueError>(
+                    |_| format!("create dict value: {}", k),
+                )?,
+            );
         }
         Ok(res)
     }

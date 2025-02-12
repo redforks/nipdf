@@ -1,7 +1,7 @@
 //! Contains types of PDF file structures.
 
 use crate::{
-    ObjectResolveSnafu, ObjectValueError, Result,
+    ObjectValueError, Result,
     file::encrypt::Authorizer,
     object::{
         Array, Dictionary, Embedded, Entry, Frame, HexString, LiteralString, Object, ObjectId,
@@ -23,7 +23,7 @@ use std::iter::repeat_with;
 use winnow::{
     LocatingSlice, ModalResult, Parser as _,
     combinator::{alt, repeat, terminated},
-    error::{ContextError, ErrMode, ParseError},
+    error::{ErrMode, ParseError},
     stream::{Compare, StreamIsPartial},
     token::{any, rest, take_until},
 };
@@ -57,11 +57,11 @@ struct ObjectStream {
     /// Data contains all objects in this stream, without index part.
     buf: Vec<u8>,
     /// offsets of objects in `buf`
-    offsets: Vec<u16>,
+    offsets: Vec<u32>,
 }
 
 // TODO: use and create test
-fn object_stream_parser<'a, S>(n: usize) -> impl winnow::Parser<S, ObjectStream, ContextError> + 'a
+fn object_stream_parser<'a, S>(n: usize) -> impl winnow::Parser<S, ObjectStream, ParserError> + 'a
 where
     S: winnow::stream::Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
 {
@@ -73,13 +73,13 @@ where
         repeat(
             n,
             terminated(
-                preceded((dec_uint::<_, u32, _>, space1), dec_uint::<_, u16, _>),
+                preceded((dec_uint::<_, u32, _>, space1), dec_uint::<_, u32, _>),
                 wsc0(),
             ),
         ),
         rest,
     )
-        .map(|(nums, buf): (Vec<u16>, &'a [u8])| ObjectStream {
+        .map(|(nums, buf): (Vec<u32>, &'a [u8])| ObjectStream {
             buf: buf.to_owned(),
             offsets: nums,
         })
@@ -97,8 +97,12 @@ impl ObjectStream {
             "not object stream"
         );
         let n = d.get(&sname("N")).map_or(Ok(0), Object::int)? as usize;
-        let buf = stream.decode_without_resolve_length(file, encrypt_info)?;
-        let r = object_stream_parser(n).parse(buf.as_ref())?;
+        let buf = stream
+            .decode_without_resolve_length(file, encrypt_info)
+            .whatever_context::<_, ObjectValueError>("decode_without_resolve_length ")?;
+        let r = object_stream_parser(n)
+            .parse(buf.as_ref())
+            .map_err(ParseError::into_inner)?;
         Ok(r)
     }
 
@@ -200,8 +204,9 @@ impl XRefTable {
         encrypt_info: Option<&EncryptInfo>,
     ) -> Result<Either<&'a [u8], &'b [u8]>, ObjectValueError> {
         fn parse_indirect_stream(input: &[u8]) -> Result<Stream, ObjectValueError> {
-            let (_, o) = indirect_object_def::<_, ContextError<&'static str>>()
-                .parse_peek(LocatingSlice::new(input))?;
+            let o = indirect_object_def::<_, ParserError>()
+                .parse_next(&mut LocatingSlice::new(input))
+                .map_err(|e| e.into_inner().unwrap())?;
             let Object::Stream(s) = o.take() else {
                 whatever!("expected stream");
             };
@@ -220,29 +225,33 @@ impl XRefTable {
         match entry {
             ObjectPos::Offset(offset) => Ok(Either::Left(&buf[*offset as usize..])),
             ObjectPos::InStream(id, idx) => {
-                let object_stream = self.object_streams[id].get_or_try_init(|| {
-                    let obj_buf = self
-                        .resolve_object_buf(buf, *id, encrypt_info)?
-                        .left()
-                        .whatever_context::<_, ObjectValueError>(
-                        "object stream should not be in another object stream",
-                    )?;
+                let object_stream = self.object_streams[id]
+                    .get_or_try_init(|| {
+                        let obj_buf = self
+                            .resolve_object_buf(buf, *id, encrypt_info)?
+                            .left()
+                            .whatever_context::<_, ObjectValueError>(
+                            "object stream should not be in another object stream",
+                        )?;
 
-                    let mut stream = parse_indirect_stream(obj_buf)
-                        .whatever_context::<_, ObjectValueError>("parse indirect stream")?;
+                        let mut stream = parse_indirect_stream(obj_buf)
+                            .whatever_context::<_, ObjectValueError>("parse indirect stream")?;
 
-                    let length = stream.0.get("Length").cloned();
-                    if let Some(Object::Reference(id)) = length {
-                        let v = self
-                            .parse_object(buf, id, None)
-                            .whatever_context::<_, ObjectValueError>("parse object")?;
-                        stream.0.update(|d| {
-                            d.insert(sname("Length"), v);
-                        });
-                    }
+                        let length = stream.0.get("Length").cloned();
+                        if let Some(Object::Reference(id)) = length {
+                            let v = self
+                                .parse_object(buf, id, None)
+                                .whatever_context::<_, ObjectValueError>("parse object")?;
+                            stream.0.update(|d| {
+                                d.insert(sname("Length"), v);
+                            });
+                        }
 
-                    ObjectStream::new(&stream, obj_buf, encrypt_info)
-                })?;
+                        ObjectStream::new(&stream, obj_buf, encrypt_info)
+                    })
+                    .with_whatever_context::<_, _, ObjectValueError>(|_| {
+                        format!("parse object stream {}", id)
+                    })?;
 
                 Ok(Either::Right(object_stream.get_buf(*idx as usize)))
             }
@@ -257,6 +266,7 @@ impl XRefTable {
     ) -> Result<Object, ObjectValueError> {
         let id = id.into();
         self.resolve_object_buf(buf, id, encrypt_info)
+            .with_whatever_context(|_| format!("resolve buf for object {}", id))
             .and_then(|buf| {
                 buf.either(
                     |buf| {
@@ -483,7 +493,6 @@ impl<'a> ObjectResolver<'a> {
             .get_or_try_init(|| {
                 self.xref_table
                     .parse_object(self.buf, id, self.encrypt_info())
-                    .context(ObjectResolveSnafu)
             })
     }
 
