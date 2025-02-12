@@ -11,7 +11,7 @@ use crate::{
     },
     text::FontDict,
 };
-use ahash::{HashMap, HashMapExt};
+use ahash::{HashMap, HashMapExt, HashSet, HashSetExt as _};
 use educe::Educe;
 use nipdf_macro::{TryFromNameObject, pdf_object};
 use prescript::{Name, ParserError, sname};
@@ -331,11 +331,22 @@ impl<'a> Page<'a> {
     pub(crate) fn parse(root: PageDict<'a, 'a>) -> Result<Vec<Self>> {
         let mut pages = Vec::new();
         let mut parents = Vec::new();
+        let mut visited = HashSet::new();
+
         fn handle<'a, 'c>(
             node: PageDict<'a, 'a>,
             pages: &'c mut Vec<Page<'a>>,
             parents: &'c mut Vec<PageDict<'a, 'a>>,
+            visited: &'c mut HashSet<RuntimeObjectId>,
         ) -> Result<()> {
+            let node_id = node.id();
+
+            if !visited.insert(node_id) {
+                // 检测到循环时记录警告日志但继续执行
+                log::warn!("Detected page tree loop at node {}", node_id);
+                return Ok(()); // 直接返回，跳过这个分支
+            }
+
             if node.is_leaf() {
                 pages.push(
                     Page::from_leaf(&node, &parents[..])
@@ -345,12 +356,14 @@ impl<'a> Page<'a> {
                 let kids = node.kids()?;
                 parents.push(node);
                 for kid in kids {
-                    handle(kid, pages, parents)?;
+                    handle(kid, pages, parents, visited)?;
                 }
+                parents.pop();
             }
             Ok(())
         }
-        handle(root, &mut pages, &mut parents)?;
+
+        handle(root, &mut pages, &mut parents, &mut visited)?;
         Ok(pages)
     }
 
