@@ -1139,6 +1139,11 @@ fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> Result<Dyn
         (DynamicImage::ImageLuma8(_), ColorSpace::Indexed(cs)) => Ok(DynamicImage::ImageRgba8(
             convert_cs(&img.into_luma8(), cs.as_ref())?,
         )),
+        (DynamicImage::ImageRgb8(_), ColorSpace::Indexed(_)) => {
+            // I think RGB8 image can not be converted to Indexed color space, indexed color should
+            // use u8 as index to lookup color.
+            Ok(img)
+        }
         (DynamicImage::ImageRgb8(_), ColorSpace::DeviceN(cs)) => Ok(DynamicImage::ImageRgba8(
             convert_cs(&img.into_luma8(), cs.as_ref())?,
         )),
