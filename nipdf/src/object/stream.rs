@@ -721,12 +721,11 @@ fn decode_lzw(buf: &[u8], params: LZWDeflateDecodeParams) -> Result<Vec<u8>, Obj
         return Err(ObjectValueError::FilterDecodeError);
     }
     if rv.bytes_read != buf.len() {
-        error!(
+        warn!(
             "LZWDecode: expected to read {} bytes, but read {} bytes",
             buf.len(),
             rv.bytes_read
         );
-        return Err(ObjectValueError::FilterDecodeError);
     }
     predictor_decode(r, &params)
 }

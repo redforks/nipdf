@@ -320,7 +320,9 @@ impl<'a> Page<'a> {
             .into_iter()
             .map(|s| {
                 s.decode(self.d.d.resolver())
-                    .whatever_context::<_, ObjectValueError>("decode stream")
+                    .with_whatever_context::<_, _, ObjectValueError>(|_| {
+                        format!("decode stream {:?}", s.id())
+                    })
                     .map(std::borrow::Cow::into_owned)
             })
             .collect::<Result<_, _>>()?;
