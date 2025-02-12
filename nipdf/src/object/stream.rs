@@ -14,7 +14,7 @@ use crate::{
     object::PdfObject,
     parser::is_white_space,
 };
-use bitstream_io::{BigEndian, BitReader};
+use bitstream_io::{BigEndian, BitRead as _, BitReader};
 use image::{DynamicImage, GrayImage, Luma, RgbImage, Rgba, RgbaImage};
 use log::{error, warn};
 use nipdf_macro::{TryFromIntObject, pdf_object};
@@ -326,6 +326,14 @@ fn decode_image<'a, M: ImageMetadata>(
         .map(|args| ColorSpace::from_args(&args, resolver, resources))
         .transpose()
         .whatever_context::<_, ObjectValueError>("Failed to create ColorSpace from args")?;
+
+    let width = img_meta
+        .width()
+        .whatever_context::<_, ObjectValueError>("Failed to get width")?;
+    let height = img_meta
+        .height()
+        .whatever_context::<_, ObjectValueError>("Failed to get height")?;
+
     let mut r = match data {
         FilterDecodedData::Image(img) => {
             if let Some(color_space) = color_space.as_ref() {
@@ -375,16 +383,42 @@ fn decode_image<'a, M: ImageMetadata>(
                     data.borrow(),
                     true,
                 )?,
+                (Some(cs @ ColorSpace::Indexed(_)), bpc @ (2 | 4)) => {
+                    // Paletted or low-depth color
+                    let n_colors = cs.components();
+                    ensure_whatever!(
+                        n_colors == 1,
+                        "indexed color space must have 1 component, got {}",
+                        n_colors
+                    );
+                    let mut img = RgbaImage::new(width, height);
+
+                    let mut bit_reader = BitReader::<_, BigEndian>::new(data.as_ref());
+
+                    for y in 0..height {
+                        for x in 0..width {
+                            // Read the color index
+                            let color_index = bit_reader
+                                .read::<u8>(bpc as u32)
+                                .whatever_context::<_, ObjectValueError>(
+                                    "Failed to read color index",
+                                )?;
+
+                            // Convert the color index to RGBA
+                            let color: [u8; 4] = color_to_rgba(
+                                cs,
+                                &[color_index.into_color_comp()], // Assuming indexed color space
+                            );
+
+                            img.put_pixel(x, y, Rgba(color));
+                        }
+                    }
+
+                    DynamicImage::ImageRgba8(img)
+                }
                 (Some(cs), 8) => {
                     let n_colors = cs.components();
-                    let mut img = RgbaImage::new(
-                        img_meta
-                            .width()
-                            .whatever_context::<_, ObjectValueError>("Failed to get width")?,
-                        img_meta
-                            .height()
-                            .whatever_context::<_, ObjectValueError>("Failed to get height")?,
-                    );
+                    let mut img = RgbaImage::new(width, height);
                     for (p, dest_p) in data.chunks(n_colors).zip(img.pixels_mut()) {
                         let c: TinyVec<[f32; 4]> = p.iter().map(|v| v.into_color_comp()).collect();
                         let color: [u8; 4] = color_to_rgba(cs, c.as_slice());
