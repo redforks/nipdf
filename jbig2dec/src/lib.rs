@@ -240,10 +240,140 @@ fn get_context(x: i32, y: i32, width: u32, height: u32, data: &Vec<bool>) -> u32
     a * 512 + b * 256 + c * 128 + d * 64 + e * 32 + f * 16 + g * 8 + h * 4 + i * 2 + j
 }
 
-const Q_TABLE_0: [u32; 4] = [0x5602, 0x341, 0x181, 0x64];
-const Q_TABLE_1: [u32; 4] = [0x194, 0x65, 0x29, 0xA];
-const Q_TABLE_2: [u32; 4] = [0x66, 0x29, 0xA, 0x4];
-const Q_TABLE_3: [u32; 4] = [0x67, 0x2A, 0xA, 0x4];
+const Q_TABLE_0: [(u32, u32); 128] = [
+    (0x5602, 0),
+    (0x341, 0),
+    (0x181, 0),
+    (0x64, 0),
+    (0x194, 0),
+    (0x65, 0),
+    (0x29, 0),
+    (0xA, 0),
+    (0x66, 0),
+    (0x29, 0),
+    (0xA, 0),
+    (0x4, 0),
+    (0x67, 0),
+    (0x2A, 0),
+    (0xA, 0),
+    (0x4, 0),
+    (0x68, 0),
+    (0x2B, 0),
+    (0xB, 0),
+    (0x5, 0),
+    (0x69, 0),
+    (0x2C, 0),
+    (0x12, 0),
+    (0x6, 0),
+    (0x6A, 0),
+    (0x2D, 0),
+    (0x13, 0),
+    (0x6, 0),
+    (0x6B, 0),
+    (0x2E, 0),
+    (0x14, 0),
+    (0x7, 0),
+    (0x6C, 0),
+    (0x2F, 0),
+    (0x15, 0),
+    (0x7, 0),
+    (0x6D, 0),
+    (0x30, 0),
+    (0x16, 0),
+    (0x8, 0),
+    (0x6E, 0),
+    (0x31, 0),
+    (0x17, 0),
+    (0x8, 0),
+    (0x6F, 0),
+    (0x32, 0),
+    (0x18, 0),
+    (0x9, 0),
+    (0x70, 0),
+    (0x33, 0),
+    (0x19, 0),
+    (0x9, 0),
+    (0x71, 0),
+    (0x34, 0),
+    (0x1A, 0),
+    (0xA, 0),
+    (0x72, 0),
+    (0x35, 0),
+    (0x1B, 0),
+    (0xA, 0),
+    (0x73, 0),
+    (0x36, 0),
+    (0x1C, 0),
+    (0xB, 0),
+    (0x74, 0),
+    (0x37, 0),
+    (0x1D, 0),
+    (0xB, 0),
+    (0x75, 0),
+    (0x38, 0),
+    (0x1E, 0),
+    (0xC, 0),
+    (0x76, 0),
+    (0x39, 0),
+    (0x1F, 0),
+    (0xC, 0),
+    (0x77, 0),
+    (0x3A, 0),
+    (0x20, 0),
+    (0xD, 0),
+    (0x78, 0),
+    (0x3B, 0),
+    (0x21, 0),
+    (0xD, 0),
+    (0x79, 0),
+    (0x3C, 0),
+    (0x22, 0),
+    (0xE, 0),
+    (0x7A, 0),
+    (0x3D, 0),
+    (0x23, 0),
+    (0xE, 0),
+    (0x7B, 0),
+    (0x3E, 0),
+    (0x24, 0),
+    (0xF, 0),
+    (0x7C, 0),
+    (0x3F, 0),
+    (0x25, 0),
+    (0xF, 0),
+    (0x7D, 0),
+    (0x40, 0),
+    (0x26, 0),
+    (0x10, 0),
+    (0x7E, 0),
+    (0x41, 0),
+    (0x27, 0),
+    (0x10, 0),
+    (0x7F, 0),
+    (0x42, 0),
+    (0x28, 0),
+    (0x11, 0),
+    (0x80, 0),
+    (0x43, 0),
+    (0x29, 0),
+    (0x11, 0),
+    (0x81, 0),
+    (0x44, 0),
+    (0x2A, 0),
+    (0x12, 0),
+    (0x82, 0),
+    (0x45, 0),
+    (0x2B, 0),
+    (0x12, 0),
+    (0x83, 0),
+    (0x46, 0),
+    (0x2C, 0),
+    (0x13, 0),
+];
+
+fn get_qe(context: u32, state: &ArithmeticDecoderState) -> u32 {
+    Q_TABLE_0[context as usize].0 // Only QE value
+}
 
 struct ArithmeticDecoderState {
     c: u32,  // Code register
@@ -336,11 +466,11 @@ impl ArithmeticDecoder {
 
         for y in 0..height {
             for x in 0..width {
-                let context_index = get_context(x as i32, y as i32, width, height, &data) as usize;
+                let context_index = get_context(x as i32, y as i32, width, height, &data);
 
-                let qe = Q_TABLE_0[0]; // Replace with actual Q-table lookup
-
-                let bit = self.state.arithmetic_decode(reader, qe)?;
+                let bit = self
+                    .state
+                    .arithmetic_decode(reader, get_qe(context_index, &self.state))?;
                 data[(y * width + x) as usize] = bit;
             }
         }
