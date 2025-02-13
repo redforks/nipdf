@@ -1,0 +1,12 @@
+[package]
+name = "jbig2dec"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bitreader = "0.3.11"
+educe.workspace = true
+image.workspace = true
+
+[lints]
+workspace = true
