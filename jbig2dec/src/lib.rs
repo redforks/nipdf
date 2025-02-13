@@ -214,11 +214,65 @@ fn decode_mmr(
     Ok(decoded_data)
 }
 
-struct ArithmeticDecoder {}
+const Q_TABLE_0: [u32; 4] = [0x5602, 0x341, 0x181, 0x64];
+const Q_TABLE_1: [u32; 4] = [0x194, 0x65, 0x29, 0xA];
+const Q_TABLE_2: [u32; 4] = [0x66, 0x29, 0xA, 0x4];
+const Q_TABLE_3: [u32; 4] = [0x67, 0x2A, 0xA, 0x4];
+
+struct ArithmeticDecoder {
+    c: u32,  // Code register
+    a: u32,  // Interval width register
+    ct: u32, // Counter
+}
 
 impl ArithmeticDecoder {
     fn new() -> Self {
-        ArithmeticDecoder {}
+        ArithmeticDecoder {
+            c: 0,
+            a: 0x8000,
+            ct: 12,
+        }
+    }
+
+    fn arithmetic_decode(
+        &mut self,
+        reader: &mut BitReader<'_>,
+        qe: u32,
+    ) -> Result<bool, Jbig2Error> {
+        let lps = self.a < qe;
+        if lps {
+            self.a = self.a - qe;
+            if self.a & 0x8000 == 0 {
+                self.arithmetic_renorm(reader)?;
+            }
+            Ok(true)
+        } else {
+            self.a = qe;
+            self.arithmetic_renorm(reader)?;
+            Ok(false)
+        }
+    }
+
+    fn arithmetic_renorm(&mut self, reader: &mut BitReader<'_>) -> Result<(), Jbig2Error> {
+        while self.a < 0x8000 {
+            self.a = self.a << 1;
+            self.c = (self.c << 1) | (if reader.read_bool()? { 1 } else { 0 }) as u32;
+            self.ct -= 1;
+            if self.ct == 0 {
+                self.fill_c_register(reader)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn fill_c_register(&mut self, reader: &mut BitReader<'_>) -> Result<(), Jbig2Error> {
+        let mut new_bits: u32 = 0;
+        for _ in 0..8 {
+            new_bits = (new_bits << 1) | (if reader.read_bool()? { 1 } else { 0 }) as u32;
+        }
+        self.c = (self.c & 0xff00) | new_bits;
+        self.ct = 8;
+        Ok(())
     }
 
     fn decode(
@@ -231,9 +285,22 @@ impl ArithmeticDecoder {
             "Decoding arithmetic coded data (width: {}, height: {})",
             width, height
         );
-        // Placeholder implementation. Replace with actual arithmetic decoding logic.
+
+        //Placeholder implementation: Replace with actual arithmetic decoding logic.
         let total_pixels = width * height;
-        let data = vec![false; total_pixels as usize];
+        let mut data = vec![false; total_pixels as usize];
+
+        //Initialize
+        self.fill_c_register(reader)?;
+        self.c = self.c << 4;
+        self.ct = 4;
+
+        for i in 0..total_pixels {
+            //Context lookup - placeholder always use Q_TABLE_0
+            let bit = self.arithmetic_decode(reader, Q_TABLE_0[0])?;
+            data[i as usize] = bit;
+        }
+
         Ok(data)
     }
 }
