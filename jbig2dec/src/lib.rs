@@ -245,15 +245,15 @@ const Q_TABLE_1: [u32; 4] = [0x194, 0x65, 0x29, 0xA];
 const Q_TABLE_2: [u32; 4] = [0x66, 0x29, 0xA, 0x4];
 const Q_TABLE_3: [u32; 4] = [0x67, 0x2A, 0xA, 0x4];
 
-struct ArithmeticDecoder {
+struct ArithmeticDecoderState {
     c: u32,  // Code register
     a: u32,  // Interval width register
     ct: u32, // Counter
 }
 
-impl ArithmeticDecoder {
+impl ArithmeticDecoderState {
     fn new() -> Self {
-        ArithmeticDecoder {
+        ArithmeticDecoderState {
             c: 0,
             a: 0x8000,
             ct: 12,
@@ -300,6 +300,20 @@ impl ArithmeticDecoder {
         self.ct = 8;
         Ok(())
     }
+}
+
+struct ArithmeticDecoder {
+    state: ArithmeticDecoderState,
+    contexts: Vec<u32>,
+}
+
+impl ArithmeticDecoder {
+    fn new() -> Self {
+        ArithmeticDecoder {
+            state: ArithmeticDecoderState::new(),
+            contexts: vec![0; 1024],
+        }
+    }
 
     fn decode(
         &mut self,
@@ -316,18 +330,17 @@ impl ArithmeticDecoder {
         let mut data = vec![false; total_pixels as usize];
 
         //Initialize
-        self.fill_c_register(reader)?;
-        self.c = self.c << 4;
-        self.ct = 4;
+        self.state.fill_c_register(reader)?;
+        self.state.c = self.state.c << 4;
+        self.state.ct = 4;
 
         for y in 0..height {
             for x in 0..width {
-                let context = get_context(x as i32, y as i32, width, height, &data);
+                let context_index = get_context(x as i32, y as i32, width, height, &data) as usize;
 
-                //Use context to lookup in a probability estimation table (Q-table)
                 let qe = Q_TABLE_0[0]; // Replace with actual Q-table lookup
 
-                let bit = self.arithmetic_decode(reader, qe)?;
+                let bit = self.state.arithmetic_decode(reader, qe)?;
                 data[(y * width + x) as usize] = bit;
             }
         }
