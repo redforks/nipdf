@@ -214,6 +214,32 @@ fn decode_mmr(
     Ok(decoded_data)
 }
 
+fn get_context(x: i32, y: i32, width: u32, height: u32, data: &Vec<bool>) -> u32 {
+    let width_i32 = width as i32;
+    let height_i32 = height as i32;
+
+    let get_pixel = |x: i32, y: i32| -> bool {
+        if x < 0 || y < 0 || x >= width_i32 || y >= height_i32 {
+            false // Out-of-bounds pixels are assumed to be 0
+        } else {
+            data[(y as u32 * width + x as u32) as usize]
+        }
+    };
+
+    let a = get_pixel(x - 1, y - 1) as u32;
+    let b = get_pixel(x, y - 1) as u32;
+    let c = get_pixel(x + 1, y - 1) as u32;
+    let d = get_pixel(x - 1, y) as u32;
+    let e = get_pixel(x + 1, y) as u32;
+    let f = get_pixel(x - 1, y + 1) as u32;
+    let g = get_pixel(x, y + 1) as u32;
+    let h = get_pixel(x + 1, y + 1) as u32;
+    let i = get_pixel(x - 1, y + 2) as u32;
+    let j = get_pixel(x, y + 2) as u32;
+
+    a * 512 + b * 256 + c * 128 + d * 64 + e * 32 + f * 16 + g * 8 + h * 4 + i * 2 + j
+}
+
 const Q_TABLE_0: [u32; 4] = [0x5602, 0x341, 0x181, 0x64];
 const Q_TABLE_1: [u32; 4] = [0x194, 0x65, 0x29, 0xA];
 const Q_TABLE_2: [u32; 4] = [0x66, 0x29, 0xA, 0x4];
@@ -286,7 +312,6 @@ impl ArithmeticDecoder {
             width, height
         );
 
-        //Placeholder implementation: Replace with actual arithmetic decoding logic.
         let total_pixels = width * height;
         let mut data = vec![false; total_pixels as usize];
 
@@ -295,10 +320,16 @@ impl ArithmeticDecoder {
         self.c = self.c << 4;
         self.ct = 4;
 
-        for i in 0..total_pixels {
-            //Context lookup - placeholder always use Q_TABLE_0
-            let bit = self.arithmetic_decode(reader, Q_TABLE_0[0])?;
-            data[i as usize] = bit;
+        for y in 0..height {
+            for x in 0..width {
+                let context = get_context(x as i32, y as i32, width, height, &data);
+
+                //Use context to lookup in a probability estimation table (Q-table)
+                let qe = Q_TABLE_0[0]; // Replace with actual Q-table lookup
+
+                let bit = self.arithmetic_decode(reader, qe)?;
+                data[(y * width + x) as usize] = bit;
+            }
         }
 
         Ok(data)
