@@ -835,7 +835,7 @@ trait DCTDecodeParamsDictTrait {
     fn color_transform(&self) -> DCTColorTransform;
 }
 
-fn do_decode_dct<'a>(buf: &[u8]) -> Result<FilterDecodedData<'a>, ObjectValueError> {
+fn decode_dct<'a>(buf: &[u8]) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     use jpeg_decoder::{Decoder, PixelFormat};
     let mut decoder = Decoder::new(buf);
     let pixels = decoder
@@ -866,21 +866,6 @@ fn do_decode_dct<'a>(buf: &[u8]) -> Result<FilterDecodedData<'a>, ObjectValueErr
             pixels,
         ))),
     }
-}
-
-fn decode_dct<'a>(
-    buf: &[u8],
-    params: &DCTDecodeParamsDict<'_, '_>,
-) -> Result<FilterDecodedData<'a>, ObjectValueError> {
-    ensure_whatever!(
-        params
-            .color_transform()
-            .whatever_context::<_, ObjectValueError>("get color_transform")?
-            == DCTColorTransform::NoTransform,
-        "TODO: handle DCTDceode color_transform of",
-    );
-
-    do_decode_dct(buf)
 }
 
 fn decode_jbig2<'a>(
@@ -1144,13 +1129,7 @@ fn filter<'a: 'b, 'b>(
             LZWDeflateDecodeParams::new(params.unwrap_or_else(|| &*empty_dict), resolver)?,
         )
         .map(FilterDecodedData::bytes),
-        S_FILTER_DCT_DECODE => decode_dct(
-            &buf,
-            &DCTDecodeParamsDict::new(
-                params.unwrap_or_else(|| &*empty_dict),
-                resolver.whatever_context::<_, ObjectValueError>("Need ObjectResolver")?,
-            )?,
-        ),
+        S_FILTER_DCT_DECODE => decode_dct(&buf),
         S_FILTER_CCITT_FAX => decode_ccitt(
             &buf,
             &CCITTFaxDecodeParamsDict::new(

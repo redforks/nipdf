@@ -214,7 +214,7 @@ fn deflate_recover_truncated_zlib_data() {
 
 #[report]
 #[test]
-fn decode_dct() -> Result<()> {
+fn test_decode_dct() -> Result<()> {
     // file extracted from pdf.js/test/pdfs/issue11052.pdf.link
     let buf = include_bytes!("decode-dct.jpg");
     // TODO: jpeg_decoder 无法解码这个文件, 切换到 tune-jpeg 后可以解码，但图片颜色不对,
@@ -222,7 +222,7 @@ fn decode_dct() -> Result<()> {
     //
     // jpeg_decoder 无法处理兼容性问题，切换到 tune-jpeg 是比较好的选择，但 tune-jpeg
     // 喜欢自己转换颜色，还没有找到处理方法
-    assert!(do_decode_dct(buf).is_err());
+    assert!(decode_dct(buf).is_err());
     Ok(())
 }
 
