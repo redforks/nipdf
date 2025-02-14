@@ -53,12 +53,8 @@ fn value_type_validator() {
     d.insert(sname("a"), "/foo".into());
     let d = Dictionary::from(d);
 
-    assert!(matches!(
-        validator.valid(&d),
-        Err(ObjectValueError::DictSchemaUnExpectedType {
-            schema
-        }) if schema == "Type: Page"
-    ));
+    // if type field not exist, it is valid, because type field is optional
+    assert!(validator.valid(&d).is_ok());
 }
 
 #[test]

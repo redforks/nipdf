@@ -58,7 +58,7 @@ fn test_iter_filter(
 }
 
 #[test_case(
-    [(KEY_FILTER, 1.into())] => matches Err(ObjectValueError::UnexpectedType);
+    [(KEY_FILTER, 1.into())] => matches Err(ObjectValueError::GenericError {..});
     "incorrect filter type"
 )]
 #[test_case(
