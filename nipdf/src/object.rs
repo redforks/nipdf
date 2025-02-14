@@ -76,6 +76,22 @@ impl Dictionary {
     pub fn update<T>(&mut self, f: impl FnOnce(&mut HashMap<Name, Object>) -> T) -> T {
         f(Rc::make_mut(&mut self.0))
     }
+
+    /// Get value by key, return None if value is Object::Null or not exist.
+    /// Because pdf file standard says if a dictionary value is null, it is identical to not exist.
+    pub fn get<Q>(&self, key: &Q) -> Option<&Object>
+    where
+        Name: Borrow<Q>,
+        Q: std::hash::Hash + Eq + ?Sized,
+    {
+        self.0.get(key).and_then(|value| {
+            if let Object::Null = value {
+                None
+            } else {
+                Some(value)
+            }
+        })
+    }
 }
 
 /// Get type value from Dictionary.
