@@ -32,7 +32,6 @@ pathfinder_geometry.workspace = true
 weezl.workspace = true
 either.workspace = true
 euclid.workspace = true
-ttf-parser.workspace = true
 ouroboros.workspace = true
 md-5.workspace = true
 arc4.workspace = true

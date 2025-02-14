@@ -420,6 +420,14 @@ fn parse_cmap_file() {
 }
 
 #[test]
+fn parse_cmap_file_with_default_wmode() {
+    let mut reg = CMapRegistry::new();
+    let cmap_data = include_bytes!("default-wmode-cmap.ps");
+    let cmap = reg.add_cmap_file(cmap_data).unwrap();
+    assert_eq!(WriteMode::Horizontal, cmap.w_mode);
+}
+
+#[test]
 fn parse_cmap_file_with_use() {
     let mut reg = CMapRegistry::new();
     let base_data = include_bytes!("test-cmap.ps");

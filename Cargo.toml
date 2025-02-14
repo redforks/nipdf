@@ -51,7 +51,6 @@ pathfinder_geometry = "0.5"
 weezl = "0.1"
 either = "1.13"
 euclid = "0.22"
-ttf-parser = { version = "0.25", features = ["gvar-alloc"] }
 ouroboros = "0.18"
 md-5 = "0.10"
 arc4 = "0.1"

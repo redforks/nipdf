@@ -13,7 +13,7 @@ use crate::{
 };
 use cff_parser::{File as CffFile, Font as CffFont};
 use either::Either;
-use font_kit::loaders::freetype::Font as FontKitFont;
+use font_kit::{hinting::HintingOptions, loaders::freetype::Font as FontKitFont};
 use fontdb::{Database, Family, Query, Source, Weight};
 use heck::ToTitleCase;
 use log::{debug, error, info, warn};
@@ -27,8 +27,12 @@ use prescript::{
     name, sname,
 };
 use snafu::{OptionExt, ResultExt, ensure_whatever, whatever};
-use std::{collections::HashMap, ops::RangeInclusive, rc::Rc, sync::LazyLock};
-use ttf_parser::{Face as TTFFace, GlyphId, OutlineBuilder};
+use std::{
+    collections::HashMap,
+    ops::RangeInclusive,
+    rc::Rc,
+    sync::{Arc, LazyLock},
+};
 use winnow::{Parser as _, combinator::terminated, token::rest};
 
 /// FontWidth used in Type1 and TrueType fonts
@@ -124,44 +128,18 @@ impl<S: PathSink> font_kit::outline::OutlineSink for PathSinkWrap<'_, S> {
     }
 }
 
-impl<S: PathSink> OutlineBuilder for PathSinkWrap<'_, S> {
-    fn move_to(&mut self, x: f32, y: f32) {
-        self.0.move_to(Point::new(x, y));
-    }
-
-    fn line_to(&mut self, x: f32, y: f32) {
-        self.0.line_to(Point::new(x, y));
-    }
-
-    fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {
-        self.0.quad_to(Point::new(x1, y1), Point::new(x, y));
-    }
-
-    fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32) {
-        self.0
-            .cubic_to(Point::new(x1, y1), Point::new(x2, y2), Point::new(x, y));
-    }
-
-    fn close(&mut self) {
-        self.0.close();
-    }
-}
 pub trait GlyphRender<P> {
     fn render(&self, gid: u16, sink: &mut P) -> Result<()>;
 }
 
-struct Type1GlyphRender<'a> {
+struct TTFGlyphRender<'a> {
     font: &'a FontKitFont,
 }
 
-impl<P: PathSink> GlyphRender<P> for Type1GlyphRender<'_> {
+impl<P: PathSink> GlyphRender<P> for TTFGlyphRender<'_> {
     fn render(&self, gid: u16, sink: &mut P) -> Result<()> {
         self.font
-            .outline(
-                gid as u32,
-                font_kit::hinting::HintingOptions::None,
-                &mut PathSinkWrap(sink),
-            )
+            .outline(gid as u32, HintingOptions::None, &mut PathSinkWrap(sink))
             .whatever_context("get glyph outline")
     }
 }
@@ -428,25 +406,29 @@ impl<P: PathSink> Font<P> for Type1Font<'_> {
     }
 
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
-        Ok(Box::new(Type1GlyphRender { font: &self.font }))
+        Ok(Box::new(TTFGlyphRender { font: &self.font }))
     }
 }
 
-struct TTFParserFontOp<'a> {
-    face: TTFFace<'a>,
+struct TTFFontOp<'a> {
+    face: &'a FontKitFont,
     units_per_em: u16,
     encoding: Option<Encoding>,
     font_width: Option<FirstLastFontWidth>,
 }
 
-impl<'a> TTFParserFontOp<'a> {
+impl<'a> TTFFontOp<'a> {
     pub fn new(
-        face: TTFFace<'a>,
+        face: &'a FontKitFont,
         encoding: Option<Encoding>,
         font_width: Option<FirstLastFontWidth>,
     ) -> Result<Self> {
         Ok(Self {
-            units_per_em: face.units_per_em(),
+            units_per_em: face
+                .metrics()
+                .units_per_em
+                .try_into()
+                .whatever_context::<_, ObjectValueError>("failed convert unit_per_em")?,
             face,
             encoding,
             font_width,
@@ -456,52 +438,53 @@ impl<'a> TTFParserFontOp<'a> {
 
 static GLYPH_NAME_TO_UNICODE: phf::Map<&'static str, u32> = include!("glyph_name_to_unicode.rs");
 
-impl FontOp for TTFParserFontOp<'_> {
+impl<'a> FontOp for TTFFontOp<'a> {
     fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>> {
         Ok(s.iter().map(|v| *v as u32).collect())
     }
 
-    fn char_to_gid(&self, ch: u32) -> Result<u16> {
+    fn char_to_gid(&self, mut ch: u32) -> Result<u16> {
         if let Some(encoding) = self.encoding.as_ref() {
             let glyph_name = encoding.get_str(
                 ch.try_into()
                     .whatever_context::<_, ObjectValueError>("Convert ch to u8")?,
             );
             if glyph_name != NOTDEF {
-                if let Some(r) = self.face.glyph_index_by_name(glyph_name) {
-                    return Ok(r.0);
+                if let Some(r) = self.face.glyph_by_name(glyph_name) {
+                    return r.try_into().whatever_context("failed convert glyph index");
                 } else {
                     // If glyph_name not in font CMap, convert to unicode then resolve by unicode
                     // use Adobe Glyph List to convert glyph name to unicode
                     if let Some(unicode) = GLYPH_NAME_TO_UNICODE.get(glyph_name) {
-                        if let Some(gid) = self.face.glyph_index(
-                            char::from_u32(*unicode).whatever_context::<_, ObjectValueError>(
-                                "convert unicode to char",
-                            )?,
-                        ) {
-                            return Ok(gid.0);
-                        }
+                        ch = *unicode;
                     }
                 }
             }
         }
 
-        Ok(glyph_index(&self.face, ch)?.unwrap_or_else(|| {
-            warn!("TTF glyph id not found for char: {}", ch);
-            0
-        }))
+        if let Some(gid) = self.face.glyph_for_char(
+            char::from_u32(ch)
+                .whatever_context::<_, ObjectValueError>("convert unicode to char")?,
+        ) {
+            return gid
+                .try_into()
+                .whatever_context("failed convert glyph index");
+        }
+        warn!("TTF glyph id not found for char: {}", ch);
+        Ok(0)
     }
 
     fn char_width(&self, ch: u32) -> Result<GlyphLength> {
         if let Some(font_width) = &self.font_width {
             return Ok(font_width.char_width(ch) / 1000.0 * self.units_per_em as f32);
         }
+        let gid = self.char_to_gid(ch)?;
 
         Ok(GlyphLength::new(
             self.face
-                .glyph_hor_advance(GlyphId(self.char_to_gid(ch)?))
-                .whatever_context::<_, ObjectValueError>("get glyph horizontal advance")?
-                as f32,
+                .advance(gid as u32)
+                .whatever_context::<_, ObjectValueError>("get char advance")?
+                .x(),
         ))
     }
 
@@ -510,55 +493,41 @@ impl FontOp for TTFParserFontOp<'_> {
     }
 }
 
-struct TTFParserGlyphRender<'a> {
-    face: TTFFace<'a>,
-}
-
-impl<P: PathSink> GlyphRender<P> for TTFParserGlyphRender<'_> {
-    fn render(&self, gid: u16, sink: &mut P) -> Result<()> {
-        self.face
-            .outline_glyph(GlyphId(gid), &mut PathSinkWrap(sink));
-        Ok(())
-    }
-}
-
-struct TTFParserFont<'a, 'b> {
+struct TTFFont<'a, 'b> {
     typ: FontType,
-    data: Vec<u8>,
     font_dict: FontDict<'a, 'b>,
+    face: FontKitFont,
 }
 
-impl<'a, 'b> TTFParserFont<'a, 'b> {
-    fn new(typ: FontType, data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> Self {
+impl<'a, 'b> TTFFont<'a, 'b> {
+    fn new(typ: FontType, data: Arc<Vec<u8>>, font_dict: FontDict<'a, 'b>) -> Result<Self> {
         debug_assert!(typ == FontType::TrueType || typ == FontType::Type1);
-        Self {
+        let face = FontKitFont::from_bytes(data, 0)
+            .whatever_context::<_, ObjectValueError>("parse TTF Font")?;
+        Ok(Self {
             typ,
-            data,
             font_dict,
-        }
+            face,
+        })
     }
 }
 
-impl<P: PathSink> Font<P> for TTFParserFont<'_, '_> {
+impl<P: PathSink> Font<P> for TTFFont<'_, '_> {
     fn font_type(&self) -> FontType {
         self.typ
     }
 
     fn create_op(&self, _cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
-        let face = TTFFace::parse(&self.data, 0)
-            .whatever_context::<_, ObjectValueError>("parse TTFFace")?;
         let encoding = EncodingParser(&self.font_dict).ttf()?;
-        Ok(Box::new(TTFParserFontOp::new(
-            face,
+        Ok(Box::new(TTFFontOp::new(
+            &self.face,
             encoding,
             FirstLastFontWidth::from(&self.font_dict)?,
         )?))
     }
 
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
-        let face = TTFFace::parse(&self.data, 0)
-            .whatever_context::<_, ObjectValueError>("parse TTFFace")?;
-        Ok(Box::new(TTFParserGlyphRender { face }))
+        Ok(Box::new(TTFGlyphRender { font: &self.face }))
     }
 }
 
@@ -796,7 +765,8 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                     Some(stream) => {
                         // if font is invalid, load from os
                         let bytes = Self::load_embed_font_bytes(desc.resolver(), stream)?;
-                        match TTFFace::parse(&bytes, 0) {
+                        let bytes = Arc::new(bytes);
+                        match FontKitFont::analyze_bytes(bytes.clone()) {
                             Result::Ok(_) => (true, bytes),
                             Err(e) => {
                                 warn!(
@@ -804,11 +774,11 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                                     desc.font_name()?,
                                     e
                                 );
-                                (false, Self::load_true_type_from_os(desc)?)
+                                (false, Arc::new(Self::load_true_type_from_os(desc)?))
                             }
                         }
                     }
-                    None => (false, Self::load_true_type_from_os(desc)?),
+                    None => (false, Arc::new(Self::load_true_type_from_os(desc)?)),
                 }
             }
             None => {
@@ -819,17 +789,13 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                 .into_iter()
                 .collect();
                 let desc = FontDescriptorDict::new(&d, font.resolver())?;
-                (false, Self::load_true_type_from_os(&desc)?)
+                (false, Arc::new(Self::load_true_type_from_os(&desc)?))
             }
         };
         if font_type == FontType::Type0 {
             Ok(Box::new(CIDFontType2Font::new(is_embed, ttf_bytes, font)?))
         } else {
-            Ok(Box::new(TTFParserFont::new(
-                font.subtype()?,
-                ttf_bytes,
-                font,
-            )))
+            Ok(Box::new(TTFFont::new(font.subtype()?, ttf_bytes, font)?))
         }
     }
 
@@ -1088,8 +1054,8 @@ impl CIDToGIDMap {
     }
 }
 
-struct CIDFontType2FontOp<'a> {
-    face: TTFFace<'a>,
+struct CIDFontType2FontOp {
+    face: FontKitFont,
     widths: Option<CIDFontWidths>,
     default_width: u32,
     units_per_em: u16,
@@ -1099,10 +1065,10 @@ struct CIDFontType2FontOp<'a> {
     cid_is_gid: bool,
 }
 
-impl<'a> CIDFontType2FontOp<'a> {
+impl CIDFontType2FontOp {
     fn new(
         cmap_registry: &mut CMapRegistry,
-        face: TTFFace<'a>,
+        face: FontKitFont,
         font: &Type0FontDict<'_, '_>,
         is_embed: bool,
     ) -> Result<Self> {
@@ -1151,7 +1117,7 @@ impl<'a> CIDFontType2FontOp<'a> {
         let widths = cid_font.w()?;
 
         Ok(Self {
-            units_per_em: face.units_per_em(),
+            units_per_em: face.metrics().units_per_em as u16,
             face,
             widths,
             default_width: cid_font.dw()?,
@@ -1165,23 +1131,15 @@ impl<'a> CIDFontType2FontOp<'a> {
 // TTFFace::glyph_index() ignores non unicode cmap table,
 // some non-cjk pdf file use non unicode cmap table. This function
 // try to find glyph id from all cmap tables
-fn glyph_index(face: &TTFFace<'_>, ch: u32) -> Result<Option<u16>> {
-    for subtable in face
-        .tables()
-        .cmap
-        .whatever_context::<_, ObjectValueError>("get cmap from TTF Face")?
-        .subtables
-    {
-        if let Some(id) = subtable.glyph_index(ch) {
-            return Ok(Some(id.0));
-        }
-    }
-
-    warn!("glyph id not found from TTF CMap for char: {}", ch);
-    Ok(None)
+fn glyph_index(face: &FontKitFont, ch: u32) -> Result<Option<u16>> {
+    Ok(face
+        .glyph_for_char(
+            char::from_u32(ch).whatever_context::<_, ObjectValueError>("convert ch to char")?,
+        )
+        .map(|glyph| glyph as u16))
 }
 
-impl FontOp for CIDFontType2FontOp<'_> {
+impl FontOp for CIDFontType2FontOp {
     fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>> {
         self.cmap.as_ref().map_or_else(
             || {
@@ -1267,14 +1225,14 @@ impl<'a, 'b> CIDFontType0Font<'a, 'b> {
 }
 
 struct CIDFontType2Font<'a, 'b> {
-    data: Vec<u8>,
+    data: Arc<Vec<u8>>,
     font: FontKitFont,
     font_dict: FontDict<'a, 'b>,
     font_is_embed: bool,
 }
 
 impl<'a, 'b> CIDFontType2Font<'a, 'b> {
-    fn new(font_is_embed: bool, data: Vec<u8>, font_dict: FontDict<'a, 'b>) -> Result<Self> {
+    fn new(font_is_embed: bool, data: Arc<Vec<u8>>, font_dict: FontDict<'a, 'b>) -> Result<Self> {
         let font = FontKitFont::from_bytes(data.clone().into(), 0)
             .whatever_context::<_, ObjectValueError>("decode FontKitFont for Type2")?;
         Ok(Self {
@@ -1292,8 +1250,8 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
     }
 
     fn create_op(&self, cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
-        let face = TTFFace::parse(&self.data, 0)
-            .whatever_context::<_, ObjectValueError>("decode TTFFace font for CIDFontType2")?;
+        let face = FontKitFont::from_bytes(self.data.clone(), 0)
+            .whatever_context::<_, ObjectValueError>("decode FontKitFont for Type2")?;
         Ok(Box::new(CIDFontType2FontOp::new(
             cmap_registry,
             face,
@@ -1304,7 +1262,7 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
 
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
         // Use FreeType, TTFParser failed render bug1734802.pdf
-        Ok(Box::new(Type1GlyphRender { font: &self.font }))
+        Ok(Box::new(TTFGlyphRender { font: &self.font }))
     }
 }
 
@@ -1318,7 +1276,7 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType0Font<'_, '_> {
     }
 
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
-        Ok(Box::new(Type1GlyphRender { font: &self.font }))
+        Ok(Box::new(TTFGlyphRender { font: &self.font }))
     }
 }
 

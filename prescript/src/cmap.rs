@@ -10,7 +10,7 @@ use crate::{
 };
 use educe::Educe;
 use either::Either;
-use log::error;
+use log::{debug, error};
 use once_cell::unsync::OnceCell;
 use phf::phf_map;
 use snafu::{OptionExt as _, ResultExt as _, ensure_whatever};
@@ -630,6 +630,7 @@ impl CMapRegistry {
             .parse_cmap_file(file)
             .whatever_context("parse cmap file")?;
         let name = parsed.name.clone();
+        debug!("CMap added: {}", name);
         self.add(parsed);
         self.get(&name)
             .with_whatever_context(|_| format!("get cmap: {}", name))?
@@ -846,7 +847,9 @@ impl MachinePlugin for CMapMachinePlugin<'_> {
                     let cmap_name = m.pop()?.name()?;
                     let cmap = CMap {
                         cid_system_info: CIDSystemInfo::from_dict(&d_ref[&sname("CIDSystemInfo")].dict()?.borrow())?,
-                        w_mode: WriteMode::parse(d_ref[&sname("WMode")].int()?)?,
+                        w_mode: WriteMode::parse(
+                            d_ref.get(&sname("WMode")).map_or_else(|| Ok(0), |v| v.int()).whatever_context("get WMode")?
+                        ).whatever_context("parse WMode")?,
                         name: cmap_name,
                         code_space: CodeSpace::new(m.p.code_space_entries.take()),
                         cid_map: Mapper {
