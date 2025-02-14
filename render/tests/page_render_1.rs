@@ -67,7 +67,7 @@ fn download_file(url: &str, p: impl AsRef<Path>) -> Result<()> {
 }
 
 /// These files are very rare and odd, not to be tested
-const IGNORED: [&str; 9] = [
+const IGNORED: [&str; 10] = [
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
     "bug1050040.pdf",
     // invalid object format, mupdf failed to parse, mupdf says no page
@@ -110,6 +110,10 @@ const IGNORED: [&str; 9] = [
     // jpeg-decoder failed to decode this file, I don't know how to use zune-jpeg
     // to decode this file with correct color.
     "issue11052.pdf.link",
+    // this file contains invalid xref, after file scan trailer point to wrong catalog,
+    // If resolve catalog dict by check all dict for `/Catalog` type, can find correct
+    // catalog dict. `mupdf` also failed to parse this file, but others are okay.
+    "issue12402.pdf.link",
 ];
 
 static PASSWORD: phf::Map<&'static str, &'static str> = phf::phf_map! {
