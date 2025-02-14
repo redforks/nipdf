@@ -47,6 +47,7 @@ miniz_oxide.workspace = true
 snafu.workspace = true
 winnow.workspace = true
 itertools.workspace = true
+jbig2dec = { version = "0.3.1", default-features = false, git = "https://github.com/redforks/jbig2dec-rs" }
 
 [dev-dependencies]
 env_logger.workspace = true

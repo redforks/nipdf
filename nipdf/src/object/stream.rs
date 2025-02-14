@@ -45,6 +45,7 @@ const S_FILTER_ASCII85_DECODE: &str = "ASCII85Decode";
 const S_FILTER_ASCII_HEX_DECODE: &str = "ASCIIHexDecode";
 const S_FILTER_RUN_LENGTH_DECODE: &str = "RunLengthDecode";
 const S_FILTER_JPX_DECODE: &str = "JPXDecode";
+const S_FILTER_JBIG2_DECODE: &str = "JBIG2Decode";
 
 const FILTER_CRYPT: Name = sname(S_FILTER_CRYPT);
 #[cfg(test)]
@@ -283,42 +284,42 @@ pub trait ImageMetadata {
     fn decode(&self) -> Result<Option<Domains>>;
 }
 
+fn decode_one_bit(
+    w: u32,
+    h: u32,
+    data: &[u8],
+    row_padding: bool,
+) -> Result<DynamicImage, ObjectValueError> {
+    use bitstream_io::read::BitRead;
+
+    let mut img = GrayImage::new(w, h);
+    let row_padding_bits = if row_padding {
+        let remain_bits = w % 8;
+        if remain_bits != 0 { 8 - remain_bits } else { 0 }
+    } else {
+        0
+    };
+
+    let mut r = BitReader::<_, BigEndian>::new(data);
+    for y in 0..h {
+        for x in 0..w {
+            let bit = r
+                .read_bit()
+                .whatever_context::<_, ObjectValueError>("Failed to read bit")?;
+            img.put_pixel(x, y, Luma([if bit { 255u8 } else { 0 }]));
+        }
+        r.skip(row_padding_bits)
+            .whatever_context::<_, ObjectValueError>("Failed to skip bits")?;
+    }
+    Ok(DynamicImage::ImageLuma8(img))
+}
+
 fn decode_image<'a, M: ImageMetadata>(
     data: FilterDecodedData<'a>,
     img_meta: &M,
     resolver: &ObjectResolver<'a>,
     resources: Option<&ResourceDict<'a, '_>>,
 ) -> Result<DynamicImage, ObjectValueError> {
-    fn decode_one_bit(
-        w: u32,
-        h: u32,
-        data: &[u8],
-        row_padding: bool,
-    ) -> Result<DynamicImage, ObjectValueError> {
-        use bitstream_io::read::BitRead;
-
-        let mut img = GrayImage::new(w, h);
-        let row_padding_bits = if row_padding {
-            let remain_bits = w % 8;
-            if remain_bits != 0 { 8 - remain_bits } else { 0 }
-        } else {
-            0
-        };
-
-        let mut r = BitReader::<_, BigEndian>::new(data);
-        for y in 0..h {
-            for x in 0..w {
-                let bit = r
-                    .read_bit()
-                    .whatever_context::<_, ObjectValueError>("Failed to read bit")?;
-                img.put_pixel(x, y, Luma([if bit { 255u8 } else { 0 }]));
-            }
-            r.skip(row_padding_bits)
-                .whatever_context::<_, ObjectValueError>("Failed to skip bits")?;
-        }
-        Ok(DynamicImage::ImageLuma8(img))
-    }
-
     let color_space = img_meta
         .color_space()
         .whatever_context::<_, ObjectValueError>("Failed to get color space")?;
@@ -876,6 +877,34 @@ fn decode_dct<'a>(
     do_decode_dct(buf)
 }
 
+fn decode_jbig2<'a>(
+    buf: &[u8],
+    params: Option<&Dictionary>,
+) -> Result<FilterDecodedData<'a>, ObjectValueError> {
+    ensure_whatever!(
+        params.is_none_or(|p| p.is_empty()),
+        "TODO: handle params of {}",
+        S_FILTER_JBIG2_DECODE
+    );
+
+    do_decode_jbig2(&buf)
+}
+
+fn do_decode_jbig2<'a>(mut buf: &[u8]) -> Result<FilterDecodedData<'a>> {
+    use jbig2dec::{Document, OpenFlag};
+    let doc = Document::from_reader(&mut buf, OpenFlag::Embedded)
+        .whatever_context::<_, ObjectValueError>("parse jbig2 data")?;
+    ensure_whatever!(doc.len() > 0, "jbig2 image should not empty");
+    let img = &doc[0];
+    let width = img.width();
+    let height = img.height();
+    let data = img.data();
+
+    // Create GrayImage from the data
+    let img = decode_one_bit(width, height, data, false)?;
+    Ok(FilterDecodedData::Image(img))
+}
+
 fn decode_jpx<'a>(
     buf: &Cow<'a, [u8]>,
     params: Option<&Dictionary>,
@@ -1132,6 +1161,7 @@ fn filter<'a: 'b, 'b>(
             LZWDeflateDecodeParams::new(params.unwrap_or_else(|| &*empty_dict), resolver)?,
         )
         .map(FilterDecodedData::bytes),
+        S_FILTER_JBIG2_DECODE => decode_jbig2(&buf, params),
         _ => {
             error!("Unknown filter: {}", filter_name);
             Err(ObjectValueError::UnknownFilter)

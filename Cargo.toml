@@ -7,7 +7,7 @@ members = [
     "reader",
     "cff-parser",
     "prescript",
-    "render", "jbig2dec",
+    "render",
 ]
 resolver = "2"
 

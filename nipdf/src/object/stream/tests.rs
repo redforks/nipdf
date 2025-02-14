@@ -225,3 +225,13 @@ fn decode_dct() -> Result<()> {
     assert!(do_decode_dct(buf).is_err());
     Ok(())
 }
+
+#[report]
+#[test]
+fn decode_jbig2() -> Result<()> {
+    // file extracted from pdf.js/test/pdfs/issue11052.pdf.link
+    let buf = include_bytes!("contains-global-segment.jbig2");
+    let data = do_decode_jbig2(buf)?;
+    assert!(matches!(data, FilterDecodedData::Image(_)));
+    Ok(())
+}
