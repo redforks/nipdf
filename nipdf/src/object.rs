@@ -290,12 +290,7 @@ where
 
     fn check(&self, d: &Dictionary) -> Result<bool, ObjectValueError> {
         let v = self.getter.get(d)?;
-        if v.is_none() {
-            // PdfObject type field is optional, so if value not exist, return true
-            Ok(true)
-        } else {
-            Ok(self.checker.check(v))
-        }
+        Ok(self.checker.check(v))
     }
 }
 

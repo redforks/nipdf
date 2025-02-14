@@ -54,7 +54,7 @@ fn value_type_validator() {
     let d = Dictionary::from(d);
 
     // if type field not exist, it is valid, because type field is optional
-    assert!(validator.valid(&d).is_ok());
+    assert!(validator.valid(&d).is_err());
 }
 
 #[test]
