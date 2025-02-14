@@ -476,7 +476,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         self.opt(key).map(Option::unwrap_or_default)
     }
 
-    /// If value not exist, return empty vector.
+    /// If value not exist or null, return empty vector.
     /// If value is array, return all elements in array, otherwise return with one element vec.
     pub fn zero_one_or_more<V>(&self, key: &Name) -> Result<Vec<V>>
     where
@@ -508,11 +508,11 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
                 .map(|o| V::create(o, self.resolver()))
                 .collect::<Result<_, _>>()
                 .with_whatever_context::<_, _, ObjectValueError>(with_err),
+            None | Some(Object::Null) => Ok(vec![]),
             Some(o) => Ok(vec![
                 V::create(o, self.resolver())
                     .with_whatever_context::<_, _, ObjectValueError>(with_err)?,
             ]),
-            None => Ok(vec![]),
         }
     }
 
