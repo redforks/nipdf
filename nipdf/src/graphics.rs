@@ -2,8 +2,8 @@ use crate::{
     ObjectValueError,
     graphics::trans::TextToUserSpace,
     object::{
-        Array, Dictionary, InlineImage, InlineStream, Object, ObjectWithResolver, RuntimeObjectId,
-        Stream, TextString, TextStringOrNumber,
+        Array, Dictionary, InlineImage, InlineStream, Object, ObjectDiscriminants,
+        ObjectWithResolver, RuntimeObjectId, Stream, TextString, TextStringOrNumber,
     },
     parser::{self, eol3, whitespace, wsc_prefixed0, wsc0},
 };
@@ -11,7 +11,7 @@ use euclid::{Length, Point2D, Transform2D};
 use log::{debug, error, warn};
 use nipdf_macro::{OperationParser, TryFromIntObject, TryFromNameObject, pdf_object};
 use prescript::{Name, sname};
-use snafu::whatever;
+use snafu::{ensure_whatever, whatever};
 use std::{
     num::ParseIntError,
     str::{Utf8Error, from_utf8},
@@ -38,9 +38,11 @@ impl<S, T> TryFrom<ObjectWithResolver<'_, '_>> for Transform2D<f32, S, T> {
 
     fn try_from(obj: ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
         let arr = obj.into_schema_array()?;
-        if arr.len() != 6 {
-            return Err(ObjectValueError::UnexpectedType);
-        }
+        ensure_whatever!(
+            arr.len() == 6,
+            "expected array with 6 elements, but got {}",
+            arr.len()
+        );
         Ok(Self::new(
             arr.required_object(0)?.number()?,
             arr.required_object(1)?.number()?,
@@ -516,7 +518,10 @@ impl<'b> ConvertFromObject<'b> for TextString {
         match o {
             Object::LiteralString(s) => Ok(TextString::Text(s)),
             Object::HexString(s) => Ok(TextString::HexText(s)),
-            _ => Err(ObjectValueError::UnexpectedType),
+            _ => whatever!(
+                "expected literal string or hex string, but got {}",
+                ObjectDiscriminants::from(o)
+            ),
         }
     }
 }
@@ -531,7 +536,10 @@ impl<'b> ConvertFromObject<'b> for TextStringOrNumber {
             Object::HexString(s) => Ok(TextStringOrNumber::TextString(TextString::HexText(s))),
             Object::Number(n) => Ok(TextStringOrNumber::Number(Length::new(n))),
             Object::Integer(v) => Ok(TextStringOrNumber::Number(Length::new(v as f32))),
-            _ => Err(ObjectValueError::UnexpectedType),
+            _ => whatever!(
+                "expected literal string or hex string or number or integer, but got {}",
+                ObjectDiscriminants::from(o)
+            ),
         }
     }
 }

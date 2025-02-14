@@ -5,6 +5,7 @@ use educe::Educe;
 use itertools::Itertools as _;
 use paste::paste;
 use prescript::Name;
+use snafu::ensure_whatever;
 use std::{
     borrow::{Borrow, Cow},
     fmt::{Debug, Display},
@@ -12,6 +13,7 @@ use std::{
     rc::Rc,
     str::{Utf8Error, from_utf8},
 };
+use strum::{Display, EnumDiscriminants};
 use tinyvec::TinyVec;
 
 mod stream;
@@ -779,7 +781,8 @@ pub use frame::*;
 ///      value not expected type.
 ///   1. `opt_typename() -> Option<$type>`, return None if value not specific type, for both Copy
 ///      and Reference types.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, EnumDiscriminants)]
+#[strum_discriminants(derive(Display))]
 pub enum Object {
     Null,
     Bool(bool),
@@ -863,7 +866,10 @@ macro_rules! copy_value_access {
                 pub fn $method(&self) -> Result<$t, ObjectValueError> {
                     match self {
                         Self::$branch(v) => Ok(*v),
-                        _ => Err(ObjectValueError::UnexpectedType),
+                        _ => Err(ObjectValueError::UnexpectedType {
+                            expected: ObjectDiscriminants::$branch,
+                            actual: self.into(),
+                        }),
                     }
                 }
             }
@@ -879,7 +885,10 @@ macro_rules! ref_value_access {
                 pub fn [<as_ $method>](&self) -> Result<$t, ObjectValueError> {
                     match self {
                         Self::$branch(v) => Ok(&v),
-                        _ => Err(ObjectValueError::UnexpectedType),
+                        _ => Err(ObjectValueError::UnexpectedType{
+                            expected: ObjectDiscriminants::$branch,
+                            actual: self.into(),
+                        }),
                     }
                 }
             }
@@ -1018,9 +1027,12 @@ impl<const N: usize> TryFrom<ObjectWithResolver<'_, '_>> for [f32; N] {
 
     fn try_from(obj: ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
         let arr = obj.into_schema_array()?;
-        if arr.len() != N {
-            return Err(ObjectValueError::UnexpectedType);
-        }
+        ensure_whatever!(
+            arr.len() == N,
+            "array length not match, expected: {}, actual: {}",
+            N,
+            arr.len()
+        );
         let mut r = [0.0; N];
         for (i, item) in r.iter_mut().enumerate().take(N) {
             *item = arr.required_object(i)?.number()?;

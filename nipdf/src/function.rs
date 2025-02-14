@@ -45,9 +45,11 @@ impl TryFrom<ObjectWithResolver<'_, '_>> for Domain<f32> {
 
     fn try_from(obj: ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
         let arr = obj.into_schema_array()?;
-        if arr.len() != 2 {
-            return Err(ObjectValueError::UnexpectedType);
-        }
+        ensure_whatever!(
+            arr.len() == 2,
+            "expected array with 2 elements, but got {}",
+            arr.len()
+        );
         Ok(Self::new(
             arr.required_object(0)?.number()?,
             arr.required_object(1)?.number()?,
@@ -60,9 +62,11 @@ impl TryFrom<ObjectWithResolver<'_, '_>> for Domain<u32> {
 
     fn try_from(obj: ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
         let arr = obj.into_schema_array()?;
-        if arr.len() != 2 {
-            return Err(ObjectValueError::UnexpectedType);
-        }
+        ensure_whatever!(
+            arr.len() == 2,
+            "expected array with 2 elements, but got {}",
+            arr.len()
+        );
         Ok(Self::new(
             arr.required_object(0)?.int()? as u32,
             arr.required_object(1)?.int()? as u32,

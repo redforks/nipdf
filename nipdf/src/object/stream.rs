@@ -11,7 +11,7 @@ use crate::{
             convert_color_to,
         },
     },
-    object::PdfObject,
+    object::{ObjectDiscriminants, PdfObject},
     parser::is_white_space,
 };
 use bitstream_io::{BigEndian, BitRead as _, BitReader};
@@ -113,8 +113,10 @@ impl<'a, 'b> FilterDict<'a, 'b> {
                 r,
             )?,
             _ => {
-                error!("Filter is not Name or Array of Name");
-                return Err(ObjectValueError::UnexpectedType);
+                whatever!(
+                    "Filter need to be Name or Array of Name, got {}",
+                    ObjectDiscriminants::from(v)
+                );
             }
         })
     }
@@ -152,15 +154,19 @@ impl<'a, 'b> FilterDict<'a, 'b> {
                         .resolve(r)
                         .and_then(|o| o.as_dict().map(Some)),
                     _ => {
-                        error!("DecodeParms is not Dictionary or Array of Dictionary");
-                        Err(ObjectValueError::UnexpectedType)
+                        whatever!(
+                            "DecodeParms expected to be Dictionary or Array of Dictionary, got {}",
+                            ObjectDiscriminants::from(v)
+                        );
                     }
                 })
                 .collect::<Result<_, _>>()?,
             Object::Dictionary(d) => vec![Some(d)],
             _ => {
-                error!("DecodeParms is not Dictionary or Array of Dictionary");
-                return Err(ObjectValueError::UnexpectedType);
+                whatever!(
+                    "DecodeParms expected to be Dictionary or Array of Dictionary, got {}",
+                    ObjectDiscriminants::from(v)
+                );
             }
         })
     }
@@ -941,7 +947,10 @@ impl TryFrom<ObjectWithResolver<'_, '_>> for ImageMask {
                 let domains = Domains::try_from(v)?;
                 Self::ColorKey(domains)
             }
-            _ => return Err(ObjectValueError::UnexpectedType),
+            _ => whatever!(
+                "ImageMastk expected to be Stream or Array, got {}",
+                ObjectDiscriminants::from(v)
+            ),
         })
     }
 }
@@ -1291,8 +1300,10 @@ impl Stream {
                 (Object::Integer(l), _) => Ok(*l as u32),
                 (Object::Reference(id), Some(resolver)) => Ok(resolver.resolve(id)?.int()? as u32),
                 _ => {
-                    error!("Length is not Integer or Reference, {:?}", l);
-                    Err(ObjectValueError::UnexpectedType)
+                    whatever!(
+                        "Length expected to be Integer or Reference, got {}",
+                        ObjectDiscriminants::from(l)
+                    );
                 }
             }
         })

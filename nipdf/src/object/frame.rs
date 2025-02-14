@@ -1,6 +1,7 @@
 use super::{Dictionary, Entry, ObjectValueError, ObjectWithResolver, RuntimeObjectId};
 use crate::file::EncryptDict;
 use nipdf_macro::pdf_object;
+use snafu::ensure_whatever;
 
 /// Document id, two binary string.
 pub struct DocId(pub Box<[u8]>, pub Box<[u8]>);
@@ -10,9 +11,11 @@ impl TryFrom<ObjectWithResolver<'_, '_>> for DocId {
 
     fn try_from(o: ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
         let arr = o.into_schema_array()?;
-        if arr.len() != 2 {
-            return Err(ObjectValueError::UnexpectedType);
-        }
+        ensure_whatever!(
+            arr.len() == 2,
+            "expected array with 2 elements, but got {}",
+            arr.len()
+        );
 
         Ok(Self(
             arr.required_object(0)?.as_bstr()?.into(),

@@ -27,8 +27,11 @@ pub fn log_err<E: Error>(v: Result<(), E>) {
 
 #[derive(Debug, Snafu)]
 pub enum ObjectValueError {
-    #[snafu(display("unexpected type"))]
-    UnexpectedType,
+    #[snafu(display("unexpected type, expected {expected}, got {actual}"))]
+    UnexpectedType {
+        expected: object::ObjectDiscriminants,
+        actual: object::ObjectDiscriminants,
+    },
     #[snafu(display("invalid hex string"))]
     InvalidHexString,
     #[snafu(display("invalid name format"))]

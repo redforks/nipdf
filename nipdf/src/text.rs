@@ -2,7 +2,7 @@ use crate::{
     ObjectValueError, Result,
     file::{Rectangle, ResourceDict},
     graphics::{NameOrDictByRef, NameOrStream, trans::GlyphToTextSpace},
-    object::{Object, ObjectWithResolver, Stream},
+    object::{Object, ObjectDiscriminants, ObjectWithResolver, Stream},
 };
 use ahash::{HashMap, HashMapExt};
 use bitflags::bitflags;
@@ -10,7 +10,7 @@ use log::warn;
 use nipdf_macro::{TryFromIntObjectForBitflags, TryFromNameObject, pdf_object};
 use num_traits::ToPrimitive;
 use prescript::{Encoding, Name, name};
-use snafu::{OptionExt, ResultExt};
+use snafu::{OptionExt, ResultExt, whatever};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, TryFromNameObject)]
 pub enum FontType {
@@ -241,7 +241,10 @@ impl TryFrom<ObjectWithResolver<'_, '_>> for CIDFontWidths {
                         width,
                     });
                 }
-                _ => return Err(Self::Error::UnexpectedType),
+                _ => whatever!(
+                    "CIDFontWidths expected to be array or integer, got {}",
+                    ObjectDiscriminants::from(second)
+                ),
             }
         }
         Ok(CIDFontWidths(widths))
@@ -407,7 +410,10 @@ impl<'b> TryFrom<ObjectWithResolver<'_, 'b>> for EncodingDifferences<'b> {
                 Object::Integer(num) => {
                     code = *num;
                 }
-                _ => return Err(Self::Error::UnexpectedType),
+                o => whatever!(
+                    "expected name or integer, got {}",
+                    ObjectDiscriminants::from(o)
+                ),
             };
         }
         Ok(EncodingDifferences(map))

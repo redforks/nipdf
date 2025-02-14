@@ -8,7 +8,7 @@ use crate::{
 };
 use nipdf_macro::{TryFromIntObject, pdf_object};
 use prescript::sname;
-use snafu::ResultExt;
+use snafu::{ResultExt, ensure_whatever};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, TryFromIntObject)]
 pub enum ShadingType {
@@ -44,9 +44,11 @@ impl TryFrom<ObjectWithResolver<'_, '_>> for Extend {
 
     fn try_from(obj: ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
         let arr = obj.into_schema_array()?;
-        if arr.len() != 2 {
-            return Err(ObjectValueError::UnexpectedType);
-        }
+        ensure_whatever!(
+            arr.len() == 2,
+            "expected array with 2 elements, but got {}",
+            arr.len()
+        );
         Ok(Self(arr.required(0)?, arr.required(1)?))
     }
 }
@@ -62,9 +64,11 @@ impl TryFrom<ObjectWithResolver<'_, '_>> for AxialCoords {
 
     fn try_from(obj: ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
         let arr = obj.into_schema_array()?;
-        if arr.len() != 4 {
-            return Err(ObjectValueError::UnexpectedType);
-        }
+        ensure_whatever!(
+            arr.len() == 4,
+            "expected array with 4 elements, but got {}",
+            arr.len()
+        );
         Ok(Self {
             start: Point::new(
                 arr.required_object(0)?.number()?,
@@ -121,9 +125,11 @@ impl TryFrom<ObjectWithResolver<'_, '_>> for RadialCoords {
 
     fn try_from(obj: ObjectWithResolver<'_, '_>) -> Result<Self, Self::Error> {
         let arr = obj.into_schema_array()?;
-        if arr.len() != 6 {
-            return Err(ObjectValueError::UnexpectedType);
-        }
+        ensure_whatever!(
+            arr.len() == 6,
+            "expected array with 6 elements, but got {}",
+            arr.len()
+        );
         Ok(Self {
             start: RadialCircle {
                 point: Point::new(
