@@ -79,7 +79,7 @@ where
 }
 
 fn is_whitespace() -> impl ContainsToken<u8> {
-    b" \t\r\n\x0C"
+    b" \t\r\n\x0C\0"
 }
 
 /// Parses a Whitespace or a comment.
