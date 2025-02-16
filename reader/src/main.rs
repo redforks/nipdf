@@ -1,15 +1,7 @@
 use clap::Parser;
-use iced::{
-    Element, Length, Task,
-    alignment::Horizontal,
-    application,
-    widget::{Button, Row, Text, text_input},
-};
-use iced_aw::Card;
-use log::error;
+use iced::{Element, Task, application};
 use mimalloc::MiMalloc;
 use prescript::AnyWhatever;
-use std::sync::Arc;
 use view::{
     error::ErrorView,
     viewer::{Viewer, ViewerMessage},
@@ -46,6 +38,7 @@ fn main() -> iced::Result {
 
 mod app {
     use super::*;
+    use rfd::FileDialog;
 
     /// Messages for application view.
     #[derive(Debug, Clone)]
@@ -53,9 +46,6 @@ mod app {
         Viewer(ViewerMessage),
 
         SelectFile,
-        SelectedFileChange(String),
-        CancelSelectFile,
-        FileSelected,
     }
 
     #[derive(Default)]
@@ -83,13 +73,6 @@ mod app {
                 selecting_file: false,
                 file_path_selecting: "".to_owned(),
                 password: "".to_owned(),
-            }
-        }
-
-        fn viewer(&self) -> Option<&Viewer> {
-            match self.current {
-                View::Viewer(ref v) => Some(v),
-                _ => None,
             }
         }
 
@@ -131,20 +114,12 @@ mod app {
             }
 
             Message::SelectFile => {
-                state.selecting_file = true;
-                if let Some(viewer) = state.viewer() {
-                    state.file_path_selecting = viewer.file_path().to_owned();
+                let filename = FileDialog::new().add_filter("PDF", &["pdf"]).pick_file();
+                if let Some(filename) = dbg!(filename) {
+                    state.file_path_selecting = filename.to_str().unwrap().to_string();
+                    state.password = String::new();
+                    state.open();
                 }
-            }
-            Message::SelectedFileChange(path) => {
-                state.file_path_selecting = path;
-            }
-            Message::CancelSelectFile => {
-                state.selecting_file = false;
-            }
-            Message::FileSelected => {
-                state.open();
-                state.selecting_file = false;
             }
         }
     }
@@ -156,14 +131,7 @@ mod app {
             View::Welcome => Welcome::view(),
         };
 
-        // if state.selecting_file {
-        //     modal(main, Some(state.file_modal_view()))
-        //         .on_esc(Message::CancelSelectFile)
-        //         .backdrop(Message::CancelSelectFile)
-        //         .into()
-        // } else {
         main
-        // }
     }
 }
 
@@ -174,168 +142,3 @@ enum View {
     #[default]
     Welcome,
 }
-
-// struct App {
-//     current: View,
-//     selecting_file: bool,
-//     file_path_selecting: String,
-//     password: String,
-// }
-
-// impl App {
-//     fn viewer(&self) -> Option<&Viewer> {
-//         match self.current {
-//             View::Viewer(ref v) => Some(v),
-//             _ => None,
-//         }
-//     }
-
-//     fn mut_viewer(&mut self) -> Option<&mut Viewer> {
-//         match self.current {
-//             View::Viewer(ref mut v) => Some(v),
-//             _ => None,
-//         }
-//     }
-
-//     fn file_modal_view(&self) -> Element<'_, AppMessage> {
-//         Card::new(
-//             Text::new(APP_NAME),
-//             text_input("pdf file path", &self.file_path_selecting)
-//                 .on_input(AppMessage::SelectedFileChange)
-//                 .on_submit(AppMessage::FileSelected),
-//         )
-//         .foot(
-//             Row::new()
-//                 .spacing(10)
-//                 .padding(5)
-//                 .width(Length::Fill)
-//                 .push(
-//                     Button::new(Text::new("Cancel").horizontal_alignment(Horizontal::Center))
-//                         .width(Length::Fill)
-//                         .on_press(AppMessage::CancelSelectFile),
-//                 )
-//                 .push(
-//                     Button::new(Text::new("Ok").horizontal_alignment(Horizontal::Center))
-//                         .width(Length::Fill)
-//                         .on_press(AppMessage::FileSelected),
-//                 ),
-//         )
-//         .max_width(300.0)
-//         .on_close(AppMessage::CancelSelectFile)
-//         .into()
-//     }
-
-//     fn handle_result<T, E: std::fmt::Display>(&mut self, rv: Result<T, E>) -> Option<T> {
-//         match rv {
-//             Ok(v) => Some(v),
-//             Err(e) => {
-//                 self.current = View::Error(ErrorView::new(&e));
-//                 self.selecting_file = false;
-//                 None
-//             }
-//         }
-//     }
-
-//     fn open_last_file(&mut self) {
-//         if let Some(p) = app_state::load_last_file() {
-//             match Viewer::new(p, &self.password) {
-//                 Ok(v) => {
-//                     self.current = View::Viewer(Box::new(v));
-//                 }
-//                 Err(e) => {
-//                     error!("open last file failed: {}", e);
-//                 }
-//             }
-//         }
-//     }
-
-//     fn open(&mut self) {
-//         let file_path = &self.file_path_selecting;
-//         if let Some(viewer) = self.handle_result(Viewer::new(file_path, &self.password)) {
-//             self.current = View::Viewer(Box::new(viewer));
-//             app_state::save_last_file(&self.file_path_selecting);
-//         }
-//     }
-// }
-
-// impl Application for App {
-//     type Executor = executor::Default;
-//     type Flags = Opts;
-//     type Message = AppMessage;
-//     type Theme = Theme;
-
-//     fn new(flags: Self::Flags) -> (Self, Command<Self::Message>) {
-//         let mut r = Self {
-//             current: View::Welcome,
-//             selecting_file: false,
-//             file_path_selecting: "".to_owned(),
-//             password: "".to_owned(),
-//         };
-//         if let Some(path) = flags.filename {
-//             r.file_path_selecting = path;
-//             r.password = flags.password.unwrap_or_default();
-//             r.open();
-//         } else {
-//             r.open_last_file();
-//         }
-//         (
-//             r,
-//             // load icon font for iced_aw, without this modal close button icon will not show.
-//             font::load(iced_aw::core::icons::BOOTSTRAP_FONT_BYTES).map(|_|
-// AppMessage::Initialized),         )
-//     }
-
-//     fn title(&self) -> String {
-//         self.viewer().map_or(APP_NAME.to_owned(), |v| {
-//             format!("{APP_NAME} - {}", v.file_path())
-//         })
-//     }
-
-//     fn update(&mut self, message: AppMessage) -> Command<Self::Message> {
-//         match message {
-//             AppMessage::Initialized => {}
-//             AppMessage::Viewer(msg) => {
-//                 if let Some(v) = self.mut_viewer() {
-//                     let rv = v.update(msg);
-//                     self.handle_result(rv);
-//                 }
-//             }
-
-//             AppMessage::SelectFile => {
-//                 self.selecting_file = true;
-//                 if let Some(viewer) = self.viewer() {
-//                     self.file_path_selecting = viewer.file_path().to_owned();
-//                 }
-//             }
-//             AppMessage::SelectedFileChange(path) => {
-//                 self.file_path_selecting = path;
-//             }
-//             AppMessage::CancelSelectFile => {
-//                 self.selecting_file = false;
-//             }
-//             AppMessage::FileSelected => {
-//                 self.open();
-//                 self.selecting_file = false;
-//             }
-//         }
-
-//         Command::none()
-//     }
-
-//     fn view(&self) -> Element<'_, AppMessage> {
-//         let main = match &self.current {
-//             View::Viewer(v) => v.view(),
-//             View::Error(v) => v.view(),
-//             View::Welcome => Welcome::view(),
-//         };
-
-//         if self.selecting_file {
-//             modal(main, Some(self.file_modal_view()))
-//                 .on_esc(AppMessage::CancelSelectFile)
-//                 .backdrop(AppMessage::CancelSelectFile)
-//                 .into()
-//         } else {
-//             main
-//         }
-//     }
-// }
