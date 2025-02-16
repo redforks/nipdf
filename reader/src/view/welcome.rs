@@ -15,13 +15,12 @@ impl Welcome {
             text("Welcome to nipdf!"),
             button("Open a pdf file").on_press(AppMessage::SelectFile),
         ]
-        .align_items(iced::Alignment::Center);
+        .align_x(iced::Alignment::Center);
 
         container(content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .center_x()
-            .center_y()
+            .center(iced::Length::Fill)
             .into()
     }
 }

@@ -1,11 +1,11 @@
-use crate::{AppMessage, Result, ShardedData};
+use crate::{AppMessage, Result};
 use iced::{
     Element, Length,
     widget::{
         button, column, horizontal_space,
         image::{Handle, Image},
         row, scrollable,
-        scrollable::{Direction, Properties},
+        scrollable::Direction,
         text, text_input,
     },
 };
@@ -45,7 +45,7 @@ impl PageNavigator {
 struct Page {
     width: u32,
     height: u32,
-    data: ShardedData,
+    data: Vec<u8>,
 }
 
 /// Messages for pdf file viewer view.
@@ -81,7 +81,7 @@ impl Viewer {
             page: Page {
                 width: 0,
                 height: 0,
-                data: ShardedData(vec![].into()),
+                data: vec![],
             },
             navi: PageNavigator {
                 current_page: 0,
@@ -116,7 +116,7 @@ impl Viewer {
         self.page = Page {
             width: image.width(),
             height: image.height(),
-            data: ShardedData(image.into_vec().into()),
+            data: image.into_vec(),
         };
         self.navi = PageNavigator {
             current_page: no,
@@ -170,53 +170,44 @@ impl Viewer {
 
     pub(crate) fn view(&self) -> Element<'_, AppMessage> {
         let main: Element<'_, AppMessage> = column![
-            row(vec![
+            row![
                 // can not use row! macro, it has compile problems because of #[cfg] attribute on
                 // some of items
-                button("Open...").on_press(AppMessage::SelectFile).into(),
-                horizontal_space().width(16).into(),
+                button("Open...").on_press(AppMessage::SelectFile),
+                horizontal_space().width(16),
                 text_input("Page", &self.cur_page_editing)
                     .width(60)
                     .on_input(|s| AppMessage::Viewer(ViewerMessage::CurPageChange(s)))
-                    .on_submit(AppMessage::Viewer(ViewerMessage::CurPageChanged))
-                    .into(),
-                text(format!("/{}", self.navi.total_pages)).into(),
-                horizontal_space().width(16).into(),
-                button("Prev")
-                    .on_press_maybe(
-                        self.navi
-                            .can_prev()
-                            .then_some(AppMessage::Viewer(ViewerMessage::PrevPage))
-                    )
-                    .into(),
-                button("Next")
-                    .on_press_maybe(
-                        self.navi
-                            .can_next()
-                            .then_some(AppMessage::Viewer(ViewerMessage::NextPage))
-                    )
-                    .into(),
-                horizontal_space().width(16).into(),
-                button("Zoom In")
-                    .on_press(AppMessage::Viewer(ViewerMessage::ZoomIn))
-                    .into(),
-                button("Zoom Out")
-                    .on_press(AppMessage::Viewer(ViewerMessage::ZoomOut))
-                    .into(),
-                horizontal_space().width(Length::Fill).into(),
-            ])
-            .align_items(iced::Alignment::Center),
+                    .on_submit(AppMessage::Viewer(ViewerMessage::CurPageChanged)),
+                text(format!("/{}", self.navi.total_pages)),
+                horizontal_space().width(16),
+                button("Prev").on_press_maybe(
+                    self.navi
+                        .can_prev()
+                        .then_some(AppMessage::Viewer(ViewerMessage::PrevPage))
+                ),
+                button("Next").on_press_maybe(
+                    self.navi
+                        .can_next()
+                        .then_some(AppMessage::Viewer(ViewerMessage::NextPage))
+                ),
+                horizontal_space().width(16),
+                button("Zoom In").on_press(AppMessage::Viewer(ViewerMessage::ZoomIn)),
+                button("Zoom Out").on_press(AppMessage::Viewer(ViewerMessage::ZoomOut)),
+                horizontal_space().width(Length::Fill),
+            ]
+            .align_y(iced::Alignment::Center),
             scrollable(
-                Image::new(Handle::from_pixels(
+                Image::new(Handle::from_rgba(
                     self.page.width,
                     self.page.height,
-                    self.page.data.clone(),
+                    self.page.data.clone()
                 ))
                 .content_fit(iced::ContentFit::None)
             )
             .direction(Direction::Both {
-                vertical: Properties::default(),
-                horizontal: Properties::default(),
+                horizontal: Default::default(),
+                vertical: Default::default()
             })
         ]
         .into();

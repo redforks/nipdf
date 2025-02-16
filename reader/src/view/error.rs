@@ -1,6 +1,6 @@
 //! View on application has error
 
-use crate::AppMessage;
+use crate::app::Message;
 use iced::{
     Element,
     widget::{Text, button, row},
@@ -14,10 +14,10 @@ impl ErrorView {
         Self(err.to_string())
     }
 
-    pub(crate) fn view(&self) -> Element<'_, AppMessage> {
+    pub(crate) fn view(&self) -> Element<'_, Message> {
         row![
             Text::new(self.0.to_string()),
-            button("Open a new file...").on_press(AppMessage::SelectFile),
+            button("Open a new file...").on_press(Message::SelectFile),
         ]
         .into()
     }
