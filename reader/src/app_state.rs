@@ -43,11 +43,11 @@ pub fn save_last_file(file_path: impl AsRef<str>) {
 }
 
 /// Loads the last opened file path. If error happened, error log and ignore it.
-pub fn load_last_file() -> Option<String> {
+pub fn load_last_file() -> Option<(String, String)> {
     fn _do() -> Result<String> {
         let last_file_path = last_file_path()?;
         std::fs::read_to_string(last_file_path).whatever_context("read last opened file")
     }
 
-    log_and_forget(_do(), "load last file path failed")
+    log_and_forget(_do(), "load last file path failed").map(|v| (v, "".to_owned()))
 }

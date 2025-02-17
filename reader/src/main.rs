@@ -28,6 +28,16 @@ struct Opts {
     password: Option<String>,
 }
 
+impl From<Opts> for Option<(String, String)> {
+    fn from(value: Opts) -> Self {
+        if let Some(filename) = value.filename {
+            Some((filename, value.password.unwrap_or_default()))
+        } else {
+            None
+        }
+    }
+}
+
 fn main() -> iced::Result {
     env_logger::init();
 
@@ -38,6 +48,7 @@ fn main() -> iced::Result {
 
 mod app {
     use super::*;
+    use crate::app_state::load_last_file;
     use rfd::FileDialog;
 
     /// Messages for application view.
@@ -58,8 +69,10 @@ mod app {
 
     impl State {
         pub fn new(opts: Opts) -> Self {
-            let current = if let Some(filename) = opts.filename {
-                let viewer = Viewer::new(filename, opts.password.unwrap_or_default());
+            let args: Option<(String, String)> =
+                <Option<(String, String)>>::from(opts).or_else(load_last_file);
+            let current = if let Some((filename, password)) = args {
+                let viewer = Viewer::new(filename, password);
                 match viewer {
                     Ok(v) => View::Viewer(Box::new(v)),
                     Err(e) => View::Error(ErrorView::new(&e)),
