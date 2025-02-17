@@ -637,19 +637,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6d43a04d8753f35258c91f8ec639f792891f748a1edbd759cf1dcea3382ad83c"
 
 [[package]]
-name = "cff-parser"
-version = "0.1.0"
-dependencies = [
- "log",
- "map-macro",
- "paste",
- "prescript",
- "snafu",
- "test-case",
- "winnow 0.7.2",
-]
-
-[[package]]
 name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2480,17 +2467,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "540654e97a3f4470a492cd30ff187bc95d89557a903a2bbf112e2fae98104ef2"
 
 [[package]]
-name = "jbig2dec"
-version = "0.3.1"
-source = "git+https://github.com/redforks/jbig2dec-rs#18ff90d73c8ae755f0515398969c4a2a17ff61ea"
-dependencies = [
- "jbig2dec-sys",
-]
-
-[[package]]
 name = "jbig2dec-sys"
 version = "0.19.0"
-source = "git+https://github.com/redforks/jbig2dec-rs#18ff90d73c8ae755f0515398969c4a2a17ff61ea"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea4b80390a387e43bb835103ba3c7133768e2f319a09cba718f028beb2dd9502"
 dependencies = [
  "cc",
 ]
@@ -2916,7 +2896,6 @@ dependencies = [
  "bitstream-io",
  "bitvec",
  "cbc",
- "cff-parser",
  "educe",
  "either",
  "env_logger",
@@ -2930,7 +2909,6 @@ dependencies = [
  "image 0.25.5",
  "insta",
  "itertools 0.13.0",
- "jbig2dec",
  "jpeg-decoder",
  "jpeg2k",
  "log",
@@ -2938,6 +2916,8 @@ dependencies = [
  "memchr",
  "miniz_oxide",
  "mockall",
+ "nipdf-cff-parser",
+ "nipdf-jbig2dec",
  "nipdf-macro",
  "num-traits",
  "once_cell",
@@ -2958,6 +2938,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "nipdf-cff-parser"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "map-macro",
+ "paste",
+ "prescript",
+ "snafu",
+ "test-case",
+ "winnow 0.7.2",
+]
+
+[[package]]
 name = "nipdf-dump"
 version = "0.1.0"
 dependencies = [
@@ -2970,6 +2963,15 @@ dependencies = [
  "nipdf-render",
  "prescript",
  "snafu",
+]
+
+[[package]]
+name = "nipdf-jbig2dec"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e7a635a1246599f4a28ec09d78fa901928702e7a7b4a52e4daf618d35d99d9f"
+dependencies = [
+ "jbig2dec-sys",
 ]
 
 [[package]]

@@ -882,7 +882,7 @@ fn decode_jbig2<'a>(
 }
 
 fn do_decode_jbig2<'a>(mut buf: &[u8]) -> Result<FilterDecodedData<'a>> {
-    use jbig2dec::{Document, OpenFlag};
+    use nipdf_jbig2dec::{Document, OpenFlag};
     let doc = Document::from_reader(&mut buf, OpenFlag::Embedded)
         .whatever_context::<_, ObjectValueError>("parse jbig2 data")?;
     ensure_whatever!(doc.len() > 0, "jbig2 image should not empty");

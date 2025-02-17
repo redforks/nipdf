@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 description = "A PDF library written in Rust"
+exclude = ["pdf.js", "sample_files"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -20,9 +21,9 @@ bitstream-io.workspace = true
 strum.workspace = true
 bitvec.workspace = true
 jpeg2k.workspace = true
-nipdf-macro = { path = "../macro" }
-cff-parser = { path = "../cff-parser" }
-prescript = { path = "../prescript" }
+nipdf-macro = { path = "../macro", version = "0.1" }
+nipdf-cff-parser = { path = "../cff-parser", version = "0.1" }
+prescript = { path = "../prescript", version = "0.1" }
 educe.workspace = true
 pretty.workspace = true
 bitflags.workspace = true
@@ -46,7 +47,7 @@ miniz_oxide.workspace = true
 snafu.workspace = true
 winnow.workspace = true
 itertools.workspace = true
-jbig2dec = { version = "0.3.1", default-features = false, git = "https://github.com/redforks/jbig2dec-rs" }
+nipdf-jbig2dec = { version = "0.3.1", default-features = false }
 
 [dev-dependencies]
 env_logger.workspace = true

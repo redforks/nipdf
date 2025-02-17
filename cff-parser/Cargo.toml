@@ -1,16 +1,16 @@
 [package]
-name = "cff-parser"
+name = "nipdf-cff-parser"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "A library that parses CFF files"
+description = "A library that parses CFF files, part of nipdf library."
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 log.workspace = true
 paste.workspace = true
-prescript = { path = "../prescript" }
+prescript = { path = "../prescript", version = "0.1.0" }
 snafu.workspace = true
 winnow.workspace = true
 

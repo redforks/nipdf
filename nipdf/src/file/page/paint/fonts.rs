@@ -11,12 +11,12 @@ use crate::{
         FontDescriptorFlags, FontDict, FontType, Type0FontDict, Type3FontDict,
     },
 };
-use cff_parser::{File as CffFile, Font as CffFont};
 use either::Either;
 use font_kit::{hinting::HintingOptions, loaders::freetype::Font as FontKitFont};
 use fontdb::{Database, Family, Query, Source, Weight};
 use heck::ToTitleCase;
 use log::{debug, error, info, warn};
+use nipdf_cff_parser::{File as CffFile, Font as CffFont};
 use num_traits::ToPrimitive;
 use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
