@@ -62,7 +62,6 @@ pub enum ViewerMessage {
 
 /// Pdf file viewer
 pub struct Viewer {
-    file_path: String,
     page: Page,
     navi: PageNavigator,
     zoom: f32,
@@ -77,7 +76,6 @@ impl Viewer {
         let file_data = std::fs::read(&file_path).whatever_context("read pdf file content")?;
         let file = PdfFile::parse(file_data, &password).whatever_context("parse pdf file")?;
         let mut r = Self {
-            file_path,
             page: Page {
                 width: 0,
                 height: 0,
@@ -93,10 +91,6 @@ impl Viewer {
         };
         r.load_page(0)?;
         Ok(r)
-    }
-
-    pub fn file_path(&self) -> &str {
-        &self.file_path
     }
 
     fn update_cur_page_editing_from_navigation(&mut self) {

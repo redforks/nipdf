@@ -20,7 +20,7 @@ impl Welcome {
         container(content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .center(iced::Length::Fill)
+            .center(Length::Fill)
             .into()
     }
 }
