@@ -8,8 +8,8 @@ description = "nipdf-render is a PDF renderer written in Rust."
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-nipdf = { path = "../nipdf" }
-prescript = { path = "../prescript" }
+nipdf = { path = "../nipdf", version = "*" }
+prescript = { path = "../prescript", version = "*" }
 log.workspace = true
 tiny-skia = "0.11.4"
 either.workspace = true
@@ -26,7 +26,7 @@ test-case.workspace = true
 md-5.workspace = true
 hex.workspace = true
 ureq = { version = "2.12", features = ["proxy-from-env"] }
-nipdf-test-macro = { path = "../test-macro" }
+nipdf-test-macro = { path = "../test-macro", version = "0.1.0" }
 maplit = "1.0"
 criterion = "0.5"
 mimalloc.workspace = true

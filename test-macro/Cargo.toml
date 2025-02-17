@@ -2,6 +2,8 @@
 name = "nipdf-test-macro"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Used in nipdf-render to build test cases"
 
 [lib]
 proc-macro = true
