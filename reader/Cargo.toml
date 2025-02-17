@@ -3,12 +3,13 @@ name = "nipdf-reader"
 version = "0.1.0"
 edition = "2021"
 description = "iced pdf GUI reader"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-nipdf = { path = "../nipdf", version = "*" }
-nipdf-render = { path = "../render", version = "*" }
+nipdf = { path = "../nipdf", version = "0.1.0" }
+nipdf-render = { path = "../render", version = "0.1.0" }
 env_logger.workspace = true
 iced = { version = "0.13.1", features = ["image", "advanced"] }
 directories-next = "2.0.0"
