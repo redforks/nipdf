@@ -30,3 +30,12 @@ test:
 
 test-no-fail-fast:
 	cargo nextest run --no-fail-fast --test-threads 8
+
+publish:
+	cargo publish -p prescript
+	cargo publish -p nipdf-cff-parser
+	cargo publish -p nipdf-macro
+	cargo publish -p nipdf
+	cargo publish -p nipdf-test-macro
+	cargo publish -p nipdf-render
+	cargo publish -p nipdf-reader
