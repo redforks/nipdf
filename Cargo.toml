@@ -23,16 +23,12 @@ opt-level = 3
 
 [profile.release]
 split-debuginfo = "unpacked"
-# lto = true
-codegen-units = 1
+lto = "thin"
 # Uncomment next line to emb more symbols for profiling
 # debug = 1
 
 [profile.dev]
 split-debuginfo = "unpacked"
-
-[profile.dev.package."*"]
-opt-level = 3
 
 [workspace.dependencies]
 hex = { version = "0.4" }
