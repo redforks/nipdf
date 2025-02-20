@@ -12,6 +12,9 @@ members = [
 resolver = "2"
 package.repository = "https://github.com/redforks/nipdf"
 package.license = "MIT"
+package.edition = "2021"
+package.version = "0.1.1"
+package.authors = ["Red Forks redforks@gmail.com"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

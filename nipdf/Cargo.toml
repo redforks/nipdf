@@ -1,8 +1,10 @@
 [package]
 name = "nipdf"
-version = "0.1.0"
-edition = "2021"
-license = "MIT"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
 description = "A PDF library written in Rust"
 exclude = ["pdf.js", "sample_files"]
 

@@ -2886,7 +2886,7 @@ dependencies = [
 
 [[package]]
 name = "nipdf"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aes",
  "ahash 0.8.11",
@@ -2939,7 +2939,7 @@ dependencies = [
 
 [[package]]
 name = "nipdf-cff-parser"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "log",
  "map-macro",
@@ -2952,7 +2952,7 @@ dependencies = [
 
 [[package]]
 name = "nipdf-dump"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "clap",
  "colog",
@@ -2976,7 +2976,7 @@ dependencies = [
 
 [[package]]
 name = "nipdf-macro"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "either",
  "proc-macro2",
@@ -2986,7 +2986,7 @@ dependencies = [
 
 [[package]]
 name = "nipdf-reader"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "clap",
  "directories-next",
@@ -3003,7 +3003,7 @@ dependencies = [
 
 [[package]]
 name = "nipdf-render"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "colog",
  "criterion",
@@ -3031,7 +3031,7 @@ dependencies = [
 
 [[package]]
 name = "nipdf-test-macro"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "glob",
  "itertools 0.13.0",
@@ -3733,7 +3733,7 @@ dependencies = [
 
 [[package]]
 name = "prescript"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "assert_approx_eq",
  "educe",

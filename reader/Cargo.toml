@@ -1,9 +1,11 @@
 [package]
 name = "nipdf-reader"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+repository.workspace = true
+license.workspace = true
+edition.workspace = true
+authors.workspace = true
 description = "iced pdf GUI reader"
-license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
