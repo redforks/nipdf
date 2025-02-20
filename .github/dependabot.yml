@@ -1,0 +1,15 @@
+version: 2
+updates:
+  # Enable version updates for Cargo dependencies
+  - package-ecosystem: "cargo" # Use "cargo" for Rust
+    directory: "/" # Location of package manifests (Cargo.toml)
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10 # Limit PR creation to avoid overwhelming
+    ignore:
+      - dependency-name: "rust-version" # Ignore dependency updates for rust-version as this may not be supported by dependabot
+    groups:
+      rust-dependencies: # Group all rust dependencies into one PR
+        update-types:
+          - "minor"
+          - "patch"
