@@ -45,7 +45,7 @@ bitvec = "1.0"
 jpeg2k = "0.9"
 educe = "0.6"
 pretty = "0.12"
-bitflags = "2.6"
+bitflags = "2.8"
 fontdb = "0.23"
 font-kit = { version = "0.14", features = ["loader-freetype"] }
 pathfinder_geometry = "0.5"
@@ -65,7 +65,7 @@ phf = { version = "0.11", features = ["macros"] }
 miniz_oxide = "0.8"
 env_logger = "0.11"
 glob = "0.3"
-insta = { version = "1.40", features = ["ron"] }
+insta = { version = "1.42", features = ["ron"] }
 assert_approx_eq = "1.1"
 test-case = "3.3"
 test-log = "0.2"
@@ -74,7 +74,7 @@ proc-macro2 = "1.0"
 quote = "1.0"
 syn = { version = "2.0", features = ["full", "extra-traits"] }
 map-macro = "0.3"
-winnow = { version = "0.7.2", features = ["simd"] }
+winnow = { version = "0.7.3", features = ["simd"] }
 kstring = { version = "2.0", features = ["max_inline"] }
 itertools = "0.13"
 clap = { version = "4.5", features = ["derive"] }
