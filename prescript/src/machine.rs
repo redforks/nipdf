@@ -1385,10 +1385,9 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
             let value = m.pop()?;
             let key = m.pop()?;
             let dict = m.variable_stack.top()?;
-            let is_encoding = if let RuntimeValue::Value(Value::Name(ref name)) = key {
-                name == &sname("Encoding")
-            } else {
-                false
+            let is_encoding = match key {
+                RuntimeValue::Value(Value::Name(ref name)) => name == &sname("Encoding"),
+                _ => false
             };
             dict.borrow_mut().insert(key.try_into()?, value);
             if is_encoding {

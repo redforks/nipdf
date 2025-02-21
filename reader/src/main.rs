@@ -128,7 +128,7 @@ mod app {
 
             Message::SelectFile => {
                 let filename = FileDialog::new().add_filter("PDF", &["pdf"]).pick_file();
-                if let Some(filename) = dbg!(filename) {
+                if let Some(filename) = filename {
                     state.file_path_selecting = filename.to_str().unwrap().to_string();
                     state.password = String::new();
                     state.open();

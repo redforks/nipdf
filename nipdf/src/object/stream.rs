@@ -878,7 +878,7 @@ fn decode_jbig2<'a>(
         S_FILTER_JBIG2_DECODE
     );
 
-    do_decode_jbig2(&buf)
+    do_decode_jbig2(buf)
 }
 
 fn do_decode_jbig2<'a>(mut buf: &[u8]) -> Result<FilterDecodedData<'a>> {
@@ -1048,7 +1048,7 @@ fn decode_ascii_hex(buf: &[u8]) -> Result<Vec<u8>, ObjectValueError> {
                 return Err(ObjectValueError::FilterDecodeError);
             }
         };
-        let b = b << 4
+        let b = (b << 4)
             | match iter.next() {
                 Some(&b) => match b {
                     b'0'..=b'9' => b - b'0',
@@ -1170,12 +1170,15 @@ fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> Result<Dyn
     fn convert_rgba_cs(img: &RgbaImage, cs: &dyn ColorSpaceTrait<f32>) -> Result<RgbaImage> {
         let mut r = RgbaImage::new(img.width(), img.height());
         for (p, dest_p) in img.pixels().zip(r.pixels_mut()) {
-            let color: [u8; 4] = color_to_rgba(cs, &[
-                p[0].into_color_comp(),
-                p[1].into_color_comp(),
-                p[2].into_color_comp(),
-                p[3].into_color_comp(),
-            ]);
+            let color: [u8; 4] = color_to_rgba(
+                cs,
+                &[
+                    p[0].into_color_comp(),
+                    p[1].into_color_comp(),
+                    p[2].into_color_comp(),
+                    p[3].into_color_comp(),
+                ],
+            );
             *dest_p = Rgba(color);
         }
         Ok(r)

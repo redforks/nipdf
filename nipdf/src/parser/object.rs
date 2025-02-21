@@ -267,7 +267,7 @@ where
     E: ParserError<S> + 'a,
 {
     (zero_prefixed_uint(), ws_prefixed1(dec_uint))
-        .map(|(id, gen): (u32, u16)| ObjectId::new(id, gen))
+        .map(|(id, r#gen): (u32, u16)| ObjectId::new(id, r#gen))
 }
 
 fn reference<'a, S, E>() -> impl Parser<S, Object, E> + 'a

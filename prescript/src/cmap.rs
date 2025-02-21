@@ -848,7 +848,7 @@ impl MachinePlugin for CMapMachinePlugin<'_> {
                     let cmap = CMap {
                         cid_system_info: CIDSystemInfo::from_dict(&d_ref[&sname("CIDSystemInfo")].dict()?.borrow())?,
                         w_mode: WriteMode::parse(
-                            d_ref.get(&sname("WMode")).map_or_else(|| Ok(0), |v| v.int()).whatever_context("get WMode")?
+                            d_ref.get(&sname("WMode")).map_or_else(|| Ok(0), RuntimeValue::int).whatever_context("get WMode")?
                         ).whatever_context("parse WMode")?,
                         name: cmap_name,
                         code_space: CodeSpace::new(m.p.code_space_entries.take()),

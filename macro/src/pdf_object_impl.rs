@@ -135,10 +135,12 @@ enum DefaultAttr {
 fn parse_default_attr(attrs: &[Attribute]) -> Option<DefaultAttr> {
     if let Some(lit) = default_lit(attrs) {
         Some(DefaultAttr::Literal(lit))
-    } else if or_default(attrs) {
-        Some(DefaultAttr::OrDefault)
     } else {
-        default_fn(attrs).map(DefaultAttr::Function)
+        if or_default(attrs) {
+            Some(DefaultAttr::OrDefault)
+        } else {
+            default_fn(attrs).map(DefaultAttr::Function)
+        }
     }
 }
 
@@ -502,50 +504,52 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
             schema_method_name(rt, &attrs[..]).map(|m| Ident::new(m, name.span()))
         {
             quote! { self.d.#method_name(&prescript::sname(#key)) }
-        } else if let Some(nested_type) = nested(rt, attrs) {
-            gen_option_method(
-                nested_type,
-                |ty| {
-                    let type_name = remove_generic(ty);
-                    quote! { self.d.opt::<#type_name<'_, '_>>(&prescript::sname(#key)) }
-                },
-                |ty| {
-                    if is_vec(ty) {
-                        quote! { self.d.zero_one_or_more(&prescript::sname(#key)) }
-                    } else if is_map(ty) {
-                        quote! { self.d.map_dict(&prescript::sname(#key)) }
-                    } else {
-                        let type_name = remove_generic(ty);
-                        quote! { self.d.required::<#type_name<'_, '_>>(&prescript::sname(#key)) }
-                    }
-                },
-            )
-        } else if let Some(try_from_type) = try_from(rt, attrs) {
-            gen_option_method(
-                try_from_type,
-                |ty| {
-                    quote! {
-                        let d: Option<crate::object::ObjectWithResolver> = self.d.opt(&prescript::sname(#key))?;
-                        d.map(|d| <#ty>::try_from(d)).transpose()
-                    }
-                },
-                |ty| {
-                    quote! {
-                        let d: crate::object::ObjectWithResolver = self.d.required(&prescript::sname(#key))?;
-                        <#ty>::try_from(d)
-                    }
-                },
-            )
-        } else if let Some(rt) = self_as(rt, attrs) {
-            gen_option_method(
-                rt,
-                |_| unreachable!("self_as methods never return Option"),
-                |ty| {
-                    quote! { <Self as crate::object::ToPdfObject::<(#ty, _, _)>>::to_pdf_object(self).map(|v| v.0) }
-                },
-            )
         } else {
-            panic!("unsupported return type: {}", rt.to_token_stream())
+            if let Some(nested_type) = nested(rt, attrs) {
+                gen_option_method(
+                    nested_type,
+                    |ty| {
+                        let type_name = remove_generic(ty);
+                        quote! { self.d.opt::<#type_name<'_, '_>>(&prescript::sname(#key)) }
+                    },
+                    |ty| {
+                        if is_vec(ty) {
+                            quote! { self.d.zero_one_or_more(&prescript::sname(#key)) }
+                        } else if is_map(ty) {
+                            quote! { self.d.map_dict(&prescript::sname(#key)) }
+                        } else {
+                            let type_name = remove_generic(ty);
+                            quote! { self.d.required::<#type_name<'_, '_>>(&prescript::sname(#key)) }
+                        }
+                    },
+                )
+            } else if let Some(try_from_type) = try_from(rt, attrs) {
+                gen_option_method(
+                    try_from_type,
+                    |ty| {
+                        quote! {
+                            let d: Option<crate::object::ObjectWithResolver> = self.d.opt(&prescript::sname(#key))?;
+                            d.map(|d| <#ty>::try_from(d)).transpose()
+                        }
+                    },
+                    |ty| {
+                        quote! {
+                            let d: crate::object::ObjectWithResolver = self.d.required(&prescript::sname(#key))?;
+                            <#ty>::try_from(d)
+                        }
+                    },
+                )
+            } else if let Some(rt) = self_as(rt, attrs) {
+                gen_option_method(
+                    rt,
+                    |_| unreachable!("self_as methods never return Option"),
+                    |ty| {
+                        quote! { <Self as crate::object::ToPdfObject::<(#ty, _, _)>>::to_pdf_object(self).map(|v| v.0) }
+                    },
+                )
+            } else {
+                panic!("unsupported return type: {}", rt.to_token_stream())
+            }
         };
 
         if let Some(default_attr) = default_attr {

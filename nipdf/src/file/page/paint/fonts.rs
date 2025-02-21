@@ -203,9 +203,10 @@ impl EncodingParser<'_, '_, '_> {
 
     fn guess_by_font_name(font_name: &str) -> Option<Encoding> {
         // if font not embed encoding, use known encoding for the two standard symbol fonts
-        match font_name {
-            "Symbol" | "ZapfDingbats" => Some(Encoding::SYMBOL),
-            _ => None,
+        if let "Symbol" | "ZapfDingbats" = font_name {
+            Some(Encoding::SYMBOL)
+        } else {
+            None
         }
     }
 
@@ -438,7 +439,7 @@ impl<'a> TTFFontOp<'a> {
 
 static GLYPH_NAME_TO_UNICODE: phf::Map<&'static str, u32> = include!("glyph_name_to_unicode.rs");
 
-impl<'a> FontOp for TTFFontOp<'a> {
+impl FontOp for TTFFontOp<'_> {
     fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>> {
         Ok(s.iter().map(|v| *v as u32).collect())
     }
@@ -987,13 +988,16 @@ struct CIDFontType0FontOp {
 
 impl CIDFontType0FontOp {
     fn new(font: &Type0FontDict<'_, '_>) -> Result<Self> {
-        if let NameOrStream::Name(encoding) = font.encoding()? {
-            ensure_whatever!(
-                encoding == "Identity-H",
-                "Only IdentityH encoding supported"
-            );
-        } else {
-            whatever!("Only IdentityH encoding supported");
+        match font.encoding()? {
+            NameOrStream::Name(encoding) => {
+                ensure_whatever!(
+                    encoding == "Identity-H",
+                    "Only IdentityH encoding supported"
+                );
+            }
+            _ => {
+                whatever!("Only IdentityH encoding supported");
+            }
         }
 
         let cid_fonts = font.descendant_fonts()?;
@@ -1144,7 +1148,7 @@ impl FontOp for CIDFontType2FontOp {
         self.cmap.as_ref().map_or_else(
             || {
                 Ok(s.chunks(2)
-                    .map(|ch| (ch[0] as u32) << 8 | ch[1] as u32)
+                    .map(|ch| ((ch[0] as u32) << 8) | ch[1] as u32)
                     .collect())
             },
             |cmap| {
@@ -1233,7 +1237,7 @@ struct CIDFontType2Font<'a, 'b> {
 
 impl<'a, 'b> CIDFontType2Font<'a, 'b> {
     fn new(font_is_embed: bool, data: Arc<Vec<u8>>, font_dict: FontDict<'a, 'b>) -> Result<Self> {
-        let font = FontKitFont::from_bytes(data.clone().into(), 0)
+        let font = FontKitFont::from_bytes(data.clone(), 0)
             .whatever_context::<_, ObjectValueError>("decode FontKitFont for Type2")?;
         Ok(Self {
             data,

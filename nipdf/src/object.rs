@@ -207,7 +207,7 @@ impl<Inner: TypeValueCheck<V> + Clone + Debug, V> TypeValueCheck<V>
     }
 
     fn check(&self, v: Option<V>) -> bool {
-        v.map_or(true, |v| self.0.check(Some(v)))
+        v.is_none_or(|v| self.0.check(Some(v)))
     }
 }
 
@@ -507,16 +507,16 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
                     .r
                     .resolve(reference)
                     .with_whatever_context::<_, _, ObjectValueError>(with_err)?;
-                match o {
-                    Object::Array(arr) => arr
-                        .iter()
+                if let Object::Array(arr) = o {
+                    arr.iter()
                         .map(|o| V::create(o, self.resolver()))
                         .collect::<Result<_, _>>()
-                        .with_whatever_context::<_, _, ObjectValueError>(with_err),
-                    _ => Ok(vec![
+                        .with_whatever_context::<_, _, ObjectValueError>(with_err)
+                } else {
+                    Ok(vec![
                         V::create(v, self.resolver())
                             .with_whatever_context::<_, _, ObjectValueError>(with_err)?,
-                    ]),
+                    ])
                 }
             }
             Some(Object::Array(arr)) => arr
@@ -591,7 +591,7 @@ pub(crate) fn try_from<
 ) -> Result<T> {
     let xref = crate::file::XRefTable::empty();
     let resolver = ObjectResolver::empty(&xref);
-    let o = ObjectWithResolver::new(&o, &resolver)?;
+    let o = ObjectWithResolver::new(o, &resolver)?;
     T::try_from(o)
 }
 

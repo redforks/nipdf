@@ -92,7 +92,7 @@ fn integer_parser<'a, E: ParserError<&'a [u8]>>() -> impl Parser<&'a [u8], i32, 
         28 => |buf: &mut &'a [u8]| {
             let b1 = any(buf)?;
             let b2 = any(buf)?;
-            Ok(((b1 as i16) << 8 | b2 as i16) as i32)
+            Ok((((b1 as i16) << 8) | b2 as i16) as i32)
         },
         29 => |buf: &mut &'a [u8]| {
             let b1 = any(buf)?;
