@@ -33,6 +33,7 @@ use std::{
     rc::Rc,
     sync::{Arc, LazyLock},
 };
+use ttf_parser::Face as TTFFace;
 use winnow::{Parser as _, combinator::terminated, token::rest};
 
 /// FontWidth used in Type1 and TrueType fonts
@@ -416,6 +417,7 @@ struct TTFFontOp<'a> {
     units_per_em: u16,
     encoding: Option<Encoding>,
     font_width: Option<FirstLastFontWidth>,
+    ttf_font: TTFFace<'a>,
 }
 
 impl<'a> TTFFontOp<'a> {
@@ -423,6 +425,7 @@ impl<'a> TTFFontOp<'a> {
         face: &'a FontKitFont,
         encoding: Option<Encoding>,
         font_width: Option<FirstLastFontWidth>,
+        ttf_font: TTFFace<'a>,
     ) -> Result<Self> {
         Ok(Self {
             units_per_em: face
@@ -433,7 +436,28 @@ impl<'a> TTFFontOp<'a> {
             face,
             encoding,
             font_width,
+            ttf_font,
         })
+    }
+
+    // TTFFace::glyph_index() ignores non unicode cmap table,
+    // some non-cjk pdf file use non unicode cmap table. This function
+    // try to find glyph id from all cmap tables
+    fn glyph_index(&self, ch: u32) -> Result<Option<u16>> {
+        for subtable in self
+            .ttf_font
+            .tables()
+            .cmap
+            .whatever_context::<_, ObjectValueError>("get cmap from TTF Face")?
+            .subtables
+        {
+            if let Some(id) = subtable.glyph_index(ch) {
+                return Ok(Some(id.0));
+            }
+        }
+
+        warn!("glyph id not found from TTF CMap for char: {}", ch);
+        Ok(None)
     }
 }
 
@@ -471,6 +495,9 @@ impl FontOp for TTFFontOp<'_> {
                 .try_into()
                 .whatever_context("failed convert glyph index");
         }
+        if let Some(r) = self.glyph_index(ch)? {
+            return r.try_into().whatever_context("failed convert glyph index");
+        }
         warn!("TTF glyph id not found for char: {}", ch);
         Ok(0)
     }
@@ -498,17 +525,19 @@ struct TTFFont<'a, 'b> {
     typ: FontType,
     font_dict: FontDict<'a, 'b>,
     face: FontKitFont,
+    data: Arc<Vec<u8>>,
 }
 
 impl<'a, 'b> TTFFont<'a, 'b> {
     fn new(typ: FontType, data: Arc<Vec<u8>>, font_dict: FontDict<'a, 'b>) -> Result<Self> {
         debug_assert!(typ == FontType::TrueType || typ == FontType::Type1);
-        let face = FontKitFont::from_bytes(data, 0)
+        let face = FontKitFont::from_bytes(data.clone(), 0)
             .whatever_context::<_, ObjectValueError>("parse TTF Font")?;
         Ok(Self {
             typ,
             font_dict,
             face,
+            data,
         })
     }
 }
@@ -524,6 +553,8 @@ impl<P: PathSink> Font<P> for TTFFont<'_, '_> {
             &self.face,
             encoding,
             FirstLastFontWidth::from(&self.font_dict)?,
+            TTFFace::parse(&self.data, 0)
+                .whatever_context::<_, ObjectValueError>("parse TTF Font")?,
         )?))
     }
 
@@ -1132,9 +1163,6 @@ impl CIDFontType2FontOp {
     }
 }
 
-// TTFFace::glyph_index() ignores non unicode cmap table,
-// some non-cjk pdf file use non unicode cmap table. This function
-// try to find glyph id from all cmap tables
 fn glyph_index(face: &FontKitFont, ch: u32) -> Result<Option<u16>> {
     Ok(face
         .glyph_for_char(
