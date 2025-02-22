@@ -1096,21 +1096,36 @@ pub trait FontOp {
 struct CIDFontType0FontOp {
     widths: Option<CIDFontWidths>,
     default_width: u32,
+    encoding: Option<Rc<CMap>>,
 }
 
 impl CIDFontType0FontOp {
     fn new(font: &Type0FontDict<'_, '_>) -> Result<Self> {
-        match font.encoding()? {
-            NameOrStream::Name(encoding) => {
-                ensure_whatever!(
-                    encoding == "Identity-H",
-                    "Only IdentityH encoding supported"
-                );
+        let mut cmap_registry = CMapRegistry::new();
+        let encoding = match font.encoding()? {
+            NameOrStream::Name(encoding_name) => {
+                if encoding_name == "Identity-H" {
+                    None
+                } else {
+                    Some(
+                        cmap_registry
+                            .get(&name(encoding_name))
+                            .whatever_context::<_, ObjectValueError>("Get cmap")?
+                            .whatever_context::<_, ObjectValueError>("Get cmap")?,
+                    )
+                }
             }
-            _ => {
-                whatever!("Only IdentityH encoding supported");
+            NameOrStream::Stream(s) => {
+                let data = s
+                    .decode(font.resolver())
+                    .whatever_context::<_, ObjectValueError>("decode cmap from stream")?;
+                Some(
+                    cmap_registry
+                        .add_cmap_file(data.as_ref())
+                        .whatever_context::<_, ObjectValueError>("add cmap file")?,
+                )
             }
-        }
+        };
 
         let cid_fonts = font.descendant_fonts()?;
         let cid_font = &cid_fonts[0];
@@ -1118,6 +1133,7 @@ impl CIDFontType0FontOp {
         Ok(Self {
             widths,
             default_width: cid_font.dw()?,
+            encoding,
         })
     }
 }
@@ -1125,13 +1141,24 @@ impl CIDFontType0FontOp {
 impl FontOp for CIDFontType0FontOp {
     /// `s` each two bytes as a char code, big endian. append 0 if len(s) is odd
     fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>> {
-        debug_assert!(s.len() % 2 == 0, "{:?}", s);
-        let mut rv = Vec::with_capacity(s.len() / 2);
-        for i in 0..s.len() / 2 {
-            let ch = u16::from_be_bytes([s[i * 2], s[i * 2 + 1]]);
-            rv.push(ch as u32);
+        if let Some(cmap) = &self.encoding {
+            // Use the CMap for decoding if available
+            Ok(cmap
+                .map(s)
+                .whatever_context::<_, ObjectValueError>("map code to cid")?
+                .into_iter()
+                .map(|ch| ch.0 as u32)
+                .collect())
+        } else {
+            // Fallback to Identity-H decoding
+            debug_assert!(s.len() % 2 == 0, "{:?}", s);
+            let mut rv = Vec::with_capacity(s.len() / 2);
+            for i in 0..s.len() / 2 {
+                let ch = u16::from_be_bytes([s[i * 2], s[i * 2 + 1]]);
+                rv.push(ch as u32);
+            }
+            Ok(rv)
         }
-        Ok(rv)
     }
 
     fn char_to_gid(&self, ch: u32) -> Result<u16> {
