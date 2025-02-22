@@ -500,7 +500,7 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         V: FromSchemaContainer<'a, 'b>,
     {
         let with_err =
-            |_: &mut ObjectValueError| format!("resolve zero_one_or_more porerty: {}", &key);
+            |_: &mut ObjectValueError| format!("resolve zero_one_or_more property: {}", &key);
         let v = self.d.get(key);
         match v {
             Some(v @ Object::Reference(reference)) => {
@@ -510,25 +510,43 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
                     .with_whatever_context::<_, _, ObjectValueError>(with_err)?;
                 if let Object::Array(arr) = o {
                     arr.iter()
-                        .map(|o| V::create(o, self.resolver()))
-                        .collect::<Result<_, _>>()
-                        .with_whatever_context::<_, _, ObjectValueError>(with_err)
+                        .filter_map(|o| match V::create(o, self.resolver()) {
+                            Ok(v) => Some(Ok(v)),
+                            Err(e) => {
+                                warn!("Ignoring item in array due to error: {}", e);
+                                None
+                            }
+                        })
+                        .collect::<Result<Vec<V>, _>>()
+                        .with_whatever_context(with_err)
                 } else {
-                    Ok(vec![
-                        V::create(v, self.resolver())
-                            .with_whatever_context::<_, _, ObjectValueError>(with_err)?,
-                    ])
+                    match V::create(v, self.resolver()) {
+                        Ok(v) => Ok(vec![v]),
+                        Err(e) => {
+                            warn!("Ignoring item due to error: {}", e);
+                            Ok(vec![])
+                        }
+                    }
                 }
             }
             Some(Object::Array(arr)) => arr
                 .iter()
-                .map(|o| V::create(o, self.resolver()))
-                .collect::<Result<_, _>>()
-                .with_whatever_context::<_, _, ObjectValueError>(with_err),
-            Some(o) => Ok(vec![
-                V::create(o, self.resolver())
-                    .with_whatever_context::<_, _, ObjectValueError>(with_err)?,
-            ]),
+                .filter_map(|o| match V::create(o, self.resolver()) {
+                    Ok(v) => Some(Ok(v)),
+                    Err(e) => {
+                        warn!("Ignoring item in array due to error: {}", e);
+                        None
+                    }
+                })
+                .collect::<Result<Vec<V>, _>>()
+                .with_whatever_context(with_err),
+            Some(o) => match V::create(o, self.resolver()) {
+                Ok(v) => Ok(vec![v]),
+                Err(e) => {
+                    warn!("Ignoring item due to error: {}", e);
+                    Ok(vec![])
+                }
+            },
             None => Ok(vec![]),
         }
     }
