@@ -337,6 +337,7 @@ where
                         black_point,
                     }))
                 }
+                "DeviceRGB" => Ok(Self::DeviceRGB),
                 s => whatever!("ColorSpace::from_args() {} color space", s),
             },
         }
