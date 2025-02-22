@@ -961,9 +961,16 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                         let desc = descentdant_font
                             .font_descriptor()?
                             .whatever_context::<_, ObjectValueError>("get CIDFontType0 desc")?;
-                        let stream = desc.font_file3()?.whatever_context::<_, ObjectValueError>(
-                            "get CIDFontType0 font stream",
-                        )?;
+                        let stream = desc
+                            .font_file3()
+                            .transpose()
+                            .or_else(|| {
+                                warn!("CIDFontType0 font_file3 is null, try font_file");
+                                desc.font_file().transpose()
+                            })
+                            .whatever_context::<_, ObjectValueError>(
+                                "get CIDFontType0 font stream",
+                            )??;
                         Ok(Some(Box::new(CIDFontType0Font::new(
                             font,
                             Self::load_embed_font_bytes(descentdant_font.resolver(), stream)?,
