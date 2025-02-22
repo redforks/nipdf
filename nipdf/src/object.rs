@@ -3,6 +3,7 @@ use crate::{ObjectValueError, Result, file::ObjectResolver};
 use ahash::{HashMap, HashMapExt};
 use educe::Educe;
 use itertools::Itertools as _;
+use log::warn;
 use paste::paste;
 use prescript::Name;
 use snafu::ensure_whatever;
@@ -545,12 +546,12 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
             .whatever_context::<_, ObjectValueError>("as dict")?;
         let mut res = HashMap::with_capacity(v.len());
         for (k, v) in v.iter() {
-            res.insert(
-                k.clone(),
-                V::create(v, self.resolver()).with_whatever_context::<_, _, ObjectValueError>(
-                    |_| format!("create dict value: {}", k),
-                )?,
-            );
+            match V::create(v, self.resolver()) {
+                Ok(v) => {
+                    res.insert(k.clone(), v);
+                }
+                Err(e) => warn!("ignore dict value {}: {}", k, e),
+            }
         }
         Ok(res)
     }
