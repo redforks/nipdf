@@ -775,8 +775,6 @@ fn deflate(input: &[u8]) -> Result<Vec<u8>, ObjectValueError> {
         let mut in_pos = 0;
         let mut out_pos = 0;
         loop {
-            // Wrap the whole output slice so we know we have enough of the
-            // decompressed data for matches.
             let (status, in_consumed, out_consumed) =
                 decompress(&mut decomp, &input[in_pos..], &mut ret, out_pos, flags);
             in_pos += in_consumed;
@@ -789,26 +787,19 @@ fn deflate(input: &[u8]) -> Result<Vec<u8>, ObjectValueError> {
                 }
 
                 TINFLStatus::HasMoreOutput => {
-                    // if the buffer has already reached the size limit, return an error
                     if ret.len() >= MAX_OUTPUT_SIZE {
-                        error!("inflate: has more output");
+                        warn!("inflate: reach max output size");
+                        ret.truncate(out_pos);
                         return Err(ObjectValueError::FilterDecodeError);
                     }
-                    // calculate the new length, capped at `max_output_size`
                     let new_len = ret.len().saturating_mul(2).min(MAX_OUTPUT_SIZE);
                     ret.resize(new_len, 0);
                 }
 
                 _ => {
-                    if status == TINFLStatus::FailedCannotMakeProgress {
-                        // ignore truncated zlib data, see deflate_recover_truncated_zlib_data()
-                        // unit test
-                        error!("inflate: need more data");
-                        ret.truncate(out_pos);
-                        return Ok(ret);
-                    }
-                    error!("inflate: error: {:?}", status);
-                    return Err(ObjectValueError::FilterDecodeError);
+                    warn!("inflate: error: {:?}, ignore remain data", status);
+                    ret.truncate(out_pos);
+                    return Ok(ret);
                 }
             }
         }
