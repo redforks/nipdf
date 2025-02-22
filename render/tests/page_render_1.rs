@@ -67,7 +67,7 @@ fn download_file(url: &str, p: impl AsRef<Path>) -> Result<()> {
 }
 
 /// These files are very rare and odd, not to be tested
-const IGNORED: [&str; 10] = [
+const IGNORED: [&str; 11] = [
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
     "bug1050040.pdf",
     // invalid object format, mupdf failed to parse, mupdf says no page
@@ -114,6 +114,8 @@ const IGNORED: [&str; 10] = [
     // If resolve catalog dict by check all dict for `/Catalog` type, can find correct
     // catalog dict. `mupdf` also failed to parse this file, but others are okay.
     "issue12402.pdf.link",
+    // xpdf, mupdf and chrome failed to parse this file, broken xref, failed get root entry after rebuild xref
+    "issue15590.pdf",
 ];
 
 static PASSWORD: phf::Map<&'static str, &'static str> = phf::phf_map! {
