@@ -1819,15 +1819,12 @@ impl<'a, 'c> Render<'a, 'c> {
             return Ok(());
         }
 
-        let font = self
-            .font_cache
-            .get_font(
-                text_object
-                    .font_name
-                    .as_ref()
-                    .whatever_context("get font name")?,
-            )
-            .whatever_context("get font")?;
+        let font = self.font_cache.get_font(
+            text_object
+                .font_name
+                .as_ref()
+                .whatever_context("get font name")?,
+        );
         debug!(
             "font: {}, type: {:?}",
             text_object
@@ -1836,15 +1833,12 @@ impl<'a, 'c> Render<'a, 'c> {
                 .whatever_context("get text_object font name")?,
             font.font_type()
         );
-        let op = self
-            .font_cache
-            .get_op(
-                self.text_object()?
-                    .font_name
-                    .as_ref()
-                    .whatever_context("get text_object font name")?,
-            )
-            .whatever_context("get font op")?;
+        let op = self.font_cache.get_op(
+            self.text_object()?
+                .font_name
+                .as_ref()
+                .whatever_context("get text_object font name")?,
+        );
         let state = self.stack.last().whatever_context("get stack top")?;
         let mut text_object = state.text_object.clone();
         text_object
@@ -1894,15 +1888,12 @@ impl<'a, 'c> Render<'a, 'c> {
                 );
             }
         } else {
-            let glyph_render = self
-                .font_cache
-                .get_glyph_render(
-                    self.text_object()?
-                        .font_name
-                        .as_ref()
-                        .whatever_context("get font name")?,
-                )
-                .whatever_context("get font glyph render")?;
+            let glyph_render = self.font_cache.get_glyph_render(
+                self.text_object()?
+                    .font_name
+                    .as_ref()
+                    .whatever_context("get font name")?,
+            );
             let mut text_clip_path = Path::default();
 
             for ch in op.decode_chars(text).whatever_context("decode chars")? {

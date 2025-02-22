@@ -321,6 +321,14 @@ impl<'a> Type1FontOp<'a> {
             encoding,
         })
     }
+
+    pub fn new_fallback(font: &'a FontKitFont) -> Self {
+        Self {
+            font_width: Either::Right(FreeTypeFontWidth::new(font)),
+            font,
+            encoding: Encoding::WIN_ANSI,
+        }
+    }
 }
 
 impl FontOp for Type1FontOp<'_> {
@@ -367,6 +375,49 @@ impl FontOp for Type1FontOp<'_> {
             .units_per_em
             .try_into()
             .whatever_context("convert units_per_em to u16")
+    }
+}
+
+/// FallbackFont struct, similar to Type1Font but with specific modifications
+pub struct FallbackFont {
+    font: FontKitFont,
+}
+
+impl FallbackFont {
+    /// Creates a new FallbackFont instance
+    ///
+    /// This method loads the builtin Helvetica font and uses WinAnsiEncoding
+    pub fn new() -> Result<Self> {
+        // Load the builtin Helvetica font data
+        let font_data = Arc::new(
+            standard_14_type1_font_data("Helvetica")
+                .whatever_context::<_, ObjectValueError>("Fallback font (Helvetica) not found")?
+                .to_vec(),
+        );
+
+        // Create FontKitFont from the font data
+        let font = FontKitFont::from_bytes(font_data.clone(), 0)
+            .whatever_context::<_, ObjectValueError>("create FontKitFont for fallback")?;
+
+        Ok(Self { font })
+    }
+
+    pub fn create_fallback_op(&self) -> Box<dyn FontOp + '_> {
+        Box::new(Type1FontOp::new_fallback(&self.font))
+    }
+}
+
+impl<P: PathSink> Font<P> for FallbackFont {
+    fn font_type(&self) -> FontType {
+        FontType::Type1
+    }
+
+    fn create_op(&self, _cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
+        Ok(Box::new(Type1FontOp::new_fallback(&self.font)))
+    }
+
+    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
+        Ok(Box::new(TTFGlyphRender { font: &self.font }))
     }
 }
 
@@ -707,12 +758,20 @@ fn standard_14_type1_font_data(font_name: &str) -> Option<&'static [u8]> {
 #[self_referencing]
 struct FontCacheInner<'c, P: PathSink + 'static> {
     fonts: HashMap<Name, Box<dyn Font<P> + 'c>>,
-    #[borrows(fonts)]
+    cmap_registry: CMapRegistry,
+    #[borrows(fonts, mut cmap_registry)]
     #[covariant]
     ops: HashMap<Name, Box<dyn FontOp + 'this>>,
     #[borrows(fonts)]
     #[covariant]
     renders: HashMap<Name, Box<dyn GlyphRender<P> + 'this>>,
+    fallback_font: FallbackFont,
+    #[borrows(fallback_font)]
+    #[covariant]
+    fallback_op: Box<dyn FontOp + 'this>,
+    #[borrows(fallback_font)]
+    #[covariant]
+    fallback_render: Box<dyn GlyphRender<P> + 'this>,
 }
 
 pub struct FontCache<'c, P: PathSink + 'static> {
@@ -965,15 +1024,15 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
             }
         }
 
-        let mut cmap_registry = CMapRegistry::new();
         Ok(Self {
             cache: FontCacheInner::try_new(
                 fonts,
-                |fonts| {
+                CMapRegistry::new(),
+                |fonts, cmap_registry| {
                     let mut ops = HashMap::with_capacity(fonts.len());
                     for (k, v) in fonts {
                         debug!("Create {} font_op", k.as_str());
-                        ops.insert(k.clone(), v.create_op(&mut cmap_registry)?);
+                        ops.insert(k.clone(), v.create_op(cmap_registry)?);
                     }
                     Ok::<_, ObjectValueError>(ops)
                 },
@@ -984,20 +1043,35 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                     }
                     Ok(renders)
                 },
+                FallbackFont::new().unwrap(),
+                |fallback_font| Ok(fallback_font.create_fallback_op()),
+                |fallback_font| fallback_font.create_glyph_render(),
             )?,
         })
     }
 
-    pub fn get_font(&self, s: &Name) -> Option<&dyn Font<P>> {
-        self.cache.borrow_fonts().get(s).map(AsRef::as_ref)
+    pub fn get_font(&self, s: &Name) -> &dyn Font<P> {
+        self.cache
+            .borrow_fonts()
+            .get(s)
+            .map(AsRef::as_ref)
+            .unwrap_or_else(|| self.cache.borrow_fallback_font())
     }
 
-    pub fn get_op(&self, s: &Name) -> Option<&(dyn FontOp)> {
-        self.cache.borrow_ops().get(s).map(AsRef::as_ref)
+    pub fn get_op(&self, s: &Name) -> &(dyn FontOp) {
+        self.cache
+            .borrow_ops()
+            .get(s)
+            .map(AsRef::as_ref)
+            .unwrap_or_else(|| self.cache.borrow_fallback_op().as_ref())
     }
 
-    pub fn get_glyph_render(&self, s: &Name) -> Option<&(dyn GlyphRender<P>)> {
-        self.cache.borrow_renders().get(s).map(AsRef::as_ref)
+    pub fn get_glyph_render(&self, s: &Name) -> &(dyn GlyphRender<P>) {
+        self.cache
+            .borrow_renders()
+            .get(s)
+            .map(AsRef::as_ref)
+            .unwrap_or_else(|| self.cache.borrow_fallback_render().as_ref())
     }
 }
 
