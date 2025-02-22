@@ -97,8 +97,14 @@ struct ByteRange {
 
 impl ByteRange {
     pub fn new(lower: u8, upper: u8) -> Self {
-        assert!(lower <= upper);
-        Self { lower, upper }
+        if lower > upper {
+            Self {
+                lower: upper,
+                upper: lower,
+            }
+        } else {
+            Self { upper, lower }
+        }
     }
 
     fn in_range(self, c: u8) -> bool {
