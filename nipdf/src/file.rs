@@ -4,12 +4,12 @@ use crate::{
     ObjectValueError, Result,
     file::encrypt::Authorizer,
     object::{
-        Array, Dictionary, Embedded, Entry, Frame, HexString, LiteralString, Object, ObjectId,
-        PdfObject, Root, RootPdfObject, RuntimeObjectId, Stream, TrailerDict,
+        Array, Dictionary, Embedded, Entry, FilePos, Frame, HexString, LiteralString, Object,
+        ObjectId, PdfObject, Root, RootPdfObject, RuntimeObjectId, Stream, TrailerDict,
     },
     parser::{
-        self, header_parser, indirect_object_def, object_id, parse_frame_set, wsc_prefixed0, wsc0,
-        wsc1,
+        self, dict, header_parser, indirect_object_def, object_id, parse_frame_set,
+        parse_xref_stream, wsc_prefixed0, wsc0, wsc1,
     },
 };
 use ahash::{HashMap, HashMapExt};
@@ -22,7 +22,7 @@ use snafu::{OptionExt as _, Report, ResultExt as _, Snafu, ensure_whatever, what
 use std::iter::repeat_with;
 use winnow::{
     LocatingSlice, ModalResult, Parser as _,
-    combinator::{alt, repeat, terminated},
+    combinator::{alt, repeat, repeat_till, terminated},
     error::{ErrMode, ParseError},
     stream::{Compare, StreamIsPartial},
     token::{any, rest, take_until},
@@ -563,7 +563,7 @@ impl<'a> Catalog<'a> {
     ) -> Result<Self, ObjectValueError> {
         Ok(Self {
             d: resolver
-                .resolve_pdf_object(id)
+                .resolve_pdf_object(id.into())
                 .whatever_context::<_, ObjectValueError>("resolve catalog")?,
         })
     }
@@ -661,29 +661,42 @@ fn open_encrypt(
     Ok(Some(EncryptInfo::new(k, encrypt.crypt_filters()?)))
 }
 
-fn index_xref<'a, E>(
+fn index_xref<'a>(
     data: &mut LocatingSlice<&'a [u8]>,
-) -> ModalResult<(Vec<usize>, Vec<(ObjectId, usize)>), E>
-where
-    E: winnow::error::ParserError<LocatingSlice<&'a [u8]>> + 'a,
-{
+) -> ModalResult<(Vec<usize>, Vec<(ObjectId, usize)>, Vec<usize>), ParserError> {
     const TRAILER_BYTES: &[u8] = b"trailer";
     let mut trailer_positions = Vec::new();
     let mut entries = Vec::new();
+    // Store positions of XRef streams: (position, stream object ID)
+    let mut xref_streams = Vec::new();
 
     let parse_trailer_position_after_xref = (b"xref".as_slice(), take_until(1.., TRAILER_BYTES))
         .span()
         .map(|r| trailer_positions.push(r.end));
-    let parse_indirect_object =
-        (object_id().with_span(), wsc1(), b"obj".as_slice()).map(|((obj_id, range), ..)| {
+
+    // Add parser for XRef stream object header
+    let parse_xref_stream = (
+        object_id().with_span(),
+        wsc1(),
+        b"obj".as_slice(),
+        wsc0(),
+        dict,
+    )
+        .map(|((obj_id, range), .., dict)| {
+            if let Some(&Object::Name(ref name)) = dict.get(&sname("Type")) {
+                if name == &sname("XRef") {
+                    xref_streams.push(range.start);
+                }
+            }
             entries.push((obj_id, range.start));
         });
+
     let mut parser = repeat::<_, _, (), _, _>(
         1..,
         alt((
             wsc1().void(),
-            parse_indirect_object,
-            // fix: prevent match "startxref" by parse_trailer_position_after_xref()
+            parse_xref_stream,
+            indirect_object_def().void(),
             b"startxref".as_slice().void(),
             parse_trailer_position_after_xref,
             any.void(),
@@ -692,12 +705,14 @@ where
     parser.parse_next(data)?;
     drop(parser);
 
-    Ok((trailer_positions, entries))
+    Ok((trailer_positions, entries, xref_streams))
 }
 
-fn parse_header(buf: &[u8]) -> Option<String> {
-    match header_parser().parse_next(&mut &buf[..]) {
-        Ok(ver) => Some(ver.to_owned()),
+/// Parse the header of a PDF file. Returns (position, version), position is the header position, it should be zero,
+/// but some broken file contains rubbish bytes before header
+fn parse_header(buf: &[u8]) -> Option<(usize, String)> {
+    match repeat_till(0.., any, header_parser()).parse_next(&mut &buf[..]) {
+        Ok((pos, ver)) => Some((pos, ver.to_owned())),
         Err(e) => {
             log::warn!("Failed to parse header: {}", e);
             None
@@ -720,7 +735,7 @@ fn get_root_id(trailers: &[Dictionary]) -> Result<RuntimeObjectId> {
 
 impl File {
     fn normal_parse(buf: Vec<u8>, user_password: &str) -> Result<Self> {
-        let head_ver = parse_header(&buf);
+        let head_ver = parse_header(&buf).map(|(_, ver)| ver);
 
         let frame_set = parse_frame_set::<ParserError>
             .parse(&buf[..])
@@ -765,11 +780,11 @@ impl File {
     /// Do not use xref/trailer/encrypt info from file, scan them from buf.
     ///
     /// Used for corruptted xref/trailer/encrypt pdf file.
-    pub fn build_xref(buf: Vec<u8>, user_password: &str) -> Result<Self> {
+    fn build_xref(buf: Vec<u8>, user_password: &str) -> Result<Self> {
         let head_ver = parse_header(&buf);
 
-        // Scan the file for trailer positions and object entries
-        let (trailer_positions, object_entries) = index_xref::<ParserError>
+        // Scan the file for trailer positions, object entries and XRef streams
+        let (trailer_positions, object_entries, xref_streams) = index_xref
             .parse(LocatingSlice::new(&buf))
             .map_err(ParseError::into_inner)
             .whatever_context::<_, ObjectValueError>("scan file for xref entries")?;
@@ -786,18 +801,45 @@ impl File {
                 ),
             );
         }
+        let mut trailers = Vec::with_capacity(trailer_positions.len() + xref_streams.len());
+
+        // Try to parse XRef streams and add their entries
+        for pos in xref_streams {
+            let mut bytes = LocatingSlice::new(&buf[pos..]);
+            match parse_xref_stream::<_, ParserError>.parse_next(&mut bytes) {
+                Ok((entries, trailer_dict)) => {
+                    trailers.push(trailer_dict);
+                    for (id, mut entry) in entries {
+                        let file_offset: u32 = head_ver
+                            .as_ref()
+                            .map(|(offset, _)| *offset)
+                            .unwrap_or_default()
+                            .try_into()
+                            .whatever_context::<_, ObjectValueError>("convert offset")?;
+                        match &mut entry {
+                            Entry::InFile(FilePos(offset, _, _)) => {
+                                *offset += file_offset;
+                            }
+                            Entry::InStream(..) => {}
+                        }
+                        id_offset.insert(RuntimeObjectId(id), (&entry).into());
+                    }
+                }
+                Err(_) => (),
+            }
+        }
+        trailers.reverse();
 
         // Create XRef table
         let xref = XRefTable::new(id_offset);
 
         // Parse trailers
-        let mut trailers = Vec::with_capacity(trailer_positions.len());
         for pos in trailer_positions {
             if let Ok((_, _, dict)) = terminated(
                 (
                     b"trailer".as_slice(),
                     wsc0::<_, ErrMode<ParserError>>(),
-                    parser::dict,
+                    dict,
                 ),
                 rest,
             )
@@ -816,7 +858,7 @@ impl File {
         )?;
 
         Ok(Self {
-            head_ver,
+            head_ver: head_ver.map(|(_, ver)| ver),
             root_id: get_root_id(&trailers)?,
             data: buf,
             xref,

@@ -230,7 +230,9 @@ where
     }
 }
 
-fn parse_xref_stream<'a, S, E>(input: &mut S) -> ModalResult<(Vec<(u32, Entry)>, Dictionary), E>
+pub(crate) fn parse_xref_stream<'a, S, E>(
+    input: &mut S,
+) -> ModalResult<(Vec<(u32, Entry)>, Dictionary), E>
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
         + StreamIsPartial

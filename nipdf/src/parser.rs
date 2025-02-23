@@ -2,7 +2,7 @@ use snafu::Snafu;
 
 mod file;
 mod object;
-pub(crate) use file::{header as header_parser, parse_frame_set};
+pub(crate) use file::{header as header_parser, parse_frame_set, parse_xref_stream};
 #[cfg(test)]
 pub(crate) use object::hex_string;
 pub(crate) use object::{
