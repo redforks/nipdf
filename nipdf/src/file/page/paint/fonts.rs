@@ -600,6 +600,10 @@ impl<P: PathSink> Font<P> for TTFFont<'_, '_> {
 static SYSTEM_FONTS: LazyLock<Database> = LazyLock::new(|| {
     let mut db = Database::new();
     db.load_system_fonts();
+    // set fallback font that support Cjk, depends on specific environment,
+    // TODO: better way to provide default fonts
+    db.set_serif_family("Noto Serif CJK SC");
+    db.set_sans_serif_family("Noto Sans CJK SC");
     db
 });
 
@@ -629,13 +633,7 @@ fn normalize_true_type_font_name(name: &str) -> String {
         }
     }
 
-    if rv == "SimHei" {
-        "Microsoft YaHei".to_string()
-    } else if rv == "FZXBSJW--GB1-0" {
-        "FZXiaoBiaoSong-B05S".to_string()
-    } else {
-        rv
-    }
+    rv
 }
 
 /// For historic bugs, some pdf file use internal names for the 14 standard fonts
@@ -819,7 +817,6 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
             .face(id)
             .whatever_context::<_, ObjectValueError>("get system fonts")?;
         info!("loaded ttf font: {:?}", &face.source);
-        ensure_whatever!(face.index == 0, "Only one face supported");
         match face.source {
             Source::File(ref path) => Ok(std::fs::read(path)
                 .whatever_context::<_, ObjectValueError>("read ttf file from OS")?),
