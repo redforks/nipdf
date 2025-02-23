@@ -188,7 +188,7 @@ fn test_decode_ascii_hex(buf: &[u8]) -> Vec<u8> {
     decode_ascii_hex(buf).unwrap()
 }
 
-#[test]
+#[test_log::test]
 fn test_deflate() {
     // with zlib header and invalid adler32
     let input = include_bytes!("zlib-no-adler32");
@@ -196,9 +196,12 @@ fn test_deflate() {
     // assert that data is valid ascii char bytes
     assert!(data.iter().all(|&b| b.is_ascii()));
 
+    log::info!("middle");
     // no zlib header(only deflate data)
     let input = compress_to_vec(&data, 1);
     let back = deflate(&input).unwrap();
+    warn!("input length: {}, back length: {}", data.len(), back.len());
+    assert_eq!(data.len(), back.len());
     assert_eq!(data, back);
 }
 

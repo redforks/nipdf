@@ -762,7 +762,7 @@ fn deflate(input: &[u8]) -> Result<Vec<u8>, ObjectValueError> {
         core::{DecompressorOxide, decompress, inflate_flags},
     };
 
-    fn _deflate(input: &[u8], flags: u32) -> Result<Vec<u8>, ObjectValueError> {
+    fn _deflate(input: &[u8], flags: u32) -> Result<Vec<u8>, (Vec<u8>, ObjectValueError)> {
         const MAX_OUTPUT_SIZE: usize = 128 * 1024 * 1024;
 
         let flags = flags
@@ -788,24 +788,38 @@ fn deflate(input: &[u8]) -> Result<Vec<u8>, ObjectValueError> {
 
                 TINFLStatus::HasMoreOutput => {
                     if ret.len() >= MAX_OUTPUT_SIZE {
-                        warn!("inflate: reach max output size");
                         ret.truncate(out_pos);
-                        return Err(ObjectValueError::FilterDecodeError);
+                        return Err((ret, ObjectValueError::FilterDecodeError));
                     }
                     let new_len = ret.len().saturating_mul(2).min(MAX_OUTPUT_SIZE);
                     ret.resize(new_len, 0);
                 }
 
                 _ => {
-                    warn!("inflate: error: {:?}, ignore remain data", status);
                     ret.truncate(out_pos);
-                    return Ok(ret);
+                    return Err((ret, ObjectValueError::FilterDecodeError));
                 }
             }
         }
     }
 
-    _deflate(input, inflate_flags::TINFL_FLAG_PARSE_ZLIB_HEADER).or_else(|_| _deflate(input, 0))
+    match _deflate(input, inflate_flags::TINFL_FLAG_PARSE_ZLIB_HEADER) {
+        Ok(data) => Ok(data),
+        Err((data1, _)) => {
+            // First attempt failed, try without zlib header flag
+            match _deflate(input, 0) {
+                Ok(data) => Ok(data),
+                Err((partial_data, err)) => {
+                    warn!("deflate: error: {:?}, return partial decoded data", err);
+                    Ok(if partial_data.len() > data1.len() {
+                        partial_data
+                    } else {
+                        data1
+                    })
+                }
+            }
+        }
+    }
 }
 
 fn decode_flate(buf: &[u8], params: LZWDeflateDecodeParams) -> Result<Vec<u8>, ObjectValueError> {
