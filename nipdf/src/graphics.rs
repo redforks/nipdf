@@ -677,7 +677,7 @@ where
         .try_map(|buf| Ok::<_, Utf8Error>(ObjectOrOperator::Operator(from_utf8(buf)?)))
         .context("operator");
     let mut object_or_operator = alt((
-        parser::object_inside_page_stream()
+        parser::object_inside_page_stream::<_, prescript::ParserError>()
             .map(ObjectOrOperator::Object)
             .context("operands"),
         operator,
@@ -692,10 +692,10 @@ where
             }
             return Ok(r);
         }
-        let oo = object_or_operator.parse_next(buf)?;
+        let oo = object_or_operator.parse_next(buf);
         match oo {
-            ObjectOrOperator::Object(o) => operands.push(o),
-            ObjectOrOperator::Operator(op) => {
+            Ok(ObjectOrOperator::Object(o)) => operands.push(o),
+            Ok(ObjectOrOperator::Operator(op)) => {
                 let opt_op = create_operation(op, &mut operands).unwrap_or_else(|e| {
                     // possible because not enough operands
                     warn!("Invalid operation '{}': {:?}", op, e);
@@ -723,6 +723,13 @@ where
                 }
                 // Some pdf files has bug that has extra operands
                 operands.clear();
+            }
+            Err(e) => {
+                warn!(
+                    "Error parsing operation, Ignore remait page content: {:?}",
+                    e
+                );
+                return Ok(r);
             }
         }
     }
