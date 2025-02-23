@@ -12,9 +12,9 @@ use crate::{
     },
 };
 use either::Either;
+use encoding_rs::Encoding as CharEncoding;
 use font_kit::{hinting::HintingOptions, loaders::freetype::Font as FontKitFont};
 use fontdb::{Database, Family, Query, Source, Weight};
-use heck::ToTitleCase;
 use log::{debug, error, info, warn};
 use nipdf_cff_parser::{File as CffFile, Font as CffFont};
 use num_traits::ToPrimitive;
@@ -490,26 +490,6 @@ impl<'a> TTFFontOp<'a> {
             ttf_font,
         })
     }
-
-    // TTFFace::glyph_index() ignores non unicode cmap table,
-    // some non-cjk pdf file use non unicode cmap table. This function
-    // try to find glyph id from all cmap tables
-    fn glyph_index(&self, ch: u32) -> Result<Option<u16>> {
-        for subtable in self
-            .ttf_font
-            .tables()
-            .cmap
-            .whatever_context::<_, ObjectValueError>("get cmap from TTF Face")?
-            .subtables
-        {
-            if let Some(id) = subtable.glyph_index(ch) {
-                return Ok(Some(id.0));
-            }
-        }
-
-        warn!("glyph id not found from TTF CMap for char: {}", ch);
-        Ok(None)
-    }
 }
 
 static GLYPH_NAME_TO_UNICODE: phf::Map<&'static str, u32> = include!("glyph_name_to_unicode.rs");
@@ -546,7 +526,10 @@ impl FontOp for TTFFontOp<'_> {
                 .try_into()
                 .whatever_context("failed convert glyph index");
         }
-        if let Some(r) = self.glyph_index(ch)? {
+        if let Some(r) = {
+            let this = &self;
+            glyph_index(&this.ttf_font, ch)
+        }? {
             return r.try_into().whatever_context("failed convert glyph index");
         }
         warn!("TTF glyph id not found for char: {}", ch);
@@ -645,7 +628,14 @@ fn normalize_true_type_font_name(name: &str) -> String {
             break;
         }
     }
-    rv
+
+    if rv == "SimHei" {
+        "Microsoft YaHei".to_string()
+    } else if rv == "FZXBSJW--GB1-0" {
+        "FZXiaoBiaoSong-B05S".to_string()
+    } else {
+        rv
+    }
 }
 
 /// For historic bugs, some pdf file use internal names for the 14 standard fonts
@@ -782,7 +772,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
     fn load_true_type_from_os(desc: &FontDescriptorDict<'_, '_>) -> Result<Vec<u8>> {
         let font_name = desc.font_name()?;
         let font_name = normalize_true_type_font_name(&font_name);
-        let font_name = font_name.to_title_case();
+        // let font_name = font_name.to_title_case();
         let mut families = vec![Family::Name(font_name.as_ref())];
         let family = desc.font_family()?;
         if let Some(family) = &family {
@@ -820,7 +810,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         if let Some(stretch) = desc.font_stretch()? {
             q.stretch = stretch.into();
         }
-        debug!("load ttf font from OS, using query: {:?}", &q);
+        info!("load ttf font from OS, using query: {:?}", &q);
 
         let id = SYSTEM_FONTS
             .query(&q)
@@ -828,7 +818,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         let face = SYSTEM_FONTS
             .face(id)
             .whatever_context::<_, ObjectValueError>("get system fonts")?;
-        debug!("loaded ttf font: {:?}", &face.source);
+        info!("loaded ttf font: {:?}", &face.source);
         ensure_whatever!(face.index == 0, "Only one face supported");
         match face.source {
             Source::File(ref path) => Ok(std::fs::read(path)
@@ -1197,8 +1187,8 @@ impl CIDToGIDMap {
     }
 }
 
-struct CIDFontType2FontOp {
-    face: FontKitFont,
+struct CIDFontType2FontOp<'a> {
+    ttf_face: TTFFace<'a>,
     widths: Option<CIDFontWidths>,
     default_width: u32,
     units_per_em: u16,
@@ -1208,12 +1198,15 @@ struct CIDFontType2FontOp {
     cid_is_gid: bool,
 }
 
-impl CIDFontType2FontOp {
+impl<'a> CIDFontType2FontOp<'a> {
     fn new(
         cmap_registry: &mut CMapRegistry,
-        face: FontKitFont,
-        font: &Type0FontDict<'_, '_>,
+        font: Type0FontDict<'_, '_>,
         is_embed: bool,
+        ttf_data: &'a [u8],
+        widths: Option<CIDFontWidths>,
+        default_width: u32,
+        units_per_em: u16,
     ) -> Result<Self> {
         let cmap = match font.encoding()? {
             NameOrStream::Name(encoding_name) => {
@@ -1257,13 +1250,15 @@ impl CIDFontType2FontOp {
                     .into_owned(),
             )?),
         };
-        let widths = cid_font.w()?;
+
+        let ttf_face = TTFFace::parse(ttf_data, 0)
+            .whatever_context::<_, ObjectValueError>("parse TTF Face for CIDFontType2")?;
 
         Ok(Self {
-            units_per_em: face.metrics().units_per_em as u16,
-            face,
+            ttf_face,
             widths,
-            default_width: cid_font.dw()?,
+            default_width,
+            units_per_em,
             cmap,
             cid_is_gid: is_embed && cid_to_gid.is_none(),
             cid_to_gid,
@@ -1271,15 +1266,26 @@ impl CIDFontType2FontOp {
     }
 }
 
-fn glyph_index(face: &FontKitFont, ch: u32) -> Result<Option<u16>> {
-    Ok(face
-        .glyph_for_char(
-            char::from_u32(ch).whatever_context::<_, ObjectValueError>("convert ch to char")?,
-        )
-        .map(|glyph| glyph as u16))
+// TTFFace::glyph_index() ignores non unicode cmap table,
+// some non-cjk pdf file use non unicode cmap table. This function
+// try to find glyph id from all cmap tables
+fn glyph_index(ttf_font: &TTFFace<'_>, ch: u32) -> Result<Option<u16>> {
+    for subtable in ttf_font
+        .tables()
+        .cmap
+        .whatever_context::<_, ObjectValueError>("get cmap from TTF Face")?
+        .subtables
+    {
+        if let Some(id) = subtable.glyph_index(ch) {
+            return Ok(Some(id.0));
+        }
+    }
+
+    warn!("glyph id not found from TTF CMap for char: {}", ch);
+    Ok(None)
 }
 
-impl FontOp for CIDFontType2FontOp {
+impl FontOp for CIDFontType2FontOp<'_> {
     fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>> {
         self.cmap.as_ref().map_or_else(
             || {
@@ -1305,22 +1311,16 @@ impl FontOp for CIDFontType2FontOp {
 
         self.cid_to_gid.as_ref().map_or_else(
             || {
-                glyph_index(&self.face, ch)?.map_or_else(
-                    || {
-                        // warn!("(cid_to_gid_map) glyph id not found for char: {}", ch);
-                        ch.try_into().whatever_context("convert ch to u16 gid")
-                    },
+                glyph_index(&self.ttf_face, ch)?.map_or_else(
+                    || ch.try_into().whatever_context("convert ch to u16 gid"),
                     Ok,
                 )
             },
             |m| {
                 m.to_gid(ch as usize).map_or_else(
                     || {
-                        glyph_index(&self.face, ch)?.map_or_else(
-                            || {
-                                // warn!("(cid_to_gid_map) glyph id not found for char: {}", ch);
-                                ch.try_into().whatever_context("convert ch to u16 gid")
-                            },
+                        glyph_index(&self.ttf_face, ch)?.map_or_else(
+                            || ch.try_into().whatever_context("convert ch to u16 gid"),
                             Ok,
                         )
                     },
@@ -1333,6 +1333,71 @@ impl FontOp for CIDFontType2FontOp {
     fn char_width(&self, ch: u32) -> Result<GlyphLength> {
         let mut char_width = self
             .widths
+            .as_ref()
+            .map(|w| w.char_width(ch))
+            .transpose()
+            .whatever_context::<_, ObjectValueError>("get char width")?
+            .flatten()
+            .unwrap_or(self.default_width) as f32;
+        if self.units_per_em != 1000 {
+            char_width = char_width / 1000.0 * self.units_per_em as f32;
+        }
+        Ok(GlyphLength::new(char_width))
+    }
+
+    fn units_per_em(&self) -> Result<u16> {
+        Ok(self.units_per_em)
+    }
+}
+
+struct CIDFontType2UnicodeFontOp {
+    face: FontKitFont,
+    width: Option<CIDFontWidths>,
+    default_width: u32,
+    units_per_em: u16,
+    encoding: &'static CharEncoding,
+}
+
+impl CIDFontType2UnicodeFontOp {
+    fn new(
+        face: FontKitFont,
+        width: Option<CIDFontWidths>,
+        default_width: u32,
+        units_per_em: u16,
+        encoding: &'static CharEncoding,
+    ) -> Self {
+        Self {
+            face,
+            width,
+            default_width,
+            units_per_em,
+            encoding,
+        }
+    }
+}
+
+impl FontOp for CIDFontType2UnicodeFontOp {
+    fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>> {
+        let (decoded, _, has_errors) = self.encoding.decode(s);
+        if has_errors {
+            warn!("Encoding errors occurred while decoding.");
+        }
+        Ok(decoded.chars().map(|c| c as u32).collect())
+    }
+
+    fn char_to_gid(&self, ch: u32) -> Result<u16> {
+        let c = char::from_u32(ch)
+            .whatever_context::<_, ObjectValueError>("invalid unicode code point")?;
+
+        self.face
+            .glyph_for_char(c)
+            .map(|glyph| glyph as u16)
+            .whatever_context::<_, ObjectValueError>("glyph id not found")
+    }
+
+    fn char_width(&self, ch: u32) -> Result<GlyphLength> {
+        let mut char_width = self
+            .width
             .as_ref()
             .map(|w| w.char_width(ch))
             .transpose()
@@ -1392,11 +1457,40 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
     fn create_op(&self, cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
         let face = FontKitFont::from_bytes(self.data.clone(), 0)
             .whatever_context::<_, ObjectValueError>("decode FontKitFont for Type2")?;
+
+        // Get the common font info upfront
+        let font = self.font_dict.type0()?;
+        let cid_fonts = font.descendant_fonts()?;
+        let cid_font = &cid_fonts[0];
+        let widths = cid_font.w()?;
+        let default_width = cid_font.dw()?;
+        let units_per_em = face.metrics().units_per_em as u16;
+
+        // Check encoding and create appropriate FontOp
+        if let Some(NameOrDictByRef::Name(ref name)) = self.font_dict.encoding()? {
+            if *name != &sname("Identity-H") && Encoding::predefined(name).is_none() {
+                if *name == &sname("GBK-EUC-H") {
+                    return Ok(Box::new(CIDFontType2UnicodeFontOp::new(
+                        face,
+                        widths,
+                        default_width,
+                        units_per_em,
+                        encoding_rs::GBK,
+                    )));
+                } else {
+                    whatever!("unsupported encoding: '{}'", name)
+                }
+            }
+        }
+
         Ok(Box::new(CIDFontType2FontOp::new(
             cmap_registry,
-            face,
-            &self.font_dict.type0()?,
+            font,
             self.font_is_embed,
+            &self.data,
+            widths,
+            default_width,
+            units_per_em,
         )?))
     }
 
