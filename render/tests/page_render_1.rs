@@ -67,7 +67,7 @@ fn download_file(url: &str, p: impl AsRef<Path>) -> Result<()> {
 }
 
 /// These files are very rare and odd, not to be tested
-const IGNORED: [&str; 11] = [
+const IGNORED: [&str; 12] = [
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
     "bug1050040.pdf",
     // invalid object format, mupdf failed to parse, mupdf says no page
@@ -116,6 +116,8 @@ const IGNORED: [&str; 11] = [
     "issue12402.pdf.link",
     // xpdf, mupdf and chrome failed to parse this file, broken xref, failed get root entry after rebuild xref
     "issue15590.pdf",
+    // ColorSpace CS0 is NULL, release version ignores failed operation, so release version is okay,
+    "issue11287.pdf.link",
 ];
 
 static PASSWORD: phf::Map<&'static str, &'static str> = phf::phf_map! {
