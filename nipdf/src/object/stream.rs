@@ -125,7 +125,7 @@ impl<'a, 'b> FilterDict<'a, 'b> {
     /// If value is array, its items should all be Name,
     /// Otherwise, it should be Name.
     pub fn filters(&self) -> Result<Vec<Name>, ObjectValueError> {
-        let v = self.alt_get(&KEY_FILTER, &sname("F"));
+        let v = self.alt_get(&sname("F"), &KEY_FILTER);
         let Some(v) = v else {
             return Ok(vec![]);
         };
@@ -137,7 +137,7 @@ impl<'a, 'b> FilterDict<'a, 'b> {
     /// If value is array, its items should be Dictionary or None,
     /// Otherwise, it should be Dictionary.
     pub fn parameters(&self) -> Result<Vec<Option<&'b Dictionary>>, ObjectValueError> {
-        let v = self.alt_get(&KEY_FILTER_PARAMS, &sname("DP"));
+        let v = self.alt_get(&sname("DP"), &KEY_FILTER_PARAMS);
         let Some(mut v) = v else {
             return Ok(vec![]);
         };

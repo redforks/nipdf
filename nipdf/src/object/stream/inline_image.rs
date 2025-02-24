@@ -39,19 +39,19 @@ impl<'a> InlineStreamDict<'a> {
 
 impl ImageMetadata for InlineStreamDict<'_> {
     fn width(&self) -> Result<u32> {
-        self.alt_get(&sname("Width"), &sname("W"), |o| o.int().map(|v| v as u32))
+        self.alt_get(&sname("W"), &sname("Width"), |o| o.int().map(|v| v as u32))
             .whatever_context::<_, ObjectValueError>("get width")?
             .whatever_context::<_, ObjectValueError>("Missing Width")
     }
 
     fn height(&self) -> Result<u32> {
-        self.alt_get(&sname("Height"), &sname("H"), |o| o.int().map(|v| v as u32))
+        self.alt_get(&sname("H"), &sname("Height"), |o| o.int().map(|v| v as u32))
             .whatever_context::<_, ObjectValueError>("get height")?
             .whatever_context::<_, ObjectValueError>("Missing Height")
     }
 
     fn bits_per_component(&self) -> Result<Option<u8>> {
-        self.alt_get(&sname("BitsPerComponent"), &sname("BPC"), |o| {
+        self.alt_get(&sname("BPC"), &sname("BitsPerComponent"), |o| {
             o.int()
                 .and_then(|v| v.try_into().whatever_context("convert BitsPerComponent"))
         })
@@ -59,7 +59,7 @@ impl ImageMetadata for InlineStreamDict<'_> {
     }
 
     fn color_space(&self) -> Result<Option<crate::graphics::ColorSpaceArgs>> {
-        self.try_from(&sname("ColorSpace"), &sname("CS"))
+        self.try_from(&sname("CS"), &sname("ColorSpace"))
             .whatever_context("get ColorSpace")
     }
 
@@ -68,13 +68,13 @@ impl ImageMetadata for InlineStreamDict<'_> {
     }
 
     fn decode(&self) -> Result<Option<crate::function::Domains>> {
-        self.try_from(&sname("Decode"), &sname("D"))
+        self.try_from(&sname("D"), &sname("Decode"))
             .whatever_context("get Decode")
     }
 
     fn image_mask(&self) -> Result<bool> {
         Ok(self
-            .alt_get(&sname("ImageMask"), &sname("IM"), Object::bool)
+            .alt_get(&sname("IM"), &sname("ImageMask"), Object::bool)
             .whatever_context::<_, ObjectValueError>("get ImageMask")?
             .unwrap_or(false))
     }
