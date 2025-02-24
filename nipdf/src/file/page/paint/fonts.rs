@@ -23,7 +23,7 @@ use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
 use phf::phf_map;
 use prescript::{
     Encoding, NOTDEF, Name,
-    cmap::{CMap, CMapRegistry},
+    cmap::{CMap, CMapRegistry, WriteMode},
     name, sname,
 };
 use snafu::{OptionExt, ResultExt, ensure_whatever, whatever};
@@ -1113,6 +1113,12 @@ impl CIDFontType0FontOp {
                 )
             }
         };
+        ensure_whatever!(
+            encoding
+                .as_ref()
+                .is_none_or(|cmap| cmap.w_mode == WriteMode::Horizontal),
+            "TODO: support Vertical WMode"
+        );
 
         let cid_fonts = font.descendant_fonts()?;
         let cid_font = &cid_fonts[0];
@@ -1189,8 +1195,8 @@ struct CIDFontType2FontOp<'a> {
     widths: Option<CIDFontWidths>,
     default_width: u32,
     units_per_em: u16,
-    // Convert as Identity-{H,V} if None
-    cmap: Option<Rc<CMap>>,
+    // Convert as Identity-H if None
+    encoding: Option<Rc<CMap>>,
     cid_to_gid: Option<CIDToGIDMap>,
     cid_is_gid: bool,
 }
@@ -1205,22 +1211,15 @@ impl<'a> CIDFontType2FontOp<'a> {
         default_width: u32,
         units_per_em: u16,
     ) -> Result<Self> {
-        let cmap = match font.encoding()? {
-            NameOrStream::Name(encoding_name) => {
-                ensure_whatever!(
-                    !(encoding_name.ends_with("-V") || encoding_name == "V"),
-                    "todo: Vertical write mode '{}'",
-                    encoding_name
-                );
-                (!(encoding_name == "Identity-H" || encoding_name == "Identity-V"))
-                    .then(|| {
-                        cmap_registry
-                            .get(&name(encoding_name))
-                            .whatever_context::<_, ObjectValueError>("Get cmap")?
-                            .whatever_context::<_, ObjectValueError>("Get cmap")
-                    })
-                    .transpose()?
-            }
+        let encoding = match font.encoding()? {
+            NameOrStream::Name(encoding_name) => (encoding_name != "Identity-H")
+                .then(|| {
+                    cmap_registry
+                        .get(&name(encoding_name))
+                        .whatever_context::<_, ObjectValueError>("Get cmap")?
+                        .whatever_context::<_, ObjectValueError>("Get cmap")
+                })
+                .transpose()?,
             NameOrStream::Stream(s) => {
                 ensure_whatever!(
                     font.cmap_stream_dict()?.use_cmap()?.is_none(),
@@ -1236,6 +1235,12 @@ impl<'a> CIDFontType2FontOp<'a> {
                 )
             }
         };
+        ensure_whatever!(
+            encoding
+                .as_ref()
+                .is_none_or(|cmap| cmap.w_mode == WriteMode::Horizontal),
+            "TODO: support Vertical WMode"
+        );
 
         let cid_fonts = font.descendant_fonts()?;
         let cid_font = &cid_fonts[0];
@@ -1256,7 +1261,7 @@ impl<'a> CIDFontType2FontOp<'a> {
             widths,
             default_width,
             units_per_em,
-            cmap,
+            encoding,
             cid_is_gid: is_embed && cid_to_gid.is_none(),
             cid_to_gid,
         })
@@ -1284,7 +1289,7 @@ fn glyph_index(ttf_font: &TTFFace<'_>, ch: u32) -> Result<Option<u16>> {
 
 impl FontOp for CIDFontType2FontOp<'_> {
     fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>> {
-        self.cmap.as_ref().map_or_else(
+        self.encoding.as_ref().map_or_else(
             || {
                 Ok(s.chunks(2)
                     .map(|ch| ((ch[0] as u32) << 8) | ch[1] as u32)
@@ -1465,7 +1470,10 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
 
         // Check encoding and create appropriate FontOp
         if let Some(NameOrDictByRef::Name(ref name)) = self.font_dict.encoding()? {
-            if *name != &sname("Identity-H") && Encoding::predefined(name).is_none() {
+            if *name != &sname("Identity-H")
+                && *name != &sname("Identity-V")
+                && Encoding::predefined(name).is_none()
+            {
                 if *name == &sname("GBK-EUC-H") {
                     return Ok(Box::new(CIDFontType2UnicodeFontOp::new(
                         face,
