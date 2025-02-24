@@ -1247,7 +1247,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 };
                 let img = match mask
                     .decode_image(self.resources.resolver(), Some(self.resources))
-                    .whatever_context("decode mask image")
+                    .with_whatever_context(|_| format!("decode mask image: {:?}", mask.id()))
                 {
                     Ok(v) => v,
                     Err(e) => return Some(Err(e)),

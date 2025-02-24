@@ -446,25 +446,16 @@ fn decode_image<'a, M: ImageMetadata>(
             }
         }
 
-        FilterDecodedData::CCITTFaxImage(data) => {
-            ensure_whatever!(
-                1 == img_meta
-                    .bits_per_component()
-                    .whatever_context::<_, ObjectValueError>("Failed to get bits per component")?
-                    .whatever_context::<_, ObjectValueError>("Bits per component is None")?,
-                "Bits per component is not 1"
-            );
-            decode_one_bit(
-                img_meta
-                    .width()
-                    .whatever_context::<_, ObjectValueError>("Failed to get width")?,
-                img_meta
-                    .height()
-                    .whatever_context::<_, ObjectValueError>("Failed to get height")?,
-                &data,
-                false,
-            )?
-        }
+        FilterDecodedData::CCITTFaxImage(data) => decode_one_bit(
+            img_meta
+                .width()
+                .whatever_context::<_, ObjectValueError>("Failed to get width")?,
+            img_meta
+                .height()
+                .whatever_context::<_, ObjectValueError>("Failed to get height")?,
+            &data,
+            false,
+        )?,
     };
 
     if let Some(ImageMask::ColorKey(color_key)) = img_meta
