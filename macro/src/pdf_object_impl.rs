@@ -192,6 +192,7 @@ fn schema_method_name(rt: &Type, attrs: &[Attribute]) -> Option<&'static str> {
         || rt == &(parse_quote!(Option<&'b Dictionary>))
         || rt == &(parse_quote!(Option<&'b Stream>))
         || rt == &(parse_quote!(Option<RuntimeObjectId>))
+        || rt == &(parse_quote!(Option<(f32, f32)>))
     {
         Some("opt")
     } else if rt == &(parse_quote!(Vec<f32>))

@@ -261,8 +261,12 @@ pub trait CIDFontDictTrait {
     #[default(1000u32)]
     #[key("DW")]
     fn dw(&self) -> u32;
+    #[key("DW2")]
+    fn dw2(&self) -> Option<(f32, f32)>;
     #[try_from]
     fn w(&self) -> Option<CIDFontWidths>;
+    #[try_from]
+    fn w2(&self) -> Option<CIDFontWidths>;
     #[try_from]
     #[key("CIDToGIDMap")]
     #[default_fn(NameOrStream::identity)]

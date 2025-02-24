@@ -466,6 +466,21 @@ where
     }
 }
 
+impl<'a, 'b, T1, T2> FromSchemaContainer<'a, 'b> for (T1, T2)
+where
+    T1: FromSchemaContainer<'b, 'b>,
+    T2: FromSchemaContainer<'b, 'b>,
+{
+    fn create(o: &'b Object, r: &'b ObjectResolver<'a>) -> Result<Self, ObjectValueError> {
+        let o = r.resolve_reference(o)?;
+        let arr = o.as_arr()?;
+        ensure_whatever!(arr.len() == 2, "Array length must be 2");
+        let first = &arr[0];
+        let second = &arr[1];
+        Ok((T1::create(first, r)?, T2::create(second, r)?))
+    }
+}
+
 impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     pub fn required<V>(&self, key: &Name) -> Result<V>
     where

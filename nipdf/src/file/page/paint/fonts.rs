@@ -369,6 +369,10 @@ impl FontOp for Type1FontOp<'_> {
         )
     }
 
+    fn char_height(&self, _gid: u32) -> Result<GlyphLength> {
+        unreachable!("Type1 font no Vertital Write mode");
+    }
+
     fn units_per_em(&self) -> Result<u16> {
         self.font
             .metrics()
@@ -548,6 +552,10 @@ impl FontOp for TTFFontOp<'_> {
                 .whatever_context::<_, ObjectValueError>("get char advance")?
                 .x(),
         ))
+    }
+
+    fn char_height(&self, _ch: u32) -> Result<GlyphLength> {
+        unreachable!("TTFFont no Vertital Write mode");
     }
 
     fn units_per_em(&self) -> Result<u16> {
@@ -870,6 +878,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                 (false, Arc::new(Self::load_true_type_from_os(&desc)?))
             }
         };
+
         if font_type == FontType::Type0 {
             Ok(Box::new(CIDFontType2Font::new(is_embed, ttf_bytes, font)?))
         } else {
@@ -1075,6 +1084,8 @@ pub trait FontOp {
     fn char_to_gid(&self, ch: u32) -> Result<u16>;
     /// Return glyph width for specified char
     fn char_width(&self, ch: u32) -> Result<GlyphLength>;
+    /// Return glyph height for specified char
+    fn char_height(&self, ch: u32) -> Result<GlyphLength>;
     fn units_per_em(&self) -> Result<u16> {
         Ok(1000)
     }
@@ -1082,7 +1093,8 @@ pub trait FontOp {
 
 struct CIDFontType0FontOp {
     widths: Option<CIDFontWidths>,
-    default_width: u32,
+    // width if horizontal, height if vertical
+    default_advance: u32,
     encoding: Option<Rc<CMap>>,
 }
 
@@ -1113,19 +1125,21 @@ impl CIDFontType0FontOp {
                 )
             }
         };
-        ensure_whatever!(
-            encoding
-                .as_ref()
-                .is_none_or(|cmap| cmap.w_mode == WriteMode::Horizontal),
-            "TODO: support Vertical WMode"
-        );
 
         let cid_fonts = font.descendant_fonts()?;
         let cid_font = &cid_fonts[0];
         let widths = cid_font.w()?;
+        if !encoding
+            .as_ref()
+            .is_none_or(|cmap| cmap.w_mode == WriteMode::Horizontal)
+        {
+            ensure_whatever!(cid_font.w2()?.is_none(), "TODO: support w2");
+            ensure_whatever!(cid_font.dw2()?.is_some(), "TODO support dw2");
+        }
+
         Ok(Self {
             widths,
-            default_width: cid_font.dw()?,
+            default_advance: cid_font.dw()?,
             encoding,
         })
     }
@@ -1166,8 +1180,12 @@ impl FontOp for CIDFontType0FontOp {
             .transpose()
             .whatever_context::<_, ObjectValueError>("get char width")?
             .flatten()
-            .unwrap_or(self.default_width) as f32;
+            .unwrap_or(self.default_advance) as f32;
         Ok(GlyphLength::new(char_width))
+    }
+
+    fn char_height(&self, ch: u32) -> Result<GlyphLength> {
+        self.char_width(ch)
     }
 }
 
@@ -1193,7 +1211,8 @@ impl CIDToGIDMap {
 struct CIDFontType2FontOp<'a> {
     ttf_face: TTFFace<'a>,
     widths: Option<CIDFontWidths>,
-    default_width: u32,
+    // width if horizontal, height if vertical
+    default_advance: u32,
     units_per_em: u16,
     // Convert as Identity-H if None
     encoding: Option<Rc<CMap>>,
@@ -1208,7 +1227,7 @@ impl<'a> CIDFontType2FontOp<'a> {
         is_embed: bool,
         ttf_data: &'a [u8],
         widths: Option<CIDFontWidths>,
-        default_width: u32,
+        default_advance: u32,
         units_per_em: u16,
     ) -> Result<Self> {
         let encoding = match font.encoding()? {
@@ -1235,12 +1254,6 @@ impl<'a> CIDFontType2FontOp<'a> {
                 )
             }
         };
-        ensure_whatever!(
-            encoding
-                .as_ref()
-                .is_none_or(|cmap| cmap.w_mode == WriteMode::Horizontal),
-            "TODO: support Vertical WMode"
-        );
 
         let cid_fonts = font.descendant_fonts()?;
         let cid_font = &cid_fonts[0];
@@ -1252,6 +1265,13 @@ impl<'a> CIDFontType2FontOp<'a> {
                     .into_owned(),
             )?),
         };
+        if !encoding
+            .as_ref()
+            .is_none_or(|cmap| cmap.w_mode == WriteMode::Horizontal)
+        {
+            ensure_whatever!(cid_font.w2()?.is_none(), "TODO: support w2");
+            ensure_whatever!(cid_font.dw2()?.is_some(), "TODO support dw2");
+        }
 
         let ttf_face = TTFFace::parse(ttf_data, 0)
             .whatever_context::<_, ObjectValueError>("parse TTF Face for CIDFontType2")?;
@@ -1259,7 +1279,7 @@ impl<'a> CIDFontType2FontOp<'a> {
         Ok(Self {
             ttf_face,
             widths,
-            default_width,
+            default_advance,
             units_per_em,
             encoding,
             cid_is_gid: is_embed && cid_to_gid.is_none(),
@@ -1340,11 +1360,15 @@ impl FontOp for CIDFontType2FontOp<'_> {
             .transpose()
             .whatever_context::<_, ObjectValueError>("get char width")?
             .flatten()
-            .unwrap_or(self.default_width) as f32;
+            .unwrap_or(self.default_advance) as f32;
         if self.units_per_em != 1000 {
             char_width = char_width / 1000.0 * self.units_per_em as f32;
         }
         Ok(GlyphLength::new(char_width))
+    }
+
+    fn char_height(&self, ch: u32) -> Result<GlyphLength> {
+        self.char_width(ch)
     }
 
     fn units_per_em(&self) -> Result<u16> {
@@ -1355,7 +1379,8 @@ impl FontOp for CIDFontType2FontOp<'_> {
 struct CIDFontType2UnicodeFontOp {
     face: FontKitFont,
     width: Option<CIDFontWidths>,
-    default_width: u32,
+    // width if horizontal, height if vertical
+    default_advance: u32,
     units_per_em: u16,
     encoding: &'static CharEncoding,
 }
@@ -1364,14 +1389,14 @@ impl CIDFontType2UnicodeFontOp {
     fn new(
         face: FontKitFont,
         width: Option<CIDFontWidths>,
-        default_width: u32,
+        default_advance: u32,
         units_per_em: u16,
         encoding: &'static CharEncoding,
     ) -> Self {
         Self {
             face,
             width,
-            default_width,
+            default_advance,
             units_per_em,
             encoding,
         }
@@ -1405,11 +1430,15 @@ impl FontOp for CIDFontType2UnicodeFontOp {
             .transpose()
             .whatever_context::<_, ObjectValueError>("get char width")?
             .flatten()
-            .unwrap_or(self.default_width) as f32;
+            .unwrap_or(self.default_advance) as f32;
         if self.units_per_em != 1000 {
             char_width = char_width / 1000.0 * self.units_per_em as f32;
         }
         Ok(GlyphLength::new(char_width))
+    }
+
+    fn char_height(&self, ch: u32) -> Result<GlyphLength> {
+        self.char_width(ch)
     }
 
     fn units_per_em(&self) -> Result<u16> {
@@ -1462,11 +1491,42 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
 
         // Get the common font info upfront
         let font = self.font_dict.type0()?;
+        let encoding = match font.encoding()? {
+            NameOrStream::Name(encoding_name) => {
+                if encoding_name == "Identity-H" {
+                    None
+                } else {
+                    Some(
+                        cmap_registry
+                            .get(&name(encoding_name))
+                            .whatever_context::<_, ObjectValueError>("Get cmap")?
+                            .whatever_context::<_, ObjectValueError>("Get cmap")?,
+                    )
+                }
+            }
+            NameOrStream::Stream(s) => {
+                let data = s
+                    .decode(font.resolver())
+                    .whatever_context::<_, ObjectValueError>("decode cmap from stream")?;
+                Some(
+                    cmap_registry
+                        .add_cmap_file(data.as_ref())
+                        .whatever_context::<_, ObjectValueError>("add cmap file")?,
+                )
+            }
+        };
         let cid_fonts = font.descendant_fonts()?;
         let cid_font = &cid_fonts[0];
         let widths = cid_font.w()?;
-        let default_width = cid_font.dw()?;
+        let default_advance = cid_font.dw()?;
         let units_per_em = face.metrics().units_per_em as u16;
+        if !encoding
+            .as_ref()
+            .is_none_or(|cmap| cmap.w_mode == WriteMode::Horizontal)
+        {
+            ensure_whatever!(cid_font.w2()?.is_none(), "TODO: support w2");
+            ensure_whatever!(cid_font.dw2()?.is_some(), "TODO support dw2");
+        }
 
         // Check encoding and create appropriate FontOp
         if let Some(NameOrDictByRef::Name(ref name)) = self.font_dict.encoding()? {
@@ -1478,7 +1538,7 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
                     return Ok(Box::new(CIDFontType2UnicodeFontOp::new(
                         face,
                         widths,
-                        default_width,
+                        default_advance,
                         units_per_em,
                         encoding_rs::GBK,
                     )));
@@ -1494,7 +1554,7 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
             self.font_is_embed,
             &self.data,
             widths,
-            default_width,
+            default_advance,
             units_per_em,
         )?))
     }
@@ -1573,6 +1633,10 @@ impl FontOp for Type3FontOp<'_> {
 
     fn char_width(&self, ch: u32) -> Result<GlyphLength> {
         Ok(self.font_width.char_width(ch))
+    }
+
+    fn char_height(&self, _ch: u32) -> Result<GlyphLength> {
+        unreachable!("Type3 do not support vertical mode")
     }
 
     fn units_per_em(&self) -> Result<u16> {
