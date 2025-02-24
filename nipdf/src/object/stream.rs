@@ -138,12 +138,13 @@ impl<'a, 'b> FilterDict<'a, 'b> {
     /// Otherwise, it should be Dictionary.
     pub fn parameters(&self) -> Result<Vec<Option<&'b Dictionary>>, ObjectValueError> {
         let v = self.alt_get(&KEY_FILTER_PARAMS, &sname("DP"));
-        let Some(v) = v else {
+        let Some(mut v) = v else {
             return Ok(vec![]);
         };
 
-        Ok(match v {
-            Object::Array(vals) => vals
+        loop {
+            return Ok(match v {
+                Object::Array(vals) => vals
                 .iter()
                 .map(|v| match v {
                     Object::Dictionary(d) => Ok(Some(d)),
@@ -162,19 +163,26 @@ impl<'a, 'b> FilterDict<'a, 'b> {
                 })
                 .collect::<Result<_, _>>()?,
             Object::Dictionary(d) => vec![Some(d)],
+            Object::Reference(id) => {
+                v = self.r
+                    .whatever_context::<_, ObjectValueError>("ObjectResolver is None")?
+                    .resolve(id)?;
+                continue;
+            }
             _ => {
                 whatever!(
                     "DecodeParms expected to be Dictionary or Array of Dictionary, got {}",
                     ObjectDiscriminants::from(v)
                 );
             }
-        })
+        });
+        }
     }
 }
 
 /// Iterate pairs of filter name and its parameter
-fn iter_filters<'b>(
-    d: FilterDict<'_, 'b>,
+fn iter_filters<'a, 'b>(
+    d: FilterDict<'a, 'b>,
 ) -> Result<impl Iterator<Item = (Name, Option<&'b Dictionary>)>, ObjectValueError> {
     let filters = d.filters()?;
     let params = d.parameters()?;
