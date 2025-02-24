@@ -1143,7 +1143,9 @@ fn filter<'a: 'b, 'b>(
             )?,
         )
         .map(FilterDecodedData::CCITTFaxImage),
-        S_FILTER_ASCII85_DECODE => decode_ascii85(&buf, params).map(FilterDecodedData::bytes),
+        S_FILTER_ASCII85_DECODE | "A85" => {
+            decode_ascii85(&buf, params).map(FilterDecodedData::bytes)
+        }
         S_FILTER_ASCII_HEX_DECODE => decode_ascii_hex(&buf).map(FilterDecodedData::bytes),
         S_FILTER_RUN_LENGTH_DECODE => {
             Ok(FilterDecodedData::bytes(decode_run_length(&buf, params)?))
