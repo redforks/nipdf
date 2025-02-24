@@ -1,0 +1,5 @@
+---
+source: render/src/render_tests.rs
+expression: "&decode_file_page(\"../render/src/vertical_text_mode.pdf\", 0).unwrap()"
+---
+"6dd05a437e9be750e1d9a36d7bfde9e4"

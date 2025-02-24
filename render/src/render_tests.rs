@@ -143,7 +143,7 @@ fn todo_glyph_encoding_problem() {
 }
 
 #[test]
-fn todo_radius_patten_without_extension() {
+fn todo_radius_pattern_without_extension() {
     // todo: tiny_skia shader, RadialGradient and LinearGradient
     // SpreadMode no support of no extension, apply a mask can fix, but complex
     //
@@ -185,7 +185,7 @@ fn type3_font() {
 }
 
 #[test]
-fn type3_with_nagative_font_size() {
+fn type3_with_negative_font_size() {
     assert_ron_snapshot!(&decode_file_page("pdf.js/test/pdfs/bug1011159.pdf", 0).unwrap());
 }
 
@@ -210,4 +210,9 @@ fn type1_font_units_per_em_not_1000() {
     assert_ron_snapshot!(
         &decode_file_page("../render/src/type1-units-per-em-not-1000.pdf", 0).unwrap()
     );
+}
+
+#[test]
+fn vertical_text_mode() {
+    assert_ron_snapshot!(&decode_file_page("../render/src/vertical_text_mode.pdf", 0).unwrap());
 }
