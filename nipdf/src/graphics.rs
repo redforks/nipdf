@@ -270,7 +270,7 @@ impl<'a, 'b> TryFrom<ObjectWithResolver<'a, 'b>> for NameOrDictByRef<'b> {
         match o.obj {
             Object::Name(name) => Ok(NameOrDictByRef::Name(name)),
             Object::Dictionary(dict) => Ok(NameOrDictByRef::Dict(dict)),
-            _ => Err(ObjectValueError::GraphicsOperationSchemaError),
+            _ => whatever!("Expect Name or Dictionary, but got {:?}", o.obj),
         }
     }
 }

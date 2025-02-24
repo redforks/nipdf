@@ -530,7 +530,13 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                     |ty| {
                         quote! {
                             let d: Option<crate::object::ObjectWithResolver> = self.d.opt(&prescript::sname(#key))?;
-                            d.map(|d| <#ty>::try_from(d)).transpose()
+                            match d.map(|d| <#ty>::try_from(d)).transpose() {
+                                Ok(v) => Ok(v),
+                                Err(e) => {
+                                    log::warn!("Convert PDF object field {} to {:?}: {}, ignore its value", #key, stringify!(#ty), e);
+                                    Ok(None)
+                                }
+                            }
                         }
                     },
                     |ty| {

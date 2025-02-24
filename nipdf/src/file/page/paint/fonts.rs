@@ -1026,8 +1026,13 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                 |fonts, cmap_registry| {
                     let mut ops = HashMap::with_capacity(fonts.len());
                     for (k, v) in fonts {
-                        debug!("Create {} font_op", k.as_str());
-                        ops.insert(k.clone(), v.create_op(cmap_registry)?);
+                        ops.insert(
+                            k.clone(),
+                            v.create_op(cmap_registry)
+                                .with_whatever_context::<_, _, ObjectValueError>(|_| {
+                                    format!("Create FontOp for: {}", k)
+                                })?,
+                        );
                     }
                     Ok::<_, ObjectValueError>(ops)
                 },
