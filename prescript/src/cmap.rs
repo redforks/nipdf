@@ -224,7 +224,7 @@ impl CodeSpace {
             })
             .unwrap_or_else(|| Either::Left(CharCode::One([codes[0]])))
             .map_left(|code| {
-                let min_bytes = self.min_bytes()?;
+                let min_bytes = self.min_bytes();
                 if code.n_bytes() >= min_bytes {
                     return Ok(code);
                 }
@@ -238,13 +238,12 @@ impl CodeSpace {
         Ok((&codes[next.into_inner().n_bytes().min(codes.len())..], next))
     }
 
-    fn min_bytes(&self) -> Result<usize> {
-        Ok(self
-            .0
+    fn min_bytes(&self) -> usize {
+        self.0
             .iter()
             .map(CodeRange::n_bytes)
             .min()
-            .unwrap_or_default())
+            .unwrap_or_default()
     }
 }
 
