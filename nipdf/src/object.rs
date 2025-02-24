@@ -494,10 +494,18 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     where
         V: FromSchemaContainer<'a, 'b>,
     {
-        self.d
+        match self
+            .d
             .get(key)
             .map(|o| V::create(o, self.resolver()))
             .transpose()
+        {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                warn!("Failed to create optional value for key '{}': {}", key, e);
+                Ok(None)
+            }
+        }
     }
 
     /// Return default value if not exist, error if not expected type.
