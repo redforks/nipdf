@@ -1883,7 +1883,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 }
 
                 text_object.move_to_next_pos(
-                    op.char_width(ch).whatever_context("get char width")?,
+                    op.char_advance(ch).whatever_context("get char width")?,
                     ch == 32,
                 );
             }
@@ -1922,7 +1922,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 }
 
                 text_object.move_to_next_pos(
-                    op.char_width(ch).whatever_context("get char width")?,
+                    op.char_advance(ch).whatever_context("get char width")?,
                     ch == 32,
                 );
             }

@@ -351,7 +351,7 @@ impl FontOp for Type1FontOp<'_> {
         }
     }
 
-    fn char_width(&self, gid: u32) -> Result<GlyphLength> {
+    fn char_advance(&self, gid: u32) -> Result<GlyphLength> {
         self.font_width.as_ref().either(
             |x| {
                 let r = x.char_width(gid);
@@ -367,10 +367,6 @@ impl FontOp for Type1FontOp<'_> {
                 ))
             },
         )
-    }
-
-    fn char_height(&self, _gid: u32) -> Result<GlyphLength> {
-        unreachable!("Type1 font no Vertital Write mode");
     }
 
     fn units_per_em(&self) -> Result<u16> {
@@ -540,7 +536,7 @@ impl FontOp for TTFFontOp<'_> {
         Ok(0)
     }
 
-    fn char_width(&self, ch: u32) -> Result<GlyphLength> {
+    fn char_advance(&self, ch: u32) -> Result<GlyphLength> {
         if let Some(font_width) = &self.font_width {
             return Ok(font_width.char_width(ch) / 1000.0 * self.units_per_em as f32);
         }
@@ -552,10 +548,6 @@ impl FontOp for TTFFontOp<'_> {
                 .whatever_context::<_, ObjectValueError>("get char advance")?
                 .x(),
         ))
-    }
-
-    fn char_height(&self, _ch: u32) -> Result<GlyphLength> {
-        unreachable!("TTFFont no Vertital Write mode");
     }
 
     fn units_per_em(&self) -> Result<u16> {
@@ -1082,10 +1074,11 @@ pub trait FontOp {
     /// Decode char codes to chars, possible using some encoding
     fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>>;
     fn char_to_gid(&self, ch: u32) -> Result<u16>;
-    /// Return glyph width for specified char
-    fn char_width(&self, ch: u32) -> Result<GlyphLength>;
-    /// Return glyph height for specified char
-    fn char_height(&self, ch: u32) -> Result<GlyphLength>;
+    /// Return glyph width or height based on write_mode
+    fn char_advance(&self, ch: u32) -> Result<GlyphLength>;
+    fn write_mode(&self) -> WriteMode {
+        WriteMode::Horizontal
+    }
     fn units_per_em(&self) -> Result<u16> {
         Ok(1000)
     }
@@ -1096,6 +1089,7 @@ struct CIDFontType0FontOp {
     // width if horizontal, height if vertical
     default_advance: u32,
     encoding: Option<Rc<CMap>>,
+    write_mode: WriteMode,
 }
 
 impl CIDFontType0FontOp {
@@ -1129,18 +1123,22 @@ impl CIDFontType0FontOp {
         let cid_fonts = font.descendant_fonts()?;
         let cid_font = &cid_fonts[0];
         let widths = cid_font.w()?;
-        if !encoding
+        let write_mode = if !encoding
             .as_ref()
             .is_none_or(|cmap| cmap.w_mode == WriteMode::Horizontal)
         {
             ensure_whatever!(cid_font.w2()?.is_none(), "TODO: support w2");
             ensure_whatever!(cid_font.dw2()?.is_some(), "TODO support dw2");
-        }
+            WriteMode::Vertical
+        } else {
+            WriteMode::Horizontal
+        };
 
         Ok(Self {
             widths,
             default_advance: cid_font.dw()?,
             encoding,
+            write_mode,
         })
     }
 }
@@ -1172,7 +1170,7 @@ impl FontOp for CIDFontType0FontOp {
         ch.try_into().whatever_context("convert ch to u16 gid")
     }
 
-    fn char_width(&self, ch: u32) -> Result<GlyphLength> {
+    fn char_advance(&self, ch: u32) -> Result<GlyphLength> {
         let char_width = self
             .widths
             .as_ref()
@@ -1184,8 +1182,8 @@ impl FontOp for CIDFontType0FontOp {
         Ok(GlyphLength::new(char_width))
     }
 
-    fn char_height(&self, ch: u32) -> Result<GlyphLength> {
-        self.char_width(ch)
+    fn write_mode(&self) -> WriteMode {
+        self.write_mode
     }
 }
 
@@ -1218,6 +1216,7 @@ struct CIDFontType2FontOp<'a> {
     encoding: Option<Rc<CMap>>,
     cid_to_gid: Option<CIDToGIDMap>,
     cid_is_gid: bool,
+    write_mode: WriteMode,
 }
 
 impl<'a> CIDFontType2FontOp<'a> {
@@ -1265,13 +1264,16 @@ impl<'a> CIDFontType2FontOp<'a> {
                     .into_owned(),
             )?),
         };
-        if !encoding
+        let write_mode = if !encoding
             .as_ref()
             .is_none_or(|cmap| cmap.w_mode == WriteMode::Horizontal)
         {
             ensure_whatever!(cid_font.w2()?.is_none(), "TODO: support w2");
             ensure_whatever!(cid_font.dw2()?.is_some(), "TODO support dw2");
-        }
+            WriteMode::Vertical
+        } else {
+            WriteMode::Horizontal
+        };
 
         let ttf_face = TTFFace::parse(ttf_data, 0)
             .whatever_context::<_, ObjectValueError>("parse TTF Face for CIDFontType2")?;
@@ -1282,6 +1284,7 @@ impl<'a> CIDFontType2FontOp<'a> {
             default_advance,
             units_per_em,
             encoding,
+            write_mode,
             cid_is_gid: is_embed && cid_to_gid.is_none(),
             cid_to_gid,
         })
@@ -1352,7 +1355,7 @@ impl FontOp for CIDFontType2FontOp<'_> {
         )
     }
 
-    fn char_width(&self, ch: u32) -> Result<GlyphLength> {
+    fn char_advance(&self, ch: u32) -> Result<GlyphLength> {
         let mut char_width = self
             .widths
             .as_ref()
@@ -1367,12 +1370,12 @@ impl FontOp for CIDFontType2FontOp<'_> {
         Ok(GlyphLength::new(char_width))
     }
 
-    fn char_height(&self, ch: u32) -> Result<GlyphLength> {
-        self.char_width(ch)
-    }
-
     fn units_per_em(&self) -> Result<u16> {
         Ok(self.units_per_em)
+    }
+
+    fn write_mode(&self) -> WriteMode {
+        self.write_mode
     }
 }
 
@@ -1383,6 +1386,7 @@ struct CIDFontType2UnicodeFontOp {
     default_advance: u32,
     units_per_em: u16,
     encoding: &'static CharEncoding,
+    write_mode: WriteMode,
 }
 
 impl CIDFontType2UnicodeFontOp {
@@ -1392,6 +1396,7 @@ impl CIDFontType2UnicodeFontOp {
         default_advance: u32,
         units_per_em: u16,
         encoding: &'static CharEncoding,
+        write_mode: WriteMode,
     ) -> Self {
         Self {
             face,
@@ -1399,6 +1404,7 @@ impl CIDFontType2UnicodeFontOp {
             default_advance,
             units_per_em,
             encoding,
+            write_mode,
         }
     }
 }
@@ -1422,7 +1428,7 @@ impl FontOp for CIDFontType2UnicodeFontOp {
             .whatever_context::<_, ObjectValueError>("glyph id not found")
     }
 
-    fn char_width(&self, ch: u32) -> Result<GlyphLength> {
+    fn char_advance(&self, ch: u32) -> Result<GlyphLength> {
         let mut char_width = self
             .width
             .as_ref()
@@ -1437,12 +1443,12 @@ impl FontOp for CIDFontType2UnicodeFontOp {
         Ok(GlyphLength::new(char_width))
     }
 
-    fn char_height(&self, ch: u32) -> Result<GlyphLength> {
-        self.char_width(ch)
-    }
-
     fn units_per_em(&self) -> Result<u16> {
         Ok(self.units_per_em)
+    }
+
+    fn write_mode(&self) -> WriteMode {
+        self.write_mode
     }
 }
 
@@ -1520,13 +1526,16 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
         let widths = cid_font.w()?;
         let default_advance = cid_font.dw()?;
         let units_per_em = face.metrics().units_per_em as u16;
-        if !encoding
+        let write_mode = if !encoding
             .as_ref()
             .is_none_or(|cmap| cmap.w_mode == WriteMode::Horizontal)
         {
             ensure_whatever!(cid_font.w2()?.is_none(), "TODO: support w2");
             ensure_whatever!(cid_font.dw2()?.is_some(), "TODO support dw2");
-        }
+            WriteMode::Vertical
+        } else {
+            WriteMode::Horizontal
+        };
 
         // Check encoding and create appropriate FontOp
         if let Some(NameOrDictByRef::Name(ref name)) = self.font_dict.encoding()? {
@@ -1541,6 +1550,7 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
                         default_advance,
                         units_per_em,
                         encoding_rs::GBK,
+                        write_mode,
                     )));
                 } else {
                     whatever!("unsupported encoding: '{}'", name)
@@ -1631,12 +1641,8 @@ impl FontOp for Type3FontOp<'_> {
         }
     }
 
-    fn char_width(&self, ch: u32) -> Result<GlyphLength> {
+    fn char_advance(&self, ch: u32) -> Result<GlyphLength> {
         Ok(self.font_width.char_width(ch))
-    }
-
-    fn char_height(&self, _ch: u32) -> Result<GlyphLength> {
-        unreachable!("Type3 do not support vertical mode")
     }
 
     fn units_per_em(&self) -> Result<u16> {
