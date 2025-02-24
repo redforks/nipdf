@@ -1006,6 +1006,10 @@ impl Object {
             Object::HexString(s) => s
                 .as_str()
                 .whatever_context::<_, ObjectValueError>("convert HexString to str"),
+            Object::Name(name) => {
+                warn!("Treat Name object as string");
+                Ok(name.as_str())
+            }
             _ => whatever!("Expected LiteralString or HexString, got {:?}", self),
         }
     }

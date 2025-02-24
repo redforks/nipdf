@@ -1012,8 +1012,8 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
             .whatever_context::<_, ObjectValueError>("get font resource")?;
         let mut fonts = HashMap::with_capacity(font_res.len());
         for (k, v) in font_res {
-            info!("load font: {:?}", k);
-            let font = Self::scan_font(v)?;
+            let font = Self::scan_font(v)
+                .with_whatever_context::<_, _, ObjectValueError>(|_| format!("Load font: {}", k))?;
             if let Some(font) = font {
                 fonts.insert(k, font);
             }
