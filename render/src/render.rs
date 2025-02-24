@@ -1738,9 +1738,7 @@ impl<'a, 'c> Render<'a, 'c> {
         gid: u16,
     ) -> Result<PathBuilder> {
         let mut sink = SkiaPathSink(PathBuilder::new());
-        glyph_render
-            .render(gid, &mut sink)
-            .whatever_context("render glyph")?;
+        glyph_render.render(gid, &mut sink);
         Ok(sink.into_inner())
     }
 

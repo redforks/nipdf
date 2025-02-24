@@ -130,7 +130,7 @@ impl<S: PathSink> font_kit::outline::OutlineSink for PathSinkWrap<'_, S> {
 }
 
 pub trait GlyphRender<P> {
-    fn render(&self, gid: u16, sink: &mut P) -> Result<()>;
+    fn render(&self, gid: u16, sink: &mut P);
 }
 
 struct TTFGlyphRender<'a> {
@@ -138,10 +138,13 @@ struct TTFGlyphRender<'a> {
 }
 
 impl<P: PathSink> GlyphRender<P> for TTFGlyphRender<'_> {
-    fn render(&self, gid: u16, sink: &mut P) -> Result<()> {
-        self.font
+    fn render(&self, gid: u16, sink: &mut P) {
+        if let Err(e) = self
+            .font
             .outline(gid as u32, HintingOptions::None, &mut PathSinkWrap(sink))
-            .whatever_context("get glyph outline")
+        {
+            warn!("Failed to render glyph: {}", e);
+        }
     }
 }
 
@@ -1727,7 +1730,7 @@ impl<P: PathSink + 'static> Font<P> for Type3Font<'_, '_> {
         struct StubGlyphRender;
 
         impl<P> GlyphRender<P> for StubGlyphRender {
-            fn render(&self, _gid: u16, _sink: &mut P) -> Result<()> {
+            fn render(&self, _gid: u16, _sink: &mut P) {
                 // Paint::show_texts() do not use GlyphRender to render glyphs
                 unreachable!()
             }
