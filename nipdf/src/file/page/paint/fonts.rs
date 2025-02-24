@@ -1128,7 +1128,7 @@ impl CIDFontType0FontOp {
             .is_none_or(|cmap| cmap.w_mode == WriteMode::Horizontal)
         {
             ensure_whatever!(cid_font.w2()?.is_none(), "TODO: support w2");
-            ensure_whatever!(cid_font.dw2()?.is_some(), "TODO support dw2");
+            ensure_whatever!(cid_font.dw2()?.is_none(), "TODO support dw2");
             WriteMode::Vertical
         } else {
             WriteMode::Horizontal
@@ -1269,7 +1269,7 @@ impl<'a> CIDFontType2FontOp<'a> {
             .is_none_or(|cmap| cmap.w_mode == WriteMode::Horizontal)
         {
             ensure_whatever!(cid_font.w2()?.is_none(), "TODO: support w2");
-            ensure_whatever!(cid_font.dw2()?.is_some(), "TODO support dw2");
+            ensure_whatever!(cid_font.dw2()?.is_none(), "TODO support dw2");
             WriteMode::Vertical
         } else {
             WriteMode::Horizontal
@@ -1531,7 +1531,7 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
             .is_none_or(|cmap| cmap.w_mode == WriteMode::Horizontal)
         {
             ensure_whatever!(cid_font.w2()?.is_none(), "TODO: support w2");
-            ensure_whatever!(cid_font.dw2()?.is_some(), "TODO support dw2");
+            ensure_whatever!(cid_font.dw2()?.is_none(), "TODO support dw2");
             WriteMode::Vertical
         } else {
             WriteMode::Horizontal

@@ -239,11 +239,12 @@ impl CodeSpace {
     }
 
     fn min_bytes(&self) -> Result<usize> {
-        self.0
+        Ok(self
+            .0
             .iter()
             .map(CodeRange::n_bytes)
             .min()
-            .whatever_context("Should not happen")
+            .unwrap_or_default())
     }
 }
 

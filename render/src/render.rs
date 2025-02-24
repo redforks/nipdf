@@ -24,7 +24,7 @@ use nipdf::{
             GlyphLength, GlyphSpace, GlyphToTextSpace, GlyphToUserSpace, ImageToDeviceSpace,
             PatternSpace, PatternToUserSpace, TextPoint, TextSpace, TextToUserSpace,
             ThousandthsOfText, UserToDeviceSpace, UserToLogicDeviceSpace, UserToUserSpace, f_flip,
-            image_to_user_space, move_text_space_pos, move_text_space_right,
+            image_to_user_space, move_text_space_down, move_text_space_pos, move_text_space_right,
         },
     },
     log_err,
@@ -34,7 +34,7 @@ use nipdf::{
     },
 };
 use num_traits::ToPrimitive;
-use prescript::{AnyWhatever, Name, ParserError};
+use prescript::{AnyWhatever, Name, ParserError, cmap::WriteMode};
 use snafu::{FromString, OptionExt, ResultExt, ensure_whatever, whatever};
 use std::{
     borrow::Cow,
@@ -1763,10 +1763,6 @@ impl<'a, 'c> Render<'a, 'c> {
                 );
             }
             TextRenderingMode::Stroke => {
-                let paint = state.get_stroke_paint();
-                let stroke = state.get_stroke();
-                debug!("text stroke: {:?} {:?}", &paint, stroke);
-                debug!("text stroke path: {:?}", &path);
                 canvas.stroke_path(
                     &path,
                     state.get_stroke_paint()?.as_ref(),
@@ -1843,6 +1839,7 @@ impl<'a, 'c> Render<'a, 'c> {
         let mut text_object = state.text_object.clone();
         text_object
             .set_units_per_em(op.units_per_em().whatever_context("get units per em")? as f32);
+        text_object.set_write_mode(op.write_mode());
         let user_to_device = state.user_to_device.into_skia();
 
         if let Some(type3_font) = font.as_type3() {
@@ -1903,10 +1900,6 @@ impl<'a, 'c> Render<'a, 'c> {
                 )?;
                 if !path.is_empty() {
                     let path = path.finish().whatever_context("finish path")?;
-                    // pre transform path to user space, render_glyph() will zoom line_width,
-                    // pdf line_width state is in user space, but skia line_width is in device
-                    // space so we need to transform path to user space,
-                    // and zoom line_width in device space
                     let path = path
                         .transform(text_object.runtime_matrix().into_skia())
                         .whatever_context("transform by text_object runtime matrix")?;
@@ -1922,7 +1915,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 }
 
                 text_object.move_to_next_pos(
-                    op.char_advance(ch).whatever_context("get char width")?,
+                    op.char_advance(ch).whatever_context("get glyph advance")?,
                     ch == 32,
                 );
             }
@@ -1974,6 +1967,7 @@ struct TextObject {
     render_mode: TextRenderingMode, // Tmode
     rise: f32,                      // Trise
     knockout: bool,                 // Tk
+    write_mode: WriteMode,
 }
 
 impl TextObject {
@@ -1993,7 +1987,12 @@ impl TextObject {
             render_mode: TextRenderingMode::Fill,
             rise: 0.0,
             knockout: true,
+            write_mode: WriteMode::Horizontal,
         }
+    }
+
+    pub fn set_write_mode(&mut self, mode: WriteMode) {
+        self.write_mode = mode;
     }
 
     pub fn type3_runtime_matrix(&self, font_matrix: &GlyphToTextSpace) -> GlyphToUserSpace {
@@ -2003,9 +2002,22 @@ impl TextObject {
     }
 
     pub fn runtime_matrix(&self) -> GlyphToUserSpace {
-        Transform2D::scale(self.em_ratio.0, self.em_ratio.0)
-            .then_scale(self.font_size * self.horiz_scaling, self.font_size)
-            .then(&self.matrix)
+        let base_matrix = Transform2D::scale(self.em_ratio.0, self.em_ratio.0)
+            .then_scale(self.font_size * self.horiz_scaling, self.font_size);
+
+        match self.write_mode {
+            WriteMode::Horizontal => base_matrix.then(&self.matrix),
+            WriteMode::Vertical => {
+                // 将原点移到字符上方中点
+                // 假设字符宽度是em宽度
+                let shift_x = -0.5; // 向左移动半个em宽度使原点位于中点
+                let shift_y = -1.0; // 向上移动一个em高度到字符顶部
+
+                let vertical_adjust = Transform2D::translation(shift_x, shift_y);
+
+                base_matrix.then(&vertical_adjust).then(&self.matrix)
+            }
+        }
     }
 
     fn reset(&mut self) {
@@ -2044,17 +2056,37 @@ impl TextObject {
         self.update_horizontal_scale();
     }
 
-    fn move_to_next_pos(&mut self, glyph_width: GlyphLength, word_boundary: bool) {
-        let mut w = glyph_width * self.em_ratio * self.font_size + self.char_spacing;
-        if word_boundary {
-            w += self.word_spacing;
+    fn move_to_next_pos(&mut self, glyph_advance: GlyphLength, word_boundary: bool) {
+        let mut advance = glyph_advance * self.em_ratio * self.font_size;
+
+        match self.write_mode {
+            WriteMode::Horizontal => {
+                advance += self.char_spacing;
+                if word_boundary {
+                    advance += self.word_spacing;
+                }
+                self.matrix = move_text_space_right(&self.matrix, advance);
+            }
+            WriteMode::Vertical => {
+                advance -= self.char_spacing;
+                if word_boundary {
+                    advance -= self.word_spacing;
+                }
+                self.matrix = move_text_space_down(&self.matrix, advance);
+            }
         }
-        self.matrix = move_text_space_right(&self.matrix, w);
     }
 
     fn adjust_tj(&mut self, tj: Length<f32, ThousandthsOfText>) {
         let n = tj * self.font_size * Scale::new(1.0 / 1000.0);
-        self.matrix = move_text_space_right(&self.matrix, -n);
+        match self.write_mode {
+            WriteMode::Horizontal => {
+                self.matrix = move_text_space_right(&self.matrix, -n);
+            }
+            WriteMode::Vertical => {
+                self.matrix = move_text_space_down(&self.matrix, n);
+            }
+        }
     }
 
     fn set_character_spacing(&mut self, spacing: Length<f32, TextSpace>) {

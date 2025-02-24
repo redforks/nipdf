@@ -54,6 +54,13 @@ pub fn move_text_space_right(
     move_text_space_pos(transform, TextPoint::new(x_text_space.0, 0.0))
 }
 
+pub fn move_text_space_down(
+    matrix: &TextToUserSpace,
+    y: Length<f32, TextSpace>,
+) -> TextToUserSpace {
+    Transform2D::translation(0.0, -y.0).then(matrix)
+}
+
 /// Adjust transform to moves position in text space.
 pub fn move_text_space_pos(transform: &TextToUserSpace, p: TextPoint) -> TextToUserSpace {
     transform.pre_translate(p.to_vector())
