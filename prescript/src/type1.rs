@@ -1,10 +1,10 @@
 use crate::{
-    Encoding, Result,
+    AnyWhatever, Encoding, Result,
     machine::{Array, Machine, Value},
-    parser::{header, parse_error_to_whatever},
+    parser::header,
     sname,
 };
-use snafu::{OptionExt as _, ResultExt as _, ensure_whatever, whatever};
+use snafu::{FromString as _, OptionExt as _, ResultExt as _, ensure_whatever, whatever};
 use std::{array::from_fn, borrow::Cow};
 use winnow::{
     Parser,
@@ -90,14 +90,15 @@ fn normalize_pfb(data: &[u8]) -> Result<Cow<'_, [u8]>> {
     for _ in 0..3 {
         let section_len = preceded((0x80u8, any::<_, crate::ParserError>), le_u32)
             .parse(&data[pos..(6 + pos)])
-            .map_err(|e| parse_error_to_whatever(e, "get pfb section len"))?
-            as usize;
+            .map_err(|e| {
+                AnyWhatever::with_source(Box::new(e.into_inner()), "get pfb section len".into())
+            })? as usize;
         data.drain(pos..(pos + 6));
         pos += section_len;
     }
 
     Parser::<_, _, crate::ParserError>::parse(&mut &b"\x80\x03"[..], &data[pos..])
-        .map_err(|e| parse_error_to_whatever(e, "skip pfb tag"))?;
+        .map_err(|e| AnyWhatever::with_source(Box::new(e.into_inner()), "skip pfb tag".into()))?;
     data.drain(pos..);
 
     Ok(data.into())

@@ -1,12 +1,10 @@
 use crate::{
-    AnyWhatever,
     ascii85::{self, Ascii85Error},
     machine::{Token, TokenArray, Value},
     name,
     type1::Header,
 };
 use either::Either;
-use snafu::FromString as _;
 use std::{
     cell::RefCell,
     iter::once,
@@ -19,7 +17,7 @@ use winnow::{
     ModalResult, Parser,
     ascii::hex_digit1,
     combinator::{alt, delimited, dispatch, fail, opt, preceded, repeat, terminated},
-    error::{ErrMode, FromExternalError, ParseError, ParserError},
+    error::{ErrMode, FromExternalError, ParserError},
     stream::{AsChar, Stream},
     token::{any, literal, one_of, take_till, take_while},
 };
@@ -34,14 +32,6 @@ pub enum PossibleError {
     Int { source: ParseIntError },
     #[snafu(transparent)]
     Ascii85 { source: Ascii85Error },
-}
-
-pub(crate) fn parse_error_to_whatever<I, E: std::error::Error + Send + Sync + 'static>(
-    err: ParseError<I, E>,
-    msg: impl Into<String>,
-) -> AnyWhatever {
-    let e = err.into_inner();
-    AnyWhatever::with_source(Box::new(e), msg.into())
 }
 
 /// Parses the header of a Type 1 font. The header is the first line of the
