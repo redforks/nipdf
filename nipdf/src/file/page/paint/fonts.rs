@@ -607,6 +607,7 @@ static SYSTEM_FONTS: LazyLock<Database> = LazyLock::new(|| {
     // TODO: better way to provide default fonts
     db.set_serif_family("Noto Serif CJK SC");
     db.set_sans_serif_family("Noto Sans CJK SC");
+    db.set_monospace_family("Noto Sans Mono CJK SC");
     db
 });
 
@@ -1558,6 +1559,15 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
                         default_advance,
                         units_per_em,
                         encoding_rs::GBK,
+                        write_mode,
+                    )));
+                } else if *name == &sname("UniJIS-UCS2-HW-H") {
+                    return Ok(Box::new(CIDFontType2UnicodeFontOp::new(
+                        face,
+                        widths,
+                        default_advance,
+                        units_per_em,
+                        encoding_rs::UTF_16BE,
                         write_mode,
                     )));
                 } else {
