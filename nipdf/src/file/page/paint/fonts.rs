@@ -989,13 +989,11 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                         "Failed to load type1 font \"{:?}\", try load as truetype",
                         err
                     );
-                    let desc = font
-                        .font_descriptor()?
-                        .whatever_context::<_, ObjectValueError>("get Type1 font desc")?;
+                    let desc = font.font_descriptor()?;
                     Ok(Some(Self::load_ttf_parser_font(
                         FontType::Type1,
                         font,
-                        Some(&desc),
+                        desc.as_ref(),
                     )?))
                 }),
 
