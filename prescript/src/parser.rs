@@ -328,8 +328,9 @@ where
     {
         delimited(
             b'~',
-            take_while(0.., |c| c != b'~')
-                .try_map(|v: &[u8]| Ok::<_, PossibleError>(ascii85::decode(v)?.into())),
+            take_while(0.., |c| c != b'~').try_map(|v: &[u8]| {
+                Ok::<_, PossibleError>(ascii85::decode(v).map_err(|(_, e)| e)?.into())
+            }),
             b"~>",
         )
         .parse_next(input)

@@ -1073,7 +1073,17 @@ fn decode_ascii_hex(buf: &[u8]) -> Result<Vec<u8>, ObjectValueError> {
 
 fn decode_ascii85(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, ObjectValueError> {
     ensure_whatever!(params.is_none(), "TODO: handle params of ascii85");
-    prescript::ascii85::decode(buf).whatever_context("decode ascii85")
+    match prescript::ascii85::decode(buf) {
+        Ok(v) => Ok(v),
+        Err((data, e)) => {
+            if !data.is_empty() {
+                warn!("Invalid ASCII85Decode data, use partial data: {}", e);
+                Ok(data)
+            } else {
+                Err(ObjectValueError::FilterDecodeError)
+            }
+        }
+    }
 }
 
 fn decode_run_length(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, ObjectValueError> {

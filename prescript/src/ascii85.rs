@@ -26,7 +26,8 @@ pub enum Ascii85Error {
     CharOutOfRange { digit: u8 },
 }
 
-pub fn decode(input: &[u8]) -> Result<Vec<u8>, Ascii85Error> {
+/// On error, return the partial result and the error.
+pub fn decode(input: &[u8]) -> Result<Vec<u8>, (Vec<u8>, Ascii85Error)> {
     let mut result = Vec::with_capacity(4 * (input.len() / 5 + 16));
 
     let mut counter = 0;
@@ -69,12 +70,12 @@ pub fn decode(input: &[u8]) -> Result<Vec<u8>, Ascii85Error> {
                 result.extend_from_slice(&[0, 0, 0, 0]);
                 continue;
             } else {
-                return Err(Ascii85Error::MisalignedZ);
+                return Err((result, Ascii85Error::MisalignedZ));
             }
         }
 
         if !(33..=117).contains(&digit) {
-            return Err(Ascii85Error::CharOutOfRange { digit });
+            return Err((result, Ascii85Error::CharOutOfRange { digit }));
         }
 
         decode_digit(digit, &mut counter, &mut chunk, &mut result);
@@ -98,9 +99,10 @@ mod tests {
 
     #[test]
     fn decode_test() {
-        assert_eq!(decode(b"<~9jqo^F*2M7/c~>").unwrap(), [
-            77, 97, 110, 32, 115, 117, 114, 101, 46
-        ]);
+        assert_eq!(
+            decode(b"<~9jqo^F*2M7/c~>").unwrap(),
+            [77, 97, 110, 32, 115, 117, 114, 101, 46]
+        );
 
         assert!(
             decode(br#"
