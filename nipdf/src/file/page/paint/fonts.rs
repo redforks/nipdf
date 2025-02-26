@@ -968,7 +968,6 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                             .whatever_context::<_, ObjectValueError>(
                                 "get CIDFontType0 font stream",
                             )??;
-                        // load font kit font use Self::load_font_kit_font(), add font_kit argument to CIDFontType0Font::new(). AI!
                         Ok(Some(Box::new(CIDFontType0Font::new(
                             font,
                             Self::load_embed_font_bytes(descentdant_font.resolver(), stream)?,
