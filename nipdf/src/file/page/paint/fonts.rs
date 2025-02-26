@@ -10,7 +10,7 @@ use crate::{
 use encoding::EncodingParser;
 use font_kit::{hinting::HintingOptions, loaders::freetype::Font as FontKitFont};
 use fontdb::{Database, Family, Query, Source, Weight};
-use log::{error, info, warn};
+use log::{info, warn};
 use num_traits::ToPrimitive;
 use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
@@ -581,7 +581,9 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
 
             FontType::Type3 => Ok(Some(Box::new(type3::Type3Font::new(font)?))),
             _ => {
-                error!("Unsupported font type: {:?}", font.subtype()?);
+                #[cfg(debug_assertions)]
+                todo!("Unsupported font type: {:?}", font.subtype()?);
+                #[cfg(not(debug_assertions))]
                 Ok(None)
             }
         }
@@ -596,11 +598,22 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
             .whatever_context::<_, ObjectValueError>("get font resource")?;
         let mut fonts = HashMap::with_capacity(font_res.len());
         for (k, v) in font_res {
-            let font = Self::scan_font(v)
-                .with_whatever_context::<_, _, ObjectValueError>(|_| format!("Load font: {}", k))?;
-            if let Some(font) = font {
-                fonts.insert(k, font);
-            }
+            let font = match Self::scan_font(v) {
+                Ok(Some(font)) => font,
+                Ok(None) => {
+                    warn!("Font {} is not supported, use fallback font", k);
+                    continue;
+                }
+                Err(e) => {
+                    warn!("Failed to load font {}: {}, use fallback font", k, e);
+                    continue;
+                }
+            };
+            fonts.insert(k, font);
+        }
+
+        if fonts.is_empty() {
+            warn!("No fonts found, use fallback font");
         }
 
         Ok(Self {
