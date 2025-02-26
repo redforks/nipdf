@@ -14,7 +14,7 @@ use crate::{
 };
 use ahash::{HashMap, HashMapExt};
 use either::Either;
-use log::error;
+use log::{error, warn};
 use nipdf_macro::pdf_object;
 use once_cell::unsync::OnceCell;
 use prescript::{Name, ParserError, sname};
@@ -326,14 +326,24 @@ fn decrypt_string(encrypt_info: &EncryptInfo, id: ObjectId, mut o: Object) -> Re
         fn dict(&self, dict: &mut Dictionary) -> Result<()> {
             dict.update(|d| {
                 for (_, v) in d.iter_mut() {
-                    self.decrypt(v)?;
+                    // Don't propagate errors from individual field decryption
+                    if let Err(e) = self.decrypt(v) {
+                        warn!("Failed to decrypt field: {}", e);
+                        *v = Object::FailedDecryptedValue;
+                    }
                 }
                 Ok(())
             })
         }
 
         fn arr(&self, arr: &mut Array) -> Result<()> {
-            Object::try_update_array_items(arr, |o| self.decrypt(o))
+            Object::try_update_array_items(arr, |o| {
+                if let Err(e) = self.decrypt(o) {
+                    warn!("Failed to decrypt array item: {}", e);
+                    *o = Object::FailedDecryptedValue;
+                }
+                Ok(())
+            })
         }
 
         fn stream(&self, stream: &mut Stream) -> Result<()> {
@@ -352,7 +362,12 @@ fn decrypt_string(encrypt_info: &EncryptInfo, id: ObjectId, mut o: Object) -> Re
         }
     }
 
-    Decryptor(encrypt_info, id).decrypt(&mut o)?;
+    // Main decryption process - continue even if inner elements fail
+    if let Err(e) = Decryptor(encrypt_info, id).decrypt(&mut o) {
+        warn!("Failed to decrypt array item: {}", e);
+        return Ok(Object::FailedDecryptedValue);
+    }
+
     Ok(o)
 }
 
@@ -806,7 +821,9 @@ impl File {
         // Try to parse XRef streams and add their entries
         for pos in xref_streams {
             let mut bytes = LocatingSlice::new(&buf[pos..]);
-            if let Ok((entries, trailer_dict)) = parse_xref_stream::<_, ParserError>.parse_next(&mut bytes) {
+            if let Ok((entries, trailer_dict)) =
+                parse_xref_stream::<_, ParserError>.parse_next(&mut bytes)
+            {
                 trailers.push(trailer_dict);
                 for (id, mut entry) in entries {
                     let file_offset: u32 = head_ver

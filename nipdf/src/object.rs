@@ -853,6 +853,7 @@ pub enum Object {
     Array(Array),
     Stream(Stream),
     Reference(Reference),
+    FailedDecryptedValue,
 }
 
 /// Macro to implement TryFrom<&Object> for various types
@@ -1155,6 +1156,7 @@ impl Object {
                 .append(RcDoc::as_string(r.id().generation()))
                 .append(RcDoc::space())
                 .append(RcDoc::text("R")),
+            Object::FailedDecryptedValue => RcDoc::text("FailedDecryptedValue"),
         }
     }
 }
