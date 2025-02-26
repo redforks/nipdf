@@ -1472,6 +1472,7 @@ struct CIDFontType0Font<'a, 'b> {
 
 impl<'a, 'b> CIDFontType0Font<'a, 'b> {
     fn new(font_dict: FontDict<'a, 'b>, data: Vec<u8>) -> Result<Self> {
+        // load font by caller, and remove Result from return value. AI!
         let font = FontKitFont::from_bytes(data.into(), 0)
             .whatever_context::<_, ObjectValueError>("decode FontKitFont for Type0")?;
         Ok(Self { font_dict, font })
