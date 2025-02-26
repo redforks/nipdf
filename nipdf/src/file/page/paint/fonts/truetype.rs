@@ -86,7 +86,7 @@ impl<'a> TTFFontOp<'a> {
     }
 }
 
-impl<'a> FontOp for TTFFontOp<'a> {
+impl FontOp for TTFFontOp<'_> {
     fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>, ObjectValueError> {
         Ok(s.iter().map(|v| *v as u32).collect())
     }
