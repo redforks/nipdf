@@ -971,7 +971,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                         Ok(Some(Box::new(CIDFontType0Font::new(
                             font,
                             Self::load_embed_font_bytes(descentdant_font.resolver(), stream)?,
-                        )?)))
+                        ))))
                     }
                     CIDFontType::CIDFontType2 => {
                         let desc = descentdant_font
