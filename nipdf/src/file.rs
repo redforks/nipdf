@@ -661,8 +661,8 @@ fn open_encrypt(
     Ok(Some(EncryptInfo::new(k, encrypt.crypt_filters()?)))
 }
 
-fn index_xref<'a>(
-    data: &mut LocatingSlice<&'a [u8]>,
+fn index_xref(
+    data: &mut LocatingSlice<&[u8]>,
 ) -> ModalResult<(Vec<usize>, Vec<(ObjectId, usize)>, Vec<usize>), ParserError> {
     const TRAILER_BYTES: &[u8] = b"trailer";
     let mut trailer_positions = Vec::new();
@@ -683,7 +683,7 @@ fn index_xref<'a>(
         dict,
     )
         .map(|((obj_id, range), .., dict)| {
-            if let Some(&Object::Name(ref name)) = dict.get(&sname("Type")) {
+            if let Some(Object::Name(name)) = dict.get(&sname("Type")) {
                 if name == &sname("XRef") {
                     xref_streams.push(range.start);
                 }
@@ -806,26 +806,23 @@ impl File {
         // Try to parse XRef streams and add their entries
         for pos in xref_streams {
             let mut bytes = LocatingSlice::new(&buf[pos..]);
-            match parse_xref_stream::<_, ParserError>.parse_next(&mut bytes) {
-                Ok((entries, trailer_dict)) => {
-                    trailers.push(trailer_dict);
-                    for (id, mut entry) in entries {
-                        let file_offset: u32 = head_ver
-                            .as_ref()
-                            .map(|(offset, _)| *offset)
-                            .unwrap_or_default()
-                            .try_into()
-                            .whatever_context::<_, ObjectValueError>("convert offset")?;
-                        match &mut entry {
-                            Entry::InFile(FilePos(offset, _, _)) => {
-                                *offset += file_offset;
-                            }
-                            Entry::InStream(..) => {}
+            if let Ok((entries, trailer_dict)) = parse_xref_stream::<_, ParserError>.parse_next(&mut bytes) {
+                trailers.push(trailer_dict);
+                for (id, mut entry) in entries {
+                    let file_offset: u32 = head_ver
+                        .as_ref()
+                        .map(|(offset, _)| *offset)
+                        .unwrap_or_default()
+                        .try_into()
+                        .whatever_context::<_, ObjectValueError>("convert offset")?;
+                    match &mut entry {
+                        Entry::InFile(FilePos(offset, _, _)) => {
+                            *offset += file_offset;
                         }
-                        id_offset.insert(RuntimeObjectId(id), (&entry).into());
+                        Entry::InStream(..) => {}
                     }
+                    id_offset.insert(RuntimeObjectId(id), (&entry).into());
                 }
-                Err(_) => (),
             }
         }
         trailers.reverse();
