@@ -50,6 +50,9 @@ impl FirstLastFontWidth {
         }
 
         let default_width = font.default_width()?;
+        if default_width == 0 && widths.len() == 0 {
+            return Ok(None);
+        }
 
         let range = first_char.whatever_context::<_, ObjectValueError>("get first_char")?
             ..=last_char.whatever_context::<_, ObjectValueError>("get last_char")?;
@@ -63,7 +66,9 @@ impl FirstLastFontWidth {
     fn char_width(&self, ch: u32) -> GlyphLength {
         GlyphLength::new(if self.range.contains(&ch) {
             let idx = (ch - self.range.start()) as usize;
-            self.widths[idx]
+            let r = *self.widths.get(idx).unwrap_or(&self.default_width);
+            debug_assert!(r != 0, "width is zero, possible wrong");
+            r
         } else {
             self.default_width
         } as f32)
