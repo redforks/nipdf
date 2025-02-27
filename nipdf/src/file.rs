@@ -681,13 +681,24 @@ fn index_xref(
 ) -> ModalResult<(Vec<usize>, Vec<(ObjectId, usize)>, Vec<usize>), ParserError> {
     const TRAILER_BYTES: &[u8] = b"trailer";
     let mut trailer_positions = Vec::new();
-    let mut entries = Vec::new();
+    let mut indirect_obj_entries = Vec::new();
+    let mut xref_entries = Vec::new();
     // Store positions of XRef streams: (position, stream object ID)
     let mut xref_streams = Vec::new();
 
     let parse_trailer_position_after_xref = (b"xref".as_slice(), take_until(1.., TRAILER_BYTES))
         .span()
         .map(|r| trailer_positions.push(r.end));
+
+    // Add parser for object definitions, capturing their positions more accurately
+    let parse_indirect_object = {
+        let pos_and_id = object_id().with_span().map(|(id, span)| (id, span.start));
+
+        // Match the full object definition but just return the position and ID we already captured
+        (pos_and_id, wsc1(), b"obj".as_slice()).map(|((id, pos), ..)| {
+            indirect_obj_entries.push((id, pos));
+        })
+    };
 
     // Add parser for XRef stream object header
     let parse_xref_stream = (
@@ -701,17 +712,22 @@ fn index_xref(
             if let Some(Object::Name(name)) = dict.get(&sname("Type")) {
                 if name == &sname("XRef") {
                     xref_streams.push(range.start);
+                    xref_entries.push((obj_id, range.start)); // Also add as a regular entry
+                }
+            } else {
+                // Add as regular entry if not already added by xref parser
+                if !xref_entries.iter().any(|(id, _)| id == &obj_id) {
+                    xref_entries.push((obj_id, range.start));
                 }
             }
-            entries.push((obj_id, range.start));
         });
 
     let mut parser = repeat::<_, _, (), _, _>(
         1..,
         alt((
             wsc1().void(),
+            parse_indirect_object,
             parse_xref_stream,
-            indirect_object_def().void(),
             b"startxref".as_slice().void(),
             parse_trailer_position_after_xref,
             any.void(),
@@ -719,6 +735,22 @@ fn index_xref(
     );
     parser.parse_next(data)?;
     drop(parser);
+
+    // Merge xref_entries and indirect_obj_entries, preferring indirect_obj_entries when IDs overlap
+    let mut merged_entries = HashMap::new();
+
+    // First add all xref entries
+    for (id, pos) in xref_entries {
+        merged_entries.insert(id, pos);
+    }
+
+    // Then add indirect_obj entries, overwriting any existing entries with same ID
+    for (id, pos) in indirect_obj_entries {
+        merged_entries.insert(id, pos);
+    }
+
+    // Convert back to Vec
+    let entries = merged_entries.into_iter().collect();
 
     Ok((trailer_positions, entries, xref_streams))
 }
