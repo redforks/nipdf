@@ -877,7 +877,8 @@ fn decode_jbig2<'a>(
     params: Option<&Dictionary>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     ensure_whatever!(
-        params.is_none_or(|p| p.is_empty()),
+        // JBIG2Globals is the only effect parameter for JBIG2Decode filter
+        params.is_none_or(|p| !p.contains_key("JBIG2Globals")),
         "TODO: handle params of {}",
         S_FILTER_JBIG2_DECODE
     );
