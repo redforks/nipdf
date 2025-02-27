@@ -1201,7 +1201,7 @@ fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> Result<Dyn
     }
 
     match (&img, to) {
-        (DynamicImage::ImageLuma8(_), ColorSpace::DeviceGray)
+        (DynamicImage::ImageLuma8(_), ColorSpace::DeviceGray | ColorSpace::CalGray(_))
         | (DynamicImage::ImageRgb8(_), ColorSpace::DeviceRGB) => Ok(img),
         (DynamicImage::ImageLuma8(_), ColorSpace::Separation(sep)) => Ok(DynamicImage::ImageRgba8(
             convert_cs(&img.into_luma8(), sep.as_ref())?,
