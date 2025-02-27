@@ -418,27 +418,21 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
                 && *name != &sname("Identity-V")
                 && Encoding::predefined(name).is_none()
             {
-                if *name == &sname("GBK-EUC-H") {
-                    return Ok(Box::new(CIDFontType2UnicodeFontOp::new(
-                        face,
-                        widths,
-                        default_advance,
-                        units_per_em,
-                        encoding_rs::GBK,
-                        write_mode,
-                    )));
-                } else if *name == &sname("UniJIS-UCS2-HW-H") {
-                    return Ok(Box::new(CIDFontType2UnicodeFontOp::new(
-                        face,
-                        widths,
-                        default_advance,
-                        units_per_em,
-                        encoding_rs::UTF_16BE,
-                        write_mode,
-                    )));
-                } else {
-                    whatever!("unsupported encoding: '{}'", name)
-                }
+                let encoding = match name.as_ref() {
+                    "GBK-EUC-H" => encoding_rs::GBK,
+                    "UniJIS-UCS2-HW-H" => encoding_rs::UTF_16BE,
+                    "ETenms-B5-V" | "ETenms-B5-H" => encoding_rs::BIG5,
+                    _ => whatever!("unsupported encoding: '{}'", name),
+                };
+
+                return Ok(Box::new(CIDFontType2UnicodeFontOp::new(
+                    face,
+                    widths,
+                    default_advance,
+                    units_per_em,
+                    encoding,
+                    write_mode,
+                )));
             }
         }
 
