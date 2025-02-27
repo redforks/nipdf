@@ -10,6 +10,7 @@ use snafu::ensure_whatever;
 use std::{
     borrow::{Borrow, Cow},
     fmt::{Debug, Display},
+    hash::Hash,
     iter::Peekable,
     rc::Rc,
     str::{Utf8Error, from_utf8},
@@ -83,7 +84,7 @@ impl Dictionary {
     pub fn get<Q>(&self, key: &Q) -> Option<&Object>
     where
         Name: Borrow<Q>,
-        Q: std::hash::Hash + Eq + ?Sized,
+        Q: Hash + Eq + ?Sized,
     {
         self.0.get(key).and_then(|value| {
             if let Object::Null = value {
@@ -482,17 +483,21 @@ where
 }
 
 impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
-    pub fn required<V>(&self, key: &Name) -> Result<V>
+    pub fn required<V, Q>(&self, key: &Q) -> Result<V>
     where
         V: FromSchemaContainer<'a, 'b>,
+        Name: Borrow<Q>,
+        Q: Eq + Hash + Display + ?Sized,
     {
         let r = self.resolver();
         self.required_value(key).and_then(move |o| V::create(o, r))
     }
 
-    pub fn opt<V>(&self, key: &Name) -> Result<Option<V>>
+    pub fn opt<V, Q>(&self, key: &Q) -> Result<Option<V>>
     where
         V: FromSchemaContainer<'a, 'b>,
+        Name: Borrow<Q>,
+        Q: Eq + Hash + Display + ?Sized,
     {
         match self
             .d
@@ -509,18 +514,22 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
     }
 
     /// Return default value if not exist, error if not expected type.
-    pub fn or_default<V>(&self, key: &Name) -> Result<V>
+    pub fn or_default<V, Q>(&self, key: &Q) -> Result<V>
     where
         V: FromSchemaContainer<'a, 'b> + Default,
+        Name: Borrow<Q>,
+        Q: Eq + Hash + Display + ?Sized,
     {
         self.opt(key).map(Option::unwrap_or_default)
     }
 
     /// If value not exist, return empty vector.
     /// If value is array, return all elements in array, otherwise return with one element vec.
-    pub fn zero_one_or_more<V>(&self, key: &Name) -> Result<Vec<V>>
+    pub fn zero_one_or_more<V, Q>(&self, key: &Q) -> Result<Vec<V>>
     where
         V: FromSchemaContainer<'a, 'b>,
+        Name: Borrow<Q>,
+        Q: Eq + Hash + Display + ?Sized,
     {
         let with_err =
             |_: &mut ObjectValueError| format!("resolve zero_one_or_more property: {}", &key);
@@ -574,9 +583,11 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         }
     }
 
-    pub fn map_dict<V>(&self, key: &Name) -> Result<HashMap<Name, V>>
+    pub fn map_dict<V, Q>(&self, key: &Q) -> Result<HashMap<Name, V>>
     where
         V: FromSchemaContainer<'a, 'b>,
+        Name: Borrow<Q>,
+        Q: Eq + Hash + Display + ?Sized,
     {
         let v = self.opt_object(key)?;
         let Some(v) = v else {
@@ -597,7 +608,11 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
         Ok(res)
     }
 
-    pub fn opt_object(&self, key: &Name) -> Result<Option<&'b Object>> {
+    pub fn opt_object<Q>(&self, key: &Q) -> Result<Option<&'b Object>>
+    where
+        Name: Borrow<Q>,
+        Q: Eq + Hash + Display + ?Sized,
+    {
         let Some(v) = self.d.get(key) else {
             return Ok(None);
         };
@@ -607,12 +622,11 @@ impl<'a, 'b, T: TypeValidator> SchemaDict<'a, 'b, T> {
             .with_whatever_context(|_| format!("resolve reference for key: {}", key))
     }
 
-    pub fn required_object(&self, key: &Name) -> Result<&'b Object> {
-        self.required_value(key)
-            .and_then(|o| self.r.resolve_reference(o))
-    }
-
-    fn required_value(&self, key: &Name) -> Result<&'b Object> {
+    fn required_value<Q>(&self, key: &Q) -> Result<&'b Object>
+    where
+        Name: Borrow<Q>,
+        Q: Eq + Hash + Display + ?Sized,
+    {
         self.d
             .get(key)
             .with_whatever_context(|| format!("required value for key: {}", key))

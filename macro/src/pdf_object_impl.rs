@@ -502,22 +502,22 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
         let mut method = if let Some(method_name) =
             schema_method_name(rt, &attrs[..]).map(|m| Ident::new(m, name.span()))
         {
-            quote! { self.d.#method_name(&prescript::sname(#key)) }
+            quote! { self.d.#method_name(#key) }
         } else if let Some(nested_type) = nested(rt, attrs) {
             gen_option_method(
                 nested_type,
                 |ty| {
                     let type_name = remove_generic(ty);
-                    quote! { self.d.opt::<#type_name<'_, '_>>(&prescript::sname(#key)) }
+                    quote! { self.d.opt::<#type_name<'_, '_>, _>(#key) }
                 },
                 |ty| {
                     if is_vec(ty) {
-                        quote! { self.d.zero_one_or_more(&prescript::sname(#key)) }
+                        quote! { self.d.zero_one_or_more(#key) }
                     } else if is_map(ty) {
-                        quote! { self.d.map_dict(&prescript::sname(#key)) }
+                        quote! { self.d.map_dict(#key) }
                     } else {
                         let type_name = remove_generic(ty);
-                        quote! { self.d.required::<#type_name<'_, '_>>(&prescript::sname(#key)) }
+                        quote! { self.d.required::<#type_name<'_, '_>, _>(#key) }
                     }
                 },
             )
@@ -526,7 +526,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 try_from_type,
                 |ty| {
                     quote! {
-                        let d: Option<crate::object::ObjectWithResolver> = self.d.opt(&prescript::sname(#key))?;
+                        let d: Option<crate::object::ObjectWithResolver> = self.d.opt(#key)?;
                         match d.map(|d| <#ty>::try_from(d)).transpose() {
                             Ok(v) => Ok(v),
                             Err(e) => {
@@ -538,7 +538,7 @@ pub fn pdf_object(attr: TokenStream, item: TokenStream) -> TokenStream {
                 },
                 |ty| {
                     quote! {
-                        let d: crate::object::ObjectWithResolver = self.d.required(&prescript::sname(#key))?;
+                        let d: crate::object::ObjectWithResolver = self.d.required(#key)?;
                         <#ty>::try_from(d)
                     }
                 },
