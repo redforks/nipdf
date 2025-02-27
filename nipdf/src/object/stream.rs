@@ -896,8 +896,10 @@ fn do_decode_jbig2<'a>(mut buf: &[u8]) -> Result<FilterDecodedData<'a>> {
     let height = img.height();
     let data = img.data();
 
+    // Invert bit, because in jbig2 image 1 is black
+    let inverted: Vec<u8> = data.iter().map(|byte| !byte).collect();
     // Create GrayImage from the data
-    let img = decode_one_bit(width, height, data, false)?;
+    let img = decode_one_bit(width, height, &inverted, false)?;
     Ok(FilterDecodedData::Image(img))
 }
 
