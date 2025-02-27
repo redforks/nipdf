@@ -905,7 +905,7 @@ fn decode_jpx<'a>(
     params: Option<&Dictionary>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     ensure_whatever!(
-        params.is_none(),
+        params.is_none_or(|o| o.is_empty()),
         "TODO: handle params of {}",
         FILTER_JPX_DECODE
     );
