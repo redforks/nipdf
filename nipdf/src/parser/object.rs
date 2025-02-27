@@ -426,63 +426,77 @@ where
         + FromExternalError<S, TryFromIntError>
         + FromExternalError<S, ParseIntError>,
 {
-    let o = object().parse_next(buf)?;
+    let o = object().context("object").parse_next(buf)?;
     let Object::Dictionary(dict) = o else {
         (wsc0(), b"endobj".as_slice(), wsc0()).parse_next(buf)?;
         return Ok(Either::Left(o));
     };
-    let len: Option<u32> = match dict.get("Length") {
-        Some(Object::Integer(l)) => {
-            Some(u32::try_from(*l).map_err(|e| ErrMode::from_external_error(buf, e))?)
-        }
-        Some(Object::Reference(_)) => None,
-        _ => {
-            (wsc0(), b"endobj".as_slice(), wsc0()).parse_next(buf)?;
-            return Ok(Either::Left(Object::Dictionary(dict)));
-        }
-    };
 
+    // First check if this is potentially a stream by saving current position
     let saved_pos = buf.checkpoint();
-    match delimited(wsc0(), b"stream".as_slice(), eol2::<_, E>())
-        .span()
-        .parse_next(buf)
-    {
-        Ok(range) => {
-            if let Some(len) = len {
-                (
-                    take(len),
-                    // pdf file may broken, so we need to repeat till `endstream` and `endobj`
-                    repeat_till::<_, _, (), _, _, _, _>(
-                        0..,
-                        any,
-                        (
-                            // in pdf.js/test/pdfs/issue10004.pdf.link, use 'endstrea' instead of
-                            // 'endstream'
-                            wsc0(),
-                            b"endstrea".as_slice(),
-                            opt(b'm'),
-                            wsc0(),
-                            b"endobj".as_slice(),
-                            wsc0(),
-                        ),
-                    ),
-                )
-                    .parse_next(buf)?;
+
+    // Try to match "stream" keyword - using winnow's approach
+    let mut stream_marker = preceded(wsc0::<_, ErrMode<E>>(), b"stream".as_slice());
+    let is_stream = stream_marker.parse_next(buf).is_ok();
+
+    // Reset to the position after the dictionary
+    buf.reset(&saved_pos);
+
+    if is_stream {
+        // Process the stream - handle the error conversion explicitly
+        let stream_start = delimited(wsc0::<_, ErrMode<E>>(), b"stream".as_slice(), eol2())
+            .span()
+            .parse_next(buf)?;
+
+        // If Length is known and a direct integer, we can use it
+        let mut len: Option<u32> = match dict.get("Length") {
+            Some(Object::Integer(l)) => {
+                Some(u32::try_from(*l).map_err(|e| ErrMode::from_external_error(buf, e))?)
             }
-            let bufpos = BufPos::new(
-                range
-                    .end
-                    .try_into()
-                    .map_err(|e| ErrMode::from_external_error(buf, e))?,
-                len,
-            );
-            Ok(Either::Right((dict, bufpos)))
+            Some(Object::Reference(_)) => None, // Length is a reference, will be resolved later
+            _ => {
+                // Length not available or invalid
+                // We'll need to scan for endstream to determine length
+                None
+            }
+        };
+
+        if let Some(len) = len {
+            // Length is known, we can skip directly to endstream/endobj
+            take::<_, _, ErrMode<E>>(len).parse_next(buf)?;
         }
-        Err(_) => {
-            buf.reset(&saved_pos);
-            (wsc0(), b"endobj".as_slice(), wsc0()).parse_next(buf)?;
-            Ok(Either::Left(Object::Dictionary(dict)))
+
+        let l = repeat_till::<_, _, usize, _, _, _, _>(
+            0..,
+            any::<_, ErrMode<E>>,
+            (
+                wsc0(),
+                b"endstrea".as_slice(),
+                opt(b'm'),
+                wsc0(),
+                b"endobj".as_slice(),
+                wsc0(),
+            ),
+        )
+        .try_map(|l| <u32>::try_from(l.0))
+        .parse_next(buf)?;
+        if len.is_none() {
+            len = Some(l);
         }
+
+        let bufpos = BufPos::new(
+            stream_start
+                .end
+                .try_into()
+                .map_err(|e| ErrMode::from_external_error(buf, e))?,
+            len,
+        );
+
+        Ok(Either::Right((dict, bufpos)))
+    } else {
+        // Not a stream object, just a dictionary
+        (wsc0(), b"endobj".as_slice(), wsc0()).parse_next(buf)?;
+        Ok(Either::Left(Object::Dictionary(dict)))
     }
 }
 
