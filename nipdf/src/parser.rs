@@ -47,7 +47,7 @@ where
     E: ParserError<S> + 'a,
 {
     one_of([b'\n', b'\r'])
-        .flat_map(|v| cond(v == b'\r', b'\n'))
+        .flat_map(|v| cond(v == b'\r', opt(b'\n')))
         .void()
 }
 
