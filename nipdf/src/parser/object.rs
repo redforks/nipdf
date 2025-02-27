@@ -480,7 +480,7 @@ where
         )
         .try_map(|l| <u32>::try_from(l.0))
         .parse_next(buf)?;
-        if len.is_none() {
+        if len.is_none() && !matches!(dict.get("Length"), Some(Object::Reference(_))) {
             len = Some(l);
         }
 
