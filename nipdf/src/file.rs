@@ -173,7 +173,7 @@ impl XRefTable {
                 .whatever_context::<_, ObjectValueError>("get object position")?
                 .try_into()
                 .whatever_context::<_, ObjectValueError>("convert position into u32")?;
-            id_offset.insert(o.into(), ObjectPos::Offset(pos));
+            insert_object_pos(&mut id_offset, o, ObjectPos::Offset(pos), buf.len());
         }
 
         Ok(Self::new(id_offset))
@@ -748,6 +748,33 @@ fn get_root_id(trailers: &[Dictionary]) -> Result<RuntimeObjectId> {
     Ok(root_id)
 }
 
+/// Helper function to safely insert ObjectPos into id_offset map
+/// Checks if the offset is within bounds of the buffer and logs a warning if not
+fn insert_object_pos(
+    id_offset: &mut HashMap<RuntimeObjectId, ObjectPos>,
+    id: impl Into<RuntimeObjectId>,
+    pos: ObjectPos,
+    buf_len: usize,
+) {
+    let id = id.into();
+    match pos {
+        ObjectPos::Offset(offset) => {
+            if offset as usize >= buf_len {
+                warn!(
+                    "Skipping invalid object {} offset: {} exceeds buffer length {}",
+                    id.0, offset, buf_len
+                );
+            } else {
+                id_offset.insert(id, pos);
+            }
+        }
+        ObjectPos::InStream(..) => {
+            // For objects in streams, we don't need to check the buffer bounds
+            id_offset.insert(id, pos);
+        }
+    }
+}
+
 impl File {
     fn normal_parse(buf: Vec<u8>, user_password: &str) -> Result<Self> {
         let head_ver = parse_header(&buf).map(|(_, ver)| ver);
@@ -807,14 +834,23 @@ impl File {
         // Build id_offset map from object entries
         let mut id_offset = HashMap::with_capacity(object_entries.len());
         for (obj_id, offset) in object_entries {
-            id_offset.insert(
-                RuntimeObjectId(obj_id.id().0),
-                ObjectPos::Offset(
-                    offset
-                        .try_into()
-                        .whatever_context::<_, ObjectValueError>("convert offset")?,
-                ),
+            // Skip invalid offsets
+            if offset >= buf.len() {
+                warn!(
+                    "Skipping invalid object {} offset: {} exceeds buffer length {}",
+                    obj_id.id().0,
+                    offset,
+                    buf.len()
+                );
+                continue;
+            }
+
+            let obj_pos = ObjectPos::Offset(
+                offset
+                    .try_into()
+                    .whatever_context::<_, ObjectValueError>("convert offset")?,
             );
+            insert_object_pos(&mut id_offset, obj_id.id(), obj_pos, buf.len());
         }
         let mut trailers = Vec::with_capacity(trailer_positions.len() + xref_streams.len());
 
@@ -838,7 +874,8 @@ impl File {
                         }
                         Entry::InStream(..) => {}
                     }
-                    id_offset.insert(RuntimeObjectId(id), (&entry).into());
+                    let obj_pos: ObjectPos = (&entry).into();
+                    insert_object_pos(&mut id_offset, id, obj_pos, buf.len());
                 }
             }
         }
