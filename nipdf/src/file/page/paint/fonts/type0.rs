@@ -53,31 +53,7 @@ struct CIDFontType0FontOp {
 impl CIDFontType0FontOp {
     fn new(font: &Type0FontDict<'_, '_>) -> Result<Self> {
         let mut cmap_registry = CMapRegistry::new();
-        let encoding = match font.encoding()? {
-            NameOrStream::Name(encoding_name) => {
-                if encoding_name == "Identity-H" {
-                    None
-                } else {
-                    Some(
-                        cmap_registry
-                            .get(&name(encoding_name))
-                            .whatever_context::<_, ObjectValueError>("Get cmap")?
-                            .whatever_context::<_, ObjectValueError>("Get cmap")?,
-                    )
-                }
-            }
-            NameOrStream::Stream(s) => {
-                let data = s
-                    .decode(font.resolver())
-                    .whatever_context::<_, ObjectValueError>("decode cmap from stream")?;
-                Some(
-                    cmap_registry
-                        .add_cmap_file(data.as_ref())
-                        .whatever_context::<_, ObjectValueError>("add cmap file")?,
-                )
-            }
-        };
-
+        let encoding = get_font_encoding(&mut cmap_registry, font)?;
         let cid_fonts = font.descendant_fonts()?;
         let cid_font = &cid_fonts[0];
         let widths = cid_font.w()?;
@@ -145,6 +121,36 @@ impl FontOp for CIDFontType0FontOp {
     }
 }
 
+fn get_font_encoding(
+    cmap_registry: &mut CMapRegistry,
+    font: &Type0FontDict<'_, '_>,
+) -> Result<Option<Rc<CMap>>> {
+    match font.encoding()? {
+        NameOrStream::Name(encoding_name) => {
+            if encoding_name == "Identity-H" {
+                Ok(None)
+            } else {
+                Ok(Some(
+                    cmap_registry
+                        .get(&name(encoding_name))
+                        .whatever_context::<_, ObjectValueError>("Get cmap")?
+                        .whatever_context::<_, ObjectValueError>("Get cmap")?,
+                ))
+            }
+        }
+        NameOrStream::Stream(s) => {
+            let data = s
+                .decode(font.resolver())
+                .whatever_context::<_, ObjectValueError>("decode cmap from stream")?;
+            Ok(Some(
+                cmap_registry
+                    .add_cmap_file(data.as_ref())
+                    .whatever_context::<_, ObjectValueError>("add cmap file")?,
+            ))
+        }
+    }
+}
+
 /// CID -> GID, GID is u16. stored in [u8], each u16 is big endian
 struct CIDToGIDMap(Box<[u8]>);
 
@@ -187,31 +193,7 @@ impl<'a> CIDFontType2FontOp<'a> {
         default_advance: u32,
         units_per_em: u16,
     ) -> Result<Self> {
-        let encoding = match font.encoding()? {
-            NameOrStream::Name(encoding_name) => (encoding_name != "Identity-H")
-                .then(|| {
-                    cmap_registry
-                        .get(&name(encoding_name))
-                        .whatever_context::<_, ObjectValueError>("Get cmap")?
-                        .whatever_context::<_, ObjectValueError>("Get cmap")
-                })
-                .transpose()?,
-            NameOrStream::Stream(s) => {
-                ensure_whatever!(
-                    font.cmap_stream_dict()?.use_cmap()?.is_none(),
-                    "font_dict.use_cmap not supported"
-                );
-                let data = s
-                    .decode(font.resolver())
-                    .whatever_context::<_, ObjectValueError>("decode cmap from stream")?;
-                Some(
-                    cmap_registry
-                        .add_cmap_file(data.as_ref())
-                        .whatever_context::<_, ObjectValueError>("add cmap file")?,
-                )
-            }
-        };
-
+        let encoding = get_font_encoding(cmap_registry, &font)?;
         let cid_fonts = font.descendant_fonts()?;
         let cid_font = &cid_fonts[0];
         let cid_to_gid = match cid_font.cid_to_gid_map()? {
@@ -372,30 +354,7 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
 
         // Get the common font info upfront
         let font = self.font_dict.type0()?;
-        let encoding = match font.encoding()? {
-            NameOrStream::Name(encoding_name) => {
-                if encoding_name == "Identity-H" {
-                    None
-                } else {
-                    Some(
-                        cmap_registry
-                            .get(&name(encoding_name))
-                            .whatever_context::<_, ObjectValueError>("Get cmap")?
-                            .whatever_context::<_, ObjectValueError>("Get cmap")?,
-                    )
-                }
-            }
-            NameOrStream::Stream(s) => {
-                let data = s
-                    .decode(font.resolver())
-                    .whatever_context::<_, ObjectValueError>("decode cmap from stream")?;
-                Some(
-                    cmap_registry
-                        .add_cmap_file(data.as_ref())
-                        .whatever_context::<_, ObjectValueError>("add cmap file")?,
-                )
-            }
-        };
+        let encoding = get_font_encoding(cmap_registry, &font)?;
         let cid_fonts = font.descendant_fonts()?;
         let cid_font = &cid_fonts[0];
         let widths = cid_font.w()?;
