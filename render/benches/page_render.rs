@@ -58,6 +58,12 @@ pub fn render_path(c: &mut Criterion) {
     });
 }
 
+pub fn render_type3(c: &mut Criterion) {
+    c.bench_function("page render", |b| {
+        b.iter(|| render_page_no("../nipdf/sample_files/type3.pdf", 0).unwrap());
+    });
+}
+
 criterion_group! {
     name = benches;
     config = Criterion::default();
@@ -67,7 +73,7 @@ criterion_group! {
 criterion_group! {
     name = inline_image;
     config = Criterion::default().sample_size(10);
-    targets = render_inline_image, render_path
+    targets = render_inline_image, render_path, render_type3
 }
 
 criterion_main!(benches, inline_image);
