@@ -852,7 +852,6 @@ impl MachinePlugin for CMapMachinePlugin<'_> {
                     let d = m.pop()?.dict()?;
                     let d_ref = d.borrow();
                     let cmap_name = m.pop()?.name()?;
-                    // warn log error instead of use `.ok()` to ignore, AI!
                     let cid_system_info = match d_ref.get(&sname("CIDSystemInfo")) {
                         Some(v) => match v.dict() {
                             Ok(d) => match CIDSystemInfo::from_dict(&d.borrow()) {

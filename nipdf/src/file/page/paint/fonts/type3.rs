@@ -3,55 +3,42 @@ use super::{
     parse_operations,
 };
 use crate::file::page::paint::fonts::FontOp;
+use crate::object::Stream;
 use crate::{
     ObjectValueError, Result, file::page::ResourceDict, graphics::trans::GlyphToTextSpace,
     object::PdfObjectCore as _,
 };
+use ahash::{HashMap, HashMapExt};
 use log::{debug, info};
 use num_traits::ToPrimitive;
+use once_cell::unsync::OnceCell;
 use prescript::Name;
 use snafu::{OptionExt, ResultExt};
-use std::collections::HashMap;
 use winnow::{Parser as _, combinator::terminated, token::rest};
 
 pub struct Type3Font<'a, 'b> {
     name_to_gid: HashMap<Name, u16>,
-    glyphs: Box<[Type3Glyph]>,
+    glyphs: Box<[OnceCell<Type3Glyph>]>,
     dict: FontDict<'a, 'b>,
     type3_dict: super::Type3FontDict<'a, 'b>,
+    char_procs: HashMap<Name, &'b Stream>,
 }
 
 impl<'a, 'b> Type3Font<'a, 'b> {
-    fn parse_glyphs(d: &super::Type3FontDict<'_, '_>) -> Result<Vec<(Name, Type3Glyph)>> {
-        let procs = d.char_procs()?;
-        let mut r = Vec::with_capacity(procs.len());
-        for (name, stream) in &procs {
-            debug!("parse Type3 glyph: {}", name.as_str());
-            let data = stream
-                .decode(d.resolver())
-                .whatever_context::<_, ObjectValueError>("decode stream")?;
-            let ops = terminated(parse_operations::<crate::ParserError>, rest)
-                .parse(&data[..])
-                .map_err(winnow::error::ParseError::into_inner)
-                .whatever_context::<_, ObjectValueError>("parse type3 operation")?;
-            r.push((name.clone(), Type3Glyph(ops.into())));
-        }
-
-        Ok(r)
-    }
-
     pub fn new(dict: FontDict<'a, 'b>) -> Result<Self> {
         let type3_dict = dict.type3()?;
-        let glyph_and_names = Self::parse_glyphs(&type3_dict)?;
-        let mut glyphs = Vec::with_capacity(glyph_and_names.len());
-        let mut glyph_ids = HashMap::with_capacity(glyph_and_names.len());
-        for (name, glyph) in glyph_and_names {
+        let char_procs = type3_dict.char_procs()?;
+
+        let mut glyphs = Vec::with_capacity(char_procs.len());
+        let mut glyph_ids = HashMap::with_capacity(char_procs.len());
+
+        for (name, _) in &char_procs {
             let gid = glyphs
                 .len()
                 .try_into()
                 .whatever_context::<_, ObjectValueError>("glyphs length convert to u16")?;
-            glyphs.push(glyph);
-            glyph_ids.insert(name, gid);
+            glyphs.push(OnceCell::new());
+            glyph_ids.insert(name.clone(), gid);
         }
 
         Ok(Self {
@@ -59,6 +46,7 @@ impl<'a, 'b> Type3Font<'a, 'b> {
             glyphs: glyphs.into(),
             dict,
             type3_dict,
+            char_procs,
         })
     }
 
@@ -67,7 +55,30 @@ impl<'a, 'b> Type3Font<'a, 'b> {
     }
 
     pub fn get_glyph(&self, gid: u16) -> Option<&Type3Glyph> {
-        self.glyphs.get(gid as usize)
+        self.glyphs.get(gid as usize).and_then(|cell| {
+            // Find the name for this glyph ID
+            let name = self
+                .name_to_gid
+                .iter()
+                .find_map(|(name, &id)| if id == gid { Some(name) } else { None })?;
+
+            // Get the stream for this glyph
+            let stream = self.char_procs.get(name)?;
+
+            // Parse the glyph on demand
+            cell.get_or_try_init(|| {
+                debug!("parse Type3 glyph: {}", name.as_str());
+                let data = stream
+                    .decode(self.type3_dict.resolver())
+                    .whatever_context::<_, ObjectValueError>("decode stream")?;
+                let ops = terminated(parse_operations::<crate::ParserError>, rest)
+                    .parse(&data[..])
+                    .map_err(winnow::error::ParseError::into_inner)
+                    .whatever_context::<_, ObjectValueError>("parse type3 operation")?;
+                Ok::<_, ObjectValueError>(Type3Glyph(ops.into()))
+            })
+            .ok()
+        })
     }
 
     pub fn matrix(&self) -> Result<GlyphToTextSpace> {

@@ -1182,7 +1182,6 @@ fn filter<'a: 'b, 'b>(
             LZWDeflateDecodeParams::new(params.unwrap_or_else(|| &*empty_dict), resolver)?,
         )
         .map(FilterDecodedData::bytes),
-        // add resolver argument to decode_jbig2(), AI!
         S_FILTER_JBIG2_DECODE => decode_jbig2(&buf, params, resolver),
         _ => {
             error!("Unknown filter: {}", filter_name);
