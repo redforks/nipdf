@@ -875,20 +875,34 @@ fn decode_dct<'a>(buf: &[u8]) -> Result<FilterDecodedData<'a>, ObjectValueError>
 fn decode_jbig2<'a>(
     buf: &[u8],
     params: Option<&Dictionary>,
+    resolver: Option<&ObjectResolver<'a>>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
-    ensure_whatever!(
-        // JBIG2Globals is the only effect parameter for JBIG2Decode filter
-        params.is_none_or(|p| !p.contains_key("JBIG2Globals")),
-        "TODO: handle params of {}",
-        S_FILTER_JBIG2_DECODE
-    );
+    let global_stream = params.and_then(|p| p.get("JBIG2Globals"));
+    dbg!(global_stream.is_some());
 
-    do_decode_jbig2(buf)
+    let global_data = if let Some(global_stream) = global_stream {
+        let resolver = resolver.whatever_context::<_, ObjectValueError>("resolver required")?;
+        let global_stream = resolver.resolve_reference(global_stream)?;
+        global_stream
+            .as_stream()
+            .ok()
+            .map(|global_stream| global_stream.decode(resolver))
+            .transpose()?
+    } else {
+        None
+    };
+
+    do_decode_jbig2(buf, global_data.as_deref())
 }
 
-fn do_decode_jbig2<'a>(mut buf: &[u8]) -> Result<FilterDecodedData<'a>> {
+fn do_decode_jbig2<'a, 'b>(
+    mut buf: &'b [u8],
+    mut global_stream: Option<&'b [u8]>,
+) -> Result<FilterDecodedData<'a>> {
     use nipdf_jbig2dec::{Document, OpenFlag};
-    let doc = Document::from_reader(&mut buf, OpenFlag::Embedded)
+    dbg!(global_stream.map(|v| v.len()));
+
+    let doc = Document::from_reader(&mut buf, global_stream.as_mut(), OpenFlag::Embedded)
         .whatever_context::<_, ObjectValueError>("parse jbig2 data")?;
     ensure_whatever!(doc.len() > 0, "jbig2 image should not empty");
     let img = &doc[0];
@@ -1168,7 +1182,8 @@ fn filter<'a: 'b, 'b>(
             LZWDeflateDecodeParams::new(params.unwrap_or_else(|| &*empty_dict), resolver)?,
         )
         .map(FilterDecodedData::bytes),
-        S_FILTER_JBIG2_DECODE => decode_jbig2(&buf, params),
+        // add resolver argument to decode_jbig2(), AI!
+        S_FILTER_JBIG2_DECODE => decode_jbig2(&buf, params, resolver),
         _ => {
             error!("Unknown filter: {}", filter_name);
             Err(ObjectValueError::UnknownFilter)
