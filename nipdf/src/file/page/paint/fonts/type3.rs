@@ -18,6 +18,7 @@ pub struct Type3Font<'a, 'b> {
     name_to_gid: HashMap<Name, u16>,
     glyphs: Box<[Type3Glyph]>,
     dict: FontDict<'a, 'b>,
+    type3_dict: super::Type3FontDict<'a, 'b>,
 }
 
 impl<'a, 'b> Type3Font<'a, 'b> {
@@ -40,8 +41,8 @@ impl<'a, 'b> Type3Font<'a, 'b> {
     }
 
     pub fn new(dict: FontDict<'a, 'b>) -> Result<Self> {
-        let type3 = dict.type3()?;
-        let glyph_and_names = Self::parse_glyphs(&type3)?;
+        let type3_dict = dict.type3()?;
+        let glyph_and_names = Self::parse_glyphs(&type3_dict)?;
         let mut glyphs = Vec::with_capacity(glyph_and_names.len());
         let mut glyph_ids = HashMap::with_capacity(glyph_and_names.len());
         for (name, glyph) in glyph_and_names {
@@ -57,11 +58,12 @@ impl<'a, 'b> Type3Font<'a, 'b> {
             name_to_gid: glyph_ids,
             glyphs: glyphs.into(),
             dict,
+            type3_dict,
         })
     }
 
     pub fn resources(&self) -> Result<Option<ResourceDict<'_, '_>>> {
-        self.dict.type3()?.resources()
+        self.type3_dict.resources()
     }
 
     pub fn get_glyph(&self, gid: u16) -> Option<&Type3Glyph> {
@@ -69,7 +71,7 @@ impl<'a, 'b> Type3Font<'a, 'b> {
     }
 
     pub fn matrix(&self) -> Result<GlyphToTextSpace> {
-        self.dict.type3()?.matrix()
+        self.type3_dict.matrix()
     }
 }
 
@@ -81,10 +83,13 @@ struct Type3FontOp<'a> {
 }
 
 impl<'a> Type3FontOp<'a> {
-    fn new(font_dict: &FontDict<'_, '_>, name_to_gid: &'a HashMap<Name, u16>) -> Result<Self> {
+    fn new(
+        font_dict: &FontDict<'_, '_>,
+        type3_dict: &super::Type3FontDict<'_, '_>,
+        name_to_gid: &'a HashMap<Name, u16>,
+    ) -> Result<Self> {
         let encoding = super::EncodingParser(font_dict).type3()?;
-        let type3 = font_dict.type3()?;
-        let matrix = type3.matrix()?;
+        let matrix = type3_dict.matrix()?;
 
         Ok(Self {
             font_width: FirstLastFontWidth::from(font_dict)?
@@ -141,7 +146,11 @@ impl<P: PathSink + 'static> Font<P> for Type3Font<'_, '_> {
     }
 
     fn create_op(&self, _cmap_registry: &mut super::CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
-        Ok(Box::new(Type3FontOp::new(&self.dict, &self.name_to_gid)?))
+        Ok(Box::new(Type3FontOp::new(
+            &self.dict,
+            &self.type3_dict,
+            &self.name_to_gid,
+        )?))
     }
 
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
