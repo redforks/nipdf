@@ -64,6 +64,7 @@ pub(crate) enum RuntimeValue<'a, P> {
         #[educe(PartialEq(ignore))]
         Rc<RefCell<CurrentFile<'a>>>,
     ),
+    InvalidValue(String),
 }
 
 impl<P> Display for RuntimeValue<'_, P> {
@@ -75,6 +76,7 @@ impl<P> Display for RuntimeValue<'_, P> {
             RuntimeValue::Dictionary(_) => write!(f, "dict"),
             RuntimeValue::BuiltInOp(_) => write!(f, "built-in-op"),
             RuntimeValue::CurrentFile(_) => write!(f, "current-file"),
+            RuntimeValue::InvalidValue(msg) => write!(f, "invalid-value: {:?}", msg),
             RuntimeValue::Value(v) => match v {
                 Value::Null => write!(f, "null"),
                 Value::Bool(b) => {
@@ -778,6 +780,10 @@ impl<'a, P> Machine<'a, P> {
                     }
                     encoding @ RuntimeValue::Value(Value::PredefinedEncoding(_)) => {
                         self.push(encoding);
+                        ExecState::Ok
+                    }
+                    v @ RuntimeValue::InvalidValue(..) => {
+                        self.push(v);
                         ExecState::Ok
                     }
                     v => unreachable!("{:?}", v),
@@ -1604,9 +1610,9 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
                 RuntimeValue::Value(Value::Array(_) | Value::Procedure(_) | Value::PredefinedEncoding(_)) => sname("arraytype"),
                 RuntimeValue::CurrentFile(_) => sname("filetype"),
                 RuntimeValue::BuiltInOp(_) => sname("operatortype"),
-                RuntimeValue::Mark | RuntimeValue::ArrayMark |
-                RuntimeValue::DictMark => sname("marktype"),
+                RuntimeValue::Mark | RuntimeValue::ArrayMark | RuntimeValue::DictMark => sname("marktype"),
                 RuntimeValue::Value(Value::Null) => sname("nulltype"),
+                RuntimeValue::InvalidValue(_) => todo!(),
             });
             ok()
         },
@@ -1713,9 +1719,10 @@ impl<'a, P> VariableDictStack<'a, P> {
             .iter()
             .find_map(|dict| dict.borrow().get(name).cloned())
             .context(UndefinedSnafu);
-        #[cfg(debug_assertions)]
         if r.is_err() {
-            error!("name not found: {:?}", name);
+            let msg = format!("Var name not found: {:?}", name);
+            error!("{}", msg);
+            return Ok(RuntimeValue::InvalidValue(msg));
         }
         r
     }

@@ -472,6 +472,18 @@ end
     .into_bytes()
 }
 
+#[snafu::report]
+#[test]
+fn parse_invalid_cid_system_info() -> Result<()> {
+    let mut reg = CMapRegistry::new();
+    let cmap_data = include_bytes!("invalid-cid-system-info.ps");
+    let cmap = reg.add_cmap_file(cmap_data)?;
+
+    assert_eq!("VASKKK+ArialMT", cmap.name.as_str());
+    assert_eq!(cmap.cid_system_info, None);
+    Ok(())
+}
+
 #[test]
 fn parse_bf_char() {
     let mut reg = CMapRegistry::new();
