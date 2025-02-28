@@ -307,7 +307,7 @@ fn use_map() {
     };
 
     let use_map = CMap {
-        cid_system_info: Default::default(),
+        cid_system_info: None,
         w_mode: Default::default(),
         name: sname("base"),
         code_space: base_code_space,
@@ -317,7 +317,7 @@ fn use_map() {
     };
 
     let cmap = CMap {
-        cid_system_info: Default::default(),
+        cid_system_info: None,
         w_mode: Default::default(),
         name: sname("foo"),
         code_space,
@@ -350,11 +350,11 @@ fn parse_cmap_file() {
     let cmap = reg.add_cmap_file(cmap_data).unwrap();
     assert_eq!("Test-H", cmap.name.as_str());
     assert_eq!(
-        CIDSystemInfo {
+        Some(CIDSystemInfo {
             registry: "Testing".to_owned(),
             ordering: "Test".to_owned(),
             supplement: 3,
-        },
+        }),
         cmap.cid_system_info
     );
     assert_eq!(WriteMode::Horizontal, cmap.w_mode);

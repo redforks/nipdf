@@ -10,6 +10,7 @@ use crate::{
 };
 use educe::Educe;
 use either::Either;
+use log::warn;
 use log::{debug, error};
 use once_cell::unsync::OnceCell;
 use phf::phf_map;
@@ -647,7 +648,7 @@ impl CMapRegistry {
 /// CMap maps sequence CharCode to sequence of CIDs.
 #[derive(Debug, PartialEq, Eq)]
 pub struct CMap {
-    pub cid_system_info: CIDSystemInfo,
+    pub cid_system_info: Option<CIDSystemInfo>,
     pub w_mode: WriteMode,
     pub name: Name,
 
@@ -851,8 +852,26 @@ impl MachinePlugin for CMapMachinePlugin<'_> {
                     let d = m.pop()?.dict()?;
                     let d_ref = d.borrow();
                     let cmap_name = m.pop()?.name()?;
+                    // warn log error instead of use `.ok()` to ignore, AI!
+                    let cid_system_info = match d_ref.get(&sname("CIDSystemInfo")) {
+                        Some(v) => match v.dict() {
+                            Ok(d) => match CIDSystemInfo::from_dict(&d.borrow()) {
+                                Ok(info) => Some(info),
+                                Err(e) => {
+                                    warn!("Failed to parse CIDSystemInfo: {}", e);
+                                    None
+                                }
+                            },
+                            Err(e) => {
+                                warn!("CIDSystemInfo is not a dictionary: {}", e);
+                                None
+                            }
+                        },
+                        None => None,
+                    };
+
                     let cmap = CMap {
-                        cid_system_info: CIDSystemInfo::from_dict(&d_ref[&sname("CIDSystemInfo")].dict()?.borrow())?,
+                        cid_system_info,
                         w_mode: WriteMode::parse(
                             d_ref.get(&sname("WMode")).map_or_else(|| Ok(0), RuntimeValue::int).whatever_context("get WMode")?
                         ).whatever_context("parse WMode")?,
