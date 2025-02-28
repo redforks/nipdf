@@ -409,7 +409,7 @@ impl ObjectKind for Root {}
 impl ObjectKind for Embedded {}
 
 /// Object impl this trait to resolve from ObjectResolver.
-pub trait RootObjectResolveable<'a, 'b>
+pub trait RootObjectResolvable<'a, 'b>
 where
     Self: Sized + 'a + 'b,
 {
@@ -419,7 +419,7 @@ where
     ) -> Result<Self, ObjectValueError>;
 }
 
-impl<'a, 'b, T> RootObjectResolveable<'a, 'b> for (T, Root)
+impl<'a, 'b, T> RootObjectResolvable<'a, 'b> for (T, Root)
 where
     T: RootPdfObject<'a, 'b> + 'b + 'a,
 {
@@ -432,7 +432,7 @@ where
     }
 }
 
-impl<'a, 'b, T> RootObjectResolveable<'a, 'b> for (T, Embedded)
+impl<'a, 'b, T> RootObjectResolvable<'a, 'b> for (T, Embedded)
 where
     T: PdfObject<'a, 'b> + 'b + 'a,
 {
@@ -535,7 +535,7 @@ impl<'a> ObjectResolver<'a> {
         id: impl Into<RuntimeObjectId>,
     ) -> Result<T, ObjectValueError>
     where
-        (T, K): RootObjectResolveable<'a, 'b>,
+        (T, K): RootObjectResolvable<'a, 'b>,
         K: ObjectKind,
     {
         Ok(<(T, _)>::resolve(self, id.into())?.0)
