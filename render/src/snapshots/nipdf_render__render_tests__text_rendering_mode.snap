@@ -1,0 +1,5 @@
+---
+source: render/src/render_tests.rs
+expression: "&decode_file_page(\"sample_files/text-rendering-mode.pdf\", 0).unwrap()"
+---
+"2118783a4b85ecfd3465f8328fe688eb"

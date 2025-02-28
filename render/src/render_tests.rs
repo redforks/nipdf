@@ -71,6 +71,11 @@ fn radial_shade() {
 }
 
 #[test]
+fn text_rendering_mode() {
+    assert_ron_snapshot!(&decode_file_page("sample_files/text-rendering-mode.pdf", 0).unwrap());
+}
+
+#[test]
 fn axial_shade() {
     // TODO: find a sample page contains PaintShading("axial-shade") operation
     assert_ron_snapshot!(&decode_file_page("../../pdf/code.pdf", 619).unwrap());
