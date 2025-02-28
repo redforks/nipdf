@@ -497,9 +497,6 @@ impl<'a> ObjectResolver<'a> {
     }
 
     /// Resolve an object by ID, caching it in “objects”. If not in XRef, returns an error.
-    ///
-    /// Returns [ObjectValueError::ObjectResolveError] if resolve object failed.
-    /// Returns [ObjectValueError::ObjectIDNotFound] if object not found.
     pub fn resolve(&self, id: impl Into<RuntimeObjectId>) -> Result<&Object, ObjectValueError> {
         let id = id.into();
         self.objects
