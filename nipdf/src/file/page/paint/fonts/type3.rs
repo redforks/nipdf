@@ -7,7 +7,7 @@ use crate::{
     ObjectValueError, Result, file::page::ResourceDict, graphics::trans::GlyphToTextSpace,
     object::PdfObjectCore as _,
 };
-use log::info;
+use log::{debug, info};
 use num_traits::ToPrimitive;
 use prescript::Name;
 use snafu::{OptionExt, ResultExt};
@@ -25,7 +25,7 @@ impl<'a, 'b> Type3Font<'a, 'b> {
         let procs = d.char_procs()?;
         let mut r = Vec::with_capacity(procs.len());
         for (name, stream) in &procs {
-            info!("parse Type3 glyph: {}", name.as_str());
+            debug!("parse Type3 glyph: {}", name.as_str());
             let data = stream
                 .decode(d.resolver())
                 .whatever_context::<_, ObjectValueError>("decode stream")?;
