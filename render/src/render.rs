@@ -188,7 +188,7 @@ struct ColorState {
 
     #[educe(Default(expression = PaintCreator::Color(SkiaColor::BLACK)))]
     paint: PaintCreator,
-    #[educe(Default(expression = ColorSpace::DeviceRGB))]
+    #[educe(Default(expression = ColorSpace::DeviceGray))]
     color_space: ColorSpace<f32>,
     #[educe(Default = 1.0f32)]
     alpha: f32,

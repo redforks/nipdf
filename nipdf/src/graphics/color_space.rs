@@ -449,7 +449,8 @@ impl<T: ColorComp> ColorSpaceTrait<T> for DeviceRGB {
     fn to_rgba(&self, color: &[T]) -> Result<[T; 4]> {
         ensure_whatever!(
             color.len() > 2,
-            "DeviceRGB color must have at least 3 components"
+            "DeviceRGB color must have at least 3 components, got: {}",
+            color.len()
         );
         if color.iter().take(3).any(|c| c > &T::max_color()) {
             return Ok([
