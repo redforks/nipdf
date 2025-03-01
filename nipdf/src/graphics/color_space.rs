@@ -622,12 +622,14 @@ where
     u8: ColorCompConvertTo<T>,
 {
     fn to_rgba(&self, color: &[T]) -> Result<[T; 4]> {
-        let index = ColorCompConvertTo::<u8>::into_color_comp(color[0]) as usize;
+        let index =
+            ColorCompConvertTo::<u8>::into_color_comp(color.get(0).copied().unwrap_or_default())
+                as usize;
         let n = self.base.components();
-        let u8_color = &self.data[index * n..(index + 1) * n];
+        let u8_color = self.data.get(index * n..(index + 1) * n);
         let c: [T; 4] = std::array::from_fn(|i| {
             if i < n {
-                u8_color[i].into_color_comp()
+                u8_color.map(|c| c[i].into_color_comp()).unwrap_or_else(|| T::min_color())
             } else {
                 T::min_color()
             }
