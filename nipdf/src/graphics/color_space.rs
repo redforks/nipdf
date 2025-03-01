@@ -478,7 +478,8 @@ where
     fn to_rgba(&self, color: &[T]) -> Result<[T; 4]> {
         ensure_whatever!(
             color.len() > 3,
-            "DeviceCMYK color must have at least 4 components"
+            "DeviceCMYK color must have at least 4 components, got {}",
+            color.len(),
         );
         let c = color[0].into_color_comp();
         let m = color[1].into_color_comp();

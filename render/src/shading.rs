@@ -3,7 +3,7 @@ use educe::Educe;
 use log::error;
 use nipdf::{
     file::{Rectangle, ResourceDict},
-    function::{Domain, Function},
+    function::{Domain, Function, NFunc},
     graphics::{
         Extend, Point, RadialCircle,
         color_space::ColorSpace,
@@ -125,11 +125,8 @@ fn build_axial(d: &ShadingDict<'_, '_>, resources: &ResourceDict<'_, '_>) -> Res
     let color_space = d.color_space().whatever_context("get color_space")?;
     let color_space = ColorSpace::from_args(&color_space, resources.resolver(), Some(resources))
         .whatever_context("parse color_space")?;
-    let function = axial
-        .functions()
-        .whatever_context("get function")?
-        .pop()
-        .whatever_context("get last function")?;
+    let function = NFunc::new(axial.functions().whatever_context("get function")?)
+        .whatever_context("Create func")?;
 
     let stops = build_stops(&color_space, &function).whatever_context("build axial stops")?;
     Ok(Some(Axial {

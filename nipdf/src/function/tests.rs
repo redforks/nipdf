@@ -14,13 +14,16 @@ fn test_clip_args() {
     let signature = Type23Signature {
         domain: Domains(vec![Domain::new(0.0, 1.0), Domain::new(-2.0, 2.0)]),
         range: None,
+        n: 2,
     };
-    assert_eq!(signature.clip_args(&[0.5, 0.0]), tiny_vec![
-        0.5_f32, 0.0_f32
-    ]);
-    assert_eq!(signature.clip_args(&[-1.0, 100.0]), tiny_vec![
-        0.0_f32, 2.0_f32
-    ]);
+    assert_eq!(
+        signature.clip_args(&[0.5, 0.0]),
+        tiny_vec![0.5_f32, 0.0_f32]
+    );
+    assert_eq!(
+        signature.clip_args(&[-1.0, 100.0]),
+        tiny_vec![0.0_f32, 2.0_f32]
+    );
 }
 
 #[test]
@@ -28,10 +31,12 @@ fn test_clip_returns() {
     let signature = Type23Signature {
         domain: Domains(vec![]),
         range: None,
+        n: 0,
     };
-    assert_eq!(signature.clip_returns(tiny_vec![100.0, -100.0]), tiny_vec![
-        100.0_f32, -100.0_f32
-    ]);
+    assert_eq!(
+        signature.clip_returns(tiny_vec![100.0, -100.0]),
+        tiny_vec![100.0_f32, -100.0_f32]
+    );
     assert_eq!(
         signature.clip_returns(FunctionValue::new()),
         FunctionValue::new()
@@ -40,6 +45,7 @@ fn test_clip_returns() {
     let signature = Type23Signature {
         domain: Domains(vec![]),
         range: Some(Domains(vec![Domain::new(0.0, 1.0), Domain::new(-2.0, 2.0)])),
+        n: 0,
     };
     assert_eq!(
         signature.clip_returns(tiny_vec![0.5, 0.0]),

@@ -11,8 +11,8 @@ use educe::Educe;
 use mockall::automock;
 use nipdf_macro::{TryFromIntObject, pdf_object};
 use num_traits::ToPrimitive;
-use prescript::{PdfFunc, sname};
-use snafu::{OptionExt as _, ResultExt as _, ensure_whatever};
+use prescript::PdfFunc;
+use snafu::{OptionExt as _, ResultExt, ensure_whatever, whatever};
 use tinyvec::{TinyVec, tiny_vec};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -167,6 +167,7 @@ trait InnerFunction {
 pub trait Function {
     fn call(&self, args: &[f32]) -> Result<FunctionValue>;
     fn stops(&self) -> Box<dyn Iterator<Item = f32>>;
+    fn n_out(&self) -> u8;
 }
 
 impl<Inner: InnerFunction> Function for Inner {
@@ -176,6 +177,10 @@ impl<Inner: InnerFunction> Function for Inner {
 
     fn stops(&self) -> Box<dyn Iterator<Item = f32>> {
         Box::new(self.stops())
+    }
+
+    fn n_out(&self) -> u8 {
+        self.signature().n_out()
     }
 }
 
@@ -187,6 +192,10 @@ impl Function for Box<dyn Function> {
     fn stops(&self) -> Box<dyn Iterator<Item = f32>> {
         self.as_ref().stops()
     }
+
+    fn n_out(&self) -> u8 {
+        self.as_ref().n_out()
+    }
 }
 
 impl<'a, 'b> FromSchemaContainer<'a, 'b> for Box<dyn Function> {
@@ -196,7 +205,7 @@ impl<'a, 'b> FromSchemaContainer<'a, 'b> for Box<dyn Function> {
 
         // Get function type from dictionary
         let function_type = dict
-            .get(&sname("FunctionType"))
+            .get("FunctionType")
             .ok_or(ObjectValueError::DictKeyNotFound)?;
         let function_type = Type::try_from(function_type)?;
 
@@ -236,12 +245,12 @@ impl<'a, 'b> FromSchemaContainer<'a, 'b> for Box<dyn Function> {
             Type::PostScriptCalculator => {
                 // Get required fields
                 let domain = dict
-                    .get(&sname("Domain"))
+                    .get("Domain")
                     .ok_or(ObjectValueError::DictKeyNotFound)
                     .and_then(Domains::try_from)?;
 
                 let range = dict
-                    .get(&sname("Range"))
+                    .get("Range")
                     .ok_or(ObjectValueError::DictKeyNotFound)
                     .and_then(Domains::try_from)?;
 
@@ -262,6 +271,65 @@ impl<'a, 'b> FromSchemaContainer<'a, 'b> for Box<dyn Function> {
     }
 }
 
+/// Combine functions to create a new function. These functions called with
+/// the same arguments as the original function, and returns only one value.
+/// The end result gather the results of the component functions into an vec.
+pub struct NFunc(Vec<Box<dyn Function>>);
+
+impl NFunc {
+    /// If one element in `functions`, returns it directly.
+    /// If the first function has >1 return value, returns it directly.
+    /// Returns `NFunc` otherwise.
+    pub fn new_box(functions: Vec<Box<dyn Function>>) -> Result<Box<dyn Function>> {
+        if let Some(first) = functions.first() {
+            if functions.len() == 1 || first.n_out() > 1 {
+                return Ok(functions
+                    .into_iter()
+                    .next()
+                    .whatever_context::<_, ObjectValueError>("Expected at least one function")?);
+            }
+        }
+        Ok(Box::new(Self::new(functions)?))
+    }
+
+    /// Returns error if any of the functions has more than one return value.
+    pub fn new(functions: Vec<Box<dyn Function>>) -> Result<Self> {
+        if functions.is_empty() {
+            whatever!("at least one function is required")
+        }
+
+        Ok(Self(functions))
+    }
+}
+
+impl Function for NFunc {
+    fn call(&self, args: &[f32]) -> Result<FunctionValue> {
+        let mut r = FunctionValue::new();
+        for f in &self.0 {
+            r.extend_from_slice(&f.call(args)?);
+        }
+        Ok(r)
+    }
+
+    fn stops(&self) -> Box<dyn Iterator<Item = f32>> {
+        // Collect all stops from all functions
+        let mut stops = Vec::new();
+        for f in &self.0 {
+            stops.extend(f.stops());
+        }
+
+        // Sort and deduplicate
+        stops.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        stops.dedup_by(|a, b| (*a - *b).abs() < std::f32::EPSILON);
+
+        Box::new(stops.into_iter())
+    }
+
+    fn n_out(&self) -> u8 {
+        self.0.first().map(|f| f.n_out()).unwrap_or(0)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, TryFromIntObject)]
 pub enum Type {
     Sampled = 0,
@@ -278,7 +346,7 @@ pub struct PostScriptFunction {
 impl PostScriptFunction {
     pub fn new(signature: Type04Signature, script: Box<[u8]>) -> Self {
         Self {
-            f: PdfFunc::new(script, signature.n_returns()),
+            f: PdfFunc::new(script, signature.n_out()),
             signature,
         }
     }
@@ -309,11 +377,13 @@ impl InnerFunction for PostScriptFunction {
 pub trait Signature {
     fn clip_args(&self, args: &[f32]) -> TinyVec<[f32; 4]>;
     fn clip_returns(&self, returns: FunctionValue) -> FunctionValue;
+    fn n_out(&self) -> u8;
 }
 
 /// Function signature for Type 2 and 3, clip input args and returns.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Type23Signature {
+    n: u8,
     domain: Domains,
     range: Option<Domains>,
 }
@@ -340,19 +410,15 @@ impl Signature for Type23Signature {
             .map(|(&arg, domain)| domain.clamp(arg))
             .collect()
     }
+
+    fn n_out(&self) -> u8 {
+        self.n
+    }
 }
 
 impl Type23Signature {
-    pub fn new(domain: Domains, range: Option<Domains>) -> Self {
-        Self { domain, range }
-    }
-
     pub fn n_args(&self) -> usize {
         self.domain.n()
-    }
-
-    pub fn n_returns(&self) -> Option<usize> {
-        self.range.as_ref().map(Domains::n)
     }
 }
 
@@ -382,6 +448,10 @@ impl Signature for Type04Signature {
             .map(|(&arg, domain)| domain.clamp(arg))
             .collect()
     }
+
+    fn n_out(&self) -> u8 {
+        self.domain.len() as u8
+    }
 }
 
 impl Type04Signature {
@@ -393,7 +463,7 @@ impl Type04Signature {
         self.domain.n()
     }
 
-    pub fn n_returns(&self) -> usize {
+    pub fn n_out(&self) -> usize {
         self.range.n()
     }
 }
@@ -452,7 +522,7 @@ pub struct SampledFunction {
 impl SampledFunction {
     fn samples(&self) -> usize {
         // NOTE: assume bits_per_sample is 8
-        self.samples.len() / self.signature.n_returns()
+        self.samples.len() / self.signature.n_out()
     }
 }
 
@@ -482,7 +552,7 @@ impl InnerFunction for SampledFunction {
         }
         let idx = idx as usize;
 
-        let n_ret = self.signature.n_returns();
+        let n_ret = self.signature.n_out();
         let sample_size = self.bits_per_sample as usize / 8;
         let mut r = tiny_vec![];
         let decode = &self.decode.0[0];
@@ -545,7 +615,7 @@ impl SampledFunctionDict<'_, '_> {
             .whatever_context::<_, ObjectValueError>("decode stream")?;
         let signature = self.type04_signature()?;
         ensure_whatever!(
-            sample_data.len() >= size[0] as usize * signature.n_returns(),
+            sample_data.len() >= size[0] as usize * signature.n_out(),
             "Sample data length is insufficient"
         );
         Ok(SampledFunction {
@@ -636,6 +706,11 @@ impl ExponentialInterpolationFunctionDict<'_, '_> {
         Ok(Type23Signature {
             domain: self.domain()?,
             range: self.range()?,
+            n: self
+                .c0()?
+                .len()
+                .try_into()
+                .whatever_context::<_, ObjectValueError>("cast n-out")?,
         })
     }
 }
@@ -661,13 +736,14 @@ impl StitchingFunctionDict<'_, '_> {
     fn func(&self) -> Result<StitchingFunction> {
         let functions: Vec<Box<dyn Function>> =
             self.d
-                .zero_one_or_more(&sname("Functions"))
+                .zero_one_or_more("Functions")
                 .whatever_context::<_, ObjectValueError>("get stitching Functions")?;
         let bounds = self.bounds()?;
         let encode = self.encode()?;
         let signature = Type23Signature {
             domain: self.domain()?,
             range: self.range()?,
+            n: functions.first().map(|f| f.n_out()).unwrap_or(0),
         };
         Ok(StitchingFunction {
             functions,
