@@ -573,10 +573,13 @@ impl<'a> Catalog<'a> {
         id: impl Into<RuntimeObjectId>,
         resolver: &'a ObjectResolver<'a>,
     ) -> Result<Self, ObjectValueError> {
+        let id = id.into();
         Ok(Self {
             d: resolver
-                .resolve_pdf_object(id.into())
-                .whatever_context::<_, ObjectValueError>("resolve catalog")?,
+                .resolve_pdf_object(id)
+                .with_whatever_context::<_, _, ObjectValueError>(|_| {
+                    format!("resolve catalog: {:?}", id)
+                })?,
         })
     }
 
@@ -822,13 +825,16 @@ impl File {
             user_password,
         )?;
 
-        Ok(Self {
+        let r = Self {
             head_ver,
             root_id: get_root_id(&trailers)?,
             data: buf,
             xref,
             encrypt_info: encrypt_key,
-        })
+        };
+        let resolver = r.resolver()?;
+        r.catalog(&resolver)?;
+        Ok(r)
     }
 
     pub fn parse(buf: Vec<u8>, user_password: &str) -> Result<Self> {
