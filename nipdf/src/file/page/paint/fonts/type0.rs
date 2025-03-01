@@ -56,21 +56,31 @@ impl CIDFontType0FontOp {
         let encoding = get_font_encoding(&mut cmap_registry, font)?;
         let cid_fonts = font.descendant_fonts()?;
         let cid_font = &cid_fonts[0];
-        let widths = cid_font.w()?;
-        let write_mode = if !encoding
+        let (write_mode, widths, default_advance) = if !encoding
             .as_ref()
             .is_none_or(|cmap| cmap.w_mode == WriteMode::Horizontal)
         {
-            ensure_whatever!(cid_font.w2()?.is_none(), "TODO: support w2");
-            ensure_whatever!(cid_font.dw2()?.is_none(), "TODO support dw2");
-            WriteMode::Vertical
+            // Vertical mode - try w2() first, fall back to w()
+            let widths = match cid_font.w2()? {
+                Some(w) => Some(w),
+                None => cid_font.w()?,
+            };
+
+            // For dw2, it returns Option<(f32, f32)>, but we only need the first component
+            let default_advance = match cid_font.dw2()? {
+                Some((height, _)) => height as u32,
+                None => cid_font.dw().unwrap_or(1000),
+            };
+
+            (WriteMode::Vertical, widths, default_advance)
         } else {
-            WriteMode::Horizontal
+            // Horizontal mode - use standard widths
+            (WriteMode::Horizontal, cid_font.w()?, cid_font.dw()?)
         };
 
         Ok(Self {
             widths,
-            default_advance: cid_font.dw()?,
+            default_advance,
             encoding,
             write_mode,
         })
