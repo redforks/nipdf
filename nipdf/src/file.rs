@@ -555,7 +555,7 @@ impl<'a> ObjectResolver<'a> {
     }
 }
 
-#[pdf_object("Catalog")]
+#[pdf_object(Some("Catalog"))]
 #[root_pdf_object]
 trait CatalogDictTrait {
     fn version(&self) -> Option<Name>;
