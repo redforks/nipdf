@@ -91,7 +91,10 @@ pub fn try_from_int_object(input: TokenStream) -> TokenStream {
                 let n = object.int()?;
                 match n {
                     #( #arms, )*
-                    _ => Err(crate::ObjectValueError::GraphicsOperationSchemaError),
+                    _ => {
+                        log::warn!("Invalid value for {}: {}", stringify!(#t), n);
+                        Err(crate::ObjectValueError::GraphicsOperationSchemaError)
+                    }
                 }
             }
         }
