@@ -2,7 +2,7 @@ use super::{EncodingParser, FirstLastFontWidth, FontOp, GlyphRender, PathSink, T
 use crate::graphics::trans::GlyphLength;
 use crate::{
     ObjectValueError, Result,
-    file::page::paint::fonts::{Font, FontDict, FontType},
+    file::page::paint::fonts::{Font, FontDict},
 };
 use font_kit::loaders::freetype::Font as FontKitFont;
 use log::warn;
@@ -14,19 +14,16 @@ use std::sync::Arc;
 use ttf_parser::Face as TTFFace;
 
 pub struct TTFFont<'a, 'b> {
-    typ: FontType,
     font_dict: FontDict<'a, 'b>,
     face: FontKitFont,
     data: Arc<Vec<u8>>,
 }
 
 impl<'a, 'b> TTFFont<'a, 'b> {
-    pub fn new(typ: FontType, data: Arc<Vec<u8>>, font_dict: FontDict<'a, 'b>) -> Result<Self> {
-        debug_assert!(typ == FontType::TrueType || typ == FontType::Type1);
+    pub fn new(data: Arc<Vec<u8>>, font_dict: FontDict<'a, 'b>) -> Result<Self> {
         let face = FontKitFont::from_bytes(data.clone(), 0)
             .whatever_context::<_, ObjectValueError>("parse TTF Font")?;
         Ok(Self {
-            typ,
             font_dict,
             face,
             data,
@@ -35,10 +32,6 @@ impl<'a, 'b> TTFFont<'a, 'b> {
 }
 
 impl<P: PathSink> Font<P> for TTFFont<'_, '_> {
-    fn font_type(&self) -> FontType {
-        self.typ
-    }
-
     fn create_op(&self, _cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
         let encoding = EncodingParser(&self.font_dict).ttf()?;
         Ok(Box::new(TTFFontOp::new(

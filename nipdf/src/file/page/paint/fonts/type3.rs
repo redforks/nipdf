@@ -152,10 +152,6 @@ impl Type3Glyph {
 }
 
 impl<P: PathSink + 'static> Font<P> for Type3Font<'_, '_> {
-    fn font_type(&self) -> super::FontType {
-        super::FontType::Type3
-    }
-
     fn create_op(&self, _cmap_registry: &mut super::CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
         Ok(Box::new(Type3FontOp::new(
             &self.dict,

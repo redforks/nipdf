@@ -1848,14 +1848,6 @@ impl<'a, 'c> Render<'a, 'c> {
                 .as_ref()
                 .whatever_context("get font name")?,
         );
-        debug!(
-            "font: {}, type: {:?}",
-            text_object
-                .font_name
-                .as_ref()
-                .whatever_context("get text_object font name")?,
-            font.font_type()
-        );
         let op = self.font_cache.get_op(
             self.text_object()?
                 .font_name

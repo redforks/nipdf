@@ -1,4 +1,3 @@
-use super::FontType;
 use super::{
     EncodingParser, FirstLastFontWidth, Font, FontKitFont, FontOp, FreeTypeFontWidth, GlyphRender,
     PathSink, TTFGlyphRender,
@@ -36,10 +35,6 @@ impl<'a> Type1Font<'a> {
 }
 
 impl<P: PathSink> Font<P> for Type1Font<'_> {
-    fn font_type(&self) -> FontType {
-        FontType::Type1
-    }
-
     fn create_op(&self, _cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
         Ok(Box::new(Type1FontOp::new(
             &self.font_dict,

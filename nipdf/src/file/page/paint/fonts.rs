@@ -149,7 +149,6 @@ impl<P: PathSink> GlyphRender<P> for TTFGlyphRender<'_> {
 }
 
 pub trait Font<P> {
-    fn font_type(&self) -> FontType;
     fn create_op(&self, cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>>;
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>>;
     fn as_type3(&self) -> Option<&type3::Type3Font<'_, '_>> {
@@ -187,10 +186,6 @@ impl FallbackFont {
 }
 
 impl<P: PathSink> Font<P> for FallbackFont {
-    fn font_type(&self) -> FontType {
-        FontType::Type1
-    }
-
     fn create_op(&self, _cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
         Ok(Box::new(Type1FontOp::new_fallback(&self.font)))
     }
@@ -459,11 +454,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                 is_embed, ttf_bytes, font,
             )?))
         } else {
-            Ok(Box::new(truetype::TTFFont::new(
-                font.subtype()?,
-                ttf_bytes,
-                font,
-            )?))
+            Ok(Box::new(truetype::TTFFont::new(ttf_bytes, font)?))
         }
     }
 

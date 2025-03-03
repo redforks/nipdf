@@ -2,7 +2,7 @@ use super::{Font, FontOp, GlyphRender, PathSink, TTFGlyphRender};
 use crate::graphics::trans::GlyphLength;
 use crate::graphics::{NameOrDictByRef, NameOrStream};
 use crate::object::PdfObjectCore as _;
-use crate::text::{CIDFontWidths, FontDict, FontType, Type0FontDict};
+use crate::text::{CIDFontWidths, FontDict, Type0FontDict};
 use crate::{ObjectValueError, Result};
 use encoding_rs::Encoding as CharEncoding;
 use font_kit::loaders::freetype::Font as FontKitFont;
@@ -29,10 +29,6 @@ impl<'a, 'b> CIDFontType0Font<'a, 'b> {
 }
 
 impl<P: PathSink + 'static> Font<P> for CIDFontType0Font<'_, '_> {
-    fn font_type(&self) -> FontType {
-        FontType::Type0
-    }
-
     fn create_op(&self, _cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
         Ok(Box::new(CIDFontType0FontOp::new(&self.font_dict.type0()?)?))
     }
@@ -354,10 +350,6 @@ impl<'a, 'b> CIDFontType2Font<'a, 'b> {
 }
 
 impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
-    fn font_type(&self) -> FontType {
-        FontType::Type0
-    }
-
     fn create_op(&self, cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
         let face = FontKitFont::from_bytes(self.data.clone(), 0)
             .whatever_context::<_, ObjectValueError>("decode FontKitFont for Type2")?;
