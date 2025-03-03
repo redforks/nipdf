@@ -914,12 +914,9 @@ impl File {
                 }
             }
         }
-        trailers.reverse();
 
         // Create XRef table
         let xref = XRefTable::new(id_offset);
-
-        // Parse trailers
         for pos in trailer_positions {
             if let Ok((_, _, dict)) = terminated(
                 (
@@ -934,6 +931,7 @@ impl File {
                 trailers.push(dict);
             }
         }
+        trailers.reverse();
 
         // Get encrypt info if file is encrypted
         let encrypt_key = open_encrypt(
