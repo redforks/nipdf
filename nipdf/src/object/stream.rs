@@ -981,6 +981,7 @@ pub(crate) trait ImageDictTrait {
 #[pdf_object(())]
 trait CCITTFaxDecodeParamsDictTrait {
     #[try_from]
+    #[or_default]
     fn k(&self) -> CCITTAlgorithm;
     #[or_default]
     fn end_of_line(&self) -> bool;

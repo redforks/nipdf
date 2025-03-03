@@ -13,8 +13,9 @@ use std::{
     num::TryFromIntError,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Algorithm {
+    #[default]
     Group3_1D,
 
     /// Mixed one- and two-dimensional encoding (Group 3,
