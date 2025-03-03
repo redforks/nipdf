@@ -122,7 +122,7 @@ fn test_parse_indirect_object_def() -> Result<(), ParserError> {
     let dict = Dictionary::from(dict);
     let o = indirect_object_def::<_, ParserError>()
         .parse(LocatingSlice::new(
-            b"100 1 obj\n<</Length 10 0 R>>\nstream\n".as_slice(),
+            b"100 1 obj\n<</Length 10 0 R>>\nstream\nendstream\nendobj".as_slice(),
         ))
         .map_err(winnow::error::ParseError::into_inner)?;
     assert_eq!(
