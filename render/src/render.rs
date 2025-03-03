@@ -27,7 +27,6 @@ use nipdf::{
             image_to_user_space, move_text_space_down, move_text_space_pos, move_text_space_right,
         },
     },
-    log_err,
     object::{
         ImageMask, ImageMetadata, InlineImage, Object, PdfObjectCore as _, RootPdfObject as _,
         TextStringOrNumber,
@@ -887,17 +886,17 @@ impl<'a, 'c> Render<'a, 'c> {
             Operation::MoveToStartOfNextLine => self.move_to_start_of_next_line()?,
 
             // Text Showing Operations
-            Operation::ShowText(text) => log_err(self.show_text(text.to_bytes())),
+            Operation::ShowText(text) => self.show_text(text.to_bytes())?,
             Operation::MoveToNextLineAndShowText(text) => {
                 self.move_to_start_of_next_line()?;
-                log_err(self.show_text(text.to_bytes()));
+                self.show_text(text.to_bytes())?;
             }
-            Operation::ShowTexts(texts) => log_err(self.show_texts(&texts)),
+            Operation::ShowTexts(texts) => self.show_texts(&texts)?,
             Operation::SetSpacingMoveToNextLineAndShowText(aw, ac, text) => {
                 self.text_object_mut()?.set_word_spacing(aw);
                 self.text_object_mut()?.set_character_spacing(ac);
                 self.move_to_start_of_next_line()?;
-                log_err(self.show_text(text.to_bytes()));
+                self.show_text(text.to_bytes())?;
             }
 
             // Color Operations
