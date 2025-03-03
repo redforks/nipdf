@@ -441,6 +441,32 @@ fn decode_image<'a, M: ImageMetadata>(
                     }
                     DynamicImage::ImageRgba8(img)
                 }
+                (Some(cs), 16) => {
+                    // Handle 16-bit color components
+                    let n_colors = cs.components();
+                    let mut img = RgbaImage::new(width, height);
+
+                    // Process 16-bit values (stored as 2 bytes per component)
+                    for (p, dest_p) in data.chunks(n_colors * 2).zip(img.pixels_mut()) {
+                        let mut c = TinyVec::<[f32; 4]>::with_capacity(n_colors);
+
+                        // Convert each 16-bit component (2 bytes) to a float
+                        for i in 0..n_colors {
+                            let idx = i * 2;
+                            // Make sure we're reading the bytes in the correct order (big-endian)
+                            let value = ((p[idx] as u16) << 8) | (p[idx + 1] as u16);
+
+                            // Convert to 0.0-1.0 range
+                            c.push((value as f32) / 65535.0);
+                        }
+
+                        // Convert the color using the color space
+                        let color: [u8; 4] = color_to_rgba(cs, c.as_slice());
+                        *dest_p = Rgba(color);
+                    }
+
+                    DynamicImage::ImageRgba8(img)
+                }
                 _ => whatever!(
                     "TODO: unsupported interoperate decoded stream data as image: {:?} {}",
                     color_space,
@@ -666,6 +692,31 @@ fn tiff_predictor_1bit(data: &[u8], columns: usize) -> Vec<u8> {
     output
 }
 
+fn tiff_predictor_16bit(buf: &[u8], columns: usize, colors: usize) -> Vec<u8> {
+    // For 16-bit components, apply TIFF predictor on 16-bit values
+    let mut output = buf.to_owned();
+    let bytes_per_row = columns * colors * 2;
+
+    for output_row in output.chunks_mut(bytes_per_row) {
+        // Process each 16-bit component (2 bytes per component)
+        for c in 0..colors {
+            let offset = c * 2;
+            for i in (offset + colors * 2..output_row.len()).step_by(colors * 2) {
+                // Get previous 16-bit value (big-endian)
+                let prev_val = ((output_row[i - colors * 2] as u16) << 8) | (output_row[i - colors * 2 + 1] as u16);
+                // Get current 16-bit value (big-endian)
+                let curr_val = ((output_row[i] as u16) << 8) | (output_row[i + 1] as u16);
+                // Add values as 16-bit and handle wrapping
+                let new_val = curr_val.wrapping_add(prev_val);
+                // Store result back (big-endian)
+                output_row[i] = (new_val >> 8) as u8;
+                output_row[i + 1] = new_val as u8;
+            }
+        }
+    }
+    output
+}
+
 /// Restore data processed by png predictor.
 fn png_predictor(
     buf: &[u8],
@@ -744,18 +795,45 @@ fn predictor_decode(
             (params.colors * params.bits_per_component + 7) as usize / 8,
         ),
         2 => {
-            ensure_whatever!(
-                params.bits_per_component == 1,
-                "TODO: support other bits per component, {}",
-                params.bits_per_component == 1,
-            );
-            Ok(tiff_predictor_1bit(&buf, params.columns as usize))
+            if params.bits_per_component == 1 {
+                Ok(tiff_predictor_1bit(&buf, params.columns as usize))
+            } else if params.bits_per_component == 16 {
+                Ok(tiff_predictor_16bit(
+                    &buf,
+                    params.columns as usize,
+                    params.colors as usize,
+                ))
+            } else if params.bits_per_component == 8 {
+                Ok(tiff_predictor_8bit(
+                    &buf,
+                    params.columns as usize,
+                    params.colors as usize,
+                ))
+            } else {
+                whatever!(
+                    "Unsupported bits per component for TIFF predictor: {}",
+                    params.bits_per_component
+                )
+            }
         }
         _ => {
             error!("Unknown predictor: {}", params.predictor);
             Err(ObjectValueError::FilterDecodeError)
         }
     }
+}
+
+fn tiff_predictor_8bit(buf: &[u8], columns: usize, colors: usize) -> Vec<u8> {
+    // For 8-bit components, apply TIFF predictor on byte values
+    let mut output = buf.to_owned();
+    let bytes_per_row = columns * colors;
+
+    for output_row in output.chunks_mut(bytes_per_row) {
+        for i in colors..output_row.len() {
+            output_row[i] = output_row[i].wrapping_add(output_row[i - colors]);
+        }
+    }
+    output
 }
 
 fn decode_lzw(buf: &[u8], params: LZWDeflateDecodeParams) -> Result<Vec<u8>, ObjectValueError> {
