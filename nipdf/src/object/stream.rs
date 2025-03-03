@@ -627,6 +627,45 @@ fn paeth(a: u8, b: u8, c: u8) -> u8 {
     }
 }
 
+fn tiff_predictor_1bit(data: &[u8], columns: usize) -> Vec<u8> {
+    use bitstream_io::{BigEndian, BitReader};
+
+    let mut output = Vec::with_capacity(data.len());
+    let mut reader = BitReader::endian(data, BigEndian);
+
+    // Process each row
+    for _ in 0..(data.len() * 8 / columns) {
+        let mut row = Vec::with_capacity(columns);
+
+        // Read first pixel
+        let first_bit = reader.read_bit().unwrap_or(false);
+        row.push(if first_bit { 1 } else { 0 });
+
+        // Read remaining pixels using TIFF predictor
+        for _ in 1..columns {
+            let bit = reader.read_bit().unwrap_or(false);
+            let prev = *row.last().unwrap();
+            row.push(prev ^ (bit as u8));
+        }
+
+        // Convert bits to bytes
+        let mut byte = 0u8;
+        for (i, bit) in row.iter().enumerate() {
+            byte |= *bit << (7 - (i % 8));
+            if i % 8 == 7 {
+                output.push(byte);
+                byte = 0;
+            }
+        }
+        // Handle partial byte at end of row
+        if columns % 8 != 0 {
+            output.push(byte);
+        }
+    }
+
+    output
+}
+
 /// Restore data processed by png predictor.
 fn png_predictor(
     buf: &[u8],
@@ -704,7 +743,14 @@ fn predictor_decode(
             (params.columns * params.colors * params.bits_per_component + 7) as usize / 8,
             (params.colors * params.bits_per_component + 7) as usize / 8,
         ),
-        2 => whatever!("TODO: predictor 2/tiff"),
+        2 => {
+            ensure_whatever!(
+                params.bits_per_component == 1,
+                "TODO: support other bits per component, {}",
+                params.bits_per_component == 1,
+            );
+            Ok(tiff_predictor_1bit(&buf, params.columns as usize))
+        }
         _ => {
             error!("Unknown predictor: {}", params.predictor);
             Err(ObjectValueError::FilterDecodeError)
