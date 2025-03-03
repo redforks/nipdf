@@ -189,7 +189,9 @@ where
                     Self::from_args(args, resolver, resources)
                 }
             },
-            ColorSpaceArgs::Array(arr) => match arr[0]
+            ColorSpaceArgs::Array(arr) => match resolver
+                .resolve_reference(&arr[0])
+                .whatever_context::<_, ObjectValueError>("resolve reference")?
                 .as_name()
                 .whatever_context::<_, ObjectValueError>("get ColorSpace name")?
                 .as_str()
@@ -629,7 +631,9 @@ where
         let u8_color = self.data.get(index * n..(index + 1) * n);
         let c: [T; 4] = std::array::from_fn(|i| {
             if i < n {
-                u8_color.map(|c| c[i].into_color_comp()).unwrap_or_else(|| T::min_color())
+                u8_color
+                    .map(|c| c[i].into_color_comp())
+                    .unwrap_or_else(|| T::min_color())
             } else {
                 T::min_color()
             }
