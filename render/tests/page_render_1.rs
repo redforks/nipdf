@@ -67,7 +67,7 @@ fn download_file(url: &str, p: impl AsRef<Path>) -> Result<()> {
 }
 
 /// These files are very rare and odd, not to be tested
-const IGNORED: [&str; 15] = [
+const IGNORED: [&str; 17] = [
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
     "bug1050040.pdf",
     // invalid object format, mupdf failed to parse, mupdf says no page
@@ -124,6 +124,9 @@ const IGNORED: [&str; 15] = [
     "issue11287.pdf.link",
     // incorrect Image dict width field, release version is okay.
     "issue4575.pdf",
+    // ignored because it is encrypted with revions 6, which is defined in pdf 2.0
+    "issue6010_1.pdf",
+    "issue6010_2.pdf",
 ];
 
 static PASSWORD: phf::Map<&'static str, &'static str> = phf::phf_map! {
