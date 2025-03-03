@@ -1,3 +1,5 @@
+use crate::object::decode_one_bit_gray_image;
+
 use super::*;
 use test_case::test_case;
 
@@ -124,6 +126,27 @@ fn group3_2d() {
     };
     // extracted by `dump-pdf stream -f pdf.js/test/pdfs/ccitt_EndOfBlock_false.pdf 10 --raw`
     insta::assert_debug_snapshot!(decoder.decode(include_bytes!("group3-2d")).unwrap());
+}
+
+#[test]
+fn failed_ccitt() {
+    let flags = Flags::default();
+    let decoder = Decoder {
+        algorithm: Algorithm::default(),
+        flags,
+        width: 2480,
+        rows: Some(1748),
+    };
+    let raw = decoder.decode(include_bytes!("failed.ccitt")).unwrap();
+    let image = decode_one_bit_gray_image(2480, 1748, &raw, false)
+        .unwrap()
+        .into_luma8()
+        .into_vec();
+    let expected_image = image::open("src/ccitt/failed-ccitt-exp.png")
+        .unwrap()
+        .into_luma8()
+        .into_vec();
+    assert_eq!(image, expected_image);
 }
 
 #[test_case(Color::White, 0, &[0b0011_0101] ; "white 0")]

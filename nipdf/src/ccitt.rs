@@ -673,7 +673,7 @@ impl LineDecoder for Group3_1DLineDecoder {
     fn process_next_pe(
         &mut self,
         reader: &mut BitReader<Cursor<&[u8]>, BigEndian>,
-        line: &LineBuffer<'_>,
+        _line: &LineBuffer<'_>,
     ) -> Result<ProcessPEResult> {
         use ProcessPEResult::*;
 
@@ -687,36 +687,22 @@ impl LineDecoder for Group3_1DLineDecoder {
                 Ok(Pixels1((Color::White, n)))
             }
             PictualElement::Eol => {
-                let px = (
-                    Color::White,
-                    (line.last.0.len() - line.pos())
-                        .try_into()
-                        .context(InvalidPixelSnafu)?,
-                );
                 if read_eol_or_eob(5, reader)? {
-                    Ok(Pixels1(px))
+                    Ok(Pixels1((Color::White, 0)))
                 } else {
                     Ok(EndOfBlock)
                 }
             }
             PictualElement::TwelveZeros => {
-                let px = (
-                    Color::White,
-                    (line.last.0.len() - line.pos())
-                        .try_into()
-                        .context(InvalidPixelSnafu)?,
-                );
                 read_eol_with_fill_padding(12, reader)?;
+
                 if read_eol_or_eob(5, reader)? {
-                    Ok(Pixels1(px))
+                    Ok(Pixels1((Color::White, 0)))
                 } else {
                     Ok(EndOfBlock)
                 }
             }
-            PictualElement::NotDef(_) | PictualElement::MakeUp(_) => {
-                // Instead of unreachable! or todo!, return an InvalidCode error
-                Err(DecodeError::InvalidCode)
-            }
+            PictualElement::NotDef(_) | PictualElement::MakeUp(_) => Err(DecodeError::InvalidCode),
         }
     }
 }
@@ -747,15 +733,25 @@ impl<'a> LineBuffer<'a> {
     }
 
     pub fn push_pixels(&mut self, color: Color, counts: u16) -> Result<()> {
-        let pos = self.pos();
-        for i in pos..(pos + counts as usize) {
-            self.cur.set(i, color.is_white());
+        // Don't do anything for 0-length runs
+        if counts == 0 {
+            return Ok(());
         }
-        self.pos = Some(
-            (self.pos() + counts as usize)
-                .try_into()
-                .context(InvalidPixelSnafu)?,
-        );
+
+        let pos = self.pos();
+        // Ensure we don't go beyond the line width
+        let max_pixels = (self.last.0.len() - pos).min(counts as usize);
+
+        if max_pixels > 0 {
+            // CRITICAL FIX: Set all pixels in the run to the same color
+            let value = color.is_white();
+            for i in pos..(pos + max_pixels) {
+                self.cur.set(i, value);
+            }
+
+            self.pos = Some((pos + max_pixels).try_into().context(InvalidPixelSnafu)?);
+        }
+
         debug_assert!(self.pos() <= self.last.0.len());
         Ok(())
     }
@@ -788,11 +784,14 @@ impl Decoder {
             self.rows.unwrap_or(30) as usize * self.width as usize,
         );
         let imagnation_line: BitVec<u8, Msb0> = repeat(true).take(self.width as usize).collect();
+
         let mut line_buffer = LineBuffer::new(
             &imagnation_line[..],
             repeat(true).take(self.width as usize).collect(),
         );
+
         let mut reader = BitReader::endian(Cursor::new(buf), BigEndian);
+
         loop {
             if self.flags.encoded_byte_align {
                 reader.byte_align();
@@ -803,19 +802,34 @@ impl Decoder {
                 DecodeLineResult::EndOfBlock => true,
                 DecodeLineResult::EndOfBlockNoLine => break,
             };
+
+            // Make sure line is filled completely (particularly important for Group3_1D)
+            if !line_buffer.line_fulfilled() {
+                let pos = line_buffer.pos();
+                if pos < self.width as usize {
+                    let remaining = self.width as usize - pos;
+                    // Fill with white to complete the line
+                    line_buffer.push_pixels(Color::White, remaining as u16)?;
+                }
+            }
+
             let line = line_buffer.take();
             r.extend(&line);
+
             if finished {
                 break;
             }
+
             if let Some(rows) = self.rows {
                 if rows as usize == r.len() / self.width as usize {
                     break;
                 }
             }
+
             line_buffer = LineBuffer::new(&r[r.len() - self.width as usize..], line);
             ld.reset();
         }
+
         Ok(r)
     }
 

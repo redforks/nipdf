@@ -298,7 +298,7 @@ pub trait ImageMetadata {
     fn decode(&self) -> Result<Option<Domains>>;
 }
 
-fn decode_one_bit(
+pub(crate) fn decode_one_bit_gray_image(
     w: u32,
     h: u32,
     data: &[u8],
@@ -388,7 +388,7 @@ fn decode_image<'a, M: ImageMetadata>(
                     .whatever_context::<_, ObjectValueError>("Failed to get bits per component")?
                     .whatever_context::<_, ObjectValueError>("Bits per component is None")?,
             ) {
-                (_, 1) => decode_one_bit(
+                (_, 1) => decode_one_bit_gray_image(
                     img_meta
                         .width()
                         .whatever_context::<_, ObjectValueError>("Failed to get width")?,
@@ -454,7 +454,7 @@ fn decode_image<'a, M: ImageMetadata>(
             }
         }
 
-        FilterDecodedData::CCITTFaxImage(data) => decode_one_bit(
+        FilterDecodedData::CCITTFaxImage(data) => decode_one_bit_gray_image(
             img_meta
                 .width()
                 .whatever_context::<_, ObjectValueError>("Failed to get width")?,
@@ -913,7 +913,7 @@ fn do_decode_jbig2<'a, 'b>(
     // Invert bit, because in jbig2 image 1 is black
     let inverted: Vec<u8> = data.iter().map(|byte| !byte).collect();
     // Create GrayImage from the data
-    let img = decode_one_bit(width, height, &inverted, false)?;
+    let img = decode_one_bit_gray_image(width, height, &inverted, false)?;
     Ok(FilterDecodedData::Image(img))
 }
 
