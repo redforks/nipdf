@@ -10,6 +10,7 @@ use crate::{
 use encoding::EncodingParser;
 use font_kit::{hinting::HintingOptions, loaders::freetype::Font as FontKitFont};
 use fontdb::{Database, Family, Query, Source, Weight};
+use heck::ToTitleCase;
 use log::{info, warn};
 use num_traits::ToPrimitive;
 use ouroboros::self_referencing;
@@ -348,8 +349,11 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
     fn load_true_type_from_os(desc: &FontDescriptorDict<'_, '_>) -> Result<Vec<u8>> {
         let font_name = desc.font_name()?;
         let font_name = normalize_true_type_font_name(&font_name);
-        // let font_name = font_name.to_title_case();
-        let mut families = vec![Family::Name(font_name.as_ref())];
+        let font_name_title_case = font_name.to_title_case();
+        let mut families = vec![
+            Family::Name(font_name.as_ref()),
+            Family::Name(&font_name_title_case),
+        ];
         let family = desc.font_family()?;
         if let Some(family) = &family {
             if !family.is_empty() {
