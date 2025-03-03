@@ -893,6 +893,12 @@ impl<'a, 'c> Render<'a, 'c> {
                 log_err(self.show_text(text.to_bytes()));
             }
             Operation::ShowTexts(texts) => log_err(self.show_texts(&texts)),
+            Operation::SetSpacingMoveToNextLineAndShowText(aw, ac, text) => {
+                self.text_object_mut()?.set_word_spacing(aw);
+                self.text_object_mut()?.set_character_spacing(ac);
+                self.move_to_start_of_next_line()?;
+                log_err(self.show_text(text.to_bytes()));
+            }
 
             // Color Operations
             Operation::SetStrokeColorSpace(args) => {

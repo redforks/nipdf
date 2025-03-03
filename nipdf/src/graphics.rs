@@ -415,7 +415,7 @@ pub enum Operation {
     #[op_tag("'")]
     MoveToNextLineAndShowText(TextString),
     #[op_tag("\"")]
-    SetSpacingMoveToNextLineAndShowText(f32, f32, String),
+    SetSpacingMoveToNextLineAndShowText(Length<f32, TextSpace>, Length<f32, TextSpace>, TextString),
 
     // Type 3 Font Operations
     #[op_tag("d0")]
