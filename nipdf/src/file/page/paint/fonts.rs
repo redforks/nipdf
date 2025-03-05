@@ -41,6 +41,20 @@ struct FirstLastFontWidth {
     default_width: u32,
 }
 
+impl GlyphAdvance for FirstLastFontWidth {
+    fn char_advance(&self, ch: u32) -> Result<GlyphLength> {
+        Ok(GlyphLength::new(if self.range.contains(&ch) {
+            let idx = (ch - self.range.start()) as usize;
+            self.widths
+                .get(idx)
+                .map(|v| *v)
+                .unwrap_or(self.default_width)
+        } else {
+            self.default_width
+        } as f32))
+    }
+}
+
 impl FirstLastFontWidth {
     pub fn from(font: &FontDict<'_, '_>) -> Result<Option<Self>> {
         let widths = font.widths()?;
@@ -62,15 +76,6 @@ impl FirstLastFontWidth {
             default_width,
             widths,
         }))
-    }
-
-    fn char_width(&self, ch: u32) -> GlyphLength {
-        GlyphLength::new(if self.range.contains(&ch) {
-            let idx = (ch - self.range.start()) as usize;
-            *self.widths.get(idx).unwrap_or(&self.default_width)
-        } else {
-            self.default_width
-        } as f32)
     }
 }
 
@@ -725,10 +730,10 @@ mod tests {
             default_width: 15,
         };
 
-        assert_eq!(100.0, font_width.char_width('a' as u32).0);
-        assert_eq!(200.0, font_width.char_width('b' as u32).0);
-        assert_eq!(400.0, font_width.char_width('d' as u32).0);
-        assert_eq!(15.0, font_width.char_width('e' as u32).0);
+        assert_eq!(100.0, font_width.char_advance('a' as u32).unwrap().0);
+        assert_eq!(200.0, font_width.char_advance('b' as u32).unwrap().0);
+        assert_eq!(400.0, font_width.char_advance('d' as u32).unwrap().0);
+        assert_eq!(15.0, font_width.char_advance('e' as u32).unwrap().0);
     }
 
     #[test_case("s" => "s"; "no need to normalize")]
