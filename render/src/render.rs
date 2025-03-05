@@ -1686,23 +1686,29 @@ impl<'a, 'c> Render<'a, 'c> {
             .map_err(winnow::error::ParseError::into_inner)
             .whatever_context("parse tile pattern operations")?;
         let b_box = tile.b_box().whatever_context("get tile b_box")?;
-        ensure_whatever!(
-            tile.x_step().whatever_context("get tile x_step")? > 0.0,
-            "negative x_step not supported"
-        );
-        ensure_whatever!(
-            tile.y_step().whatever_context("get tile y_step")? > 0.0,
-            "negative y_step not supported"
-        );
+        let x_step = tile.x_step().whatever_context("get tile x_step")?;
+        let y_step = tile.y_step().whatever_context("get tile y_step")?;
+
+        ensure_whatever!(x_step >= 0.0, "negative x_step not supported");
+        ensure_whatever!(y_step >= 0.0, "negative y_step not supported");
+
         let mut zoom = 1.0f32;
         let (mut w, mut h) = (
-            b_box
-                .width()
-                .min(tile.x_step().whatever_context("get tile x_step")?),
-            b_box
-                .height()
-                .min(tile.y_step().whatever_context("get tile y_step")?),
+            if x_step == 0.0 {
+                b_box.width()
+            } else {
+                b_box.width().min(x_step)
+            },
+            if y_step == 0.0 {
+                b_box.height()
+            } else {
+                b_box.height().min(y_step)
+            },
         );
+        if w == 0.0 || h == 0.0 {
+            return Ok(());
+        }
+
         let mut matrix = tile.matrix().whatever_context("get tile matrix")?;
         while w > canvas_size.width && h > canvas_size.height {
             w /= 2.0;
@@ -1730,11 +1736,7 @@ impl<'a, 'c> Render<'a, 'c> {
         }
         ops.into_iter().try_for_each(|op| render.exec(op))?;
         drop(render);
-        color_state.paint = PaintCreator::Tile((
-            canvas,
-            matrix,
-            tile.x_step().whatever_context("get tile x_step")? > b_box.width(),
-        ));
+        color_state.paint = PaintCreator::Tile((canvas, matrix, x_step > b_box.width()));
         Ok(())
     }
 
