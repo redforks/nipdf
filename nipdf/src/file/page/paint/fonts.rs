@@ -42,9 +42,9 @@ struct FirstLastFontWidth {
 }
 
 impl GlyphAdvance for FirstLastFontWidth {
-    fn char_advance(&self, ch: u32) -> Result<GlyphLength> {
-        Ok(GlyphLength::new(if self.range.contains(&ch) {
-            let idx = (ch - self.range.start()) as usize;
+    fn advance(&self, gid: u32) -> Result<GlyphLength> {
+        Ok(GlyphLength::new(if self.range.contains(&gid) {
+            let idx = (gid - self.range.start()) as usize;
             self.widths
                 .get(idx)
                 .map(|v| *v)
@@ -87,14 +87,18 @@ impl<'a> FreeTypeFontWidth<'a> {
     fn new(font: &'a FontKitFont) -> Self {
         Self { font }
     }
+}
 
-    pub fn glyph_width(&self, gid: u32) -> Result<u32> {
-        self.font
+impl<'a> GlyphAdvance for FreeTypeFontWidth<'a> {
+    fn advance(&self, gid: u32) -> Result<GlyphLength> {
+        let r = self
+            .font
             .advance(gid)
             .whatever_context::<_, ObjectValueError>("get gid advance")?
             .x()
             .to_u32()
-            .whatever_context("convert advance to u32")
+            .whatever_context::<_, ObjectValueError>("convert advance to u32")?;
+        Ok(GlyphLength::new(r as f32))
     }
 }
 
@@ -702,7 +706,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
 
 pub trait GlyphAdvance {
     /// Return glyph width or height based on write_mode
-    fn char_advance(&self, ch: u32) -> Result<GlyphLength>;
+    fn advance(&self, gid: u32) -> Result<GlyphLength>;
 }
 
 pub trait FontOp {
@@ -730,10 +734,10 @@ mod tests {
             default_width: 15,
         };
 
-        assert_eq!(100.0, font_width.char_advance('a' as u32).unwrap().0);
-        assert_eq!(200.0, font_width.char_advance('b' as u32).unwrap().0);
-        assert_eq!(400.0, font_width.char_advance('d' as u32).unwrap().0);
-        assert_eq!(15.0, font_width.char_advance('e' as u32).unwrap().0);
+        assert_eq!(100.0, font_width.advance('a' as u32).unwrap().0);
+        assert_eq!(200.0, font_width.advance('b' as u32).unwrap().0);
+        assert_eq!(400.0, font_width.advance('d' as u32).unwrap().0);
+        assert_eq!(15.0, font_width.advance('e' as u32).unwrap().0);
     }
 
     #[test_case("s" => "s"; "no need to normalize")]

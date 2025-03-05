@@ -1909,9 +1909,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 }
 
                 text_object.move_to_next_pos(
-                    glyph_width
-                        .char_advance(ch)
-                        .whatever_context("get char width")?,
+                    glyph_width.advance(ch).whatever_context("get char width")?,
                     ch == 32,
                 );
             }
@@ -1947,7 +1945,7 @@ impl<'a, 'c> Render<'a, 'c> {
 
                 text_object.move_to_next_pos(
                     glyph_width
-                        .char_advance(ch)
+                        .advance(ch)
                         .whatever_context("get glyph advance")?,
                     ch == 32,
                 );
