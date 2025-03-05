@@ -1723,7 +1723,9 @@ impl<'a, 'c> Render<'a, 'c> {
             .page_box(&b_box, 0)
             .background_color(SkiaColor::TRANSPARENT)
             .build();
-        let mut canvas = option.create_canvas()?;
+        let Some(mut canvas) = option.create_canvas() else {
+            return Ok(());
+        };
         let Some(mut render) =
             Render::new_nested(self.nested_level, &mut canvas, option, &resources)?
         else {

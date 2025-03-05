@@ -8,7 +8,7 @@ use nipdf::{
     graphics::trans::{LogicDeviceToDeviceSpace, UserToUserSpace, logic_device_to_device},
 };
 use prescript::Result;
-use snafu::{OptionExt, ResultExt, whatever};
+use snafu::{OptionExt, ResultExt};
 use tiny_skia::{Color, Pixmap};
 
 mod render;
@@ -106,20 +106,21 @@ pub struct RenderOption {
 }
 
 impl RenderOption {
-    pub fn create_canvas(&self) -> Result<Pixmap> {
+    pub fn create_canvas(&self) -> Option<Pixmap> {
         let (w, h) = (
             self.dimension.canvas_width(),
             self.dimension.canvas_height(),
         );
         if w * h > 1024 * 1024 * 100 {
-            whatever!("page size too large: {}x{}", w, h);
+            log::error!("Cannot create canvas, size too large: {}x{}", w, h);
+            return None;
         }
 
-        let mut r = Pixmap::new(w, h).whatever_context("Failed create canvas")?;
+        let mut r = Pixmap::new(w, h)?;
         if self.background_color.is_opaque() {
             r.fill(self.background_color);
         }
-        Ok(r)
+        Some(r)
     }
 
     /// Convert canvas to image, crop if crop option not None
@@ -209,7 +210,9 @@ pub fn render_steps(
     let ops = content
         .operations()
         .whatever_context("get page operations")?;
-    let mut canvas = option.create_canvas()?;
+    let Some(mut canvas) = option.create_canvas() else {
+        return Ok(RgbaImage::new(0, 0));
+    };
     if !ops.is_empty() {
         // skip render if no operations, fixes incorrect pdf files that no resources
         let resource = page.resources().whatever_context("get page resources")?;
