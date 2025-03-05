@@ -36,6 +36,10 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType0Font<'_, '_> {
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
         Ok(Box::new(TTFGlyphRender { font: &self.font }))
     }
+
+    fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance + '_>> {
+        todo!()
+    }
 }
 
 struct CIDFontType0FontOp {
@@ -110,17 +114,17 @@ impl FontOp for CIDFontType0FontOp {
         ch.try_into().whatever_context("convert ch to u16 gid")
     }
 
-    fn char_advance(&self, ch: u32) -> Result<GlyphLength> {
-        let char_width = self
-            .widths
-            .as_ref()
-            .map(|w| w.char_width(ch))
-            .transpose()
-            .whatever_context::<_, ObjectValueError>("get char width")?
-            .flatten()
-            .unwrap_or(self.default_advance) as f32;
-        Ok(GlyphLength::new(char_width))
-    }
+    // fn char_advance(&self, ch: u32) -> Result<GlyphLength> {
+    //     let char_width = self
+    //         .widths
+    //         .as_ref()
+    //         .map(|w| w.char_width(ch))
+    //         .transpose()
+    //         .whatever_context::<_, ObjectValueError>("get char width")?
+    //         .flatten()
+    //         .unwrap_or(self.default_advance) as f32;
+    //     Ok(GlyphLength::new(char_width))
+    // }
 
     fn write_mode(&self) -> WriteMode {
         self.write_mode
@@ -301,20 +305,20 @@ impl FontOp for CIDFontType2FontOp<'_> {
         )
     }
 
-    fn char_advance(&self, ch: u32) -> Result<GlyphLength> {
-        let mut char_width = self
-            .widths
-            .as_ref()
-            .map(|w| w.char_width(ch))
-            .transpose()
-            .whatever_context::<_, ObjectValueError>("get char width")?
-            .flatten()
-            .unwrap_or(self.default_advance) as f32;
-        if self.units_per_em != 1000 {
-            char_width = char_width / 1000.0 * self.units_per_em as f32;
-        }
-        Ok(GlyphLength::new(char_width))
-    }
+    // fn char_advance(&self, ch: u32) -> Result<GlyphLength> {
+    //     let mut char_width = self
+    //         .widths
+    //         .as_ref()
+    //         .map(|w| w.char_width(ch))
+    //         .transpose()
+    //         .whatever_context::<_, ObjectValueError>("get char width")?
+    //         .flatten()
+    //         .unwrap_or(self.default_advance) as f32;
+    //     if self.units_per_em != 1000 {
+    //         char_width = char_width / 1000.0 * self.units_per_em as f32;
+    //     }
+    //     Ok(GlyphLength::new(char_width))
+    // }
 
     fn units_per_em(&self) -> Result<u16> {
         Ok(self.units_per_em)
@@ -413,6 +417,10 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
         // Use FreeType, TTFParser failed render bug1734802.pdf
         Ok(Box::new(TTFGlyphRender { font: &self.font }))
     }
+
+    fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance + '_>> {
+        todo!()
+    }
 }
 
 struct CIDFontType2UnicodeFontOp {
@@ -464,20 +472,20 @@ impl FontOp for CIDFontType2UnicodeFontOp {
             .whatever_context::<_, ObjectValueError>("glyph id not found")
     }
 
-    fn char_advance(&self, ch: u32) -> Result<GlyphLength> {
-        let mut char_width = self
-            .width
-            .as_ref()
-            .map(|w| w.char_width(ch))
-            .transpose()
-            .whatever_context::<_, ObjectValueError>("get char width")?
-            .flatten()
-            .unwrap_or(self.default_advance) as f32;
-        if self.units_per_em != 1000 {
-            char_width = char_width / 1000.0 * self.units_per_em as f32;
-        }
-        Ok(GlyphLength::new(char_width))
-    }
+    // fn char_advance(&self, ch: u32) -> Result<GlyphLength> {
+    //     let mut char_width = self
+    //         .width
+    //         .as_ref()
+    //         .map(|w| w.char_width(ch))
+    //         .transpose()
+    //         .whatever_context::<_, ObjectValueError>("get char width")?
+    //         .flatten()
+    //         .unwrap_or(self.default_advance) as f32;
+    //     if self.units_per_em != 1000 {
+    //         char_width = char_width / 1000.0 * self.units_per_em as f32;
+    //     }
+    //     Ok(GlyphLength::new(char_width))
+    // }
 
     fn units_per_em(&self) -> Result<u16> {
         Ok(self.units_per_em)

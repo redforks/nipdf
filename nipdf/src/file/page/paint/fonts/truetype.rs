@@ -1,5 +1,4 @@
 use super::{EncodingParser, FirstLastFontWidth, FontOp, GlyphRender, PathSink, TTFGlyphRender};
-use crate::graphics::trans::GlyphLength;
 use crate::{
     ObjectValueError, Result,
     file::page::paint::fonts::{Font, FontDict},
@@ -45,6 +44,10 @@ impl<P: PathSink> Font<P> for TTFFont<'_, '_> {
 
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
         Ok(Box::new(TTFGlyphRender { font: &self.face }))
+    }
+
+    fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance + '_>> {
+        todo!()
     }
 }
 
@@ -121,22 +124,26 @@ impl FontOp for TTFFontOp<'_> {
         Ok(0)
     }
 
-    fn char_advance(&self, ch: u32) -> Result<GlyphLength, ObjectValueError> {
-        if let Some(font_width) = &self.font_width {
-            return Ok(font_width.char_width(ch) / 1000.0 * self.units_per_em as f32);
-        }
-        let gid = self.char_to_gid(ch)?;
+    // fn char_advance(&self, ch: u32) -> Result<GlyphLength, ObjectValueError> {
+    //     if let Some(font_width) = &self.font_width {
+    //         return Ok(font_width.char_width(ch) / 1000.0 * self.units_per_em as f32);
+    //     }
+    //     let gid = self.char_to_gid(ch)?;
 
-        Ok(GlyphLength::new(
-            self.face
-                .advance(gid as u32)
-                .whatever_context::<_, ObjectValueError>("get char advance")?
-                .x(),
-        ))
-    }
+    //     Ok(GlyphLength::new(
+    //         self.face
+    //             .advance(gid as u32)
+    //             .whatever_context::<_, ObjectValueError>("get char advance")?
+    //             .x(),
+    //     ))
+    // }
 
     fn units_per_em(&self) -> Result<u16, ObjectValueError> {
         Ok(self.units_per_em)
+    }
+
+    fn write_mode(&self) -> prescript::cmap::WriteMode {
+        prescript::cmap::WriteMode::Horizontal
     }
 }
 

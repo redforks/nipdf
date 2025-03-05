@@ -1857,12 +1857,13 @@ impl<'a, 'c> Render<'a, 'c> {
                 .as_ref()
                 .whatever_context("get font name")?,
         );
-        let op = self.font_cache.get_op(
-            self.text_object()?
-                .font_name
-                .as_ref()
-                .whatever_context("get text_object font name")?,
-        );
+        let font_name = self
+            .text_object()?
+            .font_name
+            .as_ref()
+            .whatever_context("get text_object font name")?;
+        let op = self.font_cache.get_op(font_name);
+        let glyph_width = self.font_cache.get_glyph_width(font_name);
         let state = self.stack.last().whatever_context("get stack top")?;
         let mut text_object = state.text_object.clone();
         text_object
@@ -1908,7 +1909,9 @@ impl<'a, 'c> Render<'a, 'c> {
                 }
 
                 text_object.move_to_next_pos(
-                    op.char_advance(ch).whatever_context("get char width")?,
+                    glyph_width
+                        .char_advance(ch)
+                        .whatever_context("get char width")?,
                     ch == 32,
                 );
             }
@@ -1943,7 +1946,9 @@ impl<'a, 'c> Render<'a, 'c> {
                 }
 
                 text_object.move_to_next_pos(
-                    op.char_advance(ch).whatever_context("get glyph advance")?,
+                    glyph_width
+                        .char_advance(ch)
+                        .whatever_context("get glyph advance")?,
                     ch == 32,
                 );
             }

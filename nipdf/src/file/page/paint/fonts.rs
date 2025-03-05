@@ -152,6 +152,7 @@ impl<P: PathSink> GlyphRender<P> for TTFGlyphRender<'_> {
 pub trait Font<P> {
     fn create_op(&self, cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>>;
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>>;
+    fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance + '_>>;
     fn as_type3(&self) -> Option<&type3::Type3Font<'_, '_>> {
         None
     }
@@ -193,6 +194,10 @@ impl<P: PathSink> Font<P> for FallbackFont {
 
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
         Ok(Box::new(TTFGlyphRender { font: &self.font }))
+    }
+
+    fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance + '_>> {
+        todo!()
     }
 }
 
@@ -326,19 +331,27 @@ fn standard_14_type1_font_data(font_name: &str) -> Option<&'static [u8]> {
 struct FontCacheInner<'c, P: PathSink + 'static> {
     fonts: HashMap<Name, Box<dyn Font<P> + 'c>>,
     cmap_registry: CMapRegistry,
+    fallback_font: FallbackFont,
+
     #[borrows(fonts, mut cmap_registry)]
     #[covariant]
     ops: HashMap<Name, Box<dyn FontOp + 'this>>,
     #[borrows(fonts)]
     #[covariant]
     renders: HashMap<Name, Box<dyn GlyphRender<P> + 'this>>,
-    fallback_font: FallbackFont,
+    #[borrows(fonts)]
+    #[covariant]
+    glyph_widths: HashMap<Name, Box<dyn GlyphAdvance + 'this>>,
+
     #[borrows(fallback_font)]
     #[covariant]
     fallback_op: Box<dyn FontOp + 'this>,
     #[borrows(fallback_font)]
     #[covariant]
     fallback_render: Box<dyn GlyphRender<P> + 'this>,
+    #[borrows(fallback_font)]
+    #[covariant]
+    fallback_width: Box<dyn GlyphAdvance + 'this>,
 }
 
 pub struct FontCache<'c, P: PathSink + 'static> {
@@ -618,6 +631,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
             cache: FontCacheInner::try_new(
                 fonts,
                 CMapRegistry::new(),
+                FallbackFont::new().unwrap(),
                 |fonts, cmap_registry| {
                     let mut ops = HashMap::with_capacity(fonts.len());
                     for (k, v) in fonts {
@@ -638,9 +652,16 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                     }
                     Ok(renders)
                 },
-                FallbackFont::new().unwrap(),
+                |fonts| {
+                    let mut renders = HashMap::with_capacity(fonts.len());
+                    for (k, v) in fonts {
+                        renders.insert(k.clone(), v.create_glyph_width()?);
+                    }
+                    Ok(renders)
+                },
                 |fallback_font| Ok(fallback_font.create_fallback_op()),
                 |fallback_font| fallback_font.create_glyph_render(),
+                |fallback_font| Font::<P>::create_glyph_width(fallback_font),
             )?,
         })
     }
@@ -665,14 +686,24 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
             AsRef::as_ref,
         )
     }
+
+    pub fn get_glyph_width(&self, s: &Name) -> &(dyn GlyphAdvance) {
+        self.cache.borrow_glyph_widths().get(s).map_or_else(
+            || self.cache.borrow_fallback_width().as_ref(),
+            AsRef::as_ref,
+        )
+    }
+}
+
+pub trait GlyphAdvance {
+    /// Return glyph width or height based on write_mode
+    fn char_advance(&self, ch: u32) -> Result<GlyphLength>;
 }
 
 pub trait FontOp {
     /// Decode char codes to chars, possible using some encoding
     fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>>;
     fn char_to_gid(&self, ch: u32) -> Result<u16>;
-    /// Return glyph width or height based on write_mode
-    fn char_advance(&self, ch: u32) -> Result<GlyphLength>;
     fn write_mode(&self) -> WriteMode {
         WriteMode::Horizontal
     }

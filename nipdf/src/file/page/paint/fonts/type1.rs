@@ -47,6 +47,10 @@ impl<P: PathSink> Font<P> for Type1Font<'_> {
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
         Ok(Box::new(TTFGlyphRender { font: &self.font }))
     }
+
+    fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance + '_>> {
+        todo!()
+    }
 }
 
 pub(super) struct Type1FontOp<'a> {
@@ -102,23 +106,23 @@ impl FontOp for Type1FontOp<'_> {
         }
     }
 
-    fn char_advance(&self, gid: u32) -> Result<GlyphLength> {
-        self.font_width.as_ref().either(
-            |x| {
-                let r = x.char_width(gid);
-                if self.units_per_em()? != 1000 {
-                    Ok(GlyphLength::new(r.0 / 1000.0 * self.units_per_em()? as f32))
-                } else {
-                    Ok(r)
-                }
-            },
-            |x| {
-                Ok(GlyphLength::new(
-                    x.glyph_width(self.char_to_gid(gid)? as u32)? as f32,
-                ))
-            },
-        )
-    }
+    // fn char_advance(&self, gid: u32) -> Result<GlyphLength> {
+    //     self.font_width.as_ref().either(
+    //         |x| {
+    //             let r = x.char_width(gid);
+    //             if self.units_per_em()? != 1000 {
+    //                 Ok(GlyphLength::new(r.0 / 1000.0 * self.units_per_em()? as f32))
+    //             } else {
+    //                 Ok(r)
+    //             }
+    //         },
+    //         |x| {
+    //             Ok(GlyphLength::new(
+    //                 x.glyph_width(self.char_to_gid(gid)? as u32)? as f32,
+    //             ))
+    //         },
+    //     )
+    // }
 
     fn units_per_em(&self) -> Result<u16> {
         self.font

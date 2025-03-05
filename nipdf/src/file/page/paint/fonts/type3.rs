@@ -133,9 +133,9 @@ impl FontOp for Type3FontOp<'_> {
         }
     }
 
-    fn char_advance(&self, ch: u32) -> Result<GlyphLength> {
-        Ok(self.font_width.char_width(ch))
-    }
+    // fn char_advance(&self, ch: u32) -> Result<GlyphLength> {
+    //     Ok(self.font_width.char_width(ch))
+    // }
 
     fn units_per_em(&self) -> Result<u16> {
         Ok(self.units_per_em)
@@ -175,5 +175,9 @@ impl<P: PathSink + 'static> Font<P> for Type3Font<'_, '_> {
 
     fn as_type3(&self) -> Option<&Type3Font<'_, '_>> {
         Some(self)
+    }
+
+    fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance + '_>> {
+        todo!()
     }
 }
