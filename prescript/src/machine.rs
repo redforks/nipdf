@@ -769,7 +769,6 @@ impl<'a, P> Machine<'a, P> {
                 ExecState::Ok
             }
             Token::Name(name) => {
-                // dbg!(&name);
                 let v = self.variable_stack.get(&name)?;
                 match v {
                     RuntimeValue::BuiltInOp(op) => op(self)?,

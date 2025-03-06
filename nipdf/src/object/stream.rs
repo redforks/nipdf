@@ -703,7 +703,8 @@ fn tiff_predictor_16bit(buf: &[u8], columns: usize, colors: usize) -> Vec<u8> {
             let offset = c * 2;
             for i in (offset + colors * 2..output_row.len()).step_by(colors * 2) {
                 // Get previous 16-bit value (big-endian)
-                let prev_val = ((output_row[i - colors * 2] as u16) << 8) | (output_row[i - colors * 2 + 1] as u16);
+                let prev_val = ((output_row[i - colors * 2] as u16) << 8)
+                    | (output_row[i - colors * 2 + 1] as u16);
                 // Get current 16-bit value (big-endian)
                 let curr_val = ((output_row[i] as u16) << 8) | (output_row[i + 1] as u16);
                 // Add values as 16-bit and handle wrapping
@@ -1002,7 +1003,6 @@ fn decode_jbig2<'a>(
     resolver: Option<&ObjectResolver<'a>>,
 ) -> Result<FilterDecodedData<'a>, ObjectValueError> {
     let global_stream = params.and_then(|p| p.get("JBIG2Globals"));
-    dbg!(global_stream.is_some());
 
     let global_data = if let Some(global_stream) = global_stream {
         let resolver = resolver.whatever_context::<_, ObjectValueError>("resolver required")?;
@@ -1024,7 +1024,6 @@ fn do_decode_jbig2<'a, 'b>(
     mut global_stream: Option<&'b [u8]>,
 ) -> Result<FilterDecodedData<'a>> {
     use nipdf_jbig2dec::{Document, OpenFlag};
-    dbg!(global_stream.map(|v| v.len()));
 
     let doc = Document::from_reader(&mut buf, global_stream.as_mut(), OpenFlag::Embedded)
         .whatever_context::<_, ObjectValueError>("parse jbig2 data")?;
