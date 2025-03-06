@@ -67,7 +67,7 @@ fn download_file(url: &str, p: impl AsRef<Path>) -> Result<()> {
 }
 
 /// These files are very rare and odd, not to be tested
-const IGNORED: [&str; 19] = [
+const IGNORED: [&str; 20] = [
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
     "bug1050040.pdf",
     // invalid object format, mupdf failed to parse, mupdf says no page
@@ -114,6 +114,8 @@ const IGNORED: [&str; 19] = [
     "issue1419.pdf.link",
     // the same as issue11052.pdf.link
     "issue1877.pdf.link",
+    // the same as issue11052.pdf.link
+    "multiple-filters-length-zero.pdf",
     // this file contains invalid xref, after file scan trailer point to wrong catalog,
     // If resolve catalog dict by check all dict for `/Catalog` type, can find correct
     // catalog dict. `mupdf` also failed to parse this file, but others are okay.
