@@ -34,27 +34,6 @@ mod type0;
 mod type1;
 mod type3;
 
-/// FontWidth used in Type1 and TrueType fonts
-struct FirstLastFontWidth {
-    range: RangeInclusive<u32>,
-    widths: Vec<u32>,
-    default_width: u32,
-}
-
-impl GlyphAdvance for FirstLastFontWidth {
-    fn advance(&self, gid: u32) -> Result<GlyphLength> {
-        Ok(GlyphLength::new(if self.range.contains(&gid) {
-            let idx = (gid - self.range.start()) as usize;
-            self.widths
-                .get(idx)
-                .map(|v| *v)
-                .unwrap_or(self.default_width)
-        } else {
-            self.default_width
-        } as f32))
-    }
-}
-
 struct ChainGlyphAdvance<T, U>(T, U);
 
 impl<T, U> ChainGlyphAdvance<T, U>
@@ -94,6 +73,27 @@ impl GlyphAdvance for DefaultAdvance {
     }
 }
 
+/// FontWidth used in Type1 and TrueType fonts
+struct FirstLastFontWidth {
+    range: RangeInclusive<u32>,
+    widths: Vec<u32>,
+    default_width: u32,
+}
+
+impl GlyphAdvance for FirstLastFontWidth {
+    fn advance(&self, gid: u32) -> Result<GlyphLength> {
+        Ok(GlyphLength::new(if self.range.contains(&gid) {
+            let idx = (gid - self.range.start()) as usize;
+            self.widths
+                .get(idx)
+                .map(|v| *v)
+                .unwrap_or(self.default_width)
+        } else {
+            self.default_width
+        } as f32))
+    }
+}
+
 impl FirstLastFontWidth {
     pub fn from(font: &FontDict<'_, '_>) -> Result<Option<Self>> {
         let widths = font.widths()?;
@@ -120,23 +120,27 @@ impl FirstLastFontWidth {
 
 struct FreeTypeFontWidth<'a> {
     font: &'a FontKitFont,
+    write_mode: WriteMode,
 }
 
 impl<'a> FreeTypeFontWidth<'a> {
-    fn new(font: &'a FontKitFont) -> Self {
-        Self { font }
+    fn new(font: &'a FontKitFont, write_mode: WriteMode) -> Self {
+        Self { font, write_mode }
     }
 }
 
 impl<'a> GlyphAdvance for FreeTypeFontWidth<'a> {
     fn advance(&self, gid: u32) -> Result<GlyphLength> {
-        let r = self
+        let advance = self
             .font
             .advance(gid)
-            .whatever_context::<_, ObjectValueError>("get gid advance")?
-            .x()
-            .to_u32()
-            .whatever_context::<_, ObjectValueError>("convert advance to u32")?;
+            .whatever_context::<_, ObjectValueError>("get gid advance")?;
+        let r = match self.write_mode {
+            WriteMode::Horizontal => advance.x(),
+            WriteMode::Vertical => advance.y(),
+        }
+        .to_u32()
+        .whatever_context::<_, ObjectValueError>("convert advance to u32")?;
         Ok(GlyphLength::new(r as f32))
     }
 }

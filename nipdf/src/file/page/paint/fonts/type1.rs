@@ -8,7 +8,7 @@ use crate::{ObjectValueError, Result};
 use either::Either;
 use log::info;
 use prescript::Encoding;
-use prescript::cmap::CMapRegistry;
+use prescript::cmap::{CMapRegistry, WriteMode};
 use snafu::ResultExt as _;
 
 /// Font implementation using free-type/(font-kit), to handle Type1 fonts
@@ -66,9 +66,16 @@ impl<'a> Type1FontOp<'a> {
         is_cff: bool,
         font_data: &'a [u8],
     ) -> Result<Self> {
-        let font_width = FirstLastFontWidth::from(font_dict)?
-            .map_or_else(|| Either::Right(FreeTypeFontWidth::new(font)), Either::Left);
         let encoding = EncodingParser(font_dict).type1(is_cff, font_data)?;
+        let font_width = FirstLastFontWidth::from(font_dict)?.map_or_else(
+            || {
+                Either::Right(FreeTypeFontWidth::new(
+                    font,
+                    /* Type1 font no Vertical mode*/ WriteMode::Horizontal,
+                ))
+            },
+            Either::Left,
+        );
 
         Ok(Self {
             font_width,
@@ -79,7 +86,7 @@ impl<'a> Type1FontOp<'a> {
 
     pub fn new_fallback(font: &'a FontKitFont) -> Self {
         Self {
-            font_width: Either::Right(FreeTypeFontWidth::new(font)),
+            font_width: Either::Right(FreeTypeFontWidth::new(font, WriteMode::Horizontal)),
             font,
             encoding: Encoding::WIN_ANSI,
         }
