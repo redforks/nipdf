@@ -58,10 +58,10 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType0Font<'_, '_> {
             cid_font.w()?
         };
 
-        // Create the appropriate glyph advance implementation
-        Ok(Box::new(ChainGlyphAdvance(
-            widths,
-            FreeTypeFontWidth::new(&self.font, write_mode),
+        let units_per_em = self.font.units_per_em()?;
+        Ok(Box::new(UnitPerEmAdjust::new(
+            units_per_em,
+            ChainGlyphAdvance(widths, FreeTypeFontWidth::new(&self.font, write_mode)),
         )))
     }
 }
@@ -399,10 +399,11 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
         };
 
         let units_per_em = self.font.units_per_em()?;
+        dbg!(units_per_em);
         // Create the appropriate glyph advance implementation
-        Ok(Box::new(ChainGlyphAdvance(
-            UnitPerEmAdjust::new(units_per_em, widths),
-            FreeTypeFontWidth::new(&self.font, write_mode),
+        Ok(Box::new(UnitPerEmAdjust::new(
+            units_per_em,
+            ChainGlyphAdvance(widths, FreeTypeFontWidth::new(&self.font, write_mode)),
         )))
     }
 }
