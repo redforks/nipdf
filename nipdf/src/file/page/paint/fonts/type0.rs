@@ -399,7 +399,6 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
         };
 
         let units_per_em = self.font.units_per_em()?;
-        dbg!(units_per_em);
         // Create the appropriate glyph advance implementation
         Ok(Box::new(UnitPerEmAdjust::new(
             units_per_em,

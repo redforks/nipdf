@@ -136,7 +136,13 @@ impl<'a> GlyphAdvance for FreeTypeFontWidth<'a> {
             .whatever_context::<_, ObjectValueError>("get gid advance")?;
         let r = match self.write_mode {
             WriteMode::Horizontal => advance.x(),
-            WriteMode::Vertical => advance.y(),
+            WriteMode::Vertical => {
+                if advance.y() == 0.0 {
+                    advance.x()
+                } else {
+                    advance.y()
+                }
+            }
         }
         .to_u32()
         .whatever_context::<_, ObjectValueError>("convert advance to u32")?;
