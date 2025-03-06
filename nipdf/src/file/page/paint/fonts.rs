@@ -36,16 +36,6 @@ mod type3;
 
 struct ChainGlyphAdvance<T, U>(T, U);
 
-impl<T, U> ChainGlyphAdvance<T, U>
-where
-    T: GlyphAdvance,
-    U: GlyphAdvance,
-{
-    pub fn new(first: T, second: U) -> Self {
-        Self(first, second)
-    }
-}
-
 impl<T, U> GlyphAdvance for ChainGlyphAdvance<T, U>
 where
     T: GlyphAdvance,
@@ -69,12 +59,6 @@ impl<T: GlyphAdvance> GlyphAdvance for Option<T> {
 }
 
 struct DefaultAdvance(f32);
-
-impl DefaultAdvance {
-    pub fn new(width: u32) -> Self {
-        Self(width as f32)
-    }
-}
 
 impl GlyphAdvance for DefaultAdvance {
     fn advance(&self, _gid: u32) -> Result<GlyphLength> {
@@ -258,7 +242,10 @@ impl<P: PathSink> Font<P> for FallbackFont {
     }
 
     fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance + '_>> {
-        todo!()
+        Ok(Box::new(FreeTypeFontWidth::new(
+            &self.font,
+            /* Type1 font no Vertical mode*/ WriteMode::Horizontal,
+        )))
     }
 }
 
