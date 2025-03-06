@@ -1,5 +1,5 @@
 use super::{
-    Encoding, FirstLastFontWidth, Font, FontDict, GlyphLength, GlyphRender, Operation, PathSink,
+    Encoding, FirstLastFontWidth, Font, FontDict, GlyphRender, Operation, PathSink,
     parse_operations,
 };
 use crate::file::page::paint::fonts::FontOp;
@@ -87,7 +87,6 @@ impl<'a, 'b> Type3Font<'a, 'b> {
 }
 
 struct Type3FontOp<'a> {
-    font_width: FirstLastFontWidth,
     encoding: Encoding,
     name_to_gid: &'a HashMap<Name, u16>,
     units_per_em: u16,
@@ -103,8 +102,6 @@ impl<'a> Type3FontOp<'a> {
         let matrix = type3_dict.matrix()?;
 
         Ok(Self {
-            font_width: FirstLastFontWidth::from(font_dict)?
-                .whatever_context::<_, ObjectValueError>("Get FirstLastFontWidth")?,
             name_to_gid,
             encoding,
             units_per_em: (1.0 / matrix.m11)
@@ -178,6 +175,6 @@ impl<P: PathSink + 'static> Font<P> for Type3Font<'_, '_> {
     }
 
     fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance + '_>> {
-        todo!()
+        Ok(Box::new(FirstLastFontWidth::from(&self.dict)?.unwrap()))
     }
 }
