@@ -1900,16 +1900,17 @@ impl<'a, 'c> Render<'a, 'c> {
                         .with_destination()
                         .with_source(),
                 );
-                if let Some(glyph) =
-                    type3_font.get_glyph(op.char_to_gid(ch).whatever_context("get char to gid")?)
-                {
+                let gid = op.char_to_gid(ch).whatever_context("get char to gid")?;
+                if let Some(glyph) = type3_font.get_glyph(gid) {
                     for op in glyph.operations() {
                         render.exec(op.clone())?;
                     }
                 }
 
                 text_object.move_to_next_pos(
-                    glyph_width.advance(ch).whatever_context("get char width")?,
+                    glyph_width
+                        .advance(gid as u32)
+                        .whatever_context("get char width")?,
                     ch == 32,
                 );
             }
@@ -1923,10 +1924,8 @@ impl<'a, 'c> Render<'a, 'c> {
             let mut text_clip_path = Path::default();
 
             for ch in op.decode_chars(text).whatever_context("decode chars")? {
-                let path = Self::gen_glyph_path(
-                    glyph_render,
-                    op.char_to_gid(ch).whatever_context("get char to gid")?,
-                )?;
+                let gid = op.char_to_gid(ch).whatever_context("get char to gid")?;
+                let path = Self::gen_glyph_path(glyph_render, gid)?;
                 if !path.is_empty() {
                     let path = path.finish().whatever_context("finish path")?;
                     let path = path
@@ -1945,7 +1944,7 @@ impl<'a, 'c> Render<'a, 'c> {
 
                 text_object.move_to_next_pos(
                     glyph_width
-                        .advance(ch)
+                        .advance(gid as u32)
                         .whatever_context("get glyph advance")?,
                     ch == 32,
                 );
