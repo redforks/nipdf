@@ -55,6 +55,20 @@ impl GlyphAdvance for FirstLastFontWidth {
     }
 }
 
+struct DefaultAdvance(f32);
+
+impl DefaultAdvance {
+    pub fn new(width: u32) -> Self {
+        Self(width as f32)
+    }
+}
+
+impl GlyphAdvance for DefaultAdvance {
+    fn advance(&self, _gid: u32) -> Result<GlyphLength> {
+        Ok(GlyphLength::new(self.0))
+    }
+}
+
 impl FirstLastFontWidth {
     pub fn from(font: &FontDict<'_, '_>) -> Result<Option<Self>> {
         let widths = font.widths()?;
