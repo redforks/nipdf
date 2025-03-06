@@ -1,11 +1,9 @@
 use super::{
-    EncodingParser, FirstLastFontWidth, Font, FontKitFont, FontOp, FreeTypeFontWidth, GlyphRender,
-    PathSink, TTFGlyphRender,
+    ChainGlyphAdvance, EncodingParser, FirstLastFontWidth, Font, FontKitFont, FontOp,
+    FreeTypeFontWidth, GlyphRender, PathSink, TTFGlyphRender,
 };
-use crate::graphics::trans::GlyphLength;
 use crate::text::FontDict;
 use crate::{ObjectValueError, Result};
-use either::Either;
 use log::info;
 use prescript::Encoding;
 use prescript::cmap::{CMapRegistry, WriteMode};
@@ -49,12 +47,17 @@ impl<P: PathSink> Font<P> for Type1Font<'_> {
     }
 
     fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance + '_>> {
-        todo!()
+        Ok(Box::new(ChainGlyphAdvance(
+            FirstLastFontWidth::from(&self.font_dict)?,
+            FreeTypeFontWidth::new(
+                &self.font,
+                /* Type1 font no Vertical mode*/ WriteMode::Horizontal,
+            ),
+        )))
     }
 }
 
 pub(super) struct Type1FontOp<'a> {
-    font_width: Either<FirstLastFontWidth, FreeTypeFontWidth<'a>>,
     font: &'a FontKitFont,
     encoding: Encoding,
 }
@@ -67,26 +70,12 @@ impl<'a> Type1FontOp<'a> {
         font_data: &'a [u8],
     ) -> Result<Self> {
         let encoding = EncodingParser(font_dict).type1(is_cff, font_data)?;
-        let font_width = FirstLastFontWidth::from(font_dict)?.map_or_else(
-            || {
-                Either::Right(FreeTypeFontWidth::new(
-                    font,
-                    /* Type1 font no Vertical mode*/ WriteMode::Horizontal,
-                ))
-            },
-            Either::Left,
-        );
 
-        Ok(Self {
-            font_width,
-            font,
-            encoding,
-        })
+        Ok(Self { font, encoding })
     }
 
     pub fn new_fallback(font: &'a FontKitFont) -> Self {
         Self {
-            font_width: Either::Right(FreeTypeFontWidth::new(font, WriteMode::Horizontal)),
             font,
             encoding: Encoding::WIN_ANSI,
         }
@@ -112,24 +101,6 @@ impl FontOp for Type1FontOp<'_> {
             Ok(0)
         }
     }
-
-    // fn char_advance(&self, gid: u32) -> Result<GlyphLength> {
-    //     self.font_width.as_ref().either(
-    //         |x| {
-    //             let r = x.char_width(gid);
-    //             if self.units_per_em()? != 1000 {
-    //                 Ok(GlyphLength::new(r.0 / 1000.0 * self.units_per_em()? as f32))
-    //             } else {
-    //                 Ok(r)
-    //             }
-    //         },
-    //         |x| {
-    //             Ok(GlyphLength::new(
-    //                 x.glyph_width(self.char_to_gid(gid)? as u32)? as f32,
-    //             ))
-    //         },
-    //     )
-    // }
 
     fn units_per_em(&self) -> Result<u16> {
         self.font

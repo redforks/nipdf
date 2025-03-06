@@ -59,6 +59,15 @@ where
     }
 }
 
+impl<T: GlyphAdvance> GlyphAdvance for Option<T> {
+    fn advance(&self, gid: u32) -> Result<GlyphLength> {
+        match self {
+            Some(glyph_advance) => glyph_advance.advance(gid),
+            None => whatever!("No glyph advance"),
+        }
+    }
+}
+
 struct DefaultAdvance(f32);
 
 impl DefaultAdvance {

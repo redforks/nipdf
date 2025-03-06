@@ -130,10 +130,6 @@ impl FontOp for Type3FontOp<'_> {
         }
     }
 
-    // fn char_advance(&self, ch: u32) -> Result<GlyphLength> {
-    //     Ok(self.font_width.char_width(ch))
-    // }
-
     fn units_per_em(&self) -> Result<u16> {
         Ok(self.units_per_em)
     }
