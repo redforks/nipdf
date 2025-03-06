@@ -1,5 +1,5 @@
 use super::{
-    ChainGlyphAdvance, DefaultAdvance, Font, FontKitFontExt, FontOp, GlyphAdvance, GlyphRender,
+    ChainGlyphAdvance, Font, FontKitFontExt, FontOp, FreeTypeFontWidth, GlyphAdvance, GlyphRender,
     PathSink, TTFGlyphRender, UnitPerEmAdjust,
 };
 use crate::graphics::{NameOrDictByRef, NameOrStream};
@@ -46,10 +46,10 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType0Font<'_, '_> {
 
         // Check if we need to use vertical metrics
         let encoding = get_font_encoding(&mut CMapRegistry::new(), &font_dict)?;
-        let is_vertical = get_write_mode(&encoding) == WriteMode::Vertical;
+        let write_mode = get_write_mode(&encoding);
 
         // Use w2 for vertical writing mode, w for horizontal
-        let widths = if is_vertical {
+        let widths = if write_mode == WriteMode::Vertical {
             match cid_font.w2()? {
                 Some(w) => Some(w),
                 None => cid_font.w()?, // Fall back to w if w2 is not available
@@ -58,20 +58,10 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType0Font<'_, '_> {
             cid_font.w()?
         };
 
-        // Use dw2 for vertical writing mode, dw for horizontal
-        let default_advance = if is_vertical {
-            match cid_font.dw2()? {
-                Some((height, _)) => height, // Only use the height component
-                None => cid_font.dw()?,      // Fall back to dw if dw2 is not available
-            }
-        } else {
-            cid_font.dw()?
-        };
-
         // Create the appropriate glyph advance implementation
         Ok(Box::new(ChainGlyphAdvance(
             widths,
-            DefaultAdvance(default_advance),
+            FreeTypeFontWidth::new(&self.font, write_mode),
         )))
     }
 }
@@ -396,10 +386,10 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
 
         // Check if we need to use vertical metrics
         let encoding = get_font_encoding(&mut CMapRegistry::new(), &font_dict)?;
-        let is_vertical = get_write_mode(&encoding) == WriteMode::Vertical;
+        let write_mode = get_write_mode(&encoding);
 
         // Use w2 for vertical writing mode, w for horizontal
-        let widths = if is_vertical {
+        let widths = if write_mode == WriteMode::Vertical {
             match cid_font.w2()? {
                 Some(w) => Some(w),
                 None => cid_font.w()?, // Fall back to w if w2 is not available
@@ -408,21 +398,11 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
             cid_font.w()?
         };
 
-        // Use dw2 for vertical writing mode, dw for horizontal
-        let default_advance = if is_vertical {
-            match cid_font.dw2()? {
-                Some((height, _)) => height, // Only use the height component
-                None => cid_font.dw()?,      // Fall back to dw if dw2 is not available
-            }
-        } else {
-            cid_font.dw()?
-        };
-
         let units_per_em = self.font.units_per_em()?;
         // Create the appropriate glyph advance implementation
         Ok(Box::new(ChainGlyphAdvance(
             UnitPerEmAdjust::new(units_per_em, widths),
-            DefaultAdvance(default_advance),
+            FreeTypeFontWidth::new(&self.font, write_mode),
         )))
     }
 }

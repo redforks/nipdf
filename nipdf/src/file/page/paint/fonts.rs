@@ -72,14 +72,6 @@ impl<T: GlyphAdvance> GlyphAdvance for Option<T> {
     }
 }
 
-struct DefaultAdvance(f32);
-
-impl GlyphAdvance for DefaultAdvance {
-    fn advance(&self, _gid: u32, _ch: u32) -> Result<GlyphLength> {
-        Ok(GlyphLength::new(self.0))
-    }
-}
-
 /// FontWidth used in Type1 and TrueType fonts
 struct FirstLastFontWidth {
     range: RangeInclusive<u32>,
