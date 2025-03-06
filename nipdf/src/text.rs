@@ -267,9 +267,9 @@ pub trait CIDFontDictTrait {
     fn base_font(&self) -> Name;
     #[nested]
     fn font_descriptor(&self) -> Option<FontDescriptorDict<'a, 'b>>;
-    #[default(1000u32)]
+    #[default(1000f32)]
     #[key("DW")]
-    fn dw(&self) -> u32;
+    fn dw(&self) -> f32;
     #[key("DW2")]
     fn dw2(&self) -> Option<(f32, f32)>;
     #[try_from]

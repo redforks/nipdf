@@ -1,5 +1,6 @@
-use super::{Font, FontOp, GlyphRender, PathSink, TTFGlyphRender};
-use crate::graphics::trans::GlyphLength;
+use super::{
+    ChainGlyphAdvance, DefaultAdvance, Font, FontOp, GlyphRender, PathSink, TTFGlyphRender,
+};
 use crate::graphics::{NameOrDictByRef, NameOrStream};
 use crate::object::PdfObjectCore as _;
 use crate::text::{CIDFontWidths, FontDict, Type0FontDict};
@@ -38,49 +39,66 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType0Font<'_, '_> {
     }
 
     fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance + '_>> {
-        todo!()
+        let font_dict = self.font_dict.type0()?;
+        let cid_fonts = font_dict.descendant_fonts()?;
+        let cid_font = &cid_fonts[0];
+
+        // Check if we need to use vertical metrics
+        let encoding = get_font_encoding(&mut CMapRegistry::new(), &font_dict)?;
+        let is_vertical = get_write_mode(&encoding) == WriteMode::Vertical;
+
+        // Use w2 for vertical writing mode, w for horizontal
+        let widths = if is_vertical {
+            match cid_font.w2()? {
+                Some(w) => Some(w),
+                None => cid_font.w()?, // Fall back to w if w2 is not available
+            }
+        } else {
+            cid_font.w()?
+        };
+
+        // Use dw2 for vertical writing mode, dw for horizontal
+        let default_advance = if is_vertical {
+            match cid_font.dw2()? {
+                Some((height, _)) => height, // Only use the height component
+                None => cid_font.dw()?,      // Fall back to dw if dw2 is not available
+            }
+        } else {
+            cid_font.dw()?
+        };
+
+        // Create the appropriate glyph advance implementation
+        Ok(Box::new(ChainGlyphAdvance(
+            widths,
+            DefaultAdvance(default_advance),
+        )))
     }
 }
 
 struct CIDFontType0FontOp {
-    widths: Option<CIDFontWidths>,
-    // width if horizontal, height if vertical
-    default_advance: u32,
     encoding: Option<Rc<CMap>>,
     write_mode: WriteMode,
+}
+
+/// Helper function to determine the write mode from an encoding
+fn get_write_mode(encoding: &Option<Rc<CMap>>) -> WriteMode {
+    if encoding
+        .as_ref()
+        .is_none_or(|cmap| cmap.w_mode == WriteMode::Horizontal)
+    {
+        WriteMode::Horizontal
+    } else {
+        WriteMode::Vertical
+    }
 }
 
 impl CIDFontType0FontOp {
     fn new(font: &Type0FontDict<'_, '_>) -> Result<Self> {
         let mut cmap_registry = CMapRegistry::new();
         let encoding = get_font_encoding(&mut cmap_registry, font)?;
-        let cid_fonts = font.descendant_fonts()?;
-        let cid_font = &cid_fonts[0];
-        let (write_mode, widths, default_advance) = if !encoding
-            .as_ref()
-            .is_none_or(|cmap| cmap.w_mode == WriteMode::Horizontal)
-        {
-            // Vertical mode - try w2() first, fall back to w()
-            let widths = match cid_font.w2()? {
-                Some(w) => Some(w),
-                None => cid_font.w()?,
-            };
-
-            // For dw2, it returns Option<(f32, f32)>, but we only need the first component
-            let default_advance = match cid_font.dw2()? {
-                Some((height, _)) => height as u32,
-                None => cid_font.dw().unwrap_or(1000),
-            };
-
-            (WriteMode::Vertical, widths, default_advance)
-        } else {
-            // Horizontal mode - use standard widths
-            (WriteMode::Horizontal, cid_font.w()?, cid_font.dw()?)
-        };
+        let write_mode = get_write_mode(&encoding);
 
         Ok(Self {
-            widths,
-            default_advance,
             encoding,
             write_mode,
         })
@@ -113,18 +131,6 @@ impl FontOp for CIDFontType0FontOp {
     fn char_to_gid(&self, ch: u32) -> Result<u16> {
         ch.try_into().whatever_context("convert ch to u16 gid")
     }
-
-    // fn char_advance(&self, ch: u32) -> Result<GlyphLength> {
-    //     let char_width = self
-    //         .widths
-    //         .as_ref()
-    //         .map(|w| w.char_width(ch))
-    //         .transpose()
-    //         .whatever_context::<_, ObjectValueError>("get char width")?
-    //         .flatten()
-    //         .unwrap_or(self.default_advance) as f32;
-    //     Ok(GlyphLength::new(char_width))
-    // }
 
     fn write_mode(&self) -> WriteMode {
         self.write_mode
@@ -184,7 +190,7 @@ struct CIDFontType2FontOp<'a> {
     ttf_face: TTFFace<'a>,
     widths: Option<CIDFontWidths>,
     // width if horizontal, height if vertical
-    default_advance: u32,
+    default_advance: f32,
     units_per_em: u16,
     // Convert as Identity-H if None
     encoding: Option<Rc<CMap>>,
@@ -200,7 +206,7 @@ impl<'a> CIDFontType2FontOp<'a> {
         is_embed: bool,
         ttf_data: &'a [u8],
         widths: Option<CIDFontWidths>,
-        default_advance: u32,
+        default_advance: f32,
         units_per_em: u16,
     ) -> Result<Self> {
         let encoding = get_font_encoding(cmap_registry, &font)?;
@@ -214,16 +220,11 @@ impl<'a> CIDFontType2FontOp<'a> {
                     .into_owned(),
             )?),
         };
-        let write_mode = if !encoding
-            .as_ref()
-            .is_none_or(|cmap| cmap.w_mode == WriteMode::Horizontal)
-        {
+        let write_mode = get_write_mode(&encoding);
+        if write_mode == WriteMode::Vertical {
             ensure_whatever!(cid_font.w2()?.is_none(), "TODO: support w2");
             ensure_whatever!(cid_font.dw2()?.is_none(), "TODO support dw2");
-            WriteMode::Vertical
-        } else {
-            WriteMode::Horizontal
-        };
+        }
 
         let ttf_face = TTFFace::parse(ttf_data, 0)
             .whatever_context::<_, ObjectValueError>("parse TTF Face for CIDFontType2")?;
@@ -304,21 +305,6 @@ impl FontOp for CIDFontType2FontOp<'_> {
             },
         )
     }
-
-    // fn char_advance(&self, ch: u32) -> Result<GlyphLength> {
-    //     let mut char_width = self
-    //         .widths
-    //         .as_ref()
-    //         .map(|w| w.char_width(ch))
-    //         .transpose()
-    //         .whatever_context::<_, ObjectValueError>("get char width")?
-    //         .flatten()
-    //         .unwrap_or(self.default_advance) as f32;
-    //     if self.units_per_em != 1000 {
-    //         char_width = char_width / 1000.0 * self.units_per_em as f32;
-    //     }
-    //     Ok(GlyphLength::new(char_width))
-    // }
 
     fn units_per_em(&self) -> Result<u16> {
         Ok(self.units_per_em)
@@ -427,7 +413,7 @@ struct CIDFontType2UnicodeFontOp {
     face: FontKitFont,
     width: Option<CIDFontWidths>,
     // width if horizontal, height if vertical
-    default_advance: u32,
+    default_advance: f32,
     units_per_em: u16,
     encoding: &'static CharEncoding,
     write_mode: WriteMode,
@@ -437,7 +423,7 @@ impl CIDFontType2UnicodeFontOp {
     fn new(
         face: FontKitFont,
         width: Option<CIDFontWidths>,
-        default_advance: u32,
+        default_advance: f32,
         units_per_em: u16,
         encoding: &'static CharEncoding,
         write_mode: WriteMode,
@@ -471,21 +457,6 @@ impl FontOp for CIDFontType2UnicodeFontOp {
             .map(|glyph| glyph as u16)
             .whatever_context::<_, ObjectValueError>("glyph id not found")
     }
-
-    // fn char_advance(&self, ch: u32) -> Result<GlyphLength> {
-    //     let mut char_width = self
-    //         .width
-    //         .as_ref()
-    //         .map(|w| w.char_width(ch))
-    //         .transpose()
-    //         .whatever_context::<_, ObjectValueError>("get char width")?
-    //         .flatten()
-    //         .unwrap_or(self.default_advance) as f32;
-    //     if self.units_per_em != 1000 {
-    //         char_width = char_width / 1000.0 * self.units_per_em as f32;
-    //     }
-    //     Ok(GlyphLength::new(char_width))
-    // }
 
     fn units_per_em(&self) -> Result<u16> {
         Ok(self.units_per_em)
