@@ -451,7 +451,12 @@ where
         // If Length is known and a direct integer, we can use it
         let mut len: Option<u32> = match dict.get("Length") {
             Some(Object::Integer(l)) => {
-                Some(u32::try_from(*l).map_err(|e| ErrMode::from_external_error(buf, e))?)
+                // scan file for length if Length is 0
+                if *l == 0 {
+                    None
+                } else {
+                    Some(u32::try_from(*l).map_err(|e| ErrMode::from_external_error(buf, e))?)
+                }
             }
             Some(Object::Reference(_)) => None, // Length is a reference, will be resolved later
             _ => {
