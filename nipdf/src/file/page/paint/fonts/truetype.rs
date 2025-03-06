@@ -1,6 +1,6 @@
 use super::{
-    ChainGlyphAdvance, EncodingParser, FirstLastFontWidth, FontOp, FreeTypeFontWidth, GlyphRender,
-    PathSink, TTFGlyphRender,
+    ChainGlyphAdvance, EncodingParser, FirstLastFontWidth, FontKitFontExt as _, FontOp,
+    FreeTypeFontWidth, GlyphRender, PathSink, TTFGlyphRender, UnitPerEmAdjust,
 };
 use crate::{
     ObjectValueError, Result,
@@ -41,7 +41,8 @@ impl<P: PathSink> Font<P> for TTFFont<'_, '_> {
             encoding,
             TTFFace::parse(&self.data, 0)
                 .whatever_context::<_, ObjectValueError>("parse TTF Font")?,
-        )?))
+            self.face.units_per_em()?,
+        )))
     }
 
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
@@ -49,12 +50,17 @@ impl<P: PathSink> Font<P> for TTFFont<'_, '_> {
     }
 
     fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance + '_>> {
+        let units_per_em = self.face.units_per_em()?;
+        let first_last_width =
+            UnitPerEmAdjust::new(units_per_em, FirstLastFontWidth::from(&self.font_dict)?);
+        let free_type_width = FreeTypeFontWidth::new(
+            &self.face,
+            /* TrueType font no Vertical mode*/ WriteMode::Horizontal,
+        );
+
         Ok(Box::new(ChainGlyphAdvance(
-            FirstLastFontWidth::from(&self.font_dict)?,
-            FreeTypeFontWidth::new(
-                &self.face,
-                /* TrueType font no Vertical mode*/ WriteMode::Horizontal,
-            ),
+            first_last_width,
+            free_type_width,
         )))
     }
 }
@@ -73,17 +79,14 @@ impl<'a> TTFFontOp<'a> {
         face: &'a FontKitFont,
         encoding: Option<prescript::Encoding>,
         ttf_font: TTFFace<'a>,
-    ) -> Result<Self, ObjectValueError> {
-        Ok(Self {
-            units_per_em: face
-                .metrics()
-                .units_per_em
-                .try_into()
-                .whatever_context::<_, ObjectValueError>("failed convert unit_per_em")?,
+        units_per_em: u16,
+    ) -> Self {
+        Self {
+            units_per_em,
             face,
             encoding,
             ttf_font,
-        })
+        }
     }
 }
 

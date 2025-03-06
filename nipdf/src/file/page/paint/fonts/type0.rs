@@ -1,6 +1,6 @@
 use super::{
-    ChainGlyphAdvance, DefaultAdvance, Font, FontOp, GlyphAdvance, GlyphRender, PathSink,
-    TTFGlyphRender,
+    ChainGlyphAdvance, DefaultAdvance, Font, FontKitFontExt, FontOp, GlyphAdvance, GlyphRender,
+    PathSink, TTFGlyphRender, UnitPerEmAdjust,
 };
 use crate::graphics::{NameOrDictByRef, NameOrStream};
 use crate::object::PdfObjectCore as _;
@@ -335,15 +335,12 @@ impl<'a, 'b> CIDFontType2Font<'a, 'b> {
 
 impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
     fn create_op(&self, cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
-        let face = FontKitFont::from_bytes(self.data.clone(), 0)
-            .whatever_context::<_, ObjectValueError>("decode FontKitFont for Type2")?;
-
         // Get the common font info upfront
         let font = self.font_dict.type0()?;
         let encoding = get_font_encoding(cmap_registry, &font)?;
         let cid_fonts = font.descendant_fonts()?;
         let cid_font = &cid_fonts[0];
-        let units_per_em = face.metrics().units_per_em as u16;
+        let units_per_em = self.font.units_per_em()?;
         let write_mode = if !encoding
             .as_ref()
             .is_none_or(|cmap| cmap.w_mode == WriteMode::Horizontal)
@@ -370,7 +367,7 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
                 };
 
                 return Ok(Box::new(CIDFontType2UnicodeFontOp::new(
-                    face,
+                    &self.font,
                     units_per_em,
                     encoding,
                     write_mode,
@@ -421,24 +418,25 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
             cid_font.dw()?
         };
 
+        let units_per_em = self.font.units_per_em()?;
         // Create the appropriate glyph advance implementation
         Ok(Box::new(ChainGlyphAdvance(
-            widths,
+            UnitPerEmAdjust::new(units_per_em, widths),
             DefaultAdvance(default_advance),
         )))
     }
 }
 
-struct CIDFontType2UnicodeFontOp {
-    face: FontKitFont,
+struct CIDFontType2UnicodeFontOp<'a> {
+    face: &'a FontKitFont,
     units_per_em: u16,
     encoding: &'static CharEncoding,
     write_mode: WriteMode,
 }
 
-impl CIDFontType2UnicodeFontOp {
+impl<'a> CIDFontType2UnicodeFontOp<'a> {
     fn new(
-        face: FontKitFont,
+        face: &'a FontKitFont,
         units_per_em: u16,
         encoding: &'static CharEncoding,
         write_mode: WriteMode,
@@ -452,7 +450,7 @@ impl CIDFontType2UnicodeFontOp {
     }
 }
 
-impl FontOp for CIDFontType2UnicodeFontOp {
+impl<'a> FontOp for CIDFontType2UnicodeFontOp<'a> {
     fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>> {
         let (decoded, _, has_errors) = self.encoding.decode(s);
         if has_errors {

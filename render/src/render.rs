@@ -2062,6 +2062,7 @@ impl TextObject {
     }
 
     fn set_units_per_em(&mut self, units_per_em: f32) {
+        dbg!(units_per_em);
         self.em_ratio = Scale::new(1.0 / units_per_em);
     }
 
@@ -2088,6 +2089,7 @@ impl TextObject {
     }
 
     fn move_to_next_pos(&mut self, glyph_advance: GlyphLength, word_boundary: bool) {
+        dbg!((glyph_advance, self.em_ratio, self.font_size));
         let mut advance = glyph_advance * self.em_ratio * self.font_size;
 
         match self.write_mode {

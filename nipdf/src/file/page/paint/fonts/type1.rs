@@ -1,6 +1,6 @@
 use super::{
-    ChainGlyphAdvance, EncodingParser, FirstLastFontWidth, Font, FontKitFont, FontOp,
-    FreeTypeFontWidth, GlyphRender, PathSink, TTFGlyphRender,
+    ChainGlyphAdvance, EncodingParser, FirstLastFontWidth, Font, FontKitFont, FontKitFontExt,
+    FontOp, FreeTypeFontWidth, GlyphRender, PathSink, TTFGlyphRender, UnitPerEmAdjust,
 };
 use crate::text::FontDict;
 use crate::{ObjectValueError, Result};
@@ -48,7 +48,10 @@ impl<P: PathSink> Font<P> for Type1Font<'_> {
 
     fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance + '_>> {
         Ok(Box::new(ChainGlyphAdvance(
-            FirstLastFontWidth::from(&self.font_dict)?,
+            UnitPerEmAdjust::new(
+                self.font.units_per_em()?,
+                FirstLastFontWidth::from(&self.font_dict)?,
+            ),
             FreeTypeFontWidth::new(
                 &self.font,
                 /* Type1 font no Vertical mode*/ WriteMode::Horizontal,

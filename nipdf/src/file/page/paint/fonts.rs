@@ -34,6 +34,19 @@ mod type0;
 mod type1;
 mod type3;
 
+trait FontKitFontExt {
+    fn units_per_em(&self) -> Result<u16>;
+}
+
+impl FontKitFontExt for FontKitFont {
+    fn units_per_em(&self) -> Result<u16> {
+        self.metrics()
+            .units_per_em
+            .try_into()
+            .whatever_context("Failed to convert units_per_em to u32")
+    }
+}
+
 struct ChainGlyphAdvance<T, U>(T, U);
 
 impl<T, U> GlyphAdvance for ChainGlyphAdvance<T, U>
@@ -746,6 +759,28 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
 pub trait GlyphAdvance {
     /// Return glyph width or height based on write_mode
     fn advance(&self, gid: u32) -> Result<GlyphLength>;
+}
+
+struct UnitPerEmAdjust<G> {
+    units_per_em: u16,
+    inner: G,
+}
+
+impl<G> UnitPerEmAdjust<G> {
+    fn new(units_per_em: u16, inner: G) -> Self {
+        Self {
+            units_per_em,
+            inner,
+        }
+    }
+}
+
+impl<G: GlyphAdvance> GlyphAdvance for UnitPerEmAdjust<G> {
+    fn advance(&self, gid: u32) -> Result<GlyphLength> {
+        let mut glyph_length = self.inner.advance(gid)?;
+        glyph_length.0 *= self.units_per_em as f32 / 1000.0;
+        Ok(glyph_length)
+    }
 }
 
 pub trait FontOp {
