@@ -182,33 +182,30 @@ pub enum CIDFontWidthGroup {
 pub struct CIDFontWidths(Vec<CIDFontWidthGroup>);
 
 impl GlyphAdvance for CIDFontWidths {
-    fn advance(&self, _gid: u32, ch: u32) -> Result<GlyphLength> {
+    fn advance(&self, gid: u32, cid: u32) -> Result<GlyphLength> {
         // Find the width for the given glyph ID
-        let width_opt = {
-            for group in &self.0 {
-                match group {
-                    CIDFontWidthGroup::NConsecutive((first, widths)) => {
-                        if ch >= *first
-                            && ch
-                                < *first
-                                    + u32::try_from(widths.len())
-                                        .whatever_context::<_, ObjectValueError>("convert to u32")?
-                        {
-                            return Ok(GlyphLength::new(widths[(ch - first) as usize] as f32));
-                        }
+        for group in &self.0 {
+            match group {
+                CIDFontWidthGroup::NConsecutive((first, widths)) => {
+                    if gid >= *first
+                        && gid
+                            < *first
+                                + u32::try_from(widths.len())
+                                    .whatever_context::<_, ObjectValueError>("convert to u32")?
+                    {
+                        return Ok(GlyphLength::new(widths[(gid - first) as usize] as f32));
                     }
-                    CIDFontWidthGroup::FirstLast { first, last, width } => {
-                        if ch >= *first && ch <= *last {
-                            return Ok(GlyphLength::new(*width as f32));
-                        }
+                }
+                CIDFontWidthGroup::FirstLast { first, last, width } => {
+                    if gid >= *first && gid <= *last {
+                        return Ok(GlyphLength::new(*width as f32));
                     }
                 }
             }
-            None
-        };
+        }
 
         // If no width found, return an error
-        width_opt.with_whatever_context(|| format!("Glyph ID {} not found in CIDFontWidths", _gid))
+        whatever!("CID/gid {}/{} not found in CIDFontWidths", cid, gid)
     }
 }
 
@@ -260,6 +257,10 @@ impl TryFrom<ObjectWithResolver<'_, '_>> for CIDFontWidths {
     }
 }
 
+fn default_dw2() -> (f32, f32) {
+    (880.0f32, 1000.0f32)
+}
+
 #[pdf_object("Font")]
 pub trait CIDFontDictTrait {
     #[try_from]
@@ -270,8 +271,9 @@ pub trait CIDFontDictTrait {
     #[default(1000f32)]
     #[key("DW")]
     fn dw(&self) -> f32;
+    #[default_fn(default_dw2)]
     #[key("DW2")]
-    fn dw2(&self) -> Option<(f32, f32)>;
+    fn dw2(&self) -> (f32, f32);
     #[try_from]
     fn w(&self) -> Option<CIDFontWidths>;
     #[try_from]

@@ -56,8 +56,8 @@ where
     U: GlyphAdvance,
 {
     fn advance(&self, gid: u32, ch: u32) -> Result<GlyphLength> {
-        self.0.advance(gid, ch).or_else(|e| {
-            info!("Primary glyph advance failed, using fallback: {}", e);
+        self.0.advance(gid, ch).or_else(|_e| {
+            // info!("{}", e);
             self.1.advance(gid, ch)
         })
     }
@@ -144,9 +144,9 @@ impl<'a> GlyphAdvance for FreeTypeFontWidth<'a> {
                 }
             }
         }
-        .to_u32()
+        .to_f32()
         .whatever_context::<_, ObjectValueError>("convert advance to u32")?;
-        Ok(GlyphLength::new(r as f32))
+        Ok(GlyphLength::new(r))
     }
 }
 
@@ -758,6 +758,13 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
 pub trait GlyphAdvance {
     /// Return glyph width or height based on write_mode
     fn advance(&self, gid: u32, ch: u32) -> Result<GlyphLength>;
+}
+
+struct LengthAdavnce(f32);
+impl GlyphAdvance for LengthAdavnce {
+    fn advance(&self, _gid: u32, _ch: u32) -> Result<GlyphLength> {
+        Ok(GlyphLength::new(self.0))
+    }
 }
 
 struct UnitPerEmAdjust<G> {

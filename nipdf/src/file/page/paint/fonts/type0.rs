@@ -1,7 +1,8 @@
 use super::{
-    ChainGlyphAdvance, Font, FontKitFontExt, FontOp, FreeTypeFontWidth, GlyphAdvance, GlyphRender,
-    PathSink, TTFGlyphRender, UnitPerEmAdjust,
+    ChainGlyphAdvance, Font, FontKitFontExt, FontOp, GlyphAdvance, GlyphRender, PathSink,
+    TTFGlyphRender, UnitPerEmAdjust,
 };
+use crate::file::paint::fonts::LengthAdavnce;
 use crate::graphics::{NameOrDictByRef, NameOrStream};
 use crate::object::PdfObjectCore as _;
 use crate::text::{FontDict, Type0FontDict};
@@ -49,19 +50,18 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType0Font<'_, '_> {
         let write_mode = get_write_mode(&encoding);
 
         // Use w2 for vertical writing mode, w for horizontal
-        let widths = if write_mode == WriteMode::Vertical {
-            match cid_font.w2()? {
-                Some(w) => Some(w),
-                None => cid_font.w()?, // Fall back to w if w2 is not available
-            }
+        let (widths, default_width) = if write_mode == WriteMode::Vertical {
+            let widths = cid_font.w2()?;
+            let default_width = cid_font.dw2()?.1;
+            (widths, default_width)
         } else {
-            cid_font.w()?
+            (cid_font.w()?, cid_font.dw()?)
         };
 
         let units_per_em = self.font.units_per_em()?;
-        Ok(Box::new(UnitPerEmAdjust::new(
-            units_per_em,
-            ChainGlyphAdvance(widths, FreeTypeFontWidth::new(&self.font, write_mode)),
+        Ok(Box::new(ChainGlyphAdvance(
+            UnitPerEmAdjust::new(units_per_em, widths),
+            UnitPerEmAdjust::new(units_per_em, LengthAdavnce(default_width)),
         )))
     }
 }
@@ -207,10 +207,6 @@ impl<'a> CIDFontType2FontOp<'a> {
             )?),
         };
         let write_mode = get_write_mode(&encoding);
-        if write_mode == WriteMode::Vertical {
-            ensure_whatever!(cid_font.w2()?.is_none(), "TODO: support w2");
-            ensure_whatever!(cid_font.dw2()?.is_none(), "TODO support dw2");
-        }
 
         let ttf_face = TTFFace::parse(ttf_data, 0)
             .whatever_context::<_, ObjectValueError>("parse TTF Face for CIDFontType2")?;
@@ -328,15 +324,11 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
         // Get the common font info upfront
         let font = self.font_dict.type0()?;
         let encoding = get_font_encoding(cmap_registry, &font)?;
-        let cid_fonts = font.descendant_fonts()?;
-        let cid_font = &cid_fonts[0];
         let units_per_em = self.font.units_per_em()?;
         let write_mode = if !encoding
             .as_ref()
             .is_none_or(|cmap| cmap.w_mode == WriteMode::Horizontal)
         {
-            ensure_whatever!(cid_font.w2()?.is_none(), "TODO: support w2");
-            ensure_whatever!(cid_font.dw2()?.is_none(), "TODO support dw2");
             WriteMode::Vertical
         } else {
             WriteMode::Horizontal
@@ -389,20 +381,18 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
         let write_mode = get_write_mode(&encoding);
 
         // Use w2 for vertical writing mode, w for horizontal
-        let widths = if write_mode == WriteMode::Vertical {
-            match cid_font.w2()? {
-                Some(w) => Some(w),
-                None => cid_font.w()?, // Fall back to w if w2 is not available
-            }
+        let (widths, default_width) = if write_mode == WriteMode::Vertical {
+            let widths = cid_font.w2()?;
+            let default_width = cid_font.dw2()?.1;
+            (widths, default_width)
         } else {
-            cid_font.w()?
+            (cid_font.w()?, cid_font.dw()?)
         };
 
         let units_per_em = self.font.units_per_em()?;
-        // Create the appropriate glyph advance implementation
-        Ok(Box::new(UnitPerEmAdjust::new(
-            units_per_em,
-            ChainGlyphAdvance(widths, FreeTypeFontWidth::new(&self.font, write_mode)),
+        Ok(Box::new(ChainGlyphAdvance(
+            UnitPerEmAdjust::new(units_per_em, widths),
+            UnitPerEmAdjust::new(units_per_em, LengthAdavnce(default_width)),
         )))
     }
 }
