@@ -67,7 +67,7 @@ fn download_file(url: &str, p: impl AsRef<Path>) -> Result<()> {
 }
 
 /// These files are very rare and odd, not to be tested
-const IGNORED: [&str; 18] = [
+const IGNORED: [&str; 19] = [
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
     "bug1050040.pdf",
     // invalid object format, mupdf failed to parse, mupdf says no page
@@ -129,6 +129,8 @@ const IGNORED: [&str; 18] = [
     "issue6010_2.pdf",
     // Possible of jpeg_decoder crate failed to decode jpx stream
     "issue12841_reduced.pdf",
+    // bad file, browser/mupdf/xpdf all failed to open
+    "poppler-937-0-fuzzed.pdf",
 ];
 
 static PASSWORD: phf::Map<&'static str, &'static str> = phf::phf_map! {
