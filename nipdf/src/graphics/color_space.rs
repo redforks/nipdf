@@ -183,9 +183,9 @@ where
                         .color_space()?;
                     let args = color_spaces
                         .get(name)
-                        .whatever_context::<_, ObjectValueError>(
-                            "ColorSpace::from_args() color space not found",
-                        )?;
+                        .with_whatever_context::<_, _, ObjectValueError>(|| {
+                            format!("ColorSpace {} not found", name)
+                        })?;
                     Self::from_args(args, resolver, resources)
                 }
             },

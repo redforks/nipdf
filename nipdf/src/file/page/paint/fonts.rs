@@ -49,7 +49,6 @@ impl FontKitFontExt for FontKitFont {
 
 struct ChainGlyphAdvance<T, U>(T, U);
 
-// AI
 impl<T, U> GlyphAdvance for ChainGlyphAdvance<T, U>
 where
     T: GlyphAdvance,
