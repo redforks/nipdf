@@ -182,23 +182,23 @@ pub enum CIDFontWidthGroup {
 pub struct CIDFontWidths(Vec<CIDFontWidthGroup>);
 
 impl GlyphAdvance for CIDFontWidths {
-    fn advance(&self, gid: u32) -> Result<GlyphLength> {
+    fn advance(&self, _gid: u32, ch: u32) -> Result<GlyphLength> {
         // Find the width for the given glyph ID
         let width_opt = {
             for group in &self.0 {
                 match group {
                     CIDFontWidthGroup::NConsecutive((first, widths)) => {
-                        if gid >= *first
-                            && gid
+                        if ch >= *first
+                            && ch
                                 < *first
                                     + u32::try_from(widths.len())
                                         .whatever_context::<_, ObjectValueError>("convert to u32")?
                         {
-                            return Ok(GlyphLength::new(widths[(gid - first) as usize] as f32));
+                            return Ok(GlyphLength::new(widths[(ch - first) as usize] as f32));
                         }
                     }
                     CIDFontWidthGroup::FirstLast { first, last, width } => {
-                        if gid >= *first && gid <= *last {
+                        if ch >= *first && ch <= *last {
                             return Ok(GlyphLength::new(*width as f32));
                         }
                     }
@@ -208,7 +208,7 @@ impl GlyphAdvance for CIDFontWidths {
         };
 
         // If no width found, return an error
-        width_opt.with_whatever_context(|| format!("Glyph ID {} not found in CIDFontWidths", gid))
+        width_opt.with_whatever_context(|| format!("Glyph ID {} not found in CIDFontWidths", _gid))
     }
 }
 

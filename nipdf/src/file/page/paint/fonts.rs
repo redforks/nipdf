@@ -49,23 +49,24 @@ impl FontKitFontExt for FontKitFont {
 
 struct ChainGlyphAdvance<T, U>(T, U);
 
+// AI
 impl<T, U> GlyphAdvance for ChainGlyphAdvance<T, U>
 where
     T: GlyphAdvance,
     U: GlyphAdvance,
 {
-    fn advance(&self, gid: u32) -> Result<GlyphLength> {
-        self.0.advance(gid).or_else(|e| {
+    fn advance(&self, gid: u32, ch: u32) -> Result<GlyphLength> {
+        self.0.advance(gid, ch).or_else(|e| {
             info!("Primary glyph advance failed, using fallback: {}", e);
-            self.1.advance(gid)
+            self.1.advance(gid, ch)
         })
     }
 }
 
 impl<T: GlyphAdvance> GlyphAdvance for Option<T> {
-    fn advance(&self, gid: u32) -> Result<GlyphLength> {
+    fn advance(&self, gid: u32, ch: u32) -> Result<GlyphLength> {
         match self {
-            Some(glyph_advance) => glyph_advance.advance(gid),
+            Some(glyph_advance) => glyph_advance.advance(gid, ch),
             None => whatever!("No glyph advance"),
         }
     }
@@ -74,7 +75,7 @@ impl<T: GlyphAdvance> GlyphAdvance for Option<T> {
 struct DefaultAdvance(f32);
 
 impl GlyphAdvance for DefaultAdvance {
-    fn advance(&self, _gid: u32) -> Result<GlyphLength> {
+    fn advance(&self, _gid: u32, _ch: u32) -> Result<GlyphLength> {
         Ok(GlyphLength::new(self.0))
     }
 }
@@ -87,9 +88,9 @@ struct FirstLastFontWidth {
 }
 
 impl GlyphAdvance for FirstLastFontWidth {
-    fn advance(&self, gid: u32) -> Result<GlyphLength> {
-        Ok(GlyphLength::new(if self.range.contains(&gid) {
-            let idx = (gid - self.range.start()) as usize;
+    fn advance(&self, _gid: u32, ch: u32) -> Result<GlyphLength> {
+        Ok(GlyphLength::new(if self.range.contains(&ch) {
+            let idx = (ch - self.range.start()) as usize;
             self.widths
                 .get(idx)
                 .map(|v| *v)
@@ -136,7 +137,7 @@ impl<'a> FreeTypeFontWidth<'a> {
 }
 
 impl<'a> GlyphAdvance for FreeTypeFontWidth<'a> {
-    fn advance(&self, gid: u32) -> Result<GlyphLength> {
+    fn advance(&self, gid: u32, _ch: u32) -> Result<GlyphLength> {
         let advance = self
             .font
             .advance(gid)
@@ -758,7 +759,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
 
 pub trait GlyphAdvance {
     /// Return glyph width or height based on write_mode
-    fn advance(&self, gid: u32) -> Result<GlyphLength>;
+    fn advance(&self, gid: u32, ch: u32) -> Result<GlyphLength>;
 }
 
 struct UnitPerEmAdjust<G> {
@@ -776,8 +777,8 @@ impl<G> UnitPerEmAdjust<G> {
 }
 
 impl<G: GlyphAdvance> GlyphAdvance for UnitPerEmAdjust<G> {
-    fn advance(&self, gid: u32) -> Result<GlyphLength> {
-        let mut glyph_length = self.inner.advance(gid)?;
+    fn advance(&self, gid: u32, ch: u32) -> Result<GlyphLength> {
+        let mut glyph_length = self.inner.advance(gid, ch)?;
         glyph_length.0 *= self.units_per_em as f32 / 1000.0;
         Ok(glyph_length)
     }
@@ -808,10 +809,10 @@ mod tests {
             default_width: 15,
         };
 
-        assert_eq!(100.0, font_width.advance('a' as u32).unwrap().0);
-        assert_eq!(200.0, font_width.advance('b' as u32).unwrap().0);
-        assert_eq!(400.0, font_width.advance('d' as u32).unwrap().0);
-        assert_eq!(15.0, font_width.advance('e' as u32).unwrap().0);
+        assert_eq!(100.0, font_width.advance('a' as u32, 'a' as u32).unwrap().0);
+        assert_eq!(200.0, font_width.advance('b' as u32, 'b' as u32).unwrap().0);
+        assert_eq!(400.0, font_width.advance('d' as u32, 'd' as u32).unwrap().0);
+        assert_eq!(15.0, font_width.advance('e' as u32, 'e' as u32).unwrap().0);
     }
 
     #[test_case("s" => "s"; "no need to normalize")]
