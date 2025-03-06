@@ -55,6 +55,31 @@ impl GlyphAdvance for FirstLastFontWidth {
     }
 }
 
+struct ChainGlyphAdvance<T, U>(T, U);
+
+impl<T, U> ChainGlyphAdvance<T, U>
+where
+    T: GlyphAdvance,
+    U: GlyphAdvance,
+{
+    pub fn new(first: T, second: U) -> Self {
+        Self(first, second)
+    }
+}
+
+impl<T, U> GlyphAdvance for ChainGlyphAdvance<T, U>
+where
+    T: GlyphAdvance,
+    U: GlyphAdvance,
+{
+    fn advance(&self, gid: u32) -> Result<GlyphLength> {
+        self.0.advance(gid).or_else(|e| {
+            info!("Primary glyph advance failed, using fallback: {}", e);
+            self.1.advance(gid)
+        })
+    }
+}
+
 struct DefaultAdvance(f32);
 
 impl DefaultAdvance {
