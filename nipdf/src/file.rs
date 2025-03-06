@@ -587,7 +587,9 @@ impl<'a> Catalog<'a> {
         Page::parse(
             self.d
                 .pages()
-                .whatever_context::<_, ObjectValueError>("resolve pages")?,
+                .with_whatever_context::<_, _, ObjectValueError>(|_| {
+                    format!("resolve pages, catalog: {:?}", self.d.id())
+                })?,
         )
     }
 
@@ -941,12 +943,30 @@ impl File {
             user_password,
         )?;
 
+        let root_id = trailers
+            .iter()
+            .filter_map(|t| t.get(&sname("Root")))
+            .filter_map(|o| o.reference().ok())
+            .find_map(|root_id| {
+                let resolver = ObjectResolver::new(&buf, &xref, encrypt_key.clone());
+                if let Ok(catalog) = Catalog::parse(root_id, &resolver) {
+                    if catalog.pages().is_ok() {
+                        Some(root_id)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .whatever_context::<_, ObjectValueError>("context")?;
+
         Ok(Self {
-            head_ver: head_ver.map(|(_, ver)| ver),
-            root_id: get_root_id(&trailers)?,
-            data: buf,
-            xref,
+            root_id: root_id.into(),
             encrypt_info: encrypt_key,
+            xref,
+            data: buf,
+            head_ver: head_ver.map(|(_, ver)| ver),
         })
     }
 
