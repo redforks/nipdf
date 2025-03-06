@@ -1,4 +1,7 @@
-use super::{EncodingParser, FirstLastFontWidth, FontOp, GlyphRender, PathSink, TTFGlyphRender};
+use super::{
+    ChainGlyphAdvance, EncodingParser, FirstLastFontWidth, FontOp, FreeTypeFontWidth, GlyphRender,
+    PathSink, TTFGlyphRender,
+};
 use crate::{
     ObjectValueError, Result,
     file::page::paint::fonts::{Font, FontDict},
@@ -6,7 +9,7 @@ use crate::{
 use font_kit::loaders::freetype::Font as FontKitFont;
 use log::warn;
 use phf::phf_map;
-use prescript::cmap::CMapRegistry;
+use prescript::cmap::{CMapRegistry, WriteMode};
 use snafu::OptionExt as _;
 use snafu::ResultExt;
 use std::sync::Arc;
@@ -36,7 +39,6 @@ impl<P: PathSink> Font<P> for TTFFont<'_, '_> {
         Ok(Box::new(TTFFontOp::new(
             &self.face,
             encoding,
-            FirstLastFontWidth::from(&self.font_dict)?,
             TTFFace::parse(&self.data, 0)
                 .whatever_context::<_, ObjectValueError>("parse TTF Font")?,
         )?))
@@ -47,7 +49,13 @@ impl<P: PathSink> Font<P> for TTFFont<'_, '_> {
     }
 
     fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance + '_>> {
-        todo!()
+        Ok(Box::new(ChainGlyphAdvance(
+            FirstLastFontWidth::from(&self.font_dict)?,
+            FreeTypeFontWidth::new(
+                &self.face,
+                /* TrueType font no Vertical mode*/ WriteMode::Horizontal,
+            ),
+        )))
     }
 }
 
@@ -57,7 +65,6 @@ pub struct TTFFontOp<'a> {
     face: &'a FontKitFont,
     units_per_em: u16,
     encoding: Option<prescript::Encoding>,
-    font_width: Option<FirstLastFontWidth>,
     ttf_font: TTFFace<'a>,
 }
 
@@ -65,7 +72,6 @@ impl<'a> TTFFontOp<'a> {
     pub fn new(
         face: &'a FontKitFont,
         encoding: Option<prescript::Encoding>,
-        font_width: Option<FirstLastFontWidth>,
         ttf_font: TTFFace<'a>,
     ) -> Result<Self, ObjectValueError> {
         Ok(Self {
@@ -76,7 +82,6 @@ impl<'a> TTFFontOp<'a> {
                 .whatever_context::<_, ObjectValueError>("failed convert unit_per_em")?,
             face,
             encoding,
-            font_width,
             ttf_font,
         })
     }
@@ -124,26 +129,12 @@ impl FontOp for TTFFontOp<'_> {
         Ok(0)
     }
 
-    // fn char_advance(&self, ch: u32) -> Result<GlyphLength, ObjectValueError> {
-    //     if let Some(font_width) = &self.font_width {
-    //         return Ok(font_width.char_width(ch) / 1000.0 * self.units_per_em as f32);
-    //     }
-    //     let gid = self.char_to_gid(ch)?;
-
-    //     Ok(GlyphLength::new(
-    //         self.face
-    //             .advance(gid as u32)
-    //             .whatever_context::<_, ObjectValueError>("get char advance")?
-    //             .x(),
-    //     ))
-    // }
-
     fn units_per_em(&self) -> Result<u16, ObjectValueError> {
         Ok(self.units_per_em)
     }
 
-    fn write_mode(&self) -> prescript::cmap::WriteMode {
-        prescript::cmap::WriteMode::Horizontal
+    fn write_mode(&self) -> WriteMode {
+        WriteMode::Horizontal
     }
 }
 
