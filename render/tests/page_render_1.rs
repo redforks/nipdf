@@ -67,7 +67,7 @@ fn download_file(url: &str, p: impl AsRef<Path>) -> Result<()> {
 }
 
 /// These files are very rare and odd, not to be tested
-const IGNORED: [&str; 22] = [
+const IGNORED: [&str; 23] = [
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
     "bug1050040.pdf",
     // invalid object format, mupdf failed to parse, mupdf says no page
@@ -137,6 +137,8 @@ const IGNORED: [&str; 22] = [
     "poppler-937-0-fuzzed.pdf",
     // okay in release mode, invalid ColorSpace name
     "issue6707.pdf.link",
+    // only pdf.js can open, pdf.js says: Warning: indexObjects: Found "2 0 obj" inside of another "obj", caused by missing "endobj" -- trying to recover.
+    "issue9105_other.pdf",
 ];
 
 static PASSWORD: phf::Map<&'static str, &'static str> = phf::phf_map! {
