@@ -5,7 +5,7 @@ use crate::{
         BufPos, Dictionary, HexString, IndirectObjectDef, InnerString, LiteralString, Object,
         ObjectId, Reference, Stream as PdfStream,
     },
-    parser::is_whitespace,
+    parser::{is_whitespace, wsc0_or_1},
 };
 use ahash::HashMap;
 use either::Either;
@@ -451,12 +451,7 @@ where
         // If Length is known and a direct integer, we can use it
         let len: Option<u32> = match dict.get("Length") {
             Some(Object::Integer(l)) => {
-                // scan file for length if Length is 0
-                if *l == 0 {
-                    None
-                } else {
-                    Some(u32::try_from(*l).map_err(|e| ErrMode::from_external_error(buf, e))?)
-                }
+                Some(u32::try_from(*l).map_err(|e| ErrMode::from_external_error(buf, e))?)
             }
             Some(Object::Reference(_)) => None, // Length is a reference, will be resolved later
             _ => {
@@ -471,11 +466,11 @@ where
             take::<_, _, ErrMode<E>>(len).parse_next(buf)?;
         }
 
-        let l = repeat_till::<_, _, usize, _, _, _, _>(
+        let scanned_length = repeat_till::<_, _, usize, _, _, _, _>(
             0..,
             any::<_, ErrMode<E>>,
             (
-                wsc0(),
+                wsc0_or_1(),
                 b"endstrea".as_slice(),
                 opt(b'm'),
                 wsc0(),
@@ -484,8 +479,8 @@ where
             ),
         )
         .try_map(|l| <u32>::try_from(l.0))
-        .parse_next(buf)?;
-        let scanned_length = l;
+        .parse_next(buf)?
+            + len.unwrap_or_default();
 
         let bufpos = BufPos::new(
             stream_start

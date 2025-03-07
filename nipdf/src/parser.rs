@@ -100,6 +100,15 @@ where
     repeat::<_, _, (), _, _>(0.., wsc()).void()
 }
 
+/// Matches 0 or one whitespace or comments.
+pub fn wsc0_or_1<'a, S, E>() -> impl Parser<S, (), E> + 'a
+where
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+    E: ParserError<S> + 'a,
+{
+    repeat::<_, _, (), _, _>(0..1, wsc()).void()
+}
+
 /// Matches 1 or more whitespace or comments.
 pub fn wsc1<'a, S, E>() -> impl Parser<S, (), E> + 'a
 where
