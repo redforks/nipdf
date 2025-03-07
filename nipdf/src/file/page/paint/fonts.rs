@@ -682,10 +682,6 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
             fonts.insert(k, font);
         }
 
-        if fonts.is_empty() {
-            warn!("No fonts found, use fallback font");
-        }
-
         Ok(Self {
             cache: FontCacheInner::try_new(
                 fonts,
