@@ -228,7 +228,7 @@ pub fn render_steps(
             match renderer.exec(op) {
                 Ok(_) => (),
                 Err(e) if option.fail_fast => return Err(e),
-                Err(e) => log::error!("Operation failed: {}", e),
+                Err(e) => log::error!("Operation failed: {}", snafu::Report::from_error(e)),
             }
         }
     }

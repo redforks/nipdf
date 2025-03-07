@@ -343,7 +343,7 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
                 let encoding = match name.as_ref() {
                     "GBK-EUC-H" => encoding_rs::GBK,
                     "UniJIS-UCS2-HW-H" | "UniGB-UTF16-H" => encoding_rs::UTF_16BE,
-                    "ETenms-B5-V" | "ETenms-B5-H" | "B5pc-H" => encoding_rs::BIG5,
+                    "ETenms-B5-V" | "ETenms-B5-H" | "ETen-B5-H" | "B5pc-H" => encoding_rs::BIG5,
                     "90pv-RKSJ-H" => encoding_rs::SHIFT_JIS,
                     _ => whatever!("unsupported encoding: '{}'", name),
                 };
