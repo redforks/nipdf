@@ -194,18 +194,9 @@ impl<'a> CIDFontType2FontOp<'a> {
         is_embed: bool,
         ttf_data: &'a [u8],
         units_per_em: u16,
+        cid_to_gid: Option<CIDToGIDMap>,
     ) -> Result<Self> {
         let encoding = get_font_encoding(cmap_registry, &font)?;
-        let cid_fonts = font.descendant_fonts()?;
-        let cid_font = &cid_fonts[0];
-        let cid_to_gid = match cid_font.cid_to_gid_map()? {
-            NameOrStream::Name(_) => None,
-            NameOrStream::Stream(s) => Some(CIDToGIDMap::new(
-                s.decode(cid_font.resolver())
-                    .whatever_context::<_, ObjectValueError>("decode stream")?
-                    .into_owned(),
-            )?),
-        };
         let write_mode = get_write_mode(&encoding);
 
         let ttf_face = TTFFace::parse(ttf_data, 0)
@@ -334,26 +325,38 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
             WriteMode::Horizontal
         };
 
-        // Check encoding and create appropriate FontOp
-        if let Some(NameOrDictByRef::Name(ref name)) = self.font_dict.encoding()? {
-            if *name != &sname("Identity-H")
-                && *name != &sname("Identity-V")
-                && Encoding::predefined(name).is_none()
-            {
-                let encoding = match name.as_ref() {
-                    "GBK-EUC-H" => encoding_rs::GBK,
-                    "UniJIS-UCS2-HW-H" | "UniGB-UTF16-H" => encoding_rs::UTF_16BE,
-                    "ETenms-B5-V" | "ETenms-B5-H" | "ETen-B5-H" | "B5pc-H" => encoding_rs::BIG5,
-                    "90pv-RKSJ-H" => encoding_rs::SHIFT_JIS,
-                    _ => whatever!("unsupported encoding: '{}'", name),
-                };
+        // Resolve CIDToGIDMap before creating the FontOp
+        let cid_to_gid = match font.descendant_fonts()?[0].cid_to_gid_map()? {
+            NameOrStream::Name(_) => None,
+            NameOrStream::Stream(s) => Some(CIDToGIDMap::new(
+                s.decode(font.resolver())
+                    .whatever_context::<_, ObjectValueError>("decode stream")?
+                    .into_owned(),
+            )?),
+        };
 
-                return Ok(Box::new(CIDFontType2UnicodeFontOp::new(
-                    &self.font,
-                    units_per_em,
-                    encoding,
-                    write_mode,
-                )));
+        // Check encoding and create appropriate FontOp
+        if cid_to_gid.is_none() {
+            if let Some(NameOrDictByRef::Name(ref name)) = self.font_dict.encoding()? {
+                if *name != &sname("Identity-H")
+                    && *name != &sname("Identity-V")
+                    && Encoding::predefined(name).is_none()
+                {
+                    let encoding = match name.as_ref() {
+                        "GBK-EUC-H" => encoding_rs::GBK,
+                        "UniJIS-UCS2-HW-H" | "UniGB-UTF16-H" => encoding_rs::UTF_16BE,
+                        "ETenms-B5-V" | "ETenms-B5-H" | "ETen-B5-H" | "B5pc-H" => encoding_rs::BIG5,
+                        "90pv-RKSJ-H" => encoding_rs::SHIFT_JIS,
+                        _ => whatever!("unsupported encoding: '{}'", name),
+                    };
+
+                    return Ok(Box::new(CIDFontType2UnicodeFontOp::new(
+                        &self.font,
+                        units_per_em,
+                        encoding,
+                        write_mode,
+                    )));
+                }
             }
         }
 
@@ -363,6 +366,7 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
             self.font_is_embed,
             &self.data,
             units_per_em,
+            cid_to_gid,
         )?))
     }
 
