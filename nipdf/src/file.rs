@@ -25,7 +25,7 @@ use winnow::{
     combinator::{alt, repeat, repeat_till, terminated},
     error::{ErrMode, ParseError},
     stream::{Compare, StreamIsPartial},
-    token::{any, rest, take_until},
+    token::{any, rest},
 };
 
 pub mod page;
@@ -688,9 +688,8 @@ fn index_xref(
     // Store positions of XRef streams: (position, stream object ID)
     let mut xref_streams = Vec::new();
 
-    let parse_trailer_position_after_xref = (b"xref".as_slice(), take_until(1.., TRAILER_BYTES))
-        .span()
-        .map(|r| trailer_positions.push(r.end));
+    let parse_trailer_position_after_xref =
+        terminated((TRAILER_BYTES, wsc0()).span(), dict).map(|r| trailer_positions.push(r.start));
 
     // Add parser for object definitions, capturing their positions more accurately
     let parse_indirect_object = {
@@ -731,6 +730,7 @@ fn index_xref(
             parse_indirect_object,
             parse_xref_stream,
             b"startxref".as_slice().void(),
+            b"xref".as_slice().void(),
             parse_trailer_position_after_xref,
             any.void(),
         )),
@@ -959,7 +959,7 @@ impl File {
                     None
                 }
             })
-            .whatever_context::<_, ObjectValueError>("context")?;
+            .whatever_context::<_, ObjectValueError>("find root_id")?;
 
         Ok(Self {
             root_id: root_id.into(),
