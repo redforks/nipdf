@@ -498,6 +498,7 @@ fn decode_image<'a, M: ImageMetadata>(
             &data,
             false,
         )?,
+        FilterDecodedData::ConvertedImage(img) => img,
     };
 
     if let Some(ImageMask::ColorKey(color_key)) = img_meta
@@ -1065,13 +1066,79 @@ fn decode_jpx<'a>(
         FILTER_JPX_DECODE
     );
 
-    use jpeg2k::Image;
+    fn cmyk_to_rgb8(c: u8, m: u8, y: u8, k: u8) -> (u8, u8, u8) {
+        let c_f = f32::from(c) / 255.0;
+        let m_f = f32::from(m) / 255.0;
+        let y_f = f32::from(y) / 255.0;
+        let k_f = f32::from(k) / 255.0;
+
+        let r_f = 255.0 * (1.0 - c_f) * (1.0 - k_f);
+        let g_f = 255.0 * (1.0 - m_f) * (1.0 - k_f);
+        let b_f = 255.0 * (1.0 - y_f) * (1.0 - k_f);
+
+        (r_f.round() as u8, g_f.round() as u8, b_f.round() as u8)
+    }
+
+    use jpeg2k::{ColorSpace, Image};
     let img = Image::from_bytes(buf.borrow())
         .whatever_context::<_, ObjectValueError>("Failed to decode JPX image")?;
-    let img = (&img)
-        .try_into()
-        .whatever_context::<_, ObjectValueError>("Failed to convert JPX image")?;
-    Ok(FilterDecodedData::Image(img))
+    match img.color_space() {
+        ColorSpace::CMYK => {
+            let width = img.width();
+            let height = img.height();
+
+            // Collect CMYK data from all channels
+            let mut rgb_data = Vec::with_capacity(width as usize * height as usize * 3);
+
+            // Get data from each channel
+            let mut channel_data: Vec<Vec<u8>> = Vec::with_capacity(4);
+
+            // Collect data from each channel
+            for channel in img.components().iter() {
+                let data: Vec<u8> = channel.data_u8().collect();
+                ensure_whatever!(
+                    data.len() == (width * height) as usize,
+                    "channel data should equals width x height"
+                );
+
+                channel_data.push(data);
+            }
+            ensure_whatever!(
+                channel_data.len() == 4,
+                "cmyk image should have 4 channels, but got {}",
+                channel_data.len()
+            );
+
+            // Interleave the channel data (CMYK format)
+            for y in 0..height {
+                for x in 0..width {
+                    let pos = (y * width + x) as usize;
+                    // Convert CMYK to RGB
+                    let c = channel_data[0][pos];
+                    let m = channel_data[1][pos];
+                    let y = channel_data[2][pos];
+                    let k = channel_data[3][pos];
+
+                    // Apply CMYK to RGB conversion
+                    let (r, g, b) = cmyk_to_rgb8(c, m, y, k);
+
+                    // Add RGB components to output data
+                    rgb_data.push(r);
+                    rgb_data.push(g);
+                    rgb_data.push(b);
+                }
+            }
+
+            let img = RgbImage::from_raw(width, height, rgb_data)
+                .whatever_context::<_, ObjectValueError>("Create rgb image")?;
+            Ok(FilterDecodedData::ConvertedImage(img.into()))
+        }
+        _ => Ok(FilterDecodedData::Image(
+            (&img)
+                .try_into()
+                .whatever_context::<_, ObjectValueError>("Failed to convert JPX image")?,
+        )),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1173,6 +1240,8 @@ impl<'a, 'b> TryFrom<ObjectWithResolver<'a, 'b>> for CCITTAlgorithm {
 enum FilterDecodedData<'a> {
     Bytes(Cow<'a, [u8]>),
     Image(DynamicImage),
+    // Contains image already done colorspace conversion, no need to convert color space by color space defined in image dict
+    ConvertedImage(DynamicImage),
     CCITTFaxImage(Vec<u8>),         // width, height, data
     CmykImage((u32, u32, Vec<u8>)), // width, height, data
 }
