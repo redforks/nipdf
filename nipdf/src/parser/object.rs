@@ -449,7 +449,7 @@ where
             .parse_next(buf)?;
 
         // If Length is known and a direct integer, we can use it
-        let mut len: Option<u32> = match dict.get("Length") {
+        let len: Option<u32> = match dict.get("Length") {
             Some(Object::Integer(l)) => {
                 // scan file for length if Length is 0
                 if *l == 0 {
@@ -485,9 +485,7 @@ where
         )
         .try_map(|l| <u32>::try_from(l.0))
         .parse_next(buf)?;
-        if len.is_none() && !matches!(dict.get("Length"), Some(Object::Reference(_))) {
-            len = Some(l);
-        }
+        let scanned_length = l;
 
         let bufpos = BufPos::new(
             stream_start
@@ -495,6 +493,7 @@ where
                 .try_into()
                 .map_err(|e| ErrMode::from_external_error(buf, e))?,
             len,
+            scanned_length,
         );
 
         Ok(Either::Right((dict, bufpos)))

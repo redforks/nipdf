@@ -62,18 +62,26 @@ const FILTER_JPX_DECODE: Name = sname("JPXDecode");
 pub struct BufPos {
     start: u32,
     length: Option<u32>,
+    scanned_length: u32,
 }
 
 impl BufPos {
-    pub fn new(start: u32, length: Option<u32>) -> Self {
-        Self { start, length }
+    pub fn new(start: u32, length: Option<u32>, scanned_length: u32) -> Self {
+        Self {
+            start,
+            length,
+            scanned_length,
+        }
     }
 
     /// Return [start..(start+length)] if length not None, otherwise call
     /// `f` to resolve length
     pub fn range<E>(&self, f: impl FnOnce() -> Result<u32, E>) -> Result<Range<usize>, E> {
         let start = self.start as usize;
-        let length = self.length.map_or_else(f, |v| Ok(v))? as usize;
+        let mut length = self.length.map_or_else(f, |v| Ok(v))? as usize;
+        if length == 0 {
+            length = self.scanned_length as usize;
+        }
         Ok(start..(start + length))
     }
 }
