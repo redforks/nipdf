@@ -67,7 +67,8 @@ fn download_file(url: &str, p: impl AsRef<Path>) -> Result<()> {
 }
 
 /// These files are very rare and odd, not to be tested
-const IGNORED: [&str; 23] = [
+#[rustfmt::skip]
+const IGNORED: [&str; 24] = [
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
     "bug1050040.pdf",
     // invalid object format, mupdf failed to parse, mupdf says no page
@@ -104,20 +105,23 @@ const IGNORED: [&str; 23] = [
     "bug920426.pdf",
     // Same as bug1260585.pdf.link
     "close-path-bug.pdf",
+
     // encrypted by pdf 2.0, Revision 6
     "empty_protected.pdf",
-    // this file contains premature jpeg image(incomplete scan-line data),
+    "issue6010_1.pdf",
+    "issue6010_2.pdf",
+    "issue7665.pdf",
+
+    // contains premature jpeg image(incomplete scan-line data),
     // jpeg-decoder failed to decode this file, I don't know how to use zune-jpeg
     // to decode this file with correct color.
     "issue11052.pdf.link",
-    // the same as issue11052.pdf.link
     "issue1419.pdf.link",
-    // the same as issue11052.pdf.link
     "issue1877.pdf.link",
-    // the same as issue11052.pdf.link
     "multiple-filters-length-zero.pdf",
-    // failed decode jpeg/dct image 203, the same as issue11052.pdf.link
+    // failed decode jpeg/dct image 203
     "issue6364.pdf.link",
+
     // this file contains invalid xref, after file scan trailer point to wrong catalog,
     // If resolve catalog dict by check all dict for `/Catalog` type, can find correct
     // catalog dict. `mupdf` also failed to parse this file, but others are okay.
@@ -128,9 +132,6 @@ const IGNORED: [&str; 23] = [
     "issue11287.pdf.link",
     // incorrect Image dict width field, release version is okay.
     "issue4575.pdf",
-    // ignored because it is encrypted with revions 6, which is defined in pdf 2.0
-    "issue6010_1.pdf",
-    "issue6010_2.pdf",
     // Possible of jpeg_decoder crate failed to decode jpx stream
     "issue12841_reduced.pdf",
     // bad file, browser/mupdf/xpdf all failed to open
