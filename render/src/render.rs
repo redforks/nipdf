@@ -1231,10 +1231,10 @@ impl<'a, 'c> Render<'a, 'c> {
             .s_mask()
             .whatever_context("read x_object s_mask")?
             .map(|s_mask| {
-                let s_mask = s_mask.as_stream().whatever_context("get s_mask stream")?;
-                let img = s_mask
+                let s_mask_stream = s_mask.as_stream().whatever_context("get s_mask stream")?;
+                let img = s_mask_stream
                     .decode_image(self.resources.resolver(), Some(self.resources))
-                    .whatever_context("decode s_mask image")?;
+                    .with_whatever_context(|_| format!("decode s_mask image, {:?}", s_mask.id()))?;
                 Self::load_image_as_mask(img.into_rgba8(), state, true)
             })
             .or_else(|| {

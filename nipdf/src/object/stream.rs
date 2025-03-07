@@ -733,7 +733,14 @@ fn png_predictor(
     pixel_bytes: usize,
 ) -> Result<Vec<u8>, ObjectValueError> {
     let row_with_flag_bytes = 1 + row_bytes;
-    ensure_whatever!(buf.len() % row_with_flag_bytes == 0, "Invalid row length");
+    if buf.len() % row_with_flag_bytes != 0 {
+        if buf.len() % row_bytes == 0 {
+            // some invalid pdf file actually not use png_predictor, but lied in DecodeParams
+            return Ok(buf.to_owned());
+        }
+        whatever!("Invalid row length");
+    }
+
     let first_row = vec![0u8; row_bytes];
     let mut upper_row = &first_row[..];
     let mut r = vec![0u8; buf.len() / row_with_flag_bytes * row_bytes];
