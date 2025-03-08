@@ -76,12 +76,25 @@ impl BufPos {
 
     /// Return [start..(start+length)] if length not None, otherwise call
     /// `f` to resolve length
-    pub fn range<E>(&self, f: impl FnOnce() -> Result<u32, E>) -> Result<Range<usize>, E> {
-        let start = self.start as usize;
-        let mut length = self.length.map_or_else(f, |v| Ok(v))? as usize;
+    pub fn range<E: std::fmt::Display>(
+        &self,
+        f: impl FnOnce() -> Result<u32, E>,
+    ) -> Result<Range<usize>, E> {
+        let mut length = self
+            .length
+            .or_else(|| match f() {
+                Ok(len) => Some(len),
+                Err(err) => {
+                    log::error!("resolve length failed, {}", err);
+                    None
+                }
+            })
+            .unwrap_or(self.scanned_length) as usize;
         if length == 0 {
             length = self.scanned_length as usize;
         }
+
+        let start = self.start as usize;
         Ok(start..(start + length))
     }
 }
