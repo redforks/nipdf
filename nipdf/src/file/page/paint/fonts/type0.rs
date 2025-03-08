@@ -178,7 +178,7 @@ impl CIDToGIDMap {
 }
 
 struct CIDFontType2FontOp<'a> {
-    ttf_face: TTFFace<'a>,
+    ttf_face: Option<TTFFace<'a>>,
     units_per_em: u16,
     // Convert as Identity-H if None
     encoding: Option<Rc<CMap>>,
@@ -198,9 +198,11 @@ impl<'a> CIDFontType2FontOp<'a> {
     ) -> Result<Self> {
         let encoding = get_font_encoding(cmap_registry, &font)?;
         let write_mode = get_write_mode(&encoding);
-
-        let ttf_face = TTFFace::parse(ttf_data, 0)
-            .whatever_context::<_, ObjectValueError>("parse TTF Face for CIDFontType2")?;
+        let ttf_face = TTFFace::parse(ttf_data, 0).ok();
+        ensure_whatever!(
+            ttf_face.is_some() || cid_to_gid.is_some(),
+            "ttf_face and cid_to_gid can not both be None"
+        );
 
         Ok(Self {
             ttf_face,
@@ -258,7 +260,13 @@ impl FontOp for CIDFontType2FontOp<'_> {
 
         self.cid_to_gid.as_ref().map_or_else(
             || {
-                glyph_index(&self.ttf_face, ch)?.map_or_else(
+                glyph_index(
+                    self.ttf_face
+                        .as_ref()
+                        .whatever_context::<_, ObjectValueError>("get ttf_face")?,
+                    ch,
+                )?
+                .map_or_else(
                     || ch.try_into().whatever_context("convert ch to u16 gid"),
                     Ok,
                 )
@@ -266,7 +274,13 @@ impl FontOp for CIDFontType2FontOp<'_> {
             |m| {
                 m.to_gid(ch as usize).map_or_else(
                     || {
-                        glyph_index(&self.ttf_face, ch)?.map_or_else(
+                        glyph_index(
+                            self.ttf_face
+                                .as_ref()
+                                .whatever_context::<_, ObjectValueError>("get ttf face")?,
+                            ch,
+                        )?
+                        .map_or_else(
                             || ch.try_into().whatever_context("convert ch to u16 gid"),
                             Ok,
                         )
