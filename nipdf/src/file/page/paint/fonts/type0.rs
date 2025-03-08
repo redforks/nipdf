@@ -199,8 +199,9 @@ impl<'a> CIDFontType2FontOp<'a> {
         let encoding = get_font_encoding(cmap_registry, &font)?;
         let write_mode = get_write_mode(&encoding);
         let ttf_face = TTFFace::parse(ttf_data, 0).ok();
+        let cid_is_gid = is_embed && cid_to_gid.is_none();
         ensure_whatever!(
-            ttf_face.is_some() || cid_to_gid.is_some(),
+            cid_is_gid || ttf_face.is_some() || cid_to_gid.is_some(),
             "ttf_face and cid_to_gid can not both be None"
         );
 
@@ -350,7 +351,7 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
         };
 
         // Check encoding and create appropriate FontOp
-        if cid_to_gid.is_none() {
+        if cid_to_gid.is_none() && !self.font_is_embed {
             if let Some(NameOrDictByRef::Name(ref name)) = self.font_dict.encoding()? {
                 if *name != &sname("Identity-H")
                     && *name != &sname("Identity-V")
