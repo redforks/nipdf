@@ -663,6 +663,8 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
     where
         'a: 'c,
     {
+        warn!("create font cache");
+
         let font_res = resource
             .font()
             .whatever_context::<_, ObjectValueError>("get font resource")?;

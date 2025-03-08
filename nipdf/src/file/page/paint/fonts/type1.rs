@@ -63,6 +63,7 @@ impl<P: PathSink> Font<P> for Type1Font<'_> {
 pub(super) struct Type1FontOp<'a> {
     font: &'a FontKitFont,
     encoding: Encoding,
+    units_per_em: u16,
 }
 
 impl<'a> Type1FontOp<'a> {
@@ -74,13 +75,24 @@ impl<'a> Type1FontOp<'a> {
     ) -> Result<Self> {
         let encoding = EncodingParser(font_dict).type1(is_cff, font_data)?;
 
-        Ok(Self { font, encoding })
+        let units_per_em = font
+            .metrics()
+            .units_per_em
+            .try_into()
+            .whatever_context::<_, ObjectValueError>("convert units_per_em to u16")?;
+        Ok(Self {
+            font,
+            encoding,
+            units_per_em,
+        })
     }
 
     pub fn new_fallback(font: &'a FontKitFont) -> Self {
+        let units_per_em = font.metrics().units_per_em.try_into().unwrap();
         Self {
             font,
             encoding: Encoding::WIN_ANSI,
+            units_per_em,
         }
     }
 }
@@ -106,10 +118,6 @@ impl FontOp for Type1FontOp<'_> {
     }
 
     fn units_per_em(&self) -> Result<u16> {
-        self.font
-            .metrics()
-            .units_per_em
-            .try_into()
-            .whatever_context("convert units_per_em to u16")
+        Ok(self.units_per_em)
     }
 }

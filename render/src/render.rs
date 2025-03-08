@@ -785,7 +785,13 @@ impl<'a, 'c> Render<'a, 'c> {
     }
 
     pub(crate) fn exec(&mut self, op: Operation) -> Result<()> {
-        self._exec(op)
+        let start = std::time::Instant::now();
+        let result = self._exec(op.clone());
+        let duration = start.elapsed();
+        if duration > std::time::Duration::from_millis(15) {
+            warn!("Operation {:?} took {:?} to execute", op, duration);
+        }
+        result
     }
 
     fn _exec(&mut self, op: Operation) -> Result<()> {
@@ -1298,8 +1304,6 @@ impl<'a, 'c> Render<'a, 'c> {
     /// 1. Paints the graphics objects specified in the form object's stream in sub render.
     /// 1. Paint the rendered image on parent render
     fn paint_form_x_object(&mut self, x_object: &XObjectDict<'a, 'a>) -> Result<()> {
-        debug!("Render form");
-
         let form = x_object
             .as_form()
             .whatever_context("read x_object as form")?;
@@ -1308,7 +1312,6 @@ impl<'a, 'c> Render<'a, 'c> {
         let stream = x_object
             .as_stream()
             .whatever_context("read x_object stream")?;
-        debug!("stream: {:?}", stream);
         let stream = stream
             .decode(self.resources.resolver())
             .with_whatever_context(|_| {
@@ -1342,7 +1345,6 @@ impl<'a, 'c> Render<'a, 'c> {
             .into_iter()
             .try_for_each(|op| render.exec(op))?;
 
-        debug!("End render form");
         Ok(())
     }
 

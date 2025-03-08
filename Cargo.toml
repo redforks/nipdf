@@ -23,9 +23,9 @@ opt-level = 3
 
 [profile.release]
 split-debuginfo = "unpacked"
-lto = "thin"
+# lto = "thin"
 # Uncomment next line to emb more symbols for profiling
-# debug = 1
+debug = 1
 
 [profile.dev]
 split-debuginfo = "unpacked"

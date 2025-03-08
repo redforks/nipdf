@@ -55,30 +55,36 @@ impl<'a, 'b> Type3Font<'a, 'b> {
     }
 
     pub fn get_glyph(&self, gid: u16) -> Option<&Type3Glyph> {
-        self.glyphs.get(gid as usize).and_then(|cell| {
-            // Find the name for this glyph ID
-            let name = self
-                .name_to_gid
-                .iter()
-                .find_map(|(name, &id)| if id == gid { Some(name) } else { None })?;
+        // Get the cell from the glyphs array
+        let cell = self.glyphs.get(gid as usize)?;
+        
+        // If the cell is already initialized, return it directly
+        if cell.get().is_some() {
+            return cell.get();
+        }
+        
+        // Find the name for this glyph ID
+        let name = self
+            .name_to_gid
+            .iter()
+            .find_map(|(name, &id)| if id == gid { Some(name) } else { None })?;
 
-            // Get the stream for this glyph
-            let stream = self.char_procs.get(name)?;
+        // Get the stream for this glyph
+        let stream = self.char_procs.get(name)?;
 
-            // Parse the glyph on demand
-            cell.get_or_try_init(|| {
-                debug!("parse Type3 glyph: {}", name.as_str());
-                let data = stream
-                    .decode(self.type3_dict.resolver())
-                    .whatever_context::<_, ObjectValueError>("decode stream")?;
-                let ops = terminated(parse_operations::<crate::ParserError>, rest)
-                    .parse(&data[..])
-                    .map_err(winnow::error::ParseError::into_inner)
-                    .whatever_context::<_, ObjectValueError>("parse type3 operation")?;
-                Ok::<_, ObjectValueError>(Type3Glyph(ops.into()))
-            })
-            .ok()
+        // Parse the glyph on demand and cache it
+        cell.get_or_try_init(|| {
+            debug!("parse Type3 glyph: {}", name.as_str());
+            let data = stream
+                .decode(self.type3_dict.resolver())
+                .whatever_context::<_, ObjectValueError>("decode stream")?;
+            let ops = terminated(parse_operations::<crate::ParserError>, rest)
+                .parse(&data[..])
+                .map_err(winnow::error::ParseError::into_inner)
+                .whatever_context::<_, ObjectValueError>("parse type3 operation")?;
+            Ok::<_, ObjectValueError>(Type3Glyph(ops.into()))
         })
+        .ok()
     }
 
     pub fn matrix(&self) -> Result<GlyphToTextSpace> {
