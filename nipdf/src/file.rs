@@ -727,8 +727,8 @@ fn index_xref(
         1..,
         alt((
             wsc1().void(),
-            parse_indirect_object,
             parse_xref_stream,
+            parse_indirect_object,
             b"startxref".as_slice().void(),
             b"xref".as_slice().void(),
             parse_trailer_position_after_xref,
@@ -739,20 +739,12 @@ fn index_xref(
     drop(parser);
 
     // Merge xref_entries and indirect_obj_entries, preferring indirect_obj_entries when IDs overlap
-    let mut merged_entries = HashMap::new();
-
-    // First add all xref entries
-    for (id, pos) in xref_entries {
-        merged_entries.insert(id, pos);
-    }
-
-    // Then add indirect_obj entries, overwriting any existing entries with same ID
-    for (id, pos) in indirect_obj_entries {
-        merged_entries.insert(id, pos);
-    }
-
-    // Convert back to Vec
-    let entries = merged_entries.into_iter().collect();
+    let merged_entries: HashMap<ObjectId, usize> = xref_entries
+        .into_iter()
+        .chain(indirect_obj_entries.into_iter())
+        .collect();
+    // Convert back to Vec preserving the order from xref_entries first, then indirect_obj_entries
+    let entries: Vec<_> = merged_entries.into_iter().collect();
 
     Ok((trailer_positions, entries, xref_streams))
 }
