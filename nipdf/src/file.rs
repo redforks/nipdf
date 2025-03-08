@@ -8,7 +8,7 @@ use crate::{
         ObjectId, PdfObject, Root, RootPdfObject, RuntimeObjectId, Stream, TrailerDict,
     },
     parser::{
-        self, dict, header_parser, indirect_object_def, object_id, parse_frame_set,
+        dict, header_parser, indirect_object_def, object, object_id, parse_frame_set,
         parse_xref_stream, wsc_prefixed0, wsc0, wsc1,
     },
 };
@@ -288,7 +288,7 @@ impl XRefTable {
                     },
                     |buf| {
                         terminated(
-                            parser::object::<_, ParserError>(),
+                            object::<_, ParserError>(),
                             /* some invalid pdf file contains endobj after data,
                              * pdf.js/test/pdfs/bug1037816.pdf, use rest to ignore it */
                             rest,
@@ -684,7 +684,6 @@ fn index_xref(
     const TRAILER_BYTES: &[u8] = b"trailer";
     let mut trailer_positions = Vec::new();
     let mut indirect_obj_entries = Vec::new();
-    let mut xref_entries = Vec::new();
     // Store positions of XRef streams: (position, stream object ID)
     let mut xref_streams = Vec::new();
 
@@ -693,41 +692,29 @@ fn index_xref(
 
     // Add parser for object definitions, capturing their positions more accurately
     let parse_indirect_object = {
-        let pos_and_id = object_id().with_span().map(|(id, span)| (id, span.start));
-
-        // Match the full object definition but just return the position and ID we already captured
-        (pos_and_id, wsc1(), b"obj".as_slice()).map(|((id, pos), ..)| {
-            indirect_obj_entries.push((id, pos));
-        })
+        (
+            object_id().with_span(),
+            wsc1(),
+            b"obj".as_slice(),
+            wsc0(),
+            object(),
+        )
+            .map(|((id, pos), .., o)| {
+                if let Object::Dictionary(dict) = o {
+                    if let Some(Object::Name(name)) = dict.get(&sname("Type")) {
+                        if name == &sname("XRef") {
+                            xref_streams.push(pos.start);
+                        }
+                    }
+                }
+                indirect_obj_entries.push((id, pos.start));
+            })
     };
-
-    // Add parser for XRef stream object header
-    let parse_xref_stream = (
-        object_id().with_span(),
-        wsc1(),
-        b"obj".as_slice(),
-        wsc0(),
-        dict,
-    )
-        .map(|((obj_id, range), .., dict)| {
-            if let Some(Object::Name(name)) = dict.get(&sname("Type")) {
-                if name == &sname("XRef") {
-                    xref_streams.push(range.start);
-                    xref_entries.push((obj_id, range.start)); // Also add as a regular entry
-                }
-            } else {
-                // Add as regular entry if not already added by xref parser
-                if !xref_entries.iter().any(|(id, _)| id == &obj_id) {
-                    xref_entries.push((obj_id, range.start));
-                }
-            }
-        });
 
     let mut parser = repeat::<_, _, (), _, _>(
         1..,
         alt((
             wsc1().void(),
-            parse_xref_stream,
             parse_indirect_object,
             b"startxref".as_slice().void(),
             b"xref".as_slice().void(),
@@ -739,10 +726,7 @@ fn index_xref(
     drop(parser);
 
     // Merge xref_entries and indirect_obj_entries, preferring indirect_obj_entries when IDs overlap
-    let merged_entries: HashMap<ObjectId, usize> = xref_entries
-        .into_iter()
-        .chain(indirect_obj_entries.into_iter())
-        .collect();
+    let merged_entries: HashMap<ObjectId, usize> = indirect_obj_entries.into_iter().collect();
     // Convert back to Vec preserving the order from xref_entries first, then indirect_obj_entries
     let entries: Vec<_> = merged_entries.into_iter().collect();
 
@@ -931,24 +915,25 @@ impl File {
         let encrypt_key = open_encrypt(
             &buf,
             &xref,
-            trailers.iter().find(|d| d.contains_key(&sname("Encrypt"))),
+            trailers.iter().find(|d| d.contains_key("Encrypt")),
             user_password,
         )?;
 
         let root_id = trailers
             .iter()
-            .filter_map(|t| t.get(&sname("Root")))
+            .filter_map(|t| t.get("Root"))
             .filter_map(|o| o.reference().ok())
             .find_map(|root_id| {
                 let resolver = ObjectResolver::new(&buf, &xref, encrypt_key.clone());
-                if let Ok(catalog) = Catalog::parse(root_id, &resolver) {
-                    if catalog.pages().is_ok() {
-                        Some(root_id)
-                    } else {
-                        None
+                match Catalog::parse(root_id, &resolver) {
+                    Ok(catalog) => {
+                        if catalog.pages().is_ok() {
+                            Some(root_id)
+                        } else {
+                            None
+                        }
                     }
-                } else {
-                    None
+                    Err(_) => None,
                 }
             })
             .whatever_context::<_, ObjectValueError>("find root_id")?;
