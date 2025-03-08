@@ -71,7 +71,7 @@ impl ColorCompConvertTo<u8> for f32 {
 
 impl ColorCompConvertTo<f32> for f32 {
     fn into_color_comp(self) -> f32 {
-        self
+        self.clamp(0.0, 1.0)
     }
 }
 
