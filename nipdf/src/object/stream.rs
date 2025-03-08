@@ -783,7 +783,6 @@ fn png_predictor(
             // some invalid pdf file actually not use png_predictor, but lied in DecodeParams
             return Ok(buf.to_owned());
         }
-        whatever!("Invalid row length");
     }
 
     let first_row = vec![0u8; row_bytes];

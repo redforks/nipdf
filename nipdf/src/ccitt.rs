@@ -76,8 +76,6 @@ impl PictualElement {
 pub enum DecodeError {
     #[snafu(display("IOError"))]
     IOError { source: std::io::Error },
-    // #[error("Horizontal run color mismatch")]
-    // HorizontalRunColorMismatch,
     #[snafu(display("Unknown code"))]
     InvalidCode,
     #[snafu(display("Invalid pixel"))]
