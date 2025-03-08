@@ -443,13 +443,13 @@ fn decode_image<'a, M: ImageMetadata>(
                 (Some(cs), 4) => {
                     let n_colors = cs.components();
                     let mut img = RgbaImage::new(width, height);
-                    
+
                     let mut bit_reader = BitReader::<_, BigEndian>::new(data.as_ref());
-                    
+
                     for y in 0..height {
                         for x in 0..width {
                             let mut c = TinyVec::<[f32; 4]>::with_capacity(n_colors);
-                            
+
                             // Read each color component (4 bits) and scale to 0-255 range
                             for _ in 0..n_colors {
                                 let value = bit_reader
@@ -457,17 +457,17 @@ fn decode_image<'a, M: ImageMetadata>(
                                     .whatever_context::<_, ObjectValueError>(
                                         "Failed to read color component",
                                     )?;
-                                
+
                                 // Scale 4-bit value (0-15) to 8-bit (0-255)
                                 c.push((value * 17).into_color_comp());
                             }
-                            
+
                             // Convert the color using the color space
                             let color: [u8; 4] = color_to_rgba(cs, c.as_slice());
                             img.put_pixel(x, y, Rgba(color));
                         }
                     }
-                    
+
                     DynamicImage::ImageRgba8(img)
                 }
                 (Some(cs), 8) => {
@@ -1464,6 +1464,9 @@ fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> Result<Dyn
         )),
         (DynamicImage::ImageLuma8(_), ColorSpace::Indexed(cs)) => Ok(DynamicImage::ImageRgba8(
             convert_cs(&img.into_luma8(), cs.as_ref())?,
+        )),
+        (DynamicImage::ImageLuma8(_), ColorSpace::DeviceN(alt)) => Ok(DynamicImage::ImageRgba8(
+            convert_cs(&img.into_luma8(), alt.as_ref())?,
         )),
         (DynamicImage::ImageRgb8(_), ColorSpace::Indexed(_) | ColorSpace::CalRGB(_)) => {
             // I think RGB8 image can not be converted to Indexed color space, indexed color should
