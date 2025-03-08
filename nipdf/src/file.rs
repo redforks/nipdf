@@ -693,8 +693,7 @@ fn index_xref(
     // Add parser for object definitions, capturing their positions more accurately
     let parse_indirect_object = {
         (
-            object_id().with_span(),
-            wsc1(),
+            terminated(object_id(), wsc1()).with_span(),
             b"obj".as_slice(),
             wsc0(),
             object(),
@@ -888,7 +887,9 @@ impl File {
                         Entry::InStream(..) => {}
                     }
                     let obj_pos: ObjectPos = (&entry).into();
-                    insert_object_pos(&mut id_offset, id, obj_pos, buf.len());
+                    if !id_offset.contains_key(&id) {
+                        insert_object_pos(&mut id_offset, id, obj_pos, buf.len());
+                    }
                 }
             }
         }
@@ -926,14 +927,17 @@ impl File {
             .find_map(|root_id| {
                 let resolver = ObjectResolver::new(&buf, &xref, encrypt_key.clone());
                 match Catalog::parse(root_id, &resolver) {
-                    Ok(catalog) => {
-                        if catalog.pages().is_ok() {
-                            Some(root_id)
-                        } else {
+                    Ok(catalog) => match catalog.pages() {
+                        Ok(_) => Some(root_id),
+                        Err(e) => {
+                            log::error!("Error parsing pages: {}", e);
                             None
                         }
+                    },
+                    Err(e) => {
+                        log::error!("Error parsing catalog: {}", Report::from_error(e));
+                        None
                     }
-                    Err(_) => None,
                 }
             })
             .whatever_context::<_, ObjectValueError>("find root_id")?;
