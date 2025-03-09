@@ -461,26 +461,53 @@ where
             }
         };
 
-        if let Some(len) = len {
-            // Length is known, we can skip directly to endstream/endobj
-            take::<_, _, ErrMode<E>>(len).parse_next(buf)?;
+        // parse until endstream endobj, returns consumed length before endstream.
+        fn to_end_obj<'a, S, E>() -> impl Parser<S, u32, ErrMode<E>>
+        where
+            S: Stream<Token = u8, Slice = &'a [u8]>
+                + StreamIsPartial
+                + AsBStr
+                + Compare<u8>
+                + Compare<char>
+                + Compare<&'a [u8]>
+                + Compare<Caseless<&'static str>>
+                + Location
+                + 'a,
+            <S as Stream>::IterOffsets: Clone,
+            E: ParserError<S>
+                + 'a
+                + ParserError<&'a [u8]>
+                + AddContext<S, &'static str>
+                + FromExternalError<S, ObjectValueError>
+                + FromExternalError<S, FromHexError>
+                + FromExternalError<S, TryFromIntError>
+                + FromExternalError<S, ParseIntError>,
+        {
+            repeat_till::<_, _, usize, _, _, _, _>(
+                0..,
+                any::<_, ErrMode<E>>,
+                (
+                    wsc0_or_1(),
+                    b"endstrea".as_slice(),
+                    opt(b'm'),
+                    wsc0(),
+                    b"endobj".as_slice(),
+                    wsc0(),
+                ),
+            )
+            .try_map(|l| <u32>::try_from(l.0))
         }
 
-        let scanned_length = repeat_till::<_, _, usize, _, _, _, _>(
-            0..,
-            any::<_, ErrMode<E>>,
-            (
-                wsc0_or_1(),
-                b"endstrea".as_slice(),
-                opt(b'm'),
-                wsc0(),
-                b"endobj".as_slice(),
-                wsc0(),
-            ),
-        )
-        .try_map(|l| <u32>::try_from(l.0))
-        .parse_next(buf)?
-            + len.unwrap_or_default();
+        let scanned_length = if let Some(len) = len {
+            // Length is known, we can skip directly to endstream/endobj
+            alt((
+                preceded(take::<_, _, ErrMode<E>>(len), to_end_obj().map(|v| v + len)),
+                to_end_obj(),
+            ))
+            .parse_next(buf)?
+        } else {
+            to_end_obj().parse_next(buf)?
+        };
 
         let bufpos = BufPos::new(
             stream_start
