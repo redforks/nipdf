@@ -60,8 +60,9 @@ struct ObjectStream {
     offsets: Vec<u32>,
 }
 
-// TODO: use and create test
-fn object_stream_parser<'a, S>(n: usize) -> impl winnow::Parser<S, ObjectStream, ParserError> + 'a
+fn object_stream_offsets_parser<'a, S>(
+    n: usize,
+) -> impl winnow::Parser<S, Vec<u32>, ParserError> + 'a
 where
     S: winnow::stream::Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
 {
@@ -69,7 +70,7 @@ where
         ascii::{dec_uint, space1},
         combinator::{preceded, repeat, terminated},
     };
-    (
+    terminated(
         repeat(
             n,
             terminated(
@@ -79,10 +80,6 @@ where
         ),
         rest,
     )
-        .map(|(nums, buf): (Vec<u32>, &'a [u8])| ObjectStream {
-            buf: buf.to_owned(),
-            offsets: nums,
-        })
 }
 
 impl ObjectStream {
@@ -97,13 +94,17 @@ impl ObjectStream {
             "not object stream"
         );
         let n = d.get(&sname("N")).map_or(Ok(0), Object::int)? as usize;
+        let first = d.get(&sname("First")).map_or(Ok(0), Object::int)? as usize;
         let buf = stream
             .decode_without_resolve_length(file, encrypt_info)
             .whatever_context::<_, ObjectValueError>("decode_without_resolve_length ")?;
-        let r = object_stream_parser(n)
+        let offsets = object_stream_offsets_parser(n)
             .parse(buf.as_ref())
             .map_err(ParseError::into_inner)?;
-        Ok(r)
+        Ok(Self {
+            offsets,
+            buf: buf.as_ref()[first..].to_vec(),
+        })
     }
 
     pub fn get_buf(&self, idx: usize) -> &[u8] {
