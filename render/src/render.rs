@@ -7,7 +7,7 @@ use educe::Educe;
 use either::Either::{self, Left, Right};
 use euclid::{Length, Scale, Transform2D, default::Size2D};
 use image::RgbaImage;
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use nipdf::{
     file::{
         GraphicsStateParameterDict, PageContent, Rectangle, ResourceDict, XObjectDict, XObjectType,
@@ -514,7 +514,9 @@ impl State {
     fn set_text_knockout_flag(&mut self, knockout: bool) -> Result<()> {
         self.text_object.knockout = knockout;
         // default value of knockout is true, so set to true don't change anything
-        ensure_whatever!(knockout, "TODO: impl text knockout");
+        if !knockout {
+            error!("TODO: impl text knockout");
+        }
         Ok(())
     }
 
