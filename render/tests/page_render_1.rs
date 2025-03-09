@@ -68,7 +68,7 @@ fn download_file(url: &str, p: impl AsRef<Path>) -> Result<()> {
 
 /// These files are very rare and odd, not to be tested
 #[rustfmt::skip]
-const IGNORED: [&str; 26] = [
+const IGNORED: [&str; 27] = [
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
     "bug1050040.pdf",
     // invalid object format, mupdf failed to parse, mupdf says no page
@@ -143,6 +143,8 @@ const IGNORED: [&str; 26] = [
     "issue9105_other.pdf",
     // overflow panic in font-kit crate, rust check arithmetic overflow in debug mode
     "issue16839.pdf.link",
+    // contains invalid dct image, okay in release mode. All other pdf readers can decode the image
+    "issue18042.pdf",
 ];
 
 static PASSWORD: phf::Map<&'static str, &'static str> = phf::phf_map! {
