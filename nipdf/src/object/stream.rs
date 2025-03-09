@@ -772,11 +772,12 @@ fn tiff_predictor_16bit(buf: &[u8], columns: usize, colors: usize) -> Vec<u8> {
 }
 
 /// Restore data processed by png predictor.
+/// Returns partial decoded data on error so caller can log the error and use the partial data.
 fn png_predictor(
     buf: &[u8],
     row_bytes: usize,
     pixel_bytes: usize,
-) -> Result<Vec<u8>, ObjectValueError> {
+) -> Result<Vec<u8>, (Vec<u8>, ObjectValueError)> {
     let row_with_flag_bytes = 1 + row_bytes;
     if buf.len() % row_with_flag_bytes != 0 {
         if buf.len() % row_bytes == 0 {
@@ -790,9 +791,9 @@ fn png_predictor(
     let mut r = vec![0u8; buf.len() / row_with_flag_bytes * row_bytes];
 
     for (cur_row, dest_row) in buf.chunks(row_with_flag_bytes).zip(r.chunks_mut(row_bytes)) {
-        let (flag, cur_row) = cur_row
-            .split_first()
-            .whatever_context::<_, ObjectValueError>("Failed to split first element")?;
+        let Some((flag, cur_row)) = cur_row.split_first() else {
+            continue;
+        };
         match flag {
             0 => dest_row.copy_from_slice(cur_row),
             1 => {
@@ -835,12 +836,22 @@ fn png_predictor(
             }
             _ => {
                 error!("Unknown png predictor: {}", flag);
-                return Err(ObjectValueError::FilterDecodeError);
+                return Err((r.clone(), ObjectValueError::FilterDecodeError));
             }
         }
         upper_row = dest_row;
     }
     Ok(r)
+}
+
+fn log_and_return<V, E: std::fmt::Debug>(e: Result<V, (V, E)>) -> V {
+    match e {
+        Ok(v) => v,
+        Err((v, e)) => {
+            error!("Error: {:?}", e);
+            v
+        }
+    }
 }
 
 fn predictor_decode(
@@ -849,11 +860,11 @@ fn predictor_decode(
 ) -> Result<Vec<u8>, ObjectValueError> {
     match params.predictor {
         1 => Ok(buf),
-        10..=15 => png_predictor(
+        10..=15 => Ok(log_and_return(png_predictor(
             &buf,
             (params.columns * params.colors * params.bits_per_component + 7) as usize / 8,
             (params.colors * params.bits_per_component + 7) as usize / 8,
-        ),
+        ))),
         2 => {
             if params.bits_per_component == 1 {
                 Ok(tiff_predictor_1bit(&buf, params.columns as usize))
