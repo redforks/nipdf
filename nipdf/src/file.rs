@@ -22,7 +22,7 @@ use snafu::{OptionExt as _, Report, ResultExt as _, Snafu, ensure_whatever, what
 use std::iter::repeat_with;
 use winnow::{
     LocatingSlice, ModalResult, Parser as _,
-    combinator::{alt, repeat, repeat_till, terminated},
+    combinator::{alt, delimited, repeat, repeat_till, terminated},
     error::{ErrMode, ParseError},
     stream::{Compare, StreamIsPartial},
     token::{any, rest},
@@ -288,7 +288,8 @@ impl XRefTable {
                         .with_whatever_context(|_| format!("parse object {}", id))
                     },
                     |buf| {
-                        terminated(
+                        delimited(
+                            wsc0(),
                             object::<_, ParserError>(),
                             /* some invalid pdf file contains endobj after data,
                              * pdf.js/test/pdfs/bug1037816.pdf, use rest to ignore it */
