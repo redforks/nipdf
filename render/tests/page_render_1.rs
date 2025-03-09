@@ -68,7 +68,7 @@ fn download_file(url: &str, p: impl AsRef<Path>) -> Result<()> {
 
 /// These files are very rare and odd, not to be tested
 #[rustfmt::skip]
-const IGNORED: [&str; 25] = [
+const IGNORED: [&str; 26] = [
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
     "bug1050040.pdf",
     // invalid object format, mupdf failed to parse, mupdf says no page
@@ -111,6 +111,7 @@ const IGNORED: [&str; 25] = [
     "issue6010_1.pdf",
     "issue6010_2.pdf",
     "issue7665.pdf",
+    "pr6531_1.pdf",
 
     // contains premature jpeg image(incomplete scan-line data),
     // jpeg-decoder failed to decode this file, I don't know how to use zune-jpeg
