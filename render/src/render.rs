@@ -2149,10 +2149,33 @@ impl TextObject {
     }
 
     fn set_text_rise(&mut self, rise: f32) -> Result<()> {
+        // Store the previous rise value to calculate the adjustment needed
+        let previous_rise = self.rise;
         self.rise = rise;
-        if rise != 0. {
-            whatever!("TODO: text rise");
+
+        // Apply text rise by modifying the text matrix
+        // Text rise moves the baseline up (positive) or down (negative)
+        // If the previous rise wasn't 0, we need to remove its effect first
+        if previous_rise != 0.0 {
+            // Create a translation matrix that undoes the previous rise
+            let undo_rise =
+                Transform2D::<f32, TextSpace, TextSpace>::translation(0.0, -previous_rise);
+
+            // Remove the previous rise effect
+            self.matrix = undo_rise.then(&self.matrix);
+            self.line_matrix = undo_rise.then(&self.line_matrix);
         }
+
+        // Apply the new rise if it's not zero
+        if rise != 0.0 {
+            // Create a translation matrix that moves text vertically by the rise amount
+            let rise_transform = Transform2D::<f32, TextSpace, TextSpace>::translation(0.0, rise);
+
+            // Apply the rise transformation to both the current matrix and line matrix
+            self.matrix = rise_transform.then(&self.matrix);
+            self.line_matrix = rise_transform.then(&self.line_matrix);
+        }
+
         Ok(())
     }
 }
