@@ -359,6 +359,7 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
                 {
                     let encoding = match name.as_ref() {
                         "GBK-EUC-H" => encoding_rs::GBK,
+                        "EUC-H" => encoding_rs::EUC_JP,
                         "UniJIS-UCS2-HW-H" | "UniGB-UTF16-H" | "UniCNS-UTF16-H" => {
                             encoding_rs::UTF_16BE
                         }
