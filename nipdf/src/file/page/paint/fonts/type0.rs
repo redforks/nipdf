@@ -454,10 +454,14 @@ impl<'a> FontOp for CIDFontType2UnicodeFontOp<'a> {
         let c = char::from_u32(ch)
             .whatever_context::<_, ObjectValueError>("invalid unicode code point")?;
 
-        self.face
+        Ok(self
+            .face
             .glyph_for_char(c)
             .map(|glyph| glyph as u16)
-            .whatever_context::<_, ObjectValueError>("glyph id not found")
+            .unwrap_or_else(|| {
+                warn!("Glyph not found for character: {:?}", c);
+                0
+            }))
     }
 
     fn units_per_em(&self) -> Result<u16> {
