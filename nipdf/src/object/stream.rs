@@ -1317,7 +1317,7 @@ impl<'a> FilterDecodedData<'a> {
 /// decode ASCIIHexDecode encoded stream data.
 /// Ignore whitespace bytes.
 /// '>' means end of stream, assume '0' if last hex digit is missing.
-fn decode_ascii_hex(buf: &[u8]) -> Result<Vec<u8>, ObjectValueError> {
+fn decode_ascii_hex(buf: &[u8]) -> Result<Vec<u8>, (Vec<u8>, ObjectValueError)> {
     let mut r = Vec::with_capacity(buf.len() / 2);
     let mut iter = buf.iter().filter(|&&b| !is_white_space(b));
     while let Some(&b) = iter.next() {
@@ -1328,7 +1328,7 @@ fn decode_ascii_hex(buf: &[u8]) -> Result<Vec<u8>, ObjectValueError> {
             b'>' => break,
             _ => {
                 error!("Invalid ASCIIHexDecode: {}", b);
-                return Err(ObjectValueError::FilterDecodeError);
+                return Err((r, ObjectValueError::FilterDecodeError));
             }
         };
         let b = (b << 4)
@@ -1340,7 +1340,7 @@ fn decode_ascii_hex(buf: &[u8]) -> Result<Vec<u8>, ObjectValueError> {
                     b'>' => 0,
                     _ => {
                         error!("Invalid ASCIIHexDecode: {}", b);
-                        return Err(ObjectValueError::FilterDecodeError);
+                        return Err((r, ObjectValueError::FilterDecodeError));
                     }
                 },
                 None => 0,
@@ -1434,7 +1434,17 @@ fn filter<'a: 'b, 'b>(
         S_FILTER_ASCII85_DECODE | "A85" => {
             decode_ascii85(&buf, params).map(FilterDecodedData::bytes)
         }
-        S_FILTER_ASCII_HEX_DECODE => decode_ascii_hex(&buf).map(FilterDecodedData::bytes),
+        S_FILTER_ASCII_HEX_DECODE => match decode_ascii_hex(&buf) {
+            Ok(data) => Ok(FilterDecodedData::bytes(data)),
+            Err((partial_data, err)) => {
+                warn!("Invalid ASCIIHexDecode data, using partial  {:?}", err);
+                if !partial_data.is_empty() {
+                    Ok(FilterDecodedData::bytes(partial_data))
+                } else {
+                    Err(err)
+                }
+            }
+        },
         S_FILTER_RUN_LENGTH_DECODE => {
             Ok(FilterDecodedData::bytes(decode_run_length(&buf, params)?))
         }
