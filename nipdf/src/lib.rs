@@ -38,6 +38,7 @@ impl<T, E: Error> PartialResult<T, E> {
 }
 
 /// Create PartialResult from value and result, if result is okay, return the value.
+#[macro_export]
 macro_rules! partial_result {
     ($value:expr, $result:expr) => {
         match $result {
@@ -46,6 +47,17 @@ macro_rules! partial_result {
                 return PartialResult(Err(($value, error)));
             }
         }
+    };
+}
+
+/// Return PartialResult(Err($value, whatever($msg)))
+#[macro_export]
+macro_rules! whatever_partial_result {
+    ($value:expr, $msg:expr) => {
+        return PartialResult(Err((
+            $value,
+            <crate::ObjectValueError as snafu::FromString>::without_source($msg.to_owned()),
+        )));
     };
 }
 

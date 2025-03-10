@@ -13,6 +13,7 @@ use crate::{
     },
     object::{ObjectDiscriminants, PdfObject},
     parser::is_white_space,
+    whatever_partial_result,
 };
 use bitstream_io::{BigEndian, BitRead as _, BitReader};
 use image::{DynamicImage, GrayImage, Luma, RgbImage, Rgba, RgbaImage};
@@ -1339,16 +1340,19 @@ fn decode_ascii_hex(buf: &[u8]) -> PartialResult<Vec<u8>> {
     PartialResult(Ok(r))
 }
 
-fn decode_ascii85(buf: &[u8], params: Option<&Dictionary>) -> Result<Vec<u8>, ObjectValueError> {
-    ensure_whatever!(params.is_none(), "TODO: handle params of ascii85");
+fn decode_ascii85(buf: &[u8], params: Option<&Dictionary>) -> PartialResult<Vec<u8>> {
+    if params.is_some() {
+        whatever_partial_result!(vec![], "TODO: handle params of ascii85");
+    }
+
     match prescript::ascii85::decode(buf) {
-        Ok(v) => Ok(v),
+        Ok(v) => PartialResult(Ok(v)),
         Err((data, e)) => {
             if !data.is_empty() {
                 warn!("Invalid ASCII85Decode data, use partial data: {}", e);
-                Ok(data)
+                PartialResult(Err((data, ObjectValueError::FilterDecodeError)))
             } else {
-                Err(ObjectValueError::FilterDecodeError)
+                PartialResult(Err((Vec::new(), ObjectValueError::FilterDecodeError)))
             }
         }
     }
@@ -1421,12 +1425,13 @@ fn filter<'a: 'b, 'b>(
         )
         .map(FilterDecodedData::CCITTFaxImage),
         S_FILTER_ASCII85_DECODE | "A85" => {
-            decode_ascii85(&buf, params).map(FilterDecodedData::bytes)
+            let result = decode_ascii85(&buf, params);
+            Ok(FilterDecodedData::bytes(result.take_value()))
         }
         S_FILTER_ASCII_HEX_DECODE => {
             let result = decode_ascii_hex(&buf);
             Ok(FilterDecodedData::bytes(result.take_value()))
-        },
+        }
         S_FILTER_RUN_LENGTH_DECODE => {
             Ok(FilterDecodedData::bytes(decode_run_length(&buf, params)?))
         }
