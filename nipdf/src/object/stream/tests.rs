@@ -185,7 +185,7 @@ fn test_color_key_range() {
 #[test_case(b"AB12>" => b"\xab\x12".as_slice(); "EOD")]
 #[test_case(b"AB1>" => b"\xab\x10".as_slice(); "EOD with odd hex digits")]
 fn test_decode_ascii_hex(buf: &[u8]) -> Vec<u8> {
-    decode_ascii_hex(buf).unwrap()
+    decode_ascii_hex(buf).into_result().unwrap()
 }
 
 #[test_log::test]

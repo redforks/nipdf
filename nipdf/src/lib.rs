@@ -27,6 +27,14 @@ impl<T, E: Error> PartialResult<T, E> {
             }
         }
     }
+
+    #[cfg(test)]
+    pub fn into_result(self) -> Result<T, E> {
+        match self.0 {
+            Ok(value) => Ok(value),
+            Err((_, error)) => Err(error),
+        }
+    }
 }
 
 /// Create PartialResult from value and result, if result is okay, return the value.
