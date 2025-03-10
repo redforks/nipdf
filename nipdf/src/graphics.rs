@@ -715,11 +715,7 @@ where
                     }
                     Some(op) => r.push(op),
                     None => {
-                        warn!(
-                            "Unknown operation: '{:?}', possible broken page content, abort parsing",
-                            op
-                        );
-                        return Ok(r);
+                        warn!("Unknown page operation: '{:?}', try recover romains", op);
                     }
                 }
                 // Some pdf files has bug that has extra operands
