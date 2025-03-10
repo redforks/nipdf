@@ -1410,13 +1410,13 @@ fn filter<'a: 'b, 'b>(
             params,
         )
         .map(FilterDecodedData::bytes),
-        S_FILTER_FLATE_DECODE => decode_flate(
+        S_FILTER_FLATE_DECODE | "Fl" => decode_flate(
             &buf,
             LZWDeflateDecodeParams::new(params.unwrap_or_else(|| &*empty_dict), resolver)?,
         )
         .map(FilterDecodedData::bytes),
-        S_FILTER_DCT_DECODE => decode_dct(&buf),
-        S_FILTER_CCITT_FAX => decode_ccitt(
+        S_FILTER_DCT_DECODE | "DCT" => decode_dct(&buf),
+        S_FILTER_CCITT_FAX | "CCF" => decode_ccitt(
             &buf,
             &CCITTFaxDecodeParamsDict::new(
                 params.unwrap_or_else(|| &*empty_dict),
@@ -1428,15 +1428,15 @@ fn filter<'a: 'b, 'b>(
             let result = decode_ascii85(&buf, params);
             Ok(FilterDecodedData::bytes(result.take_value()))
         }
-        S_FILTER_ASCII_HEX_DECODE => {
+        S_FILTER_ASCII_HEX_DECODE | "AHx" => {
             let result = decode_ascii_hex(&buf);
             Ok(FilterDecodedData::bytes(result.take_value()))
         }
-        S_FILTER_RUN_LENGTH_DECODE => {
+        S_FILTER_RUN_LENGTH_DECODE | "RL" => {
             Ok(FilterDecodedData::bytes(decode_run_length(&buf, params)?))
         }
         S_FILTER_JPX_DECODE => decode_jpx(&buf, params),
-        S_FILTER_LZW_DECODE => decode_lzw(
+        S_FILTER_LZW_DECODE | "LZW" => decode_lzw(
             &buf,
             LZWDeflateDecodeParams::new(params.unwrap_or_else(|| &*empty_dict), resolver)?,
         )
