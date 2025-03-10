@@ -1864,17 +1864,11 @@ impl<'a, 'c> Render<'a, 'c> {
             return Ok(());
         }
 
-        let font = self.font_cache.get_font(
-            text_object
-                .font_name
-                .as_ref()
-                .whatever_context("get font name")?,
-        );
-        let font_name = self
-            .text_object()?
+        let font_name = text_object
             .font_name
             .as_ref()
-            .whatever_context("get text_object font name")?;
+            .whatever_context("get font name")?;
+        let font = self.font_cache.get_font(font_name);
         let op = self.font_cache.get_op(font_name);
         let glyph_width = self.font_cache.get_glyph_width(font_name);
         let state = self.stack.last().whatever_context("get stack top")?;
@@ -1928,12 +1922,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 );
             }
         } else {
-            let glyph_render = self.font_cache.get_glyph_render(
-                self.text_object()?
-                    .font_name
-                    .as_ref()
-                    .whatever_context("get font name")?,
-            );
+            let glyph_render = self.font_cache.get_glyph_render(font_name);
             let mut text_clip_path = Path::default();
 
             for ch in op.decode_chars(text).whatever_context("decode chars")? {
