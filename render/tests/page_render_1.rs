@@ -68,7 +68,7 @@ fn download_file(url: &str, p: impl AsRef<Path>) -> Result<()> {
 
 /// These files are very rare and odd, not to be tested
 #[rustfmt::skip]
-const IGNORED: [&str; 28] = [
+const IGNORED: [&str; 30] = [
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
     "bug1050040.pdf",
     // invalid object format, mupdf failed to parse, mupdf says no page
@@ -122,6 +122,15 @@ const IGNORED: [&str; 28] = [
     "multiple-filters-length-zero.pdf",
     // failed decode jpeg/dct image 203
     "issue6364.pdf.link",
+    // Possible of jpeg_decoder crate failed to decode jpx stream
+    "issue12841_reduced.pdf",
+
+    // okay in release mode, invalid ColorSpace name
+    "issue6707.pdf.link",
+    // ColorSpace CS0 is NULL, release version ignores failed operation, so release version is okay,
+    "issue11287.pdf.link",
+    // incorrect Image dict width field, release version is okay.
+    "issue4575.pdf",
 
     // this file contains invalid xref, after file scan trailer point to wrong catalog,
     // If resolve catalog dict by check all dict for `/Catalog` type, can find correct
@@ -129,18 +138,15 @@ const IGNORED: [&str; 28] = [
     "issue12402.pdf.link",
     // xpdf, mupdf and chrome failed to parse this file, broken xref, failed get root entry after rebuild xref
     "issue15590.pdf",
-    // ColorSpace CS0 is NULL, release version ignores failed operation, so release version is okay,
-    "issue11287.pdf.link",
-    // incorrect Image dict width field, release version is okay.
-    "issue4575.pdf",
-    // Possible of jpeg_decoder crate failed to decode jpx stream
-    "issue12841_reduced.pdf",
     // bad file, browser/mupdf/xpdf all failed to open
     "poppler-937-0-fuzzed.pdf",
-    // okay in release mode, invalid ColorSpace name
-    "issue6707.pdf.link",
     // only pdf.js can open, pdf.js says: Warning: indexObjects: Found "2 0 obj" inside of another "obj", caused by missing "endobj" -- trying to recover.
     "issue9105_other.pdf",
+    // all pdf readers failed to open, althghough pdf.js seems fixed this issue,
+    // but firefox says need password, but no password defined for this filed in
+    // pdf.js repo test_manifest.json
+    "issue19484_1.pdf",
+    "issue19484_2.pdf",
 
     // overflow panic in font-kit crate, rust check arithmetic overflow in debug mode
     "issue16839.pdf.link",
