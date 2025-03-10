@@ -1,6 +1,6 @@
 use super::{Dictionary, Object, ObjectId, ObjectValueError, ObjectWithResolver, SchemaDict};
 use crate::{
-    Result,
+    PartialResult, Result,
     ccitt::{Algorithm as CCITTAlgorithm, Flags},
     file::{EncryptInfo, ObjectResolver, ResourceDict},
     function::Domains,
@@ -773,16 +773,12 @@ fn tiff_predictor_16bit(buf: &[u8], columns: usize, colors: usize) -> Vec<u8> {
 
 /// Restore data processed by png predictor.
 /// Returns partial decoded data on error so caller can log the error and use the partial data.
-fn png_predictor(
-    buf: &[u8],
-    row_bytes: usize,
-    pixel_bytes: usize,
-) -> Result<Vec<u8>, (Vec<u8>, ObjectValueError)> {
+fn png_predictor(buf: &[u8], row_bytes: usize, pixel_bytes: usize) -> PartialResult<Vec<u8>> {
     let row_with_flag_bytes = 1 + row_bytes;
     if buf.len() % row_with_flag_bytes != 0 {
         if buf.len() % row_bytes == 0 {
             // some invalid pdf file actually not use png_predictor, but lied in DecodeParams
-            return Ok(buf.to_owned());
+            return PartialResult(Ok(buf.to_owned()));
         }
     }
 
@@ -836,22 +832,12 @@ fn png_predictor(
             }
             _ => {
                 error!("Unknown png predictor: {}", flag);
-                return Err((r.clone(), ObjectValueError::FilterDecodeError));
+                return PartialResult(Err((r.clone(), ObjectValueError::FilterDecodeError)));
             }
         }
         upper_row = dest_row;
     }
-    Ok(r)
-}
-
-fn log_and_return<V, E: std::fmt::Debug>(e: Result<V, (V, E)>) -> V {
-    match e {
-        Ok(v) => v,
-        Err((v, e)) => {
-            error!("Error: {:?}", e);
-            v
-        }
-    }
+    PartialResult(Ok(r))
 }
 
 fn predictor_decode(
@@ -860,11 +846,14 @@ fn predictor_decode(
 ) -> Result<Vec<u8>, ObjectValueError> {
     match params.predictor {
         1 => Ok(buf),
-        10..=15 => Ok(log_and_return(png_predictor(
-            &buf,
-            (params.columns * params.colors * params.bits_per_component + 7) as usize / 8,
-            (params.colors * params.bits_per_component + 7) as usize / 8,
-        ))),
+        10..=15 => Ok({
+            let e = png_predictor(
+                &buf,
+                (params.columns * params.colors * params.bits_per_component + 7) as usize / 8,
+                (params.colors * params.bits_per_component + 7) as usize / 8,
+            );
+            e.take_value()
+        }),
         2 => {
             if params.bits_per_component == 1 {
                 Ok(tiff_predictor_1bit(&buf, params.columns as usize))

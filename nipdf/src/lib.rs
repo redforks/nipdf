@@ -7,10 +7,39 @@ pub mod parser;
 mod run_length;
 pub mod text;
 use prescript::ParserError;
-use snafu::Snafu;
+use snafu::{Report, Snafu};
 use std::error::Error;
 
 pub type Result<T, E = ObjectValueError> = std::result::Result<T, E>;
+
+/// A special result to allow return partial result.
+#[derive(Debug)]
+struct PartialResult<T, E = ObjectValueError>(std::result::Result<T, (T, E)>);
+
+impl<T, E: Error> PartialResult<T, E> {
+    /// warn log if the result is an error and return partial value, or return value if success.
+    pub fn take_value(self) -> T {
+        match self.0 {
+            Ok(value) => value,
+            Err((value, error)) => {
+                log::warn!("{}", Report::from_error(error));
+                value
+            }
+        }
+    }
+}
+
+/// Create PartialResult from value and result, if result is okay, return the value.
+macro_rules! partial_result {
+    ($value:expr, $result:expr) => {
+        match $result {
+            Ok(_) => $value,
+            Err(error) => {
+                return PartialResult(Err(($value, error)));
+            }
+        }
+    };
+}
 
 /// Error logging if the result is an error, panic in debug mode
 pub fn log_err<E: Error>(v: Result<(), E>) {
@@ -20,7 +49,7 @@ pub fn log_err<E: Error>(v: Result<(), E>) {
         #[allow(clippy::panic)]
         {
             #[cfg(debug_assertions)]
-            panic!("{}", snafu::Report::from_error(e));
+            panic!("{}", Report::from_error(e));
         }
     }
 }
