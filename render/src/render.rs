@@ -1361,13 +1361,18 @@ impl<'a, 'c> Render<'a, 'c> {
         let x_object = x_objects.get(&nm.0);
 
         if let Some(x_object) = x_object {
-            match x_object
-                .subtype()
-                .whatever_context("get x_object subtype")?
-            {
-                XObjectType::Image => self.paint_image_x_object(x_object),
-                XObjectType::Form => self.paint_form_x_object(x_object),
-                t => whatever!("TODO: {:?}", t),
+            if x_object.as_stream().is_ok() {
+                match x_object
+                    .subtype()
+                    .whatever_context("get x_object subtype")?
+                {
+                    XObjectType::Image => self.paint_image_x_object(x_object),
+                    XObjectType::Form => self.paint_form_x_object(x_object),
+                    t => whatever!("TODO: {:?}", t),
+                }
+            } else {
+                warn!("x_object {} not stream, ignored", nm.0);
+                return Ok(());
             }
         } else {
             warn!("x_object {} not found", nm.0);
