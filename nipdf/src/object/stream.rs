@@ -1628,8 +1628,10 @@ type ColorKey = ([u8; 4], [u8; 4]);
 /// Convert min and max color into ColorSpace, return (min, max) rgba8
 fn color_key_range(range: &Domains, cs: &ColorSpace) -> Result<ColorKey, ObjectValueError> {
     let n = cs.components();
-    ensure_whatever!(range.n() == n, "Color key range length mismatch");
-    assert!(range.n() <= 4);
+    ensure_whatever!(range.n() >= n, "range length mismatch");
+    if range.n() != n {
+        log::info!("Color key range length mismatch, {}/{}", range.n(), n);
+    }
 
     let mut min = [0u8; 4];
     let mut max = [0u8; 4];
