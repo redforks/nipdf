@@ -813,8 +813,11 @@ impl<'a, 'c> Render<'a, 'c> {
                     .resources
                     .ext_g_state()
                     .whatever_context("get page resources")?;
-                let res = res.get(&nm.0).whatever_context("ExtGState not found")?;
-                self.current_mut()?.set_graphics_state(res)?;
+                if let Some(res) = res.get(&nm.0) {
+                    self.current_mut()?.set_graphics_state(res)?;
+                } else {
+                    warn!("ExtGState not found {}", nm.0);
+                }
             }
 
             // Special Graphics State Operations
