@@ -191,7 +191,6 @@ struct ColorState {
     color_space: ColorSpace<f32>,
     #[educe(Default = 1.0f32)]
     alpha: f32,
-    #[educe(Default = true)]
     alpha_is_shape: bool,
 }
 
