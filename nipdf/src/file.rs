@@ -4,8 +4,9 @@ use crate::{
     ObjectValueError, Result,
     file::encrypt::Authorizer,
     object::{
-        Array, Dictionary, Embedded, Entry, FilePos, Frame, HexString, LiteralString, Object,
-        ObjectId, PdfObject, Root, RootPdfObject, RuntimeObjectId, Stream, TrailerDict,
+        Array, Dictionary, Embedded, Entry, FilePos, Frame, HexString, IndirectObjectDef,
+        LiteralString, Object, ObjectId, PdfObject, Root, RootPdfObject, RuntimeObjectId, Stream,
+        TrailerDict,
     },
     parser::{
         dict, header_parser, indirect_object_def, object, object_id, parse_frame_set,
@@ -868,6 +869,7 @@ impl File {
         }
         let mut trailers = Vec::with_capacity(trailer_positions.len() + xref_streams.len());
 
+        let mut possible_root = None;
         // Try to parse XRef streams and add their entries
         for pos in xref_streams {
             let mut bytes = LocatingSlice::new(&buf[pos..]);
@@ -891,6 +893,19 @@ impl File {
                     let obj_pos: ObjectPos = (&entry).into();
                     if !id_offset.contains_key(&id) {
                         insert_object_pos(&mut id_offset, id, obj_pos, buf.len());
+                    }
+                }
+            } else {
+                let mut buf = LocatingSlice::new(&buf[pos..]);
+                if let Ok(IndirectObjectDef(_, s)) =
+                    indirect_object_def::<_, ParserError>().parse_next(&mut buf)
+                {
+                    if let Ok(o) = s.as_dict() {
+                        if let Some(o) = o.get("Root") {
+                            if let Ok(root) = o.reference() {
+                                possible_root = Some(root);
+                            }
+                        }
                     }
                 }
             }
@@ -942,6 +957,7 @@ impl File {
                     }
                 }
             })
+            .or(possible_root)
             .whatever_context::<_, ObjectValueError>("find root_id")?;
 
         Ok(Self {
