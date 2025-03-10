@@ -1552,7 +1552,9 @@ impl<'a, 'c> Render<'a, 'c> {
             .resources
             .shading()
             .whatever_context("get shading resource")?;
-        let shading = &shading[&nm.0];
+        let Some(shading) = shading.get(&nm.0) else {
+            return Ok(warn!("shading {} not found", nm.0));
+        };
         match build_shading(shading, self.resources).whatever_context("build shading")? {
             Some(Shading::Radial(radial)) => {
                 self.paint_radial(&radial).whatever_context("paint radial")
