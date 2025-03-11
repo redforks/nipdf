@@ -53,7 +53,7 @@ fontdb = "0.23"
 font-kit = { version = "0.14", features = ["loader-freetype"] }
 pathfinder_geometry = "0.5"
 weezl = "0.1"
-either = "1.13"
+either = "1.15"
 euclid = "0.22"
 ouroboros = "0.18"
 md-5 = "0.10"
