@@ -1857,7 +1857,11 @@ impl<'a, 'c> Render<'a, 'c> {
         let font_name = text_object
             .font_name
             .as_ref()
-            .whatever_context("get font name")?;
+            .or_else(|| {
+                warn!("font name not set in text_object, use first font in font cache");
+                self.font_cache.first_font()
+            })
+            .whatever_context("get current font name")?;
         let font = self.font_cache.get_font(font_name);
         let op = self.font_cache.get_op(font_name);
         let glyph_width = self.font_cache.get_glyph_width(font_name);

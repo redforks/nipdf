@@ -723,6 +723,10 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         })
     }
 
+    pub fn first_font(&self) -> Option<&Name> {
+        self.cache.borrow_fonts().keys().next()
+    }
+
     pub fn get_font(&self, s: &Name) -> &dyn Font<P> {
         self.cache
             .borrow_fonts()
