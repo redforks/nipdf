@@ -99,6 +99,10 @@ pub struct RenderOption {
     state: Option<State>,
     rotate: i32,
     dimension: PageDimension,
+    /// If true, operations that result in errors will cause the render to fail immediately.
+    /// If false, errors will be logged and rendering will continue.
+    #[educe(Default = false)]
+    fail_fast: bool,
 }
 
 impl RenderOption {
@@ -165,6 +169,10 @@ impl RenderOptionBuilder {
         self
     }
 
+    pub fn fail_fast(mut self, fail_fast: bool) -> Self {
+        self.0.fail_fast = fail_fast;
+        self
+    }
 
     fn state(mut self, state: State) -> Self {
         self.0.state = Some(state);
@@ -219,6 +227,7 @@ pub fn render_steps(
         for op in iter {
             match renderer.exec(op) {
                 Ok(_) => (),
+                Err(e) if option.fail_fast => return Err(e),
                 Err(e) => log::error!("Operation failed: {}", snafu::Report::from_error(e)),
             }
         }
