@@ -1544,7 +1544,11 @@ impl Stream {
     /// `buf` start from indirect object, from xref
     pub fn raw<'a>(&self, resolver: &ObjectResolver<'a>) -> Result<&'a [u8], ObjectValueError> {
         let buf = resolver.stream_data(self.2.id())?;
-        Ok(&buf[self.buf_range(Some(resolver))?])
+        let range = self.buf_range(Some(resolver))?;
+        let buf_len = buf.len();
+        let start = range.start.min(buf_len);
+        let end = range.end.min(buf_len);
+        Ok(&buf[start..end])
     }
 
     fn _decode<'a>(
