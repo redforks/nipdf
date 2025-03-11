@@ -688,9 +688,6 @@ where
     loop {
         wsc0().parse_next(buf)?;
         if buf.is_empty() {
-            if !operands.is_empty() {
-                warn!("Not enough operands for operation");
-            }
             return Ok(r);
         }
         let oo = object_or_operator.parse_next(buf);
@@ -708,10 +705,17 @@ where
                         Operation::BeginCompatibilitySection | Operation::EndCompatibilitySection,
                     ) => {}
                     Some(Operation::BeginInlineImage) => {
-                        let inline_image = inline_image()
+                        match inline_image::<prescript::ParserError>()
                             .map(Operation::PaintInlineImage)
-                            .parse_next(buf)?;
-                        r.push(inline_image);
+                            .parse_next(buf)
+                        {
+                            Ok(v) => {
+                                r.push(v);
+                            }
+                            Err(e) => {
+                                warn!("Error parsing inline image: {:?}", e);
+                            }
+                        };
                     }
                     Some(op) => r.push(op),
                     None => {
