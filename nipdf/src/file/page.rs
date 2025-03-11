@@ -17,7 +17,7 @@ use nipdf_macro::{TryFromNameObject, pdf_object};
 use prescript::{Name, ParserError, sname};
 use snafu::{OptionExt as _, ResultExt as _};
 use std::{cell::LazyCell, iter::once};
-use winnow::Parser as _;
+use winnow::{Parser as _, combinator::terminated, token::rest};
 
 pub mod paint;
 
@@ -396,7 +396,7 @@ impl PageContent {
     pub fn operations(self) -> Result<Vec<Operation>> {
         let data = self.bufs.into_iter().flatten().collect::<Vec<u8>>();
 
-        parse_operations::<ParserError>
+        terminated(parse_operations::<ParserError>, rest)
             .parse(&data)
             .map_err(winnow::error::ParseError::into_inner)
             .whatever_context::<_, ObjectValueError>("parse page operations")

@@ -11,7 +11,7 @@ use euclid::{Length, Point2D, Transform2D};
 use log::{debug, error, warn};
 use nipdf_macro::{OperationParser, TryFromIntObject, TryFromNameObject, pdf_object};
 use prescript::{Name, sname};
-use snafu::{ensure_whatever, whatever};
+use snafu::{Report, ensure_whatever, whatever};
 use std::{
     num::ParseIntError,
     str::{Utf8Error, from_utf8},
@@ -727,8 +727,8 @@ where
             }
             Err(e) => {
                 warn!(
-                    "Error parsing operation, Ignore remait page content: {:?}",
-                    e
+                    "Error parsing operation, Ignore renain page content: {}",
+                    Report::from_error(e.into_inner().unwrap())
                 );
                 return Ok(r);
             }
