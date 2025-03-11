@@ -394,23 +394,12 @@ impl PageContent {
     }
 
     pub fn operations(self) -> Result<Vec<Operation>> {
-        let mut data: Option<Vec<u8>> = None;
-        for buf in self.bufs {
-            if let Some(data) = data.as_mut() {
-                data.extend_from_slice(&buf);
-            } else {
-                data = Some(buf);
-            }
-        }
+        let data = self.bufs.into_iter().flatten().collect::<Vec<u8>>();
 
-        Ok(if let Some(data) = data {
-            terminated(parse_operations::<ParserError>, rest)
-                .parse(&data)
-                .map_err(winnow::error::ParseError::into_inner)
-                .whatever_context::<_, ObjectValueError>("parse page operations")?
-        } else {
-            vec![]
-        })
+        parse_operations::<ParserError>
+            .parse(&data)
+            .map_err(winnow::error::ParseError::into_inner)
+            .whatever_context::<_, ObjectValueError>("parse page operations")
     }
 
     pub fn as_ref(&self) -> impl Iterator<Item = &[u8]> {

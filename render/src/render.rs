@@ -1335,7 +1335,7 @@ impl<'a, 'c> Render<'a, 'c> {
         };
         content
             .operations()
-            .whatever_context("get page operations")?
+            .whatever_context("get form page operations")?
             .into_iter()
             .try_for_each(|op| render.exec(op))?;
 
