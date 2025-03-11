@@ -68,7 +68,7 @@ fn download_file(url: &str, p: impl AsRef<Path>) -> Result<()> {
 
 /// These files are very rare and odd, not to be tested
 #[rustfmt::skip]
-const IGNORED: [&str; 37] = [
+const IGNORED: [&str; 38] = [
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
     "bug1050040.pdf",
     // invalid object format, mupdf failed to parse, mupdf says no page
@@ -128,6 +128,8 @@ const IGNORED: [&str; 37] = [
     "issue12841_reduced.pdf",
     // contains invalid dct image, okay in release mode. All other pdf readers can decode the image
     "issue18042.pdf",
+    // invalid JPEG format: found marker DNL inside scan where RST3 was expected
+    "issue8614.pdf.link",
 
     // okay in release mode, invalid ColorSpace name
     "issue6707.pdf.link",
