@@ -754,35 +754,33 @@ impl<'a, 'c> Render<'a, 'c> {
     }
 
     fn push(&mut self) -> Result<()> {
-        self.stack.push(self.top()?.clone());
+        self.stack.push(Self::top(&self.stack)?.clone());
         Ok(())
     }
 
-    fn top(&self) -> Result<&State> {
-        self.stack.last().whatever_context("get stack top")
+    fn top(stack: &[State]) -> Result<&State> {
+        stack.last().whatever_context("get stack top")
     }
 
     fn pop(&mut self) {
-        if self.stack.pop().is_none() {
+        if self.stack.len() <= 1 {
             // some file contains unpaired q/Q operations
-            warn!("pop empty state stack");
+            warn!("cannot pop state stack with only one state remaining");
+        } else {
+            self.stack.pop();
         }
     }
 
-    fn current_mut(&mut self) -> Result<&mut State> {
-        self.stack.last_mut().whatever_context("get current state")
+    fn current_mut(stack: &mut Vec<State>) -> Result<&mut State> {
+        stack.last_mut().whatever_context("get current state")
     }
 
     fn text_object(&self) -> Result<&TextObject> {
-        Ok(&self
-            .stack
-            .last()
-            .whatever_context("get current text object")?
-            .text_object)
+        Ok(&Self::top(&self.stack)?.text_object)
     }
 
     fn text_object_mut(&mut self) -> Result<&mut TextObject> {
-        Ok(&mut self.current_mut()?.text_object)
+        Ok(&mut Self::current_mut(&mut self.stack)?.text_object)
     }
 
     pub(crate) fn exec(&mut self, op: Operation) -> Result<()> {
@@ -799,22 +797,30 @@ impl<'a, 'c> Render<'a, 'c> {
         debug!("handle operation: {:?}", op);
         match op {
             // General Graphics State Operations
-            Operation::SetLineWidth(width) => self.current_mut()?.set_line_width(width),
-            Operation::SetLineCap(cap) => self.current_mut()?.set_line_cap(cap),
-            Operation::SetLineJoin(join) => self.current_mut()?.set_line_join(join),
-            Operation::SetMiterLimit(limit) => self.current_mut()?.set_miter_limit(limit),
-            Operation::SetDashPattern(pattern, phase) => {
-                self.current_mut()?.set_dash_pattern(&pattern, phase);
+            Operation::SetLineWidth(width) => {
+                Self::current_mut(&mut self.stack)?.set_line_width(width)
             }
-            Operation::SetRenderIntent(intent) => self.current_mut()?.set_render_intent(intent),
-            Operation::SetFlatness(flatness) => self.current_mut()?.set_flatness(flatness),
+            Operation::SetLineCap(cap) => Self::current_mut(&mut self.stack)?.set_line_cap(cap),
+            Operation::SetLineJoin(join) => Self::current_mut(&mut self.stack)?.set_line_join(join),
+            Operation::SetMiterLimit(limit) => {
+                Self::current_mut(&mut self.stack)?.set_miter_limit(limit)
+            }
+            Operation::SetDashPattern(pattern, phase) => {
+                Self::current_mut(&mut self.stack)?.set_dash_pattern(&pattern, phase);
+            }
+            Operation::SetRenderIntent(intent) => {
+                Self::current_mut(&mut self.stack)?.set_render_intent(intent)
+            }
+            Operation::SetFlatness(flatness) => {
+                Self::current_mut(&mut self.stack)?.set_flatness(flatness)
+            }
             Operation::SetGraphicsStateParameters(nm) => {
                 let res = self
                     .resources
                     .ext_g_state()
                     .whatever_context("get page resources")?;
                 if let Some(res) = res.get(&nm.0) {
-                    self.current_mut()?.set_graphics_state(res)?;
+                    Self::current_mut(&mut self.stack)?.set_graphics_state(res)?;
                 } else {
                     warn!("ExtGState not found {}", nm.0);
                 }
@@ -823,7 +829,7 @@ impl<'a, 'c> Render<'a, 'c> {
             // Special Graphics State Operations
             Operation::SaveGraphicsState => self.push()?,
             Operation::RestoreGraphicsState => self.pop(),
-            Operation::ModifyCTM(ctm) => self.current_mut()?.concat_ctm(ctm),
+            Operation::ModifyCTM(ctm) => Self::current_mut(&mut self.stack)?.concat_ctm(ctm),
 
             // Path Construction Operations
             Operation::MoveToNext(p) => self.path.move_to(p)?,
@@ -853,18 +859,10 @@ impl<'a, 'c> Render<'a, 'c> {
 
             // Clipping Path Operations
             Operation::ClipNonZero => {
-                let state = self
-                    .stack
-                    .last_mut()
-                    .whatever_context("get stack top mutable ref")?;
-                state.clipping = Some(FillRule::Winding);
+                Self::current_mut(&mut self.stack)?.clipping = Some(FillRule::Winding);
             }
             Operation::ClipEvenOdd => {
-                let state = self
-                    .stack
-                    .last_mut()
-                    .whatever_context("get stack top mutable ref")?;
-                state.clipping = Some(FillRule::EvenOdd);
+                Self::current_mut(&mut self.stack)?.clipping = Some(FillRule::EvenOdd);
             }
 
             // Text Object Operations
@@ -992,12 +990,7 @@ impl<'a, 'c> Render<'a, 'c> {
     }
 
     fn move_to_start_of_next_line(&mut self) -> Result<()> {
-        let leading = self
-            .stack
-            .last()
-            .whatever_context("get stack top")?
-            .text_object
-            .leading;
+        let leading = Self::top(&self.stack)?.text_object.leading;
         self.text_object_mut()?
             .move_text_position(TextPoint::new(0.0, -leading));
         Ok(())
@@ -1025,7 +1018,7 @@ impl<'a, 'c> Render<'a, 'c> {
 
     fn stroke(&mut self) -> Result<()> {
         if let Some(p) = self.path.finish()? {
-            let state = self.stack.last().whatever_context("get stack top")?;
+            let state = Self::top(&self.stack)?;
             let stroke = state.get_stroke();
             state.stroke_state.stroke(
                 self.canvas,
@@ -1041,10 +1034,7 @@ impl<'a, 'c> Render<'a, 'c> {
     }
 
     fn end_path(&mut self) -> Result<()> {
-        let state = self
-            .stack
-            .last_mut()
-            .whatever_context("get stack top mutable ref")?;
+        let state = Self::current_mut(&mut self.stack)?;
         if let Some(rule) = state.clipping {
             if let Some(p) = self.path.finish()? {
                 state.update_mask(p, rule, true)?;
@@ -1065,7 +1055,7 @@ impl<'a, 'c> Render<'a, 'c> {
     }
 
     fn _fill(&mut self, fill_rule: FillRule, reset_path: bool) -> Result<()> {
-        let state = self.stack.last().whatever_context("get stack top")?;
+        let state = Self::top(&self.stack)?;
         if let Some(p) = self.path.finish()? {
             state.fill_state.fill(
                 self.canvas,
@@ -1138,7 +1128,7 @@ impl<'a, 'c> Render<'a, 'c> {
     }
 
     fn paint_inline_image(&mut self, inline_image: &InlineImage) -> Result<()> {
-        let state = self.stack.last().whatever_context("get stack top")?;
+        let state = Self::top(&self.stack)?;
         let meta = inline_image.meta();
         let img = inline_image
             .image(self.resources.resolver(), self.resources)
@@ -1201,7 +1191,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 .into_rgba8())
         }
 
-        let state = self.stack.last().whatever_context("get stack top")?;
+        let state = Self::top(&self.stack)?;
 
         if x_object.image_mask().whatever_context("get image mask")? {
             let is_invert =
@@ -1325,7 +1315,7 @@ impl<'a, 'c> Render<'a, 'c> {
         let resources = form.resources().whatever_context("get form resources")?;
         let resources = resources.as_ref().unwrap_or(self.resources);
 
-        let state = self.stack.last().whatever_context("get stack top")?;
+        let state = Self::top(&self.stack)?;
         let mut inner_state = state.clone();
         let ctm = matrix.then(&state.ctm).with_destination().with_source();
         inner_state.set_ctm(ctm);
@@ -1383,7 +1373,7 @@ impl<'a, 'c> Render<'a, 'c> {
     fn paint_axial(&mut self, axial: &Axial) -> Result<()> {
         let b_box = axial.b_box;
 
-        let state = self.stack.last().whatever_context("get stack top")?;
+        let state = Self::top(&self.stack)?;
         let ctm = state.user_to_device.into_skia();
         let (shader_ctm, fill_ctm, path) = if let Some(b_box) = b_box {
             (
@@ -1431,7 +1421,7 @@ impl<'a, 'c> Render<'a, 'c> {
         let (x1, y1) = (radial.end.point.x, radial.end.point.y);
         let r0 = radial.start.r;
         let r1 = radial.end.r;
-        let state = self.stack.last().whatever_context("get stack top")?;
+        let state = Self::top(&self.stack)?;
         let ctm = state.user_to_device;
         let mask = state.get_mask();
         let mut paint = Paint::default();
@@ -1570,11 +1560,11 @@ impl<'a, 'c> Render<'a, 'c> {
     }
 
     fn fill_color_state(&mut self) -> Result<&mut ColorState> {
-        Ok(&mut self.current_mut()?.fill_state)
+        Ok(&mut Self::current_mut(&mut self.stack)?.fill_state)
     }
 
     fn stroke_color_state(&mut self) -> Result<&mut ColorState> {
-        Ok(&mut self.current_mut()?.stroke_state)
+        Ok(&mut Self::current_mut(&mut self.stack)?.stroke_state)
     }
 
     fn set_color_or_pattern(
@@ -1648,7 +1638,7 @@ impl<'a, 'c> Render<'a, 'c> {
             pattern.ext_g_state().whatever_context("read ext_g_state")?
         {
             self.push()?;
-            self.current_mut()?.set_graphics_state(&ext_g_state)?;
+            Render::current_mut(&mut self.stack)?.set_graphics_state(&ext_g_state)?;
             Some(RestoreState(Some(|| self.pop())))
         } else {
             None
@@ -1871,7 +1861,7 @@ impl<'a, 'c> Render<'a, 'c> {
         let font = self.font_cache.get_font(font_name);
         let op = self.font_cache.get_op(font_name);
         let glyph_width = self.font_cache.get_glyph_width(font_name);
-        let state = self.stack.last().whatever_context("get stack top")?;
+        let state = Self::top(&self.stack)?;
         let mut text_object = state.text_object.clone();
         text_object
             .set_units_per_em(op.units_per_em().whatever_context("get units per em")? as f32);
@@ -1900,7 +1890,7 @@ impl<'a, 'c> Render<'a, 'c> {
             };
 
             for ch in op.decode_chars(text).whatever_context("decode chars")? {
-                render.current_mut()?.set_ctm(
+                Self::current_mut(&mut render.stack)?.set_ctm(
                     text_object
                         .type3_runtime_matrix(&font_matrix)
                         .then(&state.ctm)
@@ -1959,7 +1949,7 @@ impl<'a, 'c> Render<'a, 'c> {
                     .push_path(text_clip_path);
             }
         }
-        self.current_mut()?.text_object = text_object;
+        Self::current_mut(&mut self.stack)?.text_object = text_object;
         Ok(())
     }
 
@@ -1976,7 +1966,7 @@ impl<'a, 'c> Render<'a, 'c> {
     }
 
     fn end_text(&mut self) -> Result<()> {
-        self.current_mut()?.end_text_object()
+        Self::current_mut(&mut self.stack)?.end_text_object()
     }
 }
 
