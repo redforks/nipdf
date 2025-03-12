@@ -1130,7 +1130,7 @@ impl<'a, 'c> Render<'a, 'c> {
     fn paint_inline_image(&mut self, inline_image: &InlineImage) -> Result<()> {
         let state = Self::top(&self.stack)?;
         let meta = inline_image.meta();
-        let mut img = inline_image
+        let img = inline_image
             .image(self.resources.resolver(), self.resources)
             .whatever_context("decode image")?
             .into_rgba8();
@@ -1142,42 +1142,58 @@ impl<'a, 'c> Render<'a, 'c> {
                 .map_or_else(|| Domain::new(0.0, 1.0), |domains| domains[0]);
             let mask_reversed = domain.start > domain.end;
 
-            // 直接修改图像数据，不创建额外的大型遮罩
-            // 将遮罩图像转换为RGBA颜色图像，应用当前的填充颜色
+            // 创建一个临时画布
+            let w = img.width();
+            let h = img.height();
+            let mut temp_canvas =
+                Pixmap::new(w, h).whatever_context("Create temporary canvas for mask")?;
+
+            // 在临时画布上使用当前填充色填充整个区域
             let paint = state.get_fill_paint()?;
-            let fill_color = match &state.fill_state.paint {
-                PaintCreator::Color(color) => *color,
-                _ => SkiaColor::BLACK, // 使用默认颜色作为回退
-            };
+            temp_canvas.fill_rect(
+                Rect::from_xywh(0.0, 0.0, w as f32, h as f32)
+                    .whatever_context("create temp canvas rect")?,
+                &paint,
+                Transform::identity(),
+                None,
+            );
 
-            // 直接在原始图像上应用颜色
-            img.pixels_mut().for_each(|p| {
-                let alpha = if mask_reversed { p[0] } else { !p[0] };
-                // 用当前填充颜色替换像素，保留alpha通道
-                p[0] = (fill_color.red() * 255.0) as u8;
-                p[1] = (fill_color.green() * 255.0) as u8;
-                p[2] = (fill_color.blue() * 255.0) as u8;
-                p[3] = alpha;
-            });
+            // 将掩码应用到临时画布上
+            // 通过修改像素透明度而不是创建大型掩码
+            let mut result_img = Vec::with_capacity((w * h * 4) as usize);
+            let temp_bytes = temp_canvas.data();
 
-            // 直接绘制处理后的图像，不需要额外的遮罩
+            for (i, pixel) in img.pixels().enumerate() {
+                let mask_value = if mask_reversed {
+                    pixel[0]
+                } else {
+                    255 - pixel[0]
+                };
+                let offset = i * 4;
+
+                // 复制填充色的RGB
+                result_img.push(temp_bytes[offset]); // R
+                result_img.push(temp_bytes[offset + 1]); // G
+                result_img.push(temp_bytes[offset + 2]); // B
+                result_img.push(mask_value); // A - 使用掩码值
+            }
+
+            // 创建最终图像
+            let final_img = PixmapRef::from_bytes(&result_img, w, h)
+                .whatever_context("Create final masked image")?;
+
+            // 绘制到主画布
             let paint = PixmapPaint {
-                opacity: state.fill_state.alpha(),
-                quality: FilterQuality::Bicubic,
+                quality: FilterQuality::Nearest,
                 ..Default::default()
             };
-
-            let pixmap = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height())
-                .whatever_context("Create colored mask image")?;
-
-            let state_mask = state.get_mask();
             self.canvas.draw_pixmap(
                 0,
                 0,
-                pixmap,
+                final_img,
                 &paint,
-                state.image_transform(img.width(), img.height()).into_skia(),
-                state_mask.as_deref(),
+                state.image_transform(w, h).into_skia(),
+                None,
             );
 
             return Ok(());
