@@ -11,6 +11,7 @@ use std::{
     io::{Cursor, SeekFrom},
     iter::repeat,
     num::TryFromIntError,
+    sync::OnceLock,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -96,6 +97,27 @@ impl RunHuffmanTree {
             Color::White => &self.white,
         }
     }
+}
+
+// Static instances for huffman trees
+static GROUP3_1D_RUN_HUFFMAN_TREE: OnceLock<RunHuffmanTree> = OnceLock::new();
+static GROUP4_RUN_HUFFMAN_TREE: OnceLock<RunHuffmanTree> = OnceLock::new();
+static GROUP4_HUFFMAN_TREE: OnceLock<Box<[ReadHuffmanTree<BigEndian, Group4Code>]>> =
+    OnceLock::new();
+
+// Function to get the Group3_1D huffman tree
+fn get_group3_1d_huffman_tree() -> &'static RunHuffmanTree {
+    GROUP3_1D_RUN_HUFFMAN_TREE.get_or_init(|| build_run_huffman(Algorithm::Group3_1D))
+}
+
+// Function to get the Group4 huffman tree
+fn get_group4_huffman_tree() -> &'static RunHuffmanTree {
+    GROUP4_RUN_HUFFMAN_TREE.get_or_init(|| build_run_huffman(Algorithm::Group4))
+}
+
+// Function to get the Group4 code huffman tree
+fn get_group4_code_huffman_tree() -> &'static [ReadHuffmanTree<BigEndian, Group4Code>] {
+    GROUP4_HUFFMAN_TREE.get_or_init(build_group4_huffman_tree)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -511,17 +533,14 @@ trait LineDecoder {
     }
 }
 
+#[derive(Copy, Clone)]
 struct Group4LineDecoder {
-    huffman: RunHuffmanTree,
-    group4_huffman: Box<[ReadHuffmanTree<BigEndian, Group4Code>]>,
     color: Color,
 }
 
 impl Group4LineDecoder {
     fn new() -> Self {
         Self {
-            huffman: build_run_huffman(Algorithm::Group4),
-            group4_huffman: build_group4_huffman_tree(),
             color: Color::default(),
         }
     }
@@ -539,7 +558,10 @@ impl LineDecoder for Group4LineDecoder {
     ) -> Result<ProcessPEResult> {
         use ProcessPEResult::*;
 
-        match reader.read_huffman(&self.group4_huffman).context(IOSnafu)? {
+        match reader
+            .read_huffman(get_group4_code_huffman_tree())
+            .context(IOSnafu)?
+        {
             Group4Code::Pass => {
                 let b1 = line.last.b1(line.pos, self.color.is_white());
                 let b2 = line.last.next_flip(Some(b1));
@@ -549,8 +571,8 @@ impl LineDecoder for Group4LineDecoder {
                 )))
             }
             Group4Code::Horizontal => {
-                let a0a1 = next_run(reader, &self.huffman, self.color)?;
-                let a1a2 = next_run(reader, &self.huffman, self.color.toggle())?;
+                let a0a1 = next_run(reader, get_group4_huffman_tree(), self.color)?;
+                let a1a2 = next_run(reader, get_group4_huffman_tree(), self.color.toggle())?;
                 Ok(Pixels2(a0a1.into(), a1a2.into()))
             }
             Group4Code::Vertical(n) => {
@@ -565,7 +587,10 @@ impl LineDecoder for Group4LineDecoder {
             }
             Group4Code::EndOfBlock => {
                 // Read second EndOfBlock code
-                match reader.read_huffman(&self.group4_huffman).context(IOSnafu)? {
+                match reader
+                    .read_huffman(get_group4_code_huffman_tree())
+                    .context(IOSnafu)?
+                {
                     Group4Code::EndOfBlock => Ok(EndOfBlock),
                     _ => Err(DecodeError::InvalidCode),
                 }
@@ -579,15 +604,14 @@ impl LineDecoder for Group4LineDecoder {
     }
 }
 
+#[derive(Copy, Clone)]
 struct Group3_1DLineDecoder {
-    huffman: RunHuffmanTree,
     color: Color,
 }
 
 impl Group3_1DLineDecoder {
     fn new() -> Self {
         Self {
-            huffman: build_run_huffman(Algorithm::Group3_1D),
             color: Color::default(),
         }
     }
@@ -675,7 +699,7 @@ impl LineDecoder for Group3_1DLineDecoder {
     ) -> Result<ProcessPEResult> {
         use ProcessPEResult::*;
 
-        match next_run(reader, &self.huffman, self.color)? {
+        match next_run(reader, get_group3_1d_huffman_tree(), self.color)? {
             PictualElement::Black(n) => {
                 self.color = Color::White;
                 Ok(Pixels1((Color::Black, n)))
