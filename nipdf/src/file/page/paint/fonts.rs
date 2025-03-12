@@ -663,8 +663,6 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
     where
         'a: 'c,
     {
-        warn!("create font cache");
-
         let font_res = resource
             .font()
             .whatever_context::<_, ObjectValueError>("get font resource")?;
@@ -683,8 +681,9 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
             };
             fonts.insert(k, font);
         }
+        let font_counts = fonts.len();
 
-        Ok(Self {
+        let r = Self {
             cache: FontCacheInner::try_new(
                 fonts,
                 CMapRegistry::new(),
@@ -720,7 +719,9 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                 |fallback_font| fallback_font.create_glyph_render(),
                 |fallback_font| Font::<P>::create_glyph_width(fallback_font),
             )?,
-        })
+        };
+        info!("Load {} fonts", font_counts);
+        Ok(r)
     }
 
     pub fn first_font(&self) -> Option<&Name> {
