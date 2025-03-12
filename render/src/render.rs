@@ -1130,7 +1130,7 @@ impl<'a, 'c> Render<'a, 'c> {
     fn paint_inline_image(&mut self, inline_image: &InlineImage) -> Result<()> {
         let state = Self::top(&self.stack)?;
         let meta = inline_image.meta();
-        let img = inline_image
+        let mut img = inline_image
             .image(self.resources.resolver(), self.resources)
             .whatever_context("decode image")?
             .into_rgba8();
@@ -1141,21 +1141,45 @@ impl<'a, 'c> Render<'a, 'c> {
                 .whatever_context("decode domain")?
                 .map_or_else(|| Domain::new(0.0, 1.0), |domains| domains[0]);
             let mask_reversed = domain.start > domain.end;
-            let mask = Self::load_image_as_mask(img, state, mask_reversed)?;
-            // fill canvas with current fill paint with mask
+
+            // 直接修改图像数据，不创建额外的大型遮罩
+            // 将遮罩图像转换为RGBA颜色图像，应用当前的填充颜色
             let paint = state.get_fill_paint()?;
-            self.canvas.fill_rect(
-                Rect::from_xywh(
-                    0.0,
-                    0.0,
-                    self.device_width() as f32,
-                    self.device_height() as f32,
-                )
-                .whatever_context("create inline image rect")?,
+            let fill_color = match &state.fill_state.paint {
+                PaintCreator::Color(color) => *color,
+                _ => SkiaColor::BLACK, // 使用默认颜色作为回退
+            };
+
+            // 直接在原始图像上应用颜色
+            img.pixels_mut().for_each(|p| {
+                let alpha = if mask_reversed { p[0] } else { !p[0] };
+                // 用当前填充颜色替换像素，保留alpha通道
+                p[0] = (fill_color.red() * 255.0) as u8;
+                p[1] = (fill_color.green() * 255.0) as u8;
+                p[2] = (fill_color.blue() * 255.0) as u8;
+                p[3] = alpha;
+            });
+
+            // 直接绘制处理后的图像，不需要额外的遮罩
+            let paint = PixmapPaint {
+                opacity: state.fill_state.alpha(),
+                quality: FilterQuality::Bicubic,
+                ..Default::default()
+            };
+
+            let pixmap = PixmapRef::from_bytes(img.as_raw(), img.width(), img.height())
+                .whatever_context("Create colored mask image")?;
+
+            let state_mask = state.get_mask();
+            self.canvas.draw_pixmap(
+                0,
+                0,
+                pixmap,
                 &paint,
-                Transform::identity(),
-                Some(&mask),
+                state.image_transform(img.width(), img.height()).into_skia(),
+                state_mask.as_deref(),
             );
+
             return Ok(());
         }
 
