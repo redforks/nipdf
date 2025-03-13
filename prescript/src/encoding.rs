@@ -6,7 +6,7 @@ use std::array::from_fn;
 /// Encoding for Type1 and other font types except Type0, which allows
 /// char code larger than u8.
 /// map char code (u8) to glyph name
-#[derive(Debug, PartialEq, Clone, Educe)]
+#[derive(Debug, PartialEq, Educe)]
 #[educe(Deref, DerefMut)]
 pub struct Encoding([Name; 256]);
 

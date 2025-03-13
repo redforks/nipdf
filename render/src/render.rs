@@ -775,8 +775,8 @@ impl<'a, 'c> Render<'a, 'c> {
         stack.last_mut().whatever_context("get current state")
     }
 
-    fn text_object(&self) -> Result<&TextObject> {
-        Ok(&Self::top(&self.stack)?.text_object)
+    fn text_object(stack: &[State]) -> Result<&TextObject> {
+        Ok(&Self::top(stack)?.text_object)
     }
 
     fn text_object_mut(&mut self) -> Result<&mut TextObject> {
@@ -1889,7 +1889,7 @@ impl<'a, 'c> Render<'a, 'c> {
     }
 
     fn show_text(&mut self, text: &[u8]) -> Result<()> {
-        let text_object = self.text_object()?;
+        let text_object = Self::text_object(&self.stack)?;
         if text_object.render_mode == TextRenderingMode::Invisible {
             return Ok(());
         }

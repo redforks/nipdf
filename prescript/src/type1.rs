@@ -77,6 +77,11 @@ impl Font {
     pub fn encoding(&self) -> Option<&Encoding> {
         self.encoding.as_ref()
     }
+
+    #[inline]
+    pub fn take_encoding(self) -> Option<Encoding> {
+        self.encoding
+    }
 }
 
 /// If file is pfb file, remove pfb section bytes

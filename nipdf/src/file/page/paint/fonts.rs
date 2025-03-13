@@ -735,21 +735,21 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
             .map_or_else(|| self.cache.borrow_fallback_font(), AsRef::as_ref)
     }
 
-    pub fn get_op(&self, s: &Name) -> &(dyn FontOp) {
+    pub fn get_op(&self, s: &Name) -> &dyn FontOp {
         self.cache
             .borrow_ops()
             .get(s)
             .map_or_else(|| self.cache.borrow_fallback_op().as_ref(), AsRef::as_ref)
     }
 
-    pub fn get_glyph_render(&self, s: &Name) -> &(dyn GlyphRender<P>) {
+    pub fn get_glyph_render(&self, s: &Name) -> &dyn GlyphRender<P> {
         self.cache.borrow_renders().get(s).map_or_else(
             || self.cache.borrow_fallback_render().as_ref(),
             AsRef::as_ref,
         )
     }
 
-    pub fn get_glyph_width(&self, s: &Name) -> &(dyn GlyphAdvance) {
+    pub fn get_glyph_width(&self, s: &Name) -> &dyn GlyphAdvance {
         self.cache.borrow_glyph_widths().get(s).map_or_else(
             || self.cache.borrow_fallback_width().as_ref(),
             AsRef::as_ref,

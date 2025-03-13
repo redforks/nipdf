@@ -55,7 +55,7 @@ impl EncodingParser<'_, '_, '_> {
             info!("scan encoding from type1 font. ({})", font_name);
             let type1_font = prescript::Font::parse(font_data)
                 .whatever_context::<_, ObjectValueError>("parse type1 font encoding")?;
-            Ok(type1_font.encoding().cloned())
+            Ok(type1_font.take_encoding())
         }
     }
 
