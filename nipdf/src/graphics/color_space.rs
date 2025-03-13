@@ -6,9 +6,11 @@ use crate::{
     graphics::ICCStreamDict,
     object::{FromSchemaContainer, Object, ObjectWithResolver},
 };
+use ahash::HashMap;
 use educe::Educe;
 use nipdf_macro::pdf_object;
 use num_traits::ToPrimitive;
+use ordered_float::OrderedFloat;
 use prescript::sname;
 use snafu::{OptionExt, ResultExt, ensure_whatever, whatever};
 use std::{fmt::Debug, iter::repeat, rc::Rc};
@@ -109,6 +111,35 @@ where
     T: ColorComp,
 {
     std::array::from_fn(|i| from[i].into_color_comp())
+}
+
+/// Convert color to rgba color space with caching, convert result to f32 or u8 by T generic type.
+/// Returns cached result if the same color has been processed before.
+pub fn color_to_rgba_with_cache<T>(
+    cs: &dyn ColorSpaceTrait<f32>,
+    color: &[OrderedFloat<f32>],
+    cache: &mut HashMap<TinyVec<[OrderedFloat<f32>; 4]>, [T; 4]>,
+) -> [T; 4]
+where
+    T: ColorComp,
+    f32: ColorCompConvertTo<T>,
+{
+    // Return cached result if available
+    if let Some(cached_result) = cache.get(color) {
+        return *cached_result;
+    }
+
+    unsafe {
+        let color_f32: &[f32] = std::mem::transmute(color);
+
+        // Compute the result using the existing function
+        let result = color_to_rgba(cs, &color_f32);
+
+        // Cache the result
+        cache.insert(color.into_iter().copied().collect(), result);
+
+        result
+    }
 }
 
 /// Convert color to rgba color space, convert result to f32 or u8 by T generic type.

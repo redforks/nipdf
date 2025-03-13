@@ -52,6 +52,7 @@ itertools.workspace = true
 nipdf-jbig2dec = { version = "0.4.1", default-features = false }
 ttf-parser = "0.25.1"
 encoding_rs = { version = "0.8.35" }
+ordered-float = "5.0.0"
 
 [dev-dependencies]
 env_logger.workspace = true

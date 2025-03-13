@@ -8,18 +8,20 @@ use crate::{
         ColorSpaceArgs,
         color_space::{
             ColorCompConvertTo, ColorSpace, ColorSpaceTrait, DeviceCMYK, color_to_rgba,
-            convert_color_to,
+            color_to_rgba_with_cache, convert_color_to,
         },
     },
     object::{ObjectDiscriminants, PdfObject},
     parser::is_white_space,
     whatever_partial_result,
 };
+use ahash::{HashMap, HashMapExt as _};
 use bitstream_io::{BigEndian, BitRead as _, BitReader};
 use image::{DynamicImage, GrayImage, RgbImage, Rgba, RgbaImage};
 use log::{error, warn};
 use nipdf_macro::{TryFromIntObject, pdf_object};
 use num_traits::ToPrimitive;
+use ordered_float::OrderedFloat;
 use prescript::{Name, sname};
 use snafu::{OptionExt as _, ResultExt as _, ensure_whatever, whatever};
 use std::{
@@ -415,6 +417,7 @@ fn decode_image<'a, M: ImageMetadata>(
         .height()
         .whatever_context::<_, ObjectValueError>("Failed to get height")?;
 
+    let mut color_cache = HashMap::new();
     let mut r = match data {
         FilterDecodedData::Image(img) => {
             if let Some(color_space) = color_space.as_ref() {
@@ -486,9 +489,10 @@ fn decode_image<'a, M: ImageMetadata>(
                                 )?;
 
                             // Convert the color index to RGBA
-                            let color: [u8; 4] = color_to_rgba(
+                            let color: [u8; 4] = color_to_rgba_with_cache(
                                 cs,
-                                &[color_index.into_color_comp()], // Assuming indexed color space
+                                std::slice::from_ref(&OrderedFloat(color_index.into_color_comp())), // Assuming indexed color space
+                                &mut color_cache,
                             );
 
                             img.put_pixel(x, y, Rgba(color));
@@ -501,12 +505,11 @@ fn decode_image<'a, M: ImageMetadata>(
                 (Some(cs), 4) => {
                     let n_colors = cs.components();
                     let mut img = RgbaImage::new(width, height);
-
                     let mut bit_reader = BitReader::<_, BigEndian>::new(data.as_ref());
 
                     for y in 0..height {
                         for x in 0..width {
-                            let mut c = TinyVec::<[f32; 4]>::with_capacity(n_colors);
+                            let mut c = TinyVec::<[OrderedFloat<f32>; 4]>::with_capacity(n_colors);
 
                             // Read each color component (4 bits) and scale to 0-255 range
                             for _ in 0..n_colors {
@@ -517,11 +520,12 @@ fn decode_image<'a, M: ImageMetadata>(
                                     )?;
 
                                 // Scale 4-bit value (0-15) to 8-bit (0-255)
-                                c.push((value * 17).into_color_comp());
+                                c.push(OrderedFloat((value * 17).into_color_comp()));
                             }
 
                             // Convert the color using the color space
-                            let color: [u8; 4] = color_to_rgba(cs, c.as_slice());
+                            let color: [u8; 4] =
+                                color_to_rgba_with_cache::<u8>(cs, c.as_slice(), &mut color_cache);
                             img.put_pixel(x, y, Rgba(color));
                         }
                     }
@@ -532,8 +536,12 @@ fn decode_image<'a, M: ImageMetadata>(
                     let n_colors = cs.components();
                     let mut img = RgbaImage::new(width, height);
                     for (p, dest_p) in data.chunks(n_colors).zip(img.pixels_mut()) {
-                        let c: TinyVec<[f32; 4]> = p.iter().map(|v| v.into_color_comp()).collect();
-                        let color: [u8; 4] = color_to_rgba(cs, c.as_slice());
+                        let c: TinyVec<[OrderedFloat<f32>; 4]> = p
+                            .iter()
+                            .map(|v| OrderedFloat(v.into_color_comp()))
+                            .collect();
+                        let color: [u8; 4] =
+                            color_to_rgba_with_cache(cs, c.as_slice(), &mut color_cache);
                         *dest_p = Rgba(color);
                     }
                     DynamicImage::ImageRgba8(img)
@@ -545,7 +553,7 @@ fn decode_image<'a, M: ImageMetadata>(
 
                     // Process 16-bit values (stored as 2 bytes per component)
                     for (p, dest_p) in data.chunks(n_colors * 2).zip(img.pixels_mut()) {
-                        let mut c = TinyVec::<[f32; 4]>::with_capacity(n_colors);
+                        let mut c = TinyVec::<[OrderedFloat<f32>; 4]>::with_capacity(n_colors);
 
                         // Convert each 16-bit component (2 bytes) to a float
                         for i in 0..n_colors {
@@ -554,11 +562,12 @@ fn decode_image<'a, M: ImageMetadata>(
                             let value = ((p[idx] as u16) << 8) | (p[idx + 1] as u16);
 
                             // Convert to 0.0-1.0 range
-                            c.push((value as f32) / 65535.0);
+                            c.push(OrderedFloat((value as f32) / 65535.0));
                         }
 
                         // Convert the color using the color space
-                        let color: [u8; 4] = color_to_rgba(cs, c.as_slice());
+                        let color: [u8; 4] =
+                            color_to_rgba_with_cache(cs, c.as_slice(), &mut color_cache);
                         *dest_p = Rgba(color);
                     }
 
@@ -1493,8 +1502,13 @@ fn filter<'a: 'b, 'b>(
 fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> Result<DynamicImage> {
     fn convert_cs(img: &GrayImage, cs: &dyn ColorSpaceTrait<f32>) -> Result<RgbaImage> {
         let mut r = RgbaImage::new(img.width(), img.height());
+        let mut cache = HashMap::new();
         for (p, dest_p) in img.pixels().zip(r.pixels_mut()) {
-            let color: [u8; 4] = color_to_rgba(cs, &[p[0].into_color_comp()]);
+            let color: [u8; 4] = color_to_rgba_with_cache(
+                cs,
+                std::slice::from_ref(&OrderedFloat(p[0].into_color_comp())),
+                &mut cache,
+            );
             *dest_p = Rgba(color);
         }
         Ok(r)
@@ -1502,15 +1516,17 @@ fn image_transform_color_space(img: DynamicImage, to: &ColorSpace) -> Result<Dyn
 
     fn convert_rgba_cs(img: &RgbaImage, cs: &dyn ColorSpaceTrait<f32>) -> Result<RgbaImage> {
         let mut r = RgbaImage::new(img.width(), img.height());
+        let mut cache = HashMap::new();
         for (p, dest_p) in img.pixels().zip(r.pixels_mut()) {
-            let color: [u8; 4] = color_to_rgba(
+            let color: [u8; 4] = color_to_rgba_with_cache(
                 cs,
                 &[
-                    p[0].into_color_comp(),
-                    p[1].into_color_comp(),
-                    p[2].into_color_comp(),
-                    p[3].into_color_comp(),
+                    OrderedFloat(p[0].into_color_comp()),
+                    OrderedFloat(p[1].into_color_comp()),
+                    OrderedFloat(p[2].into_color_comp()),
+                    OrderedFloat(p[3].into_color_comp()),
                 ],
+                &mut cache,
             );
             *dest_p = Rgba(color);
         }
