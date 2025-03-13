@@ -16,7 +16,7 @@ use crate::{
     whatever_partial_result,
 };
 use bitstream_io::{BigEndian, BitRead as _, BitReader};
-use image::{DynamicImage, GrayImage, Luma, RgbImage, Rgba, RgbaImage};
+use image::{DynamicImage, GrayImage, RgbImage, Rgba, RgbaImage};
 use log::{error, warn};
 use nipdf_macro::{TryFromIntObject, pdf_object};
 use num_traits::ToPrimitive;
@@ -328,7 +328,6 @@ pub(crate) fn decode_one_bit_gray_image(
 ) -> Result<DynamicImage, ObjectValueError> {
     use bitstream_io::read::BitRead;
 
-    let mut img = GrayImage::new(w, h);
     let row_padding_bits = if row_padding {
         let remain_bits = w % 8;
         if remain_bits != 0 { 8 - remain_bits } else { 0 }
@@ -336,17 +335,62 @@ pub(crate) fn decode_one_bit_gray_image(
         0
     };
 
+    let mut buffer = vec![0u8; (w * h) as usize];
     let mut r = BitReader::<_, BigEndian>::new(data);
     for y in 0..h {
-        for x in 0..w {
-            let bit = r
-                .read_bit()
-                .whatever_context::<_, ObjectValueError>("Failed to read bit")?;
-            img.put_pixel(x, y, Luma([if bit { 255u8 } else { 0 }]));
+        let row_start = y * w;
+
+        // 每次处理8个像素(或更少，如果已到行尾)
+        let mut x = 0;
+        while x < w {
+            if w - x >= 64 {
+                // 一次性读取64位(8字节)
+                let value = r
+                    .read_to::<u64>()
+                    .whatever_context::<_, ObjectValueError>("read 8 bytes")?;
+
+                // 处理这64位
+                for bit_idx in 0..64 {
+                    let pixel_idx = (row_start + x + bit_idx) as usize;
+                    let bit_value = (value >> (63 - bit_idx)) & 1;
+                    buffer[pixel_idx] = if bit_value == 1 { 255 } else { 0 };
+                }
+                x += 64;
+            } else if w - x >= 8 {
+                let byte = r
+                    .read_to::<u8>()
+                    .whatever_context::<_, ObjectValueError>("read byte")?;
+
+                for bit_idx in 0..8 {
+                    let pixel_idx = (row_start + x + bit_idx) as usize;
+                    let bit_value = (byte >> (7 - bit_idx)) & 1;
+                    buffer[pixel_idx] = if bit_value == 1 { 255 } else { 0 };
+                }
+                x += 8;
+            } else {
+                // 处理剩余的位
+                let bits_to_read = w - x;
+                for bit_idx in 0..bits_to_read {
+                    let bit = r
+                        .read_bit()
+                        .whatever_context::<_, ObjectValueError>("read bit")?;
+
+                    let pixel_idx = (row_start + x + bit_idx) as usize;
+                    buffer[pixel_idx] = if bit { 255 } else { 0 };
+                }
+                x += bits_to_read;
+            }
         }
-        r.skip(row_padding_bits)
-            .whatever_context::<_, ObjectValueError>("Failed to skip bits")?;
+
+        // 跳过行末的填充位
+        if row_padding_bits > 0 {
+            r.skip(row_padding_bits)
+                .whatever_context::<_, ObjectValueError>("skip line padding bits")?;
+        }
     }
+
+    let img = GrayImage::from_raw(w, h, buffer)
+        .whatever_context::<_, ObjectValueError>("Failed to create image from buffer")?;
     Ok(DynamicImage::ImageLuma8(img))
 }
 
