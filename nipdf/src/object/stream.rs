@@ -1238,8 +1238,7 @@ trait CCITTFaxDecodeParamsDictTrait {
     fn encoded_byte_align(&self) -> bool;
     #[default(1728u16)]
     fn columns(&self) -> u16;
-    #[or_default]
-    fn rows(&self) -> u16;
+    fn rows(&self) -> Option<u16>;
     #[default(true)]
     fn end_of_block(&self) -> bool;
     #[or_default]
@@ -1377,11 +1376,9 @@ fn decode_ccitt(
         width: params
             .columns()
             .whatever_context::<_, ObjectValueError>("Failed to get columns")?,
-        rows: Some(
-            params
-                .rows()
-                .whatever_context::<_, ObjectValueError>("Failed to get rows")?,
-        ),
+        rows: params
+            .rows()
+            .whatever_context::<_, ObjectValueError>("Failed to get rows")?,
         flags: params
             .try_into()
             .whatever_context::<_, ObjectValueError>("Failed to convert params to Flags")?,

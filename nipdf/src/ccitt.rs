@@ -812,11 +812,16 @@ impl Decoder {
             repeat(true).take(self.width as usize).collect(),
         );
 
+        let total_bits = (buf.len() * 8) as u64;
         let mut reader = BitReader::endian(Cursor::new(buf), BigEndian);
 
         loop {
             if self.flags.encoded_byte_align {
                 reader.byte_align();
+            }
+
+            if reader.position_in_bits().context(IOSnafu)? >= total_bits {
+                break;
             }
 
             let finished = match ld.decode_line(&mut reader, &mut line_buffer)? {

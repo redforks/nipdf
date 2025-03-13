@@ -1,6 +1,7 @@
 use crate::object::decode_one_bit_gray_image;
 
 use super::*;
+use snafu::report;
 use test_case::test_case;
 
 #[test_log::test]
@@ -147,6 +148,33 @@ fn failed_ccitt() {
         .into_luma8()
         .into_vec();
     assert_eq!(image, expected_image);
+}
+
+#[report]
+#[test]
+fn rows_unknown() -> Result<()> {
+    let flags = Flags {
+        encoded_byte_align: true,
+        inverse_black_white: false,
+        end_of_block: true,
+    };
+    let decoder = Decoder {
+        algorithm: Algorithm::Group3_1D,
+        flags,
+        width: 1728,
+        rows: None,
+    };
+    let decoded = decoder.decode(include_bytes!("rows-unknown.ccitt"))?;
+    let image = decode_one_bit_gray_image(1728, 2236, &decoded, false)
+        .unwrap()
+        .into_luma8()
+        .into_vec();
+    let expected_image = image::open("src/ccitt/rows-unknown-exp.png")
+        .unwrap()
+        .into_luma8()
+        .into_vec();
+    assert_eq!(image, expected_image);
+    Ok(())
 }
 
 #[test_case(Color::White, 0, &[0b0011_0101] ; "white 0")]
