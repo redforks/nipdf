@@ -763,16 +763,12 @@ impl<'a> LineBuffer<'a> {
         let pos = self.pos();
         // Ensure we don't go beyond the line width
         let max_pixels = (self.last.0.len() - pos).min(counts as usize);
-
-        if max_pixels > 0 {
-            // CRITICAL FIX: Set all pixels in the run to the same color
-            let value = color.is_white();
-            for i in pos..(pos + max_pixels) {
-                self.cur.set(i, value);
-            }
-
-            self.pos = Some((pos + max_pixels).try_into().context(InvalidPixelSnafu)?);
+        match max_pixels {
+            1 => self.cur.set(pos, color.is_white()),
+            2.. => self.cur[pos..(pos + max_pixels)].fill(color.is_white()),
+            0 => (),
         }
+        self.pos = Some((pos + max_pixels).try_into().context(InvalidPixelSnafu)?);
 
         debug_assert!(self.pos() <= self.last.0.len());
         Ok(())
@@ -841,7 +837,7 @@ impl Decoder {
             }
 
             let line = line_buffer.take();
-            r.extend(&line);
+            r.extend_from_bitslice(&line);
 
             if finished {
                 break;
