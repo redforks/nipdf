@@ -31,6 +31,7 @@ pub enum CIDFontType {
 }
 
 #[pdf_object("Font")]
+#[root_pdf_object]
 pub trait FontDictTrait {
     #[try_from]
     fn subtype(&self) -> FontType;

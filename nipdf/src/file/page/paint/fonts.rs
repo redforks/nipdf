@@ -3,9 +3,7 @@ use crate::{
     file::ObjectResolver,
     graphics::{Operation, Point, parse_operations, trans::GlyphLength},
     object::{Dictionary, Object, PdfObject, PdfObjectCore as _, RuntimeObjectId, Stream},
-    text::{
-        CIDFontType, FontDescriptorDict, FontDescriptorFlags, FontDict, FontType, Type3FontDict,
-    },
+    text::{CIDFontType, FontDescriptorDict, FontDescriptorFlags, FontDict, FontType},
 };
 use ahash::{HashMap, HashMapExt as _};
 use append_only_vec::AppendOnlyVec;
@@ -69,6 +67,7 @@ impl<T: GlyphAdvance> GlyphAdvance for Option<T> {
 }
 
 /// FontWidth used in Type1 and TrueType fonts
+#[derive(Clone)]
 struct FirstLastFontWidth {
     range: RangeInclusive<u32>,
     widths: Vec<u32>,
@@ -206,14 +205,14 @@ pub struct FontOps<'a, P> {
     pub op: Box<dyn FontOp>,
     pub render: Box<dyn GlyphRender<P>>,
     pub width: Box<dyn GlyphAdvance>,
-    pub type3: Option<&'a type3::Type3Font<'a>>,
+    pub type3: Option<&'a type3::Type3Font>,
 }
 
 pub trait Font<P> {
     fn create_op(&self) -> Result<Box<dyn FontOp>>;
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P>>>;
     fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance>>;
-    fn as_type3(&self) -> Option<&type3::Type3Font<'_>> {
+    fn as_type3(&self) -> Option<&type3::Type3Font> {
         None
     }
 

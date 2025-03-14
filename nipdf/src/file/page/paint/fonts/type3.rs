@@ -2,11 +2,11 @@ use super::{
     Encoding, FirstLastFontWidth, Font, FontDict, GlyphRender, Operation, PathSink,
     parse_operations,
 };
+use crate::file::ObjectResolver;
 use crate::file::page::paint::fonts::FontOp;
-use crate::object::Stream;
+use crate::object::{RootPdfObject as _, RuntimeObjectId, Stream};
 use crate::{
     ObjectValueError, Result, file::page::ResourceDict, graphics::trans::GlyphToTextSpace,
-    object::PdfObjectCore as _,
 };
 use ahash::{HashMap, HashMapExt};
 use log::{debug, info};
@@ -16,18 +16,19 @@ use prescript::Name;
 use snafu::{OptionExt, ResultExt};
 use winnow::{Parser as _, combinator::terminated, token::rest};
 
-pub struct Type3Font<'a> {
+pub struct Type3Font {
     name_to_gid: HashMap<Name, u16>,
     glyphs: Box<[OnceCell<Type3Glyph>]>,
-    dict: FontDict<'a, 'a>,
-    type3_dict: super::Type3FontDict<'a, 'a>,
+    dict_id: RuntimeObjectId,
     char_procs: HashMap<Name, Stream>,
+    matrix: GlyphToTextSpace,
+    encoding: Encoding,
+    first_last_width: Option<FirstLastFontWidth>,
 }
 
-impl<'a> Type3Font<'a> {
-    pub fn new(dict: FontDict<'a, 'a>) -> Result<Self> {
-        let type3_dict = dict.type3()?;
-        let char_procs = type3_dict.char_procs()?;
+impl Type3Font {
+    pub fn new(dict: FontDict<'_, '_>) -> Result<Self> {
+        let char_procs = dict.type3()?.char_procs()?;
 
         let mut glyphs = Vec::with_capacity(char_procs.len());
         let mut glyph_ids = HashMap::with_capacity(char_procs.len());
@@ -41,23 +42,33 @@ impl<'a> Type3Font<'a> {
             glyph_ids.insert(name.clone(), gid);
         }
 
+        let matrix = dict.type3()?.matrix()?;
+        let encoding = super::EncodingParser(&dict).type3()?;
+        let first_last_width = FirstLastFontWidth::from(&dict)?;
+
         Ok(Self {
             name_to_gid: glyph_ids,
             glyphs: glyphs.into(),
-            dict,
-            type3_dict,
+            dict_id: dict.id(),
             char_procs: char_procs
                 .into_iter()
                 .map(|(k, v)| (k, v.clone()))
                 .collect(),
+            matrix,
+            encoding,
+            first_last_width,
         })
     }
 
-    pub fn resources(&self) -> Result<Option<ResourceDict<'_, '_>>> {
-        self.type3_dict.resources()
+    pub fn resources<'b>(
+        &self,
+        resolver: &'b ObjectResolver<'_>,
+    ) -> Result<Option<ResourceDict<'b, '_>>> {
+        let dict: FontDict<'_, '_> = resolver.resolve_pdf_object(self.dict_id)?;
+        dict.type3()?.resources()
     }
 
-    pub fn get_glyph(&self, gid: u16) -> Option<&Type3Glyph> {
+    pub fn get_glyph<'b>(&self, gid: u16, resolver: &ObjectResolver<'b>) -> Option<&Type3Glyph> {
         // Get the cell from the glyphs array
         let cell = self.glyphs.get(gid as usize)?;
 
@@ -79,7 +90,7 @@ impl<'a> Type3Font<'a> {
         cell.get_or_try_init(|| {
             debug!("parse Type3 glyph: {}", name.as_str());
             let data = stream
-                .decode(self.type3_dict.resolver())
+                .decode(resolver)
                 .whatever_context::<_, ObjectValueError>("decode stream")?;
             let ops = terminated(parse_operations::<crate::ParserError>, rest)
                 .parse(&data[..])
@@ -90,8 +101,8 @@ impl<'a> Type3Font<'a> {
         .ok()
     }
 
-    pub fn matrix(&self) -> Result<GlyphToTextSpace> {
-        self.type3_dict.matrix()
+    pub fn matrix(&self) -> GlyphToTextSpace {
+        self.matrix
     }
 }
 
@@ -103,13 +114,10 @@ struct Type3FontOp {
 
 impl Type3FontOp {
     fn new(
-        font_dict: &FontDict<'_, '_>,
-        type3_dict: &super::Type3FontDict<'_, '_>,
         name_to_gid: HashMap<Name, u16>,
+        encoding: Encoding,
+        matrix: GlyphToTextSpace,
     ) -> Result<Self> {
-        let encoding = super::EncodingParser(font_dict).type3()?;
-        let matrix = type3_dict.matrix()?;
-
         Ok(Self {
             name_to_gid,
             encoding,
@@ -153,12 +161,12 @@ impl Type3Glyph {
     }
 }
 
-impl<P: PathSink + 'static> Font<P> for Type3Font<'_> {
+impl<P: PathSink + 'static> Font<P> for Type3Font {
     fn create_op(&self) -> Result<Box<dyn FontOp>> {
         Ok(Box::new(Type3FontOp::new(
-            &self.dict,
-            &self.type3_dict,
             self.name_to_gid.clone(),
+            self.encoding.clone(),
+            self.matrix,
         )?))
     }
 
@@ -175,11 +183,11 @@ impl<P: PathSink + 'static> Font<P> for Type3Font<'_> {
         Ok(Box::new(StubGlyphRender))
     }
 
-    fn as_type3(&self) -> Option<&Type3Font<'_>> {
+    fn as_type3(&self) -> Option<&Type3Font> {
         Some(self)
     }
 
     fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance>> {
-        Ok(Box::new(FirstLastFontWidth::from(&self.dict)?.unwrap()))
+        Ok(Box::new(self.first_last_width.clone().unwrap()))
     }
 }

@@ -1981,11 +1981,9 @@ impl<'a, 'c> Render<'a, 'c> {
         let user_to_device = state.user_to_device.into_skia();
 
         if let Some(type3_font) = font_ops.type3 {
-            let font_matrix = type3_font
-                .matrix()
-                .whatever_context("get type3 font matrix")?;
+            let font_matrix = type3_font.matrix();
             let resources = type3_font
-                .resources()
+                .resources(self.resources.resolver())
                 .whatever_context("get type3 font resources")?;
             let Some(mut render) = Render::new_nested(
                 self.nested_level,
@@ -2018,7 +2016,7 @@ impl<'a, 'c> Render<'a, 'c> {
                     .op
                     .char_to_gid(ch)
                     .whatever_context("get char to gid")?;
-                if let Some(glyph) = type3_font.get_glyph(gid) {
+                if let Some(glyph) = type3_font.get_glyph(gid, self.resources.resolver()) {
                     for op in glyph.operations() {
                         render.exec(render_cacher, op.clone())?;
                     }

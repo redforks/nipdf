@@ -8,8 +8,8 @@ use crate::{
 };
 use font_kit::loaders::freetype::Font as FontKitFont;
 use log::warn;
+use owned_ttf_parser::AsFaceRef as _;
 use owned_ttf_parser::OwnedFace as OwnedTTFFace;
-use owned_ttf_parser::{AsFaceRef as _, Face as TTFFace};
 use phf::phf_map;
 use prescript::cmap::WriteMode;
 use snafu::OptionExt as _;

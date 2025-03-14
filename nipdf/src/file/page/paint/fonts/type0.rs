@@ -12,7 +12,6 @@ use encoding_rs::Encoding as CharEncoding;
 use font_kit::loaders::freetype::Font as FontKitFont;
 use log::warn;
 use owned_ttf_parser::OwnedFace as OwnedTTFFace;
-use owned_ttf_parser::{AsFaceRef, Face as TTFFace};
 use prescript::cmap::{CMap, CMapRegistry, WriteMode};
 use prescript::{Encoding, name, sname};
 use snafu::{OptionExt as _, ResultExt as _, ensure_whatever, whatever};
