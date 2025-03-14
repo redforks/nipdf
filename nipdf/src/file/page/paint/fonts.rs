@@ -203,7 +203,7 @@ impl<P: PathSink> GlyphRender<P> for TTFGlyphRender {
 }
 
 pub struct FontOps<'a, P> {
-    pub op: Box<dyn FontOp + 'a>,
+    pub op: Box<dyn FontOp>,
     pub render: Box<dyn GlyphRender<P>>,
     pub width: Box<dyn GlyphAdvance>,
     pub type3: Option<&'a type3::Type3Font<'a>>,

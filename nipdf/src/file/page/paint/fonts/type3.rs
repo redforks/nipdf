@@ -21,7 +21,7 @@ pub struct Type3Font<'a> {
     glyphs: Box<[OnceCell<Type3Glyph>]>,
     dict: FontDict<'a, 'a>,
     type3_dict: super::Type3FontDict<'a, 'a>,
-    char_procs: HashMap<Name, &'a Stream>,
+    char_procs: HashMap<Name, Stream>,
 }
 
 impl<'a> Type3Font<'a> {
@@ -46,7 +46,10 @@ impl<'a> Type3Font<'a> {
             glyphs: glyphs.into(),
             dict,
             type3_dict,
-            char_procs,
+            char_procs: char_procs
+                .into_iter()
+                .map(|(k, v)| (k, v.clone()))
+                .collect(),
         })
     }
 
