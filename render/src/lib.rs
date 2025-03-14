@@ -217,7 +217,7 @@ pub fn render_steps(
     if !ops.is_empty() {
         // skip render if no operations, fixes incorrect pdf files that no resources
         let resource = page.resources().whatever_context("get page resources")?;
-        let mut renderer = Render::new(&mut canvas, option.clone(), &resource)?;
+        let mut renderer = Render::new(&mut render_cacher, &mut canvas, option.clone(), &resource)?;
 
         let iter = if let Some(steps) = steps {
             Either::Left(ops.into_iter().take(steps))

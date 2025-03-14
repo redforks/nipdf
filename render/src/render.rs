@@ -710,12 +710,14 @@ impl FallbackFontOps {
 }
 
 pub struct RenderCacher {
+    cmap_registry: CMapRegistry,
     fallback_font: Option<FallbackFontOps>,
 }
 
 impl RenderCacher {
     pub fn new() -> Self {
         Self {
+            cmap_registry: CMapRegistry::new(),
             fallback_font: None,
         }
     }
@@ -731,6 +733,7 @@ impl RenderCacher {
 impl<'a, 'c> Render<'a, 'c> {
     fn create(
         nested_level: u16,
+        render_cacher: &mut RenderCacher,
         canvas: &'c mut Pixmap,
         option: RenderOption,
         resources: &'c ResourceDict<'a, 'a>,
@@ -757,6 +760,7 @@ impl<'a, 'c> Render<'a, 'c> {
             canvas,
             stack: vec![state],
             path: Path::default(),
+            // AI
             font_cache: FontCache::new(resources).whatever_context("Create font cache")?,
             resources,
             dimension: option.dimension,
@@ -766,12 +770,19 @@ impl<'a, 'c> Render<'a, 'c> {
     /// Return None if nested level is greater than 10, to avoid infinite loop
     fn new_nested(
         cur_level: u16,
+        render_cacher: &mut RenderCacher,
         canvas: &'c mut Pixmap,
         option: RenderOption,
         resources: &'c ResourceDict<'a, 'a>,
     ) -> Result<Option<Self>> {
         Ok(if cur_level < 10 {
-            Some(Self::create(cur_level + 1, canvas, option, resources)?)
+            Some(Self::create(
+                cur_level + 1,
+                render_cacher,
+                canvas,
+                option,
+                resources,
+            )?)
         } else {
             warn!("nested level is greater than 10");
             None
@@ -779,6 +790,7 @@ impl<'a, 'c> Render<'a, 'c> {
     }
 
     pub fn new(
+        render_cacher: &mut RenderCacher,
         canvas: &'c mut Pixmap,
         option: RenderOption,
         resources: &'c ResourceDict<'a, 'a>,
@@ -786,7 +798,7 @@ impl<'a, 'c> Render<'a, 'c> {
     where
         'a: 'c,
     {
-        Self::create(0, canvas, option, resources)
+        Self::create(0, render_cacher, canvas, option, resources)
     }
 
     fn device_width(&self) -> u32 {
@@ -1409,6 +1421,7 @@ impl<'a, 'c> Render<'a, 'c> {
         inner_state.set_ctm(ctm);
         let Some(mut render) = Render::new_nested(
             self.nested_level,
+            render_cacher,
             self.canvas,
             RenderOptionBuilder::default()
                 .dimension(self.dimension)
@@ -1820,8 +1833,13 @@ impl<'a, 'c> Render<'a, 'c> {
         let Some(mut canvas) = option.create_canvas() else {
             return Ok(());
         };
-        let Some(mut render) =
-            Render::new_nested(self.nested_level, &mut canvas, option, &resources)?
+        let Some(mut render) = Render::new_nested(
+            self.nested_level,
+            render_cacher,
+            &mut canvas,
+            option,
+            &resources,
+        )?
         else {
             return Ok(());
         };
@@ -1972,6 +1990,7 @@ impl<'a, 'c> Render<'a, 'c> {
         let user_to_device = state.user_to_device.into_skia();
 
         if let Some(type3_font) = font_ops.type3 {
+            let mut render_cacher = RenderCacher::new();
             let font_matrix = type3_font
                 .matrix()
                 .whatever_context("get type3 font matrix")?;
@@ -1980,6 +1999,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 .whatever_context("get type3 font resources")?;
             let Some(mut render) = Render::new_nested(
                 self.nested_level,
+                &mut render_cacher,
                 self.canvas,
                 RenderOptionBuilder::default()
                     .dimension(self.dimension)
@@ -1992,7 +2012,6 @@ impl<'a, 'c> Render<'a, 'c> {
                 return Ok(());
             };
 
-            let mut render_cacher = RenderCacher::new();
             for ch in font_ops
                 .op
                 .decode_chars(text)
