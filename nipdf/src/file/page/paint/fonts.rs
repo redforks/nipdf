@@ -2,11 +2,12 @@ use crate::{
     ObjectValueError, Result,
     file::{ObjectResolver, page::ResourceDict},
     graphics::{Operation, Point, parse_operations, trans::GlyphLength},
-    object::{Dictionary, Object, PdfObject, PdfObjectCore as _, Stream},
+    object::{Dictionary, Object, PdfObject, PdfObjectCore as _, RuntimeObjectId, Stream},
     text::{
         CIDFontType, FontDescriptorDict, FontDescriptorFlags, FontDict, FontType, Type3FontDict,
     },
 };
+use append_only_vec::AppendOnlyVec;
 use encoding::EncodingParser;
 use font_kit::{hinting::HintingOptions, loaders::freetype::Font as FontKitFont};
 use fontdb::{Database, Family, Query, Source, Weight};
@@ -403,6 +404,47 @@ fn standard_14_type1_font_data(font_name: &str) -> Option<&'static [u8]> {
         "Times-Roman" => Some(&include_bytes!("../../../../fonts/n021003l.pfb")[..]),
         "ZapfDingbats" => Some(&include_bytes!("../../../../fonts/d050000l.pfb")[..]),
         _ => None,
+    }
+}
+
+/// Contains Font and its FontOps,
+#[self_referencing]
+struct OwnedFontOpsInner<'a, P: PathSink + 'static> {
+    font: Box<dyn Font<P> + 'a>,
+    #[borrows(font)]
+    #[covariant]
+    ops: FontOps<'this, P>,
+}
+
+pub struct OwnedFontOps<'a, P: PathSink + 'static>(OwnedFontOpsInner<'a, P>);
+
+impl<'a, P: PathSink + 'static> OwnedFontOps<'a, P> {
+    pub fn new(font: Box<dyn Font<P> + 'a>) -> Result<Self> {
+        OwnedFontOpsInner::try_new(font, |font| font.create_ops()).map(Self)
+    }
+
+    pub fn ops(&self) -> &FontOps<'_, P> {
+        self.0.borrow_ops()
+    }
+}
+
+#[derive(educe::Educe)]
+#[educe(Default(new))]
+pub struct CachedFonts<'a, P: PathSink + 'static>(
+    AppendOnlyVec<(RuntimeObjectId, OwnedFontOps<'a, P>)>,
+);
+
+impl<'a, P: PathSink + 'static> CachedFonts<'a, P> {
+    pub fn add(&self, id: impl Into<RuntimeObjectId>, font: Box<dyn Font<P> + 'a>) -> Result<()> {
+        self.0.push((id.into(), OwnedFontOps::new(font)?));
+        Ok(())
+    }
+
+    pub fn get(&self, id: &RuntimeObjectId) -> Option<&FontOps<'_, P>> {
+        self.0
+            .iter()
+            .find(|(oid, _)| oid == id)
+            .map(|(_, ops)| ops.ops())
     }
 }
 
