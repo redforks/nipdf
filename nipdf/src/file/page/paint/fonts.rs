@@ -581,7 +581,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
     /// by TrueType fonts scanned from current OS. Because Type1 fonts are not
     /// supported by swash, and the only crate support Type1 fonts is `font`, which
     /// I am not familiar with.
-    fn load_type1_font<'a>(font: FontDict<'a, 'a>) -> Result<Type1Font<'a>>
+    fn load_type1_font<'a>(font: FontDict<'a, 'a>) -> Result<Type1Font>
     where
         'a: 'c,
     {

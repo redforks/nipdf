@@ -1,6 +1,7 @@
 use super::{
     ChainGlyphAdvance, EncodingParser, FirstLastFontWidth, Font, FontKitFont, FontKitFontExt,
-    FontOp, FreeTypeFontWidth, GlyphRender, PathSink, TTFGlyphRender, UnitPerEmAdjust,
+    FontOp, FreeTypeFontWidth, GlyphAdvance, GlyphRender, PathSink, TTFGlyphRender,
+    UnitPerEmAdjust,
 };
 use crate::text::FontDict;
 use crate::{ObjectValueError, Result};
@@ -10,36 +11,36 @@ use prescript::cmap::WriteMode;
 use snafu::ResultExt as _;
 
 /// Font implementation using free-type/(font-kit), to handle Type1 fonts
-pub(super) struct Type1Font<'a> {
-    font_data: Vec<u8>,
-    is_cff: bool,
+pub(super) struct Type1Font {
     font: FontKitFont,
-    font_dict: FontDict<'a, 'a>,
+    encoding: Encoding,
+    first_last_width: Option<FirstLastFontWidth>,
 }
 
-impl<'a> Type1Font<'a> {
-    pub fn new(is_cff: bool, data: Vec<u8>, font_dict: FontDict<'a, 'a>) -> Result<Self> {
+impl Type1Font {
+    pub fn new(is_cff: bool, data: Vec<u8>, font_dict: FontDict<'_, '_>) -> Result<Self> {
         debug_assert_eq!(data.capacity(), data.len());
 
         let font = FontKitFont::from_bytes(data.clone().into(), 0)
             .whatever_context::<_, ObjectValueError>("create FontKitFont")?;
+        let encoding = EncodingParser(&font_dict).type1(is_cff, data.as_slice())?;
+        let first_last_width = FirstLastFontWidth::from(&font_dict)?;
         Ok(Self {
-            font_data: data,
-            is_cff,
             font,
-            font_dict,
+            encoding,
+            first_last_width,
         })
     }
 }
 
-impl<P: PathSink> Font<P> for Type1Font<'_> {
+impl<P: PathSink> Font<P> for Type1Font {
     fn create_op(&self) -> Result<Box<dyn FontOp>> {
+        let units_per_em = self.font.units_per_em()?;
         Ok(Box::new(Type1FontOp::new(
-            &self.font_dict,
             self.font.clone(),
-            self.is_cff,
-            self.font_data.as_slice(),
-        )?))
+            self.encoding.clone(),
+            units_per_em,
+        )))
     }
 
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P>>> {
@@ -48,15 +49,12 @@ impl<P: PathSink> Font<P> for Type1Font<'_> {
         }))
     }
 
-    fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance>> {
+    fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance>> {
         Ok(Box::new(ChainGlyphAdvance(
-            UnitPerEmAdjust::new(
-                self.font.units_per_em()?,
-                FirstLastFontWidth::from(&self.font_dict)?,
-            ),
+            UnitPerEmAdjust::new(self.font.units_per_em()?, self.first_last_width.clone()),
             FreeTypeFontWidth::new(
                 self.font.clone(),
-                /* Type1 font no Vertical mode*/ WriteMode::Horizontal,
+                /* Type1 font no Vertical mode */ WriteMode::Horizontal,
             ),
         )))
     }
@@ -69,24 +67,12 @@ pub(super) struct Type1FontOp {
 }
 
 impl Type1FontOp {
-    fn new(
-        font_dict: &FontDict<'_, '_>,
-        font: FontKitFont,
-        is_cff: bool,
-        font_data: &[u8],
-    ) -> Result<Self> {
-        let encoding = EncodingParser(font_dict).type1(is_cff, font_data)?;
-
-        let units_per_em = font
-            .metrics()
-            .units_per_em
-            .try_into()
-            .whatever_context::<_, ObjectValueError>("convert units_per_em to u16")?;
-        Ok(Self {
+    fn new(font: FontKitFont, encoding: Encoding, units_per_em: u16) -> Self {
+        Self {
             font,
             encoding,
             units_per_em,
-        })
+        }
     }
 
     pub fn new_fallback(font: FontKitFont) -> Self {
