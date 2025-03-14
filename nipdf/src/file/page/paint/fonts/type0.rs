@@ -370,7 +370,7 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
                     };
 
                     return Ok(Box::new(CIDFontType2UnicodeFontOp::new(
-                        &self.font,
+                        self.font.clone(),
                         units_per_em,
                         encoding,
                         write_mode,
@@ -421,16 +421,16 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
     }
 }
 
-struct CIDFontType2UnicodeFontOp<'a> {
-    face: &'a FontKitFont,
+struct CIDFontType2UnicodeFontOp {
+    face: FontKitFont,
     units_per_em: u16,
     encoding: &'static CharEncoding,
     write_mode: WriteMode,
 }
 
-impl<'a> CIDFontType2UnicodeFontOp<'a> {
+impl CIDFontType2UnicodeFontOp {
     fn new(
-        face: &'a FontKitFont,
+        face: FontKitFont,
         units_per_em: u16,
         encoding: &'static CharEncoding,
         write_mode: WriteMode,
@@ -444,7 +444,7 @@ impl<'a> CIDFontType2UnicodeFontOp<'a> {
     }
 }
 
-impl<'a> FontOp for CIDFontType2UnicodeFontOp<'a> {
+impl FontOp for CIDFontType2UnicodeFontOp {
     fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>> {
         let (decoded, _, has_errors) = self.encoding.decode(s);
         if has_errors {
