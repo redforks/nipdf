@@ -205,12 +205,32 @@ impl<P: PathSink> GlyphRender<P> for TTFGlyphRender<'_> {
     }
 }
 
+pub struct FontOps<'a, P> {
+    pub op: Box<dyn FontOp + 'a>,
+    pub render: Box<dyn GlyphRender<P> + 'a>,
+    pub width: Box<dyn GlyphAdvance + 'a>,
+    pub type3: Option<&'a type3::Type3Font<'a, 'a>>,
+}
+
 pub trait Font<P> {
     fn create_op(&self, cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>>;
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>>;
     fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance + '_>>;
     fn as_type3(&self) -> Option<&type3::Type3Font<'_, '_>> {
         None
+    }
+
+    fn create_ops(&self, cmap_registry: &mut CMapRegistry) -> Result<FontOps<'_, P>> {
+        let op = self.create_op(cmap_registry)?;
+        let render = self.create_glyph_render()?;
+        let width = self.create_glyph_width()?;
+        let type3 = self.as_type3();
+        Ok(FontOps {
+            op,
+            render,
+            width,
+            type3,
+        })
     }
 }
 
@@ -395,13 +415,7 @@ struct FontCacheInner<'c, P: PathSink + 'static> {
 
     #[borrows(fonts, mut cmap_registry)]
     #[covariant]
-    ops: HashMap<Name, Box<dyn FontOp + 'this>>,
-    #[borrows(fonts)]
-    #[covariant]
-    renders: HashMap<Name, Box<dyn GlyphRender<P> + 'this>>,
-    #[borrows(fonts)]
-    #[covariant]
-    glyph_widths: HashMap<Name, Box<dyn GlyphAdvance + 'this>>,
+    ops: HashMap<Name, FontOps<'this, P>>,
 }
 
 pub struct FontCache<'c, P: PathSink + 'static> {
@@ -675,37 +689,19 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         let font_counts = fonts.len();
 
         let r = Self {
-            cache: FontCacheInner::try_new(
-                fonts,
-                CMapRegistry::new(),
-                |fonts, cmap_registry| {
-                    let mut ops = HashMap::with_capacity(fonts.len());
-                    for (k, v) in fonts {
-                        ops.insert(
-                            k.clone(),
-                            v.create_op(cmap_registry)
-                                .with_whatever_context::<_, _, ObjectValueError>(|_| {
-                                    format!("Create FontOp for: {}", k)
-                                })?,
-                        );
-                    }
-                    Ok::<_, ObjectValueError>(ops)
-                },
-                |fonts| {
-                    let mut renders = HashMap::with_capacity(fonts.len());
-                    for (k, v) in fonts {
-                        renders.insert(k.clone(), v.create_glyph_render()?);
-                    }
-                    Ok(renders)
-                },
-                |fonts| {
-                    let mut renders = HashMap::with_capacity(fonts.len());
-                    for (k, v) in fonts {
-                        renders.insert(k.clone(), v.create_glyph_width()?);
-                    }
-                    Ok(renders)
-                },
-            )?,
+            cache: FontCacheInner::try_new(fonts, CMapRegistry::new(), |fonts, cmap_registry| {
+                let mut ops = HashMap::with_capacity(fonts.len());
+                for (k, v) in fonts {
+                    ops.insert(
+                        k.clone(),
+                        v.create_ops(cmap_registry)
+                            .with_whatever_context::<_, _, ObjectValueError>(|_| {
+                                format!("Create FontOps for: {}", k)
+                            })?,
+                    );
+                }
+                Ok::<_, ObjectValueError>(ops)
+            })?,
         };
         info!("Load {} fonts", font_counts);
         Ok(r)
@@ -715,20 +711,8 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         self.cache.borrow_fonts().keys().next()
     }
 
-    pub fn get_font(&self, s: &Name) -> Option<&dyn Font<P>> {
-        self.cache.borrow_fonts().get(s).map(AsRef::as_ref)
-    }
-
-    pub fn get_op(&self, s: &Name) -> Option<&dyn FontOp> {
-        self.cache.borrow_ops().get(s).map(AsRef::as_ref)
-    }
-
-    pub fn get_glyph_render(&self, s: &Name) -> Option<&dyn GlyphRender<P>> {
-        self.cache.borrow_renders().get(s).map(AsRef::as_ref)
-    }
-
-    pub fn get_glyph_width(&self, s: &Name) -> Option<&dyn GlyphAdvance> {
-        self.cache.borrow_glyph_widths().get(s).map(AsRef::as_ref)
+    pub fn get_font(&self, s: &Name) -> Option<&FontOps<'_, P>> {
+        self.cache.borrow_ops().get(s)
     }
 }
 

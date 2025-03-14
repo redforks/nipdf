@@ -9,11 +9,10 @@ use euclid::{Length, Scale, Transform2D, default::Size2D};
 use image::RgbaImage;
 use log::{debug, error, info, warn};
 use nipdf::{
+    ObjectValueError,
     file::{
         GraphicsStateParameterDict, PageContent, Rectangle, ResourceDict, XObjectDict, XObjectType,
-        paint::fonts::{
-            FallbackFont, Font, FontCache, FontOp, GlyphAdvance, GlyphRender, PathSink,
-        },
+        paint::fonts::{FallbackFont, Font, FontCache, FontOps, GlyphRender, PathSink},
     },
     function::Domain,
     graphics::{
@@ -695,23 +694,17 @@ struct FallbackFontOps {
     fallback_font: FallbackFont,
     #[borrows(fallback_font)]
     #[covariant]
-    ops: Box<dyn FontOp + 'this>,
-    #[borrows(fallback_font)]
-    #[covariant]
-    renders: Box<dyn GlyphRender<SkiaPathSink> + 'this>,
-    #[borrows(fallback_font)]
-    #[covariant]
-    glyph_widths: Box<dyn GlyphAdvance + 'this>,
+    ops: FontOps<'this, SkiaPathSink>,
 }
 
 impl FallbackFontOps {
     pub fn create() -> Result<Self> {
-        Self::try_new(
-            FallbackFont::new(),
-            |fallback_font: &FallbackFont| Ok(fallback_font.create_fallback_op()),
-            |fallback_font: &FallbackFont| fallback_font.create_glyph_render(),
-            |fallback_font: &FallbackFont| Font::<SkiaPathSink>::create_glyph_width(fallback_font),
-        )
+        let mut cmap_registry = CMapRegistry::new();
+        Self::try_new(FallbackFont::new(), |fallback_font: &FallbackFont| {
+            fallback_font
+                .create_ops(&mut cmap_registry)
+                .whatever_context::<_, ObjectValueError>("create fallback font ops")
+        })
         .whatever_context("create fallback font ops")
     }
 }
@@ -727,27 +720,11 @@ impl RenderCacher {
         }
     }
 
-    fn _fallback_font(&mut self) -> &FallbackFontOps {
+    fn fallback_font(&mut self) -> &FontOps<'_, SkiaPathSink> {
         if self.fallback_font.is_none() {
             self.fallback_font = Some(FallbackFontOps::create().unwrap());
         }
-        self.fallback_font.as_ref().unwrap()
-    }
-
-    fn fallback_font(&mut self) -> &FallbackFont {
-        self._fallback_font().borrow_fallback_font()
-    }
-
-    fn fallback_font_op(&mut self) -> &dyn FontOp {
-        self._fallback_font().borrow_ops().as_ref()
-    }
-
-    fn fallback_font_render(&mut self) -> &dyn GlyphRender<SkiaPathSink> {
-        self._fallback_font().borrow_renders().as_ref()
-    }
-
-    fn fallback_font_advance(&mut self) -> &dyn GlyphAdvance {
-        self._fallback_font().borrow_glyph_widths().as_ref()
+        self.fallback_font.as_ref().unwrap().borrow_ops()
     }
 }
 
@@ -1977,22 +1954,24 @@ impl<'a, 'c> Render<'a, 'c> {
                 self.font_cache.first_font()
             })
             .whatever_context("get current font name")?;
-        let font = match self.font_cache.get_font(font_name) {
-            Some(font) => font,
+
+        let font_ops = match self.font_cache.get_font(font_name) {
+            Some(font_ops) => font_ops,
             None => render_cacher.fallback_font(),
         };
-        let mut cmap_registry = CMapRegistry::new();
-        let op = font.create_op(&mut cmap_registry).unwrap();
-        let glyph_width = font.create_glyph_width().unwrap();
-        let glyph_render = font.create_glyph_render().unwrap();
+
         let state = Self::top(&self.stack)?;
         let mut text_object = state.text_object.clone();
-        text_object
-            .set_units_per_em(op.units_per_em().whatever_context("get units per em")? as f32);
-        text_object.set_write_mode(op.write_mode());
+        text_object.set_units_per_em(
+            font_ops
+                .op
+                .units_per_em()
+                .whatever_context("get units per em")? as f32,
+        );
+        text_object.set_write_mode(font_ops.op.write_mode());
         let user_to_device = state.user_to_device.into_skia();
 
-        if let Some(type3_font) = font.as_type3() {
+        if let Some(type3_font) = font_ops.type3 {
             let font_matrix = type3_font
                 .matrix()
                 .whatever_context("get type3 font matrix")?;
@@ -2013,7 +1992,12 @@ impl<'a, 'c> Render<'a, 'c> {
                 return Ok(());
             };
 
-            for ch in op.decode_chars(text).whatever_context("decode chars")? {
+            let mut render_cacher = RenderCacher::new();
+            for ch in font_ops
+                .op
+                .decode_chars(text)
+                .whatever_context("decode chars")?
+            {
                 Self::current_mut(&mut render.stack)?.set_ctm(
                     text_object
                         .type3_runtime_matrix(&font_matrix)
@@ -2021,16 +2005,19 @@ impl<'a, 'c> Render<'a, 'c> {
                         .with_destination()
                         .with_source(),
                 );
-                let gid = op.char_to_gid(ch).whatever_context("get char to gid")?;
+                let gid = font_ops
+                    .op
+                    .char_to_gid(ch)
+                    .whatever_context("get char to gid")?;
                 if let Some(glyph) = type3_font.get_glyph(gid) {
-                    let mut render_cacher = RenderCacher::new();
                     for op in glyph.operations() {
                         render.exec(&mut render_cacher, op.clone())?;
                     }
                 }
 
                 text_object.move_to_next_pos(
-                    glyph_width
+                    font_ops
+                        .width
                         .advance(gid as u32, ch)
                         .whatever_context("get char width")?,
                     ch == 32,
@@ -2039,9 +2026,16 @@ impl<'a, 'c> Render<'a, 'c> {
         } else {
             let mut text_clip_path = Path::default();
 
-            for ch in op.decode_chars(text).whatever_context("decode chars")? {
-                let gid = op.char_to_gid(ch).whatever_context("get char to gid")?;
-                let path = Self::gen_glyph_path(glyph_render.as_ref(), gid)?;
+            for ch in font_ops
+                .op
+                .decode_chars(text)
+                .whatever_context("decode chars")?
+            {
+                let gid = font_ops
+                    .op
+                    .char_to_gid(ch)
+                    .whatever_context("get char to gid")?;
+                let path = Self::gen_glyph_path(&*font_ops.render, gid)?;
                 if !path.is_empty() {
                     let path = path.finish().whatever_context("finish path")?;
                     let path = path
@@ -2059,7 +2053,8 @@ impl<'a, 'c> Render<'a, 'c> {
                 }
 
                 text_object.move_to_next_pos(
-                    glyph_width
+                    font_ops
+                        .width
                         .advance(gid as u32, ch)
                         .whatever_context("get glyph advance")?,
                     ch == 32,
