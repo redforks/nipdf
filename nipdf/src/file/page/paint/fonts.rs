@@ -205,14 +205,14 @@ pub struct FontOps<'a, P> {
     pub op: Box<dyn FontOp + 'a>,
     pub render: Box<dyn GlyphRender<P>>,
     pub width: Box<dyn GlyphAdvance>,
-    pub type3: Option<&'a type3::Type3Font<'a, 'a>>,
+    pub type3: Option<&'a type3::Type3Font<'a>>,
 }
 
 pub trait Font<P> {
     fn create_op(&self) -> Result<Box<dyn FontOp + '_>>;
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P>>>;
     fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance>>;
-    fn as_type3(&self) -> Option<&type3::Type3Font<'_, '_>> {
+    fn as_type3(&self) -> Option<&type3::Type3Font<'_>> {
         None
     }
 

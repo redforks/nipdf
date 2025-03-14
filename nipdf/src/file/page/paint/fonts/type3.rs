@@ -16,16 +16,16 @@ use prescript::Name;
 use snafu::{OptionExt, ResultExt};
 use winnow::{Parser as _, combinator::terminated, token::rest};
 
-pub struct Type3Font<'a, 'b> {
+pub struct Type3Font<'a> {
     name_to_gid: HashMap<Name, u16>,
     glyphs: Box<[OnceCell<Type3Glyph>]>,
-    dict: FontDict<'a, 'b>,
-    type3_dict: super::Type3FontDict<'a, 'b>,
-    char_procs: HashMap<Name, &'b Stream>,
+    dict: FontDict<'a, 'a>,
+    type3_dict: super::Type3FontDict<'a, 'a>,
+    char_procs: HashMap<Name, &'a Stream>,
 }
 
-impl<'a, 'b> Type3Font<'a, 'b> {
-    pub fn new(dict: FontDict<'a, 'b>) -> Result<Self> {
+impl<'a> Type3Font<'a> {
+    pub fn new(dict: FontDict<'a, 'a>) -> Result<Self> {
         let type3_dict = dict.type3()?;
         let char_procs = type3_dict.char_procs()?;
 
@@ -150,7 +150,7 @@ impl Type3Glyph {
     }
 }
 
-impl<P: PathSink + 'static> Font<P> for Type3Font<'_, '_> {
+impl<P: PathSink + 'static> Font<P> for Type3Font<'_> {
     fn create_op(&self) -> Result<Box<dyn FontOp + '_>> {
         Ok(Box::new(Type3FontOp::new(
             &self.dict,
@@ -172,7 +172,7 @@ impl<P: PathSink + 'static> Font<P> for Type3Font<'_, '_> {
         Ok(Box::new(StubGlyphRender))
     }
 
-    fn as_type3(&self) -> Option<&Type3Font<'_, '_>> {
+    fn as_type3(&self) -> Option<&Type3Font<'_>> {
         Some(self)
     }
 

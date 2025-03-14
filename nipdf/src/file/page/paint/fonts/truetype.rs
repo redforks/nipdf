@@ -15,14 +15,14 @@ use snafu::ResultExt;
 use std::sync::Arc;
 use ttf_parser::Face as TTFFace;
 
-pub struct TTFFont<'a, 'b> {
-    font_dict: FontDict<'a, 'b>,
+pub struct TTFFont<'a> {
+    font_dict: FontDict<'a, 'a>,
     face: FontKitFont,
     data: Arc<Vec<u8>>,
 }
 
-impl<'a, 'b> TTFFont<'a, 'b> {
-    pub fn new(data: Arc<Vec<u8>>, font_dict: FontDict<'a, 'b>) -> Result<Self> {
+impl<'a> TTFFont<'a> {
+    pub fn new(data: Arc<Vec<u8>>, font_dict: FontDict<'a, 'a>) -> Result<Self> {
         let face = FontKitFont::from_bytes(data.clone(), 0)
             .whatever_context::<_, ObjectValueError>("parse TTF Font")?;
         Ok(Self {
@@ -33,7 +33,7 @@ impl<'a, 'b> TTFFont<'a, 'b> {
     }
 }
 
-impl<P: PathSink> Font<P> for TTFFont<'_, '_> {
+impl<P: PathSink> Font<P> for TTFFont<'_> {
     fn create_op(&self) -> Result<Box<dyn FontOp + '_>> {
         let encoding = EncodingParser(&self.font_dict).ttf()?;
         Ok(Box::new(TTFFontOp::new(

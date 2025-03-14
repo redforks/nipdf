@@ -54,6 +54,7 @@ ttf-parser = "0.25.1"
 encoding_rs = { version = "0.8.35" }
 ordered-float = { version = "5.0.0", features = [ "bytemuck" ] }
 bytemuck = "1.22.0"
+append-only-vec = "0.1.7"
 
 [dev-dependencies]
 env_logger.workspace = true

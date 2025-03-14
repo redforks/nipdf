@@ -18,20 +18,20 @@ use std::sync::Arc;
 use ttf_parser::Face as TTFFace;
 
 /// Font for Type 0 CIDFont, its descendant font is Cff.
-pub(super) struct CIDFontType0Font<'a, 'b> {
-    font_dict: FontDict<'a, 'b>,
+pub(super) struct CIDFontType0Font<'a> {
+    font_dict: FontDict<'a, 'a>,
     font: FontKitFont,
 }
 
-impl<'a, 'b> CIDFontType0Font<'a, 'b> {
-    pub fn new(font_dict: FontDict<'a, 'b>, data: Vec<u8>) -> Result<Self> {
+impl<'a> CIDFontType0Font<'a> {
+    pub fn new(font_dict: FontDict<'a, 'a>, data: Vec<u8>) -> Result<Self> {
         let font = FontKitFont::from_bytes(data.into(), 0)
             .whatever_context::<_, ObjectValueError>("decode FontKitFont for Type0")?;
         Ok(Self { font_dict, font })
     }
 }
 
-impl<P: PathSink + 'static> Font<P> for CIDFontType0Font<'_, '_> {
+impl<P: PathSink + 'static> Font<P> for CIDFontType0Font<'_> {
     fn create_op(&self) -> Result<Box<dyn FontOp + '_>> {
         Ok(Box::new(CIDFontType0FontOp::new(&self.font_dict.type0()?)?))
     }
@@ -301,18 +301,18 @@ impl FontOp for CIDFontType2FontOp<'_> {
     }
 }
 
-pub(super) struct CIDFontType2Font<'a, 'b> {
+pub(super) struct CIDFontType2Font<'a> {
     data: Arc<Vec<u8>>,
     font: FontKitFont,
-    font_dict: FontDict<'a, 'b>,
+    font_dict: FontDict<'a, 'a>,
     font_is_embed: bool,
 }
 
-impl<'a, 'b> CIDFontType2Font<'a, 'b> {
+impl<'a> CIDFontType2Font<'a> {
     pub fn new(
         font_is_embed: bool,
         data: Arc<Vec<u8>>,
-        font_dict: FontDict<'a, 'b>,
+        font_dict: FontDict<'a, 'a>,
     ) -> Result<Self> {
         let font = FontKitFont::from_bytes(data.clone(), 0)
             .whatever_context::<_, ObjectValueError>("decode FontKitFont for Type2")?;
@@ -325,7 +325,7 @@ impl<'a, 'b> CIDFontType2Font<'a, 'b> {
     }
 }
 
-impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
+impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_> {
     fn create_op(&self) -> Result<Box<dyn FontOp + '_>> {
         // Get the common font info upfront
         let font = self.font_dict.type0()?;
