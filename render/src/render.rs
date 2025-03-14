@@ -39,7 +39,7 @@ use prescript::{AnyWhatever, Name, ParserError, cmap::WriteMode};
 use snafu::{FromString, OptionExt, ResultExt, ensure_whatever, whatever};
 use std::{
     borrow::Cow,
-    cell::{Ref, RefCell},
+    cell::{LazyCell, Ref, RefCell},
     collections::VecDeque,
     rc::Rc,
 };
@@ -706,28 +706,25 @@ impl FallbackFontOps {
 }
 
 pub struct RenderCacher {
-    fallback_font: Option<FallbackFontOps>,
+    fallback_font: LazyCell<FallbackFontOps>,
 }
 
 impl RenderCacher {
     pub fn new() -> Self {
         Self {
-            fallback_font: None,
+            fallback_font: LazyCell::new(|| FallbackFontOps::create().unwrap()),
         }
     }
 
-    fn fallback_font(&mut self) -> &FontOps<'_, SkiaPathSink> {
-        if self.fallback_font.is_none() {
-            self.fallback_font = Some(FallbackFontOps::create().unwrap());
-        }
-        self.fallback_font.as_ref().unwrap().borrow_ops()
+    fn fallback_font(&self) -> &FontOps<'_, SkiaPathSink> {
+        self.fallback_font.borrow_ops()
     }
 }
 
 impl<'a, 'c> Render<'a, 'c> {
     fn create(
         nested_level: u16,
-        render_cacher: &mut RenderCacher,
+        render_cacher: &RenderCacher,
         canvas: &'c mut Pixmap,
         option: RenderOption,
         resources: &'c ResourceDict<'a, 'a>,
@@ -763,7 +760,7 @@ impl<'a, 'c> Render<'a, 'c> {
     /// Return None if nested level is greater than 10, to avoid infinite loop
     fn new_nested(
         cur_level: u16,
-        render_cacher: &mut RenderCacher,
+        render_cacher: &RenderCacher,
         canvas: &'c mut Pixmap,
         option: RenderOption,
         resources: &'c ResourceDict<'a, 'a>,
@@ -783,7 +780,7 @@ impl<'a, 'c> Render<'a, 'c> {
     }
 
     pub fn new(
-        render_cacher: &mut RenderCacher,
+        render_cacher: &RenderCacher,
         canvas: &'c mut Pixmap,
         option: RenderOption,
         resources: &'c ResourceDict<'a, 'a>,
@@ -832,7 +829,7 @@ impl<'a, 'c> Render<'a, 'c> {
         Ok(&mut Self::current_mut(&mut self.stack)?.text_object)
     }
 
-    pub(crate) fn exec(&mut self, render_cacher: &mut RenderCacher, op: Operation) -> Result<()> {
+    pub(crate) fn exec(&mut self, render_cacher: &RenderCacher, op: Operation) -> Result<()> {
         let start = std::time::Instant::now();
         let result = self._exec(render_cacher, op.clone());
         let duration = start.elapsed();
@@ -842,7 +839,7 @@ impl<'a, 'c> Render<'a, 'c> {
         result
     }
 
-    fn _exec(&mut self, render_cacher: &mut RenderCacher, op: Operation) -> Result<()> {
+    fn _exec(&mut self, render_cacher: &RenderCacher, op: Operation) -> Result<()> {
         debug!("handle operation: {:?}", op);
         match op {
             // General Graphics State Operations
@@ -1388,7 +1385,7 @@ impl<'a, 'c> Render<'a, 'c> {
     /// 1. Paint the rendered image on parent render
     fn paint_form_x_object(
         &mut self,
-        render_cacher: &mut RenderCacher,
+        render_cacher: &RenderCacher,
         x_object: &XObjectDict<'a, 'a>,
     ) -> Result<()> {
         let form = x_object
@@ -1437,7 +1434,7 @@ impl<'a, 'c> Render<'a, 'c> {
     }
 
     /// Paints the specified XObject. Only XObjectType::Image supported
-    fn paint_x_object(&mut self, render_cacher: &mut RenderCacher, nm: &NameOfDict) -> Result<()> {
+    fn paint_x_object(&mut self, render_cacher: &RenderCacher, nm: &NameOfDict) -> Result<()> {
         let x_objects = self
             .resources
             .x_object()
@@ -1663,7 +1660,7 @@ impl<'a, 'c> Render<'a, 'c> {
 
     fn set_color_or_pattern(
         &mut self,
-        render_cacher: &mut RenderCacher,
+        render_cacher: &RenderCacher,
         mut get_state: impl FnMut(&mut Self) -> Result<&mut ColorState>,
         color_or_name: &ColorArgsOrName,
     ) -> Result<()> {
@@ -1768,7 +1765,7 @@ impl<'a, 'c> Render<'a, 'c> {
     fn tiling_pattern(
         &mut self,
         canvas_size: Size2D<f32>,
-        render_cacher: &mut RenderCacher,
+        render_cacher: &RenderCacher,
         mut get_state: impl FnMut(&mut Self) -> Result<&mut ColorState>,
         tile: &TilingPatternDict<'a, 'a>,
         color_args: Option<&ColorArgs>,
@@ -1951,7 +1948,7 @@ impl<'a, 'c> Render<'a, 'c> {
         Ok(())
     }
 
-    fn show_text(&mut self, render_cacher: &mut RenderCacher, text: &[u8]) -> Result<()> {
+    fn show_text(&mut self, render_cacher: &RenderCacher, text: &[u8]) -> Result<()> {
         let text_object = Self::text_object(&self.stack)?;
         if text_object.render_mode == TextRenderingMode::Invisible {
             return Ok(());
@@ -1983,7 +1980,6 @@ impl<'a, 'c> Render<'a, 'c> {
         let user_to_device = state.user_to_device.into_skia();
 
         if let Some(type3_font) = font_ops.type3 {
-            let mut render_cacher = RenderCacher::new();
             let font_matrix = type3_font
                 .matrix()
                 .whatever_context("get type3 font matrix")?;
@@ -1992,7 +1988,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 .whatever_context("get type3 font resources")?;
             let Some(mut render) = Render::new_nested(
                 self.nested_level,
-                &mut render_cacher,
+                render_cacher,
                 self.canvas,
                 RenderOptionBuilder::default()
                     .dimension(self.dimension)
@@ -2023,7 +2019,7 @@ impl<'a, 'c> Render<'a, 'c> {
                     .whatever_context("get char to gid")?;
                 if let Some(glyph) = type3_font.get_glyph(gid) {
                     for op in glyph.operations() {
-                        render.exec(&mut render_cacher, op.clone())?;
+                        render.exec(render_cacher, op.clone())?;
                     }
                 }
 
@@ -2086,7 +2082,7 @@ impl<'a, 'c> Render<'a, 'c> {
 
     fn show_texts(
         &mut self,
-        render_cacher: &mut RenderCacher,
+        render_cacher: &RenderCacher,
         texts: &[TextStringOrNumber],
     ) -> Result<()> {
         for t in texts {
