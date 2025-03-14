@@ -36,7 +36,7 @@ impl<P: PathSink> Font<P> for Type1Font<'_> {
     fn create_op(&self) -> Result<Box<dyn FontOp + '_>> {
         Ok(Box::new(Type1FontOp::new(
             &self.font_dict,
-            &self.font,
+            self.font.clone(),
             self.is_cff,
             self.font_data.as_slice(),
         )?))
@@ -60,18 +60,18 @@ impl<P: PathSink> Font<P> for Type1Font<'_> {
     }
 }
 
-pub(super) struct Type1FontOp<'a> {
-    font: &'a FontKitFont,
+pub(super) struct Type1FontOp {
+    font: FontKitFont,
     encoding: Encoding,
     units_per_em: u16,
 }
 
-impl<'a> Type1FontOp<'a> {
+impl Type1FontOp {
     fn new(
         font_dict: &FontDict<'_, '_>,
-        font: &'a FontKitFont,
+        font: FontKitFont,
         is_cff: bool,
-        font_data: &'a [u8],
+        font_data: &[u8],
     ) -> Result<Self> {
         let encoding = EncodingParser(font_dict).type1(is_cff, font_data)?;
 
@@ -87,7 +87,7 @@ impl<'a> Type1FontOp<'a> {
         })
     }
 
-    pub fn new_fallback(font: &'a FontKitFont) -> Self {
+    pub fn new_fallback(font: FontKitFont) -> Self {
         let units_per_em = font.metrics().units_per_em.try_into().unwrap();
         Self {
             font,
@@ -97,7 +97,7 @@ impl<'a> Type1FontOp<'a> {
     }
 }
 
-impl FontOp for Type1FontOp<'_> {
+impl FontOp for Type1FontOp {
     fn decode_chars<'d>(&'d self, text: &'d [u8]) -> Result<Vec<u32>> {
         Ok(text.iter().map(|v| *v as u32).collect())
     }

@@ -257,13 +257,13 @@ impl FallbackFont {
     }
 
     pub fn create_fallback_op(&self) -> Box<dyn FontOp + '_> {
-        Box::new(Type1FontOp::new_fallback(&self.font))
+        Box::new(Type1FontOp::new_fallback(self.font.clone()))
     }
 }
 
 impl<P: PathSink> Font<P> for FallbackFont {
     fn create_op(&self) -> Result<Box<dyn FontOp + '_>> {
-        Ok(Box::new(Type1FontOp::new_fallback(&self.font)))
+        Ok(Box::new(Type1FontOp::new_fallback(self.font.clone())))
     }
 
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
