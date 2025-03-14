@@ -6,7 +6,7 @@ use super::{
 use crate::file::paint::fonts::LengthAdavnce;
 use crate::graphics::{NameOrDictByRef, NameOrStream};
 use crate::object::PdfObjectCore as _;
-use crate::text::{FontDict, Type0FontDict};
+use crate::text::{CIDFontWidths, FontDict, Type0FontDict};
 use crate::{ObjectValueError, Result};
 use encoding_rs::Encoding as CharEncoding;
 use font_kit::loaders::freetype::Font as FontKitFont;
@@ -19,37 +19,25 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 /// Font for Type 0 CIDFont, its descendant font is Cff.
-pub(super) struct CIDFontType0Font<'a> {
-    font_dict: FontDict<'a, 'a>,
+pub(super) struct CIDFontType0Font {
     font: FontKitFont,
+    font_op: CIDFontType0FontOp,
+    width:
+        ChainGlyphAdvance<UnitPerEmAdjust<Option<CIDFontWidths>>, UnitPerEmAdjust<LengthAdavnce>>,
 }
 
-impl<'a> CIDFontType0Font<'a> {
-    pub fn new(font_dict: FontDict<'a, 'a>, data: Vec<u8>) -> Result<Self> {
+impl CIDFontType0Font {
+    pub fn new(font_dict: FontDict<'_, '_>, data: Vec<u8>) -> Result<Self> {
         let font = FontKitFont::from_bytes(data.into(), 0)
             .whatever_context::<_, ObjectValueError>("decode FontKitFont for Type0")?;
-        Ok(Self { font_dict, font })
-    }
-}
+        let font_op = CIDFontType0FontOp::new(&font_dict.type0()?)?;
 
-impl<P: PathSink + 'static> Font<P> for CIDFontType0Font<'_> {
-    fn create_op(&self) -> Result<Box<dyn FontOp>> {
-        Ok(Box::new(CIDFontType0FontOp::new(&self.font_dict.type0()?)?))
-    }
-
-    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P>>> {
-        Ok(Box::new(TTFGlyphRender {
-            font: self.font.clone(),
-        }))
-    }
-
-    fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance>> {
-        let font_dict = self.font_dict.type0()?;
-        let cid_fonts = font_dict.descendant_fonts()?;
+        let type0_dict = font_dict.type0()?;
+        let cid_fonts = type0_dict.descendant_fonts()?;
         let cid_font = &cid_fonts[0];
 
         // Check if we need to use vertical metrics
-        let encoding = get_font_encoding(&mut CMapRegistry::new(), &font_dict)?;
+        let encoding = get_font_encoding(&mut CMapRegistry::new(), &type0_dict)?;
         let write_mode = get_write_mode(&encoding);
 
         // Use w2 for vertical writing mode, w for horizontal
@@ -61,14 +49,38 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType0Font<'_> {
             (cid_font.w()?, cid_font.dw()?)
         };
 
-        let units_per_em = self.font.units_per_em()?;
-        Ok(Box::new(ChainGlyphAdvance(
+        let units_per_em = font.units_per_em()?;
+        // cache ChainGlyphAdvance in current struct, AI!
+        let width = ChainGlyphAdvance(
             UnitPerEmAdjust::new(units_per_em, widths),
             UnitPerEmAdjust::new(units_per_em, LengthAdavnce(default_width)),
-        )))
+        );
+
+        Ok(Self {
+            font,
+            font_op,
+            width,
+        })
     }
 }
 
+impl<P: PathSink + 'static> Font<P> for CIDFontType0Font {
+    fn create_op(&self) -> Result<Box<dyn FontOp>> {
+        Ok(Box::new(self.font_op.clone()))
+    }
+
+    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P>>> {
+        Ok(Box::new(TTFGlyphRender {
+            font: self.font.clone(),
+        }))
+    }
+
+    fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance>> {
+        Ok(Box::new(self.width.clone()))
+    }
+}
+
+#[derive(Clone)]
 struct CIDFontType0FontOp {
     encoding: Option<Rc<CMap>>,
     write_mode: WriteMode,

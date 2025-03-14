@@ -42,6 +42,7 @@ impl FontKitFontExt for FontKitFont {
     }
 }
 
+#[derive(Clone)]
 struct ChainGlyphAdvance<T, U>(T, U);
 
 impl<T, U> GlyphAdvance for ChainGlyphAdvance<T, U>
@@ -746,7 +747,9 @@ pub trait GlyphAdvance {
     fn advance(&self, gid: u32, ch: u32) -> Result<GlyphLength>;
 }
 
+#[derive(Copy, Clone)]
 struct LengthAdavnce(f32);
+
 impl GlyphAdvance for LengthAdavnce {
     fn advance(&self, _gid: u32, _ch: u32) -> Result<GlyphLength> {
         Ok(GlyphLength::new(self.0))

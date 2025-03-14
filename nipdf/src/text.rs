@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{
     ObjectValueError, Result,
     file::{Rectangle, ResourceDict, paint::fonts::GlyphAdvance},
@@ -179,13 +181,13 @@ pub enum CIDFontWidthGroup {
     FirstLast { first: u32, last: u32, width: u16 },
 }
 
-#[derive(Debug, PartialEq)]
-pub struct CIDFontWidths(Vec<CIDFontWidthGroup>);
+#[derive(Debug, PartialEq, Clone)]
+pub struct CIDFontWidths(Rc<Vec<CIDFontWidthGroup>>);
 
 impl GlyphAdvance for CIDFontWidths {
     fn advance(&self, gid: u32, cid: u32) -> Result<GlyphLength> {
         // Find the width for the given glyph ID
-        for group in &self.0 {
+        for group in &*self.0 {
             match group {
                 CIDFontWidthGroup::NConsecutive((first, widths)) => {
                     if gid >= *first
@@ -254,7 +256,7 @@ impl TryFrom<ObjectWithResolver<'_, '_>> for CIDFontWidths {
                 ),
             }
         }
-        Ok(CIDFontWidths(widths))
+        Ok(CIDFontWidths(Rc::new(widths)))
     }
 }
 
