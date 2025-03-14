@@ -3026,6 +3026,7 @@ dependencies = [
  "nipdf",
  "nipdf-test-macro",
  "num-traits",
+ "ouroboros",
  "phf",
  "prescript",
  "snafu",

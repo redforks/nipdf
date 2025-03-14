@@ -11,7 +11,9 @@ use log::{debug, error, info, warn};
 use nipdf::{
     file::{
         GraphicsStateParameterDict, PageContent, Rectangle, ResourceDict, XObjectDict, XObjectType,
-        paint::fonts::{FontCache, GlyphRender, PathSink},
+        paint::fonts::{
+            FallbackFont, Font, FontCache, FontOp, GlyphAdvance, GlyphRender, PathSink,
+        },
     },
     function::Domain,
     graphics::{
@@ -33,7 +35,11 @@ use nipdf::{
     },
 };
 use num_traits::ToPrimitive;
-use prescript::{AnyWhatever, Name, ParserError, cmap::WriteMode};
+use ouroboros::self_referencing;
+use prescript::{
+    AnyWhatever, Name, ParserError,
+    cmap::{CMapRegistry, WriteMode},
+};
 use snafu::{FromString, OptionExt, ResultExt, ensure_whatever, whatever};
 use std::{
     borrow::Cow,
@@ -684,6 +690,67 @@ pub struct Render<'a, 'c> {
     dimension: PageDimension,
 }
 
+#[self_referencing]
+struct FallbackFontOps {
+    fallback_font: FallbackFont,
+    #[borrows(fallback_font)]
+    #[covariant]
+    ops: Box<dyn FontOp + 'this>,
+    #[borrows(fallback_font)]
+    #[covariant]
+    renders: Box<dyn GlyphRender<SkiaPathSink> + 'this>,
+    #[borrows(fallback_font)]
+    #[covariant]
+    glyph_widths: Box<dyn GlyphAdvance + 'this>,
+}
+
+impl FallbackFontOps {
+    pub fn create() -> Result<Self> {
+        Self::try_new(
+            FallbackFont::new(),
+            |fallback_font: &FallbackFont| Ok(fallback_font.create_fallback_op()),
+            |fallback_font: &FallbackFont| fallback_font.create_glyph_render(),
+            |fallback_font: &FallbackFont| Font::<SkiaPathSink>::create_glyph_width(fallback_font),
+        )
+        .whatever_context("create fallback font ops")
+    }
+}
+
+pub struct RenderCacher {
+    fallback_font: Option<FallbackFontOps>,
+}
+
+impl RenderCacher {
+    pub fn new() -> Self {
+        Self {
+            fallback_font: None,
+        }
+    }
+
+    fn _fallback_font(&mut self) -> &FallbackFontOps {
+        if self.fallback_font.is_none() {
+            self.fallback_font = Some(FallbackFontOps::create().unwrap());
+        }
+        self.fallback_font.as_ref().unwrap()
+    }
+
+    fn fallback_font(&mut self) -> &FallbackFont {
+        self._fallback_font().borrow_fallback_font()
+    }
+
+    fn fallback_font_op(&mut self) -> &dyn FontOp {
+        self._fallback_font().borrow_ops().as_ref()
+    }
+
+    fn fallback_font_render(&mut self) -> &dyn GlyphRender<SkiaPathSink> {
+        self._fallback_font().borrow_renders().as_ref()
+    }
+
+    fn fallback_font_advance(&mut self) -> &dyn GlyphAdvance {
+        self._fallback_font().borrow_glyph_widths().as_ref()
+    }
+}
+
 impl<'a, 'c> Render<'a, 'c> {
     fn create(
         nested_level: u16,
@@ -783,9 +850,9 @@ impl<'a, 'c> Render<'a, 'c> {
         Ok(&mut Self::current_mut(&mut self.stack)?.text_object)
     }
 
-    pub(crate) fn exec(&mut self, op: Operation) -> Result<()> {
+    pub(crate) fn exec(&mut self, render_cacher: &mut RenderCacher, op: Operation) -> Result<()> {
         let start = std::time::Instant::now();
-        let result = self._exec(op.clone());
+        let result = self._exec(render_cacher, op.clone());
         let duration = start.elapsed();
         if duration > std::time::Duration::from_millis(15) {
             warn!("Operation {:?} took {:?} to execute", op, duration);
@@ -793,7 +860,7 @@ impl<'a, 'c> Render<'a, 'c> {
         result
     }
 
-    fn _exec(&mut self, op: Operation) -> Result<()> {
+    fn _exec(&mut self, render_cacher: &mut RenderCacher, op: Operation) -> Result<()> {
         debug!("handle operation: {:?}", op);
         match op {
             // General Graphics State Operations
@@ -894,17 +961,17 @@ impl<'a, 'c> Render<'a, 'c> {
             Operation::MoveToStartOfNextLine => self.move_to_start_of_next_line()?,
 
             // Text Showing Operations
-            Operation::ShowText(text) => self.show_text(text.to_bytes())?,
+            Operation::ShowText(text) => self.show_text(render_cacher, text.to_bytes())?,
             Operation::MoveToNextLineAndShowText(text) => {
                 self.move_to_start_of_next_line()?;
-                self.show_text(text.to_bytes())?;
+                self.show_text(render_cacher, text.to_bytes())?;
             }
-            Operation::ShowTexts(texts) => self.show_texts(&texts)?,
+            Operation::ShowTexts(texts) => self.show_texts(render_cacher, &texts)?,
             Operation::SetSpacingMoveToNextLineAndShowText(aw, ac, text) => {
                 self.text_object_mut()?.set_word_spacing(aw);
                 self.text_object_mut()?.set_character_spacing(ac);
                 self.move_to_start_of_next_line()?;
-                self.show_text(text.to_bytes())?;
+                self.show_text(render_cacher, text.to_bytes())?;
             }
 
             // Color Operations
@@ -939,7 +1006,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 Some(&color),
             )?,
             Operation::SetStrokeColorOrWithPattern(color_or_name) => {
-                self.set_color_or_pattern(Self::stroke_color_state, &color_or_name)?;
+                self.set_color_or_pattern(render_cacher, Self::stroke_color_state, &color_or_name)?;
             }
             Operation::SetFillColor(args) => self.set_color_args(Self::fill_color_state, &args)?,
             Operation::SetFillGray(color) => self.set_color_and_space(
@@ -958,14 +1025,14 @@ impl<'a, 'c> Render<'a, 'c> {
                 Some(&color),
             )?,
             Operation::SetFillColorOrWithPattern(color_or_name) => {
-                self.set_color_or_pattern(Self::fill_color_state, &color_or_name)?;
+                self.set_color_or_pattern(render_cacher, Self::fill_color_state, &color_or_name)?;
             }
 
             // Shading Operation
             Operation::PaintShading(name) => self.paint_shading(&name)?,
 
             // XObject Operation
-            Operation::PaintXObject(name) => self.paint_x_object(&name)?,
+            Operation::PaintXObject(name) => self.paint_x_object(render_cacher, &name)?,
 
             // Marked Content Operations
             Operation::DesignateMarkedContentPoint(_)
@@ -1337,7 +1404,11 @@ impl<'a, 'c> Render<'a, 'c> {
     ///    an example pdf file that b_box start point is not (0, 0)
     /// 1. Paints the graphics objects specified in the form object's stream in sub render.
     /// 1. Paint the rendered image on parent render
-    fn paint_form_x_object(&mut self, x_object: &XObjectDict<'a, 'a>) -> Result<()> {
+    fn paint_form_x_object(
+        &mut self,
+        render_cacher: &mut RenderCacher,
+        x_object: &XObjectDict<'a, 'a>,
+    ) -> Result<()> {
         let form = x_object
             .as_form()
             .whatever_context("read x_object as form")?;
@@ -1377,13 +1448,13 @@ impl<'a, 'c> Render<'a, 'c> {
             .operations()
             .whatever_context("get form page operations")?
             .into_iter()
-            .try_for_each(|op| render.exec(op))?;
+            .try_for_each(|op| render.exec(render_cacher, op))?;
 
         Ok(())
     }
 
     /// Paints the specified XObject. Only XObjectType::Image supported
-    fn paint_x_object(&mut self, nm: &NameOfDict) -> Result<()> {
+    fn paint_x_object(&mut self, render_cacher: &mut RenderCacher, nm: &NameOfDict) -> Result<()> {
         let x_objects = self
             .resources
             .x_object()
@@ -1397,7 +1468,7 @@ impl<'a, 'c> Render<'a, 'c> {
                     .whatever_context("get x_object subtype")?
                 {
                     XObjectType::Image => self.paint_image_x_object(x_object),
-                    XObjectType::Form => self.paint_form_x_object(x_object),
+                    XObjectType::Form => self.paint_form_x_object(render_cacher, x_object),
                     t => whatever!("TODO: {:?}", t),
                 }
             } else {
@@ -1609,6 +1680,7 @@ impl<'a, 'c> Render<'a, 'c> {
 
     fn set_color_or_pattern(
         &mut self,
+        render_cacher: &mut RenderCacher,
         mut get_state: impl FnMut(&mut Self) -> Result<&mut ColorState>,
         color_or_name: &ColorArgsOrName,
     ) -> Result<()> {
@@ -1627,6 +1699,7 @@ impl<'a, 'c> Render<'a, 'c> {
                         );
                         self.tiling_pattern(
                             dimension,
+                            render_cacher,
                             get_state,
                             &pattern
                                 .tiling_pattern()
@@ -1712,6 +1785,7 @@ impl<'a, 'c> Render<'a, 'c> {
     fn tiling_pattern(
         &mut self,
         canvas_size: Size2D<f32>,
+        render_cacher: &mut RenderCacher,
         mut get_state: impl FnMut(&mut Self) -> Result<&mut ColorState>,
         tile: &TilingPatternDict<'a, 'a>,
         color_args: Option<&ColorArgs>,
@@ -1779,7 +1853,8 @@ impl<'a, 'c> Render<'a, 'c> {
             // set color used for paint matrix image
             color_state.set_color_args(args)?;
         }
-        ops.into_iter().try_for_each(|op| render.exec(op))?;
+        ops.into_iter()
+            .try_for_each(|op| render.exec(render_cacher, op))?;
         drop(render);
         color_state.paint = PaintCreator::Tile((canvas, matrix, x_step > b_box.width()));
         Ok(())
@@ -1888,7 +1963,7 @@ impl<'a, 'c> Render<'a, 'c> {
         Ok(())
     }
 
-    fn show_text(&mut self, text: &[u8]) -> Result<()> {
+    fn show_text(&mut self, render_cacher: &mut RenderCacher, text: &[u8]) -> Result<()> {
         let text_object = Self::text_object(&self.stack)?;
         if text_object.render_mode == TextRenderingMode::Invisible {
             return Ok(());
@@ -1902,9 +1977,14 @@ impl<'a, 'c> Render<'a, 'c> {
                 self.font_cache.first_font()
             })
             .whatever_context("get current font name")?;
-        let font = self.font_cache.get_font(font_name);
-        let op = self.font_cache.get_op(font_name);
-        let glyph_width = self.font_cache.get_glyph_width(font_name);
+        let font = match self.font_cache.get_font(font_name) {
+            Some(font) => font,
+            None => render_cacher.fallback_font(),
+        };
+        let mut cmap_registry = CMapRegistry::new();
+        let op = font.create_op(&mut cmap_registry).unwrap();
+        let glyph_width = font.create_glyph_width().unwrap();
+        let glyph_render = font.create_glyph_render().unwrap();
         let state = Self::top(&self.stack)?;
         let mut text_object = state.text_object.clone();
         text_object
@@ -1943,8 +2023,9 @@ impl<'a, 'c> Render<'a, 'c> {
                 );
                 let gid = op.char_to_gid(ch).whatever_context("get char to gid")?;
                 if let Some(glyph) = type3_font.get_glyph(gid) {
+                    let mut render_cacher = RenderCacher::new();
                     for op in glyph.operations() {
-                        render.exec(op.clone())?;
+                        render.exec(&mut render_cacher, op.clone())?;
                     }
                 }
 
@@ -1956,12 +2037,11 @@ impl<'a, 'c> Render<'a, 'c> {
                 );
             }
         } else {
-            let glyph_render = self.font_cache.get_glyph_render(font_name);
             let mut text_clip_path = Path::default();
 
             for ch in op.decode_chars(text).whatever_context("decode chars")? {
                 let gid = op.char_to_gid(ch).whatever_context("get char to gid")?;
-                let path = Self::gen_glyph_path(glyph_render, gid)?;
+                let path = Self::gen_glyph_path(glyph_render.as_ref(), gid)?;
                 if !path.is_empty() {
                     let path = path.finish().whatever_context("finish path")?;
                     let path = path
@@ -1997,10 +2077,14 @@ impl<'a, 'c> Render<'a, 'c> {
         Ok(())
     }
 
-    fn show_texts(&mut self, texts: &[TextStringOrNumber]) -> Result<()> {
+    fn show_texts(
+        &mut self,
+        render_cacher: &mut RenderCacher,
+        texts: &[TextStringOrNumber],
+    ) -> Result<()> {
         for t in texts {
             match t {
-                TextStringOrNumber::TextString(s) => self.show_text(s.to_bytes())?,
+                TextStringOrNumber::TextString(s) => self.show_text(render_cacher, s.to_bytes())?,
                 TextStringOrNumber::Number(n) => {
                     self.text_object_mut()?.adjust_tj(*n);
                 }

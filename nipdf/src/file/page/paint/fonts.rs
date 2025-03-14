@@ -223,19 +223,21 @@ impl FallbackFont {
     /// Creates a new FallbackFont instance
     ///
     /// This method loads the builtin Helvetica font and uses WinAnsiEncoding
-    pub fn new() -> Result<Self> {
+    pub fn new() -> Self {
         // Load the builtin Helvetica font data
         let font_data = Arc::new(
             standard_14_type1_font_data("Helvetica")
-                .whatever_context::<_, ObjectValueError>("Fallback font (Helvetica) not found")?
+                .whatever_context::<_, ObjectValueError>("Fallback font (Helvetica) not found")
+                .unwrap()
                 .to_vec(),
         );
 
         // Create FontKitFont from the font data
         let font = FontKitFont::from_bytes(font_data, 0)
-            .whatever_context::<_, ObjectValueError>("create FontKitFont for fallback")?;
+            .whatever_context::<_, ObjectValueError>("create FontKitFont for fallback")
+            .unwrap();
 
-        Ok(Self { font })
+        Self { font }
     }
 
     pub fn create_fallback_op(&self) -> Box<dyn FontOp + '_> {
@@ -390,7 +392,6 @@ fn standard_14_type1_font_data(font_name: &str) -> Option<&'static [u8]> {
 struct FontCacheInner<'c, P: PathSink + 'static> {
     fonts: HashMap<Name, Box<dyn Font<P> + 'c>>,
     cmap_registry: CMapRegistry,
-    fallback_font: FallbackFont,
 
     #[borrows(fonts, mut cmap_registry)]
     #[covariant]
@@ -401,16 +402,6 @@ struct FontCacheInner<'c, P: PathSink + 'static> {
     #[borrows(fonts)]
     #[covariant]
     glyph_widths: HashMap<Name, Box<dyn GlyphAdvance + 'this>>,
-
-    #[borrows(fallback_font)]
-    #[covariant]
-    fallback_op: Box<dyn FontOp + 'this>,
-    #[borrows(fallback_font)]
-    #[covariant]
-    fallback_render: Box<dyn GlyphRender<P> + 'this>,
-    #[borrows(fallback_font)]
-    #[covariant]
-    fallback_width: Box<dyn GlyphAdvance + 'this>,
 }
 
 pub struct FontCache<'c, P: PathSink + 'static> {
@@ -687,7 +678,6 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
             cache: FontCacheInner::try_new(
                 fonts,
                 CMapRegistry::new(),
-                FallbackFont::new().unwrap(),
                 |fonts, cmap_registry| {
                     let mut ops = HashMap::with_capacity(fonts.len());
                     for (k, v) in fonts {
@@ -715,9 +705,6 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                     }
                     Ok(renders)
                 },
-                |fallback_font| Ok(fallback_font.create_fallback_op()),
-                |fallback_font| fallback_font.create_glyph_render(),
-                |fallback_font| Font::<P>::create_glyph_width(fallback_font),
             )?,
         };
         info!("Load {} fonts", font_counts);
@@ -728,32 +715,20 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         self.cache.borrow_fonts().keys().next()
     }
 
-    pub fn get_font(&self, s: &Name) -> &dyn Font<P> {
-        self.cache
-            .borrow_fonts()
-            .get(s)
-            .map_or_else(|| self.cache.borrow_fallback_font(), AsRef::as_ref)
+    pub fn get_font(&self, s: &Name) -> Option<&dyn Font<P>> {
+        self.cache.borrow_fonts().get(s).map(AsRef::as_ref)
     }
 
-    pub fn get_op(&self, s: &Name) -> &dyn FontOp {
-        self.cache
-            .borrow_ops()
-            .get(s)
-            .map_or_else(|| self.cache.borrow_fallback_op().as_ref(), AsRef::as_ref)
+    pub fn get_op(&self, s: &Name) -> Option<&dyn FontOp> {
+        self.cache.borrow_ops().get(s).map(AsRef::as_ref)
     }
 
-    pub fn get_glyph_render(&self, s: &Name) -> &dyn GlyphRender<P> {
-        self.cache.borrow_renders().get(s).map_or_else(
-            || self.cache.borrow_fallback_render().as_ref(),
-            AsRef::as_ref,
-        )
+    pub fn get_glyph_render(&self, s: &Name) -> Option<&dyn GlyphRender<P>> {
+        self.cache.borrow_renders().get(s).map(AsRef::as_ref)
     }
 
-    pub fn get_glyph_width(&self, s: &Name) -> &dyn GlyphAdvance {
-        self.cache.borrow_glyph_widths().get(s).map_or_else(
-            || self.cache.borrow_fallback_width().as_ref(),
-            AsRef::as_ref,
-        )
+    pub fn get_glyph_width(&self, s: &Name) -> Option<&dyn GlyphAdvance> {
+        self.cache.borrow_glyph_widths().get(s).map(AsRef::as_ref)
     }
 }
 

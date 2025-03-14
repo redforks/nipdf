@@ -13,7 +13,7 @@ use tiny_skia::{Color, Pixmap};
 
 mod render;
 mod shading;
-use render::{Render, State};
+use render::{Render, RenderCacher, State};
 mod into_skia;
 pub(crate) use into_skia::*;
 use num_traits::ToPrimitive;
@@ -213,6 +213,7 @@ pub fn render_steps(
     let Some(mut canvas) = option.create_canvas() else {
         return Ok(RgbaImage::new(0, 0));
     };
+    let mut render_cacher = RenderCacher::new();
     if !ops.is_empty() {
         // skip render if no operations, fixes incorrect pdf files that no resources
         let resource = page.resources().whatever_context("get page resources")?;
@@ -225,7 +226,7 @@ pub fn render_steps(
         };
 
         for op in iter {
-            match renderer.exec(op) {
+            match renderer.exec(&mut render_cacher, op) {
                 Ok(_) => (),
                 Err(e) if option.fail_fast => return Err(e),
                 Err(e) => log::error!("Operation failed: {}", snafu::Report::from_error(e)),
