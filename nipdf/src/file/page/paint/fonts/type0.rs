@@ -37,7 +37,9 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType0Font<'_, '_> {
     }
 
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
-        Ok(Box::new(TTFGlyphRender { font: &self.font }))
+        Ok(Box::new(TTFGlyphRender {
+            font: self.font.clone(),
+        }))
     }
 
     fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance + '_>> {
@@ -388,7 +390,9 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
 
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
         // Use FreeType, TTFParser failed render bug1734802.pdf
-        Ok(Box::new(TTFGlyphRender { font: &self.font }))
+        Ok(Box::new(TTFGlyphRender {
+            font: self.font.clone(),
+        }))
     }
 
     fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance + '_>> {

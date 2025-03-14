@@ -43,7 +43,9 @@ impl<P: PathSink> Font<P> for Type1Font<'_> {
     }
 
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
-        Ok(Box::new(TTFGlyphRender { font: &self.font }))
+        Ok(Box::new(TTFGlyphRender {
+            font: self.font.clone(),
+        }))
     }
 
     fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance + '_>> {

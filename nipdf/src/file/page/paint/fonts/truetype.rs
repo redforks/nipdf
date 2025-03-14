@@ -46,7 +46,9 @@ impl<P: PathSink> Font<P> for TTFFont<'_, '_> {
     }
 
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
-        Ok(Box::new(TTFGlyphRender { font: &self.face }))
+        Ok(Box::new(TTFGlyphRender {
+            font: self.face.clone(),
+        }))
     }
 
     fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance + '_>> {

@@ -186,11 +186,11 @@ pub trait GlyphRender<P> {
     fn render(&self, gid: u16, sink: &mut P);
 }
 
-struct TTFGlyphRender<'a> {
-    font: &'a FontKitFont,
+struct TTFGlyphRender {
+    font: FontKitFont,
 }
 
-impl<P: PathSink> GlyphRender<P> for TTFGlyphRender<'_> {
+impl<P: PathSink> GlyphRender<P> for TTFGlyphRender {
     fn render(&self, gid: u16, sink: &mut P) {
         if let Err(e) = self
             .font
@@ -267,7 +267,9 @@ impl<P: PathSink> Font<P> for FallbackFont {
     }
 
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
-        Ok(Box::new(TTFGlyphRender { font: &self.font }))
+        Ok(Box::new(TTFGlyphRender {
+            font: self.font.clone(),
+        }))
     }
 
     fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance + '_>> {
