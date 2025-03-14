@@ -1,11 +1,8 @@
 use super::{
-    ChainGlyphAdvance, EncodingParser, FirstLastFontWidth, FontKitFontExt as _, FontOp,
-    FreeTypeFontWidth, GlyphRender, PathSink, TTFGlyphRender, UnitPerEmAdjust,
+    ChainGlyphAdvance, FirstLastFontWidth, FontKitFontExt as _, FontOp, FreeTypeFontWidth,
+    GlyphRender, PathSink, TTFGlyphRender, UnitPerEmAdjust,
 };
-use crate::{
-    ObjectValueError, Result,
-    file::page::paint::fonts::{Font, FontDict},
-};
+use crate::{ObjectValueError, Result, file::page::paint::fonts::Font};
 use font_kit::loaders::freetype::Font as FontKitFont;
 use log::warn;
 use owned_ttf_parser::AsFaceRef as _;
@@ -16,30 +13,36 @@ use snafu::OptionExt as _;
 use snafu::ResultExt;
 use std::sync::Arc;
 
-pub struct TTFFont<'a> {
-    font_dict: FontDict<'a, 'a>,
+pub struct TTFFont {
     face: FontKitFont,
     data: Arc<Vec<u8>>,
+    encoding: Option<prescript::Encoding>,
+    first_last_width: UnitPerEmAdjust<Option<FirstLastFontWidth>>,
 }
 
-impl<'a> TTFFont<'a> {
-    pub fn new(data: Arc<Vec<u8>>, font_dict: FontDict<'a, 'a>) -> Result<Self> {
+impl TTFFont {
+    pub fn new(
+        data: Arc<Vec<u8>>,
+        encoding: Option<prescript::Encoding>,
+        first_last_width: Option<FirstLastFontWidth>,
+    ) -> Result<Self> {
         let face = FontKitFont::from_bytes(data.clone(), 0)
             .whatever_context::<_, ObjectValueError>("parse TTF Font")?;
+        let units_per_em = face.units_per_em()?;
         Ok(Self {
-            font_dict,
             face,
             data,
+            encoding,
+            first_last_width: UnitPerEmAdjust::new(units_per_em, first_last_width),
         })
     }
 }
 
-impl<P: PathSink> Font<P> for TTFFont<'_> {
+impl<P: PathSink> Font<P> for TTFFont {
     fn create_op(&self) -> Result<Box<dyn FontOp>> {
-        let encoding = EncodingParser(&self.font_dict).ttf()?;
         Ok(Box::new(TTFFontOp::new(
             self.face.clone(),
-            encoding,
+            self.encoding.clone(),
             OwnedTTFFace::from_vec(self.data.as_slice().to_vec(), 0)
                 .whatever_context::<_, ObjectValueError>("parse TTF Font")?,
             self.face.units_per_em()?,
@@ -53,16 +56,13 @@ impl<P: PathSink> Font<P> for TTFFont<'_> {
     }
 
     fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance>> {
-        let units_per_em = self.face.units_per_em()?;
-        let first_last_width =
-            UnitPerEmAdjust::new(units_per_em, FirstLastFontWidth::from(&self.font_dict)?);
         let free_type_width = FreeTypeFontWidth::new(
             self.face.clone(),
             /* TrueType font no Vertical mode*/ WriteMode::Horizontal,
         );
 
         Ok(Box::new(ChainGlyphAdvance(
-            first_last_width,
+            self.first_last_width.clone(),
             free_type_width,
         )))
     }

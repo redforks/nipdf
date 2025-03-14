@@ -112,6 +112,7 @@ impl FirstLastFontWidth {
     }
 }
 
+#[derive(Clone)]
 struct FreeTypeFontWidth {
     font: FontKitFont,
     write_mode: WriteMode,
@@ -573,7 +574,11 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
                 is_embed, ttf_bytes, font,
             )?))
         } else {
-            Ok(Box::new(truetype::TTFFont::new(ttf_bytes, font)?))
+            let width = FirstLastFontWidth::from(&font)?;
+            let encoding = EncodingParser(&font).ttf()?;
+            Ok(Box::new(truetype::TTFFont::new(
+                ttf_bytes, encoding, width,
+            )?))
         }
     }
 
@@ -763,6 +768,7 @@ impl GlyphAdvance for LengthAdavnce {
     }
 }
 
+#[derive(Clone)]
 struct UnitPerEmAdjust<G> {
     units_per_em: u16,
     inner: G,
