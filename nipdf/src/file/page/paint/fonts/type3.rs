@@ -151,7 +151,7 @@ impl Type3Glyph {
 }
 
 impl<P: PathSink + 'static> Font<P> for Type3Font<'_> {
-    fn create_op(&self) -> Result<Box<dyn FontOp + '_>> {
+    fn create_op(&self) -> Result<Box<dyn FontOp>> {
         Ok(Box::new(Type3FontOp::new(
             &self.dict,
             &self.type3_dict,

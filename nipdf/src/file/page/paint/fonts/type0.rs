@@ -1,3 +1,4 @@
+use super::truetype::glyph_index;
 use super::{
     ChainGlyphAdvance, Font, FontKitFontExt, FontOp, GlyphAdvance, GlyphRender, PathSink,
     TTFGlyphRender, UnitPerEmAdjust,
@@ -10,12 +11,13 @@ use crate::{ObjectValueError, Result};
 use encoding_rs::Encoding as CharEncoding;
 use font_kit::loaders::freetype::Font as FontKitFont;
 use log::warn;
+use owned_ttf_parser::OwnedFace as OwnedTTFFace;
+use owned_ttf_parser::{AsFaceRef, Face as TTFFace};
 use prescript::cmap::{CMap, CMapRegistry, WriteMode};
 use prescript::{Encoding, name, sname};
 use snafu::{OptionExt as _, ResultExt as _, ensure_whatever, whatever};
 use std::rc::Rc;
 use std::sync::Arc;
-use ttf_parser::Face as TTFFace;
 
 /// Font for Type 0 CIDFont, its descendant font is Cff.
 pub(super) struct CIDFontType0Font<'a> {
@@ -32,7 +34,7 @@ impl<'a> CIDFontType0Font<'a> {
 }
 
 impl<P: PathSink + 'static> Font<P> for CIDFontType0Font<'_> {
-    fn create_op(&self) -> Result<Box<dyn FontOp + '_>> {
+    fn create_op(&self) -> Result<Box<dyn FontOp>> {
         Ok(Box::new(CIDFontType0FontOp::new(&self.font_dict.type0()?)?))
     }
 
@@ -179,8 +181,8 @@ impl CIDToGIDMap {
     }
 }
 
-struct CIDFontType2FontOp<'a> {
-    ttf_face: Option<TTFFace<'a>>,
+struct CIDFontType2FontOp {
+    ttf_face: Option<OwnedTTFFace>,
     units_per_em: u16,
     // Convert as Identity-H if None
     encoding: Option<Rc<CMap>>,
@@ -189,16 +191,16 @@ struct CIDFontType2FontOp<'a> {
     write_mode: WriteMode,
 }
 
-impl<'a> CIDFontType2FontOp<'a> {
+impl CIDFontType2FontOp {
     fn new(
         encoding: Option<Rc<CMap>>,
         is_embed: bool,
-        ttf_data: &'a [u8],
+        ttf_data: Vec<u8>,
         units_per_em: u16,
         cid_to_gid: Option<CIDToGIDMap>,
     ) -> Result<Self> {
         let write_mode = get_write_mode(&encoding);
-        let ttf_face = TTFFace::parse(ttf_data, 0).ok();
+        let ttf_face = OwnedTTFFace::from_vec(ttf_data, 0).ok();
         let cid_is_gid = is_embed && cid_to_gid.is_none();
         ensure_whatever!(
             cid_is_gid || ttf_face.is_some() || cid_to_gid.is_some(),
@@ -216,26 +218,7 @@ impl<'a> CIDFontType2FontOp<'a> {
     }
 }
 
-// TTFFace::glyph_index() ignores non unicode cmap table,
-// some non-cjk pdf file use non unicode cmap table. This function
-// try to find glyph id from all cmap tables
-fn glyph_index(ttf_font: &TTFFace<'_>, ch: u32) -> Result<Option<u16>> {
-    for subtable in ttf_font
-        .tables()
-        .cmap
-        .whatever_context::<_, ObjectValueError>("get cmap from TTF Face")?
-        .subtables
-    {
-        if let Some(id) = subtable.glyph_index(ch) {
-            return Ok(Some(id.0));
-        }
-    }
-
-    warn!("glyph id not found from TTF CMap for char: {}", ch);
-    Ok(None)
-}
-
-impl FontOp for CIDFontType2FontOp<'_> {
+impl FontOp for CIDFontType2FontOp {
     fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>> {
         self.encoding.as_ref().map_or_else(
             || {
@@ -326,7 +309,7 @@ impl<'a> CIDFontType2Font<'a> {
 }
 
 impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_> {
-    fn create_op(&self) -> Result<Box<dyn FontOp + '_>> {
+    fn create_op(&self) -> Result<Box<dyn FontOp>> {
         // Get the common font info upfront
         let font = self.font_dict.type0()?;
         let units_per_em = self.font.units_per_em()?;
@@ -382,7 +365,7 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_> {
         Ok(Box::new(CIDFontType2FontOp::new(
             encoding,
             self.font_is_embed,
-            &self.data,
+            (self.data.as_slice()).to_owned(),
             units_per_em,
             cid_to_gid,
         )?))

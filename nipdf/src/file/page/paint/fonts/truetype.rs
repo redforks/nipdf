@@ -8,12 +8,13 @@ use crate::{
 };
 use font_kit::loaders::freetype::Font as FontKitFont;
 use log::warn;
+use owned_ttf_parser::OwnedFace as OwnedTTFFace;
+use owned_ttf_parser::{AsFaceRef as _, Face as TTFFace};
 use phf::phf_map;
 use prescript::cmap::WriteMode;
 use snafu::OptionExt as _;
 use snafu::ResultExt;
 use std::sync::Arc;
-use ttf_parser::Face as TTFFace;
 
 pub struct TTFFont<'a> {
     font_dict: FontDict<'a, 'a>,
@@ -34,12 +35,12 @@ impl<'a> TTFFont<'a> {
 }
 
 impl<P: PathSink> Font<P> for TTFFont<'_> {
-    fn create_op(&self) -> Result<Box<dyn FontOp + '_>> {
+    fn create_op(&self) -> Result<Box<dyn FontOp>> {
         let encoding = EncodingParser(&self.font_dict).ttf()?;
         Ok(Box::new(TTFFontOp::new(
-            &self.face,
+            self.face.clone(),
             encoding,
-            TTFFace::parse(&self.data, 0)
+            OwnedTTFFace::from_vec(self.data.as_slice().to_vec(), 0)
                 .whatever_context::<_, ObjectValueError>("parse TTF Font")?,
             self.face.units_per_em()?,
         )))
@@ -69,18 +70,18 @@ impl<P: PathSink> Font<P> for TTFFont<'_> {
 
 static GLYPH_NAME_TO_UNICODE: phf::Map<&'static str, u32> = include!("../glyph_name_to_unicode.rs");
 
-pub struct TTFFontOp<'a> {
-    face: &'a FontKitFont,
+pub struct TTFFontOp {
+    face: FontKitFont,
     units_per_em: u16,
     encoding: Option<prescript::Encoding>,
-    ttf_font: TTFFace<'a>,
+    ttf_font: OwnedTTFFace,
 }
 
-impl<'a> TTFFontOp<'a> {
+impl TTFFontOp {
     pub fn new(
-        face: &'a FontKitFont,
+        face: FontKitFont,
         encoding: Option<prescript::Encoding>,
-        ttf_font: TTFFace<'a>,
+        ttf_font: OwnedTTFFace,
         units_per_em: u16,
     ) -> Self {
         Self {
@@ -92,7 +93,7 @@ impl<'a> TTFFontOp<'a> {
     }
 }
 
-impl FontOp for TTFFontOp<'_> {
+impl FontOp for TTFFontOp {
     fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>, ObjectValueError> {
         Ok(s.iter().map(|v| *v as u32).collect())
     }
@@ -124,10 +125,7 @@ impl FontOp for TTFFontOp<'_> {
                 .try_into()
                 .whatever_context("failed convert glyph index");
         }
-        if let Some(r) = {
-            let this = &self;
-            glyph_index(&this.ttf_font, ch)
-        }? {
+        if let Some(r) = glyph_index(&self.ttf_font, ch)? {
             return r.try_into().whatever_context("failed convert glyph index");
         }
         warn!("TTF glyph id not found for char: {}", ch);
@@ -143,8 +141,12 @@ impl FontOp for TTFFontOp<'_> {
     }
 }
 
-fn glyph_index(ttf_font: &TTFFace<'_>, ch: u32) -> Result<Option<u16>, ObjectValueError> {
+// TTFFace::glyph_index() ignores non unicode cmap table,
+// some non-cjk pdf file use non unicode cmap table. This function
+// try to find glyph id from all cmap tables
+pub(super) fn glyph_index(ttf_font: &OwnedTTFFace, ch: u32) -> Result<Option<u16>> {
     for subtable in ttf_font
+        .as_face_ref()
         .tables()
         .cmap
         .whatever_context::<_, ObjectValueError>("get cmap from TTF Face")?

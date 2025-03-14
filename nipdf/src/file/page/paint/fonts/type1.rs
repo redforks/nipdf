@@ -33,7 +33,7 @@ impl<'a> Type1Font<'a> {
 }
 
 impl<P: PathSink> Font<P> for Type1Font<'_> {
-    fn create_op(&self) -> Result<Box<dyn FontOp + '_>> {
+    fn create_op(&self) -> Result<Box<dyn FontOp>> {
         Ok(Box::new(Type1FontOp::new(
             &self.font_dict,
             self.font.clone(),

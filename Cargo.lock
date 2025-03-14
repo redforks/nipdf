@@ -2934,6 +2934,7 @@ dependencies = [
  "once_cell",
  "ordered-float",
  "ouroboros",
+ "owned_ttf_parser",
  "paste",
  "pathfinder_geometry",
  "phf",
@@ -2945,7 +2946,6 @@ dependencies = [
  "test-case",
  "test-log",
  "tinyvec",
- "ttf-parser 0.25.1",
  "weezl",
  "winnow",
 ]
