@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use super::{
     Encoding, FirstLastFontWidth, Font, FontDict, GlyphRender, Operation, PathSink,
     parse_operations,
@@ -27,7 +29,7 @@ pub struct Type3Font {
 }
 
 impl Type3Font {
-    pub fn new(dict: FontDict<'_, '_>) -> Result<Self> {
+    pub fn new(dict: FontDict<'_, '_>) -> Result<Rc<Self>> {
         let char_procs = dict.type3()?.char_procs()?;
 
         let mut glyphs = Vec::with_capacity(char_procs.len());
@@ -46,7 +48,7 @@ impl Type3Font {
         let encoding = super::EncodingParser(&dict).type3()?;
         let first_last_width = FirstLastFontWidth::from(&dict)?;
 
-        Ok(Self {
+        Ok(Rc::new(Self {
             name_to_gid: glyph_ids,
             glyphs: glyphs.into(),
             dict_id: dict.id(),
@@ -57,7 +59,7 @@ impl Type3Font {
             matrix,
             encoding,
             first_last_width,
-        })
+        }))
     }
 
     pub fn resources<'b>(
@@ -161,7 +163,7 @@ impl Type3Glyph {
     }
 }
 
-impl<P: PathSink + 'static> Font<P> for Type3Font {
+impl<P: PathSink + 'static> Font<P> for Rc<Type3Font> {
     fn create_op(&self) -> Result<Box<dyn FontOp>> {
         Ok(Box::new(Type3FontOp::new(
             self.name_to_gid.clone(),
@@ -183,8 +185,8 @@ impl<P: PathSink + 'static> Font<P> for Type3Font {
         Ok(Box::new(StubGlyphRender))
     }
 
-    fn as_type3(&self) -> Option<&Type3Font> {
-        Some(self)
+    fn as_type3(&self) -> Option<Rc<Type3Font>> {
+        Some(self.clone())
     }
 
     fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance>> {

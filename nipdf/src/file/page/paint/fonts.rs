@@ -13,12 +13,12 @@ use fontdb::{Database, Family, Query, Source, Weight};
 use heck::ToTitleCase;
 use log::{info, warn};
 use num_traits::ToPrimitive;
-use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
 use prescript::{Encoding, Name, cmap::WriteMode, sname};
 use snafu::{OptionExt, ResultExt, ensure_whatever, whatever};
 use std::{
     ops::RangeInclusive,
+    rc::Rc,
     sync::{Arc, LazyLock},
 };
 use type1::{Type1Font, Type1FontOp};
@@ -202,22 +202,22 @@ impl<P: PathSink> GlyphRender<P> for TTFGlyphRender {
     }
 }
 
-pub struct FontOps<'a, P> {
+pub struct FontOps<P> {
     pub op: Box<dyn FontOp>,
     pub render: Box<dyn GlyphRender<P>>,
     pub width: Box<dyn GlyphAdvance>,
-    pub type3: Option<&'a type3::Type3Font>,
+    pub type3: Option<Rc<type3::Type3Font>>,
 }
 
 pub trait Font<P> {
     fn create_op(&self) -> Result<Box<dyn FontOp>>;
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P>>>;
     fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance>>;
-    fn as_type3(&self) -> Option<&type3::Type3Font> {
+    fn as_type3(&self) -> Option<Rc<type3::Type3Font>> {
         None
     }
 
-    fn create_ops(&self) -> Result<FontOps<'_, P>> {
+    fn create_ops(&self) -> Result<FontOps<P>> {
         let op = self.create_op()?;
         let render = self.create_glyph_render()?;
         let width = self.create_glyph_width()?;
@@ -408,39 +408,32 @@ fn standard_14_type1_font_data(font_name: &str) -> Option<&'static [u8]> {
 }
 
 /// Contains Font and its FontOps,
-#[self_referencing]
-struct OwnedFontOpsInner<'a, P: PathSink + 'static> {
-    font: Box<dyn Font<P> + 'a>,
-    #[borrows(font)]
-    #[covariant]
-    ops: FontOps<'this, P>,
+pub struct OwnedFontOps<P: PathSink + 'static> {
+    ops: FontOps<P>,
 }
 
-pub struct OwnedFontOps<'a, P: PathSink + 'static>(OwnedFontOpsInner<'a, P>);
-
-impl<'a, P: PathSink + 'static> OwnedFontOps<'a, P> {
-    pub fn new(font: Box<dyn Font<P> + 'a>) -> Result<Self> {
-        OwnedFontOpsInner::try_new(font, |font| font.create_ops()).map(Self)
+impl<P: PathSink + 'static> OwnedFontOps<P> {
+    pub fn new(font: Box<dyn Font<P>>) -> Result<Self> {
+        let ops = font.create_ops()?;
+        Ok(Self { ops })
     }
 
-    pub fn ops(&self) -> &FontOps<'_, P> {
-        self.0.borrow_ops()
+    pub fn ops(&self) -> &FontOps<P> {
+        &self.ops
     }
 }
 
 #[derive(educe::Educe)]
 #[educe(Default(new))]
-pub struct CachedFonts<'a, P: PathSink + 'static>(
-    AppendOnlyVec<(RuntimeObjectId, OwnedFontOps<'a, P>)>,
-);
+pub struct CachedFonts<P: PathSink + 'static>(AppendOnlyVec<(RuntimeObjectId, OwnedFontOps<P>)>);
 
-impl<'a, P: PathSink + 'static> CachedFonts<'a, P> {
-    pub fn add(&self, id: impl Into<RuntimeObjectId>, font: Box<dyn Font<P> + 'a>) -> Result<()> {
+impl<P: PathSink + 'static> CachedFonts<P> {
+    pub fn add(&self, id: impl Into<RuntimeObjectId>, font: Box<dyn Font<P>>) -> Result<()> {
         self.0.push((id.into(), OwnedFontOps::new(font)?));
         Ok(())
     }
 
-    pub fn get(&self, id: &RuntimeObjectId) -> Option<&FontOps<'_, P>> {
+    pub fn get(&self, id: &RuntimeObjectId) -> Option<&FontOps<P>> {
         self.0
             .iter()
             .find(|(oid, _)| oid == id)
@@ -448,17 +441,10 @@ impl<'a, P: PathSink + 'static> CachedFonts<'a, P> {
     }
 }
 
-#[self_referencing]
-struct FontCacheInner<'a, P: PathSink + 'static> {
+pub struct FontCache<'a, P: PathSink + 'static> {
     fonts: HashMap<Name, Box<dyn Font<P> + 'a>>,
 
-    #[borrows(fonts)]
-    #[covariant]
-    ops: HashMap<Name, FontOps<'this, P>>,
-}
-
-pub struct FontCache<'a, P: PathSink + 'static> {
-    cache: FontCacheInner<'a, P>,
+    ops: HashMap<Name, FontOps<P>>,
 }
 
 impl<'c, P: PathSink + 'static> FontCache<'c, P> {
@@ -728,31 +714,30 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         }
         let font_counts = fonts.len();
 
-        let r = Self {
-            cache: FontCacheInner::try_new(fonts, |fonts| {
-                let mut ops = HashMap::with_capacity(fonts.len());
-                for (k, v) in fonts {
-                    ops.insert(
-                        k.clone(),
-                        v.create_ops()
-                            .with_whatever_context::<_, _, ObjectValueError>(|_| {
-                                format!("Create FontOps for: {}", k)
-                            })?,
-                    );
-                }
-                Ok::<_, ObjectValueError>(ops)
-            })?,
+        let ops = {
+            let mut ops = HashMap::with_capacity(fonts.len());
+            for (k, v) in &fonts {
+                ops.insert(
+                    k.clone(),
+                    v.create_ops()
+                        .with_whatever_context::<_, _, ObjectValueError>(|_| {
+                            format!("Create FontOps for: {}", k)
+                        })?,
+                );
+            }
+            ops
         };
+        let r = Self { fonts, ops };
         info!("Load {} fonts", font_counts);
         Ok(r)
     }
 
     pub fn first_font(&self) -> Option<&Name> {
-        self.cache.borrow_fonts().keys().next()
+        self.fonts.keys().next()
     }
 
-    pub fn get_font(&self, s: &Name) -> Option<&FontOps<'_, P>> {
-        self.cache.borrow_ops().get(s)
+    pub fn get_font(&self, s: &Name) -> Option<&FontOps<P>> {
+        self.ops.get(s)
     }
 }
 

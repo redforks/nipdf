@@ -9,7 +9,6 @@ use euclid::{Length, Scale, Transform2D, default::Size2D};
 use image::RgbaImage;
 use log::{debug, error, info, warn};
 use nipdf::{
-    ObjectValueError,
     file::{
         GraphicsStateParameterDict, PageContent, Rectangle, ResourceDict, XObjectDict, XObjectType,
         paint::fonts::{FallbackFont, Font, FontCache, FontOps, GlyphRender, PathSink},
@@ -34,7 +33,6 @@ use nipdf::{
     },
 };
 use num_traits::ToPrimitive;
-use ouroboros::self_referencing;
 use prescript::{AnyWhatever, Name, ParserError, cmap::WriteMode};
 use snafu::{FromString, OptionExt, ResultExt, ensure_whatever, whatever};
 use std::{
@@ -686,38 +684,22 @@ pub struct Render<'a, 'c> {
     dimension: PageDimension,
 }
 
-#[self_referencing]
-struct FallbackFontOps {
-    fallback_font: FallbackFont,
-    #[borrows(fallback_font)]
-    #[covariant]
-    ops: FontOps<'this, SkiaPathSink>,
-}
-
-impl FallbackFontOps {
-    pub fn create() -> Result<Self> {
-        Self::try_new(FallbackFont::new(), |fallback_font: &FallbackFont| {
-            fallback_font
-                .create_ops()
-                .whatever_context::<_, ObjectValueError>("create fallback font ops")
-        })
-        .whatever_context("create fallback font ops")
-    }
-}
-
 pub struct RenderCacher {
-    fallback_font: LazyCell<FallbackFontOps>,
+    fallback_font: LazyCell<FontOps<SkiaPathSink>>,
 }
 
 impl RenderCacher {
     pub fn new() -> Self {
         Self {
-            fallback_font: LazyCell::new(|| FallbackFontOps::create().unwrap()),
+            fallback_font: LazyCell::new(|| {
+                let fallback_font = FallbackFont::new();
+                fallback_font.create_ops().unwrap()
+            }),
         }
     }
 
-    fn fallback_font(&self) -> &FontOps<'_, SkiaPathSink> {
-        self.fallback_font.borrow_ops()
+    fn fallback_font(&self) -> &FontOps<SkiaPathSink> {
+        &self.fallback_font
     }
 }
 
@@ -1980,7 +1962,7 @@ impl<'a, 'c> Render<'a, 'c> {
         text_object.set_write_mode(font_ops.op.write_mode());
         let user_to_device = state.user_to_device.into_skia();
 
-        if let Some(type3_font) = font_ops.type3 {
+        if let Some(type3_font) = font_ops.type3.clone() {
             let font_matrix = type3_font.matrix();
             let resources = type3_font
                 .resources(self.resources.resolver())
