@@ -42,13 +42,13 @@ impl<P: PathSink> Font<P> for Type1Font<'_> {
         )?))
     }
 
-    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
+    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P>>> {
         Ok(Box::new(TTFGlyphRender {
             font: self.font.clone(),
         }))
     }
 
-    fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance + '_>> {
+    fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance>> {
         Ok(Box::new(ChainGlyphAdvance(
             UnitPerEmAdjust::new(
                 self.font.units_per_em()?,

@@ -36,13 +36,13 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType0Font<'_, '_> {
         Ok(Box::new(CIDFontType0FontOp::new(&self.font_dict.type0()?)?))
     }
 
-    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
+    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P>>> {
         Ok(Box::new(TTFGlyphRender {
             font: self.font.clone(),
         }))
     }
 
-    fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance + '_>> {
+    fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance>> {
         let font_dict = self.font_dict.type0()?;
         let cid_fonts = font_dict.descendant_fonts()?;
         let cid_font = &cid_fonts[0];
@@ -388,14 +388,14 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
         )?))
     }
 
-    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
+    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P>>> {
         // Use FreeType, TTFParser failed render bug1734802.pdf
         Ok(Box::new(TTFGlyphRender {
             font: self.font.clone(),
         }))
     }
 
-    fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance + '_>> {
+    fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance>> {
         let font_dict = self.font_dict.type0()?;
         let cid_fonts = font_dict.descendant_fonts()?;
         let cid_font = &cid_fonts[0];

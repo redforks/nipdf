@@ -45,13 +45,13 @@ impl<P: PathSink> Font<P> for TTFFont<'_, '_> {
         )))
     }
 
-    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
+    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P>>> {
         Ok(Box::new(TTFGlyphRender {
             font: self.face.clone(),
         }))
     }
 
-    fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance + '_>> {
+    fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance>> {
         let units_per_em = self.face.units_per_em()?;
         let first_last_width =
             UnitPerEmAdjust::new(units_per_em, FirstLastFontWidth::from(&self.font_dict)?);

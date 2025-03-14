@@ -203,15 +203,15 @@ impl<P: PathSink> GlyphRender<P> for TTFGlyphRender {
 
 pub struct FontOps<'a, P> {
     pub op: Box<dyn FontOp + 'a>,
-    pub render: Box<dyn GlyphRender<P> + 'a>,
-    pub width: Box<dyn GlyphAdvance + 'a>,
+    pub render: Box<dyn GlyphRender<P>>,
+    pub width: Box<dyn GlyphAdvance>,
     pub type3: Option<&'a type3::Type3Font<'a, 'a>>,
 }
 
 pub trait Font<P> {
     fn create_op(&self) -> Result<Box<dyn FontOp + '_>>;
-    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>>;
-    fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance + '_>>;
+    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P>>>;
+    fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance>>;
     fn as_type3(&self) -> Option<&type3::Type3Font<'_, '_>> {
         None
     }
@@ -266,13 +266,13 @@ impl<P: PathSink> Font<P> for FallbackFont {
         Ok(Box::new(Type1FontOp::new_fallback(self.font.clone())))
     }
 
-    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
+    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P>>> {
         Ok(Box::new(TTFGlyphRender {
             font: self.font.clone(),
         }))
     }
 
-    fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance + '_>> {
+    fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance>> {
         Ok(Box::new(FreeTypeFontWidth::new(
             self.font.clone(),
             /* Type1 font no Vertical mode*/ WriteMode::Horizontal,

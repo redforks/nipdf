@@ -159,7 +159,7 @@ impl<P: PathSink + 'static> Font<P> for Type3Font<'_, '_> {
         )?))
     }
 
-    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>> {
+    fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P>>> {
         struct StubGlyphRender;
 
         impl<P> GlyphRender<P> for StubGlyphRender {
@@ -176,7 +176,7 @@ impl<P: PathSink + 'static> Font<P> for Type3Font<'_, '_> {
         Some(self)
     }
 
-    fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance + '_>> {
+    fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance>> {
         Ok(Box::new(FirstLastFontWidth::from(&self.dict)?.unwrap()))
     }
 }
