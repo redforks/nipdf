@@ -1,12 +1,13 @@
 use crate::{
     ObjectValueError, Result,
-    file::{ObjectResolver, page::ResourceDict},
+    file::ObjectResolver,
     graphics::{Operation, Point, parse_operations, trans::GlyphLength},
     object::{Dictionary, Object, PdfObject, PdfObjectCore as _, RuntimeObjectId, Stream},
     text::{
         CIDFontType, FontDescriptorDict, FontDescriptorFlags, FontDict, FontType, Type3FontDict,
     },
 };
+use ahash::{HashMap, HashMapExt as _};
 use append_only_vec::AppendOnlyVec;
 use encoding::EncodingParser;
 use font_kit::{hinting::HintingOptions, loaders::freetype::Font as FontKitFont};
@@ -19,7 +20,6 @@ use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
 use prescript::{Encoding, Name, cmap::WriteMode, sname};
 use snafu::{OptionExt, ResultExt, ensure_whatever, whatever};
 use std::{
-    collections::HashMap,
     ops::RangeInclusive,
     sync::{Arc, LazyLock},
 };
@@ -449,16 +449,16 @@ impl<'a, P: PathSink + 'static> CachedFonts<'a, P> {
 }
 
 #[self_referencing]
-struct FontCacheInner<'c, P: PathSink + 'static> {
-    fonts: HashMap<Name, Box<dyn Font<P> + 'c>>,
+struct FontCacheInner<'a, P: PathSink + 'static> {
+    fonts: HashMap<Name, Box<dyn Font<P> + 'a>>,
 
     #[borrows(fonts)]
     #[covariant]
     ops: HashMap<Name, FontOps<'this, P>>,
 }
 
-pub struct FontCache<'c, P: PathSink + 'static> {
-    cache: FontCacheInner<'c, P>,
+pub struct FontCache<'a, P: PathSink + 'static> {
+    cache: FontCacheInner<'a, P>,
 }
 
 impl<'c, P: PathSink + 'static> FontCache<'c, P> {
@@ -703,13 +703,10 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         }
     }
 
-    pub fn new<'a>(resource: &'c ResourceDict<'a, 'a>) -> Result<Self>
+    pub fn new<'a>(font_res: HashMap<Name, FontDict<'a, 'a>>) -> Result<Self>
     where
         'a: 'c,
     {
-        let font_res = resource
-            .font()
-            .whatever_context::<_, ObjectValueError>("get font resource")?;
         let mut fonts = HashMap::with_capacity(font_res.len());
         for (k, v) in font_res {
             let font = match Self::scan_font(v) {

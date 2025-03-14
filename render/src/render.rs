@@ -681,7 +681,7 @@ pub struct Render<'a, 'c> {
     stack: Vec<State>,
     path: Path,
     #[educe(Debug(ignore))]
-    font_cache: FontCache<'c, SkiaPathSink>,
+    font_cache: FontCache<'a, SkiaPathSink>,
     resources: &'c ResourceDict<'a, 'a>,
     dimension: PageDimension,
 }
@@ -751,7 +751,8 @@ impl<'a, 'c> Render<'a, 'c> {
             canvas,
             stack: vec![state],
             path: Path::default(),
-            font_cache: FontCache::new(resources).whatever_context("Create font cache")?,
+            font_cache: FontCache::new(resources.font().unwrap())
+                .whatever_context("Create font cache")?,
             resources,
             dimension: option.dimension,
         })
