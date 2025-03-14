@@ -15,11 +15,7 @@ use log::{info, warn};
 use num_traits::ToPrimitive;
 use ouroboros::self_referencing;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
-use prescript::{
-    Encoding, Name,
-    cmap::{CMapRegistry, WriteMode},
-    sname,
-};
+use prescript::{Encoding, Name, cmap::WriteMode, sname};
 use snafu::{OptionExt, ResultExt, ensure_whatever, whatever};
 use std::{
     collections::HashMap,
@@ -213,15 +209,15 @@ pub struct FontOps<'a, P> {
 }
 
 pub trait Font<P> {
-    fn create_op(&self, cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>>;
+    fn create_op(&self) -> Result<Box<dyn FontOp + '_>>;
     fn create_glyph_render(&self) -> Result<Box<dyn GlyphRender<P> + '_>>;
     fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance + '_>>;
     fn as_type3(&self) -> Option<&type3::Type3Font<'_, '_>> {
         None
     }
 
-    fn create_ops(&self, cmap_registry: &mut CMapRegistry) -> Result<FontOps<'_, P>> {
-        let op = self.create_op(cmap_registry)?;
+    fn create_ops(&self) -> Result<FontOps<'_, P>> {
+        let op = self.create_op()?;
         let render = self.create_glyph_render()?;
         let width = self.create_glyph_width()?;
         let type3 = self.as_type3();
@@ -266,7 +262,7 @@ impl FallbackFont {
 }
 
 impl<P: PathSink> Font<P> for FallbackFont {
-    fn create_op(&self, _cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
+    fn create_op(&self) -> Result<Box<dyn FontOp + '_>> {
         Ok(Box::new(Type1FontOp::new_fallback(&self.font)))
     }
 
@@ -411,9 +407,8 @@ fn standard_14_type1_font_data(font_name: &str) -> Option<&'static [u8]> {
 #[self_referencing]
 struct FontCacheInner<'c, P: PathSink + 'static> {
     fonts: HashMap<Name, Box<dyn Font<P> + 'c>>,
-    cmap_registry: CMapRegistry,
 
-    #[borrows(fonts, mut cmap_registry)]
+    #[borrows(fonts)]
     #[covariant]
     ops: HashMap<Name, FontOps<'this, P>>,
 }
@@ -689,12 +684,12 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         let font_counts = fonts.len();
 
         let r = Self {
-            cache: FontCacheInner::try_new(fonts, CMapRegistry::new(), |fonts, cmap_registry| {
+            cache: FontCacheInner::try_new(fonts, |fonts| {
                 let mut ops = HashMap::with_capacity(fonts.len());
                 for (k, v) in fonts {
                     ops.insert(
                         k.clone(),
-                        v.create_ops(cmap_registry)
+                        v.create_ops()
                             .with_whatever_context::<_, _, ObjectValueError>(|_| {
                                 format!("Create FontOps for: {}", k)
                             })?,

@@ -6,7 +6,7 @@ use crate::text::FontDict;
 use crate::{ObjectValueError, Result};
 use log::info;
 use prescript::Encoding;
-use prescript::cmap::{CMapRegistry, WriteMode};
+use prescript::cmap::WriteMode;
 use snafu::ResultExt as _;
 
 /// Font implementation using free-type/(font-kit), to handle Type1 fonts
@@ -33,7 +33,7 @@ impl<'a> Type1Font<'a> {
 }
 
 impl<P: PathSink> Font<P> for Type1Font<'_> {
-    fn create_op(&self, _cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
+    fn create_op(&self) -> Result<Box<dyn FontOp + '_>> {
         Ok(Box::new(Type1FontOp::new(
             &self.font_dict,
             &self.font,

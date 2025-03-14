@@ -57,12 +57,12 @@ impl<'a, 'b> Type3Font<'a, 'b> {
     pub fn get_glyph(&self, gid: u16) -> Option<&Type3Glyph> {
         // Get the cell from the glyphs array
         let cell = self.glyphs.get(gid as usize)?;
-        
+
         // If the cell is already initialized, return it directly
         if cell.get().is_some() {
             return cell.get();
         }
-        
+
         // Find the name for this glyph ID
         let name = self
             .name_to_gid
@@ -151,7 +151,7 @@ impl Type3Glyph {
 }
 
 impl<P: PathSink + 'static> Font<P> for Type3Font<'_, '_> {
-    fn create_op(&self, _cmap_registry: &mut super::CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
+    fn create_op(&self) -> Result<Box<dyn FontOp + '_>> {
         Ok(Box::new(Type3FontOp::new(
             &self.dict,
             &self.type3_dict,

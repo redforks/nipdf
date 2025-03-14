@@ -9,7 +9,7 @@ use crate::{
 use font_kit::loaders::freetype::Font as FontKitFont;
 use log::warn;
 use phf::phf_map;
-use prescript::cmap::{CMapRegistry, WriteMode};
+use prescript::cmap::WriteMode;
 use snafu::OptionExt as _;
 use snafu::ResultExt;
 use std::sync::Arc;
@@ -34,7 +34,7 @@ impl<'a, 'b> TTFFont<'a, 'b> {
 }
 
 impl<P: PathSink> Font<P> for TTFFont<'_, '_> {
-    fn create_op(&self, _cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
+    fn create_op(&self) -> Result<Box<dyn FontOp + '_>> {
         let encoding = EncodingParser(&self.font_dict).ttf()?;
         Ok(Box::new(TTFFontOp::new(
             &self.face,

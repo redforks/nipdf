@@ -35,10 +35,7 @@ use nipdf::{
 };
 use num_traits::ToPrimitive;
 use ouroboros::self_referencing;
-use prescript::{
-    AnyWhatever, Name, ParserError,
-    cmap::{CMapRegistry, WriteMode},
-};
+use prescript::{AnyWhatever, Name, ParserError, cmap::WriteMode};
 use snafu::{FromString, OptionExt, ResultExt, ensure_whatever, whatever};
 use std::{
     borrow::Cow,
@@ -699,10 +696,9 @@ struct FallbackFontOps {
 
 impl FallbackFontOps {
     pub fn create() -> Result<Self> {
-        let mut cmap_registry = CMapRegistry::new();
         Self::try_new(FallbackFont::new(), |fallback_font: &FallbackFont| {
             fallback_font
-                .create_ops(&mut cmap_registry)
+                .create_ops()
                 .whatever_context::<_, ObjectValueError>("create fallback font ops")
         })
         .whatever_context("create fallback font ops")
@@ -710,14 +706,12 @@ impl FallbackFontOps {
 }
 
 pub struct RenderCacher {
-    cmap_registry: CMapRegistry,
     fallback_font: Option<FallbackFontOps>,
 }
 
 impl RenderCacher {
     pub fn new() -> Self {
         Self {
-            cmap_registry: CMapRegistry::new(),
             fallback_font: None,
         }
     }
@@ -760,7 +754,6 @@ impl<'a, 'c> Render<'a, 'c> {
             canvas,
             stack: vec![state],
             path: Path::default(),
-            // AI
             font_cache: FontCache::new(resources).whatever_context("Create font cache")?,
             resources,
             dimension: option.dimension,

@@ -32,7 +32,7 @@ impl<'a, 'b> CIDFontType0Font<'a, 'b> {
 }
 
 impl<P: PathSink + 'static> Font<P> for CIDFontType0Font<'_, '_> {
-    fn create_op(&self, _cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
+    fn create_op(&self) -> Result<Box<dyn FontOp + '_>> {
         Ok(Box::new(CIDFontType0FontOp::new(&self.font_dict.type0()?)?))
     }
 
@@ -189,14 +189,12 @@ struct CIDFontType2FontOp<'a> {
 
 impl<'a> CIDFontType2FontOp<'a> {
     fn new(
-        cmap_registry: &mut CMapRegistry,
-        font: Type0FontDict<'_, '_>,
+        encoding: Option<Rc<CMap>>,
         is_embed: bool,
         ttf_data: &'a [u8],
         units_per_em: u16,
         cid_to_gid: Option<CIDToGIDMap>,
     ) -> Result<Self> {
-        let encoding = get_font_encoding(cmap_registry, &font)?;
         let write_mode = get_write_mode(&encoding);
         let ttf_face = TTFFace::parse(ttf_data, 0).ok();
         let cid_is_gid = is_embed && cid_to_gid.is_none();
@@ -326,11 +324,12 @@ impl<'a, 'b> CIDFontType2Font<'a, 'b> {
 }
 
 impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
-    fn create_op(&self, cmap_registry: &mut CMapRegistry) -> Result<Box<dyn FontOp + '_>> {
+    fn create_op(&self) -> Result<Box<dyn FontOp + '_>> {
         // Get the common font info upfront
         let font = self.font_dict.type0()?;
-        let encoding = get_font_encoding(cmap_registry, &font)?;
         let units_per_em = self.font.units_per_em()?;
+        let mut cmap_registry = CMapRegistry::new();
+        let encoding = get_font_encoding(&mut cmap_registry, &font)?;
         let write_mode = if !encoding
             .as_ref()
             .is_none_or(|cmap| cmap.w_mode == WriteMode::Horizontal)
@@ -379,8 +378,7 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_, '_> {
         }
 
         Ok(Box::new(CIDFontType2FontOp::new(
-            cmap_registry,
-            font,
+            encoding,
             self.font_is_embed,
             &self.data,
             units_per_em,
