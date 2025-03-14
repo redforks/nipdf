@@ -92,17 +92,17 @@ impl<'a, 'b> Type3Font<'a, 'b> {
     }
 }
 
-struct Type3FontOp<'a> {
+struct Type3FontOp {
     encoding: Encoding,
-    name_to_gid: &'a HashMap<Name, u16>,
+    name_to_gid: HashMap<Name, u16>,
     units_per_em: u16,
 }
 
-impl<'a> Type3FontOp<'a> {
+impl Type3FontOp {
     fn new(
         font_dict: &FontDict<'_, '_>,
         type3_dict: &super::Type3FontDict<'_, '_>,
-        name_to_gid: &'a HashMap<Name, u16>,
+        name_to_gid: HashMap<Name, u16>,
     ) -> Result<Self> {
         let encoding = super::EncodingParser(font_dict).type3()?;
         let matrix = type3_dict.matrix()?;
@@ -118,7 +118,7 @@ impl<'a> Type3FontOp<'a> {
     }
 }
 
-impl FontOp for Type3FontOp<'_> {
+impl FontOp for Type3FontOp {
     fn decode_chars(&self, s: &[u8]) -> Result<Vec<u32>> {
         Ok(s.iter().map(|v| *v as u32).collect())
     }
@@ -155,7 +155,7 @@ impl<P: PathSink + 'static> Font<P> for Type3Font<'_, '_> {
         Ok(Box::new(Type3FontOp::new(
             &self.dict,
             &self.type3_dict,
-            &self.name_to_gid,
+            self.name_to_gid.clone(),
         )?))
     }
 
