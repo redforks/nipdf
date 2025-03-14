@@ -112,18 +112,18 @@ impl FirstLastFontWidth {
     }
 }
 
-struct FreeTypeFontWidth<'a> {
-    font: &'a FontKitFont,
+struct FreeTypeFontWidth {
+    font: FontKitFont,
     write_mode: WriteMode,
 }
 
-impl<'a> FreeTypeFontWidth<'a> {
-    fn new(font: &'a FontKitFont, write_mode: WriteMode) -> Self {
+impl FreeTypeFontWidth {
+    fn new(font: FontKitFont, write_mode: WriteMode) -> Self {
         Self { font, write_mode }
     }
 }
 
-impl<'a> GlyphAdvance for FreeTypeFontWidth<'a> {
+impl GlyphAdvance for FreeTypeFontWidth {
     fn advance(&self, gid: u32, _ch: u32) -> Result<GlyphLength> {
         let advance = self
             .font
@@ -274,7 +274,7 @@ impl<P: PathSink> Font<P> for FallbackFont {
 
     fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance + '_>> {
         Ok(Box::new(FreeTypeFontWidth::new(
-            &self.font,
+            self.font.clone(),
             /* Type1 font no Vertical mode*/ WriteMode::Horizontal,
         )))
     }

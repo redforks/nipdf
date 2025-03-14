@@ -55,7 +55,7 @@ impl<P: PathSink> Font<P> for Type1Font<'_> {
                 FirstLastFontWidth::from(&self.font_dict)?,
             ),
             FreeTypeFontWidth::new(
-                &self.font,
+                self.font.clone(),
                 /* Type1 font no Vertical mode*/ WriteMode::Horizontal,
             ),
         )))

@@ -56,7 +56,7 @@ impl<P: PathSink> Font<P> for TTFFont<'_, '_> {
         let first_last_width =
             UnitPerEmAdjust::new(units_per_em, FirstLastFontWidth::from(&self.font_dict)?);
         let free_type_width = FreeTypeFontWidth::new(
-            &self.face,
+            self.face.clone(),
             /* TrueType font no Vertical mode*/ WriteMode::Horizontal,
         );
 
