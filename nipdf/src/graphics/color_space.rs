@@ -7,6 +7,7 @@ use crate::{
     object::{FromSchemaContainer, Object, ObjectWithResolver},
 };
 use ahash::HashMap;
+use bytemuck::cast_slice;
 use educe::Educe;
 use nipdf_macro::pdf_object;
 use num_traits::ToPrimitive;
@@ -129,17 +130,13 @@ where
         return *cached_result;
     }
 
-    unsafe {
-        let color_f32: &[f32] = std::mem::transmute(color);
+    let color_f32: &[f32] = cast_slice(color);
+    // Compute the result using the existing function
+    let result = color_to_rgba(cs, &color_f32);
+    // Cache the result
+    cache.insert(color.into_iter().copied().collect(), result);
 
-        // Compute the result using the existing function
-        let result = color_to_rgba(cs, &color_f32);
-
-        // Cache the result
-        cache.insert(color.into_iter().copied().collect(), result);
-
-        result
-    }
+    result
 }
 
 /// Convert color to rgba color space, convert result to f32 or u8 by T generic type.

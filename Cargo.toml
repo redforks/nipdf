@@ -85,6 +85,7 @@ snafu = { version = "0.8.5" }
 colog = "1.3.0"
 
 [workspace.lints.rust]
+unsafe_code = "deny"
 elided-lifetimes-in-paths = "warn"
 explicit_outlives_requirements = "warn"
 meta_variable_misuse = "warn"
