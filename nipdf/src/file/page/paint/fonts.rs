@@ -2,7 +2,10 @@ use crate::{
     ObjectValueError, Result,
     file::ObjectResolver,
     graphics::{Operation, Point, parse_operations, trans::GlyphLength},
-    object::{Dictionary, Object, PdfObject, PdfObjectCore as _, RuntimeObjectId, Stream},
+    object::{
+        Dictionary, Object, PdfObject, PdfObjectCore as _, RootPdfObject as _, RuntimeObjectId,
+        Stream,
+    },
     text::{CIDFontType, FontDescriptorDict, FontDescriptorFlags, FontDict, FontType},
 };
 use ahash::{HashMap, HashMapExt as _};
@@ -443,8 +446,7 @@ impl<P: PathSink + 'static> CachedFonts<P> {
 }
 
 pub struct FontCache<P: PathSink + 'static> {
-    fonts: HashMap<Name, Box<dyn Font<P>>>,
-    ops: HashMap<Name, FontOps<P>>,
+    fonts: HashMap<Name, RuntimeObjectId>,
 }
 
 impl<P: PathSink + 'static> FontCache<P> {
@@ -605,16 +607,18 @@ impl<P: PathSink + 'static> FontCache<P> {
         Type1Font::new(is_cff, bytes, font)
     }
 
-    fn scan_font(font: FontDict<'_, '_>) -> Result<Option<Box<dyn Font<P>>>> {
+    fn scan_font(
+        font: FontDict<'_, '_>,
+        cached_fonts: &CachedFonts<P>,
+    ) -> Result<Option<RuntimeObjectId>> {
+        let font_id = font.id();
         match font.subtype()? {
             FontType::TrueType => {
                 let tt = font.truetype()?;
                 let desc = tt.font_descriptor()?;
-                Ok(Some(Self::load_ttf_parser_font(
-                    FontType::TrueType,
-                    font,
-                    desc.as_ref(),
-                )?))
+                let font_obj = Self::load_ttf_parser_font(FontType::TrueType, font, desc.as_ref())?;
+                cached_fonts.add(font_id, font_obj)?;
+                Ok(Some(font_id))
             }
 
             FontType::Type0 => {
@@ -643,41 +647,56 @@ impl<P: PathSink + 'static> FontCache<P> {
                             .whatever_context::<_, ObjectValueError>(
                                 "get CIDFontType0 font stream",
                             )??;
-                        Ok(Some(Box::new(type0::CIDFontType0Font::new(
+                        let font_obj = Box::new(type0::CIDFontType0Font::new(
                             font,
                             Self::load_embed_font_bytes(descentdant_font.resolver(), stream)?,
-                        )?)))
+                        )?);
+                        cached_fonts.add(font_id, font_obj)?;
+                        Ok(Some(font_id))
                     }
                     CIDFontType::CIDFontType2 => {
                         let desc = descentdant_font
                             .font_descriptor()?
                             .whatever_context::<_, ObjectValueError>("get CIDFontType2 desc")?;
 
-                        Ok(Some(Self::load_ttf_parser_font(
-                            FontType::Type0,
-                            font,
-                            Some(&desc),
-                        )?))
+                        let font_obj =
+                            Self::load_ttf_parser_font(FontType::Type0, font, Some(&desc))?;
+                        cached_fonts.add(font_id, font_obj)?;
+                        Ok(Some(font_id))
                     }
                 }
             }
 
-            FontType::Type1 => Self::load_type1_font(font.clone())
-                .map(|v| -> Option<Box<dyn Font<P>>> { Some(Box::new(v)) })
-                .or_else(|err| {
-                    info!(
-                        "Failed to load type1 font \"{:?}\", try load as truetype",
-                        err
-                    );
-                    let desc = font.font_descriptor()?;
-                    Ok(Some(Self::load_ttf_parser_font(
-                        FontType::Type1,
-                        font,
-                        desc.as_ref(),
-                    )?))
-                }),
+            FontType::Type1 => {
+                let font_obj = Self::load_type1_font(font.clone())
+                    .map(|v| -> Box<dyn Font<P>> { Box::new(v) })
+                    .or_else(|err| {
+                        info!(
+                            "Failed to load type1 font \"{:?}\", try load as truetype",
+                            err
+                        );
+                        let desc = font.font_descriptor()?;
+                        Ok(Self::load_ttf_parser_font(
+                            FontType::Type1,
+                            font,
+                            desc.as_ref(),
+                        )?)
+                    });
 
-            FontType::Type3 => Ok(Some(Box::new(type3::Type3Font::new(font)?))),
+                match font_obj {
+                    Ok(font_obj) => {
+                        cached_fonts.add(font_id, font_obj)?;
+                        Ok(Some(font_id))
+                    }
+                    Err(e) => Err(e),
+                }
+            }
+
+            FontType::Type3 => {
+                let font_obj = Box::new(type3::Type3Font::new(font)?);
+                cached_fonts.add(font_id, font_obj)?;
+                Ok(Some(font_id))
+            }
             _ => {
                 #[cfg(debug_assertions)]
                 todo!("Unsupported font type: {:?}", font.subtype()?);
@@ -687,11 +706,14 @@ impl<P: PathSink + 'static> FontCache<P> {
         }
     }
 
-    pub fn new(font_res: HashMap<Name, FontDict<'_, '_>>) -> Result<Self> {
+    pub fn new(
+        font_res: HashMap<Name, FontDict<'_, '_>>,
+        cached_fonts: &CachedFonts<P>,
+    ) -> Result<Self> {
         let mut fonts = HashMap::with_capacity(font_res.len());
         for (k, v) in font_res {
-            let font = match Self::scan_font(v) {
-                Ok(Some(font)) => font,
+            let font_id = match Self::scan_font(v, cached_fonts) {
+                Ok(Some(font_id)) => font_id,
                 Ok(None) => {
                     warn!("Font {} is not supported, use fallback font", k);
                     continue;
@@ -701,24 +723,11 @@ impl<P: PathSink + 'static> FontCache<P> {
                     continue;
                 }
             };
-            fonts.insert(k, font);
+            fonts.insert(k, font_id);
         }
         let font_counts = fonts.len();
 
-        let ops = {
-            let mut ops = HashMap::with_capacity(fonts.len());
-            for (k, v) in &fonts {
-                ops.insert(
-                    k.clone(),
-                    v.create_ops()
-                        .with_whatever_context::<_, _, ObjectValueError>(|_| {
-                            format!("Create FontOps for: {}", k)
-                        })?,
-                );
-            }
-            ops
-        };
-        let r = Self { fonts, ops };
+        let r = Self { fonts };
         info!("Load {} fonts", font_counts);
         Ok(r)
     }
@@ -727,8 +736,12 @@ impl<P: PathSink + 'static> FontCache<P> {
         self.fonts.keys().next()
     }
 
-    pub fn get_font(&self, s: &Name) -> Option<&FontOps<P>> {
-        self.ops.get(s)
+    pub fn get_font<'a>(
+        &self,
+        s: &Name,
+        cached_fonts: &'a CachedFonts<P>,
+    ) -> Option<&'a FontOps<P>> {
+        self.fonts.get(s).and_then(|id| cached_fonts.get(id))
     }
 }
 
