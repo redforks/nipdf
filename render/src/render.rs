@@ -11,7 +11,9 @@ use log::{debug, error, info, warn};
 use nipdf::{
     file::{
         GraphicsStateParameterDict, PageContent, Rectangle, ResourceDict, XObjectDict, XObjectType,
-        paint::fonts::{FallbackFont, Font, FontCache, FontOps, GlyphRender, PathSink},
+        paint::fonts::{
+            CachedFonts, FallbackFont, Font, FontCache, FontOps, GlyphRender, PathSink,
+        },
     },
     function::Domain,
     graphics::{
@@ -679,13 +681,14 @@ pub struct Render<'a, 'c> {
     stack: Vec<State>,
     path: Path,
     #[educe(Debug(ignore))]
-    font_cache: FontCache<SkiaPathSink>,
+    font_cache: FontCache,
     resources: &'c ResourceDict<'a, 'a>,
     dimension: PageDimension,
 }
 
 pub struct RenderCacher {
     fallback_font: LazyCell<FontOps<SkiaPathSink>>,
+    cached_fonts: CachedFonts<SkiaPathSink>,
 }
 
 impl RenderCacher {
@@ -695,6 +698,7 @@ impl RenderCacher {
                 let fallback_font = FallbackFont::new();
                 fallback_font.create_ops().unwrap()
             }),
+            cached_fonts: CachedFonts::new(),
         }
     }
 
@@ -733,7 +737,7 @@ impl<'a, 'c> Render<'a, 'c> {
             canvas,
             stack: vec![state],
             path: Path::default(),
-            font_cache: FontCache::new(resources.font().unwrap())
+            font_cache: FontCache::new(resources.font().unwrap(), &render_cacher.cached_fonts)
                 .whatever_context("Create font cache")?,
             resources,
             dimension: option.dimension,
@@ -1946,7 +1950,10 @@ impl<'a, 'c> Render<'a, 'c> {
             })
             .whatever_context("get current font name")?;
 
-        let font_ops = match self.font_cache.get_font(font_name) {
+        let font_ops = match self
+            .font_cache
+            .get_font(font_name, &render_cacher.cached_fonts)
+        {
             Some(font_ops) => font_ops,
             None => render_cacher.fallback_font(),
         };

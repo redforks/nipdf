@@ -433,8 +433,14 @@ pub struct CachedFonts<P: PathSink + 'static>(AppendOnlyVec<(RuntimeObjectId, Ow
 
 impl<P: PathSink + 'static> CachedFonts<P> {
     pub fn add(&self, id: impl Into<RuntimeObjectId>, font: Box<dyn Font<P>>) -> Result<()> {
-        self.0.push((id.into(), OwnedFontOps::new(font)?));
+        let id = id.into();
+        info!("add font {:?} into cache", id);
+        self.0.push((id, OwnedFontOps::new(font)?));
         Ok(())
+    }
+
+    pub fn has_id(&self, id: &RuntimeObjectId) -> bool {
+        self.0.iter().any(|(oid, _)| oid == id)
     }
 
     pub fn get(&self, id: &RuntimeObjectId) -> Option<&FontOps<P>> {
@@ -445,11 +451,11 @@ impl<P: PathSink + 'static> CachedFonts<P> {
     }
 }
 
-pub struct FontCache<P: PathSink + 'static> {
+pub struct FontCache {
     fonts: HashMap<Name, RuntimeObjectId>,
 }
 
-impl<P: PathSink + 'static> FontCache<P> {
+impl FontCache {
     fn load_true_type_from_os(desc: &FontDescriptorDict<'_, '_>) -> Result<Vec<u8>> {
         let font_name = desc.font_name()?;
         let font_name = normalize_true_type_font_name(&font_name);
@@ -518,7 +524,7 @@ impl<P: PathSink + 'static> FontCache<P> {
             .into_owned())
     }
 
-    fn load_ttf_parser_font(
+    fn load_ttf_parser_font<P: PathSink + 'static>(
         font_type: FontType,
         font: FontDict<'_, '_>,
         desc: Option<&FontDescriptorDict<'_, '_>>,
@@ -607,11 +613,15 @@ impl<P: PathSink + 'static> FontCache<P> {
         Type1Font::new(is_cff, bytes, font)
     }
 
-    fn scan_font(
+    fn scan_font<P: PathSink + 'static>(
         font: FontDict<'_, '_>,
         cached_fonts: &CachedFonts<P>,
     ) -> Result<Option<RuntimeObjectId>> {
         let font_id = font.id();
+        if cached_fonts.has_id(&font_id) {
+            return Ok(Some(font_id));
+        }
+
         match font.subtype()? {
             FontType::TrueType => {
                 let tt = font.truetype()?;
@@ -706,7 +716,7 @@ impl<P: PathSink + 'static> FontCache<P> {
         }
     }
 
-    pub fn new(
+    pub fn new<P: PathSink + 'static>(
         font_res: HashMap<Name, FontDict<'_, '_>>,
         cached_fonts: &CachedFonts<P>,
     ) -> Result<Self> {
@@ -725,18 +735,15 @@ impl<P: PathSink + 'static> FontCache<P> {
             };
             fonts.insert(k, font_id);
         }
-        let font_counts = fonts.len();
 
-        let r = Self { fonts };
-        info!("Load {} fonts", font_counts);
-        Ok(r)
+        Ok(Self { fonts })
     }
 
     pub fn first_font(&self) -> Option<&Name> {
         self.fonts.keys().next()
     }
 
-    pub fn get_font<'a>(
+    pub fn get_font<'a, P: PathSink + 'static>(
         &self,
         s: &Name,
         cached_fonts: &'a CachedFonts<P>,
