@@ -679,7 +679,7 @@ pub struct Render<'a, 'c> {
     stack: Vec<State>,
     path: Path,
     #[educe(Debug(ignore))]
-    font_cache: FontCache<'a, SkiaPathSink>,
+    font_cache: FontCache<SkiaPathSink>,
     resources: &'c ResourceDict<'a, 'a>,
     dimension: PageDimension,
 }

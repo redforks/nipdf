@@ -442,13 +442,12 @@ impl<P: PathSink + 'static> CachedFonts<P> {
     }
 }
 
-pub struct FontCache<'a, P: PathSink + 'static> {
-    fonts: HashMap<Name, Box<dyn Font<P> + 'a>>,
-
+pub struct FontCache<P: PathSink + 'static> {
+    fonts: HashMap<Name, Box<dyn Font<P>>>,
     ops: HashMap<Name, FontOps<P>>,
 }
 
-impl<'c, P: PathSink + 'static> FontCache<'c, P> {
+impl<P: PathSink + 'static> FontCache<P> {
     fn load_true_type_from_os(desc: &FontDescriptorDict<'_, '_>) -> Result<Vec<u8>> {
         let font_name = desc.font_name()?;
         let font_name = normalize_true_type_font_name(&font_name);
@@ -517,11 +516,11 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
             .into_owned())
     }
 
-    fn load_ttf_parser_font<'a, 'b>(
+    fn load_ttf_parser_font(
         font_type: FontType,
-        font: FontDict<'a, 'b>,
-        desc: Option<&FontDescriptorDict<'a, 'b>>,
-    ) -> Result<Box<dyn Font<P> + 'b>> {
+        font: FontDict<'_, '_>,
+        desc: Option<&FontDescriptorDict<'_, '_>>,
+    ) -> Result<Box<dyn Font<P>>> {
         let (is_embed, ttf_bytes) = match desc {
             Some(desc) => {
                 match desc.font_file2()? {
@@ -573,10 +572,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
     /// by TrueType fonts scanned from current OS. Because Type1 fonts are not
     /// supported by swash, and the only crate support Type1 fonts is `font`, which
     /// I am not familiar with.
-    fn load_type1_font<'a>(font: FontDict<'a, 'a>) -> Result<Type1Font>
-    where
-        'a: 'c,
-    {
+    fn load_type1_font(font: FontDict<'_, '_>) -> Result<Type1Font> {
         let f = font.type1()?;
         let font_name = font.font_name()?;
         let desc = f.font_descriptor()?;
@@ -609,10 +605,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         Type1Font::new(is_cff, bytes, font)
     }
 
-    fn scan_font<'a>(font: FontDict<'a, 'a>) -> Result<Option<Box<dyn Font<P> + 'c>>>
-    where
-        'a: 'c,
-    {
+    fn scan_font(font: FontDict<'_, '_>) -> Result<Option<Box<dyn Font<P>>>> {
         match font.subtype()? {
             FontType::TrueType => {
                 let tt = font.truetype()?;
@@ -670,7 +663,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
             }
 
             FontType::Type1 => Self::load_type1_font(font.clone())
-                .map(|v| -> Option<Box<dyn Font<P> + 'c>> { Some(Box::new(v)) })
+                .map(|v| -> Option<Box<dyn Font<P>>> { Some(Box::new(v)) })
                 .or_else(|err| {
                     info!(
                         "Failed to load type1 font \"{:?}\", try load as truetype",
@@ -694,10 +687,7 @@ impl<'c, P: PathSink + 'static> FontCache<'c, P> {
         }
     }
 
-    pub fn new<'a>(font_res: HashMap<Name, FontDict<'a, 'a>>) -> Result<Self>
-    where
-        'a: 'c,
-    {
+    pub fn new(font_res: HashMap<Name, FontDict<'_, '_>>) -> Result<Self> {
         let mut fonts = HashMap::with_capacity(font_res.len());
         for (k, v) in font_res {
             let font = match Self::scan_font(v) {
