@@ -167,29 +167,43 @@ impl InlineImage {
         InlineStreamDict(&self.0)
     }
 
+    fn decode_image_data(
+        &self,
+        resolver: &ObjectResolver<'_>,
+        resources: &ResourceDict<'_, '_>,
+    ) -> Result<Rc<RgbaImage>> {
+        let decoded_data = decode_inline_stream(&self.0, &self.1, Some(resolver))
+            .whatever_context::<_, ObjectValueError>("decode inline image stream")?;
+
+        decode_image(
+            decoded_data,
+            &InlineStreamDict(&self.0),
+            resolver,
+            Some(resources),
+        )
+        .map(|img| Rc::new(img.into_rgba8()))
+    }
+
     pub fn image<'a>(
         &self,
         cache: &'a CachedInlineImage,
         resolver: &ObjectResolver<'_>,
         resources: &ResourceDict<'_, '_>,
-    ) -> Result<&'a RgbaImage> {
-        // Generate cache key
+    ) -> Result<Rc<RgbaImage>> {
+        let meta = self.meta();
+        let width = meta.width()?;
+        let height = meta.height()?;
+
+        // Skip caching for large images (width * height > 1024)
+        if width * height > 1024 {
+            return self.decode_image_data(resolver, resources);
+        }
+
         let key = self.get_key()?;
-
         // Try to get from cache first, if not found decode and insert
-        cache.0.try_insert(key, |_| {
-            let decoded_data =
-                decode_inline_stream(&self.0, &self.1, Some(resolver))
-                    .whatever_context::<_, ObjectValueError>("decode inline image stream")?;
-
-            decode_image(
-                decoded_data,
-                &InlineStreamDict(&self.0),
-                resolver,
-                Some(resources),
-            )
-            .map(|img| Rc::new(img.into_rgba8()))
-        })
+        cache
+            .0
+            .try_insert_cloned(key, |_| self.decode_image_data(resolver, resources))
     }
 
     /// Generate a cache key for deduplicating identical images
