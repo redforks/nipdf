@@ -13,7 +13,7 @@ use font_kit::loaders::freetype::Font as FontKitFont;
 use log::warn;
 use owned_ttf_parser::OwnedFace as OwnedTTFFace;
 use prescript::cmap::{CMap, CMapRegistry, WriteMode};
-use prescript::{Encoding, name, sname};
+use prescript::{Encoding, Name, name, sname};
 use snafu::{OptionExt as _, ResultExt as _, ensure_whatever, whatever};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -24,7 +24,7 @@ pub(super) struct CIDFontType0Font {
     font_op: CIDFontType0FontOp,
     width:
         ChainGlyphAdvance<UnitPerEmAdjust<Option<CIDFontWidths>>, UnitPerEmAdjust<LengthAdavnce>>,
-}
+        }
 
 impl CIDFontType0Font {
     pub fn new(font_dict: FontDict<'_, '_>, data: Vec<u8>) -> Result<Self> {
@@ -50,7 +50,6 @@ impl CIDFontType0Font {
         };
 
         let units_per_em = font.units_per_em()?;
-        // cache ChainGlyphAdvance in current struct, AI!
         let width = ChainGlyphAdvance(
             UnitPerEmAdjust::new(units_per_em, widths),
             UnitPerEmAdjust::new(units_per_em, LengthAdavnce(default_width)),
@@ -174,6 +173,7 @@ fn get_font_encoding(
 }
 
 /// CID -> GID, GID is u16. stored in [u8], each u16 is big endian
+#[derive(Clone)]
 struct CIDToGIDMap(Box<[u8]>);
 
 impl CIDToGIDMap {
@@ -295,38 +295,94 @@ impl FontOp for CIDFontType2FontOp {
     }
 }
 
-pub(super) struct CIDFontType2Font<'a> {
+pub(super) struct CIDFontType2Font {
     data: Arc<Vec<u8>>,
     font: FontKitFont,
-    font_dict: FontDict<'a, 'a>,
     font_is_embed: bool,
+    units_per_em: u16,
+    encoding: Option<Rc<CMap>>,
+    cid_to_gid: Option<CIDToGIDMap>,
+    // use unitcode_font_op if encoding_name is Some
+    encoding_name: Option<Name>,
+    width:
+        ChainGlyphAdvance<UnitPerEmAdjust<Option<CIDFontWidths>>, UnitPerEmAdjust<LengthAdavnce>>,
 }
 
-impl<'a> CIDFontType2Font<'a> {
+impl CIDFontType2Font {
     pub fn new(
         font_is_embed: bool,
         data: Arc<Vec<u8>>,
-        font_dict: FontDict<'a, 'a>,
+        font_dict: FontDict<'_, '_>,
     ) -> Result<Self> {
         let font = FontKitFont::from_bytes(data.clone(), 0)
             .whatever_context::<_, ObjectValueError>("decode FontKitFont for Type2")?;
+        let units_per_em = font.units_per_em()?;
+
+        let cid_to_gid = match font_dict.type0()?.descendant_fonts()?[0].cid_to_gid_map()? {
+            NameOrStream::Name(_) => None,
+            NameOrStream::Stream(s) => Some(CIDToGIDMap::new(
+                s.decode(font_dict.resolver())
+                    .whatever_context::<_, ObjectValueError>("decode stream")?
+                    .into_owned(),
+            )?),
+        };
+
+        let encoding_name = if cid_to_gid.is_none() && !font_is_embed {
+            if let Some(NameOrDictByRef::Name(ref name)) = font_dict.encoding()? {
+                if *name != &sname("Identity-H")
+                    && *name != &sname("Identity-V")
+                    && Encoding::predefined(name).is_none()
+                {
+                    Some((*name).clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Calculate width metrics
+        let type0_dict = font_dict.type0()?;
+        let cid_fonts = type0_dict.descendant_fonts()?;
+        let cid_font = &cid_fonts[0];
+
+        let encoding = get_font_encoding(&mut CMapRegistry::new(), &type0_dict)?;
+        let write_mode = get_write_mode(&encoding);
+
+        let (widths, default_width) = if write_mode == WriteMode::Vertical {
+            let widths = cid_font.w2()?;
+            let default_width = cid_font.dw2()?.1;
+            (widths, default_width)
+        } else {
+            (cid_font.w()?, cid_font.dw()?)
+        };
+
+        let width = ChainGlyphAdvance(
+            UnitPerEmAdjust::new(units_per_em, widths),
+            UnitPerEmAdjust::new(units_per_em, LengthAdavnce(default_width)),
+        );
+
         Ok(Self {
             data,
             font,
-            font_dict,
             font_is_embed,
+            units_per_em,
+            encoding,
+            cid_to_gid,
+            encoding_name,
+            width,
         })
     }
 }
 
-impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_> {
+impl<P: PathSink + 'static> Font<P> for CIDFontType2Font {
     fn create_op(&self) -> Result<Box<dyn FontOp>> {
         // Get the common font info upfront
-        let font = self.font_dict.type0()?;
-        let units_per_em = self.font.units_per_em()?;
-        let mut cmap_registry = CMapRegistry::new();
-        let encoding = get_font_encoding(&mut cmap_registry, &font)?;
-        let write_mode = if !encoding
+        let write_mode = if !self
+            .encoding
             .as_ref()
             .is_none_or(|cmap| cmap.w_mode == WriteMode::Horizontal)
         {
@@ -335,50 +391,31 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_> {
             WriteMode::Horizontal
         };
 
-        // Resolve CIDToGIDMap before creating the FontOp
-        let cid_to_gid = match font.descendant_fonts()?[0].cid_to_gid_map()? {
-            NameOrStream::Name(_) => None,
-            NameOrStream::Stream(s) => Some(CIDToGIDMap::new(
-                s.decode(font.resolver())
-                    .whatever_context::<_, ObjectValueError>("decode stream")?
-                    .into_owned(),
-            )?),
-        };
-
         // Check encoding and create appropriate FontOp
-        if cid_to_gid.is_none() && !self.font_is_embed {
-            if let Some(NameOrDictByRef::Name(ref name)) = self.font_dict.encoding()? {
-                if *name != &sname("Identity-H")
-                    && *name != &sname("Identity-V")
-                    && Encoding::predefined(name).is_none()
-                {
-                    let encoding = match name.as_ref() {
-                        "GBK-EUC-H" => encoding_rs::GBK,
-                        "EUC-H" => encoding_rs::EUC_JP,
-                        "UniJIS-UCS2-HW-H" | "UniGB-UTF16-H" | "UniCNS-UTF16-H" => {
-                            encoding_rs::UTF_16BE
-                        }
-                        "ETenms-B5-V" | "ETenms-B5-H" | "ETen-B5-H" | "B5pc-H" => encoding_rs::BIG5,
-                        "90pv-RKSJ-H" | "90ms-RKSJ-H" => encoding_rs::SHIFT_JIS,
-                        _ => whatever!("unsupported encoding: '{}'", name),
-                    };
+        if let Some(name) = &self.encoding_name {
+            let encoding = match name.as_str() {
+                "GBK-EUC-H" => encoding_rs::GBK,
+                "EUC-H" => encoding_rs::EUC_JP,
+                "UniJIS-UCS2-HW-H" | "UniGB-UTF16-H" | "UniCNS-UTF16-H" => encoding_rs::UTF_16BE,
+                "ETenms-B5-V" | "ETenms-B5-H" | "ETen-B5-H" | "B5pc-H" => encoding_rs::BIG5,
+                "90pv-RKSJ-H" | "90ms-RKSJ-H" => encoding_rs::SHIFT_JIS,
+                _ => whatever!("unsupported encoding: '{}'", name),
+            };
 
-                    return Ok(Box::new(CIDFontType2UnicodeFontOp::new(
-                        self.font.clone(),
-                        units_per_em,
-                        encoding,
-                        write_mode,
-                    )));
-                }
-            }
+            return Ok(Box::new(CIDFontType2UnicodeFontOp::new(
+                self.font.clone(),
+                self.units_per_em,
+                encoding,
+                write_mode,
+            )));
         }
 
         Ok(Box::new(CIDFontType2FontOp::new(
-            encoding,
+            self.encoding.clone(),
             self.font_is_embed,
-            (self.data.as_slice()).to_owned(),
-            units_per_em,
-            cid_to_gid,
+            self.data.as_slice().to_owned(),
+            self.units_per_em,
+            self.cid_to_gid.clone(),
         )?))
     }
 
@@ -390,28 +427,7 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font<'_> {
     }
 
     fn create_glyph_width(&self) -> Result<Box<dyn GlyphAdvance>> {
-        let font_dict = self.font_dict.type0()?;
-        let cid_fonts = font_dict.descendant_fonts()?;
-        let cid_font = &cid_fonts[0];
-
-        // Check if we need to use vertical metrics
-        let encoding = get_font_encoding(&mut CMapRegistry::new(), &font_dict)?;
-        let write_mode = get_write_mode(&encoding);
-
-        // Use w2 for vertical writing mode, w for horizontal
-        let (widths, default_width) = if write_mode == WriteMode::Vertical {
-            let widths = cid_font.w2()?;
-            let default_width = cid_font.dw2()?.1;
-            (widths, default_width)
-        } else {
-            (cid_font.w()?, cid_font.dw()?)
-        };
-
-        let units_per_em = self.font.units_per_em()?;
-        Ok(Box::new(ChainGlyphAdvance(
-            UnitPerEmAdjust::new(units_per_em, widths),
-            UnitPerEmAdjust::new(units_per_em, LengthAdavnce(default_width)),
-        )))
+        Ok(Box::new(self.width.clone()))
     }
 }
 
