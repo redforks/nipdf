@@ -30,8 +30,8 @@ use nipdf::{
         },
     },
     object::{
-        ImageMask, ImageMetadata, InlineImage, Object, PdfObjectCore as _, RootPdfObject as _,
-        TextStringOrNumber,
+        CachedInlineImage, ImageMask, ImageMetadata, InlineImage, Object, PdfObjectCore as _,
+        RootPdfObject as _, TextStringOrNumber,
     },
 };
 use num_traits::ToPrimitive;
@@ -689,6 +689,7 @@ pub struct Render<'a, 'c> {
 pub struct RenderCacher {
     fallback_font: LazyCell<FontOps<SkiaPathSink>>,
     cached_fonts: CachedFonts<SkiaPathSink>,
+    inline_image_cache: CachedInlineImage,
 }
 
 impl RenderCacher {
@@ -699,6 +700,7 @@ impl RenderCacher {
                 fallback_font.create_ops().unwrap()
             }),
             cached_fonts: CachedFonts::new(),
+            inline_image_cache: CachedInlineImage::new(),
         }
     }
 
@@ -1014,7 +1016,7 @@ impl<'a, 'c> Render<'a, 'c> {
             Operation::SetGlyphWidth(_) | Operation::SetGlyphWidthAndBoundingBox(_, _, _) => {}
 
             Operation::PaintInlineImage(inline_image) => {
-                self.paint_inline_image(&inline_image)?;
+                self.paint_inline_image(render_cacher, &inline_image)?;
             }
 
             _ => whatever!("unimplemented operation: {:?}", op),
@@ -1160,13 +1162,20 @@ impl<'a, 'c> Render<'a, 'c> {
         Ok(Mask::from_pixmap(canvas.as_ref(), MaskType::Alpha))
     }
 
-    fn paint_inline_image(&mut self, inline_image: &InlineImage) -> Result<()> {
+    fn paint_inline_image(
+        &mut self,
+        render_cacher: &RenderCacher,
+        inline_image: &InlineImage,
+    ) -> Result<()> {
         let state = Self::top(&self.stack)?;
         let meta = inline_image.meta();
         let img = inline_image
-            .image(self.resources.resolver(), self.resources)
-            .whatever_context("decode image")?
-            .into_rgba8();
+            .image(
+                &render_cacher.inline_image_cache,
+                self.resources.resolver(),
+                self.resources,
+            )
+            .whatever_context("decode image")?;
 
         if meta.image_mask().whatever_context("get image mask")? {
             let domain = meta

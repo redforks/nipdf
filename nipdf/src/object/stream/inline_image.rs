@@ -8,9 +8,13 @@ use crate::{
     graphics::ConvertFromObject,
     object::{Dictionary, Object, ObjectValueError},
 };
-use image::DynamicImage;
+use educe::Educe;
+use image::RgbaImage;
+use md5::{Digest, Md5};
+use once_map::OnceMap;
 use prescript::{Name, sname};
 use snafu::{OptionExt, ResultExt};
+use std::{hash::Hash, rc::Rc};
 
 struct InlineStreamDict<'a>(&'a Dictionary);
 
@@ -134,6 +138,27 @@ impl<'a> InlineStream<'a> {
 }
 
 /// Contains image data and metadata of inlined image.
+/// Cache key for inline images to avoid duplicate decoding
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct InlineImageCacheKey {
+    // Image dimensions
+    width: u32,
+    height: u32,
+    // Optional metadata
+    bits_per_component: Option<u8>,
+    color_space: String, // Debug string representation
+    mask: String,        // Debug string representation
+    decode: String,      // Debug string representation
+    image_mask: bool,
+    // Hash of binary image data
+    data_hash: [u8; 16],
+}
+
+/// Contains image data and metadata of inlined image.
+#[derive(Educe)]
+#[educe(Default(new))]
+pub struct CachedInlineImage(OnceMap<InlineImageCacheKey, Rc<RgbaImage>>);
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct InlineImage(Dictionary, Vec<u8>);
 
@@ -142,20 +167,50 @@ impl InlineImage {
         InlineStreamDict(&self.0)
     }
 
-    pub fn image(
+    pub fn image<'a>(
         &self,
+        cache: &'a CachedInlineImage,
         resolver: &ObjectResolver<'_>,
         resources: &ResourceDict<'_, '_>,
-    ) -> Result<DynamicImage> {
-        let decoded_data = decode_inline_stream(&self.0, &self.1, Some(resolver))
-            .whatever_context::<_, ObjectValueError>("decode inline image stream")?;
-        decode_image(
-            decoded_data,
-            &InlineStreamDict(&self.0),
-            resolver,
-            Some(resources),
-        )
-        .whatever_context("decode inline image")
+    ) -> Result<&'a RgbaImage> {
+        // Generate cache key
+        let key = self.get_key()?;
+
+        // Try to get from cache first, if not found decode and insert
+        cache.0.try_insert(key, |_| {
+            let decoded_data =
+                decode_inline_stream(&self.0, &self.1, Some(resolver))
+                    .whatever_context::<_, ObjectValueError>("decode inline image stream")?;
+
+            decode_image(
+                decoded_data,
+                &InlineStreamDict(&self.0),
+                resolver,
+                Some(resources),
+            )
+            .map(|img| Rc::new(img.into_rgba8()))
+        })
+    }
+
+    /// Generate a cache key for deduplicating identical images
+    pub fn get_key(&self) -> Result<InlineImageCacheKey> {
+        let meta = self.meta();
+
+        // Calculate MD5 hash of image data
+        let mut hasher = Md5::new();
+        hasher.update(&self.1);
+        let data_hash = hasher.finalize().into();
+
+        Ok(InlineImageCacheKey {
+            width: meta.width()?,
+            height: meta.height()?,
+            bits_per_component: meta.bits_per_component()?,
+            color_space: format!("{:?}", meta.color_space()?),
+            mask: format!("{:?}", meta.mask()?),
+            decode: format!("{:?}", meta.decode()?),
+            image_mask: meta.image_mask()?,
+            data_hash,
+        })
     }
 }
 

@@ -54,6 +54,7 @@ ordered-float = { version = "5.0.0", features = [ "bytemuck" ] }
 bytemuck = "1.22.0"
 append-only-vec = "0.1.7"
 owned_ttf_parser = "0.25.0"
+once_map = "0.4.21"
 
 [dev-dependencies]
 env_logger.workspace = true

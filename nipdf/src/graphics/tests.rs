@@ -2,7 +2,7 @@ use super::*;
 use crate::{
     Result,
     file::{ObjectResolver, ResourceDict, XRefTable, open_test_file},
-    object::{LiteralString, try_from},
+    object::{CachedInlineImage, LiteralString, try_from},
 };
 use prescript::sname;
 use snafu::{ResultExt, report};
@@ -121,12 +121,13 @@ fn parse_inline_image_with_ascii85_filter() -> Result<()> {
     let d = Dictionary::default();
     let res_dict = ResourceDict::new(&d, &resolver)
         .whatever_context::<_, ObjectValueError>("parse ResourceDict")?;
-    let img = img.image(&resolver, &res_dict)?;
+    let cache = CachedInlineImage::new();
+    let img = img.image(&cache, &resolver, &res_dict)?;
     assert_eq!(4772, img.width());
     assert_eq!(110, img.height());
     // should be 4772 * 110 * 3, because it is RGB image
     // * 4, maybe because of sample data extract from wrong pdf
-    assert_eq!(4772 * 110 * 4, img.as_bytes().len());
+    assert_eq!(4772 * 110 * 4, img.len());
     Ok(())
 }
 

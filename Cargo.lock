@@ -2920,6 +2920,7 @@ dependencies = [
  "nipdf-macro",
  "num-traits",
  "once_cell",
+ "once_map",
  "ordered-float",
  "owned_ttf_parser",
  "paste",
@@ -3329,6 +3330,18 @@ name = "once_cell"
 version = "1.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "945462a4b81e43c4e3ba96bd7b49d834c6f61198356aa858733bc4acf3cbe62e"
+
+[[package]]
+name = "once_map"
+version = "0.4.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7bd2cae3bec3936bbed1ccc5a3343b3738858182419f9c0522c7260c80c430b0"
+dependencies = [
+ "ahash 0.8.11",
+ "hashbrown 0.15.2",
+ "parking_lot 0.12.3",
+ "stable_deref_trait",
+]
 
 [[package]]
 name = "oorandom"
