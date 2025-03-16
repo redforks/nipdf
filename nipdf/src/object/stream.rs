@@ -777,6 +777,7 @@ fn tiff_predictor_1bit(data: &[u8], columns: usize) -> Vec<u8> {
         // Read remaining pixels using TIFF predictor
         for _ in 1..columns {
             let bit = reader.read_bit().unwrap_or(false);
+            #[allow(clippy::unwrap_used)] // always safe because a byte pushed before loop
             let prev = *row.last().unwrap();
             row.push(prev ^ (bit as u8));
         }
@@ -818,7 +819,7 @@ fn tiff_predictor_16bit(buf: &[u8], columns: usize, colors: usize) -> Vec<u8> {
                 let new_val = curr_val.wrapping_add(prev_val);
                 // Store result back (big-endian)
                 output_row[i] = (new_val >> 8) as u8;
-                output_row[i + 1] = new_val as u8;
+                output_row[i + 1] = (new_val & 0xFF) as u8;
             }
         }
     }
@@ -829,11 +830,9 @@ fn tiff_predictor_16bit(buf: &[u8], columns: usize, colors: usize) -> Vec<u8> {
 /// Returns partial decoded data on error so caller can log the error and use the partial data.
 fn png_predictor(buf: &[u8], row_bytes: usize, pixel_bytes: usize) -> PartialResult<Vec<u8>> {
     let row_with_flag_bytes = 1 + row_bytes;
-    if buf.len() % row_with_flag_bytes != 0 {
-        if buf.len() % row_bytes == 0 {
-            // some invalid pdf file actually not use png_predictor, but lied in DecodeParams
-            return PartialResult(Ok(buf.to_owned()));
-        }
+    if buf.len() % row_with_flag_bytes != 0 && buf.len() % row_bytes == 0 {
+        // some invalid pdf file actually not use png_predictor, but lied in DecodeParams
+        return PartialResult(Ok(buf.to_owned()));
     }
 
     let first_row = vec![0u8; row_bytes];
@@ -1173,6 +1172,7 @@ fn decode_jpx<'a>(
         let g_f = 255.0 * (1.0 - m_f) * (1.0 - k_f);
         let b_f = 255.0 * (1.0 - y_f) * (1.0 - k_f);
 
+        #[allow(clippy::cast_possible_truncation)]
         (r_f.round() as u8, g_f.round() as u8, b_f.round() as u8)
     }
 
@@ -1191,7 +1191,7 @@ fn decode_jpx<'a>(
             let mut channel_data: Vec<Vec<u8>> = Vec::with_capacity(4);
 
             // Collect data from each channel
-            for channel in img.components().iter() {
+            for channel in img.components() {
                 let data: Vec<u8> = channel.data_u8().collect();
                 ensure_whatever!(
                     data.len() == (width * height) as usize,
@@ -1428,10 +1428,12 @@ fn decode_ccitt(
             .whatever_context::<_, ObjectValueError>("Failed to get CCITTAlgorithm")?,
         width: params
             .columns()
-            .whatever_context::<_, ObjectValueError>("Failed to get columns")?,
+            .whatever_context::<_, ObjectValueError>("Failed to get columns")?
+            as usize,
         rows: params
             .rows()
-            .whatever_context::<_, ObjectValueError>("Failed to get rows")?,
+            .whatever_context::<_, ObjectValueError>("Failed to get rows")?
+            .map(Into::into),
         flags: params
             .try_into()
             .whatever_context::<_, ObjectValueError>("Failed to convert params to Flags")?,

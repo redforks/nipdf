@@ -29,13 +29,13 @@ pub struct Type3Font {
 }
 
 impl Type3Font {
-    pub fn new(dict: FontDict<'_, '_>) -> Result<Rc<Self>> {
+    pub fn new(dict: &FontDict<'_, '_>) -> Result<Rc<Self>> {
         let char_procs = dict.type3()?.char_procs()?;
 
         let mut glyphs = Vec::with_capacity(char_procs.len());
         let mut glyph_ids = HashMap::with_capacity(char_procs.len());
 
-        for (name, _) in &char_procs {
+        for name in char_procs.keys() {
             let gid = glyphs
                 .len()
                 .try_into()
@@ -45,8 +45,8 @@ impl Type3Font {
         }
 
         let matrix = dict.type3()?.matrix()?;
-        let encoding = super::EncodingParser(&dict).type3()?;
-        let first_last_width = FirstLastFontWidth::from(&dict)?
+        let encoding = super::EncodingParser(dict).type3()?;
+        let first_last_width = FirstLastFontWidth::from(dict)?
             .whatever_context::<_, ObjectValueError>("type3 font requires first_last_width")?;
 
         Ok(Rc::new(Self {
@@ -71,7 +71,7 @@ impl Type3Font {
         dict.type3()?.resources()
     }
 
-    pub fn get_glyph<'b>(&self, gid: u16, resolver: &ObjectResolver<'b>) -> Option<&Type3Glyph> {
+    pub fn get_glyph(&self, gid: u16, resolver: &ObjectResolver<'_>) -> Option<&Type3Glyph> {
         // Get the cell from the glyphs array
         let cell = self.glyphs.get(gid as usize)?;
 
@@ -84,7 +84,7 @@ impl Type3Font {
         let name = self
             .name_to_gid
             .iter()
-            .find_map(|(name, &id)| if id == gid { Some(name) } else { None })?;
+            .find_map(|(name, &id)| (id == gid).then_some(name))?;
 
         // Get the stream for this glyph
         let stream = self.char_procs.get(name)?;

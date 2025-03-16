@@ -516,14 +516,14 @@ trait LineDecoder {
                     };
                 }
                 ProcessPEResult::Pixels1(pixels) => {
-                    line.push_pixels(pixels.0, pixels.1)?;
+                    line.push_pixels(pixels.0, pixels.1 as usize)?;
                     if line.line_fulfilled() {
                         return Ok(DecodeLineResult::LineFulfilled);
                     }
                 }
                 ProcessPEResult::Pixels2(p1, p2) => {
-                    line.push_pixels(p1.0, p1.1)?;
-                    line.push_pixels(p2.0, p2.1)?;
+                    line.push_pixels(p1.0, p1.1 as usize)?;
+                    line.push_pixels(p2.0, p2.1 as usize)?;
                     if line.line_fulfilled() {
                         return Ok(DecodeLineResult::LineFulfilled);
                     }
@@ -754,7 +754,7 @@ impl<'a> LineBuffer<'a> {
         self.pos.unwrap_or_default() as usize
     }
 
-    pub fn push_pixels(&mut self, color: Color, counts: u16) -> Result<()> {
+    pub fn push_pixels(&mut self, color: Color, counts: usize) -> Result<()> {
         // Don't do anything for 0-length runs
         if counts == 0 {
             return Ok(());
@@ -762,7 +762,7 @@ impl<'a> LineBuffer<'a> {
 
         let pos = self.pos();
         // Ensure we don't go beyond the line width
-        let max_pixels = (self.last.0.len() - pos).min(counts as usize);
+        let max_pixels = (self.last.0.len() - pos).min(counts);
         match max_pixels {
             1 => self.cur.set(pos, color.is_white()),
             2.. => self.cur[pos..(pos + max_pixels)].fill(color.is_white()),
@@ -791,21 +791,19 @@ pub struct Flags {
 
 pub struct Decoder {
     pub algorithm: Algorithm,
-    pub width: u16,
-    pub rows: Option<u16>,
+    pub width: usize,
+    pub rows: Option<usize>,
     pub flags: Flags,
 }
 
 impl Decoder {
     fn do_decode<LD: LineDecoder>(&self, mut ld: LD, buf: &[u8]) -> Result<BitVec<u8, Msb0>> {
-        let mut r = BitVec::<u8, Msb0>::with_capacity(
-            self.rows.unwrap_or(30) as usize * self.width as usize,
-        );
-        let imagnation_line: BitVec<u8, Msb0> = repeat(true).take(self.width as usize).collect();
+        let mut r = BitVec::<u8, Msb0>::with_capacity(self.rows.unwrap_or(30) * self.width);
+        let imagnation_line: BitVec<u8, Msb0> = repeat(true).take(self.width).collect();
 
         let mut line_buffer = LineBuffer::new(
             &imagnation_line[..],
-            repeat(true).take(self.width as usize).collect(),
+            repeat(true).take(self.width).collect(),
         );
 
         let total_bits = (buf.len() * 8) as u64;
@@ -829,10 +827,10 @@ impl Decoder {
             // Make sure line is filled completely (particularly important for Group3_1D)
             if !line_buffer.line_fulfilled() {
                 let pos = line_buffer.pos();
-                if pos < self.width as usize {
-                    let remaining = self.width as usize - pos;
+                if pos < self.width {
+                    let remaining = self.width - pos;
                     // Fill with white to complete the line
-                    line_buffer.push_pixels(Color::White, remaining as u16)?;
+                    line_buffer.push_pixels(Color::White, remaining)?;
                 }
             }
 
@@ -844,12 +842,12 @@ impl Decoder {
             }
 
             if let Some(rows) = self.rows {
-                if rows as usize == r.len() / self.width as usize {
+                if rows == r.len() / self.width {
                     break;
                 }
             }
 
-            line_buffer = LineBuffer::new(&r[r.len() - self.width as usize..], line);
+            line_buffer = LineBuffer::new(&r[r.len() - self.width..], line);
             ld.reset();
         }
 

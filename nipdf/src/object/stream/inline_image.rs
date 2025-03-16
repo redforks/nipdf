@@ -184,9 +184,9 @@ impl InlineImage {
         .map(|img| Rc::new(img.into_rgba8()))
     }
 
-    pub fn image<'a>(
+    pub fn image(
         &self,
-        cache: &'a CachedInlineImage,
+        cache: &CachedInlineImage,
         resolver: &ObjectResolver<'_>,
         resources: &ResourceDict<'_, '_>,
     ) -> Result<Rc<RgbaImage>> {

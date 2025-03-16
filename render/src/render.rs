@@ -35,11 +35,12 @@ use nipdf::{
     },
 };
 use num_traits::ToPrimitive;
+use once_cell::unsync::OnceCell;
 use prescript::{AnyWhatever, Name, ParserError, cmap::WriteMode};
 use snafu::{FromString, OptionExt, ResultExt, ensure_whatever, whatever};
 use std::{
     borrow::Cow,
-    cell::{LazyCell, Ref, RefCell},
+    cell::{Ref, RefCell},
     collections::VecDeque,
     rc::Rc,
 };
@@ -687,7 +688,7 @@ pub struct Render<'a, 'c> {
 }
 
 pub struct RenderCacher {
-    fallback_font: LazyCell<FontOps<SkiaPathSink>>,
+    fallback_font: OnceCell<FontOps<SkiaPathSink>>,
     cached_fonts: CachedFonts<SkiaPathSink>,
     inline_image_cache: CachedInlineImage,
 }
@@ -695,17 +696,19 @@ pub struct RenderCacher {
 impl RenderCacher {
     pub fn new() -> Self {
         Self {
-            fallback_font: LazyCell::new(|| {
-                let fallback_font = FallbackFont::new();
-                fallback_font.create_ops().unwrap()
-            }),
+            fallback_font: OnceCell::new(),
             cached_fonts: CachedFonts::new(),
             inline_image_cache: CachedInlineImage::new(),
         }
     }
 
-    fn fallback_font(&self) -> &FontOps<SkiaPathSink> {
-        &self.fallback_font
+    fn fallback_font(&self) -> Result<&FontOps<SkiaPathSink>> {
+        self.fallback_font.get_or_try_init(|| {
+            let fallback_font = FallbackFont::new().whatever_context("create fallback font")?;
+            fallback_font
+                .create_ops()
+                .whatever_context("create fallback font ops")
+        })
     }
 }
 
@@ -739,8 +742,11 @@ impl<'a, 'c> Render<'a, 'c> {
             canvas,
             stack: vec![state],
             path: Path::default(),
-            font_cache: FontCache::new(resources.font().unwrap(), &render_cacher.cached_fonts)
-                .whatever_context("Create font cache")?,
+            font_cache: FontCache::new(
+                resources.font().whatever_context("get font resources")?,
+                &render_cacher.cached_fonts,
+            )
+            .whatever_context("Create font cache")?,
             resources,
             dimension: option.dimension,
         })
@@ -806,7 +812,7 @@ impl<'a, 'c> Render<'a, 'c> {
         }
     }
 
-    fn current_mut(stack: &mut Vec<State>) -> Result<&mut State> {
+    fn current_mut(stack: &mut [State]) -> Result<&mut State> {
         stack.last_mut().whatever_context("get current state")
     }
 
@@ -818,7 +824,7 @@ impl<'a, 'c> Render<'a, 'c> {
         Ok(&mut Self::current_mut(&mut self.stack)?.text_object)
     }
 
-    pub(crate) fn exec(&mut self, render_cacher: &RenderCacher, op: Operation) -> Result<()> {
+    pub(crate) fn exec(&mut self, render_cacher: &RenderCacher, op: &Operation) -> Result<()> {
         let start = std::time::Instant::now();
         let result = self._exec(render_cacher, op.clone());
         let duration = start.elapsed();
@@ -833,21 +839,21 @@ impl<'a, 'c> Render<'a, 'c> {
         match op {
             // General Graphics State Operations
             Operation::SetLineWidth(width) => {
-                Self::current_mut(&mut self.stack)?.set_line_width(width)
+                Self::current_mut(&mut self.stack)?.set_line_width(width);
             }
             Operation::SetLineCap(cap) => Self::current_mut(&mut self.stack)?.set_line_cap(cap),
             Operation::SetLineJoin(join) => Self::current_mut(&mut self.stack)?.set_line_join(join),
             Operation::SetMiterLimit(limit) => {
-                Self::current_mut(&mut self.stack)?.set_miter_limit(limit)
+                Self::current_mut(&mut self.stack)?.set_miter_limit(limit);
             }
             Operation::SetDashPattern(pattern, phase) => {
                 Self::current_mut(&mut self.stack)?.set_dash_pattern(&pattern, phase);
             }
             Operation::SetRenderIntent(intent) => {
-                Self::current_mut(&mut self.stack)?.set_render_intent(intent)
+                Self::current_mut(&mut self.stack)?.set_render_intent(intent);
             }
             Operation::SetFlatness(flatness) => {
-                Self::current_mut(&mut self.stack)?.set_flatness(flatness)
+                Self::current_mut(&mut self.stack)?.set_flatness(flatness);
             }
             Operation::SetGraphicsStateParameters(nm) => {
                 let res = self
@@ -1424,7 +1430,7 @@ impl<'a, 'c> Render<'a, 'c> {
             .operations()
             .whatever_context("get form page operations")?
             .into_iter()
-            .try_for_each(|op| render.exec(render_cacher, op))?;
+            .try_for_each(|op| render.exec(render_cacher, &op))?;
 
         Ok(())
     }
@@ -1449,7 +1455,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 }
             } else {
                 warn!("x_object {} not stream, ignored", nm.0);
-                return Ok(());
+                Ok(())
             }
         } else {
             warn!("x_object {} not found", nm.0);
@@ -1635,7 +1641,8 @@ impl<'a, 'c> Render<'a, 'c> {
             .shading()
             .whatever_context("get shading resource")?;
         let Some(shading) = shading.get(&nm.0) else {
-            return Ok(warn!("shading {} not found", nm.0));
+            warn!("shading {} not found", nm.0);
+            return Ok(());
         };
         match build_shading(shading, self.resources).whatever_context("build shading")? {
             Some(Shading::Radial(radial)) => {
@@ -1835,7 +1842,7 @@ impl<'a, 'c> Render<'a, 'c> {
             color_state.set_color_args(args)?;
         }
         ops.into_iter()
-            .try_for_each(|op| render.exec(render_cacher, op))?;
+            .try_for_each(|op| render.exec(render_cacher, &op))?;
         drop(render);
         color_state.paint = PaintCreator::Tile((canvas, matrix, x_step > b_box.width()));
         Ok(())
@@ -1964,7 +1971,7 @@ impl<'a, 'c> Render<'a, 'c> {
             .get_font(font_name, &render_cacher.cached_fonts)
         {
             Some(font_ops) => font_ops,
-            None => render_cacher.fallback_font(),
+            None => render_cacher.fallback_font()?,
         };
 
         let state = Self::top(&self.stack)?;
@@ -2016,7 +2023,7 @@ impl<'a, 'c> Render<'a, 'c> {
                     .whatever_context("get char to gid")?;
                 if let Some(glyph) = type3_font.get_glyph(gid, self.resources.resolver()) {
                     for op in glyph.operations() {
-                        render.exec(render_cacher, op.clone())?;
+                        render.exec(render_cacher, op)?;
                     }
                 }
 

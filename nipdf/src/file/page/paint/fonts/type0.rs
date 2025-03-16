@@ -24,10 +24,10 @@ pub(super) struct CIDFontType0Font {
     font_op: CIDFontType0FontOp,
     width:
         ChainGlyphAdvance<UnitPerEmAdjust<Option<CIDFontWidths>>, UnitPerEmAdjust<LengthAdavnce>>,
-        }
+}
 
 impl CIDFontType0Font {
-    pub fn new(font_dict: FontDict<'_, '_>, data: Vec<u8>) -> Result<Self> {
+    pub fn new(font_dict: &FontDict<'_, '_>, data: Vec<u8>) -> Result<Self> {
         let font = FontKitFont::from_bytes(data.into(), 0)
             .whatever_context::<_, ObjectValueError>("decode FontKitFont for Type0")?;
         let font_op = CIDFontType0FontOp::new(&font_dict.type0()?)?;
@@ -296,6 +296,7 @@ impl FontOp for CIDFontType2FontOp {
 }
 
 pub(super) struct CIDFontType2Font {
+    #[allow(clippy::rc_buffer)] // FontKitFont uses Arc<Vec<u8>> type
     data: Arc<Vec<u8>>,
     font: FontKitFont,
     font_is_embed: bool,
@@ -309,10 +310,11 @@ pub(super) struct CIDFontType2Font {
 }
 
 impl CIDFontType2Font {
+    #[allow(clippy::rc_buffer)] // FontKitFont uses Arc<Vec<u8>> type
     pub fn new(
         font_is_embed: bool,
         data: Arc<Vec<u8>>,
-        font_dict: FontDict<'_, '_>,
+        font_dict: &FontDict<'_, '_>,
     ) -> Result<Self> {
         let font = FontKitFont::from_bytes(data.clone(), 0)
             .whatever_context::<_, ObjectValueError>("decode FontKitFont for Type2")?;
@@ -328,15 +330,11 @@ impl CIDFontType2Font {
         };
 
         let encoding_name = if cid_to_gid.is_none() && !font_is_embed {
-            if let Some(NameOrDictByRef::Name(ref name)) = font_dict.encoding()? {
-                if *name != &sname("Identity-H")
-                    && *name != &sname("Identity-V")
-                    && Encoding::predefined(name).is_none()
-                {
-                    Some((*name).clone())
-                } else {
-                    None
-                }
+            if let Some(NameOrDictByRef::Name(name)) = font_dict.encoding()? {
+                (name != &sname("Identity-H")
+                    && name != &sname("Identity-V")
+                    && Encoding::predefined(name).is_none())
+                .then(|| name.clone())
             } else {
                 None
             }
@@ -413,7 +411,7 @@ impl<P: PathSink + 'static> Font<P> for CIDFontType2Font {
         Ok(Box::new(CIDFontType2FontOp::new(
             self.encoding.clone(),
             self.font_is_embed,
-            self.data.as_slice().to_owned(),
+            self.data.as_ref().clone(),
             self.units_per_em,
             self.cid_to_gid.clone(),
         )?))
@@ -467,14 +465,17 @@ impl FontOp for CIDFontType2UnicodeFontOp {
         let c = char::from_u32(ch)
             .whatever_context::<_, ObjectValueError>("invalid unicode code point")?;
 
-        Ok(self
-            .face
+        self.face
             .glyph_for_char(c)
-            .map(|glyph| glyph as u16)
-            .unwrap_or_else(|| {
-                warn!("Glyph not found for character: {:?}", c);
-                0
-            }))
+            .map_or_else(
+                || {
+                    warn!("Glyph not found for character: {:?}", c);
+                    0
+                },
+                |glyph| glyph,
+            )
+            .try_into()
+            .whatever_context::<_, ObjectValueError>("failed to get glyph id")
     }
 
     fn units_per_em(&self) -> Result<u16> {

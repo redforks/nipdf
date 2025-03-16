@@ -3021,6 +3021,7 @@ dependencies = [
  "nipdf",
  "nipdf-test-macro",
  "num-traits",
+ "once_cell",
  "phf",
  "prescript",
  "snafu",

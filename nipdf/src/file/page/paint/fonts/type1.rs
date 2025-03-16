@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::{
     ChainGlyphAdvance, EncodingParser, FirstLastFontWidth, Font, FontKitFont, FontKitFontExt,
     FontOp, FreeTypeFontWidth, GlyphAdvance, GlyphRender, PathSink, TTFGlyphRender,
@@ -18,13 +20,13 @@ pub(super) struct Type1Font {
 }
 
 impl Type1Font {
-    pub fn new(is_cff: bool, data: Vec<u8>, font_dict: FontDict<'_, '_>) -> Result<Self> {
+    pub fn new(is_cff: bool, data: Vec<u8>, font_dict: &FontDict<'_, '_>) -> Result<Self> {
         debug_assert_eq!(data.capacity(), data.len());
-
-        let font = FontKitFont::from_bytes(data.clone().into(), 0)
+        let data = Arc::new(data);
+        let font = FontKitFont::from_bytes(data.clone(), 0)
             .whatever_context::<_, ObjectValueError>("create FontKitFont")?;
-        let encoding = EncodingParser(&font_dict).type1(is_cff, data.as_slice())?;
-        let first_last_width = FirstLastFontWidth::from(&font_dict)?;
+        let encoding = EncodingParser(font_dict).type1(is_cff, data.as_slice())?;
+        let first_last_width = FirstLastFontWidth::from(font_dict)?;
         Ok(Self {
             font,
             encoding,
@@ -76,6 +78,7 @@ impl Type1FontOp {
     }
 
     pub fn new_fallback(font: FontKitFont) -> Self {
+        #[allow(clippy::unwrap_used)] // this won't happen
         let units_per_em = font.metrics().units_per_em.try_into().unwrap();
         Self {
             font,

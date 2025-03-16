@@ -726,10 +726,14 @@ where
                 operands.clear();
             }
             Err(e) => {
-                warn!(
-                    "Error parsing operation, Ignore renain page content: {}",
-                    Report::from_error(e.into_inner().unwrap())
-                );
+                match e.into_inner() {
+                    Ok(e) => {
+                        warn!("Error parsing operation: {}", Report::from_error(e));
+                    }
+                    Err(e) => {
+                        warn!("Error parsing operation: {:}", e);
+                    }
+                }
                 return Ok(r);
             }
         }

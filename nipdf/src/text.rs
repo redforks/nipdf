@@ -182,7 +182,7 @@ pub enum CIDFontWidthGroup {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct CIDFontWidths(Rc<Vec<CIDFontWidthGroup>>);
+pub struct CIDFontWidths(Rc<[CIDFontWidthGroup]>);
 
 impl GlyphAdvance for CIDFontWidths {
     fn advance(&self, gid: u32, cid: u32) -> Result<GlyphLength> {
@@ -256,7 +256,7 @@ impl TryFrom<ObjectWithResolver<'_, '_>> for CIDFontWidths {
                 ),
             }
         }
-        Ok(CIDFontWidths(Rc::new(widths)))
+        Ok(CIDFontWidths(widths.into()))
     }
 }
 

@@ -15,6 +15,7 @@ use font_kit::{hinting::HintingOptions, loaders::freetype::Font as FontKitFont};
 use fontdb::{Database, Family, Query, Source, Weight};
 use heck::ToTitleCase;
 use log::{info, warn};
+
 use num_traits::ToPrimitive;
 use pathfinder_geometry::{line_segment::LineSegment2F, vector::Vector2F};
 use prescript::{Encoding, Name, cmap::WriteMode, sname};
@@ -82,10 +83,7 @@ impl GlyphAdvance for FirstLastFontWidth {
     fn advance(&self, _gid: u32, ch: u32) -> Result<GlyphLength> {
         Ok(GlyphLength::new(if self.range.contains(&ch) {
             let idx = (ch - self.range.start()) as usize;
-            self.widths
-                .get(idx)
-                .map(|v| *v)
-                .unwrap_or(self.default_width)
+            self.widths.get(idx).copied().unwrap_or(self.default_width)
         } else {
             self.default_width
         }))
@@ -102,7 +100,7 @@ impl FirstLastFontWidth {
         }
 
         let default_width = font.default_width()?;
-        if default_width == 0.0 && widths.len() == 0 {
+        if default_width == 0.0 && widths.is_empty() {
             return Ok(None);
         }
 
@@ -244,21 +242,19 @@ impl FallbackFont {
     /// Creates a new FallbackFont instance
     ///
     /// This method loads the builtin Helvetica font and uses WinAnsiEncoding
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self> {
         // Load the builtin Helvetica font data
         let font_data = Arc::new(
             standard_14_type1_font_data("Helvetica")
-                .whatever_context::<_, ObjectValueError>("Fallback font (Helvetica) not found")
-                .unwrap()
+                .whatever_context::<_, ObjectValueError>("Fallback font (Helvetica) not found")?
                 .to_vec(),
         );
 
         // Create FontKitFont from the font data
         let font = FontKitFont::from_bytes(font_data, 0)
-            .whatever_context::<_, ObjectValueError>("create FontKitFont for fallback")
-            .unwrap();
+            .whatever_context::<_, ObjectValueError>("create FontKitFont for fallback")?;
 
-        Self { font }
+        Ok(Self { font })
     }
 
     pub fn create_fallback_op(&self) -> Box<dyn FontOp + '_> {
@@ -316,7 +312,7 @@ static SYSTEM_FONTS: LazyLock<Database> = LazyLock::new(|| {
     fn set_first_available_font(db: &mut Database, font_names: &[&str], family_type: Family<'_>) {
         for font_name in font_names {
             let query = Query {
-                families: &[Family::Name(*font_name)],
+                families: &[Family::Name(font_name)],
                 ..Default::default()
             };
             if db.query(&query).is_some() {
@@ -459,9 +455,10 @@ pub struct OwnedFontOps<P: PathSink + 'static> {
 }
 
 impl<P: PathSink + 'static> OwnedFontOps<P> {
-    pub fn new(font: Box<dyn Font<P>>) -> Result<Self> {
-        let ops = font.create_ops()?;
-        Ok(Self { ops })
+    pub fn new(font: &dyn Font<P>) -> Result<Self> {
+        Ok(Self {
+            ops: font.create_ops()?,
+        })
     }
 
     pub fn ops(&self) -> &FontOps<P> {
@@ -474,7 +471,7 @@ impl<P: PathSink + 'static> OwnedFontOps<P> {
 pub struct CachedFonts<P: PathSink + 'static>(AppendOnlyVec<(RuntimeObjectId, OwnedFontOps<P>)>);
 
 impl<P: PathSink + 'static> CachedFonts<P> {
-    pub fn add(&self, id: impl Into<RuntimeObjectId>, font: Box<dyn Font<P>>) -> Result<()> {
+    pub fn add(&self, id: impl Into<RuntimeObjectId>, font: &dyn Font<P>) -> Result<()> {
         let id = id.into();
         info!("add font {:?} into cache", id);
         self.0.push((id, OwnedFontOps::new(font)?));
@@ -568,7 +565,7 @@ impl FontCache {
 
     fn load_ttf_parser_font<P: PathSink + 'static>(
         font_type: FontType,
-        font: FontDict<'_, '_>,
+        font: &FontDict<'_, '_>,
         desc: Option<&FontDescriptorDict<'_, '_>>,
     ) -> Result<Box<dyn Font<P>>> {
         let (is_embed, ttf_bytes) = match desc {
@@ -610,8 +607,8 @@ impl FontCache {
                 is_embed, ttf_bytes, font,
             )?))
         } else {
-            let width = FirstLastFontWidth::from(&font)?;
-            let encoding = EncodingParser(&font).ttf()?;
+            let width = FirstLastFontWidth::from(font)?;
+            let encoding = EncodingParser(font).ttf()?;
             Ok(Box::new(truetype::TTFFont::new(
                 ttf_bytes, encoding, width,
             )?))
@@ -622,7 +619,7 @@ impl FontCache {
     /// by TrueType fonts scanned from current OS. Because Type1 fonts are not
     /// supported by swash, and the only crate support Type1 fonts is `font`, which
     /// I am not familiar with.
-    fn load_type1_font(font: FontDict<'_, '_>) -> Result<Type1Font> {
+    fn load_type1_font(font: &FontDict<'_, '_>) -> Result<Type1Font> {
         let f = font.type1()?;
         let font_name = font.font_name()?;
         let desc = f.font_descriptor()?;
@@ -656,7 +653,7 @@ impl FontCache {
     }
 
     fn scan_font<P: PathSink + 'static>(
-        font: FontDict<'_, '_>,
+        font: &FontDict<'_, '_>,
         cached_fonts: &CachedFonts<P>,
     ) -> Result<Option<RuntimeObjectId>> {
         let font_id = font.id();
@@ -669,7 +666,7 @@ impl FontCache {
                 let tt = font.truetype()?;
                 let desc = tt.font_descriptor()?;
                 let font_obj = Self::load_ttf_parser_font(FontType::TrueType, font, desc.as_ref())?;
-                cached_fonts.add(font_id, font_obj)?;
+                cached_fonts.add(font_id, font_obj.as_ref())?;
                 Ok(Some(font_id))
             }
 
@@ -703,7 +700,7 @@ impl FontCache {
                             font,
                             Self::load_embed_font_bytes(descentdant_font.resolver(), stream)?,
                         )?);
-                        cached_fonts.add(font_id, font_obj)?;
+                        cached_fonts.add(font_id, font_obj.as_ref())?;
                         Ok(Some(font_id))
                     }
                     CIDFontType::CIDFontType2 => {
@@ -713,14 +710,14 @@ impl FontCache {
 
                         let font_obj =
                             Self::load_ttf_parser_font(FontType::Type0, font, Some(&desc))?;
-                        cached_fonts.add(font_id, font_obj)?;
+                        cached_fonts.add(font_id, font_obj.as_ref())?;
                         Ok(Some(font_id))
                     }
                 }
             }
 
             FontType::Type1 | FontType::MMType1 => {
-                let font_obj = Self::load_type1_font(font.clone())
+                let font_obj = Self::load_type1_font(font)
                     .map(|v| -> Box<dyn Font<P>> { Box::new(v) })
                     .or_else(|err| {
                         info!(
@@ -728,16 +725,12 @@ impl FontCache {
                             err
                         );
                         let desc = font.font_descriptor()?;
-                        Ok(Self::load_ttf_parser_font(
-                            FontType::Type1,
-                            font,
-                            desc.as_ref(),
-                        )?)
+                        Self::load_ttf_parser_font(FontType::Type1, font, desc.as_ref())
                     });
 
                 match font_obj {
                     Ok(font_obj) => {
-                        cached_fonts.add(font_id, font_obj)?;
+                        cached_fonts.add(font_id, font_obj.as_ref())?;
                         Ok(Some(font_id))
                     }
                     Err(e) => Err(e),
@@ -746,7 +739,7 @@ impl FontCache {
 
             FontType::Type3 => {
                 let font_obj = Box::new(type3::Type3Font::new(font)?);
-                cached_fonts.add(font_id, font_obj)?;
+                cached_fonts.add(font_id, font_obj.as_ref())?;
                 Ok(Some(font_id))
             }
         }
@@ -758,7 +751,7 @@ impl FontCache {
     ) -> Result<Self> {
         let mut fonts = HashMap::with_capacity(font_res.len());
         for (k, v) in font_res {
-            let font_id = match Self::scan_font(v, cached_fonts) {
+            let font_id = match Self::scan_font(&v, cached_fonts) {
                 Ok(Some(font_id)) => font_id,
                 Ok(None) => {
                     warn!("Font {} is not supported, use fallback font", k);

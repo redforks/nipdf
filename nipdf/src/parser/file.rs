@@ -14,7 +14,7 @@ use std::{
     borrow::Cow,
     fmt::Debug,
     num::{ParseIntError, TryFromIntError},
-    str::from_utf8,
+    str::{from_utf8, from_utf8_unchecked},
 };
 use winnow::{
     LocatingSlice, ModalResult, Parser,
@@ -23,7 +23,7 @@ use winnow::{
     combinator::{alt, delimited, empty, fail, preceded, repeat, separated_pair, seq, terminated},
     error::{AddContext, ContextError, ErrMode, FromExternalError, ParserError},
     stream::{AsBStr, AsChar, Compare, Location, Stream, StreamIsPartial},
-    token::{one_of, take},
+    token::{one_of, take, take_while},
 };
 
 /// Parser to parse file header, return pdf file version string, such as "1.7".
@@ -83,10 +83,13 @@ where
                         FilePos(
                             take(10usize).parse_to(),
                             _: b' ',
-                            take(5usize).try_map(|s| {
-                                from_utf8(s).unwrap().parse::<u16>().or_else(|e| {
+                            take_while(5, b'0'..=b'9').try_map(|s| {
+                                let s = unsafe {
+                                    from_utf8_unchecked(s)
+                                };
+                                s.parse::<u16>().or_else(|e| {
                                     // Many PDFs use 65536 as a special value to indicate that the object is not in use.
-                                    if s == b"65536" {
+                                    if s == "65536" {
                                         Ok(65535)
                                     } else {
                                         Err(e)

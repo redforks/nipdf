@@ -213,11 +213,11 @@ pub fn render_steps(
     let Some(mut canvas) = option.create_canvas() else {
         return Ok(RgbaImage::new(0, 0));
     };
-    let mut render_cacher = RenderCacher::new();
+    let render_cacher = RenderCacher::new();
     if !ops.is_empty() {
         // skip render if no operations, fixes incorrect pdf files that no resources
         let resource = page.resources().whatever_context("get page resources")?;
-        let mut renderer = Render::new(&mut render_cacher, &mut canvas, option.clone(), &resource)?;
+        let mut renderer = Render::new(&render_cacher, &mut canvas, option.clone(), &resource)?;
 
         let iter = if let Some(steps) = steps {
             Either::Left(ops.into_iter().take(steps))
@@ -226,7 +226,7 @@ pub fn render_steps(
         };
 
         for op in iter {
-            match renderer.exec(&mut render_cacher, op) {
+            match renderer.exec(&render_cacher, &op) {
                 Ok(_) => (),
                 Err(e) if option.fail_fast => return Err(e),
                 Err(e) => log::error!("Operation failed: {}", snafu::Report::from_error(e)),

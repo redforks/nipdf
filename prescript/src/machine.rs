@@ -1611,7 +1611,8 @@ fn system_dict<'a, P: MachinePlugin>() -> RuntimeDictionary<'a, P> {
                 RuntimeValue::BuiltInOp(_) => sname("operatortype"),
                 RuntimeValue::Mark | RuntimeValue::ArrayMark | RuntimeValue::DictMark => sname("marktype"),
                 RuntimeValue::Value(Value::Null) => sname("nulltype"),
-                RuntimeValue::InvalidValue(_) => todo!(),
+                #[allow(clippy::todo)]
+                RuntimeValue::InvalidValue(_) => todo!()
             });
             ok()
         },

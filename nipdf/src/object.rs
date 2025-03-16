@@ -909,9 +909,9 @@ macro_rules! impl_try_from_object {
 impl_try_from_object!(i32, int);
 impl_try_from_object!(bool, bool);
 impl_try_from_object!(Reference, reference);
-impl_try_from_object!(u16, int, |v: i32| v as u16);
-impl_try_from_object!(u32, int, |v: i32| v as u32);
-impl_try_from_object!(u8, int, |v: i32| v as u8);
+impl_try_from_object!(u16, int, |v| (v & 0xffff) as u16);
+impl_try_from_object!(u32, int, |v| v as u32);
+impl_try_from_object!(u8, int, |v| (v & 0xff) as u8);
 impl_try_from_object!(RuntimeObjectId, reference, Into::into);
 impl_try_from_object!(f32, number);
 impl_try_from_object!(Name, name);

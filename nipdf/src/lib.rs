@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::cast_possible_truncation))]
+
 mod ccitt;
 pub mod file;
 pub mod function;
@@ -56,7 +58,7 @@ macro_rules! whatever_partial_result {
     ($value:expr, $msg:expr) => {
         return PartialResult(Err((
             $value,
-            <crate::ObjectValueError as snafu::FromString>::without_source($msg.to_owned()),
+            <$crate::ObjectValueError as snafu::FromString>::without_source($msg.to_owned()),
         )));
     };
 }

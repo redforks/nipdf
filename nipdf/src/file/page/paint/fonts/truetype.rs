@@ -15,12 +15,14 @@ use std::sync::Arc;
 
 pub struct TTFFont {
     face: FontKitFont,
+    #[allow(clippy::rc_buffer)] // FontKitFont uses Arc<Vec<u8>> type
     data: Arc<Vec<u8>>,
     encoding: Option<prescript::Encoding>,
     first_last_width: UnitPerEmAdjust<Option<FirstLastFontWidth>>,
 }
 
 impl TTFFont {
+    #[allow(clippy::rc_buffer)] // FontKitFont uses Arc<Vec<u8>> type
     pub fn new(
         data: Arc<Vec<u8>>,
         encoding: Option<prescript::Encoding>,
@@ -43,7 +45,7 @@ impl<P: PathSink> Font<P> for TTFFont {
         Ok(Box::new(TTFFontOp::new(
             self.face.clone(),
             self.encoding.clone(),
-            OwnedTTFFace::from_vec(self.data.as_slice().to_vec(), 0)
+            OwnedTTFFace::from_vec(self.data.as_ref().clone(), 0)
                 .whatever_context::<_, ObjectValueError>("parse TTF Font")?,
             self.face.units_per_em()?,
         )))
@@ -126,7 +128,7 @@ impl FontOp for TTFFontOp {
                 .whatever_context("failed convert glyph index");
         }
         if let Some(r) = glyph_index(&self.ttf_font, ch)? {
-            return r.try_into().whatever_context("failed convert glyph index");
+            return Ok(r);
         }
         warn!("TTF glyph id not found for char: {}", ch);
         Ok(0)

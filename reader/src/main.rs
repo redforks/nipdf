@@ -50,6 +50,7 @@ mod app {
     use super::*;
     use crate::app_state::load_last_file;
     use rfd::FileDialog;
+    use snafu::OptionExt as _;
 
     /// Messages for application view.
     #[derive(Debug, Clone)]
@@ -129,9 +130,16 @@ mod app {
             Message::SelectFile => {
                 let filename = FileDialog::new().add_filter("PDF", &["pdf"]).pick_file();
                 if let Some(filename) = filename {
-                    state.file_path_selecting = filename.to_str().unwrap().to_string();
-                    state.password = String::new();
-                    state.open();
+                    if let Some(filename) = state.handle_result(
+                        filename
+                            .to_str()
+                            .map(ToString::to_string)
+                            .whatever_context::<_, AnyWhatever>("get file path"),
+                    ) {
+                        state.file_path_selecting = filename;
+                        state.password = String::new();
+                        state.open();
+                    }
                 }
             }
         }

@@ -206,9 +206,9 @@ impl XRefTable {
         encrypt_info: Option<&EncryptInfo>,
     ) -> Result<Either<&'a [u8], &'b [u8]>, ObjectValueError> {
         fn parse_indirect_stream(input: &[u8]) -> Result<Stream, ObjectValueError> {
-            let o = indirect_object_def::<_, ParserError>()
-                .parse_next(&mut LocatingSlice::new(input))
-                .map_err(|e| e.into_inner().unwrap())?;
+            let o = terminated(indirect_object_def::<_, ParserError>(), rest)
+                .parse(LocatingSlice::new(input))
+                .map_err(ParseError::into_inner)?;
             let Object::Stream(s) = o.take() else {
                 whatever!("expected stream");
             };
@@ -941,19 +941,19 @@ impl File {
             .iter()
             .filter_map(|t| t.get("Root"))
             .filter_map(|o| o.reference().ok())
-            .find_map(|root_id| {
+            .find(|root_id| {
                 let resolver = ObjectResolver::new(&buf, &xref, encrypt_key.clone());
                 match Catalog::parse(root_id, &resolver) {
                     Ok(catalog) => match catalog.pages() {
-                        Ok(_) => Some(root_id),
+                        Ok(_) => true,
                         Err(e) => {
-                            log::error!("Error parsing pages: {}", e);
-                            None
+                            log::error!("Error parsing pages: {}", Report::from_error(e));
+                            false
                         }
                     },
                     Err(e) => {
                         log::error!("Error parsing catalog: {}", Report::from_error(e));
-                        None
+                        false
                     }
                 }
             })

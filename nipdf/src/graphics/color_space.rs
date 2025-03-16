@@ -132,9 +132,9 @@ where
 
     let color_f32: &[f32] = cast_slice(color);
     // Compute the result using the existing function
-    let result = color_to_rgba(cs, &color_f32);
+    let result = color_to_rgba(cs, color_f32);
     // Cache the result
-    cache.insert(color.into_iter().copied().collect(), result);
+    cache.insert(color.iter().copied().collect(), result);
 
     result
 }
@@ -653,15 +653,13 @@ where
 {
     fn to_rgba(&self, color: &[T]) -> Result<[T; 4]> {
         let index =
-            ColorCompConvertTo::<u8>::into_color_comp(color.get(0).copied().unwrap_or_default())
+            ColorCompConvertTo::<u8>::into_color_comp(color.first().copied().unwrap_or_default())
                 as usize;
         let n = self.base.components();
         let u8_color = self.data.get(index * n..(index + 1) * n);
         let c: [T; 4] = std::array::from_fn(|i| {
             if i < n {
-                u8_color
-                    .map(|c| c[i].into_color_comp())
-                    .unwrap_or_else(|| T::min_color())
+                u8_color.map_or_else(T::min_color, |c| c[i].into_color_comp())
             } else {
                 T::min_color()
             }

@@ -283,10 +283,10 @@ impl NFunc {
     pub fn new_box(functions: Vec<Box<dyn Function>>) -> Result<Box<dyn Function>> {
         if let Some(first) = functions.first() {
             if functions.len() == 1 || first.n_out() > 1 {
-                return Ok(functions
+                return functions
                     .into_iter()
                     .next()
-                    .whatever_context::<_, ObjectValueError>("Expected at least one function")?);
+                    .whatever_context::<_, ObjectValueError>("Expected at least one function");
             }
         }
         Ok(Box::new(Self::new(functions)?))
@@ -320,13 +320,13 @@ impl Function for NFunc {
 
         // Sort and deduplicate
         stops.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-        stops.dedup_by(|a, b| (*a - *b).abs() < std::f32::EPSILON);
+        stops.dedup_by(|a, b| (*a - *b).abs() < f32::EPSILON);
 
         Box::new(stops.into_iter())
     }
 
     fn n_out(&self) -> u8 {
-        self.0.first().map(|f| f.n_out()).unwrap_or(0)
+        self.0.first().map_or(0, Function::n_out)
     }
 }
 
@@ -450,7 +450,8 @@ impl Signature for Type04Signature {
     }
 
     fn n_out(&self) -> u8 {
-        self.domain.len() as u8
+        #[allow(clippy::unwrap_used)] // impossible to have more than u8::MAX outputs
+        self.domain.len().try_into().unwrap()
     }
 }
 
@@ -743,7 +744,7 @@ impl StitchingFunctionDict<'_, '_> {
         let signature = Type23Signature {
             domain: self.domain()?,
             range: self.range()?,
-            n: functions.first().map(|f| f.n_out()).unwrap_or(0),
+            n: functions.first().map_or(0, Function::n_out),
         };
         Ok(StitchingFunction {
             functions,
