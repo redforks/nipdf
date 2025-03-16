@@ -288,11 +288,53 @@ impl<P: PathSink> Font<P> for FallbackFont {
 static SYSTEM_FONTS: LazyLock<Database> = LazyLock::new(|| {
     let mut db = Database::new();
     db.load_system_fonts();
-    // set fallback font that support Cjk, depends on specific environment,
-    // TODO: better way to provide default fonts
-    db.set_serif_family("Noto Serif CJK SC");
-    db.set_sans_serif_family("Noto Sans CJK SC");
-    db.set_monospace_family("Noto Sans Mono CJK SC");
+
+    // Try each font family in order until we find an available font
+    let serif_fonts = [
+        "Noto Serif CJK SC",
+        "SimSun",
+        "STSong",
+        "PMingLiU",
+        "Noto Serif CJK TC",
+    ];
+    let sans_serif_fonts = [
+        "Noto Sans CJK SC",
+        "Microsoft YaHei",
+        "PingFang SC",
+        "Source Han Sans SC",
+        "Noto Sans CJK TC",
+    ];
+    let monospace_fonts = [
+        "Noto Sans Mono CJK SC",
+        "Source Han Mono SC",
+        "NSimSun",
+        "Menlo",
+        "Noto Sans Mono CJK TC",
+    ];
+
+    // Helper function to find and set first available font
+    fn set_first_available_font(db: &mut Database, font_names: &[&str], family_type: Family<'_>) {
+        for font_name in font_names {
+            let query = Query {
+                families: &[Family::Name(*font_name)],
+                ..Default::default()
+            };
+            if db.query(&query).is_some() {
+                match family_type {
+                    Family::Serif => db.set_serif_family(*font_name),
+                    Family::SansSerif => db.set_sans_serif_family(*font_name),
+                    Family::Monospace => db.set_monospace_family(*font_name),
+                    _ => (),
+                }
+                break;
+            }
+        }
+    }
+
+    set_first_available_font(&mut db, &serif_fonts, Family::Serif);
+    set_first_available_font(&mut db, &sans_serif_fonts, Family::SansSerif);
+    set_first_available_font(&mut db, &monospace_fonts, Family::Monospace);
+
     db
 });
 
