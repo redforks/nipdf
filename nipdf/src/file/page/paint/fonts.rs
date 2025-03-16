@@ -74,8 +74,8 @@ impl<T: GlyphAdvance> GlyphAdvance for Option<T> {
 #[derive(Clone)]
 struct FirstLastFontWidth {
     range: RangeInclusive<u32>,
-    widths: Vec<u32>,
-    default_width: u32,
+    widths: Vec<f32>,
+    default_width: f32,
 }
 
 impl GlyphAdvance for FirstLastFontWidth {
@@ -88,7 +88,7 @@ impl GlyphAdvance for FirstLastFontWidth {
                 .unwrap_or(self.default_width)
         } else {
             self.default_width
-        } as f32))
+        }))
     }
 }
 
@@ -102,7 +102,7 @@ impl FirstLastFontWidth {
         }
 
         let default_width = font.default_width()?;
-        if default_width == 0 && widths.len() == 0 {
+        if default_width == 0.0 && widths.len() == 0 {
             return Ok(None);
         }
 
@@ -810,8 +810,8 @@ mod tests {
     fn first_last_font_width() {
         let font_width = FirstLastFontWidth {
             range: 'a' as u32..='d' as u32,
-            widths: vec![100, 200, 300, 400],
-            default_width: 15,
+            widths: vec![100.0, 200.0, 300.0, 400.0],
+            default_width: 15.0,
         };
 
         assert_eq!(100.0, font_width.advance('a' as u32, 'a' as u32).unwrap().0);

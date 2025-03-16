@@ -61,7 +61,7 @@ pub trait FontDictTrait {
     /// if font is the standard 14 fonts, it may not exist.
     fn last_char(&self) -> Option<u32>;
     /// if font is the standard 14 fonts, it may not exist.
-    fn widths(&self) -> Vec<u32>;
+    fn widths(&self) -> Vec<f32>;
 
     fn base_font(&self) -> Name;
 }
@@ -129,15 +129,15 @@ impl FontDict<'_, '_> {
         }
     }
 
-    pub fn default_width(&self) -> Result<u32> {
+    pub fn default_width(&self) -> Result<f32> {
         if self.subtype()? == FontType::Type3 {
-            return Ok(0);
+            return Ok(0.0);
         }
 
         let Some(desc) = self.font_descriptor()? else {
             // some pdf file has bug, Type1 font missing font descriptor, but has widths
             warn!("missing font descriptor, if widths exist, descriptor must also exist");
-            return Ok(1000);
+            return Ok(1000.0);
         };
         desc.missing_width()
     }
@@ -360,7 +360,7 @@ pub trait FontDescriptorDictTrait {
     fn max_width(&self) -> f32;
 
     #[or_default]
-    fn missing_width(&self) -> u32;
+    fn missing_width(&self) -> f32;
 
     fn font_file(&self) -> Option<&'b Stream>;
 
