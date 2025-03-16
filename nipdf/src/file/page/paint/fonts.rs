@@ -677,7 +677,7 @@ impl FontCache {
                 }
             }
 
-            FontType::Type1 => {
+            FontType::Type1 | FontType::MMType1 => {
                 let font_obj = Self::load_type1_font(font.clone())
                     .map(|v| -> Box<dyn Font<P>> { Box::new(v) })
                     .or_else(|err| {
@@ -706,12 +706,6 @@ impl FontCache {
                 let font_obj = Box::new(type3::Type3Font::new(font)?);
                 cached_fonts.add(font_id, font_obj)?;
                 Ok(Some(font_id))
-            }
-            _ => {
-                #[cfg(debug_assertions)]
-                todo!("Unsupported font type: {:?}", font.subtype()?);
-                #[cfg(not(debug_assertions))]
-                Ok(None)
             }
         }
     }

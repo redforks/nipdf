@@ -90,7 +90,7 @@ pub trait CMapDictTrait {
 
 /// For standard 14 fonts, font_descriptor/first_char/last_char/widths may not exist.
 /// they should all exist or not exist. See PDF32000_2008.pdf page 255
-#[pdf_object(("Font", "Type1"))]
+#[pdf_object("Font")]
 pub trait Type1FontDictTrait {
     fn base_font(&self) -> Name;
     /// If font is the standard 14 fonts, it may not exist.

@@ -68,7 +68,7 @@ fn download_file(url: &str, p: impl AsRef<Path>) -> Result<()> {
 
 /// These files are very rare and odd, not to be tested
 #[rustfmt::skip]
-const IGNORED: [&str; 38] = [
+const IGNORED: [&str; 36] = [
     // odd FlateDecode stream, xpdf failed to decode, mupdf no problem
     "bug1050040.pdf",
     // invalid object format, mupdf failed to parse, mupdf says no page
@@ -161,10 +161,6 @@ const IGNORED: [&str; 38] = [
     "issue16839.pdf.link",
     "issue17689.pdf.link",
     "poppler-90-0-fuzzed.pdf",
-
-    // need MMType1 font
-    "pr4922.pdf",
-    "mmtype1.pdf",
 ];
 
 static PASSWORD: phf::Map<&'static str, &'static str> = phf::phf_map! {

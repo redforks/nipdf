@@ -25,7 +25,7 @@ pub struct Type3Font {
     char_procs: HashMap<Name, Stream>,
     matrix: GlyphToTextSpace,
     encoding: Encoding,
-    first_last_width: Option<FirstLastFontWidth>,
+    first_last_width: FirstLastFontWidth,
 }
 
 impl Type3Font {
@@ -46,7 +46,8 @@ impl Type3Font {
 
         let matrix = dict.type3()?.matrix()?;
         let encoding = super::EncodingParser(&dict).type3()?;
-        let first_last_width = FirstLastFontWidth::from(&dict)?;
+        let first_last_width = FirstLastFontWidth::from(&dict)?
+            .whatever_context::<_, ObjectValueError>("type3 font requires first_last_width")?;
 
         Ok(Rc::new(Self {
             name_to_gid: glyph_ids,
@@ -190,6 +191,6 @@ impl<P: PathSink + 'static> Font<P> for Rc<Type3Font> {
     }
 
     fn create_glyph_width(&self) -> Result<Box<dyn super::GlyphAdvance>> {
-        Ok(Box::new(self.first_last_width.clone().unwrap()))
+        Ok(Box::new(self.first_last_width.clone()))
     }
 }
