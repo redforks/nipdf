@@ -64,16 +64,5 @@ pub fn render_type3(c: &mut Criterion) {
     });
 }
 
-criterion_group! {
-    name = benches;
-    config = Criterion::default();
-    targets = render1, render2
-}
-
-criterion_group! {
-    name = inline_image;
-    config = Criterion::default().sample_size(10);
-    targets = render_inline_image, render_path, render_type3
-}
-
-criterion_main!(benches, inline_image);
+criterion_group! { benches, render1, render2, render_inline_image, render_path, render_type3 }
+criterion_main!(benches);
