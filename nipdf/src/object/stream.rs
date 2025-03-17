@@ -31,7 +31,7 @@ use std::{
     ops::Range,
     rc::Rc,
 };
-use tinyvec::TinyVec;
+use tinyvec::ArrayVec;
 
 const KEY_FILTER: Name = sname("Filter");
 const KEY_FILTER_PARAMS: Name = sname("DecodeParms");
@@ -507,26 +507,32 @@ fn decode_image<'a, M: ImageMetadata>(
                     let mut img = RgbaImage::new(width, height);
                     let mut bit_reader = BitReader::<_, BigEndian>::new(data.as_ref());
 
+                    let mut c = ArrayVec::<[OrderedFloat<f32>; 4]>::new();
                     for y in 0..height {
                         for x in 0..width {
-                            let mut c = TinyVec::<[OrderedFloat<f32>; 4]>::with_capacity(n_colors);
-
                             // Read each color component (4 bits) and scale to 0-255 range
-                            for _ in 0..n_colors {
-                                let value = bit_reader
-                                    .read::<u8>(4)
-                                    .whatever_context::<_, ObjectValueError>(
-                                        "Failed to read color component",
-                                    )?;
+                            c.extend(
+                                (0..n_colors)
+                                    .map(|_| {
+                                        bit_reader
+                                            .read::<u8>(4)
+                                            .whatever_context::<_, ObjectValueError>(
+                                                "Failed to read color component",
+                                            )
+                                            .map(|value| {
+                                                OrderedFloat((value * 17).into_color_comp())
+                                            })
+                                    })
+                                    .collect::<Result<Vec<_>, _>>()?,
+                            );
 
-                                // Scale 4-bit value (0-15) to 8-bit (0-255)
-                                c.push(OrderedFloat((value * 17).into_color_comp()));
-                            }
+                            // Scale 4-bit value (0-15) to 8-bit (0-255)
 
                             // Convert the color using the color space
                             let color: [u8; 4] =
                                 color_to_rgba_with_cache::<u8>(cs, c.as_slice(), &mut color_cache);
                             img.put_pixel(x, y, Rgba(color));
+                            c.clear();
                         }
                     }
 
@@ -535,14 +541,13 @@ fn decode_image<'a, M: ImageMetadata>(
                 (Some(cs), 8) => {
                     let n_colors = cs.components();
                     let mut img = RgbaImage::new(width, height);
+                    let mut c: ArrayVec<[OrderedFloat<f32>; 4]> = ArrayVec::new();
                     for (p, dest_p) in data.chunks(n_colors).zip(img.pixels_mut()) {
-                        let c: TinyVec<[OrderedFloat<f32>; 4]> = p
-                            .iter()
-                            .map(|v| OrderedFloat(v.into_color_comp()))
-                            .collect();
+                        c.extend(p.iter().map(|v| OrderedFloat(v.into_color_comp())));
                         let color: [u8; 4] =
                             color_to_rgba_with_cache(cs, c.as_slice(), &mut color_cache);
                         *dest_p = Rgba(color);
+                        c.clear();
                     }
                     DynamicImage::ImageRgba8(img)
                 }
@@ -551,24 +556,24 @@ fn decode_image<'a, M: ImageMetadata>(
                     let n_colors = cs.components();
                     let mut img = RgbaImage::new(width, height);
 
+                    let mut c = ArrayVec::<[OrderedFloat<f32>; 4]>::new();
                     // Process 16-bit values (stored as 2 bytes per component)
                     for (p, dest_p) in data.chunks(n_colors * 2).zip(img.pixels_mut()) {
-                        let mut c = TinyVec::<[OrderedFloat<f32>; 4]>::with_capacity(n_colors);
-
                         // Convert each 16-bit component (2 bytes) to a float
-                        for i in 0..n_colors {
+                        c.extend((0..n_colors).map(|i| {
                             let idx = i * 2;
                             // Make sure we're reading the bytes in the correct order (big-endian)
                             let value = ((p[idx] as u16) << 8) | (p[idx + 1] as u16);
 
                             // Convert to 0.0-1.0 range
-                            c.push(OrderedFloat((value as f32) / 65535.0));
-                        }
+                            OrderedFloat((value as f32) / 65535.0)
+                        }));
 
                         // Convert the color using the color space
                         let color: [u8; 4] =
                             color_to_rgba_with_cache(cs, c.as_slice(), &mut color_cache);
                         *dest_p = Rgba(color);
+                        c.clear();
                     }
 
                     DynamicImage::ImageRgba8(img)

@@ -15,7 +15,7 @@ use ordered_float::OrderedFloat;
 use prescript::sname;
 use snafu::{OptionExt, ResultExt, ensure_whatever, whatever};
 use std::{fmt::Debug, iter::repeat, rc::Rc};
-use tinyvec::TinyVec;
+use tinyvec::ArrayVec;
 
 /// Color component composes a color.
 /// Two kinds of color component: float or integer.
@@ -119,7 +119,7 @@ where
 pub fn color_to_rgba_with_cache<T>(
     cs: &dyn ColorSpaceTrait<f32>,
     color: &[OrderedFloat<f32>],
-    cache: &mut HashMap<TinyVec<[OrderedFloat<f32>; 4]>, [T; 4]>,
+    cache: &mut HashMap<ArrayVec<[OrderedFloat<f32>; 4]>, [T; 4]>,
 ) -> [T; 4]
 where
     T: ColorComp,
@@ -728,7 +728,7 @@ where
     u8: ColorCompConvertTo<T>,
 {
     fn to_rgba(&self, color: &[T]) -> Result<[T; 4]> {
-        let color: TinyVec<[f32; 4]> = color
+        let color: ArrayVec<[f32; 4]> = color
             .iter()
             .take(self.n as usize)
             .map(|c| c.into_color_comp())
@@ -749,7 +749,7 @@ where
     }
 
     fn default_color(&self) -> [T; 4] {
-        let color: TinyVec<[T; 4]> = repeat(T::max_color()).take(self.n as usize).collect();
+        let color: ArrayVec<[T; 4]> = repeat(T::max_color()).take(self.n as usize).collect();
         match self.to_rgba(color.as_slice()) {
             Ok(rgba) => rgba,
             Err(e) => {
