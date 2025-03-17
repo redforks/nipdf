@@ -12,10 +12,7 @@ use log::{debug, error, warn};
 use nipdf_macro::{OperationParser, TryFromIntObject, TryFromNameObject, pdf_object};
 use prescript::{Name, sname};
 use snafu::{Report, ensure_whatever, whatever};
-use std::{
-    num::ParseIntError,
-    str::{Utf8Error, from_utf8},
-};
+use std::{num::ParseIntError, str::Utf8Error};
 use winnow::{
     ModalResult, Parser,
     combinator::{alt, repeat_till},
@@ -306,183 +303,183 @@ impl<'a, 'b> TryFrom<ObjectWithResolver<'a, 'b>> for NameOrStream<'b> {
 #[rustfmt::skip]
 pub enum Operation {
     // General Graphics State Operations
-    #[op_tag("w")]
+    #[op_tag(b"w")]
     SetLineWidth(f32),
-    #[op_tag("J")]
+    #[op_tag(b"J")]
     SetLineCap(LineCapStyle),
-    #[op_tag("j")]
+    #[op_tag(b"j")]
     SetLineJoin(LineJoinStyle),
-    #[op_tag("M")]
+    #[op_tag(b"M")]
     SetMiterLimit(f32),
-    #[op_tag("d")]
+    #[op_tag(b"d")]
     SetDashPattern(Vec<f32>, f32),
-    #[op_tag("ri")]
+    #[op_tag(b"ri")]
     SetRenderIntent(RenderingIntent),
-    #[op_tag("i")]
+    #[op_tag(b"i")]
     SetFlatness(f32),
-    #[op_tag("gs")]
+    #[op_tag(b"gs")]
     SetGraphicsStateParameters(NameOfDict),
 
     // Special Graphics State Operations
-    #[op_tag("q")]
+    #[op_tag(b"q")]
     SaveGraphicsState,
-    #[op_tag("Q")]
+    #[op_tag(b"Q")]
     RestoreGraphicsState,
-    #[op_tag("cm")]
+    #[op_tag(b"cm")]
     ModifyCTM(UserToUserSpace),
 
     // Path Construction Operations
-    #[op_tag("m")]
+    #[op_tag(b"m")]
     MoveToNext(Point),
-    #[op_tag("l")]
+    #[op_tag(b"l")]
     LineToNext(Point),
-    #[op_tag("c")]
+    #[op_tag(b"c")]
     AppendBezierCurve(Point, Point, Point),
-    #[op_tag("v")]
+    #[op_tag(b"v")]
     AppendBezierCurve2(Point, Point),
-    #[op_tag("y")]
+    #[op_tag(b"y")]
     AppendBezierCurve1(Point, Point),
-    #[op_tag("h")]
+    #[op_tag(b"h")]
     ClosePath,
-    #[op_tag("re")]
+    #[op_tag(b"re")]
     AppendRectangle(Point, f32, f32),
 
     // Path Painting Operations
-    #[op_tag("S")]
+    #[op_tag(b"S")]
     Stroke,
-    #[op_tag("s")]
+    #[op_tag(b"s")]
     CloseAndStroke,
-    #[op_tag("f")]
+    #[op_tag(b"f")]
     FillNonZero,
-    #[op_tag("F")]
+    #[op_tag(b"F")]
     FillNonZeroDeprecated,
-    #[op_tag("f*")]
+    #[op_tag(b"f*")]
     FillEvenOdd,
-    #[op_tag("B")]
+    #[op_tag(b"B")]
     FillAndStrokeNonZero,
-    #[op_tag("B*")]
+    #[op_tag(b"B*")]
     FillAndStrokeEvenOdd,
-    #[op_tag("b")]
+    #[op_tag(b"b")]
     CloseFillAndStrokeNonZero,
-    #[op_tag("b*")]
+    #[op_tag(b"b*")]
     CloseFillAndStrokeEvenOdd,
-    #[op_tag("n")]
+    #[op_tag(b"n")]
     EndPath,
 
     // Clipping Path Operations
-    #[op_tag("W")]
+    #[op_tag(b"W")]
     ClipNonZero,
-    #[op_tag("W*")]
+    #[op_tag(b"W*")]
     ClipEvenOdd,
 
     // Text Object Operations
-    #[op_tag("BT")]
+    #[op_tag(b"BT")]
     BeginText,
-    #[op_tag("ET")]
+    #[op_tag(b"ET")]
     EndText,
 
     // Text State Operations
-    #[op_tag("Tc")]
+    #[op_tag(b"Tc")]
     SetCharacterSpacing(Length<f32, TextSpace>),
-    #[op_tag("Tw")]
+    #[op_tag(b"Tw")]
     SetWordSpacing(Length<f32, TextSpace>),
-    #[op_tag("Tz")]
+    #[op_tag(b"Tz")]
     SetHorizontalScaling(f32),
-    #[op_tag("TL")]
+    #[op_tag(b"TL")]
     SetLeading(f32),
-    #[op_tag("Tf")]
+    #[op_tag(b"Tf")]
     SetFont(NameOfDict, f32),
-    #[op_tag("Tr")]
+    #[op_tag(b"Tr")]
     SetTextRenderingMode(TextRenderingMode),
-    #[op_tag("Ts")]
+    #[op_tag(b"Ts")]
     SetTextRise(f32),
 
     // Text Positioning Operations
-    #[op_tag("Td")]
+    #[op_tag(b"Td")]
     MoveTextPosition(TextPoint),
-    #[op_tag("TD")]
+    #[op_tag(b"TD")]
     MoveTextPositionAndSetLeading(TextPoint),
-    #[op_tag("Tm")]
+    #[op_tag(b"Tm")]
     SetTextMatrix(TextToUserSpace),
-    #[op_tag("T*")]
+    #[op_tag(b"T*")]
     MoveToStartOfNextLine,
 
     // Text Showing Operations
-    #[op_tag("Tj")]
+    #[op_tag(b"Tj")]
     ShowText(TextString),
-    #[op_tag("TJ")]
+    #[op_tag(b"TJ")]
     ShowTexts(Vec<TextStringOrNumber>),
-    #[op_tag("'")]
+    #[op_tag(b"'")]
     MoveToNextLineAndShowText(TextString),
-    #[op_tag("\"")]
+    #[op_tag(b"\"")]
     SetSpacingMoveToNextLineAndShowText(Length<f32, TextSpace>, Length<f32, TextSpace>, TextString),
 
     // Type 3 Font Operations
-    #[op_tag("d0")]
+    #[op_tag(b"d0")]
     SetGlyphWidth(Point),
-    #[op_tag("d1")]
+    #[op_tag(b"d1")]
     SetGlyphWidthAndBoundingBox(Point, Point, Point),
 
     // Color Operations
-    #[op_tag("CS")]
+    #[op_tag(b"CS")]
     SetStrokeColorSpace(ColorSpaceArgs),
-    #[op_tag("cs")]
+    #[op_tag(b"cs")]
     SetFillColorSpace(ColorSpaceArgs),
-    #[op_tag("SC")]
+    #[op_tag(b"SC")]
     SetStrokeColor(ColorArgs),
-    #[op_tag("SCN")]
+    #[op_tag(b"SCN")]
     SetStrokeColorOrWithPattern(ColorArgsOrName),
-    #[op_tag("sc")]
+    #[op_tag(b"sc")]
     SetFillColor(ColorArgs),
-    #[op_tag("scn")]
+    #[op_tag(b"scn")]
     SetFillColorOrWithPattern(ColorArgsOrName),
-    #[op_tag("G")]
+    #[op_tag(b"G")]
     SetStrokeGray([f32; 1]), // Should be Color::Gray
-    #[op_tag("g")]
+    #[op_tag(b"g")]
     SetFillGray([f32; 1]),   // Should be Color::Gray
-    #[op_tag("RG")]
+    #[op_tag(b"RG")]
     SetStrokeRGB([f32; 3]), // Should be Color::Rgb
-    #[op_tag("rg")]
+    #[op_tag(b"rg")]
     SetFillRGB([f32; 3]),   // Should be Color::Rgb
-    #[op_tag("K")]
+    #[op_tag(b"K")]
     SetStrokeCMYK([f32; 4]), // Should be Color::Cmyk
-    #[op_tag("k")]
+    #[op_tag(b"k")]
     SetFillCMYK([f32; 4]),   // Should be Color::Cmyk
 
     // Shading Operation
-    #[op_tag("sh")]
+    #[op_tag(b"sh")]
     PaintShading(NameOfDict),
 
     // Inline Image Operations
-    #[op_tag("BI")]
+    #[op_tag(b"BI")]
     BeginInlineImage,
-    #[op_tag("ID")]
+    #[op_tag(b"ID")]
     BeginInlineImageData,
-    #[op_tag("EI")]
+    #[op_tag(b"EI")]
     EndInlineImage,
-    #[op_tag("paint-inline-image")]
+    #[op_tag(b"paint-inline-image")]
     PaintInlineImage(InlineImage),
 
     // XObject Operation
-    #[op_tag("Do")]
+    #[op_tag(b"Do")]
     PaintXObject(NameOfDict),
 
     // Marked Content Operations
-    #[op_tag("MP")]
+    #[op_tag(b"MP")]
     DesignateMarkedContentPoint(NameOfDict),
-    #[op_tag("DP")]
+    #[op_tag(b"DP")]
     DesignateMarkedContentPointWithProperties(NameOfDict, NameOrDict),
-    #[op_tag("BMC")]
+    #[op_tag(b"BMC")]
     BeginMarkedContent(NameOfDict),
-    #[op_tag("BDC")]
+    #[op_tag(b"BDC")]
     BeginMarkedContentWithProperties(NameOfDict, NameOrDict),
-    #[op_tag("EMC")]
+    #[op_tag(b"EMC")]
     EndMarkedContent,
 
     // Compatibility Operations
-    #[op_tag("BX")]
+    #[op_tag(b"BX")]
     BeginCompatibilitySection,
-    #[op_tag("EX")]
+    #[op_tag(b"EX")]
     EndCompatibilitySection,
 }
 
@@ -635,7 +632,7 @@ impl<'b, U> ConvertFromObject<'b> for Point2D<f32, U> {
 #[derive(Debug, PartialEq)]
 enum ObjectOrOperator<'a> {
     Object(Object),
-    Operator(&'a str),
+    Operator(&'a [u8]),
 }
 
 /// Parses `Operation::PaintInlineImage` operation.
@@ -674,14 +671,13 @@ where
         + AddContext<&'a [u8], &'static str>
         + 'static,
 {
-    let operator = take_till(1.., b" \t\n\r%[<(/".as_slice())
-        .try_map(|buf| Ok::<_, Utf8Error>(ObjectOrOperator::Operator(from_utf8(buf)?)))
-        .context("operator");
     let mut object_or_operator = alt((
         parser::object_inside_page_stream::<_, prescript::ParserError>()
             .map(ObjectOrOperator::Object)
             .context("operands"),
-        operator,
+        take_till(1.., b" \t\n\r%[<(/".as_slice())
+            .map(ObjectOrOperator::Operator)
+            .context("operator"),
     ));
     let mut operands = Vec::with_capacity(8);
     let mut r = vec![];
@@ -696,6 +692,7 @@ where
             Ok(ObjectOrOperator::Operator(op)) => {
                 let opt_op = create_operation(op, &mut operands).unwrap_or_else(|e| {
                     // possible because not enough operands
+                    let op = String::from_utf8_lossy(op);
                     warn!("Invalid operation '{}': {:?}", op, e);
                     None
                 });

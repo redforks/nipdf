@@ -7,8 +7,8 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
 use syn::{
-    Arm, Expr, ExprLit, Fields, FieldsUnnamed, Ident, ItemEnum, ItemStruct, Lit, LitStr, Meta, Pat,
-    Token, parse_macro_input, parse_quote,
+    Arm, Expr, ExprLit, Fields, FieldsUnnamed, Ident, ItemEnum, ItemStruct, Lit, LitByteStr, Meta,
+    Pat, Token, parse_macro_input, parse_quote,
 };
 
 /// Generate `impl TryFrom` for enum that convert Object::Name to enum variant
@@ -132,10 +132,10 @@ pub fn try_from_int_object_for_bitflags(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(OperationParser, attributes(op_tag))]
 pub fn graphics_operation_parser(input: TokenStream) -> TokenStream {
     let op_enum = parse_macro_input!(input as ItemEnum);
-    let new_arm = |s: &str, body: Expr| Arm {
+    let new_arm = |s: &[u8], body: Expr| Arm {
         pat: Pat::Lit(ExprLit {
             attrs: vec![],
-            lit: Lit::Str(LitStr::new(s, Span::call_site())),
+            lit: Lit::ByteStr(LitByteStr::new(s, Span::call_site())),
         }),
         guard: None,
         body: body.into(),
@@ -168,7 +168,8 @@ pub fn graphics_operation_parser(input: TokenStream) -> TokenStream {
                 if list.path.is_ident("op_tag") {
                     let tokens: TokenStream = list.tokens.clone().into();
                     if let ExprLit {
-                        lit: Lit::Str(lit), ..
+                        lit: Lit::ByteStr(lit),
+                        ..
                     } = parse_macro_input!(tokens as ExprLit)
                     {
                         s = Some(lit.value());
@@ -209,7 +210,7 @@ pub fn graphics_operation_parser(input: TokenStream) -> TokenStream {
     // }));
 
     let tokens = quote! {
-        fn create_operation(op: &str, operands: &mut Vec<crate::object::Object>) -> Result<Option<Operation>, crate::ObjectValueError> {
+        fn create_operation(op: &[u8], operands: &mut Vec<crate::object::Object>) -> Result<Option<Operation>, crate::ObjectValueError> {
             Ok(match op {
                 #( #arms, )*
                 _ => None,
