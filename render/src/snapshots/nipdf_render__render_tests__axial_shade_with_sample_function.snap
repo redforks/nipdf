@@ -1,5 +1,5 @@
 ---
 source: render/src/render_tests.rs
-expression: "&decode_file_page(\"pdf.js/web/compressed.tracemonkey-pldi-09.pdf\",\n            10).unwrap()"
+expression: "&decode_file_page(\"pdf.js/web/compressed.tracemonkey-pldi-09.pdf\", 10)?"
 ---
-"6252ca14343112b1a9109386e55a7010"
+"1092039d63ff8b91719b142b0aa4e913"

@@ -2,4 +2,4 @@
 source: render/src/render_tests.rs
 expression: "&decode_file_page(\"sample_files/normal/SamplePdf1_12mb_6pages.pdf\",\n5).unwrap()"
 ---
-"d6102eb5e643c1bf3077cac01a5a9cb5"
+"bb26a348313c103ecae2907643c1a075"

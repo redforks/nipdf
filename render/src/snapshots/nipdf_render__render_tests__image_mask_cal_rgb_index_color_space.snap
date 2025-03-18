@@ -2,4 +2,4 @@
 source: render/src/render_tests.rs
 expression: "&decode_file_page(\"sample_files/filters/predictor.pdf\", 0).unwrap()"
 ---
-"e449c90294896154fbfbd3d8ef9ca4f7"
+"e364e376b3f005fc08968d25032029e2"

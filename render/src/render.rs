@@ -1143,7 +1143,7 @@ impl<'a, 'c> Render<'a, 'c> {
 
     fn load_image_as_mask(mut img: RgbaImage, state: &State, s_mask: bool) -> Result<Mask> {
         let paint = PixmapPaint {
-            quality: FilterQuality::Nearest,
+            quality: FilterQuality::Bicubic,
             ..Default::default()
         };
 
@@ -1220,7 +1220,7 @@ impl<'a, 'c> Render<'a, 'c> {
 
             // 绘制到主画布
             let paint = PixmapPaint {
-                quality: FilterQuality::Nearest,
+                quality: FilterQuality::Bicubic,
                 ..Default::default()
             };
             self.canvas.draw_pixmap(
@@ -1343,7 +1343,7 @@ impl<'a, 'c> Render<'a, 'c> {
                 .interpolate()
                 .whatever_context("read x_object interpolate")?
             {
-                FilterQuality::Bilinear
+                FilterQuality::Bicubic
             } else {
                 FilterQuality::Nearest
             },

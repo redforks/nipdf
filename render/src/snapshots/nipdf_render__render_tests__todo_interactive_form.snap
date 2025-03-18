@@ -2,4 +2,4 @@
 source: render/src/render_tests.rs
 expression: "&decode_file_page(\"pdf.js/test/pdfs/160F-2019.pdf\", 0).unwrap()"
 ---
-"8d34506f2a108671d76f66131b301354"
+"e715c77554458dffeee4343b4a7ddcb6"
