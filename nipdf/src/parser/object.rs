@@ -1,4 +1,4 @@
-use super::{eol2, eol3, ws_prefixed0, ws_prefixed1, wsc_prefixed0, wsc0};
+use super::{eol3, ws_prefixed0, ws_prefixed1, wsc_prefixed0, wsc0};
 use crate::{
     ObjectValueError,
     object::{
@@ -572,7 +572,7 @@ where
 
     if is_stream {
         // Process the stream - handle the error conversion explicitly
-        let stream_start = delimited(wsc0::<_, ErrMode<E>>(), b"stream".as_slice(), eol2())
+        let stream_start = delimited(wsc0::<_, ErrMode<E>>(), b"stream".as_slice(), eol3())
             .span()
             .parse_next(buf)?;
 

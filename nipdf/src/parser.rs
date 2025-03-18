@@ -10,10 +10,11 @@ pub(crate) use object::{
 };
 use winnow::{
     Parser,
-    combinator::{alt, cond, delimited, eof, opt, preceded, repeat},
+    combinator::{alt, cond, empty, eof, fail, opt, preceded, repeat, terminated},
+    dispatch,
     error::ParserError,
     stream::{Compare, ContainsToken, Stream, StreamIsPartial},
-    token::{one_of, take_till},
+    token::{any, one_of, take_till},
 };
 
 /// Error at file struct level.
@@ -35,34 +36,19 @@ where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8>,
     E: ParserError<S> + 'a,
 {
-    one_of([b'\n', b'\r'])
-        .flat_map(|v| cond(v == b'\r', opt(b'\n')))
-        .void()
-}
-
-/// Return eol parser that has 2 alternative: '\n', or '\r\n'
-fn eol2<'a, S, E>() -> impl Parser<S, (), E> + use<S, E>
-where
-    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8>,
-    E: ParserError<S> + 'a,
-{
-    one_of([b'\n', b'\r'])
+    one_of(b"\n\r")
         .flat_map(|v| cond(v == b'\r', opt(b'\n')))
         .void()
 }
 
 /// Return comment parser. Parser returns comment string, `%` prefix and newline suffix not
 /// included.
-fn comment<'a, S, E>() -> impl Parser<S, &'a [u8], E>
+fn comment_rest<'a, S, E>() -> impl Parser<S, &'a [u8], E>
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8>,
     E: ParserError<S> + 'a,
 {
-    delimited(
-        b'%',
-        take_till(0.., [b'\n', b'\r']),
-        alt((eol3().void(), eof.void())),
-    )
+    terminated(take_till(0.., [b'\n', b'\r']), alt((eol3(), eof.void())))
 }
 
 /// Return parser that parse one of whitespace characters.
@@ -88,7 +74,12 @@ where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
     E: ParserError<S> + 'a,
 {
-    alt((whitespace().void(), comment().void()))
+    dispatch! {
+        any;
+        b'%' => comment_rest().void(),
+        b' ' | b'\0' | b'\n' | b'\r' | b'\t' | b'\x0C' => empty.void(),
+        _ => fail,
+    }
 }
 
 /// Matches 0 or more whitespace or comments.
