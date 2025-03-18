@@ -194,8 +194,8 @@ impl InlineImage {
         let width = meta.width()?;
         let height = meta.height()?;
 
-        // Skip caching for large images (width * height > 1024)
-        if width * height > 1024 {
+        // Skip caching for large images
+        if width * height > (150 * 150) {
             return self.decode_image_data(resolver, resources);
         }
 
