@@ -18,18 +18,26 @@ use std::{
 use winnow::{
     ModalResult, Parser,
     ascii::{Caseless, dec_uint, float},
-    combinator::{alt, delimited, opt, preceded, repeat, repeat_till, terminated},
+    combinator::{alt, delimited, dispatch, fail, opt, preceded, repeat, repeat_till, terminated},
     error::{AddContext, ErrMode, FromExternalError, ParserError},
     stream::{AsBStr, AsChar, Compare, ContainsToken, Location, Stream, StreamIsPartial},
     token::{any, rest, take, take_till, take_while},
 };
+
+fn name_rest<'a, S, E>() -> impl Parser<S, Name, E> + 'a
+where
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+    E: ParserError<S> + 'a + FromExternalError<S, ObjectValueError>,
+{
+    take_till(0.., b" \t\r\n\x0C[<(/>]").try_map(normalize_name)
+}
 
 fn name<'a, S, E>() -> impl Parser<S, Name, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
     E: ParserError<S> + 'a + FromExternalError<S, ObjectValueError>,
 {
-    preceded(b'/', take_till(0.., b" \t\r\n\x0C[<(/>]")).try_map(normalize_name)
+    preceded(b'/', name_rest())
 }
 
 /// Return `Err(ObjectValueError::InvalidNameFormat)` if the name is not a valid PDF name encoding,
@@ -140,6 +148,51 @@ where
     .parse_next(input)
 }
 
+fn parse_quoted_string_rest<'a, S, E>(input: &mut S) -> ModalResult<LiteralString, E>
+where
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+    E: ParserError<S> + 'a + FromExternalError<S, ParseIntError>,
+{
+    let literal = take_till(1.., b"\\()").map(LiteralStringFragment::Literal);
+    let paired = parse_quoted_string.map(LiteralStringFragment::Nested);
+    let oct_char = take_while(1..4, AsChar::is_oct_digit)
+        .try_map(|s: &[u8]| u8::from_str_radix(&String::from_utf8_lossy(s), 8))
+        .map(LiteralStringFragment::Escaped);
+    let escaped_line = eol3().value(LiteralStringFragment::EscapedLine);
+    let escaped = preceded(
+        b'\\',
+        alt((
+            b'n'.value(LiteralStringFragment::Escaped(b'\n')),
+            b'r'.value(LiteralStringFragment::Escaped(b'\r')),
+            b't'.value(LiteralStringFragment::Escaped(b'\t')),
+            b'b'.value(LiteralStringFragment::Escaped(b'\x08')),
+            b'f'.value(LiteralStringFragment::Escaped(b'\x0C')),
+            oct_char,
+            escaped_line,
+            any.map(LiteralStringFragment::Escaped),
+        )),
+    );
+    // .map(LiteralStringFragment::Literal);
+    terminated(
+        repeat(0.., alt((literal, paired, escaped))).fold(InnerString::new, |mut r, f| {
+            match f {
+                LiteralStringFragment::Literal(s) => r.extend_from_slice(s),
+                LiteralStringFragment::Escaped(c) => r.push(c),
+                LiteralStringFragment::Nested(mut s) => {
+                    r.push(b'(');
+                    r.append(&mut s.0);
+                    r.push(b')');
+                }
+                LiteralStringFragment::EscapedLine => {}
+            }
+            r
+        }),
+        b')',
+    )
+    .map(LiteralString)
+    .parse_next(input)
+}
+
 fn decode_hex(buf: &[u8]) -> Result<HexString, FromHexError> {
     /// Remove whitespace from hex string.
     fn preprocess(buf: &[u8]) -> Cow<'_, [u8]> {
@@ -163,7 +216,7 @@ fn decode_hex(buf: &[u8]) -> Result<HexString, FromHexError> {
     hex::decode(&buf).map(|v| HexString((&v[..]).into()))
 }
 
-pub(crate) fn hex_string<'a, S, E>() -> impl Parser<S, Object, E> + 'a
+fn hex_string_rest<'a, S, E>() -> impl Parser<S, Object, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
     E: ParserError<S> + FromExternalError<S, FromHexError> + 'a,
@@ -172,7 +225,40 @@ where
         ..,
         (AsChar::is_hex_digit, [b' ', b'\t', b'\r', b'\n', b'\x0C']),
     );
-    delimited(b'<', parser.try_map(decode_hex), b'>').map(Object::HexString)
+    terminated(parser.try_map(decode_hex), b'>').map(Object::HexString)
+}
+
+pub(crate) fn hex_string<'a, S, E>() -> impl Parser<S, Object, E> + 'a
+where
+    S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
+    E: ParserError<S> + FromExternalError<S, FromHexError> + 'a,
+{
+    preceded(b'<', hex_string_rest())
+}
+
+fn array_rest<'a, S, E>(input: &mut S) -> ModalResult<Object, E>
+where
+    S: Stream<Token = u8, Slice = &'a [u8]>
+        + StreamIsPartial
+        + AsBStr
+        + Compare<u8>
+        + Compare<char>
+        + Compare<&'a [u8]>
+        + Compare<Caseless<&'static str>>
+        + 'a,
+    <S as Stream>::IterOffsets: Clone,
+    E: ParserError<S>
+        + 'a
+        + ParserError<&'a [u8]>
+        + AddContext<S, &'static str>
+        + FromExternalError<S, ObjectValueError>
+        + FromExternalError<S, FromHexError>
+        + FromExternalError<S, ParseIntError>,
+{
+    let item = repeat::<_, _, Vec<_>, _, _>(0.., wsc_prefixed0(object()));
+    terminated(item, (wsc0(), b']'))
+        .output_into()
+        .parse_next(input)
 }
 
 fn array<'a, S, E>(input: &mut S) -> ModalResult<Object, E>
@@ -194,10 +280,7 @@ where
         + FromExternalError<S, FromHexError>
         + FromExternalError<S, ParseIntError>,
 {
-    let item = repeat::<_, _, Vec<_>, _, _>(0.., wsc_prefixed0(object()));
-    delimited(b'[', item, (wsc0(), b']'))
-        .output_into()
-        .parse_next(input)
+    preceded(b'[', array_rest).parse_next(input)
 }
 
 /// Parse Dictionary body, i.e, Dictionary without '<<' and '>>' quote.
@@ -225,6 +308,60 @@ where
     repeat::<_, _, HashMap<_, _>, _, _>(0.., (key, value)).map(Dictionary::from)
 }
 
+fn dict_rest<'a, S, E>(input: &mut S) -> ModalResult<Dictionary, E>
+where
+    S: Stream<Token = u8, Slice = &'a [u8]>
+        + StreamIsPartial
+        + AsBStr
+        + Compare<u8>
+        + Compare<char>
+        + Compare<&'a [u8]>
+        + Compare<Caseless<&'static str>>
+        + 'a,
+    <S as Stream>::IterOffsets: Clone,
+    E: ParserError<S>
+        + 'a
+        + ParserError<&'a [u8]>
+        + AddContext<S, &'static str>
+        + FromExternalError<S, ObjectValueError>
+        + FromExternalError<S, FromHexError>
+        + FromExternalError<S, ParseIntError>,
+{
+    terminated(dict_body().context("dict body"), (wsc0(), b">>".as_slice())).parse_next(input)
+}
+
+fn dict_or_hex_string_rest<'a, S, E>() -> impl Parser<S, Object, ErrMode<E>> + 'a
+where
+    S: Stream<Token = u8, Slice = &'a [u8]>
+        + StreamIsPartial
+        + AsBStr
+        + Compare<u8>
+        + Compare<char>
+        + Compare<&'a [u8]>
+        + Compare<Caseless<&'static str>>
+        + 'a,
+    <S as Stream>::IterOffsets: Clone,
+    E: ParserError<S>
+        + 'a
+        + ParserError<&'a [u8]>
+        + AddContext<S, &'static str>
+        + FromExternalError<S, ObjectValueError>
+        + FromExternalError<S, FromHexError>
+        + FromExternalError<S, ParseIntError>,
+{
+    opt(b'<').flat_map(|v| {
+        if v.is_some() {
+            let r: Box<dyn Parser<S, Object, ErrMode<E>>> =
+                Box::new(dict_rest.map(Object::Dictionary));
+            r
+        } else {
+            let r: Box<dyn Parser<S, Object, ErrMode<E>>> =
+                Box::new(hex_string_rest::<_, ErrMode<E>>());
+            r
+        }
+    })
+}
+
 pub(crate) fn dict<'a, S, E>(input: &mut S) -> ModalResult<Dictionary, E>
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
@@ -244,12 +381,7 @@ where
         + FromExternalError<S, FromHexError>
         + FromExternalError<S, ParseIntError>,
 {
-    delimited(
-        b"<<".as_slice(),
-        dict_body().context("dict body"),
-        (wsc0(), b">>".as_slice()),
-    )
-    .parse_next(input)
+    preceded(b"<<".as_slice(), dict_rest).parse_next(input)
 }
 
 pub(crate) fn zero_prefixed_uint<'a, T, S, E>() -> impl Parser<S, T, E> + 'a
@@ -299,24 +431,20 @@ where
         + FromExternalError<S, FromHexError>
         + FromExternalError<S, ParseIntError>,
 {
-    let null = b"null".as_slice().value(Object::Null);
-    let bool = alt((
-        b"true".as_slice().value(Object::Bool(true)),
-        b"false".as_slice().value(Object::Bool(false)),
-    ));
-    let name = name().map(Object::Name);
-    let quoted_string = parse_quoted_string.map(Object::LiteralString);
-
     alt((
-        null,
-        bool,
         reference(),
         number(),
-        name,
-        quoted_string,
-        hex_string(),
-        array,
-        dict.output_into(),
+        dispatch! {
+            any;
+            b'/' => name_rest().map(Object::Name),
+            b'n' => b"ull".as_slice().value(Object::Null),
+            b't' => b"rue".as_slice().value(Object::Bool(true)),
+            b'f' => b"alse".as_slice().value(Object::Bool(false)),
+            b'<' => dict_or_hex_string_rest(),
+            b'(' => parse_quoted_string_rest.map(Object::LiteralString),
+            b'[' => array_rest,
+             _ => fail,
+        },
     ))
 }
 
