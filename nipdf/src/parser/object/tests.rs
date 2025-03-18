@@ -25,7 +25,7 @@ fn new_hex_string(s: &str) -> Object {
 #[test_case("-123.12" => Object::Number(-123.12); "negative number")]
 #[test_case("-" => Object::Integer(0); "negative symbol only")]
 #[test_case("+123.12" => Object::Number(123.12); "number prefixed with +")]
-#[test_case("4.0" => Object::Number(4.); "number end with dot")]
+#[test_case("4.0" => Object::Integer(4); "number end with dot")]
 #[test_case("4.58984938980.04" => Object::Number(4.589_849_5); "number ignore 2nd dot")]
 #[test_case("-.002" => Object::Number(-0.002); "number start with dot")]
 #[test_case("/" => Object::Name(sname("")); "empty name")]

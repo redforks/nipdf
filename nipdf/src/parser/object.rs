@@ -21,7 +21,7 @@ use winnow::{
     combinator::{alt, delimited, dispatch, fail, opt, preceded, repeat, repeat_till, terminated},
     error::{AddContext, ErrMode, FromExternalError, ParserError},
     stream::{AsBStr, AsChar, Compare, ContainsToken, Location, Stream, StreamIsPartial},
-    token::{any, rest, take, take_till, take_while},
+    token::{any, take, take_till, take_while},
 };
 
 fn name_rest<'a, S, E>() -> impl Parser<S, Name, E> + 'a
@@ -84,14 +84,18 @@ where
         buf.finish();
         Ok(Object::Integer(0))
     }
-    take_while::<_, S, _>(1.., (b'0'..=b'9', b'+', b'-', b'.'))
-        .take()
-        .and_then(alt((
-            rest.parse_to().map(Object::Integer),
-            rest.parse_to().map(Object::Number),
-            float.map(Object::Number),
-            fallback,
-        )))
+
+    take_while::<_, S, _>(1.., (b'0'..=b'9', b'+', b'-', b'.')).and_then(alt((
+        float.map(|v: f64| {
+            // return Object::Integer if v has no decimal part
+            if v.fract() == 0.0 && v <= i32::MAX as f64 && v >= i32::MIN as f64 {
+                Object::Integer(v as i32)
+            } else {
+                Object::Number(v as f32)
+            }
+        }),
+        fallback,
+    )))
 }
 
 #[derive(Clone)]
