@@ -10,11 +10,13 @@ use crate::{
 };
 use educe::Educe;
 use image::RgbaImage;
-use md5::{Digest, Md5};
 use once_map::OnceMap;
 use prescript::{Name, sname};
 use snafu::{OptionExt, ResultExt};
-use std::{hash::Hash, rc::Rc};
+use std::{
+    hash::{Hash, Hasher},
+    rc::Rc,
+};
 
 struct InlineStreamDict<'a>(&'a Dictionary);
 
@@ -151,7 +153,7 @@ pub struct InlineImageCacheKey {
     decode: String,      // Debug string representation
     image_mask: bool,
     // Hash of binary image data
-    data_hash: [u8; 16],
+    data_hash: u64,
 }
 
 /// Contains image data and metadata of inlined image.
@@ -211,9 +213,9 @@ impl InlineImage {
         let meta = self.meta();
 
         // Calculate MD5 hash of image data
-        let mut hasher = Md5::new();
-        hasher.update(&self.1);
-        let data_hash = hasher.finalize().into();
+        let mut hasher = ahash::AHasher::default();
+        hasher.write(&self.1);
+        let data_hash = hasher.finish();
 
         Ok(InlineImageCacheKey {
             width: meta.width()?,
