@@ -34,7 +34,7 @@ debug = 1
 
 [workspace.dependencies]
 hex = { version = "0.4" }
-once_cell = "1.20"
+once_cell = "1.21"
 num-traits = "0.2"
 memchr = "2.7"
 ahash = { version = "0.8", features = ["no-rng"] }
@@ -75,7 +75,7 @@ proc-macro2 = "1.0"
 quote = "1.0"
 syn = { version = "2.0", features = ["full", "extra-traits"] }
 map-macro = "0.3"
-winnow = { version = "0.7.3", features = ["simd"] }
+winnow = { version = "0.7.4", features = ["simd"] }
 kstring = { version = "2.0", features = ["max_inline"] }
 itertools = "0.13"
 clap = { version = "4.5", features = ["derive"] }
