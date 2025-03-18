@@ -1207,29 +1207,16 @@ impl<'a, 'c> Render<'a, 'c> {
                 None,
             );
 
-            // 将掩码应用到临时画布上
-            // 通过修改像素透明度而不是创建大型掩码
-            let mut result_img = Vec::with_capacity((w * h * 4) as usize);
-            let temp_bytes = temp_canvas.data();
-
+            // 修改 temp_canvas 的像素数据，使其包含 img 的掩码信息
+            let temp_canvas_buffer = temp_canvas.data_mut();
             for (i, pixel) in img.pixels().enumerate() {
                 let mask_value = if mask_reversed {
                     pixel[0]
                 } else {
                     255 - pixel[0]
                 };
-                let offset = i * 4;
-
-                // 复制填充色的RGB
-                result_img.push(temp_bytes[offset]); // R
-                result_img.push(temp_bytes[offset + 1]); // G
-                result_img.push(temp_bytes[offset + 2]); // B
-                result_img.push(mask_value); // A - 使用掩码值
+                temp_canvas_buffer[i * 4 + 3] = mask_value;
             }
-
-            // 创建最终图像
-            let final_img = PixmapRef::from_bytes(&result_img, w, h)
-                .whatever_context("Create final masked image")?;
 
             // 绘制到主画布
             let paint = PixmapPaint {
@@ -1239,7 +1226,7 @@ impl<'a, 'c> Render<'a, 'c> {
             self.canvas.draw_pixmap(
                 0,
                 0,
-                final_img,
+                temp_canvas.as_ref(),
                 &paint,
                 state.image_transform(w, h).into_skia(),
                 None,
