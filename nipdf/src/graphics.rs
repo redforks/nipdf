@@ -13,7 +13,6 @@ use nipdf_macro::{OperationParser, TryFromIntObject, TryFromNameObject, pdf_obje
 use prescript::{Name, sname};
 use snafu::{Report, ensure_whatever, whatever};
 use std::{num::ParseIntError, str::Utf8Error};
-use tinyvec::ArrayVec;
 use winnow::{
     Parser,
     combinator::{alt, repeat_till},

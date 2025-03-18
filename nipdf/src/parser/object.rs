@@ -216,6 +216,7 @@ fn decode_hex(buf: &[u8]) -> Result<HexString, FromHexError> {
     hex::decode(&buf).map(|v| HexString((&v[..]).into()))
 }
 
+/// not including '<' prefix
 fn hex_string_rest<'a, S, E>() -> impl Parser<S, Object, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
@@ -228,6 +229,7 @@ where
     terminated(parser.try_map(decode_hex), b'>').map(Object::HexString)
 }
 
+#[cfg(test)]
 pub(crate) fn hex_string<'a, S, E>() -> impl Parser<S, Object, E> + 'a
 where
     S: Stream<Token = u8, Slice = &'a [u8]> + StreamIsPartial + Compare<u8> + 'a,
@@ -236,6 +238,7 @@ where
     preceded(b'<', hex_string_rest())
 }
 
+/// Not including '[' prefix
 fn array_rest<'a, S, E>(input: &mut S) -> ModalResult<Object, E>
 where
     S: Stream<Token = u8, Slice = &'a [u8]>
@@ -259,28 +262,6 @@ where
     terminated(item, (wsc0(), b']'))
         .output_into()
         .parse_next(input)
-}
-
-fn array<'a, S, E>(input: &mut S) -> ModalResult<Object, E>
-where
-    S: Stream<Token = u8, Slice = &'a [u8]>
-        + StreamIsPartial
-        + AsBStr
-        + Compare<u8>
-        + Compare<char>
-        + Compare<&'a [u8]>
-        + Compare<Caseless<&'static str>>
-        + 'a,
-    <S as Stream>::IterOffsets: Clone,
-    E: ParserError<S>
-        + 'a
-        + ParserError<&'a [u8]>
-        + AddContext<S, &'static str>
-        + FromExternalError<S, ObjectValueError>
-        + FromExternalError<S, FromHexError>
-        + FromExternalError<S, ParseIntError>,
-{
-    preceded(b'[', array_rest).parse_next(input)
 }
 
 /// Parse Dictionary body, i.e, Dictionary without '<<' and '>>' quote.
@@ -473,21 +454,19 @@ where
         + FromExternalError<S, FromHexError>
         + FromExternalError<S, ParseIntError>,
 {
-    let bool = alt((
-        b"true".as_slice().value(Object::Bool(true)),
-        b"false".as_slice().value(Object::Bool(false)),
-    ));
-    let name = name().map(Object::Name);
-    let quoted_string = parse_quoted_string.map(Object::LiteralString);
-
     alt((
-        bool,
         number(),
-        name,
-        quoted_string,
-        hex_string(),
-        array,
-        dict.output_into(),
+        dispatch! {
+            any;
+            b'/' => name_rest().map(Object::Name),
+            b'n' => b"ull".as_slice().value(Object::Null),
+            b't' => b"rue".as_slice().value(Object::Bool(true)),
+            b'f' => b"alse".as_slice().value(Object::Bool(false)),
+            b'<' => dict_or_hex_string_rest(),
+            b'(' => parse_quoted_string_rest.map(Object::LiteralString),
+            b'[' => array_rest,
+             _ => fail,
+        },
     ))
 }
 
