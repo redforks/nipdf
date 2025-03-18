@@ -57,7 +57,6 @@ fn scan_objects() -> Result<(), Whatever> {
                 .content()
                 .whatever_context("get page content")?
                 .operations()
-                .whatever_context("parse page operations")?
             {
                 println!("  {:?}", op);
             }

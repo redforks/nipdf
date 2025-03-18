@@ -16,7 +16,6 @@ use num_traits::ToPrimitive;
 use once_cell::unsync::OnceCell;
 use prescript::Name;
 use snafu::{OptionExt, ResultExt};
-use winnow::{Parser as _, combinator::terminated, token::rest};
 
 pub struct Type3Font {
     name_to_gid: HashMap<Name, u16>,
@@ -95,10 +94,7 @@ impl Type3Font {
             let data = stream
                 .decode(resolver)
                 .whatever_context::<_, ObjectValueError>("decode stream")?;
-            let ops = terminated(parse_operations::<crate::ParserError>, rest)
-                .parse(&data[..])
-                .map_err(winnow::error::ParseError::into_inner)
-                .whatever_context::<_, ObjectValueError>("parse type3 operation")?;
+            let ops: Vec<_> = parse_operations(&mut &data[..]).collect::<Vec<Operation>>();
             Ok::<_, ObjectValueError>(Type3Glyph(ops.into()))
         })
         .ok()

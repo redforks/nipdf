@@ -14,10 +14,9 @@ use crate::{
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt as _};
 use educe::Educe;
 use nipdf_macro::{TryFromNameObject, pdf_object};
-use prescript::{Name, ParserError, sname};
+use prescript::{Name, sname};
 use snafu::{OptionExt as _, ResultExt as _};
 use std::{cell::LazyCell, iter::once};
-use winnow::{Parser as _, combinator::terminated, token::rest};
 
 pub mod paint;
 
@@ -393,13 +392,10 @@ impl PageContent {
         Self { bufs }
     }
 
-    pub fn operations(self) -> Result<Vec<Operation>> {
+    pub fn operations(self) -> Vec<Operation> {
         let data = self.bufs.into_iter().flatten().collect::<Vec<u8>>();
 
-        terminated(parse_operations::<ParserError>, rest)
-            .parse(&data)
-            .map_err(winnow::error::ParseError::into_inner)
-            .whatever_context::<_, ObjectValueError>("parse page operations")
+        parse_operations(&mut &data[..]).collect()
     }
 
     pub fn as_ref(&self) -> impl Iterator<Item = &[u8]> {

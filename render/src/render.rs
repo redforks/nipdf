@@ -36,7 +36,7 @@ use nipdf::{
 };
 use num_traits::ToPrimitive;
 use once_cell::unsync::OnceCell;
-use prescript::{AnyWhatever, Name, ParserError, cmap::WriteMode};
+use prescript::{AnyWhatever, Name, cmap::WriteMode};
 use snafu::{FromString, OptionExt, ResultExt, ensure_whatever, whatever};
 use std::{
     borrow::Cow,
@@ -48,7 +48,6 @@ use tiny_skia::{
     Color as SkiaColor, FillRule, FilterQuality, Mask, MaskType, Paint, Path as SkiaPath,
     PathBuilder, Pixmap, PixmapPaint, PixmapRef, Rect, Stroke, StrokeDash, Transform,
 };
-use winnow::{Parser as _, combinator::terminated, token::rest};
 
 trait CloneOrMove {
     type Target;
@@ -1025,6 +1024,8 @@ impl<'a, 'c> Render<'a, 'c> {
                 self.paint_inline_image(render_cacher, &inline_image)?;
             }
 
+            Operation::BeginCompatibilitySection | Operation::EndCompatibilitySection => {}
+
             _ => whatever!("unimplemented operation: {:?}", op),
         }
         Ok(())
@@ -1428,7 +1429,6 @@ impl<'a, 'c> Render<'a, 'c> {
         };
         content
             .operations()
-            .whatever_context("get form page operations")?
             .into_iter()
             .try_for_each(|op| render.exec(render_cacher, &op))?;
 
@@ -1781,10 +1781,8 @@ impl<'a, 'c> Render<'a, 'c> {
         let bytes = stream
             .decode(tile.resolver())
             .whatever_context("decode tile stream")?;
-        let ops = terminated(parse_operations::<ParserError>, rest)
-            .parse(bytes.as_ref())
-            .map_err(winnow::error::ParseError::into_inner)
-            .whatever_context("parse tile pattern operations")?;
+        let mut bytes = bytes.as_ref();
+        let mut ops = parse_operations(&mut bytes);
         let b_box = tile.b_box().whatever_context("get tile b_box")?;
         let x_step = tile.x_step().whatever_context("get tile x_step")?;
         let y_step = tile.y_step().whatever_context("get tile y_step")?;
@@ -1841,8 +1839,7 @@ impl<'a, 'c> Render<'a, 'c> {
             // set color used for paint matrix image
             color_state.set_color_args(args)?;
         }
-        ops.into_iter()
-            .try_for_each(|op| render.exec(render_cacher, &op))?;
+        ops.try_for_each(|op| render.exec(render_cacher, &op))?;
         drop(render);
         color_state.paint = PaintCreator::Tile((canvas, matrix, x_step > b_box.width()));
         Ok(())

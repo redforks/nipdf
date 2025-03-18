@@ -8,13 +8,13 @@ use crate::{
     parser::{self, eol3, whitespace, wsc_prefixed0, wsc0},
 };
 use euclid::{Length, Point2D, Transform2D};
-use log::{debug, error, warn};
+use log::{error, warn};
 use nipdf_macro::{OperationParser, TryFromIntObject, TryFromNameObject, pdf_object};
 use prescript::{Name, sname};
 use snafu::{Report, ensure_whatever, whatever};
 use std::{num::ParseIntError, str::Utf8Error};
 use winnow::{
-    ModalResult, Parser,
+    Parser,
     combinator::{alt, repeat_till},
     error::{AddContext, ErrMode, FromExternalError, ParserError},
     seq,
@@ -660,7 +660,7 @@ where
     })
 }
 
-pub fn parse_operations<'a, E>(buf: &mut &'a [u8]) -> ModalResult<Vec<Operation>, E>
+fn operation<'a, E>(buf: &mut &'a [u8]) -> impl FnMut() -> Option<Operation>
 where
     E: ParserError<&'a [u8]>
         + FromExternalError<&'a [u8], ObjectValueError>
@@ -669,72 +669,91 @@ where
         + FromExternalError<&'a [u8], Utf8Error>
         + FromExternalError<&'a [u8], ObjectValueError>
         + AddContext<&'a [u8], &'static str>
+        + std::fmt::Debug
         + 'static,
+    prescript::ParserError: winnow::error::ErrorConvert<E>,
 {
-    let mut object_or_operator = alt((
-        parser::object_inside_page_stream::<_, prescript::ParserError>()
-            .map(ObjectOrOperator::Object)
-            .context("operands"),
-        take_till(1.., b" \t\n\r%[<(/".as_slice())
-            .map(ObjectOrOperator::Operator)
-            .context("operator"),
-    ));
-    let mut operands = Vec::with_capacity(8);
-    let mut r = vec![];
-    loop {
-        wsc0().parse_next(buf)?;
-        if buf.is_empty() {
-            return Ok(r);
-        }
-        let oo = object_or_operator.parse_next(buf);
-        match oo {
-            Ok(ObjectOrOperator::Object(o)) => operands.push(o),
-            Ok(ObjectOrOperator::Operator(op)) => {
-                let opt_op = create_operation(op, &mut operands).unwrap_or_else(|e| {
-                    // possible because not enough operands
-                    let op = String::from_utf8_lossy(op);
-                    warn!("Invalid operation '{}': {:?}", op, e);
-                    None
-                });
-                debug!("Operation: {:?}", opt_op);
-                match opt_op {
-                    Some(
-                        Operation::BeginCompatibilitySection | Operation::EndCompatibilitySection,
-                    ) => {}
-                    Some(Operation::BeginInlineImage) => {
-                        match inline_image::<prescript::ParserError>()
-                            .map(Operation::PaintInlineImage)
-                            .parse_next(buf)
-                        {
-                            Ok(v) => {
-                                r.push(v);
-                            }
-                            Err(e) => {
-                                warn!("Error parsing inline image: {:?}", e);
-                            }
-                        };
-                    }
-                    Some(op) => r.push(op),
-                    None => {
-                        warn!("Unknown page operation: '{:?}', try recover romains", op);
-                    }
-                }
-                // Some pdf files has bug that has extra operands
-                operands.clear();
+    move || {
+        let mut object_or_operator = alt((
+            parser::object_inside_page_stream::<_, prescript::ParserError>()
+                .map(ObjectOrOperator::Object)
+                .context("operands"),
+            take_till(1.., b" \t\n\r%[<(/".as_slice())
+                .map(ObjectOrOperator::Operator)
+                .context("operator"),
+        ));
+        let mut operands = Vec::with_capacity(8);
+        loop {
+            wsc0::<_, E>().parse_next(buf).unwrap();
+            if buf.is_empty() {
+                return None;
             }
-            Err(e) => {
-                match e.into_inner() {
-                    Ok(e) => {
-                        warn!("Error parsing operation: {}", Report::from_error(e));
+            let oo = object_or_operator.parse_next(buf);
+            match oo {
+                Ok(ObjectOrOperator::Object(o)) => operands.push(o),
+                Ok(ObjectOrOperator::Operator(op)) => {
+                    let opt_op = create_operation(op, &mut operands).unwrap_or_else(|e| {
+                        // possible because not enough operands
+                        let op = String::from_utf8_lossy(op);
+                        warn!("Invalid operation '{}': {:?}", op, e);
+                        None
+                    });
+                    match opt_op {
+                        Some(Operation::BeginInlineImage) => {
+                            match inline_image::<prescript::ParserError>()
+                                .map(Operation::PaintInlineImage)
+                                .parse_next(buf)
+                            {
+                                Ok(op) => {
+                                    if !operands.is_empty() {
+                                        warn!("object not all consumed");
+                                    }
+                                    return Some(op);
+                                }
+                                Err(e) => {
+                                    warn!("Error parsing inline image: {:?}", e);
+                                }
+                            };
+                        }
+                        Some(r) => {
+                            if !operands.is_empty() {
+                                warn!("object not all consumed");
+                            }
+                            return Some(r);
+                        }
+                        None => {
+                            warn!("Unknown page operation: '{:?}', try recover romains", op);
+                        }
                     }
-                    Err(e) => {
-                        warn!("Error parsing operation: {:}", e);
-                    }
+                    // Some pdf files has bug that has extra operands
+                    operands.clear();
                 }
-                return Ok(r);
+                Err(e @ ErrMode::Incomplete(_)) => {
+                    unreachable!("{:?}", e);
+                }
+                Err(ErrMode::Backtrack(e) | ErrMode::Cut(e)) => {
+                    warn!("Ignore operation parsing error: {}", Report::from_error(e));
+                    operands.clear();
+                }
             }
         }
     }
+}
+
+pub fn parse_operations<'a, E>(buf: &mut &'a [u8]) -> impl Iterator<Item = Operation>
+where
+    E: ParserError<&'a [u8]>
+        + FromExternalError<&'a [u8], ObjectValueError>
+        + FromExternalError<&'a [u8], ParseIntError>
+        + FromExternalError<&'a [u8], hex::FromHexError>
+        + FromExternalError<&'a [u8], Utf8Error>
+        + FromExternalError<&'a [u8], ObjectValueError>
+        + AddContext<&'a [u8], &'static str>
+        + std::fmt::Debug
+        + 'static,
+    prescript::ParserError: winnow::error::ErrorConvert<E>,
+{
+    std::iter::from_fn(operation::<prescript::ParserError>(buf))
 }
 
 #[cfg(test)]

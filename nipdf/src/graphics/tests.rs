@@ -27,9 +27,7 @@ use test_case::test_case;
     "cm and Do"
 )]
 fn test_parse_operations(s: &str) -> Vec<Operation> {
-    parse_operations::<winnow::error::ContextError<&'static str>>
-        .parse(s.as_bytes())
-        .unwrap()
+    parse_operations(&mut s.as_bytes()).collect()
 }
 
 #[test_case("q" => Operation::SaveGraphicsState; "save")]
@@ -47,24 +45,9 @@ fn test_parse_operations(s: &str) -> Vec<Operation> {
 #[test_case("/tag /name DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict(sname("tag")), NameOrDict::Name(sname("name"))); "DP with name")]
 #[test_case("/tag<<>>DP" => Operation::DesignateMarkedContentPointWithProperties(NameOfDict(sname("tag")), NameOrDict::Dict(Dictionary::new())); "DP with dict")]
 fn test_parse_operation(s: &str) -> Operation {
-    let mut result = parse_operations::<winnow::error::ContextError<&'static str>>
-        .parse(s.as_bytes())
-        .unwrap();
+    let mut result: Vec<_> = parse_operations(&mut s.as_bytes()).collect();
     assert_eq!(1, result.len());
     result.pop().unwrap()
-}
-
-#[test]
-fn test_ignore_bx_ex() {
-    let (buf, result) = parse_operations::<()>.parse_peek(b"BX\nq\nEX\nQ").unwrap();
-    assert_eq!(buf, b"");
-    assert_eq!(
-        vec![
-            Operation::SaveGraphicsState,
-            Operation::RestoreGraphicsState
-        ],
-        result
-    );
 }
 
 #[test_case(0 => LineCapStyle::Butt)]
@@ -149,7 +132,7 @@ fn test_inline_image_et() -> Result<()> {
         .whatever_context::<_, ObjectValueError>("get page context")?;
     // the page contains a inline image, its data contains a line begin with 'ET'
     // this test is to check if the parser can handle this case
-    content.operations()?;
+    content.operations();
 
     Ok(())
 }

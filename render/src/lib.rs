@@ -207,9 +207,7 @@ pub fn render_steps(
         .rotate(page.rotate())
         .build();
     let content = page.content().whatever_context("get page content")?;
-    let ops = content
-        .operations()
-        .whatever_context("get page operations")?;
+    let ops = content.operations();
     let Some(mut canvas) = option.create_canvas() else {
         return Ok(RgbaImage::new(0, 0));
     };

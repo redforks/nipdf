@@ -183,10 +183,7 @@ fn dump_page(args: &DumpPageArgs<'_>) -> Result<()> {
     } else if let Some(page_no) = page_no {
         let page = &catalog.pages().whatever_context("get pages")?[page_no as usize];
         let contents = page.content().whatever_context("get page content")?;
-        for op in contents
-            .operations()
-            .whatever_context("get page operations")?
-        {
+        for op in contents.operations() {
             println!("{:?}", op);
         }
     }
