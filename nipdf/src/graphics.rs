@@ -13,6 +13,7 @@ use nipdf_macro::{OperationParser, TryFromIntObject, TryFromNameObject, pdf_obje
 use prescript::{Name, sname};
 use snafu::{Report, ensure_whatever, whatever};
 use std::{num::ParseIntError, str::Utf8Error};
+use tinyvec::ArrayVec;
 use winnow::{
     Parser,
     combinator::{alt, repeat_till},
@@ -673,6 +674,7 @@ where
         + 'static,
     prescript::ParserError: winnow::error::ErrorConvert<E>,
 {
+    let mut operands = Vec::with_capacity(4);
     move || {
         let mut object_or_operator = alt((
             parser::object_inside_page_stream::<_, prescript::ParserError>()
@@ -682,7 +684,7 @@ where
                 .map(ObjectOrOperator::Operator)
                 .context("operator"),
         ));
-        let mut operands = Vec::with_capacity(8);
+        operands.clear();
         loop {
             wsc0::<_, E>().parse_next(buf).unwrap();
             if buf.is_empty() {

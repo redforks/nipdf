@@ -1,5 +1,5 @@
 use super::*;
-use crate::{ObjectValueError, file::open_test_file_with_password};
+use crate::{ObjectValueError, file::open_test_file_with_password, graphics::parse_operations};
 use hex_literal::hex;
 use snafu::{ResultExt, report};
 
@@ -67,14 +67,11 @@ fn revision_v4_not_encrypt_metadata() -> Result<()> {
         .whatever_context::<_, ObjectValueError>("parse catalog")?
         .pages()
         .whatever_context::<_, ObjectValueError>("parse pages")?;
-    assert_eq!(
-        16,
-        pages[0]
-            .content()
-            .whatever_context::<_, ObjectValueError>("get page content")?
-            .operations()
-            .len()
-    );
+    let contents = pages[0]
+        .content()
+        .whatever_context::<_, ObjectValueError>("get page content")?;
+    let mut contents = contents.as_slice();
+    assert_eq!(16, parse_operations(&mut contents).count());
     Ok(())
 }
 

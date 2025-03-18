@@ -6,11 +6,11 @@ use crate::{
 use educe::Educe;
 use either::Either::{self, Left, Right};
 use euclid::{Length, Scale, Transform2D, default::Size2D};
-use image::RgbaImage;
+use image::{EncodableLayout, RgbaImage};
 use log::{debug, error, info, warn};
 use nipdf::{
     file::{
-        GraphicsStateParameterDict, PageContent, Rectangle, ResourceDict, XObjectDict, XObjectType,
+        GraphicsStateParameterDict, Rectangle, ResourceDict, XObjectDict, XObjectType,
         paint::fonts::{
             CachedFonts, FallbackFont, Font, FontCache, FontOps, GlyphRender, PathSink,
         },
@@ -1404,7 +1404,6 @@ impl<'a, 'c> Render<'a, 'c> {
             .with_whatever_context(|_| {
                 format!("decode x_object to image, id: {:?}", stream.id())
             })?;
-        let content = PageContent::new(vec![stream.into_owned()]);
         let resources = form.resources().whatever_context("get form resources")?;
         let resources = resources.as_ref().unwrap_or(self.resources);
 
@@ -1427,10 +1426,10 @@ impl<'a, 'c> Render<'a, 'c> {
         else {
             return Ok(());
         };
-        content
-            .operations()
-            .into_iter()
-            .try_for_each(|op| render.exec(render_cacher, &op))?;
+
+        let mut stream_bytes = stream.as_bytes();
+        let mut content = parse_operations(&mut stream_bytes);
+        content.try_for_each(|op| render.exec(render_cacher, &op))?;
 
         Ok(())
     }

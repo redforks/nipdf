@@ -5,7 +5,10 @@ use image::RgbaImage;
 use log::warn;
 use nipdf::{
     file::{Page, Rectangle},
-    graphics::trans::{LogicDeviceToDeviceSpace, UserToUserSpace, logic_device_to_device},
+    graphics::{
+        parse_operations,
+        trans::{LogicDeviceToDeviceSpace, UserToUserSpace, logic_device_to_device},
+    },
 };
 use prescript::Result;
 use snafu::{OptionExt, ResultExt};
@@ -207,28 +210,27 @@ pub fn render_steps(
         .rotate(page.rotate())
         .build();
     let content = page.content().whatever_context("get page content")?;
-    let ops = content.operations();
+    let mut buf = content.as_slice();
+    let ops = parse_operations(&mut buf);
     let Some(mut canvas) = option.create_canvas() else {
         return Ok(RgbaImage::new(0, 0));
     };
     let render_cacher = RenderCacher::new();
-    if !ops.is_empty() {
-        // skip render if no operations, fixes incorrect pdf files that no resources
-        let resource = page.resources().whatever_context("get page resources")?;
-        let mut renderer = Render::new(&render_cacher, &mut canvas, option.clone(), &resource)?;
+    // skip render if no operations, fixes incorrect pdf files that no resources
+    let resource = page.resources().whatever_context("get page resources")?;
+    let mut renderer = Render::new(&render_cacher, &mut canvas, option.clone(), &resource)?;
 
-        let iter = if let Some(steps) = steps {
-            Either::Left(ops.into_iter().take(steps))
-        } else {
-            Either::Right(ops.into_iter())
-        };
+    let iter = if let Some(steps) = steps {
+        Either::Left(ops.into_iter().take(steps))
+    } else {
+        Either::Right(ops.into_iter())
+    };
 
-        for op in iter {
-            match renderer.exec(&render_cacher, &op) {
-                Ok(_) => (),
-                Err(e) if option.fail_fast => return Err(e),
-                Err(e) => log::error!("Operation failed: {}", snafu::Report::from_error(e)),
-            }
+    for op in iter {
+        match renderer.exec(&render_cacher, &op) {
+            Ok(_) => (),
+            Err(e) if option.fail_fast => return Err(e),
+            Err(e) => log::error!("Operation failed: {}", snafu::Report::from_error(e)),
         }
     }
     option.to_image(canvas)

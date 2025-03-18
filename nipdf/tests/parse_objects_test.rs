@@ -2,6 +2,7 @@ use glob::glob;
 use nipdf::{
     ObjectValueError, Result,
     file::File,
+    graphics::parse_operations,
     object::{Object, RuntimeObjectId},
 };
 use snafu::{FromString as _, ResultExt as _, Whatever, report};
@@ -53,11 +54,12 @@ fn scan_objects() -> Result<(), Whatever> {
             println!("  media_box: {:?}", page.media_box());
             println!("  crop_box: {:?}", page.crop_box());
 
-            for op in page
-                .content()
-                .whatever_context("get page content")?
-                .operations()
-            {
+            for op in parse_operations(
+                &mut page
+                    .content()
+                    .whatever_context("get page content")?
+                    .as_slice(),
+            ) {
                 println!("  {:?}", op);
             }
         }

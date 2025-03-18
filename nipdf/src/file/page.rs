@@ -2,8 +2,8 @@ use crate::{
     ObjectValueError, Result,
     function::Domains,
     graphics::{
-        ColorArgs, ColorSpaceArgs, LineCapStyle, LineJoinStyle, Operation, PatternDict, Point,
-        RenderingIntent, parse_operations, shading::ShadingDict, trans::FormToUserSpace,
+        ColorArgs, ColorSpaceArgs, LineCapStyle, LineJoinStyle, PatternDict, Point,
+        RenderingIntent, shading::ShadingDict, trans::FormToUserSpace,
     },
     object::{
         Dictionary, ImageMask, ObjectWithResolver, PdfObject, PdfObjectCore as _,
@@ -13,6 +13,7 @@ use crate::{
 };
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt as _};
 use educe::Educe;
+use image::EncodableLayout;
 use nipdf_macro::{TryFromNameObject, pdf_object};
 use prescript::{Name, sname};
 use snafu::{OptionExt as _, ResultExt as _};
@@ -312,20 +313,17 @@ impl<'a> Page<'a> {
             )
     }
 
-    pub fn content(&self) -> Result<PageContent> {
-        let bufs = self
-            .d
-            .contents()?
-            .into_iter()
-            .map(|s| {
-                s.decode(self.d.d.resolver())
-                    .with_whatever_context::<_, _, ObjectValueError>(|_| {
-                        format!("decode stream {:?}", s.id())
-                    })
-                    .map(std::borrow::Cow::into_owned)
-            })
-            .collect::<Result<_, _>>()?;
-        Ok(PageContent { bufs })
+    pub fn content(&self) -> Result<Vec<u8>> {
+        let mut r = vec![];
+        for s in self.d.contents()? {
+            let buf = s
+                .decode(self.d.d.resolver())
+                .with_whatever_context::<_, _, ObjectValueError>(|_| {
+                    format!("decode stream {:?}", s.id())
+                })?;
+            r.extend(buf.as_bytes());
+        }
+        Ok(r)
     }
 
     /// Parse page tree to get all pages
@@ -380,26 +378,6 @@ impl<'a> Page<'a> {
             parents_to_root: parents,
             empty_dict: LazyCell::new(Default::default),
         })
-    }
-}
-
-pub struct PageContent {
-    bufs: Vec<Vec<u8>>,
-}
-
-impl PageContent {
-    pub fn new(bufs: Vec<Vec<u8>>) -> Self {
-        Self { bufs }
-    }
-
-    pub fn operations(self) -> Vec<Operation> {
-        let data = self.bufs.into_iter().flatten().collect::<Vec<u8>>();
-
-        parse_operations(&mut &data[..]).collect()
-    }
-
-    pub fn as_ref(&self) -> impl Iterator<Item = &[u8]> {
-        self.bufs.iter().map(AsRef::as_ref)
     }
 }
 
