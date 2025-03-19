@@ -1,0 +1,14 @@
+[package]
+name = "nipdf-gpui-reader"
+repository.workspace = true
+license.workspace = true
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+
+[dependencies]
+gpui = { git = "https://github.com/zed-industries/zed" }
+snafu.workspace = true
+
+[lints]
+workspace = true

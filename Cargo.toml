@@ -7,7 +7,7 @@ members = [
     "reader",
     "cff-parser",
     "prescript",
-    "render",
+    "render", "gpui-reader",
 ]
 resolver = "2"
 package.repository = "https://github.com/redforks/nipdf"
