@@ -1,9 +1,21 @@
-use std::path::PathBuf;
-
 use gpui::{
-    Application, Context, DefaultColors, Entity, KeyBinding, Menu, MenuItem, MouseButton,
-    ObjectFit, SharedString, TitlebarOptions, Window, WindowOptions, actions, div, img, prelude::*,
+    Application, Context, DefaultColors, Entity, ImageSource, KeyBinding, Menu, MenuItem,
+    MouseButton, ObjectFit, RenderImage, SharedString, TitlebarOptions, Window, WindowOptions,
+    actions, div, img, prelude::*,
 };
+use image::{Frame, RgbaImage};
+use nipdf::file::File;
+use nipdf_render::{RenderOptionBuilder, render_steps};
+use prescript::{AnyWhatever, Result};
+use smallvec::SmallVec;
+use snafu::ResultExt as _;
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 struct ToolboxButton {
     text: SharedString,
@@ -55,12 +67,30 @@ impl Render for Toolbox {
 
 struct MyApp {
     toolbox: Entity<Toolbox>,
+    image: Arc<RenderImage>,
+}
+
+fn open(path: impl AsRef<Path>, password: &str) -> Result<File> {
+    let buf = std::fs::read(path).whatever_context("read file")?;
+    File::parse(buf, password).whatever_context("Open pdf file")
 }
 
 impl MyApp {
     fn new(cx: &mut Context<'_, Self>) -> Self {
         let toolbox = cx.new(Toolbox::new);
-        Self { toolbox }
+
+        let f = open("/tmp/1.pdf", "").unwrap();
+        let resolver = f.resolver().unwrap();
+        let catalog = f.catalog(&resolver).unwrap();
+        let page = &catalog.pages().unwrap()[0];
+        let image = render_steps(page, RenderOptionBuilder::new().zoom(1.75), None, false)
+            .whatever_context::<_, AnyWhatever>("render page")
+            .unwrap();
+        let mut frames = SmallVec::<[Frame; 1]>::with_capacity(1);
+        frames.push(Frame::new(image));
+        let image = Arc::new(RenderImage::new(frames));
+
+        Self { toolbox, image }
     }
 }
 
@@ -80,7 +110,7 @@ impl Render for MyApp {
                     .id("main")
                     .overflow_scroll()
                     .flex_grow()
-                    .child(img(PathBuf::from("/tmp/new.png")).object_fit(ObjectFit::None)),
+                    .child(img(self.image.clone()).object_fit(ObjectFit::None)),
             )
     }
 }
@@ -88,6 +118,8 @@ impl Render for MyApp {
 actions!(Self, [Quit]);
 
 fn main() {
+    colog::init();
+
     Application::new().run(|cx| {
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.bind_keys([KeyBinding::new("ctrl-q", Quit, None)]);

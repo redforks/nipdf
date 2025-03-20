@@ -2074,32 +2074,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "font-kit"
-version = "0.14.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b64b34f4efd515f905952d91bc185039863705592c0c53ae6d979805dd154520"
-dependencies = [
- "bitflags 2.9.0",
- "byteorder",
- "core-foundation 0.9.4",
- "core-graphics 0.23.2",
- "core-text",
- "dirs 5.0.1",
- "dwrote",
- "float-ord",
- "freetype",
- "freetype-sys",
- "lazy_static",
- "libc",
- "log",
- "pathfinder_geometry",
- "pathfinder_simd",
- "walkdir",
- "winapi",
- "yeslogic-fontconfig-sys",
-]
-
-[[package]]
 name = "font-types"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2200,16 +2174,6 @@ name = "fragile"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c2141d6d6c8512188a7891b4b01590a45f6dac67afb4f255c4124dbb86d4eaa"
-
-[[package]]
-name = "freetype"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a440748e063798e4893ceb877151e84acef9bea9a8c6800645cf3f1b3a7806e"
-dependencies = [
- "freetype-sys",
- "libc",
-]
 
 [[package]]
 name = "freetype-sys"
@@ -2574,7 +2538,7 @@ dependencies = [
  "etagere",
  "filedescriptor",
  "flume",
- "font-kit 0.14.1",
+ "font-kit",
  "foreign-types",
  "futures",
  "gpui_macros",
@@ -3963,7 +3927,7 @@ dependencies = [
  "encoding_rs",
  "env_logger",
  "euclid",
- "font-kit 0.14.2",
+ "font-kit",
  "fontdb 0.23.0",
  "glob",
  "heck 0.5.0",
@@ -4034,7 +3998,14 @@ dependencies = [
 name = "nipdf-gpui-reader"
 version = "0.1.1"
 dependencies = [
+ "colog",
  "gpui",
+ "image 0.25.5",
+ "mimalloc",
+ "nipdf",
+ "nipdf-render",
+ "prescript",
+ "smallvec",
  "snafu",
 ]
 

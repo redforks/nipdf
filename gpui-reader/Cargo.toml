@@ -7,7 +7,14 @@ version.workspace = true
 authors.workspace = true
 
 [dependencies]
+colog.workspace = true
 gpui = { git = "https://github.com/zed-industries/zed" }
+image.workspace = true
+mimalloc.workspace = true
+nipdf = { version = "0.1.1", path = "../nipdf" }
+nipdf-render = { version = "0.1.1", path = "../render" }
+prescript = { version = "0.1.1", path = "../prescript" }
+smallvec = "1.14.0"
 snafu.workspace = true
 
 [lints]
