@@ -8,6 +8,7 @@ authors.workspace = true
 
 [dependencies]
 colog.workspace = true
+educe.workspace = true
 gpui = { git = "https://github.com/zed-industries/zed" }
 image.workspace = true
 mimalloc.workspace = true

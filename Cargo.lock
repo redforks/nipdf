@@ -3999,6 +3999,7 @@ name = "nipdf-gpui-reader"
 version = "0.1.1"
 dependencies = [
  "colog",
+ "educe",
  "gpui",
  "image 0.25.5",
  "mimalloc",
