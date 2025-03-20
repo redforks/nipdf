@@ -512,7 +512,7 @@ dependencies = [
  "bitflags 2.9.0",
  "cexpr",
  "clang-sys",
- "itertools 0.12.1",
+ "itertools 0.13.0",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -1077,7 +1077,7 @@ dependencies = [
 [[package]]
 name = "collections"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#a9f7c0549cc85ac362a8e9f6d38d2dbaf1342608"
+source = "git+https://github.com/zed-industries/zed#d4daa0a3a2cabe43771237650b7768d5ea110876"
 dependencies = [
  "indexmap",
  "rustc-hash 2.1.1",
@@ -1113,7 +1113,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
 dependencies = [
  "lazy_static",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1484,7 +1484,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e3d747f100290a1ca24b752186f61f6637e1deffe3bf6320de6fcb29510a307"
 dependencies = [
  "bitflags 2.9.0",
- "libloading 0.8.6",
+ "libloading 0.7.4",
  "winapi",
 ]
 
@@ -1532,7 +1532,7 @@ dependencies = [
 [[package]]
 name = "derive_refineable"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#a9f7c0549cc85ac362a8e9f6d38d2dbaf1342608"
+source = "git+https://github.com/zed-industries/zed#d4daa0a3a2cabe43771237650b7768d5ea110876"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1653,7 +1653,7 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330c60081dcc4c72131f8eb70510f1ac07223e5d4163db481a04a0befcffa412"
 dependencies = [
- "libloading 0.8.6",
+ "libloading 0.7.4",
 ]
 
 [[package]]
@@ -1898,7 +1898,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33d852cb9b869c2a9b3df2f71a3074817f01e1844f839a144f5fcef059a4eb5d"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2546,7 +2546,7 @@ dependencies = [
 [[package]]
 name = "gpui"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#a9f7c0549cc85ac362a8e9f6d38d2dbaf1342608"
+source = "git+https://github.com/zed-industries/zed#d4daa0a3a2cabe43771237650b7768d5ea110876"
 dependencies = [
  "anyhow",
  "as-raw-xcb-connection",
@@ -2633,7 +2633,7 @@ dependencies = [
 [[package]]
 name = "gpui_macros"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#a9f7c0549cc85ac362a8e9f6d38d2dbaf1342608"
+source = "git+https://github.com/zed-industries/zed#d4daa0a3a2cabe43771237650b7768d5ea110876"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2700,7 +2700,7 @@ dependencies = [
  "bitflags 2.9.0",
  "com",
  "libc",
- "libloading 0.8.6",
+ "libloading 0.7.4",
  "thiserror",
  "widestring",
  "winapi",
@@ -2791,7 +2791,7 @@ dependencies = [
 [[package]]
 name = "http_client"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#a9f7c0549cc85ac362a8e9f6d38d2dbaf1342608"
+source = "git+https://github.com/zed-industries/zed#d4daa0a3a2cabe43771237650b7768d5ea110876"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3269,7 +3269,7 @@ checksum = "e19b23d53f35ce9f56aebc7d1bb4e6ac1e9c0db7ac85c8d1760c04379edced37"
 dependencies = [
  "hermit-abi 0.4.0",
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3721,7 +3721,7 @@ dependencies = [
 [[package]]
 name = "media"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#a9f7c0549cc85ac362a8e9f6d38d2dbaf1342608"
+source = "git+https://github.com/zed-industries/zed#d4daa0a3a2cabe43771237650b7768d5ea110876"
 dependencies = [
  "anyhow",
  "bindgen",
@@ -5398,7 +5398,7 @@ dependencies = [
 [[package]]
 name = "refineable"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#a9f7c0549cc85ac362a8e9f6d38d2dbaf1342608"
+source = "git+https://github.com/zed-industries/zed#d4daa0a3a2cabe43771237650b7768d5ea110876"
 dependencies = [
  "derive_refineable",
 ]
@@ -5607,7 +5607,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5763,7 +5763,7 @@ checksum = "c2fdfc24bc566f839a2da4c4295b82db7d25a24253867d5c64355abb5799bdbe"
 [[package]]
 name = "semantic_version"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#a9f7c0549cc85ac362a8e9f6d38d2dbaf1342608"
+source = "git+https://github.com/zed-industries/zed#d4daa0a3a2cabe43771237650b7768d5ea110876"
 dependencies = [
  "anyhow",
  "serde",
@@ -6167,7 +6167,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "sum_tree"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#a9f7c0549cc85ac362a8e9f6d38d2dbaf1342608"
+source = "git+https://github.com/zed-industries/zed#d4daa0a3a2cabe43771237650b7768d5ea110876"
 dependencies = [
  "arrayvec 0.7.6",
  "log",
@@ -6376,7 +6376,7 @@ dependencies = [
  "getrandom 0.3.1",
  "once_cell",
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -6906,7 +6906,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 [[package]]
 name = "util"
 version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#a9f7c0549cc85ac362a8e9f6d38d2dbaf1342608"
+source = "git+https://github.com/zed-industries/zed#d4daa0a3a2cabe43771237650b7768d5ea110876"
 dependencies = [
  "anyhow",
  "async-fs",
@@ -7323,7 +7323,7 @@ dependencies = [
  "js-sys",
  "log",
  "naga 0.19.2",
- "parking_lot 0.12.3",
+ "parking_lot 0.11.2",
  "profiling",
  "raw-window-handle",
  "smallvec",
@@ -7351,7 +7351,7 @@ dependencies = [
  "log",
  "naga 0.19.2",
  "once_cell",
- "parking_lot 0.12.3",
+ "parking_lot 0.11.2",
  "profiling",
  "raw-window-handle",
  "rustc-hash 1.1.0",
@@ -7386,14 +7386,14 @@ dependencies = [
  "js-sys",
  "khronos-egl",
  "libc",
- "libloading 0.8.6",
+ "libloading 0.7.4",
  "log",
  "metal 0.27.0",
  "naga 0.19.2",
  "ndk-sys 0.5.0+25.2.9519653",
  "objc",
  "once_cell",
- "parking_lot 0.12.3",
+ "parking_lot 0.11.2",
  "profiling",
  "range-alloc",
  "raw-window-handle",
@@ -7446,7 +7446,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
