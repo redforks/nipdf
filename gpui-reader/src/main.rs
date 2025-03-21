@@ -1,8 +1,8 @@
 use either::Either;
 use gpui::{
-    App, AppContext, Application, Context, DefaultColors, Entity, FocusHandle, Focusable,
-    KeyBinding, Menu, MenuItem, MouseButton, MouseDownEvent, ObjectFit, RenderImage, SharedString,
-    TitlebarOptions, Window, WindowOptions, actions, div, img, prelude::*,
+    App, AppContext, Application, ClickEvent, Context, DefaultColors, Entity, KeyBinding, Menu,
+    MenuItem, MouseButton, MouseDownEvent, ObjectFit, RenderImage, SharedString, TitlebarOptions,
+    Window, WindowOptions, actions, div, img, prelude::*,
 };
 use image::Frame;
 use log::info;
@@ -11,7 +11,8 @@ use nipdf_render::{RenderOptionBuilder, render_steps};
 use prescript::AnyWhatever;
 use smallvec::SmallVec;
 use snafu::ResultExt as _;
-use std::{any::Any, path::Path, sync::Arc};
+use std::{path::Path, sync::Arc};
+use theme::{LoadThemes, SystemAppearance};
 
 mod welcome;
 use welcome::Welcome;
@@ -224,12 +225,36 @@ struct MyApp {
 
 impl MyApp {
     fn new(cx: &mut Context<'_, Self>) -> Self {
+        let on_open = cx.listener(Self::on_open);
         Self {
-            current: Either::Right(cx.new(|_| Welcome::new())),
+            current: Either::Right(cx.new(|_| Welcome::new(on_open))),
         }
     }
 
-    fn on_open(&mut self, _: &Open, _: &mut Window, cx: &mut Context<'_, Self>) {
+    fn open(&mut self, cx: &mut Context<'_, Self>) {
+        let wait = cx.prompt_for_paths(gpui::PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+        });
+        cx.spawn(async move |my_app, mut app| {
+            if let Ok(Ok(Some(path))) = wait.await {
+                if let Some(path) = path.get(0) {
+                    if let Some(viewer) = my_app.upgrade() {
+                        app.update_entity(&viewer, |my_app, cx| {
+                            let viewer = cx.new(|cx| Viewer::new(cx, path));
+                            my_app.current = Either::Left(viewer);
+                            cx.notify();
+                        })
+                        .unwrap();
+                    }
+                }
+            }
+        })
+        .detach();
+    }
+
+    fn on_open(&mut self, _: &ClickEvent, _: &mut Window, cx: &mut Context<'_, Self>) {
         info!("on open");
         let wait = cx.prompt_for_paths(gpui::PathPromptOptions {
             files: true,
@@ -255,15 +280,11 @@ impl MyApp {
 }
 
 impl Render for MyApp {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
-        info!("hook on_open action");
-        div()
-            .key_context("root")
-            .on_action(cx.listener(Self::on_open))
-            .child(match &self.current {
-                Either::Left(viewer) => viewer.clone().into_any_element(),
-                Either::Right(welcome) => welcome.clone().into_any_element(),
-            })
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<'_, Self>) -> impl IntoElement {
+        match &self.current {
+            Either::Left(viewer) => viewer.clone().into_any_element(),
+            Either::Right(welcome) => welcome.clone().into_any_element(),
+        }
     }
 }
 
@@ -273,6 +294,10 @@ fn main() {
     colog::init();
 
     Application::new().run(|cx| {
+        settings::init(cx);
+        SystemAppearance::init(cx);
+        theme::init(LoadThemes::JustBase, cx);
+
         cx.on_action(|_: &Quit, cx| cx.quit());
         // cx.on_action(|_: &Open, cx| info!("on open in app"));
         cx.bind_keys([
@@ -298,11 +323,9 @@ fn main() {
                 |_, cx| cx.new(MyApp::new),
             )
             .unwrap();
-        let view = w.update(cx, |_, _, cx| cx.entity()).unwrap();
-        w.update(cx, |_, window, cx| {
-            cx.activate(true);
-        })
-        .unwrap();
-        dbg!(w.is_active(cx));
+        let my_app = w.update(cx, |_, _, cx| cx.entity()).unwrap();
+        cx.on_action(move |_: &Open, cx| {
+            cx.update_entity(&my_app, |my_app, cx| my_app.open(cx));
+        });
     });
 }

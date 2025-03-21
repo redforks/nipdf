@@ -1,17 +1,21 @@
-use super::Open;
-use gpui::{Context, DefaultColors, MouseButton, MouseDownEvent, Window, div, prelude::*};
-use log::info;
+use gpui::{ClickEvent, Context, Window, div, prelude::*};
+use ui::{
+    App, Button, ButtonCommon as _, ButtonSize, Clickable as _, Label, LabelCommon as _, LabelSize,
+};
 
-pub(super) struct Welcome;
+pub(super) struct Welcome {
+    on_open: Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
+}
 
 impl Welcome {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(on_open: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
+        Self {
+            on_open: Box::new(on_open),
+        }
     }
 
-    fn on_mouse_down(&mut self, _: &MouseDownEvent, _: &mut Window, cx: &mut Context<'_, Self>) {
-        info!("dispatching open action");
-        cx.dispatch_action(&Open);
+    fn on_open(&mut self, e: &ClickEvent, window: &mut Window, cx: &mut Context<'_, Self>) {
+        (self.on_open)(e, window, cx);
     }
 }
 
@@ -19,17 +23,16 @@ impl Render for Welcome {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         div()
             .flex()
+            .p_5()
             .flex_col()
-            .text_color(gpui::DefaultColor::Text.color(&DefaultColors::dark()))
-            .bg(gpui::DefaultColor::Background.color(&DefaultColors::dark()))
             .items_center()
             .justify_center()
             .size_full()
+            .child(Label::new("Welcome to nipdf!").size(LabelSize::Large))
             .child(
-                div()
-                    .child("Open File...")
-                    .cursor_pointer()
-                    .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down)),
+                Button::new("open", "Open a pdf file")
+                    .size(ButtonSize::Large)
+                    .on_click(cx.listener(Self::on_open)),
             )
     }
 }
