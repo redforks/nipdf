@@ -1,4 +1,4 @@
-use gpui::{App, Context, MouseButton, MouseDownEvent, Window, div, prelude::*};
+use gpui::{App, Context, DefaultColors, MouseButton, MouseDownEvent, Window, div, prelude::*};
 
 pub(super) struct Welcome {
     on_open: Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App)>,
@@ -25,6 +25,8 @@ impl Render for Welcome {
         div()
             .flex()
             .flex_col()
+            .text_color(gpui::DefaultColor::Text.color(&DefaultColors::dark()))
+            .bg(gpui::DefaultColor::Background.color(&DefaultColors::dark()))
             .items_center()
             .justify_center()
             .size_full()

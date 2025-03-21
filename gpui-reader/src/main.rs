@@ -151,8 +151,8 @@ struct Viewer {
 }
 
 impl Viewer {
-    fn new(cx: &mut Context<'_, Self>) -> Self {
-        let viewer = cx.new(|_| PdfViewer::new("/tmp/1.pdf"));
+    fn new(cx: &mut Context<'_, Self>, file: impl AsRef<Path>) -> Self {
+        let viewer = cx.new(|_| PdfViewer::new(file));
         let on_next = cx.listener(|this, _, _, cx| {
             cx.update_entity(&this.viewer, |viewer, _| viewer.next_page());
             cx.notify();
@@ -217,6 +217,33 @@ impl Render for Viewer {
     }
 }
 
+struct MyApp {
+    current: Either<Entity<Viewer>, Entity<Welcome>>,
+}
+
+impl MyApp {
+    fn new(cx: &mut Context<'_, Self>) -> Self {
+        Self {
+            current: Either::Right(cx.new(|_| Welcome::new())),
+        }
+    }
+
+    fn open(&mut self, path: impl AsRef<Path>, cx: &mut Context<'_, Self>) {
+        let viewer = cx.new(|cx| Viewer::new(cx, path));
+        self.current = Either::Left(viewer);
+        cx.notify();
+    }
+}
+
+impl Render for MyApp {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+        match &self.current {
+            Either::Left(viewer) => viewer.clone().into_any_element(),
+            Either::Right(welcome) => welcome.clone().into_any_element(),
+        }
+    }
+}
+
 actions!(Self, [Quit]);
 
 fn main() {
@@ -238,7 +265,7 @@ fn main() {
                 }),
                 ..Default::default()
             },
-            |_, cx| cx.new(Viewer::new),
+            |_, cx| cx.new(MyApp::new),
         )
         .unwrap();
     });
