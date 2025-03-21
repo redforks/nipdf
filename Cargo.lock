@@ -4000,6 +4000,7 @@ version = "0.1.1"
 dependencies = [
  "colog",
  "educe",
+ "either",
  "gpui",
  "image 0.25.5",
  "mimalloc",

@@ -1,3 +1,4 @@
+use either::Either;
 use gpui::{
     App, AppContext, Application, Context, DefaultColors, Entity, KeyBinding, Menu, MenuItem,
     MouseButton, MouseDownEvent, ObjectFit, RenderImage, SharedString, TitlebarOptions, Window,
@@ -10,6 +11,9 @@ use prescript::AnyWhatever;
 use smallvec::SmallVec;
 use snafu::ResultExt as _;
 use std::{path::Path, sync::Arc};
+
+mod welcome;
+use welcome::Welcome;
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -68,13 +72,13 @@ impl Render for Toolbox {
     }
 }
 
-struct Viewer {
+struct PdfViewer {
     image: Arc<RenderImage>,
     file: File,
     cur_page: usize,
 }
 
-impl Viewer {
+impl PdfViewer {
     fn new(f: impl AsRef<Path>) -> Self {
         Self::open_file(f, 0)
     }
@@ -131,7 +135,7 @@ impl Viewer {
     }
 }
 
-impl Render for Viewer {
+impl Render for PdfViewer {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<'_, Self>) -> impl IntoElement {
         div()
             .id("main")
@@ -141,14 +145,14 @@ impl Render for Viewer {
     }
 }
 
-struct MyApp {
+struct Viewer {
     toolbox: Entity<Toolbox>,
-    viewer: Entity<Viewer>,
+    viewer: Entity<PdfViewer>,
 }
 
-impl MyApp {
+impl Viewer {
     fn new(cx: &mut Context<'_, Self>) -> Self {
-        let viewer = cx.new(|_| Viewer::new("/tmp/1.pdf"));
+        let viewer = cx.new(|_| PdfViewer::new("/tmp/1.pdf"));
         let on_next = cx.listener(|this, _, _, cx| {
             cx.update_entity(&this.viewer, |viewer, _| viewer.next_page());
             cx.notify();
@@ -166,12 +170,9 @@ impl MyApp {
             cx.spawn(async move |my_app, app| {
                 if let Ok(Ok(Some(path))) = wait.await {
                     if let Some(path) = path.get(0) {
-                        if let Some(cx) = my_app.upgrade() {
-                            app.update_entity(&cx, |my_app, cx| {
-                                cx.update_entity(&my_app.viewer, |viewer, cx| {
-                                    viewer.open(path);
-                                    cx.notify();
-                                });
+                        if let Some(viewer) = my_app.upgrade() {
+                            app.update_entity(&viewer, |my_app, cx| {
+                                my_app.open(path, cx);
                             })
                             .unwrap();
                         }
@@ -192,9 +193,16 @@ impl MyApp {
 
         Self { toolbox, viewer }
     }
+
+    fn open(&mut self, path: impl AsRef<Path>, cx: &mut Context<'_, Self>) {
+        cx.update_entity(&self.viewer, |viewer, cx| {
+            viewer.open(path);
+            cx.notify();
+        });
+    }
 }
 
-impl Render for MyApp {
+impl Render for Viewer {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<'_, Self>) -> impl IntoElement {
         div()
             .flex()
@@ -230,7 +238,7 @@ fn main() {
                 }),
                 ..Default::default()
             },
-            |_, cx| cx.new(MyApp::new),
+            |_, cx| cx.new(Viewer::new),
         )
         .unwrap();
     });
