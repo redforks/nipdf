@@ -1,16 +1,17 @@
 use either::Either;
 use gpui::{
-    App, AppContext, Application, Context, DefaultColors, Entity, KeyBinding, Menu, MenuItem,
-    MouseButton, MouseDownEvent, ObjectFit, RenderImage, SharedString, TitlebarOptions, Window,
-    WindowOptions, actions, div, img, prelude::*,
+    App, AppContext, Application, Context, DefaultColors, Entity, FocusHandle, Focusable,
+    KeyBinding, Menu, MenuItem, MouseButton, MouseDownEvent, ObjectFit, RenderImage, SharedString,
+    TitlebarOptions, Window, WindowOptions, actions, div, img, prelude::*,
 };
 use image::Frame;
+use log::info;
 use nipdf::file::File;
 use nipdf_render::{RenderOptionBuilder, render_steps};
 use prescript::AnyWhatever;
 use smallvec::SmallVec;
 use snafu::ResultExt as _;
-use std::{path::Path, sync::Arc};
+use std::{any::Any, path::Path, sync::Arc};
 
 mod welcome;
 use welcome::Welcome;
@@ -167,7 +168,7 @@ impl Viewer {
                 directories: false,
                 multiple: false,
             });
-            cx.spawn(async move |my_app, app| {
+            cx.spawn(async move |my_app, mut app| {
                 if let Ok(Ok(Some(path))) = wait.await {
                     if let Some(path) = path.get(0) {
                         if let Some(viewer) = my_app.upgrade() {
@@ -223,70 +224,85 @@ struct MyApp {
 
 impl MyApp {
     fn new(cx: &mut Context<'_, Self>) -> Self {
-        let on_open = cx.listener(|_, _, _, cx| {
-            let wait = cx.prompt_for_paths(gpui::PathPromptOptions {
-                files: true,
-                directories: false,
-                multiple: false,
-            });
-            cx.spawn(async move |my_app, app| {
-                if let Ok(Ok(Some(path))) = wait.await {
-                    if let Some(path) = path.get(0) {
-                        if let Some(my_app) = my_app.upgrade() {
-                            app.update_entity(&my_app, |my_app, cx| {
-                                my_app.open(path, cx);
-                            })
-                            .unwrap();
-                        }
-                    }
-                }
-            })
-            .detach();
-        });
         Self {
-            current: Either::Right(cx.new(|_| Welcome::new().on_open(on_open))),
+            current: Either::Right(cx.new(|_| Welcome::new())),
         }
     }
 
-    fn open(&mut self, path: impl AsRef<Path>, cx: &mut Context<'_, Self>) {
-        let viewer = cx.new(|cx| Viewer::new(cx, path));
-        self.current = Either::Left(viewer);
-        cx.notify();
+    fn on_open(&mut self, _: &Open, _: &mut Window, cx: &mut Context<'_, Self>) {
+        info!("on open");
+        let wait = cx.prompt_for_paths(gpui::PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+        });
+        cx.spawn(async move |my_app, mut app| {
+            if let Ok(Ok(Some(path))) = wait.await {
+                if let Some(path) = path.get(0) {
+                    if let Some(viewer) = my_app.upgrade() {
+                        app.update_entity(&viewer, |my_app, cx| {
+                            let viewer = cx.new(|cx| Viewer::new(cx, path));
+                            my_app.current = Either::Left(viewer);
+                            cx.notify();
+                        })
+                        .unwrap();
+                    }
+                }
+            }
+        })
+        .detach();
     }
 }
 
 impl Render for MyApp {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<'_, Self>) -> impl IntoElement {
-        match &self.current {
-            Either::Left(viewer) => viewer.clone().into_any_element(),
-            Either::Right(welcome) => welcome.clone().into_any_element(),
-        }
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+        info!("hook on_open action");
+        div()
+            .key_context("root")
+            .on_action(cx.listener(Self::on_open))
+            .child(match &self.current {
+                Either::Left(viewer) => viewer.clone().into_any_element(),
+                Either::Right(welcome) => welcome.clone().into_any_element(),
+            })
     }
 }
 
-actions!(Self, [Quit]);
+actions!(Self, [Quit, Open, Next, Prev]);
 
 fn main() {
     colog::init();
 
     Application::new().run(|cx| {
         cx.on_action(|_: &Quit, cx| cx.quit());
-        cx.bind_keys([KeyBinding::new("ctrl-q", Quit, None)]);
+        // cx.on_action(|_: &Open, cx| info!("on open in app"));
+        cx.bind_keys([
+            KeyBinding::new("ctrl-o", Open, None),
+            KeyBinding::new("ctrl-q", Quit, None),
+        ]);
         cx.set_menus(vec![Menu {
             name: "File".into(),
-            items: vec![MenuItem::action("Quit", Quit)],
+            items: vec![
+                MenuItem::action("Open", Open),
+                MenuItem::action("Quit", Quit),
+            ],
         }]);
-        cx.open_window(
-            WindowOptions {
-                titlebar: Some(TitlebarOptions {
-                    title: Some("Nipdf Reader".into()),
-                    appears_transparent: false,
+        let w = cx
+            .open_window(
+                WindowOptions {
+                    titlebar: Some(TitlebarOptions {
+                        title: Some("Nipdf Reader".into()),
+                        ..Default::default()
+                    }),
                     ..Default::default()
-                }),
-                ..Default::default()
-            },
-            |_, cx| cx.new(MyApp::new),
-        )
+                },
+                |_, cx| cx.new(MyApp::new),
+            )
+            .unwrap();
+        let view = w.update(cx, |_, _, cx| cx.entity()).unwrap();
+        w.update(cx, |_, window, cx| {
+            cx.activate(true);
+        })
         .unwrap();
+        dbg!(w.is_active(cx));
     });
 }

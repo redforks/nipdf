@@ -1,22 +1,17 @@
-use gpui::{App, Context, DefaultColors, MouseButton, MouseDownEvent, Window, div, prelude::*};
+use super::Open;
+use gpui::{Context, DefaultColors, MouseButton, MouseDownEvent, Window, div, prelude::*};
+use log::info;
 
-pub(super) struct Welcome {
-    on_open: Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App)>,
-}
+pub(super) struct Welcome;
 
 impl Welcome {
     pub fn new() -> Self {
-        Self {
-            on_open: Box::new(|_, _, _| ()),
-        }
+        Self {}
     }
 
-    pub fn on_open(
-        mut self,
-        listener: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
-        self.on_open = Box::new(listener);
-        self
+    fn on_mouse_down(&mut self, _: &MouseDownEvent, _: &mut Window, cx: &mut Context<'_, Self>) {
+        info!("dispatching open action");
+        cx.dispatch_action(&Open);
     }
 }
 
@@ -30,9 +25,11 @@ impl Render for Welcome {
             .items_center()
             .justify_center()
             .size_full()
-            .child(div().child("Open File...").cursor_pointer().on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, e, w, cx| (this.on_open)(e, w, cx)),
-            ))
+            .child(
+                div()
+                    .child("Open File...")
+                    .cursor_pointer()
+                    .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down)),
+            )
     }
 }

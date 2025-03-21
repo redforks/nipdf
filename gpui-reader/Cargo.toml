@@ -10,8 +10,9 @@ authors.workspace = true
 colog.workspace = true
 educe.workspace = true
 either.workspace = true
-gpui = { git = "https://github.com/zed-industries/zed" }
+gpui = { git = "https://github.com/zed-industries/zed", tag = "v0.178.5" }
 image.workspace = true
+log.workspace = true
 mimalloc.workspace = true
 nipdf = { version = "0.1.1", path = "../nipdf" }
 nipdf-render = { version = "0.1.1", path = "../render" }
