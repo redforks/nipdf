@@ -223,8 +223,28 @@ struct MyApp {
 
 impl MyApp {
     fn new(cx: &mut Context<'_, Self>) -> Self {
+        let on_open = cx.listener(|_, _, _, cx| {
+            let wait = cx.prompt_for_paths(gpui::PathPromptOptions {
+                files: true,
+                directories: false,
+                multiple: false,
+            });
+            cx.spawn(async move |my_app, app| {
+                if let Ok(Ok(Some(path))) = wait.await {
+                    if let Some(path) = path.get(0) {
+                        if let Some(my_app) = my_app.upgrade() {
+                            app.update_entity(&my_app, |my_app, cx| {
+                                my_app.open(path, cx);
+                            })
+                            .unwrap();
+                        }
+                    }
+                }
+            })
+            .detach();
+        });
         Self {
-            current: Either::Right(cx.new(|_| Welcome::new())),
+            current: Either::Right(cx.new(|_| Welcome::new().on_open(on_open))),
         }
     }
 
@@ -236,7 +256,7 @@ impl MyApp {
 }
 
 impl Render for MyApp {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<'_, Self>) -> impl IntoElement {
         match &self.current {
             Either::Left(viewer) => viewer.clone().into_any_element(),
             Either::Right(welcome) => welcome.clone().into_any_element(),
