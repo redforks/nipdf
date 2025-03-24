@@ -20,7 +20,7 @@ mimalloc.workspace = true
 clap.workspace = true
 snafu.workspace = true
 prescript = { version = "0.1.0", path = "../prescript" }
-rfd = "0.15.2"
+rfd = "0.15.3"
 
 [lints]
 workspace = true
