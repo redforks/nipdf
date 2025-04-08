@@ -20,7 +20,7 @@ mimalloc.workspace = true
 nipdf = { version = "0.1.1", path = "../nipdf" }
 nipdf-render = { version = "0.1.1", path = "../render" }
 prescript = { version = "0.1.1", path = "../prescript" }
-smallvec = "1.14.0"
+smallvec = "1.15.0"
 snafu.workspace = true
 
 [lints]
