@@ -10,7 +10,7 @@ authors.workspace = true
 colog.workspace = true
 educe.workspace = true
 either.workspace = true
-gpui = { git = "https://github.com/zed-industries/zed", tag = "v0.178.5" }
+gpui = { git = "https://github.com/zed-industries/zed", tag = "v0.184.10" }
 settings = { git = "https://github.com/zed-industries/zed", tag = "v0.178.5" }
 ui = { git = "https://github.com/zed-industries/zed", tag = "v0.178.5" }
 theme = { git = "https://github.com/zed-industries/zed", tag = "v0.178.5" }
