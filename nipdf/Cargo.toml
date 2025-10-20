@@ -50,11 +50,11 @@ winnow.workspace = true
 itertools.workspace = true
 nipdf-jbig2dec = { version = "0.4.1", default-features = false }
 encoding_rs = { version = "0.8.35" }
-ordered-float = { version = "5.0.0", features = [ "bytemuck" ] }
-bytemuck = "1.22.0"
+ordered-float = { version = "5.1.0", features = [ "bytemuck" ] }
+bytemuck = "1.24.0"
 append-only-vec = "0.1.7"
-owned_ttf_parser = "0.25.0"
-once_map = "0.4.21"
+owned_ttf_parser = "0.25.1"
+once_map = "0.4.23"
 
 [dev-dependencies]
 env_logger.workspace = true
