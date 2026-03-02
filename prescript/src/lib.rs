@@ -43,10 +43,8 @@ pub const NOTDEF: &str = ".notdef";
 #[snafu(crate_root(crate))]
 #[snafu(whatever)]
 #[snafu(display("{message}"))]
-#[snafu(provide(opt, ref, chain, dyn std::error::Error => source.as_deref()))]
 pub struct AnyWhatever {
     #[snafu(source(from(Box<dyn Error + Send + Sync>, Some)))]
-    #[snafu(provide(false))]
     source: Option<Box<dyn Error + Send + Sync>>,
     message: String,
     backtrace: Backtrace,
